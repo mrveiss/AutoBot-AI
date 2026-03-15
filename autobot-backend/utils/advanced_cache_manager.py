@@ -523,7 +523,7 @@ class AdvancedCacheManager:
 
         except Exception as e:
             logger.error("Error getting cache stats: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     async def warm_cache(self, data_type: str, warm_data: Dict[str, Any]):
         """Warm up cache with predefined data"""
@@ -991,7 +991,7 @@ class SimpleCacheManager:
 
         except Exception as e:
             logger.error("Error getting cache stats: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     def cache_response(self, cache_key: str = None, ttl: int = None):
         """

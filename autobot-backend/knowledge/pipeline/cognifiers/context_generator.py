@@ -52,7 +52,7 @@ class ContextGeneratorCognifier(BaseCognifier):
         self.llm = LLMInterface()
 
     async def process(self, context: PipelineContext) -> PipelineContext:
-        if not self._is_enabled() or not context.chunks:
+        if not self.is_enabled() or not context.chunks:
             return context
         doc_text = "\n\n".join(c.content for c in context.chunks)
         doc_id = str(context.document_id or "")
@@ -119,5 +119,5 @@ class ContextGeneratorCognifier(BaseCognifier):
             return ""
 
     @staticmethod
-    def _is_enabled() -> bool:
+    def is_enabled() -> bool:
         return os.getenv("CONTEXT_ENABLED", "false").lower() == "true"

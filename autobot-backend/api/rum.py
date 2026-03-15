@@ -303,7 +303,7 @@ async def configure_rum(config: RumConfig):
 
     except Exception as e:
         logger.error("Error configuring RUM: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Error configuring RUM: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error configuring RUM")
 
 
 @with_error_handling(
@@ -359,10 +359,10 @@ async def log_rum_event(event: RumEvent):
             "session_event_count": session_event_count,
         }
 
-    except Exception as e:
-        logger.error("Error logging RUM event: %s", str(e))
+    except Exception:
+        logger.error("Error logging RUM event: %s", "Internal server error")
         # Don't raise HTTP exception for RUM logging failures to avoid disrupting user experience
-        return {"status": "error", "message": f"Failed to log RUM event: {str(e)}"}
+        return {"status": "error", "message": "Failed to log RUM event"}
 
 
 @with_error_handling(
@@ -384,7 +384,7 @@ async def disable_rum():
 
     except Exception as e:
         logger.error("Error disabling RUM: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Error disabling RUM: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error disabling RUM")
 
 
 @with_error_handling(
@@ -417,9 +417,7 @@ async def clear_rum_data():
 
     except Exception as e:
         logger.error("Error clearing RUM data: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error clearing RUM data: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error clearing RUM data")
 
 
 @with_error_handling(
@@ -464,9 +462,7 @@ async def export_rum_data():
 
     except Exception as e:
         logger.error("Error exporting RUM data: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error exporting RUM data: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error exporting RUM data")
 
 
 @with_error_handling(
@@ -512,9 +508,7 @@ async def get_rum_status():
 
     except Exception as e:
         logger.error("Error getting RUM status: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error getting RUM status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting RUM status")
 
 
 def format_rum_log_message(event_data: Metadata) -> str:
@@ -706,11 +700,11 @@ async def receive_rum_metrics(metrics: RumMetrics):
             "metrics_recorded": recorded_count,
         }
 
-    except Exception as e:
-        logger.error("Error recording RUM metrics: %s", str(e))
+    except Exception:
+        logger.error("Error recording RUM metrics: %s", "Internal server error")
         # Don't raise HTTP exception to avoid disrupting user experience
         return {
             "status": "error",
-            "message": f"Failed to record RUM metrics: {str(e)}",
+            "message": "Failed to record RUM metrics",
             "session_id": metrics.session_id,
         }

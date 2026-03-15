@@ -37,11 +37,15 @@ export default defineConfig({
         secure: false
       },
       // Main AutoBot backend for admin functionality (Issue #729)
+      // Issue #1779: inject X-Internal-API-Key for service auth
       '/autobot-api': {
         target: 'http://172.16.168.20:8001',
         changeOrigin: true,
         ws: true,
-        rewrite: (path) => path.replace(/^\/autobot-api/, '/api')
+        rewrite: (path) => path.replace(/^\/autobot-api/, '/api'),
+        headers: {
+          'X-Internal-API-Key': process.env.AUTOBOT_INTERNAL_API_KEY || '',
+        },
       }
     }
   },

@@ -110,7 +110,7 @@ def _validate_path_security(path: str, project_root: str) -> Optional[JSONRespon
         return JSONResponse(
             {
                 "status": "error",
-                "message": f"Invalid path: {str(e)}",
+                "message": "Invalid path",
                 "summary": {},
             },
             status_code=400,
@@ -317,6 +317,9 @@ async def get_ownership_analysis(
     refresh: bool = Query(False, description="Force fresh analysis"),
     patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
     days: int = Query(90, description="Days for recency scoring"),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
     cached = await _check_ownership_cache(refresh)
@@ -366,7 +369,7 @@ async def get_ownership_analysis(
         logger.error("Ownership analysis failed: %s", e, exc_info=True)
         return JSONResponse(
             _build_ownership_error_response(
-                f"Ownership analysis failed: {str(e)}", include_lists=False
+                "Ownership analysis failed", include_lists=False
             )
         )
 
@@ -379,6 +382,9 @@ async def get_ownership_analysis(
 )
 async def get_expertise_scores(
     path: str = Query(None, description="Root path to analyze"),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
@@ -426,7 +432,7 @@ async def get_expertise_scores(
 
     except Exception as e:
         logger.error("Failed to get expertise scores: %s", e, exc_info=True)
-        return JSONResponse(_build_expertise_error(str(e)))
+        return JSONResponse(_build_expertise_error("Internal server error"))
 
 
 @router.get("/knowledge-gaps")
@@ -439,6 +445,9 @@ async def get_knowledge_gaps(
     path: str = Query(None, description="Root path to analyze"),
     risk_level: str = Query(
         None, description="Filter by risk level (critical, high, medium, low)"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """
@@ -491,4 +500,4 @@ async def get_knowledge_gaps(
 
     except Exception as e:
         logger.error("Failed to get knowledge gaps: %s", e, exc_info=True)
-        return JSONResponse(_build_knowledge_gaps_error(str(e)))
+        return JSONResponse(_build_knowledge_gaps_error("Internal server error"))

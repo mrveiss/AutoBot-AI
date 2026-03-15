@@ -140,7 +140,7 @@ async def test_connection(request: ConnectionTestRequest) -> IntegrationHealth:
 
     except Exception as e:
         logger.error("Connection test failed: %s", str(e))
-        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Connection test failed")
 
 
 @router.get("/providers", response_model=List[ProviderInfo])
@@ -202,9 +202,7 @@ async def list_repositories(
         return result
     except Exception as e:
         logger.error("Failed to list repositories: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list repositories: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
 @router.get("/{provider}/repositories/{repo_id}/branches")
@@ -246,9 +244,7 @@ async def list_branches(
         return result
     except Exception as e:
         logger.error("Failed to list branches: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list branches: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to list branches")
 
 
 def _build_pr_params(
@@ -296,9 +292,7 @@ async def list_pull_requests(
         return result
     except Exception as e:
         logger.error("Failed to list pull requests: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list pull requests: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to list pull requests")
 
 
 @router.get("/{provider}/repositories/{repo_id}/commits")
@@ -329,6 +323,4 @@ async def get_commit_info(
 
     except Exception as e:
         logger.error("Failed to get commit info: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get commit info: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get commit info")

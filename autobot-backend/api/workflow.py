@@ -9,6 +9,7 @@ Handles workflow approvals, progress tracking, and coordination
 import asyncio
 import logging
 import time
+import uuid
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -257,14 +258,32 @@ def _validate_orchestrators(request: Request) -> tuple:
     return lightweight_orchestrator, orchestrator
 
 
+class _ComplexWorkflowRequired(Exception):
+    """Raised by _try_lightweight_routing when full orchestration is needed.
+
+    Issue #1770: Signals execute_workflow to delegate to workflow_automation.
+    """
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__("Complex workflow requires full orchestration")
+        self.session_id = session_id
+
+
 async def _try_lightweight_routing(
     lightweight_orchestrator, user_message: str
 ) -> Optional[Dict]:
-    """Try lightweight orchestrator routing (Issue #281: extracted).
+    """Try lightweight orchestrator routing (Issue #281: extracted, #1770: fixed).
 
-    Returns response dict if lightweight can handle it, None if complex routing needed.
+    Returns a response dict when the lightweight orchestrator can handle the
+    request.  Raises _ComplexWorkflowRequired for requests that need full
+    multi-agent orchestration.
+
+    Bug fix (#1770): route_request() takes (request_path, user_message); the
+    previous code passed user_message as request_path.
     """
-    result = await lightweight_orchestrator.route_request(user_message)
+    result = await lightweight_orchestrator.route_request(
+        "/api/workflow/execute", user_message
+    )
 
     if result.get("bypass_orchestration"):
         return {
@@ -273,20 +292,47 @@ async def _try_lightweight_routing(
             "result": result.get("simple_response", "Response generated successfully"),
             "routing_method": result.get("routing_reason", "lightweight_pattern_match"),
         }
-    else:
-        # Complex requests need full orchestrator (currently blocked)
-        return {
-            "success": False,
-            "type": "complex_workflow_blocked",
-            "result": (
-                "Complex workflow orchestration is temporarily "
-                "disabled due to blocking operations. This request "
-                "requires multi-agent coordination which is not yet "
-                "available in the current implementation."
-            ),
-            "complexity": result.get("complexity", "unknown"),
-            "suggested_agents": result.get("suggested_agents", []),
-        }
+
+    # Complex request — signal the caller to run full orchestration (#1770)
+    raise _ComplexWorkflowRequired(session_id=str(uuid.uuid4()))
+
+
+async def _execute_complex_workflow(
+    workflow_request: "WorkflowExecutionRequest",
+    background_tasks: BackgroundTasks,
+    session_id: str,
+) -> Dict:
+    """Delegate a complex workflow request to WorkflowAutomationManager (#1770).
+
+    Creates the workflow via the automation service and starts execution as a
+    background task so the endpoint returns immediately.
+    """
+    from services.workflow_automation.routes import get_workflow_manager
+
+    manager = get_workflow_manager()
+    workflow_id = await manager.create_workflow_from_chat_request(
+        workflow_request.user_message, session_id
+    )
+
+    if not workflow_id:
+        logger.error(
+            "workflow_automation could not create workflow for message: %s",
+            workflow_request.user_message,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create workflow from request",
+        )
+
+    background_tasks.add_task(manager.start_workflow_execution, workflow_id)
+
+    return {
+        "success": True,
+        "type": "workflow_orchestration",
+        "workflow_id": workflow_id,
+        "execution_started": True,
+        "status_endpoint": f"/api/workflow_automation/workflow_status/{workflow_id}",
+    }
 
 
 def _prepare_workflow_data(
@@ -611,8 +657,13 @@ async def execute_workflow(
 ):
     """
     Execute a workflow with coordination of multiple agents.
+
+    Routes simple requests through the lightweight orchestrator and complex
+    requests through the workflow automation service (WorkflowAutomationManager).
+
     Issue #281: Refactored from 158 lines to use extracted helper methods.
     Issue #744: Requires admin authentication.
+    Issue #1770: Re-enabled complex workflow path via workflow_automation service.
     """
     # Validate orchestrators (Issue #281: uses helper)
     lightweight_orchestrator, orchestrator = _validate_orchestrators(request)
@@ -622,80 +673,14 @@ async def execute_workflow(
         return await _try_lightweight_routing(
             lightweight_orchestrator, workflow_request.user_message
         )
-    except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.error("Workflow execution error: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Workflow execution failed: {str(e)}"
+    except _ComplexWorkflowRequired as exc:
+        # Delegate complex workflows to the workflow_automation service (#1770)
+        return await _execute_complex_workflow(
+            workflow_request, background_tasks, exc.session_id
         )
-
-    # =========================================================================
-    # NOTE: The following code is unreachable (currently disabled to prevent
-    # blocking). When full orchestration is enabled, uncomment this section
-    # and use the extracted helpers for cleaner code.
-    # =========================================================================
-    # Create workflow response
-    # workflow_response = await orchestrator.create_workflow_response(
-    #     workflow_request.user_message
-    # )
-    # workflow_id = (
-    #     workflow_request.workflow_id
-    #     or workflow_response.get("workflow_id")
-    #     or str(uuid.uuid4())
-    # )
-    #
-    # # Prepare workflow data (Issue #281: uses helper)
-    # workflow_data = _prepare_workflow_data(
-    #     workflow_id,
-    #     workflow_request.user_message,
-    #     workflow_response,
-    #     workflow_request.auto_approve,
-    # )
-    #
-    # # Start workflow metrics tracking
-    # metrics_data = {
-    #     "user_message": workflow_request.user_message,
-    #     "complexity": workflow_response.get("message_classification", "unknown"),
-    #     "total_steps": len(workflow_response.get("workflow_preview", [])),
-    #     "agents_involved": workflow_response.get("agents_involved", []),
-    # }
-    # workflow_metrics.start_workflow_tracking(workflow_id, metrics_data)
-    #
-    # # Track workflow start in Prometheus
-    # prometheus_metrics.update_active_workflows(
-    #     workflow_type=workflow_response.get("message_classification", "unknown"),
-    #     count=len([
-    #         w for w in active_workflows.values()
-    #         if w.get("classification") == workflow_response.get("message_classification")
-    #     ]),
-    # )
-    #
-    # # Record initial system metrics
-    # initial_resources = system_monitor.get_current_metrics()
-    # workflow_metrics.record_resource_usage(workflow_id, initial_resources)
-    #
-    # # Convert workflow preview to steps (Issue #281: uses helper)
-    # workflow_data["steps"] = _convert_preview_to_steps(
-    #     workflow_response.get("workflow_preview", [])
-    # )
-    #
-    # # Store workflow (thread-safe)
-    # async with _workflows_lock:
-    #     active_workflows[workflow_id] = workflow_data
-    #
-    # # Start workflow execution in background
-    # background_tasks.add_task(execute_workflow_steps, workflow_id, orchestrator)
-    #
-    # return {
-    #     "success": True,
-    #     "type": "workflow_orchestration",
-    #     "workflow_id": workflow_id,
-    #     "workflow_response": workflow_response,
-    #     "execution_started": True,
-    #     "status_endpoint": f"/api/workflow/{workflow_id}/status",
-    # }
+    except Exception as e:
+        logger.error("Workflow execution error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
 async def _handle_approval_result(
@@ -1043,7 +1028,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
 
         # End step timing with failure
         workflow_metrics.end_step_timing(
-            workflow_id, step_id, success=False, error=str(e)
+            workflow_id, step_id, success=False, error="Internal server error"
         )
 
         # Record Prometheus workflow step metric (failed)

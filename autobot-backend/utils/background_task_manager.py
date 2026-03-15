@@ -264,6 +264,7 @@ class BackgroundTaskManager:
 
         Also stores the result at ``{prefix}latest_result`` for quick
         retrieval on page load without triggering new analysis (#1540).
+        Issue #1757: Reads source_id from task params to scope cache key.
         """
         task = self._tasks.get(task_id)
         if not task:
@@ -274,10 +275,18 @@ class BackgroundTaskManager:
         task["completed_at"] = datetime.now().isoformat()
         task["result"] = result
         await self._save_to_redis(task_id)
-        await self._save_latest_result(result, task["completed_at"])
+        sid = (task.get("params") or {}).get("source_id", "")
+        await self._save_latest_result(
+            result, task["completed_at"], source_id=sid
+        )
 
-    async def _save_latest_result(self, result: Any, completed_at: str) -> None:
-        """Store latest completed result at a well-known Redis key (#1540)."""
+    async def _save_latest_result(
+        self, result: Any, completed_at: str, source_id: str = ""
+    ) -> None:
+        """Store latest completed result at a well-known Redis key (#1540).
+
+        Issue #1757: When source_id is provided, key is scoped per-project.
+        """
         try:
             redis = await self._get_redis()
             if not redis:
@@ -289,26 +298,30 @@ class BackgroundTaskManager:
                 },
                 default=str,
             )
+            suffix = f"{source_id}:" if source_id else ""
             await redis.set(
-                f"{self._prefix}latest_result",
+                f"{self._prefix}{suffix}latest_result",
                 payload,
                 ex=self._ttl,
             )
         except Exception as exc:
             logger.debug("Latest result save failed (non-fatal): %s", exc)
 
-    async def get_latest_result(self) -> Optional[Dict[str, Any]]:
+    async def get_latest_result(self, source_id: str = "") -> Optional[Dict[str, Any]]:
         """Return the most recent completed result, or *None* (#1540).
 
         Reads from the ``{prefix}latest_result`` Redis key written by
         ``complete_task``.  Returns ``{"result": ..., "completed_at": ...}``
         or *None* if no cached result exists.
+
+        Issue #1757: source_id scopes to per-project cache.
         """
         try:
             redis = await self._get_redis()
             if not redis:
                 return None
-            data = await redis.get(f"{self._prefix}latest_result")
+            suffix = f"{source_id}:" if source_id else ""
+            data = await redis.get(f"{self._prefix}{suffix}latest_result")
             if not data:
                 return None
             return json.loads(data)

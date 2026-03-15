@@ -324,7 +324,7 @@ class PerformanceMonitor:
             return {
                 "timestamp": time.time(),
                 "collection_successful": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def _persist_metrics_to_redis(self, metrics: Dict[str, Any]):
@@ -642,7 +642,7 @@ class PerformanceMonitor:
 
         except Exception as e:
             self.logger.error("Error generating performance dashboard: %s", e)
-            return {"error": str(e), "timestamp": time.time()}
+            return {"error": "Internal server error", "timestamp": time.time()}
 
     def _calculate_trend_direction(self, values: list) -> str:
         """

@@ -295,4 +295,4 @@ async def monitor_gpu_acceleration_efficiency(
 
     except Exception as e:
         logger.error("GPU efficiency monitoring failed: %s", e)
-        return {"error": str(e), "timestamp": time.time()}
+        return {"error": "Internal server error", "timestamp": time.time()}

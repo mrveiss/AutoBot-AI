@@ -723,7 +723,7 @@ async def get_judge_status():
             }
         except Exception as e:
             logger.error("Error getting metrics for %s: %s", judge_name, e)
-            judge_metrics[judge_name] = {"error": str(e)}
+            judge_metrics[judge_name] = {"error": "Internal server error"}
 
     return {
         "status": "healthy",

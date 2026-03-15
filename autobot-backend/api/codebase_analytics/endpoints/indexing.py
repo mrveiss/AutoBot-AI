@@ -38,6 +38,8 @@ from ..scanner import (
     _current_indexing_task_id,
     _index_queue,
     _load_task_from_redis,
+    _persist_queue_entry,
+    _pop_queue_entry_redis,
     _run_indexing_subprocess,
     _tasks_lock,
     _tasks_sync_lock,
@@ -49,13 +51,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _check_existing_task_and_queue(
+async def _check_existing_task_and_queue(
     source_id: Optional[str], root_path_for_queue: str
 ) -> Optional[JSONResponse]:
     """If a job is running, enqueue the request and return a queued response.
 
     Returns None when no job is running (caller should start a new job).
     Issue #1133: queuing replaces the old "already_running" rejection.
+    Issue #1717: persists queue entry to Redis for restart survival.
     """
     if _current_indexing_task_id is None:
         return None
@@ -63,18 +66,16 @@ def _check_existing_task_and_queue(
     if existing_task is None or existing_task.done():
         return None
     # A job is running — add to FIFO queue
-    from datetime import datetime as _dt
-
     position = len(_index_queue) + 1
-    _index_queue.append(
-        {
-            "source_id": source_id,
-            "root_path": root_path_for_queue,
-            "queued_at": _dt.now().isoformat(),
-            "requested_by": "api",
-        }
-    )
-    logger.info("📋 Indexing queued (position %d): %s", position, root_path_for_queue)
+    entry = {
+        "source_id": source_id,
+        "root_path": root_path_for_queue,
+        "queued_at": datetime.now().isoformat(),
+        "requested_by": "api",
+    }
+    _index_queue.append(entry)
+    await _persist_queue_entry(entry)
+    logger.info("Indexing queued (position %d): %s", position, root_path_for_queue)
     return JSONResponse(
         {
             "task_id": None,
@@ -82,7 +83,8 @@ def _check_existing_task_and_queue(
             "position": position,
             "message": (
                 f"Queued behind current job (position {position}). "
-                "The job will start automatically when the running job finishes."
+                "The job will start automatically when the running "
+                "job finishes."
             ),
         }
     )
@@ -131,10 +133,10 @@ async def _validate_and_get_path(
         try:
             path_exists = target_path.exists()
             path_is_dir = target_path.is_dir() if path_exists else False
-        except OSError as e:
+        except OSError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot access path '{request.root_path}': {e}",
+                detail="Cannot access path '{request.root_path}'",
             )
         if not path_exists:
             raise HTTPException(
@@ -151,20 +153,24 @@ async def _validate_and_get_path(
 
 
 def _start_next_queued_job() -> None:
-    """Dequeue and start the next pending indexing job if any (#1133)."""
+    """Dequeue and start the next pending indexing job (#1133, #1717)."""
     global _current_indexing_task_id
     if not _index_queue:
         return
     next_job = _index_queue.popleft()
+    # Remove from Redis queue (#1717: keep in-memory and Redis in sync)
+    loop = asyncio.get_event_loop()
+    loop.create_task(_pop_queue_entry_redis())
     next_path = next_job.get("root_path", str(PATH.PROJECT_ROOT))
+    next_source_id = next_job.get("source_id")
     next_task_id = str(uuid.uuid4())
     _current_indexing_task_id = next_task_id
-    task = asyncio.get_event_loop().create_task(
-        _run_indexing_subprocess(next_task_id, next_path)
+    task = loop.create_task(
+        _run_indexing_subprocess(next_task_id, next_path, source_id=next_source_id)
     )
     _active_tasks[next_task_id] = task
     task.add_done_callback(_create_cleanup_callback(next_task_id))
-    logger.info("▶️  Auto-started queued job %s for %s", next_task_id, next_path)
+    logger.info("Auto-started queued job %s for %s", next_task_id, next_path)
 
 
 def _create_cleanup_callback(task_id: str):
@@ -223,13 +229,15 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     logger.info("Indexing path: %s", root_path)
 
     async with _tasks_lock:
-        queued_response = _check_existing_task_and_queue(source_id, root_path)
+        queued_response = await _check_existing_task_and_queue(source_id, root_path)
         if queued_response:
             return queued_response
 
         task_id = str(uuid.uuid4())
         _current_indexing_task_id = task_id
-        task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path))
+        task = asyncio.create_task(
+            _run_indexing_subprocess(task_id, root_path, source_id=source_id)
+        )
         _active_tasks[task_id] = task
 
     task.add_done_callback(_create_cleanup_callback(task_id))
@@ -396,7 +404,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
             {
                 "success": False,
                 "task_id": task_id,
-                "message": f"Failed to cancel job: {str(e)}",
+                "message": "Failed to cancel job",
             }
         )
 

@@ -729,8 +729,8 @@ async def read_text_file_mcp(
         raise HTTPException(
             status_code=400, detail="File is not a text file (encoding error)"
         )
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+    except OSError:
+        raise HTTPException(status_code=500, detail="Failed to read file")
 
 
 @with_error_handling(
@@ -788,14 +788,10 @@ async def read_media_file_mcp(
             "base64_data": base64_data,
             "size_bytes": file_size,
         }
-    except OSError as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to read media file: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error reading media file: {str(e)}"
-        )
+    except OSError:
+        raise HTTPException(status_code=500, detail="Failed to read media file")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error reading media file")
 
 
 async def _read_single_file_for_batch(path: str) -> dict:
@@ -835,10 +831,10 @@ async def _read_single_file_for_batch(path: str) -> dict:
             content = await f.read()
 
         return {"result": {"path": path, "content": content, "size_bytes": file_size}}
-    except OSError as e:
-        return {"error": {"path": path, "error": f"Failed to read file: {str(e)}"}}
-    except Exception as e:
-        return {"error": {"path": path, "error": str(e)}}
+    except OSError:
+        return {"error": {"path": path, "error": "Failed to read file"}}
+    except Exception:
+        return {"error": {"path": path, "error": "Internal server error"}}
 
 
 def _separate_batch_read_results(all_results: list) -> tuple:
@@ -946,10 +942,10 @@ async def write_file_mcp(
             "size_bytes": file_size,
             "message": "File written successfully",
         }
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error writing file: {str(e)}")
+    except OSError:
+        raise HTTPException(status_code=500, detail="Failed to write file")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error writing file")
 
 
 async def _validate_file_path(path: str) -> None:
@@ -1047,12 +1043,10 @@ async def edit_file_mcp(
         }
     except HTTPException:
         raise
-    except OSError as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to read/write file: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error editing file: {str(e)}")
+    except OSError:
+        raise HTTPException(status_code=500, detail="Failed to read/write file")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error editing file")
 
 
 @with_error_handling(
@@ -1083,10 +1077,8 @@ async def create_directory_mcp(
             "path": request.path,
             "message": "Directory created successfully",
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error creating directory: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error creating directory")
 
 
 @with_error_handling(
@@ -1144,10 +1136,8 @@ async def list_directory_mcp(
             "entry_count": len(entries),
             "entries": entries,
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error listing directory: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error listing directory")
 
 
 async def _validate_directory_path(path: str) -> None:
@@ -1260,10 +1250,8 @@ async def list_directory_with_sizes_mcp(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error listing directory: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error listing directory")
 
 
 @with_error_handling(
@@ -1314,8 +1302,8 @@ async def move_file_mcp(
             "destination": request.destination,
             "message": "File moved successfully",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error moving file: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error moving file")
 
 
 @with_error_handling(
@@ -1373,8 +1361,8 @@ async def search_files_mcp(
             "matches_found": len(matches),
             "matches": matches,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching files: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error searching files")
 
 
 @with_error_handling(
@@ -1436,10 +1424,8 @@ async def directory_tree_mcp(
         tree = await run_in_file_executor(build_tree, request.path)
 
         return {"success": True, "root_path": request.path, "tree": tree}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error building directory tree: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error building directory tree")
 
 
 @with_error_handling(
@@ -1488,10 +1474,8 @@ async def get_file_info_mcp(
             info["mime_type"] = mime_type or "application/octet-stream"
 
         return {"success": True, **info}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error getting file info: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error getting file info")
 
 
 @with_error_handling(

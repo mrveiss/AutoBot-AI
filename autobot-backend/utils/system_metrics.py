@@ -553,7 +553,7 @@ class SystemMetricsCollector:
 
         except Exception as e:
             self.logger.error("Error generating metric summary: %s", e)
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def start_collection(self):
         """Start continuous metrics collection"""

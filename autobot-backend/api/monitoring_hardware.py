@@ -50,7 +50,7 @@ class HardwareMonitorStub:
             logger.warning("Failed to get system health: %s", e)
             return {
                 "status": "unknown",
-                "error": str(e),
+                "error": "Internal server error",
                 "note": "Infrastructure monitoring available in SLM Admin.",
             }
 
@@ -82,7 +82,7 @@ class HardwareMonitorStub:
             }
         except Exception as e:
             logger.warning("Failed to get system resources: %s", e)
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     async def get_gpu_status(self) -> Dict[str, Any]:
         """

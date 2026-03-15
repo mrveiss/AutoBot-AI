@@ -736,10 +736,8 @@ async def _write_hook_file(hook_path: Path, content: str) -> dict:
             "message": "Pre-commit hooks installed successfully",
             "path": str(hook_path),
         }
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to install hooks: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to install hooks")
 
 
 @router.post("/install")
@@ -796,10 +794,8 @@ async def uninstall_hooks(
         return {"success": True, "message": "Pre-commit hooks uninstalled"}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to uninstall hooks: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to uninstall hooks")
 
 
 @router.get("/history")

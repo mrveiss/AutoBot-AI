@@ -56,7 +56,7 @@ async def create_slm_user(
     except Exception as e:
         logger.error("Failed to create SLM user: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
         ) from e
 
 
@@ -127,7 +127,9 @@ async def update_slm_user(
         return UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update SLM user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -145,4 +147,6 @@ async def delete_slm_user(
         await user_service.delete_user(user_id)
     except Exception as e:
         logger.error("Failed to delete SLM user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e

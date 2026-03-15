@@ -271,7 +271,7 @@ async def analyze_conflicts(
         logger.error("Conflict analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Conflict analysis failed: {str(e)}",
+            detail="Conflict analysis failed",
         )
 
 
@@ -338,7 +338,7 @@ async def resolve_conflicts(
         logger.error("Conflict resolution failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Conflict resolution failed: {str(e)}",
+            detail="Conflict resolution failed",
         )
 
 
@@ -399,7 +399,7 @@ async def analyze_repository_conflicts(
         logger.error("Repository analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Repository analysis failed: {str(e)}",
+            detail="Repository analysis failed",
         )
 
 
@@ -466,7 +466,7 @@ async def apply_resolution(
         logger.error("Failed to apply resolution: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to apply resolution: {str(e)}",
+            detail="Failed to apply resolution",
         )
 
 
@@ -581,5 +581,5 @@ async def check_file_conflicts(
         logger.error("Conflict check failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Conflict check failed: {str(e)}",
+            detail="Conflict check failed",
         )

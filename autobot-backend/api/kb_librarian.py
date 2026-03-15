@@ -83,7 +83,7 @@ async def query_knowledge_base(kb_query: KBQuery):
 
     except Exception as e:
         logger.error("Error querying knowledge base: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -111,7 +111,7 @@ async def get_kb_librarian_status():
 
     except Exception as e:
         logger.error("Error getting KB Librarian status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -164,8 +164,8 @@ async def configure_kb_librarian(
             "auto_summarize": kb_librarian.auto_summarize,
         }
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         logger.error("Error configuring KB Librarian: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

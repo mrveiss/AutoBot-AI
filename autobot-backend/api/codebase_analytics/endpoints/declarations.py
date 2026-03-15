@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _query_chromadb_declarations(code_collection) -> tuple:
-    """Helper for get_code_declarations. Query ChromaDB and build declarations list. Ref: #1088.
+def _query_chromadb_declarations(
+    code_collection, source_id: Optional[str] = None
+) -> tuple:
+    """Helper for get_code_declarations (#1088, #1710: per-source filter).
 
     Returns:
         Tuple of (declarations_list, storage_type_str)
@@ -31,9 +33,18 @@ def _query_chromadb_declarations(code_collection) -> tuple:
     all_declarations = []
     storage_type = "chromadb"
     try:
+        if source_id:
+            where_filter = {
+                "$and": [
+                    {"type": {"$in": ["function", "class"]}},
+                    {"source_id": source_id},
+                ]
+            }
+        else:
+            where_filter = {"type": {"$in": ["function", "class"]}}
         results = get_all_paginated(
             code_collection,
-            where={"type": {"$in": ["function", "class"]}},
+            where=where_filter,
             include=["metadatas"],
         )
         for metadata in results.get("metadatas", []):
@@ -86,8 +97,11 @@ def _build_declarations_response(all_declarations: list, storage_type: str) -> d
     operation="get_code_declarations",
     error_code_prefix="CODEBASE",
 )
-async def get_code_declarations(declaration_type: Optional[str] = None):
-    """Get code declarations (functions, classes, variables) detected during analysis"""
+async def get_code_declarations(
+    declaration_type: Optional[str] = None,
+    source_id: Optional[str] = None,
+):
+    """Get code declarations (#1710: per-source filtering)."""
     code_collection = await asyncio.to_thread(get_code_collection)
     if not code_collection:
         return JSONResponse(
@@ -98,6 +112,6 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
             }
         )
     all_declarations, storage_type = await asyncio.to_thread(
-        _query_chromadb_declarations, code_collection
+        _query_chromadb_declarations, code_collection, source_id
     )
     return JSONResponse(_build_declarations_response(all_declarations, storage_type))

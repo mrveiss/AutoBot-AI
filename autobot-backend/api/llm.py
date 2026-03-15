@@ -55,9 +55,7 @@ async def get_llm_config(
         return ConfigService.get_llm_config()
     except Exception as e:
         logger.error("Error getting LLM config: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error getting LLM config: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting LLM config")
 
 
 @with_error_handling(
@@ -77,11 +75,9 @@ async def update_llm_config(
     try:
         result = ConfigService.update_llm_config(config_data)
         return result
-    except Exception as e:
-        logger.error("Error updating LLM config: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error updating LLM config: {str(e)}"
-        )
+    except Exception:
+        logger.error("Error updating LLM config: %s", "Internal server error")
+        raise HTTPException(status_code=500, detail="Error updating LLM config")
 
 
 @with_error_handling(
@@ -100,11 +96,11 @@ async def test_llm_connection(
     try:
         result = await ConnectionTester.test_ollama_connection()
         return result
-    except Exception as e:
-        logger.error("LLM connection test failed: %s", str(e))
+    except Exception:
+        logger.error("LLM connection test failed: %s", "Internal server error")
         return {
             "status": "disconnected",
-            "message": f"Failed to test LLM connection: {str(e)}",
+            "message": "Failed to test LLM connection",
         }
 
 
@@ -132,9 +128,7 @@ async def get_available_llm_models(
         raise
     except Exception as e:
         logger.error("Error getting available models: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error getting available models: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting available models")
 
 
 @with_error_handling(
@@ -162,9 +156,7 @@ async def get_current_llm(
         }
     except Exception as e:
         logger.error("Error getting current LLM: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error getting current LLM: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting current LLM")
 
 
 @with_error_handling(
@@ -259,9 +251,7 @@ async def update_llm_provider(
 
     except Exception as e:
         logger.error("Error updating LLM provider: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error updating LLM provider: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error updating LLM provider")
 
 
 @with_error_handling(
@@ -314,7 +304,7 @@ async def get_available_embedding_models(
         logger.error("Error getting available embedding models: %s", str(e))
         raise HTTPException(
             status_code=500,
-            detail=f"Error getting available embedding models: {str(e)}",
+            detail="Error getting available embedding models",
         )
 
 
@@ -377,9 +367,7 @@ async def update_embedding_model(
         }
     except Exception as e:
         logger.error("Error updating embedding model: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error updating embedding model: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error updating embedding model")
 
 
 def _build_local_provider_status(local_config: dict, ollama_url: str) -> dict:
@@ -540,7 +528,7 @@ async def get_comprehensive_llm_status(
     except Exception as e:
         logger.error("Failed to get comprehensive LLM status: %s", e)
         return JSONResponse(
-            status_code=500, content={"error": f"Failed to get LLM status: {str(e)}"}
+            status_code=500, content={"error": "Failed to get LLM status"}
         )
 
 
@@ -656,7 +644,7 @@ async def get_quick_llm_status(
                 "status": "error",
                 "provider_type": "unknown",
                 "model": "",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
@@ -740,7 +728,7 @@ async def get_all_providers_health():
             status_code=500,
             content={
                 "overall_status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
@@ -801,7 +789,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
                 "provider": provider_name,
                 "status": "error",
                 "available": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
@@ -851,7 +839,7 @@ async def clear_provider_health_cache(
             status_code=500,
             content={
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             },
         )
 
@@ -912,7 +900,7 @@ async def get_tiered_routing_metrics(
         logger.error("Error getting tiered routing metrics: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error getting tiered routing metrics: {str(e)}",
+            detail="Error getting tiered routing metrics",
         )
 
 
@@ -975,7 +963,7 @@ async def get_tiered_routing_config(
         logger.error("Error getting tiered routing config: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error getting tiered routing config: {str(e)}",
+            detail="Error getting tiered routing config",
         )
 
 
@@ -1085,7 +1073,7 @@ async def update_tiered_routing_config(
         logger.error("Error updating tiered routing config: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error updating tiered routing config: {str(e)}",
+            detail="Error updating tiered routing config",
         )
 
 
@@ -1135,5 +1123,5 @@ async def reset_tiered_routing_metrics(
         logger.error("Error resetting tiered routing metrics: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Error resetting tiered routing metrics: {str(e)}",
+            detail="Error resetting tiered routing metrics",
         )

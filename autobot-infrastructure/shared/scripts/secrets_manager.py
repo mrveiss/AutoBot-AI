@@ -89,7 +89,7 @@ class SecretsManager:
         self.secrets_index = self._load_secrets_index()
 
         logger.info("🔐 AutoBot Secrets Manager initialized")
-        logger.info(f"   Secrets Directory: {self.secrets_dir}")
+        logger.info("   Secrets Directory: [configured]")
         logger.info(f"   Indexed Secrets: {len(self.secrets_index)}")
 
     def print_header(self, title: str):
@@ -769,9 +769,9 @@ def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
 
     if value:
         if args.json:
-            logger.info(json.dumps({"value": value}))
+            print(json.dumps({"value": value}))  # noqa: T201
         else:
-            logger.info(f"🔐 Secret value: {value}")
+            print(f"🔐 Secret value: {value}")  # noqa: T201
         return 0
     else:
         logger.error("❌ Secret not found or access denied")

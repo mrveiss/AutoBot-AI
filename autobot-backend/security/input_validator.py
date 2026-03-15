@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 _VALID_URL_SCHEMES = frozenset({"http", "https"})
 
 # Issue #380: Pre-compiled regex patterns for frequently used operations
-_SCRIPT_TAG_RE = re.compile(r"<script[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+_SCRIPT_TAG_RE = re.compile(
+    r"<script\b[^>]*>[\s\S]*?</script\s*>", re.IGNORECASE | re.DOTALL
+)
 _EVENT_HANDLER_RE = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
 _DANGEROUS_LINK_RE = re.compile(
     r'href\s*=\s*["\'](?:javascript:|data:|vbscript:)[^"\']*["\']', re.IGNORECASE
 )
-_URL_EXTRACT_RE = re.compile(
-    r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
-)
+_URL_EXTRACT_RE = re.compile(r"https?://[a-zA-Z0-9$_.+!*(),;/?:@&=%-]{1,2048}")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 

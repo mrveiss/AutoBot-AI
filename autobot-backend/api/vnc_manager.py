@@ -28,7 +28,7 @@ from api.vnc_humanization import (
 from auth_middleware import check_admin_permission
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import with_error_handling
@@ -189,7 +189,7 @@ def start_vnc_server() -> Dict[str, str]:
         return {"status": "error", "message": "VNC server start timeout"}
     except Exception as e:
         logger.error("Error starting VNC server: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Operation failed"}
 
 
 @router.get("/status")
@@ -282,10 +282,27 @@ async def restart_vnc_server(
 
     except Exception as e:
         logger.error("Error restarting VNC server: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 # Desktop Interaction Controls (Issue #74)
+
+
+_XDOTOOL_ALLOWED_SUBCMDS = frozenset(
+    {
+        "mousemove",
+        "click",
+        "mousedown",
+        "mouseup",
+        "type",
+        "key",
+        "keydown",
+        "keyup",
+        "search",
+        "getactivewindow",
+        "getfocus",
+    }
+)
 
 
 def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
@@ -293,10 +310,17 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
     Execute xdotool command for desktop interaction.
 
     Helper for desktop interaction endpoints (Issue #74).
+    Args are validated against an allowlist of subcommands (#1721).
     """
+    if not args or args[0] not in _XDOTOOL_ALLOWED_SUBCMDS:
+        return {
+            "status": "error",
+            "message": f"Disallowed xdotool subcommand: {args[0] if args else '(empty)'}",
+        }
+    sanitized = [str(a) for a in args]
     try:
         result = subprocess.run(  # nosec B607
-            ["xdotool"] + args,
+            ["xdotool"] + sanitized,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -312,7 +336,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
         return {"status": "error", "message": "xdotool not installed"}
     except Exception as e:
         logger.error("Error running xdotool: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.post("/click")
@@ -540,7 +564,7 @@ async def vnc_screenshot(
 
     except Exception as e:
         logger.error("Error capturing screenshot: %s", e)
-        return {"status": "error", "message": str(e), "image_data": ""}
+        return {"status": "error", "message": "Operation failed", "image_data": ""}
 
 
 @router.post("/clipboard")
@@ -583,7 +607,7 @@ async def vnc_clipboard_sync(
         return {"status": "error", "message": "Clipboard sync timeout"}
     except Exception as e:
         logger.error("Error syncing clipboard: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Operation failed"}
 
 
 # Connection Settings Management (Issue #74 - Area 4)
@@ -1154,7 +1178,7 @@ async def vnc_ocr_text(
 
     except Exception as e:
         logger.error("OCR failed: %s", e)
-        return {"status": "error", "text": "", "message": str(e)}
+        return {"status": "error", "text": "", "message": "Operation failed"}
 
 
 # Area 5: Automation Features - Image Template Matching
@@ -1282,7 +1306,7 @@ async def vnc_find_image(
 
     except Exception as e:
         logger.error("Image template matching failed: %s", e)
-        return {"status": "error", "found": False, "message": str(e)}
+        return {"status": "error", "found": False, "message": "Operation failed"}
 
 
 # Area 5: Automation Features - Wait Conditions
@@ -1609,6 +1633,8 @@ async def save_session_screenshot(
             "message": "..."
         }
     """
+    if "/" in session_id or ".." in session_id:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     # Capture screenshot
     screenshot_result = await vnc_screenshot()
     if screenshot_result["status"] != "success":

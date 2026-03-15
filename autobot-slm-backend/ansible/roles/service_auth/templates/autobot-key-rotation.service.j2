@@ -1,0 +1,21 @@
+# AutoBot Service Key Rotation - Ansible Managed (#1734)
+# Runs the key rotation playbook on a schedule.
+# Deployed to the SLM manager host only.
+[Unit]
+Description=AutoBot Service Key Rotation
+After=network-online.target redis-stack-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=autobot
+Group=autobot
+WorkingDirectory={{ autobot_ansible_dir }}
+ExecStart=/usr/bin/ansible-playbook \
+  -i inventory/production.yml \
+  -i inventory/slm-nodes.yml \
+  playbooks/rotate-service-keys.yml
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autobot-key-rotation
+TimeoutStartSec=600

@@ -15523,10 +15523,14 @@ class TestBatch90AIStackIntegrationMigrations(unittest.TestCase):
         source = inspect.getsource(multi_agent_query)
         # Should preserve inner try-catches for agent fallbacks
         self.assertIn("try:", source)
-        self.assertIn('results["rag"] = {"error": str(e)}', source)
-        self.assertIn('results["research"] = {"error": str(e)}', source)
-        self.assertIn('results["classification"] = {"error": str(e)}', source)
-        self.assertIn('results["chat"] = {"error": str(e)}', source)
+        self.assertIn('results["rag"] = {"error": "Internal server error"}', source)
+        self.assertIn(
+            'results["research"] = {"error": "Internal server error"}', source
+        )
+        self.assertIn(
+            'results["classification"] = {"error": "Internal server error"}', source
+        )
+        self.assertIn('results["chat"] = {"error": "Internal server error"}', source)
         # Should NOT have outer HTTPException raise
         self.assertNotIn("raise HTTPException", source)
 
@@ -22141,7 +22145,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         # Check Mixed Pattern preserved: returns error dict instead of HTTPException
         self.assertIn("except Exception as e:", source)
         self.assertIn('return {"status": "unhealthy"', source)
-        self.assertIn('"error": str(e)', source)
+        self.assertIn('"error": "Internal server error"', source)
         self.assertIn('"service": "hot_reload"', source)
 
     # ==============================================

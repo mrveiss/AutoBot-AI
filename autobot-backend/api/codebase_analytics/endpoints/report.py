@@ -1261,9 +1261,13 @@ def _generate_cross_language_section(
     return lines
 
 
-def _fetch_problems_from_chromadb() -> List[Dict]:
+def _fetch_problems_from_chromadb(
+    source_id: Optional[str] = None,
+) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
+
+    Issue #1772: source_id filters to per-project data.
 
     Returns:
         List of problem dictionaries with type, severity, file_path, etc.
@@ -1275,9 +1279,18 @@ def _fetch_problems_from_chromadb() -> List[Dict]:
         return problems
 
     try:
+        if source_id:
+            where_filter = {
+                "$and": [
+                    {"type": "problem"},
+                    {"source_id": source_id},
+                ]
+            }
+        else:
+            where_filter = {"type": "problem"}
         results = get_all_paginated(
             code_collection,
-            where={"type": "problem"},
+            where=where_filter,
             include=["metadatas"],
         )
 
@@ -2036,6 +2049,7 @@ async def generate_analysis_report(
     include_pattern_analysis: bool = True,
     quick: bool = False,
     use_semantic: bool = False,
+    source_id: Optional[str] = None,
 ):
     """
     Generate a code analysis report from the indexed data.
@@ -2055,7 +2069,7 @@ async def generate_analysis_report(
     Returns:
         Markdown formatted report as plain text
     """
-    problems = await asyncio.to_thread(_fetch_problems_from_chromadb)
+    problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id)
     analyses = await _resolve_analyses(
         quick=quick,
         include_bug_prediction=include_bug_prediction,

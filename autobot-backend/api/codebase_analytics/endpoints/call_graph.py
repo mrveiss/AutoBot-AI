@@ -737,7 +737,10 @@ def _build_call_graph_response(
     error_code_prefix="CODEBASE",
 )
 async def get_call_graph(
-    refresh: bool = Query(False, description="Force refresh, bypass cache")
+    refresh: bool = Query(False, description="Force refresh, bypass cache"),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """Get function call graph.
 

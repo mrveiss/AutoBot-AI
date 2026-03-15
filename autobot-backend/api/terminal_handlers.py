@@ -299,9 +299,7 @@ class ConsolidatedTerminalWebSocket:
                 return
             except Exception as e:
                 logger.error("Error writing to PTY: %s", e)
-                await self.send_message(
-                    {"type": "error", "content": f"Terminal error: {str(e)}"}
-                )
+                await self.send_message({"type": "error", "content": "Terminal error"})
         else:
             # PTY not available
             await self.send_message(
@@ -480,7 +478,7 @@ class ConsolidatedTerminalWebSocket:
                     "type": "tab_completion",
                     "completions": [],
                     "prefix": "",
-                    "error": str(e),
+                    "error": "Internal server error",
                 }
             )
 
@@ -620,7 +618,7 @@ class ConsolidatedTerminalWebSocket:
             await self.send_message(
                 {
                     "type": "error",
-                    "content": f"Error processing message: {str(e)}",
+                    "content": "Error processing message",
                     "timestamp": time.time(),
                 }
             )
@@ -878,8 +876,7 @@ class ConsolidatedTerminalWebSocket:
             return False
 
         logger.info(
-            f"[STDIN] Successfully sent {len(content)} bytes to PTY "
-            f"(password: {is_password}, command_id: {command_id})"
+            f"[STDIN] Sent {len(content)} bytes to PTY (command_id: {command_id})"
         )
 
         # Re-enable echo after password (if it was disabled)
@@ -1088,7 +1085,7 @@ class ConsolidatedTerminalWebSocket:
 
         except Exception as e:
             logger.error("Error sending signal: %s", e)
-            await self._send_signal_error(f"Error sending signal: {str(e)}")
+            await self._send_signal_error("Error sending signal")
 
     def _assess_command_risk(self, command: str) -> CommandRiskLevel:
         """Assess the security risk level of a command"""

@@ -80,7 +80,7 @@ export const createMockWebSocketEvent = (type: string, data: any) => ({
 
 // Mock factory for chat messages
 export const createMockChatMessage = (overrides = {}) => ({
-  id: `msg_${Math.random().toString(36).substr(2, 9)}`,
+  id: `msg_${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('')}`,
   content: 'Test message content',
   sender: 'user',
   timestamp: Date.now(),
@@ -90,7 +90,7 @@ export const createMockChatMessage = (overrides = {}) => ({
 
 // Mock factory for chat sessions
 export const createMockChatSession = (overrides = {}) => ({
-  chatId: `chat_${Math.random().toString(36).substr(2, 9)}`,
+  chatId: `chat_${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('')}`,
   name: 'Test Chat Session',
   messages: [],
   created: Date.now(),
@@ -100,7 +100,7 @@ export const createMockChatSession = (overrides = {}) => ({
 
 // Mock factory for workflow data
 export const createMockWorkflow = (overrides = {}) => ({
-  id: `workflow_${Math.random().toString(36).substr(2, 9)}`,
+  id: `workflow_${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('')}`,
   name: 'Test Workflow',
   status: 'pending',
   steps: [],
@@ -110,7 +110,7 @@ export const createMockWorkflow = (overrides = {}) => ({
 
 // Mock factory for terminal session data
 export const createMockTerminalSession = (overrides = {}) => ({
-  sessionId: `session_${Math.random().toString(36).substr(2, 9)}`,
+  sessionId: `session_${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('')}`,
   title: 'Test Terminal Session',
   connected: true,
   hasRunningProcesses: false,

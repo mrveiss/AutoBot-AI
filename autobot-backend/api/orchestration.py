@@ -143,9 +143,7 @@ async def execute_workflow(
 
     except Exception as e:
         logger.error("Workflow execution error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Workflow execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Workflow execution failed")
 
 
 @with_error_handling(
@@ -210,7 +208,7 @@ async def create_workflow_plan(
 
     except Exception as e:
         logger.error("Plan creation error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Plan creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Plan creation failed")
 
 
 @with_error_handling(
@@ -243,9 +241,7 @@ async def get_agent_performance(
 
     except Exception as e:
         logger.error("Performance report error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get performance report: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get performance report")
 
 
 @with_error_handling(
@@ -301,9 +297,7 @@ async def recommend_agents(
 
     except Exception as e:
         logger.error("Agent recommendation error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get recommendations: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get recommendations")
 
 
 @with_error_handling(
@@ -354,9 +348,7 @@ async def get_active_workflows(
 
     except Exception as e:
         logger.error("Active workflows error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get active workflows: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get active workflows")
 
 
 @with_error_handling(
@@ -459,9 +451,7 @@ async def get_agent_capabilities(
 
     except Exception as e:
         logger.error("Capabilities error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get capabilities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get capabilities")
 
 
 @with_error_handling(
@@ -516,7 +506,7 @@ async def get_orchestration_status(
 
     except Exception as e:
         logger.error("Status error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get status")
 
 
 @with_error_handling(

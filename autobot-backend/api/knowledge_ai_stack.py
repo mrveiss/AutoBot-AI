@@ -156,7 +156,7 @@ async def _search_local_knowledge_base(
 
     except Exception as e:
         logger.warning("Local knowledge base search failed: %s", e)
-        return {"results": [], "error": str(e), "source": "local_kb"}
+        return {"results": [], "error": "Internal server error", "source": "local_kb"}
 
 
 async def _search_rag_enhanced(
@@ -353,7 +353,7 @@ async def enhanced_search(
         logger.error("Enhanced search failed: %s", e)
         return create_error_response(
             error_code="SEARCH_ERROR",
-            message=f"Enhanced search failed: {str(e)}",
+            message="Enhanced search failed",
             status_code=500,
         )
 
@@ -445,7 +445,7 @@ async def _store_single_fact_with_semaphore(
             )
         except Exception as e:
             logger.warning("Failed to store extracted fact: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Operation failed"}
 
 
 async def _store_extracted_facts(
@@ -693,7 +693,7 @@ async def get_enhanced_stats(
                 local_stats = await kb_to_use.get_stats()
         except Exception as e:
             logger.warning("Failed to get local KB stats: %s", e)
-            local_stats = {"error": str(e)}
+            local_stats = {"error": "Internal server error"}
 
         # Get AI Stack system knowledge insights
         ai_stats = {}
@@ -703,7 +703,7 @@ async def get_enhanced_stats(
             ai_stats = ai_insights
         except Exception as e:
             logger.warning("Failed to get AI Stack stats: %s", e)
-            ai_stats = {"error": str(e)}
+            ai_stats = {"error": "Internal server error"}
 
         return create_success_response(
             {
@@ -718,7 +718,7 @@ async def get_enhanced_stats(
         logger.error("Enhanced stats retrieval failed: %s", e)
         return create_error_response(
             error_code="STATS_ERROR",
-            message=f"Failed to retrieve enhanced stats: {str(e)}",
+            message="Failed to retrieve enhanced stats",
             status_code=500,
         )
 
@@ -749,9 +749,9 @@ async def enhanced_knowledge_health(
             ai_client = await get_ai_stack_client()
             ai_health = await ai_client.health_check()
             health_status["components"]["ai_stack"] = ai_health["status"]
-        except Exception as e:
+        except Exception:
             health_status["components"]["ai_stack"] = "unavailable"
-            health_status["ai_stack_error"] = str(e)
+            health_status["ai_stack_error"] = "unavailable"
 
         # Overall health assessment
         overall_healthy = health_status["components"]["ai_stack"] == "healthy"
@@ -768,7 +768,7 @@ async def enhanced_knowledge_health(
             status_code=503,
             content={
                 "status": "unhealthy",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )

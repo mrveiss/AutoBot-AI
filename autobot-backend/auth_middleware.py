@@ -641,9 +641,19 @@ auth_middleware = AuthenticationMiddleware()
 
 def get_current_user(request: Request) -> Dict:
     """
-    Dependency for FastAPI endpoints to get current authenticated user
-    Raises HTTPException if authentication fails
+    Dependency for FastAPI endpoints to get current authenticated user.
+
+    Issue #1779: Also accepts X-Internal-API-Key header for
+    service-to-service calls (e.g. SLM frontend via nginx proxy).
+    Returns a synthetic admin user dict when the internal key matches.
+
+    Raises HTTPException if authentication fails.
     """
+    # Issue #1779: Allow trusted internal services via API key
+    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+        return {"username": "service:slm", "role": "admin", "service": True}
+
     user_data = auth_middleware.get_user_from_request(request)
     if not user_data:
         raise_auth_error("AUTH_0002", "Authentication required")

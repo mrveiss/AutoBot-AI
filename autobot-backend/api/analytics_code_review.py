@@ -524,8 +524,8 @@ async def review_file(
                 raise HTTPException(
                     status_code=404, detail=f"File not found: {file_path}"
                 )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Internal server error")
 
     comments = analyze_code(content, file_path)
     score = calculate_review_score(comments)

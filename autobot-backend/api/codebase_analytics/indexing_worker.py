@@ -9,7 +9,7 @@ If this process crashes (SIGSEGV in chromadb_rust_bindings), the parent
 uvicorn worker that launched it is unaffected.
 
 Usage (internal — called by _run_indexing_subprocess):
-    python indexing_worker.py <task_id> <root_path>
+    python indexing_worker.py <task_id> <root_path> [source_id]
 """
 import asyncio
 import logging
@@ -49,9 +49,15 @@ def main() -> None:
 
     task_id = sys.argv[1]
     root_path = sys.argv[2]
+    source_id = sys.argv[3] if len(sys.argv) > 3 else None
 
-    logger.info("[Worker] Starting indexing task=%s path=%s", task_id, root_path)
-    asyncio.run(do_indexing_with_progress(task_id, root_path))
+    logger.info(
+        "[Worker] Starting indexing task=%s path=%s source=%s",
+        task_id,
+        root_path,
+        source_id,
+    )
+    asyncio.run(do_indexing_with_progress(task_id, root_path, source_id=source_id))
     logger.info("[Worker] Indexing task=%s finished", task_id)
 
 

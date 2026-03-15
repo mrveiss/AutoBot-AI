@@ -8,7 +8,7 @@ Chart data endpoints for analytics visualization
 import asyncio
 import json
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -32,11 +32,13 @@ def _try_chromadb_aggregation(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
+    source_id: Optional[str] = None,
 ) -> tuple[int, bool]:
     """
     Try to aggregate problem data from ChromaDB collection.
 
     Issue #665: Extracted from get_chart_data to reduce complexity.
+    Issue #1772: source_id filters to per-project data.
 
     Returns:
         Tuple of (total_problems, success) where success indicates if aggregation worked.
@@ -45,8 +47,17 @@ def _try_chromadb_aggregation(
         return 0, False
 
     try:
+        if source_id:
+            where_filter = {
+                "$and": [
+                    {"type": "problem"},
+                    {"source_id": source_id},
+                ]
+            }
+        else:
+            where_filter = {"type": "problem"}
         results = get_all_paginated(
-            code_collection, where={"type": "problem"}, include=["metadatas"]
+            code_collection, where=where_filter, include=["metadatas"]
         )
         total = 0
         for metadata in results.get("metadatas", []):
@@ -149,17 +160,21 @@ async def _aggregate_from_redis(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
+    source_id: Optional[str] = None,
 ) -> int:
     """Aggregate problem data from Redis.
 
     Issue #315: Extracted helper.
     Issue #361: Avoid blocking with asyncio.to_thread.
     Issue #561: Fixed N+1 query pattern - now uses pipeline batching.
+    Issue #1772: source_id scopes to per-project keys.
     """
 
     def _scan_and_aggregate():
         # Issue #561: Collect all keys first, then batch fetch with pipeline
-        keys = list(redis_client.scan_iter(match="codebase:problems:*"))
+        # Issue #1772: Scope to source_id when provided
+        key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+        keys = list(redis_client.scan_iter(match=f"{key_prefix}:problems:*"))
         if not keys:
             return 0
 
@@ -219,8 +234,11 @@ async def _get_redis_fallback_chart_data(
     severity_counts: Dict[str, int],
     race_conditions: Dict[str, int],
     file_problems: Dict[str, int],
+    source_id: Optional[str] = None,
 ):
     """Helper for get_chart_data. Ref: #1088.
+
+    Issue #1772: source_id scopes to per-project keys.
 
     Returns (total_problems, storage_type) or a JSONResponse on error/no-data.
     """
@@ -240,6 +258,7 @@ async def _get_redis_fallback_chart_data(
             severity_counts,
             race_conditions,
             file_problems,
+            source_id=source_id,
         )
         return total_problems, "redis"
     except Exception as redis_error:
@@ -260,11 +279,14 @@ async def _get_redis_fallback_chart_data(
     operation="get_chart_data",
     error_code_prefix="CODEBASE",
 )
-async def get_chart_data():
+async def get_chart_data(
+    source_id: Optional[str] = None,
+):
     """
     Get aggregated data for analytics charts.
 
     Issue #665: Refactored from 98 lines to use extracted helper methods.
+    Issue #1772: source_id filters to per-project data.
 
     Returns data structures optimized for ApexCharts:
     - problem_types: Pie chart data for problem type distribution
@@ -287,6 +309,7 @@ async def get_chart_data():
         severity_counts,
         race_conditions,
         file_problems,
+        source_id,
     )
 
     if success:
@@ -294,7 +317,11 @@ async def get_chart_data():
     else:
         # Fallback to Redis if ChromaDB fails (Issue #1088: uses _get_redis_fallback_chart_data)
         result = await _get_redis_fallback_chart_data(
-            problem_types, severity_counts, race_conditions, file_problems
+            problem_types,
+            severity_counts,
+            race_conditions,
+            file_problems,
+            source_id=source_id,
         )
         if isinstance(result, JSONResponse):
             return result

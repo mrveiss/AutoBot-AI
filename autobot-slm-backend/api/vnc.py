@@ -11,10 +11,6 @@ Related to Issue #725.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import Node
 from models.schemas import (
     VNCConnectionInfo,
@@ -27,6 +23,9 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.vnc_credentials import vnc_credential_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +62,10 @@ async def create_vnc_credential(
 
         return vnc_credential_service.to_response(credential, node)
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         )
     except Exception as e:
         logger.error("Failed to create VNC credential: %s", e)

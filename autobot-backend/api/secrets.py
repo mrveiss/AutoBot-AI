@@ -479,7 +479,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret '%s' (ID: %s)", secret_data["name"], secret_id)
+        logger.info("Updated secret (ID: %s)", secret_id[:8])
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -505,7 +505,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret '%s' (ID: %s)", secret_data["name"], secret_id)
+        logger.info("Deleted secret (ID: %s)", secret_id[:8])
         return True
 
     def transfer_secrets(
@@ -703,13 +703,11 @@ async def create_secret(
         )
     except ValueError as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
         logger.error("Failed to create secret: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create secret: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
 @with_error_handling(
@@ -742,7 +740,7 @@ async def list_secrets(
         )
     except Exception as e:
         logger.error("Failed to list secrets: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to list secrets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
 @with_error_handling(
@@ -796,7 +794,7 @@ async def get_secrets_status(
         return {
             "status": "error",
             "service": "secrets_manager",
-            "error": str(e),
+            "error": "Internal server error",
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -847,7 +845,7 @@ async def get_secrets_stats(
         return JSONResponse(status_code=200, content=stats)
     except Exception as e:
         logger.error("Failed to get secrets stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
 @with_error_handling(
@@ -906,7 +904,7 @@ async def get_secret(
 
         audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
         return JSONResponse(status_code=200, content=secret)
-    except PermissionError as e:
+    except PermissionError:
         audit_log(
             "ACCESS",
             secret_id,
@@ -914,13 +912,13 @@ async def get_secret(
             success=False,
             details="permission_denied",
         )
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
         logger.error("Failed to get secret: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get secret: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
 @with_error_handling(
@@ -967,7 +965,7 @@ async def update_secret(
                 "secret": secret_data,
             },
         )
-    except PermissionError as e:
+    except PermissionError:
         audit_log(
             "UPDATE",
             secret_id,
@@ -975,15 +973,13 @@ async def update_secret(
             success=False,
             details="permission_denied",
         )
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
         logger.error("Failed to update secret: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update secret: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
 @with_error_handling(
@@ -1016,7 +1012,7 @@ async def delete_secret(
             status_code=200,
             content={"status": "success", "message": "Secret deleted successfully"},
         )
-    except PermissionError as e:
+    except PermissionError:
         audit_log(
             "DELETE",
             secret_id,
@@ -1024,15 +1020,13 @@ async def delete_secret(
             success=False,
             details="permission_denied",
         )
-        raise HTTPException(status_code=403, detail=str(e))
+        raise HTTPException(status_code=403, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
         logger.error("Failed to delete secret: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete secret: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
 @with_error_handling(
@@ -1074,9 +1068,7 @@ async def transfer_secrets(
     except Exception as e:
         audit_log("TRANSFER", "N/A", http_request, success=False, details=str(e))
         logger.error("Failed to transfer secrets: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to transfer secrets: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
 @with_error_handling(
@@ -1096,9 +1088,7 @@ async def get_chat_cleanup_info(
         return JSONResponse(status_code=200, content=info)
     except Exception as e:
         logger.error("Failed to get chat cleanup info: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get cleanup info: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
 @with_error_handling(
@@ -1142,6 +1132,4 @@ async def delete_chat_secrets(
     except Exception as e:
         audit_log("BULK_DELETE", "N/A", http_request, success=False, details=str(e))
         logger.error("Failed to delete chat secrets: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete chat secrets: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete chat secrets")

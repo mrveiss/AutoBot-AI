@@ -150,7 +150,7 @@ async def ai_stack_health_check(admin_check: bool = Depends(check_admin_permissi
             content={
                 "success": False,
                 "error": "AI Stack unavailable",
-                "details": str(e),
+                "details": "Internal server error",
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )
@@ -454,7 +454,7 @@ async def comprehensive_research(
             results["web_research"] = web_result
         except AIStackError as e:
             logger.warning("Web research failed: %s", e)
-            results["web_research"] = {"error": str(e)}
+            results["web_research"] = {"error": "Internal server error"}
 
     return create_success_response(
         results, "Comprehensive research completed successfully"
@@ -633,8 +633,8 @@ async def _execute_parallel_agents(
             continue
         try:
             results[agent] = await _execute_agent_query(ai_client, agent, query)
-        except Exception as e:
-            results[agent] = {"error": str(e)}
+        except Exception:
+            results[agent] = {"error": "Internal server error"}
     return results
 
 
@@ -661,8 +661,8 @@ async def _execute_sequential_agents(
             # Update context for next agent
             if result.get("content"):
                 context = f"{context}\n\nPrevious result: {result['content']}"
-        except Exception as e:
-            results[agent] = {"error": str(e)}
+        except Exception:
+            results[agent] = {"error": "Internal server error"}
 
     return results
 

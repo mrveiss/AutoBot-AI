@@ -90,7 +90,7 @@ async def get_research_status():
             content={
                 "status": "error",
                 "enabled": False,
-                "message": f"Web research not available: {str(e)}",
+                "message": "Web research not available",
                 "timestamp": datetime.now().isoformat(),
             },
         )
@@ -146,9 +146,7 @@ async def enable_web_research():
 
     except Exception as e:
         logger.error("Failed to enable web research: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to enable web research: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to enable web research")
 
 
 @with_error_handling(
@@ -201,9 +199,7 @@ async def disable_web_research():
 
     except Exception as e:
         logger.error("Failed to disable web research: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to disable web research: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to disable web research")
 
 
 @with_error_handling(
@@ -255,9 +251,7 @@ async def get_research_settings():
 
     except Exception as e:
         logger.error("Failed to get research settings: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get research settings: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get research settings")
 
 
 @with_error_handling(
@@ -269,9 +263,8 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from services.config_service import ConfigService
-
         from config import unified_config_manager
+        from services.config_service import ConfigService
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
@@ -319,7 +312,7 @@ async def update_research_settings(settings: WebResearchSettings):
     except Exception as e:
         logger.error("Failed to update research settings: %s", e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to update research settings: {str(e)}"
+            status_code=500, detail="Failed to update research settings"
         )
 
 
@@ -360,7 +353,7 @@ async def test_web_research(query: str = "test query"):
             content={
                 "status": "error",
                 "test_query": query,
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
             },
         )
@@ -397,9 +390,7 @@ async def clear_research_cache():
 
     except Exception as e:
         logger.error("Failed to clear research cache: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to clear research cache: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to clear research cache")
 
 
 @with_error_handling(
@@ -433,9 +424,7 @@ async def reset_circuit_breakers():
 
     except Exception as e:
         logger.error("Failed to reset circuit breakers: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reset circuit breakers: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to reset circuit breakers")
 
 
 @with_error_handling(
@@ -477,6 +466,4 @@ async def get_usage_stats():
 
     except Exception as e:
         logger.error("Failed to get usage stats: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get usage stats: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get usage stats")

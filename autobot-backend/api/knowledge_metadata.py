@@ -88,7 +88,7 @@ async def create_metadata_template(request: CreateMetadataTemplateRequest):
         raise
     except Exception as e:
         logger.error("Failed to create metadata template: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metadata/templates")
@@ -115,7 +115,7 @@ async def list_metadata_templates(category: str = None):
 
     except Exception as e:
         logger.error("Failed to list metadata templates: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metadata/templates/{template_id}")
@@ -134,7 +134,7 @@ async def get_metadata_template(template_id: str):
         raise
     except Exception as e:
         logger.error("Failed to get metadata template %s: %s", template_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/metadata/templates/{template_id}")
@@ -171,7 +171,7 @@ async def update_metadata_template(
         raise
     except Exception as e:
         logger.error("Failed to update metadata template %s: %s", template_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/metadata/templates/{template_id}")
@@ -194,7 +194,7 @@ async def delete_metadata_template(template_id: str):
         raise
     except Exception as e:
         logger.error("Failed to delete metadata template %s: %s", template_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -226,7 +226,7 @@ async def validate_metadata(request: ValidateMetadataRequest):
 
     except Exception as e:
         logger.error("Failed to validate metadata: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/metadata/search")
@@ -273,7 +273,7 @@ async def search_by_metadata(request: SearchByMetadataRequest):
         raise
     except Exception as e:
         logger.error("Failed to search by metadata: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -311,7 +311,7 @@ async def list_fact_versions(fact_id: str, limit: int = 10):
         raise
     except Exception as e:
         logger.error("Failed to list versions for %s: %s", fact_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/facts/{fact_id}/versions/{version}")
@@ -337,7 +337,7 @@ async def get_fact_version(fact_id: str, version: int):
         raise
     except Exception as e:
         logger.error("Failed to get version %d for %s: %s", version, fact_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/facts/{fact_id}/revert")
@@ -377,7 +377,7 @@ async def revert_to_version(fact_id: str, request: RevertToVersionRequest):
         logger.error(
             "Failed to revert %s to version %d: %s", fact_id, request.version, e
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/facts/{fact_id}/versions/compare")
@@ -407,7 +407,7 @@ async def compare_versions(fact_id: str, request: CompareVersionsRequest):
         raise
     except Exception as e:
         logger.error("Failed to compare versions for %s: %s", fact_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/facts/{fact_id}/versions")
@@ -440,4 +440,4 @@ async def delete_version_history(fact_id: str, confirm: bool = False):
         raise
     except Exception as e:
         logger.error("Failed to delete version history for %s: %s", fact_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

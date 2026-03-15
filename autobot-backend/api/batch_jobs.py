@@ -866,7 +866,7 @@ async def batch_chat_initialization():
 
     except Exception as e:
         logger.error("Batch chat initialization failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def get_chat_sessions():

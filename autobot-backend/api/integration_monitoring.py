@@ -121,9 +121,9 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
             "message": health.message,
             "details": health.details,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Connection test failed for %s", request.provider)
-        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Connection test failed")
 
 
 @router.get("/providers")
@@ -179,11 +179,11 @@ async def list_hosts(
             result = await integration.execute_action("list_applications", {})
 
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Internal server error")
+    except Exception:
         logger.exception("Failed to list hosts for %s", provider)
-        raise HTTPException(status_code=500, detail=f"Failed to list hosts: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list hosts")
 
 
 @router.post("/{provider}/metrics")
@@ -218,13 +218,11 @@ async def query_metrics(
         result = await integration.execute_action("get_metrics", params)
 
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Internal server error")
+    except Exception:
         logger.exception("Failed to query metrics for %s", provider)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to query metrics: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to query metrics")
 
 
 @router.get("/{provider}/alerts")
@@ -257,11 +255,11 @@ async def list_alerts(
             result = await integration.execute_action("list_alerts", {})
 
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Internal server error")
+    except Exception:
         logger.exception("Failed to list alerts for %s", provider)
-        raise HTTPException(status_code=500, detail=f"Failed to list alerts: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list alerts")
 
 
 @router.post("/{provider}/events")
@@ -301,11 +299,11 @@ async def get_events(
         result = await integration.execute_action("get_events", params)
 
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Internal server error")
+    except Exception:
         logger.exception("Failed to get events for %s", provider)
-        raise HTTPException(status_code=500, detail=f"Failed to get events: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get events")
 
 
 def _validate_provider(provider: str) -> None:

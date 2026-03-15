@@ -286,7 +286,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
             "success": False,
             "vnc_type": vnc_type,
             "accessible": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": f"HTTP error checking VNC {vnc_type} status",
         }
     except Exception as e:
@@ -295,7 +295,7 @@ async def check_vnc_status_mcp(request: VNCStatusRequest) -> Metadata:
             "success": False,
             "vnc_type": vnc_type,
             "accessible": False,
-            "error": str(e),
+            "error": "Internal server error",
             "message": f"Failed to check VNC {vnc_type} status",
         }
 
@@ -383,10 +383,10 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                 }
     except aiohttp.ClientError as e:
         logger.warning("HTTP error getting Playwright state: %s", e)
-        context["playwright_state"] = {"error": str(e)}
+        context["playwright_state"] = {"error": "Internal server error"}
     except Exception as e:
         logger.warning("Failed to get Playwright state: %s", e)
-        context["playwright_state"] = {"error": str(e)}
+        context["playwright_state"] = {"error": "Internal server error"}
 
     # Get VNC state using singleton HTTP client
     try:
@@ -408,10 +408,10 @@ async def get_browser_vnc_context_mcp() -> Metadata:
                 context["vnc_state"]["recent_observations"] = recent
     except aiohttp.ClientError as e:
         logger.warning("HTTP error getting VNC state: %s", e)
-        context["vnc_state"] = {"error": str(e)}
+        context["vnc_state"] = {"error": "Internal server error"}
     except Exception as e:
         logger.warning("Failed to get VNC state: %s", e)
-        context["vnc_state"] = {"error": str(e)}
+        context["vnc_state"] = {"error": "Internal server error"}
 
     return context
 
@@ -620,7 +620,11 @@ async def desktop_screenshot_mcp() -> Metadata:
 
     except Exception as e:
         logger.error("Screenshot capture failed: %s", e)
-        return {"success": False, "message": str(e), "action": "screenshot"}
+        return {
+            "success": False,
+            "message": "Internal server error",
+            "action": "screenshot",
+        }
 
 
 @with_error_handling(

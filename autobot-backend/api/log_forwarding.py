@@ -282,7 +282,7 @@ async def list_destinations(
         return destinations
     except Exception as e:
         logger.error("Error listing destinations: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -318,7 +318,7 @@ async def get_destination(
         raise
     except Exception as e:
         logger.error("Error getting destination %s: %s", name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -365,7 +365,7 @@ async def create_destination_endpoint(
         raise
     except Exception as e:
         logger.error("Error creating destination: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -416,7 +416,7 @@ async def update_destination(
         raise
     except Exception as e:
         logger.error("Error updating destination %s: %s", name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -450,7 +450,7 @@ async def delete_destination(
         raise
     except Exception as e:
         logger.error("Error deleting destination %s: %s", name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -494,7 +494,7 @@ async def test_destination(
         raise
     except Exception as e:
         logger.error("Error testing destination %s: %s", name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -522,7 +522,7 @@ async def test_all_destinations(
         }
     except Exception as e:
         logger.error("Error testing all destinations: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -578,7 +578,7 @@ async def get_status(
         }
     except Exception as e:
         logger.error("Error getting status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -612,7 +612,7 @@ async def start_forwarding(
         return {"message": "Log forwarding service started"}
     except Exception as e:
         logger.error("Error starting log forwarding: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -639,7 +639,7 @@ async def stop_forwarding(
         return {"message": "Log forwarding service stopped"}
     except Exception as e:
         logger.error("Error stopping log forwarding: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _get_destination_type_list() -> list:

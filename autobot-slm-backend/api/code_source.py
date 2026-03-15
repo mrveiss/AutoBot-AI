@@ -254,7 +254,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         logger.error("SSH validation failed for %s: %s", node.hostname, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate path on {node.hostname}: {str(e)}",
+            detail="Failed to validate path on {node.hostname}",
         )
 
 

@@ -187,10 +187,10 @@ async def create_organization(
             organization=_org_to_response(org),
         )
 
-    except DuplicateOrganizationError as e:
+    except DuplicateOrganizationError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 

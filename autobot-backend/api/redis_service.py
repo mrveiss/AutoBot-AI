@@ -196,12 +196,10 @@ async def start_redis_service(
         raise
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
-        raise HTTPException(
-            status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
         logger.error("Start service error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Service start failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Service start failed")
 
 
 @with_error_handling(
@@ -243,12 +241,10 @@ async def stop_redis_service(
         raise
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
-        raise HTTPException(
-            status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
         logger.error("Stop service error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Service stop failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Service stop failed")
 
 
 @with_error_handling(
@@ -288,12 +284,10 @@ async def restart_redis_service(
         raise
     except RedisConnectionError as e:
         logger.error("Redis connection error: %s", e)
-        raise HTTPException(
-            status_code=503, detail=f"Cannot connect to Redis VM: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail="Cannot connect to Redis VM")
     except Exception as e:
         logger.error("Restart service error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Service restart failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Service restart failed")
 
 
 @with_error_handling(
@@ -321,7 +315,7 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
 
     except Exception as e:
         logger.error("Get status error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get status")
 
 
 @with_error_handling(
@@ -351,6 +345,4 @@ async def get_redis_health(manager: RedisServiceManager = Depends(get_service_ma
 
     except Exception as e:
         logger.error("Get health error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get health status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get health status")

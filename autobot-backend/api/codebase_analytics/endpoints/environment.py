@@ -64,7 +64,7 @@ def _validate_env_path_security(path: str, project_root: str) -> Optional[JSONRe
         return JSONResponse(
             {
                 "status": "error",
-                "message": f"Invalid path: {str(e)}",
+                "message": "Invalid path",
                 "total_hardcoded_values": 0,
                 "categories": {},
                 "recommendations_count": 0,
@@ -394,6 +394,9 @@ async def get_environment_analysis(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -428,9 +431,7 @@ async def get_environment_analysis(
         )
     except Exception as e:
         logger.error("Environment analysis failed: %s", e, exc_info=True)
-        return JSONResponse(
-            _build_error_response(f"Environment analysis failed: {str(e)}")
-        )
+        return JSONResponse(_build_error_response("Environment analysis failed"))
 
 
 @router.get("/env-recommendations")
@@ -442,6 +443,9 @@ async def get_environment_analysis(
 async def get_env_recommendations(
     path: str = Query(
         None, description="Root path to analyze (defaults to project root)"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """
@@ -502,7 +506,7 @@ async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
         return JSONResponse(
             {
                 "status": "error",
-                "message": str(e),
+                "message": "Internal server error",
                 "recommendations": [],
                 "total": 0,
             }
@@ -616,6 +620,9 @@ async def export_env_analysis(
     limit: int = Query(None, description="Limit number of results (default: all)"),
     include_recommendations: bool = Query(
         True, description="Include recommendations in export"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """

@@ -836,7 +836,7 @@ async def analyze_conversations(
 
     except Exception as e:
         logger.error("Error analyzing conversations: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -899,7 +899,7 @@ async def get_intent_stats(
 
     except Exception as e:
         logger.error("Error getting intent stats: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -967,7 +967,7 @@ async def get_flow_paths(
 
     except Exception as e:
         logger.error("Error getting flow paths: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1006,7 +1006,7 @@ async def get_bottlenecks(
 
     except Exception as e:
         logger.error("Error getting bottlenecks: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1050,7 +1050,7 @@ async def get_hourly_distribution(
 
     except Exception as e:
         logger.error("Error getting distribution: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1080,4 +1080,4 @@ async def detect_intent(
 
     except Exception as e:
         logger.error("Error detecting intent: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

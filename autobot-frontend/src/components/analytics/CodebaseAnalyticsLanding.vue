@@ -134,6 +134,9 @@
               {{ summaries[source.id].last_commit!.short_hash }}
             </span>
           </div>
+          <div v-if="summaries[source.id]?.last_commit?.message" class="commit-message-row">
+            <span class="commit-message">{{ summaries[source.id].last_commit!.message }}</span>
+          </div>
         </div>
       </div>
 
@@ -673,6 +676,21 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+}
+
+.commit-message-row {
+  margin-top: var(--spacing-1);
+  padding-left: calc(var(--spacing-2) + 1em);
+}
+
+.commit-message {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
 }
 
 /* Card Actions (#1468) */

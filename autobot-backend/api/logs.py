@@ -41,6 +41,15 @@ _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
+
+def _validate_log_path(file_path) -> Path:
+    """Ensure file_path is under LOG_DIR (#1733)."""
+    resolved = Path(file_path).resolve()
+    if not str(resolved).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return resolved
+
+
 # Issue #514: Per-file locking to prevent concurrent write corruption
 from typing import Dict
 
@@ -409,7 +418,7 @@ async def get_log_sources(admin_check: bool = Depends(check_admin_permission)):
         }
     except Exception as e:
         logger.error("Error getting log sources: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
@@ -479,7 +488,12 @@ async def get_recent_logs(
         }
     except Exception as e:
         logger.error("Error getting recent logs: %s", e)
-        return {"entries": [], "count": 0, "limit": limit, "error": str(e)}
+        return {
+            "entries": [],
+            "count": 0,
+            "limit": limit,
+            "error": "Internal server error",
+        }
 
 
 @with_error_handling(
@@ -500,7 +514,7 @@ async def list_logs(
         return sources["file_logs"]
     except Exception as e:
         logger.error("Error listing logs: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -540,7 +554,7 @@ async def read_log(
             )
         except OSError as e:
             logger.error("Failed to read log file %s: %s", file_path, e)
-            raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
+            raise HTTPException(status_code=500, detail="Failed to read log file")
 
         return {
             "filename": filename,
@@ -554,7 +568,7 @@ async def read_log(
         raise
     except Exception as e:
         logger.error("Error reading log %s: %s", filename, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _execute_docker_logs_command(
@@ -670,7 +684,7 @@ async def read_container_logs(
         raise
     except Exception as e:
         logger.error("Error reading container logs for %s: %s", service, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _extract_log_level(message: str) -> str:
@@ -778,7 +792,7 @@ async def get_unified_logs(
 
     except Exception as e:
         logger.error("Error getting unified logs: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _parse_file_timestamp(line: str) -> Optional[str]:
@@ -860,7 +874,7 @@ async def stream_log(
         raise
     except Exception as e:
         logger.error("Error streaming log %s: %s", filename, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -895,13 +909,13 @@ async def tail_log(websocket: WebSocket, filename: str):
             await _tail_file_to_websocket(file_path, websocket)
         except OSError as e:
             logger.error("Failed to tail log file %s: %s", file_path, e)
-            await websocket.send_json({"error": f"Failed to read log file: {e}"})
+            await websocket.send_json({"error": "Failed to read log file"})
             return
 
     except Exception as e:
         logger.error("WebSocket error for %s: %s", filename, e)
         try:
-            await websocket.send_json({"error": str(e)})
+            await websocket.send_json({"error": "Internal server error"})
         except Exception as send_err:
             logger.debug("Failed to send error to WebSocket: %s", send_err)
     finally:
@@ -1006,7 +1020,7 @@ async def search_logs(
 
     except Exception as e:
         logger.error("Error searching logs: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1055,4 +1069,4 @@ async def clear_log(
         raise
     except Exception as e:
         logger.error("Error clearing log %s: %s", filename, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

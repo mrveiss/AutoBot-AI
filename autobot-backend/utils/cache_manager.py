@@ -191,7 +191,7 @@ class CacheManager:
 
         except Exception as e:
             logger.error("Error getting cache stats: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
 
 # Create global cache manager instance

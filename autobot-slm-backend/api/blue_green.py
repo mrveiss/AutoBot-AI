@@ -100,10 +100,10 @@ async def create_deployment(
             current_user.get("sub"),
         )
         return deployment
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -318,8 +318,8 @@ async def purge_roles(
             node_id=data.node_id,
             services_stopped=stopped_services,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )

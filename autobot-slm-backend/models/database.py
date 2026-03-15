@@ -369,6 +369,40 @@ class UpdateJob(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class FleetSyncJob(Base):
+    """Fleet sync job tracking, persisted to survive restarts (#1707)."""
+
+    __tablename__ = "fleet_sync_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), unique=True, nullable=False, index=True)
+    strategy = Column(String(20), nullable=False)
+    batch_size = Column(Integer, default=1)
+    restart = Column(Boolean, default=True)
+    status = Column(String(20), default="pending")
+    total_nodes = Column(Integer, default=0)
+    completed_nodes = Column(Integer, default=0)
+    failed_nodes = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class FleetSyncNodeState(Base):
+    """Per-node state within a fleet sync job (#1707)."""
+
+    __tablename__ = "fleet_sync_node_states"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(64), nullable=False, index=True)
+    node_id = Column(String(64), nullable=False)
+    hostname = Column(String(128), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    status = Column(String(20), default="pending")
+    message = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
 class Service(Base):
     """Service tracking for systemd services on nodes."""
 

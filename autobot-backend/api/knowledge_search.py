@@ -422,7 +422,7 @@ async def _process_with_rag_agent(
             "reformulated_queries": (
                 reformulated_queries[1:] if len(reformulated_queries) > 1 else []
             ),
-            "error": str(e),
+            "error": "Internal server error",
             "rag_enhanced": False,
         }
 
@@ -1238,7 +1238,7 @@ async def _enhance_search_with_rag(query: str, results: List[Metadata]) -> Metad
     except Exception as e:
         logger.error("RAG enhancement error: %s", e)
         return {
-            "error": str(e),
+            "error": "Internal server error",
             "analysis_summary": {
                 "total_analyzed": len(results),
                 "error": "RAG analysis failed",

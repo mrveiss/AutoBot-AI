@@ -943,7 +943,7 @@ async def analyze_codebase(
 
     except Exception as e:
         logger.error("Failed to analyze codebase: %s", e, exc_info=True)
-        return _no_data_response(f"Analysis failed: {str(e)}")
+        return _no_data_response("Analysis failed")
 
 
 def _build_analysis_result(
@@ -1128,7 +1128,7 @@ async def get_high_risk_files(
 
     except Exception as e:
         logger.error("Failed to get high-risk files: %s", e, exc_info=True)
-        return _no_data_response(f"Analysis failed: {str(e)}")
+        return _no_data_response("Analysis failed")
 
 
 def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
@@ -1187,7 +1187,7 @@ async def get_file_risk(
 
     except Exception as e:
         logger.error("Failed to analyze file %s: %s", file_path, e, exc_info=True)
-        return _no_data_response(f"Analysis failed for {file_path}: {str(e)}")
+        return _no_data_response("Analysis failed for {file_path}")
 
 
 def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> str:
@@ -1294,7 +1294,7 @@ async def get_risk_heatmap(
 
     except Exception as e:
         logger.error("Failed to generate heatmap: %s", e, exc_info=True)
-        return _no_data_response(f"Heatmap generation failed: {str(e)}")
+        return _no_data_response("Heatmap generation failed")
 
 
 @router.get("/trends")
@@ -1467,7 +1467,7 @@ async def get_prediction_summary(
 
     except Exception as e:
         logger.error("Failed to generate summary: %s", e, exc_info=True)
-        return _no_data_response(f"Summary generation failed: {str(e)}")
+        return _no_data_response("Summary generation failed")
 
 
 @router.get("/factors")

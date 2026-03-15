@@ -19,6 +19,7 @@ from ..scanner import (
     _active_tasks,
     _current_indexing_task_id,
     _index_queue,
+    _remove_queue_entries_redis,
     _tasks_lock,
     indexing_tasks,
 )
@@ -77,7 +78,7 @@ async def get_index_queue():
     error_code_prefix="CODEBASE",
 )
 async def dequeue_source(source_id: str):
-    """Remove all pending queue entries for a given source_id."""
+    """Remove all pending queue entries for a given source_id (#1717)."""
     async with _tasks_lock:
         before = len(_index_queue)
         to_keep = [item for item in _index_queue if item.get("source_id") != source_id]
@@ -85,6 +86,8 @@ async def dequeue_source(source_id: str):
         _index_queue.extend(to_keep)
         removed = before - len(_index_queue)
 
+    if removed:
+        await _remove_queue_entries_redis(source_id)
     logger.info("Removed %d queue entries for source %s", removed, source_id)
     return JSONResponse(
         {

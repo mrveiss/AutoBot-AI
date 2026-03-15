@@ -709,7 +709,9 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Code generation failed: %s", e)
             return CodeGenerationResponse(
-                success=False, error=str(e), processing_time=time.time() - start_time
+                success=False,
+                error="Internal server error",
+                processing_time=time.time() - start_time,
             )
 
     async def refactor_code(self, request: RefactoringRequest) -> RefactoringResponse:
@@ -770,7 +772,7 @@ class CodeGenerationEngine:
             return RefactoringResponse(
                 success=False,
                 original_code=request.code,
-                error=str(e),
+                error="Internal server error",
                 processing_time=time.time() - start_time,
             )
 
@@ -907,7 +909,10 @@ class CodeGenerationEngine:
 
         except Exception as e:
             logger.error("Failed to get stats: %s", e)
-            return {"date": datetime.now().strftime("%Y-%m-%d"), "error": str(e)}
+            return {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "error": "Internal server error",
+            }
 
 
 # =============================================================================

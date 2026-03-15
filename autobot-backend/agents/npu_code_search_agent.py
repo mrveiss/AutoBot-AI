@@ -24,6 +24,7 @@ from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.security.path_validator import validate_path
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -375,6 +376,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         errors = []
 
         try:
+            root_path = str(validate_path(root_path))
             self.logger.info("Starting codebase indexing: %s", root_path)
             index_key = self._get_index_key(root_path)
 
@@ -570,6 +572,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     async def _index_file(self, file_path: str, relative_path: str):
         """Index a single file with embeddings (Issue #207, #398: refactored)."""
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1084,7 +1087,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
         import re
 
         try:
-            pattern = re.compile(query, re.IGNORECASE | re.MULTILINE)
+            safe_query = re.escape(query)
+            pattern = re.compile(safe_query, re.IGNORECASE | re.MULTILINE)
         except re.error as e:
             self.logger.error("Invalid regex pattern: %s, error: %s", query, e)
             return []

@@ -179,13 +179,13 @@ def _build_indexing_response(
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
-async def get_codebase_stats():
+async def get_codebase_stats(source_id: Optional[str] = None):
     """
     Get real codebase statistics from storage.
 
-    Issue #540: Returns indexing status when indexing is in progress,
-    along with any available stats from the previous indexing run.
+    Issue #540: Returns indexing status when indexing is in progress.
     Issue #665: Refactored to use _build_indexing_response helper.
+    Issue #1710: source_id filters to per-project stats.
     """
     # Issue #540: Check if indexing is in progress
     active_task = _get_active_indexing_task()
@@ -193,7 +193,6 @@ async def get_codebase_stats():
     code_collection = await asyncio.to_thread(get_code_collection)
 
     if not code_collection:
-        # Issue #540, #665: Even if ChromaDB fails, show indexing status if available
         if active_task:
             return _build_indexing_response(
                 "Indexing in progress. ChromaDB connection pending.",
@@ -201,8 +200,10 @@ async def get_codebase_stats():
             )
         return _no_data_response("ChromaDB connection failed.")
 
+    # Issue #1710: Per-source stats use source-scoped document ID
+    stats_doc_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
     try:
-        results = code_collection.get(ids=["codebase_stats"], include=["metadatas"])
+        results = code_collection.get(ids=[stats_doc_id], include=["metadatas"])
     except Exception as chroma_error:
         logger.warning("ChromaDB stats query failed: %s", chroma_error)
         # Issue #540, #665: Show indexing status even on query failure
@@ -240,27 +241,34 @@ async def get_codebase_stats():
     return JSONResponse(response)
 
 
-def _fetch_hardcodes_from_redis(redis_client, hardcode_type: Optional[str]) -> list:
+def _fetch_hardcodes_from_redis(
+    redis_client,
+    hardcode_type: Optional[str],
+    source_id: Optional[str] = None,
+) -> list:
     """
     Fetch hardcoded values from Redis with pipeline batching.
 
     Issue #620: Extracted from get_hardcoded_values.
     Issue #561: Uses pipeline batching to fix N+1 query pattern.
+    Issue #1710: source_id scopes to per-project keys.
 
     Args:
         redis_client: Redis client
         hardcode_type: Optional type filter
+        source_id: Optional source ID for per-project scoping
 
     Returns:
         List of hardcoded values
     """
+    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
     results = []
     if hardcode_type:
-        hardcodes_data = redis_client.get(f"codebase:hardcodes:{hardcode_type}")
+        hardcodes_data = redis_client.get(f"{key_prefix}:hardcodes:{hardcode_type}")
         if hardcodes_data:
             results = json.loads(hardcodes_data)
     else:
-        keys = list(redis_client.scan_iter(match="codebase:hardcodes:*"))
+        keys = list(redis_client.scan_iter(match=f"{key_prefix}:hardcodes:*"))
         if keys:
             pipe = redis_client.pipeline()
             for key in keys:
@@ -304,18 +312,25 @@ def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
     operation="get_hardcoded_values",
     error_code_prefix="CODEBASE",
 )
-async def get_hardcoded_values(hardcode_type: Optional[str] = None):
+async def get_hardcoded_values(
+    hardcode_type: Optional[str] = None,
+    source_id: Optional[str] = None,
+):
     """
     Get real hardcoded values found in the codebase.
 
     Issue #620: Refactored to use helper functions.
+    Issue #1710: source_id scopes to per-project data.
     """
     redis_client = await get_redis_connection()
 
     if redis_client:
-        # Issue #620: Use helper for Redis fetch
+        # Issue #620, #1710: Use helper for Redis fetch
         all_hardcodes = await asyncio.to_thread(
-            _fetch_hardcodes_from_redis, redis_client, hardcode_type
+            _fetch_hardcodes_from_redis,
+            redis_client,
+            hardcode_type,
+            source_id,
         )
         storage_type = "redis"
     elif _in_memory_storage:
@@ -361,11 +376,32 @@ def _parse_problem_metadata(metadata: dict) -> dict:
     }
 
 
-def _fetch_problems_from_chromadb(code_collection, problem_type: Optional[str]) -> list:
-    """Fetch problems from ChromaDB. (Issue #315 - extracted)"""
-    where_filter = {"type": "problem"}
-    if problem_type:
-        where_filter["problem_type"] = problem_type
+def _fetch_problems_from_chromadb(
+    code_collection,
+    problem_type: Optional[str],
+    source_id: Optional[str] = None,
+) -> list:
+    """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)"""
+    if source_id:
+        if problem_type:
+            where_filter = {
+                "$and": [
+                    {"type": "problem"},
+                    {"source_id": source_id},
+                    {"problem_type": problem_type},
+                ]
+            }
+        else:
+            where_filter = {
+                "$and": [
+                    {"type": "problem"},
+                    {"source_id": source_id},
+                ]
+            }
+    else:
+        where_filter = {"type": "problem"}
+        if problem_type:
+            where_filter["problem_type"] = problem_type
 
     results = get_all_paginated(
         code_collection, where=where_filter, include=["metadatas"]
@@ -373,28 +409,30 @@ def _fetch_problems_from_chromadb(code_collection, problem_type: Optional[str]) 
     return [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
 
-async def _fetch_problems_from_redis(problem_type: Optional[str]) -> tuple:
+async def _fetch_problems_from_redis(
+    problem_type: Optional[str], source_id: Optional[str] = None
+) -> tuple:
     """Fetch problems from Redis. Returns (problems, success).
 
     Issue #315: Extracted helper.
     Issue #361: Avoid blocking with asyncio.to_thread.
     Issue #561: Fixed N+1 query pattern with pipeline batching.
+    Issue #1710: source_id scopes to per-project keys.
     """
     redis_client = await get_redis_connection()
     if not redis_client:
         return [], False
 
-    # Issue #361 - avoid blocking - wrap Redis ops in thread pool
-    # Issue #561 - fix N+1 query pattern with pipeline batching
+    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
+
     def _fetch_problems():
         results = []
         if problem_type:
-            problems_data = redis_client.get(f"codebase:problems:{problem_type}")
+            problems_data = redis_client.get(f"{key_prefix}:problems:{problem_type}")
             if problems_data:
                 results = json.loads(problems_data)
         else:
-            # Issue #561: Collect keys first, then batch fetch with pipeline
-            keys = list(redis_client.scan_iter(match="codebase:problems:*"))
+            keys = list(redis_client.scan_iter(match=f"{key_prefix}:problems:*"))
             if keys:
                 pipe = redis_client.pipeline()
                 for key in keys:
@@ -465,7 +503,7 @@ async def get_embedding_stats() -> JSONResponse:
         return JSONResponse(
             {
                 "status": "error",
-                "message": str(e),
+                "message": "Internal server error",
                 "embedding_stats": None,
             }
         )
@@ -510,7 +548,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
         return JSONResponse(
             {
                 "status": "error",
-                "message": str(e),
+                "message": "Operation failed",
             }
         )
 
@@ -521,16 +559,21 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
-async def get_codebase_problems(problem_type: Optional[str] = None):
-    """Get real code problems detected during analysis"""
+async def get_codebase_problems(
+    problem_type: Optional[str] = None,
+    source_id: Optional[str] = None,
+):
+    """Get real code problems detected during analysis (#1710: per-source)."""
     code_collection = await asyncio.to_thread(get_code_collection)
     all_problems = []
     storage_type = "chromadb"
 
-    # Try ChromaDB first (Issue #315 - use extracted helpers)
+    # Try ChromaDB first (Issue #315, #1710: per-source filter)
     if code_collection:
         try:
-            all_problems = _fetch_problems_from_chromadb(code_collection, problem_type)
+            all_problems = _fetch_problems_from_chromadb(
+                code_collection, problem_type, source_id=source_id
+            )
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:
             logger.warning(
@@ -538,18 +581,16 @@ async def get_codebase_problems(problem_type: Optional[str] = None):
             )
             code_collection = None
 
-    # Fallback to Redis if ChromaDB fails
+    # Issue #1759: Problems are stored to ChromaDB only (not Redis).
+    # When ChromaDB is unavailable, return no_data directly.
     if not code_collection:
-        all_problems, success = await _fetch_problems_from_redis(problem_type)
-        if not success:
-            return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "problems": [],
-                }
-            )
-        storage_type = "redis"
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "ChromaDB unavailable. Run indexing first.",
+                "problems": [],
+            }
+        )
 
     # Sort by severity (high, medium, low)
     severity_order = {"high": 0, "medium": 1, "low": 2}

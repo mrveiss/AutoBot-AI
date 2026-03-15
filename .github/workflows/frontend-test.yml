@@ -25,6 +25,10 @@ concurrency:
 env:
   NODE_VERSION: '20'
 
+
+permissions:
+  contents: read
+
 jobs:
   # Job 1: Unit and Integration Tests
   unit-tests:

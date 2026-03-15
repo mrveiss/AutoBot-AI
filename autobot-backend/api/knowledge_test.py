@@ -45,9 +45,13 @@ async def get_fresh_kb_stats():
 
         return {"source": "fresh_instance", "stats": stats, "success": True}
 
-    except Exception as e:
-        logger.error(f"Error getting fresh KB stats: {e}")
-        return {"source": "fresh_instance", "error": str(e), "success": False}
+    except Exception:
+        logger.error("Error getting fresh KB stats")
+        return {
+            "source": "fresh_instance",
+            "error": "Internal server error",
+            "success": False,
+        }
 
 
 @with_error_handling(
@@ -80,6 +84,10 @@ async def test_rebuild_search_index():
             "success": result.get("status") == "success",
         }
 
-    except Exception as e:
-        logger.error(f"Error rebuilding search index: {e}")
-        return {"operation": "rebuild_search_index", "error": str(e), "success": False}
+    except Exception:
+        logger.error("Error rebuilding search index")
+        return {
+            "operation": "rebuild_search_index",
+            "error": "Internal server error",
+            "success": False,
+        }

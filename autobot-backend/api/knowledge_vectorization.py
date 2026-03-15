@@ -9,15 +9,23 @@ import json
 import logging
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
+from auth_middleware import check_admin_permission, get_current_user
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from knowledge.pipeline.base import PipelineContext
+from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
+from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
+from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 from type_defs.common import Metadata
+from utils.async_chromadb_client import get_async_chromadb_client
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -305,7 +313,9 @@ async def _perform_uncached_batch_check(
 
 
 @router.post("/vectorization_status")
-async def check_vectorization_status_batch(request: dict, req: Request):
+async def check_vectorization_status_batch(
+    request: dict, req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
 
@@ -561,7 +571,10 @@ def _build_vectorization_response(
     """
     return {
         "status": "success",
-        "message": f"Vectorization complete: {success} successful, {failed} failed, {skipped} skipped",
+        "message": (
+            f"Vectorization complete: {success} successful, "
+            f"{failed} failed, {skipped} skipped"
+        ),
         "processed": fact_count,
         "success": success,
         "failed": failed,
@@ -577,6 +590,7 @@ async def vectorize_existing_facts(
     batch_size: int = 50,
     batch_delay: float = 0.5,
     skip_existing: bool = True,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Generate vector embeddings for facts in Redis.
@@ -1033,7 +1047,11 @@ async def _vectorize_fact_background(
 )
 @router.post("/vectorize_fact/{fact_id}")
 async def vectorize_individual_fact(
-    fact_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
+    fact_id: str,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Vectorize a single fact by ID with progress tracking.
@@ -1080,7 +1098,9 @@ async def vectorize_individual_fact(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_job/{job_id}")
-async def get_vectorization_job_status(job_id: str, req: Request):
+async def get_vectorization_job_status(
+    job_id: str, req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Get the status of a vectorization job.
 
@@ -1141,7 +1161,9 @@ def _collect_failed_keys(keys: list, results: list) -> List[str]:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_jobs/failed")
-async def get_failed_vectorization_jobs(req: Request):
+async def get_failed_vectorization_jobs(
+    req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Get all failed vectorization jobs from Redis.
 
@@ -1197,7 +1219,11 @@ async def get_failed_vectorization_jobs(req: Request):
 )
 @router.post("/vectorize_jobs/{job_id}/retry")
 async def retry_vectorization_job(
-    job_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
+    job_id: str,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Retry a failed vectorization job.
@@ -1244,7 +1270,9 @@ async def retry_vectorization_job(
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/{job_id}")
-async def delete_vectorization_job(job_id: str, req: Request):
+async def delete_vectorization_job(
+    job_id: str, req: Request, _admin: bool = Depends(check_admin_permission)
+):
     """
     Delete a vectorization job record from Redis.
 
@@ -1283,7 +1311,9 @@ async def delete_vectorization_job(job_id: str, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/failed/clear")
-async def clear_failed_vectorization_jobs(req: Request):
+async def clear_failed_vectorization_jobs(
+    req: Request, _admin: bool = Depends(check_admin_permission)
+):
     """
     Clear all failed vectorization jobs from Redis.
 
@@ -1345,7 +1375,9 @@ async def clear_failed_vectorization_jobs(req: Request):
 )
 @router.post("/vectorize_facts/background")
 async def start_background_vectorization(
-    req: Request, background_tasks: BackgroundTasks
+    req: Request,
+    background_tasks: BackgroundTasks,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Start background vectorization of all pending facts.
@@ -1374,7 +1406,9 @@ async def start_background_vectorization(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_facts/status")
-async def get_vectorization_status(req: Request):
+async def get_vectorization_status(
+    req: Request, _user: dict = Depends(get_current_user)
+):
     """Get the status of background vectorization"""
     vectorizer = get_background_vectorizer()
 
@@ -1384,3 +1418,292 @@ async def get_vectorization_status(req: Request):
         "check_interval": vectorizer.check_interval,
         "batch_size": vectorizer.batch_size,
     }
+
+
+# ===== CONTEXTUAL RETRIEVAL REINDEX (Issue #1513) =====
+
+_REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
+_REINDEX_DEFAULT_BATCH_SIZE = 20
+_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
+
+# Reindex task state (#1513, #1761)
+_reindex_state: dict = {
+    "is_running": False,
+    "enriched_count": 0,
+    "total_count": 0,
+    "started_at": None,
+    "completed_at": None,
+    "error": None,
+}
+
+
+class ReindexWithContextRequest(BaseModel):
+    """Request model for retroactive context enrichment (#1513)."""
+
+    collection_name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        pattern=_REINDEX_COLLECTION_PATTERN,
+        description="ChromaDB collection (defaults to knowledge_vectors)",
+    )
+    batch_size: int = Field(
+        default=_REINDEX_DEFAULT_BATCH_SIZE,
+        ge=1,
+        le=500,
+        description="Chunks to process per batch",
+    )
+
+
+class ReindexWithContextResponse(BaseModel):
+    """Response model for reindex_with_context (#1513)."""
+
+    status: str
+    message: str
+
+
+async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
+    """Fetch IDs of chunks without context using where filter.
+
+    Returns list of all unenriched chunk IDs. (#1513)
+    """
+    all_ids = []
+    offset = 0
+    while True:
+        results = await collection.get(
+            where={"has_context": {"$ne": True}},
+            limit=batch_size,
+            offset=offset,
+            include=["metadatas"],
+        )
+        ids = results.get("ids", [])
+        if not ids:
+            break
+        all_ids.extend(ids)
+        offset += len(ids)
+    return all_ids
+
+
+async def _fetch_chunks_by_ids(collection, chunk_ids: list) -> list:
+    """Fetch full chunk data for a list of IDs.
+
+    Returns list of (id, document, metadata) tuples. (#1513)
+    """
+    results = await collection.get(
+        ids=chunk_ids,
+        include=["documents", "metadatas"],
+    )
+    ids = results.get("ids", [])
+    documents = results.get("documents", [])
+    metadatas = results.get("metadatas", [])
+
+    chunks = []
+    for i, chunk_id in enumerate(ids):
+        meta = metadatas[i] if i < len(metadatas) else {}
+        doc = documents[i] if i < len(documents) else ""
+        chunks.append((chunk_id, doc, meta))
+    return chunks
+
+
+async def _enrich_document_group(
+    collection,
+    cognifier: ContextGeneratorCognifier,
+    doc_id: str,
+    chunks: list,
+) -> int:
+    """Enrich chunks for a single document and upsert back.
+
+    Returns number of chunks enriched. (#1513)
+    """
+    context = _build_pipeline_context(doc_id, chunks)
+    context = await cognifier.process(context)
+    return await _upsert_enriched_chunks(collection, chunks, context)
+
+
+def _build_pipeline_context(doc_id: str, chunks: list) -> PipelineContext:
+    """Build PipelineContext from raw chunk tuples (#1513)."""
+    context = PipelineContext()
+    try:
+        context.document_id = UUID(doc_id)
+    except (ValueError, TypeError):
+        context.document_id = None
+
+    for idx, (_, doc_text, meta) in enumerate(chunks):
+        processed = ProcessedChunk(
+            content=doc_text or "",
+            document_id=context.document_id or UUID(int=0),
+            chunk_index=meta.get("chunk_index", idx),
+            metadata=dict(meta),
+            document_type=meta.get("document_type", "unknown"),
+        )
+        context.chunks.append(processed)
+    return context
+
+
+async def _upsert_enriched_chunks(
+    collection, original_chunks: list, context: PipelineContext
+) -> int:
+    """Upsert enriched chunks back to ChromaDB (#1513)."""
+    update_ids = []
+    update_docs = []
+    update_metas = []
+    for i, (chunk_id, _, original_meta) in enumerate(original_chunks):
+        if i < len(context.chunks):
+            enriched = context.chunks[i]
+            updated_meta = {**original_meta, **enriched.metadata}
+            update_ids.append(chunk_id)
+            update_docs.append(enriched.content)
+            update_metas.append(updated_meta)
+
+    if update_ids:
+        await collection.upsert(
+            ids=update_ids,
+            documents=update_docs,
+            metadatas=update_metas,
+        )
+    return len(update_ids)
+
+
+async def _process_id_batch(collection, cognifier, chunk_ids: list) -> int:
+    """Process a batch of chunk IDs: fetch, group, enrich (#1513)."""
+    chunks = await _fetch_chunks_by_ids(collection, chunk_ids)
+    doc_groups = defaultdict(list)
+    for chunk_id, doc_text, meta in chunks:
+        did = meta.get("document_id", "unknown")
+        doc_groups[did].append((chunk_id, doc_text, meta))
+
+    enriched = 0
+    for did, group in doc_groups.items():
+        try:
+            enriched += await _enrich_document_group(collection, cognifier, did, group)
+        except Exception:
+            logger.exception("Failed to enrich doc '%s'", did)
+    return enriched
+
+
+async def _reindex_with_context_task(
+    collection_name: str,
+    batch_size: int,
+) -> None:
+    """Background task wrapper with state tracking (#1513, #1761)."""
+    _reindex_state["is_running"] = True
+    _reindex_state["enriched_count"] = 0
+    _reindex_state["total_count"] = 0
+    _reindex_state["started_at"] = datetime.utcnow().isoformat()
+    _reindex_state["completed_at"] = None
+    _reindex_state["error"] = None
+    try:
+        await _run_reindex(collection_name, batch_size)
+    except Exception as exc:
+        _reindex_state["error"] = str(exc)
+        logger.exception("Reindex task failed")
+    finally:
+        _reindex_state["is_running"] = False
+        _reindex_state["completed_at"] = datetime.utcnow().isoformat()
+
+
+async def _run_reindex(collection_name: str, batch_size: int) -> None:
+    """Core reindex logic, separated for testability (#1513)."""
+    cognifier = ContextGeneratorCognifier()
+    client = await get_async_chromadb_client()
+
+    try:
+        collection = await client.get_or_create_collection(name=collection_name)
+    except Exception:
+        logger.exception("Failed to get collection '%s'", collection_name)
+        return
+
+    try:
+        all_ids = await _fetch_unenriched_ids(collection, batch_size)
+    except Exception:
+        logger.exception("Failed to fetch unenriched chunk IDs")
+        return
+
+    if not all_ids:
+        logger.info("No unenriched chunks in '%s'", collection_name)
+        return
+
+    _reindex_state["total_count"] = len(all_ids)
+    enriched_total = 0
+    for i in range(0, len(all_ids), batch_size):
+        batch_ids = all_ids[i : i + batch_size]
+        try:
+            count = await _process_id_batch(collection, cognifier, batch_ids)
+            enriched_total += count
+            _reindex_state["enriched_count"] = enriched_total
+        except Exception:
+            logger.exception("Failed batch at index %d", i)
+
+    logger.info(
+        "Reindex complete: enriched %d/%d chunks in '%s'",
+        enriched_total,
+        len(all_ids),
+        collection_name,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reindex_with_context",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post(
+    "/reindex_with_context",
+    response_model=ReindexWithContextResponse,
+)
+async def reindex_with_context(
+    request: ReindexWithContextRequest,
+    background_tasks: BackgroundTasks,
+    _admin: bool = Depends(check_admin_permission),
+) -> ReindexWithContextResponse:
+    """Retroactively enrich chunks with contextual retrieval.
+
+    Runs as a background task. Only processes chunks without
+    has_context metadata. Guarded by CONTEXT_ENABLED env var.
+    Issue #1513.
+    """
+    if not ContextGeneratorCognifier.is_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Contextual retrieval is disabled. "
+                "Set CONTEXT_ENABLED=true to enable."
+            ),
+        )
+
+    if _reindex_state["is_running"]:
+        raise HTTPException(
+            status_code=409,
+            detail="A reindex task is already running.",
+        )
+
+    col = request.collection_name or _REINDEX_DEFAULT_COLLECTION
+
+    background_tasks.add_task(
+        _reindex_with_context_task,
+        collection_name=col,
+        batch_size=request.batch_size,
+    )
+
+    return ReindexWithContextResponse(
+        status="accepted",
+        message=(
+            f"Reindex task started for collection '{col}' "
+            f"with batch_size={request.batch_size}"
+        ),
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_reindex_with_context_status",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/reindex_with_context/status")
+async def get_reindex_with_context_status(
+    _user: dict = Depends(get_current_user),
+) -> dict:
+    """Get status of the reindex_with_context background task.
+
+    Issue #1761.
+    """
+    return dict(_reindex_state)

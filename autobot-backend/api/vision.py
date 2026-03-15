@@ -223,7 +223,7 @@ async def analyze_screen(
         )
     except Exception as e:
         logger.error("Screen analysis failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Screen analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Screen analysis failed")
 
 
 @with_error_handling(
@@ -285,9 +285,7 @@ async def detect_elements(
         }
     except Exception as e:
         logger.error("Element detection failed: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Element detection failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Element detection failed")
 
 
 @with_error_handling(
@@ -343,7 +341,7 @@ async def extract_text_ocr(
             }
     except Exception as e:
         logger.error("OCR extraction failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"OCR extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="OCR extraction failed")
 
 
 @with_error_handling(
@@ -375,9 +373,7 @@ async def get_automation_opportunities(
         }
     except Exception as e:
         logger.error("Failed to identify automation opportunities: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to identify opportunities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to identify opportunities")
 
 
 @with_error_handling(
@@ -462,7 +458,7 @@ async def get_layout_analysis(
         }
     except Exception as e:
         logger.error("Layout analysis failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Layout analysis failed")
 
 
 @with_error_handling(
@@ -499,5 +495,5 @@ async def get_vision_status(
         return {
             "service": "computer_vision",
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
         }

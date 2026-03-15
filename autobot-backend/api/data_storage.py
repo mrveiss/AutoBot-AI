@@ -30,6 +30,15 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 
+def _safe_data_path(user_segment: str) -> Path:
+    """Resolve a user-supplied path segment under DATA_DIR safely (#1733)."""
+    resolved = (DATA_DIR / user_segment).resolve()
+    data_root = DATA_DIR.resolve()
+    if not str(resolved).startswith(str(data_root) + "/") and resolved != data_root:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return resolved
+
+
 class StorageCategory(BaseModel):
     """Storage category with size info."""
 
@@ -344,7 +353,7 @@ async def get_category_details(
 ):
     """Get detailed information about a specific storage category."""
     try:
-        dir_path = DATA_DIR / category_path
+        dir_path = _safe_data_path(category_path)
 
         if not dir_path.exists():
             raise HTTPException(
@@ -429,7 +438,7 @@ async def cleanup_category(
 ):
     """Clean up files in a storage category. Requires admin permission."""
     try:
-        dir_path = DATA_DIR / request.category
+        dir_path = _safe_data_path(request.category)
 
         if not dir_path.exists():
             raise HTTPException(
@@ -542,6 +551,9 @@ async def delete_conversation(
 ):
     """Delete a specific conversation and its associated files."""
     try:
+        if "/" in conversation_id or "\\" in conversation_id or ".." in conversation_id:
+            raise HTTPException(status_code=400, detail="Invalid conversation ID")
+
         files_deleted = []
         errors = []
 
@@ -563,7 +575,8 @@ async def delete_conversation(
                     chat_file.unlink()
                     files_deleted.append(str(chat_file.name))
                 except (OSError, PermissionError) as e:
-                    errors.append(f"Error deleting chat file: {str(e)}")
+                    logger.exception("Unexpected error: %s", e)
+                    errors.append("Error deleting chat file")
 
         if not files_deleted and not errors:
             raise HTTPException(

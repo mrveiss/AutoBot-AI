@@ -250,7 +250,7 @@ def _create_api_error_response(
 
     return APIErrorResponse(
         category=category,
-        message=str(e),
+        message="Operation failed",
         code=error_code,
         status_code=status_code,
         details={"operation": func_operation},

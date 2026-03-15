@@ -759,7 +759,7 @@ async def analyze_codebase(
         logger.error("Analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed: {str(e)}",
+            detail="Analysis failed",
         )
 
 
@@ -919,7 +919,7 @@ async def quick_scan_file(
         logger.error("File scan failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Scan failed: {str(e)}",
+            detail="Scan failed",
         )
 
 
@@ -976,7 +976,7 @@ async def get_codebase_health_score(
         logger.error("Health score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Health check failed: {str(e)}",
+            detail="Health check failed",
         )
 
 
@@ -1083,7 +1083,7 @@ async def analyze_redis_usage_endpoint(
         logger.error("Redis analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Redis analysis failed: {str(e)}",
+            detail="Redis analysis failed",
         )
 
 
@@ -1141,7 +1141,7 @@ async def scan_redis_file(
         logger.error("Redis file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Scan failed: {str(e)}",
+            detail="Scan failed",
         )
 
 
@@ -1239,7 +1239,7 @@ async def get_redis_usage_health_score(
         logger.error("Redis health score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Health check failed: {str(e)}",
+            detail="Health check failed",
         )
 
 
@@ -1349,7 +1349,7 @@ async def security_analyze(
         logger.error("Security analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Security analysis failed: {str(e)}",
+            detail="Security analysis failed",
         )
 
 
@@ -1415,7 +1415,7 @@ async def security_scan_file(
         logger.error("Security file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"File scan failed: {str(e)}",
+            detail="File scan failed",
         )
 
 
@@ -1517,7 +1517,7 @@ async def get_security_score(
         logger.error("Security score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Security score calculation failed: {str(e)}",
+            detail="Security score calculation failed",
         )
 
 
@@ -1553,7 +1553,7 @@ async def get_security_report(
         logger.error("Security report generation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Report generation failed: {str(e)}",
+            detail="Report generation failed",
         )
 
 
@@ -1636,7 +1636,7 @@ async def performance_analyze(
         logger.error("Performance analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Performance analysis failed: {str(e)}",
+            detail="Performance analysis failed",
         )
 
 
@@ -1702,7 +1702,7 @@ async def performance_scan_file(
         logger.error("Performance file scan failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"File scan failed: {str(e)}",
+            detail="File scan failed",
         )
 
 
@@ -1803,7 +1803,7 @@ async def get_performance_score(
         logger.error("Performance score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Performance score calculation failed: {str(e)}",
+            detail="Performance score calculation failed",
         )
 
 
@@ -1839,7 +1839,7 @@ async def get_performance_report(
         logger.error("Performance report generation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Report generation failed: {str(e)}",
+            detail="Report generation failed",
         )
 
 
@@ -1897,13 +1897,13 @@ async def analyze_code_evolution(
             },
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
     except Exception as e:
         logger.error("Evolution analysis failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Evolution analysis failed: {str(e)}",
+            detail="Evolution analysis failed",
         )
 
 
@@ -1962,7 +1962,7 @@ async def get_pattern_evolution(
         logger.error("Pattern evolution retrieval failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Pattern evolution failed: {str(e)}",
+            detail="Pattern evolution failed",
         )
 
 
@@ -2021,7 +2021,7 @@ async def detect_refactorings(
         logger.error("Refactoring detection failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Refactoring detection failed: {str(e)}",
+            detail="Refactoring detection failed",
         )
 
 
@@ -2074,7 +2074,7 @@ async def get_evolution_timeline(
         logger.error("Timeline generation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Timeline generation failed: {str(e)}",
+            detail="Timeline generation failed",
         )
 
 
@@ -2152,13 +2152,13 @@ async def get_full_evolution_report(
             },
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
     except Exception as e:
         logger.error("Evolution report generation failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Evolution report failed: {str(e)}",
+            detail="Evolution report failed",
         )
 
 

@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
+from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -31,7 +32,6 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -786,6 +786,58 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+async def _seed_agent_registry() -> None:
+    """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
+    logger.info("[ 97%%] Agent Registry: Seeding agents table...")
+    try:
+        from services.agent_registry_service import seed_agents_from_config
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            count = await seed_agents_from_config(session)
+        logger.info("[ 97%%] Agent Registry: %d agents seeded", count)
+    except Exception as e:
+        logger.warning("Agent registry seeding failed: %s", e)
+
+
+async def _init_process_adapter(app: FastAPI) -> None:
+    """Start ProcessAdapterService queue dispatcher (#1748).
+
+    NON-CRITICAL: process management endpoints return 503 until this completes.
+    """
+    logger.info("[ 96%%] Process Adapter: Initializing...")
+    try:
+        from api.process_management import set_process_adapter_service
+        from services.process_adapter_service import ProcessAdapterService
+        from user_management.database import get_async_session_factory
+
+        svc = ProcessAdapterService(session_factory=get_async_session_factory())
+        await svc.start()
+        app.state.process_adapter_service = svc
+        set_process_adapter_service(svc)
+        logger.info("[ 96%%] Process Adapter: Dispatcher started")
+    except Exception as e:
+        logger.warning("Process adapter initialization failed: %s", e)
+        app.state.process_adapter_service = None
+
+
+async def _recover_index_queue():
+    """Restore queued indexing jobs from Redis after restart (#1717)."""
+    try:
+        from api.codebase_analytics.scanner import recover_index_queue
+
+        count = await recover_index_queue()
+        if count:
+            logger.info(
+                "[ 95%%] Index Queue: Recovered %d jobs from Redis",
+                count,
+            )
+        else:
+            logger.info("[ 95%%] Index Queue: No pending jobs to recover")
+    except Exception as e:
+        logger.warning("Index queue recovery failed (non-fatal): %s", e)
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -819,6 +871,9 @@ async def initialize_background_services(app: FastAPI):
         await _init_heartbeat_scheduler(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
+        await _recover_index_queue()
+        await _init_process_adapter(app)
+        await _seed_agent_registry()
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -873,6 +928,14 @@ async def cleanup_services(app: FastAPI):
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
 
+        # Issue #1748: Stop process adapter dispatcher
+        if (
+            hasattr(app.state, "process_adapter_service")
+            and app.state.process_adapter_service
+        ):
+            await app.state.process_adapter_service.stop()
+            logger.info("✅ Process adapter stopped")
+
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
 
@@ -917,6 +980,11 @@ def create_lifespan_manager():
         logger.info(
             "🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS
         )
+
+        # Register the running event loop for sync-endpoint audit scheduling (#1568)
+        from middleware.audit_middleware import set_main_event_loop
+
+        set_main_event_loop(asyncio.get_running_loop())
 
         # Phase 1: Critical initialization (BLOCKING)
         await initialize_critical_services(app)

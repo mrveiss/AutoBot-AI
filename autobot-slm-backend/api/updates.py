@@ -13,6 +13,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -156,7 +157,7 @@ async def _execute_update_playbook(
     executor = get_playbook_executor()
     package_names = [u.package_name for u in updates]
 
-    limit = [node.hostname]
+    limit = _resolve_ips_to_inventory_names([node.ip_address])
     extra_vars = {
         "update_type": "specific",
         "specific_packages": ",".join(package_names),
@@ -278,7 +279,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
         except Exception as e:
             logger.error("Update job failed: %s - %s", job_id, e)
             job.status = UpdateJobStatus.FAILED.value
-            job.error = str(e)
+            job.error = "Internal server error"
             job.completed_at = datetime.utcnow()
             await db.commit()
             await _broadcast_job_update(job_id, "failed", job.progress, str(e))
@@ -287,17 +288,42 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
 def _parse_discover_output(output: str) -> List[dict]:
     """Parse AUTOBOT_UPDATES_JSON markers from Ansible output.
 
-    Each marker line contains JSON with hostname, packages, etc.
-    Returns list of per-host result dicts.
+    Ansible's default callback wraps long msg values across multiple
+    lines, so we search the full output and extract JSON by matching
+    balanced braces rather than parsing line-by-line (#1789).
     """
+    import re
+
     results = []
     marker = "AUTOBOT_UPDATES_JSON:"
-    for line in output.split("\n"):
-        idx = line.find(marker)
+    start = 0
+
+    while True:
+        idx = output.find(marker, start)
         if idx == -1:
+            break
+
+        brace_start = output.find("{", idx + len(marker))
+        if brace_start == -1:
+            break
+
+        depth = 0
+        pos = brace_start
+        while pos < len(output):
+            if output[pos] == "{":
+                depth += 1
+            elif output[pos] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            pos += 1
+
+        if depth != 0:
+            start = idx + 1
             continue
-        json_str = line[idx + len(marker) :].strip()
-        json_str = json_str.rstrip('"').rstrip("'")
+
+        json_str = output[brace_start : pos + 1]
+        json_str = re.sub(r"\n\s*", "", json_str)
         try:
             data = json.loads(json_str)
             results.append(data)
@@ -306,14 +332,35 @@ def _parse_discover_output(output: str) -> List[dict]:
                 "Failed to parse discover JSON: %.200s",
                 json_str,
             )
+        start = pos + 1
+
     return results
 
 
-async def _resolve_hostname_to_node(db: AsyncSession, hostname: str) -> Optional[str]:
-    """Map an Ansible hostname back to a node_id."""
+async def _resolve_host_to_node(
+    db: AsyncSession,
+    hostname: str,
+    ip_address: Optional[str] = None,
+) -> Optional[str]:
+    """Map an Ansible host back to a node_id (#1789).
+
+    Tries hostname match first, then falls back to ip_address.
+    Ansible's ansible_hostname (OS hostname) often differs from
+    the display name stored in nodes.hostname, so IP is the
+    reliable fallback.
+    """
     result = await db.execute(select(Node).where(Node.hostname == hostname))
     node = result.scalar_one_or_none()
-    return node.node_id if node else None
+    if node:
+        return node.node_id
+
+    if ip_address:
+        result = await db.execute(select(Node).where(Node.ip_address == ip_address))
+        node = result.scalar_one_or_none()
+        if node:
+            return node.node_id
+
+    return None
 
 
 def _classify_severity(pkg_name: str, security_packages: List[str]) -> str:
@@ -356,18 +403,82 @@ async def _upsert_update_info(
         db.add(new_record)
 
 
+def _build_ip_to_inventory_map() -> Dict[str, str]:
+    """Parse Ansible inventory to map IP addresses to inventory hostnames.
+
+    DB hostnames are display names (e.g. '00-SLM-Manager') which don't
+    match Ansible inventory hostnames (e.g. 'autobot-slm'). Ansible's
+    --limit only matches inventory hostnames, so we need this mapping
+    to target specific nodes (#1789).
+    """
+    import yaml
+
+    executor = get_playbook_executor()
+    inv_path = executor.inventory_path
+    if not inv_path or not Path(inv_path).exists():
+        return {}
+
+    try:
+        with open(inv_path, encoding="utf-8") as f:
+            inv = yaml.safe_load(f)
+    except Exception:
+        logger.warning("Failed to parse inventory: %s", inv_path)
+        return {}
+
+    mapping: Dict[str, str] = {}
+
+    def _walk(node: dict) -> None:
+        if not isinstance(node, dict):
+            return
+        for key, val in node.items():
+            if key == "hosts" and isinstance(val, dict):
+                for hostname, hvars in val.items():
+                    if not isinstance(hvars, dict):
+                        continue
+                    ip = hvars.get("ansible_host", "")
+                    if ip and ip not in ("127.0.0.1", "localhost"):
+                        mapping[ip] = hostname
+                    net = hvars.get("network_address", "")
+                    if net:
+                        mapping[net] = hostname
+            elif key not in ("vars",):
+                if isinstance(val, dict):
+                    _walk(val)
+
+    _walk(inv.get("all", inv))
+    return mapping
+
+
+def _resolve_ips_to_inventory_names(ips: List[str]) -> List[str]:
+    """Convert IP addresses to Ansible inventory hostnames (#1789)."""
+    ip_map = _build_ip_to_inventory_map()
+    names = []
+    for ip in ips:
+        name = ip_map.get(ip)
+        if name:
+            names.append(name)
+        else:
+            logger.warning("No inventory hostname for IP: %s", ip)
+            names.append(ip)
+    return names
+
+
 async def _resolve_target_nodes(
     db: AsyncSession,
     node_ids: Optional[List[str]],
     role: Optional[str],
 ) -> tuple:
-    """Resolve target nodes for discovery. Returns (limit, extra_vars, count)."""
+    """Resolve target nodes for discovery. Returns (limit, extra_vars, count).
+
+    Maps DB node IPs to Ansible inventory hostnames for --limit (#1789).
+    """
     extra_vars: dict = {}
     limit = None
     if node_ids:
         result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
         nodes = result.scalars().all()
-        limit = [n.hostname for n in nodes]
+        ips = [n.ip_address for n in nodes]
+        limit = _resolve_ips_to_inventory_names(ips)
         return limit, extra_vars, len(limit)
     if role:
         extra_vars["target_hosts"] = role
@@ -383,9 +494,10 @@ async def _store_host_packages(
 ) -> int:
     """Store discovered packages for one host. Returns package count."""
     hostname = host_data.get("hostname", "")
-    node_id = await _resolve_hostname_to_node(db, hostname)
+    ip_address = host_data.get("ip_address", "")
+    node_id = await _resolve_host_to_node(db, hostname, ip_address)
     if not node_id:
-        logger.warning("Unknown hostname: %s", hostname)
+        logger.warning("Unknown host: %s / %s", hostname, ip_address)
         return 0
 
     await db.execute(
@@ -783,14 +895,15 @@ async def _execute_upgrade_playbook(
     sess: AsyncSession,
     j: UpdateJob,
     node_id: str,
-    hostname: str,
+    ip_address: str,
     job_id: str,
 ) -> None:
     """Execute apply-system-updates.yml and update job state."""
     executor = get_playbook_executor()
+    limit = _resolve_ips_to_inventory_names([ip_address])
     r = await executor.execute_playbook(
         playbook_name="apply-system-updates.yml",
-        limit=[hostname],
+        limit=limit,
         extra_vars={
             "update_type": "all",
             "dry_run": "false",
@@ -846,11 +959,11 @@ async def _run_upgrade_all(jid: str, nid: str) -> None:
         await _broadcast_job_update(jid, "running", 10, j.current_step)
 
         try:
-            await _execute_upgrade_playbook(sess, j, nid, n.hostname, jid)
-        except Exception as e:
+            await _execute_upgrade_playbook(sess, j, nid, n.ip_address, jid)
+        except Exception:
             logger.exception("Upgrade all failed: %s", jid)
             j.status = UpdateJobStatus.FAILED.value
-            j.error = str(e)
+            j.error = "Internal server error"
             j.completed_at = datetime.utcnow()
             await sess.commit()
 

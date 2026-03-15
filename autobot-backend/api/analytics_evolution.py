@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -376,7 +377,7 @@ async def get_evolution_timeline(
         return JSONResponse(
             {
                 "status": "no_data",
-                "message": f"Evolution timeline unavailable: {str(e)}",
+                "message": "Evolution timeline unavailable",
                 "timeline": [],
             }
         )
@@ -449,7 +450,7 @@ async def get_pattern_evolution(
         return JSONResponse(
             {
                 "status": "no_data",
-                "message": f"Pattern evolution unavailable: {str(e)}",
+                "message": "Pattern evolution unavailable",
                 "patterns": {},
             }
         )
@@ -596,7 +597,7 @@ async def get_quality_trends(
         return JSONResponse(
             {
                 "status": "no_data",
-                "message": f"Quality trend analysis failed: {str(e)}",
+                "message": "Quality trend analysis failed",
                 "trends": {},
             }
         )
@@ -809,7 +810,7 @@ async def export_evolution_data(
         return JSONResponse(
             {
                 "status": "no_data",
-                "message": f"Export failed: {str(e)}",
+                "message": "Export failed",
                 "data": [],
                 "export_format": format,
             }
@@ -1154,9 +1155,14 @@ def _validate_evolution_repo_path(repo_path_str: str):
 
     Returns (repo_path, error_response) where error_response is None if valid.
     """
-    from pathlib import Path
 
-    repo_path = Path(repo_path_str)
+    try:
+        repo_path = validate_path(repo_path_str)
+    except ValueError:
+        return None, EvolutionAnalysisResponse(
+            status="error",
+            message="Invalid repository path: outside allowed directories",
+        )
     if not repo_path.exists():
         return None, EvolutionAnalysisResponse(
             status="error",
@@ -1233,6 +1239,6 @@ async def trigger_evolution_analysis(
         logger.error("Evolution analysis failed: %s", e)
         return EvolutionAnalysisResponse(
             status="error",
-            message=f"Analysis failed: {str(e)}",
+            message="Analysis failed",
             analysis_duration_seconds=round(time.time() - start_time, 2),
         )

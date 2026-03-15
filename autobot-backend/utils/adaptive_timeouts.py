@@ -324,7 +324,7 @@ class AdaptiveTimeout:
 
         except Exception as e:
             logger.error("Background installation failed: %s", e)
-            return {"status": "failed", "error": str(e)}
+            return {"status": "failed", "error": "Internal server error"}
 
     async def _handle_user_interaction_timeout(
         self, operation: Callable, elapsed_time: float

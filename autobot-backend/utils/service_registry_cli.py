@@ -197,8 +197,12 @@ async def _test_services(registry, services: list) -> dict:
                 "response_time": getattr(health, "response_time", 0),
                 "url": get_service_url(service),
             }
-        except Exception as e:
-            results[service] = {"status": "error", "error": str(e), "url": "unknown"}
+        except Exception:
+            results[service] = {
+                "status": "error",
+                "error": "Internal server error",
+                "url": "unknown",
+            }
     return results
 
 

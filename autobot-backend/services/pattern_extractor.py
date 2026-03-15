@@ -69,7 +69,7 @@ class PatternExtractor:
     def _extract_python_patterns(self) -> None:
         """Extract patterns from Python files."""
         python_dirs = [
-            self.base_path / "autobot-user-backend",
+            self.base_path / "autobot-backend",
             self.base_path / "autobot-slm-backend",
             self.base_path / "autobot-shared",
         ]
@@ -246,7 +246,7 @@ class PatternExtractor:
     def _extract_typescript_vue_patterns(self) -> None:
         """Extract patterns from TypeScript and Vue files."""
         frontend_dirs = [
-            self.base_path / "autobot-user-frontend" / "src",
+            self.base_path / "autobot-frontend" / "src",
             self.base_path / "autobot-slm-frontend" / "src",
         ]
 

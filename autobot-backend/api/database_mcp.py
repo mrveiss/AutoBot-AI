@@ -755,7 +755,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
 
     except sqlite3.Error as e:
         logger.error("SQLite error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database query error")
 
 
 @with_error_handling(
@@ -821,7 +821,7 @@ async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
 
     except sqlite3.Error as e:
         logger.error("SQLite execute error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Database execute error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database execute error")
 
 
 @with_error_handling(
@@ -874,7 +874,7 @@ async def database_list_tables_mcp(request: TableListRequest) -> Metadata:
 
     except sqlite3.Error as e:
         logger.error("SQLite error listing tables: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error listing tables: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error listing tables")
 
 
 @with_error_handling(
@@ -928,9 +928,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
 
     except sqlite3.Error as e:
         logger.error("SQLite error describing schema: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Error describing schema: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error describing schema")
 
 
 @with_error_handling(
@@ -1031,9 +1029,7 @@ async def database_statistics_mcp(request: TableListRequest) -> Metadata:
 
     except sqlite3.Error as e:
         logger.error("SQLite error getting statistics: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Error getting statistics: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting statistics")
 
 
 @with_error_handling(

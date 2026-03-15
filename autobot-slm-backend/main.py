@@ -209,10 +209,7 @@ async def _ensure_admin_user():
         password = env_password
         if not password:
             password = secrets.token_urlsafe(16)
-            logger.critical(
-                "Initial admin password: %s — CHANGE IMMEDIATELY",
-                password,
-            )
+            logger.critical("Initial admin password set — CHANGE IMMEDIATELY")
 
         admin_user = User(
             username="admin",

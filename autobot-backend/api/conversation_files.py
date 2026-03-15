@@ -525,7 +525,7 @@ async def upload_conversation_file(
         raise
     except Exception as e:
         logger.error("Error uploading conversation file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error uploading file")
 
 
 def _build_file_list_response(
@@ -594,7 +594,7 @@ async def list_conversation_files(
         raise
     except Exception as e:
         logger.error("Error listing conversation files: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error listing files")
 
 
 async def _get_validated_file_info(
@@ -693,7 +693,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise
     except Exception as e:
         logger.error("Error downloading conversation file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error downloading file")
 
 
 async def _generate_file_preview(
@@ -808,7 +808,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         raise
     except Exception as e:
         logger.error("Error previewing conversation file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error previewing file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error previewing file")
 
 
 def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
@@ -875,7 +875,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         raise
     except Exception as e:
         logger.error("Error deleting conversation file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error deleting file")
 
 
 @with_error_handling(
@@ -929,9 +929,7 @@ async def transfer_conversation_files(
         raise
     except Exception as e:
         logger.error("Error transferring conversation files: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Error transferring files: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error transferring files")
 
 
 # ============================================================
@@ -981,7 +979,7 @@ async def create_conversation_file(
         raise
     except Exception as e:
         logger.error("Error creating file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error creating file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating file")
 
 
 @with_error_handling(
@@ -1019,11 +1017,11 @@ async def rename_conversation_file(
 
     except HTTPException:
         raise
-    except RuntimeError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError:
+        raise HTTPException(status_code=404, detail="Internal server error")
     except Exception as e:
         logger.error("Error renaming file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error renaming file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error renaming file")
 
 
 @with_error_handling(
@@ -1048,10 +1046,10 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
         raise
     except RuntimeError as e:
         status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail="Internal server error")
     except Exception as e:
         logger.error("Error getting file content: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error reading file")
 
 
 @with_error_handling(
@@ -1086,10 +1084,10 @@ async def update_file_content(
         raise
     except RuntimeError as e:
         status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail="Internal server error")
     except Exception as e:
         logger.error("Error updating file content: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error updating file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error updating file")
 
 
 @with_error_handling(
@@ -1127,11 +1125,11 @@ async def copy_conversation_file(
 
     except HTTPException:
         raise
-    except RuntimeError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError:
+        raise HTTPException(status_code=404, detail="Internal server error")
     except Exception as e:
         logger.error("Error copying file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error copying file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error copying file")
 
 
 @with_error_handling(
@@ -1156,7 +1154,7 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
         raise
     except Exception as e:
         logger.error("Error searching files: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error searching files: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error searching files")
 
 
 @with_error_handling(
@@ -1211,7 +1209,7 @@ async def agent_generate_file(
         raise
     except Exception as e:
         logger.error("Error generating file: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error generating file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generating file")
 
 
 # ============================================================
@@ -1382,7 +1380,7 @@ async def session_mcp_call_tool(
         raise
     except RuntimeError as e:
         status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail=str(e))
+        raise HTTPException(status_code=status, detail="Internal server error")
     except Exception as e:
         logger.error("Error in MCP tool call: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error executing tool: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error executing tool")

@@ -17,16 +17,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from models.database import (
-    CodeSource,
-    CodeStatus,
-    Node,
-    NodeRole,
-    Setting,
-    UpdateSchedule,
-)
+from models.database import CodeSource, CodeStatus
+from models.database import FleetSyncJob as FleetSyncJobModel
+from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
+from models.database import Node, NodeRole, Setting, UpdateSchedule
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -55,8 +52,6 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -92,9 +87,204 @@ class FleetSyncJob:
     completed_at: Optional[datetime] = None
 
 
-# Module-level job tracking
-_fleet_sync_jobs: Dict[str, FleetSyncJob] = {}
+# In-memory tracking for running asyncio tasks only (not job state)
 _running_tasks: Dict[str, asyncio.Task] = {}
+
+
+async def _persist_fleet_sync_job(
+    job: FleetSyncJob,
+) -> None:
+    """Persist a fleet sync job and its node states to DB (#1707)."""
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        db_job = FleetSyncJobModel(
+            job_id=job.job_id,
+            strategy=job.strategy,
+            batch_size=job.batch_size,
+            restart=job.restart,
+            status=job.status,
+            total_nodes=len(job.nodes),
+            completed_nodes=0,
+            failed_nodes=0,
+            created_at=job.created_at,
+        )
+        db.add(db_job)
+
+        for ns in job.nodes.values():
+            db.add(
+                FleetSyncNodeStateModel(
+                    job_id=job.job_id,
+                    node_id=ns.node_id,
+                    hostname=ns.hostname,
+                    ip_address=ns.ip_address,
+                    status=ns.status,
+                )
+            )
+
+        await db.commit()
+
+
+async def _update_job_status_db(
+    job_id: str,
+    *,
+    status: Optional[str] = None,
+    completed_at: Optional[datetime] = None,
+) -> None:
+    """Update fleet sync job status in DB (#1707)."""
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id)
+        )
+        db_job = result.scalar_one_or_none()
+        if not db_job:
+            return
+
+        if status is not None:
+            db_job.status = status
+        if completed_at is not None:
+            db_job.completed_at = completed_at
+
+        # Recalculate node counts from node_states
+        ns_result = await db.execute(
+            select(FleetSyncNodeStateModel).where(
+                FleetSyncNodeStateModel.job_id == job_id
+            )
+        )
+        node_states = ns_result.scalars().all()
+        db_job.completed_nodes = sum(1 for n in node_states if n.status == "success")
+        db_job.failed_nodes = sum(1 for n in node_states if n.status == "failed")
+
+        await db.commit()
+
+
+async def _update_node_state_db(
+    job_id: str,
+    node_id: str,
+    *,
+    status: Optional[str] = None,
+    message: Optional[str] = None,
+    started_at: Optional[datetime] = None,
+    completed_at: Optional[datetime] = None,
+) -> None:
+    """Update a single node's sync state in DB (#1707)."""
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(FleetSyncNodeStateModel).where(
+                FleetSyncNodeStateModel.job_id == job_id,
+                FleetSyncNodeStateModel.node_id == node_id,
+            )
+        )
+        ns = result.scalar_one_or_none()
+        if not ns:
+            return
+
+        if status is not None:
+            ns.status = status
+        if message is not None:
+            ns.message = message[:500] if message else None
+        if started_at is not None:
+            ns.started_at = started_at
+        if completed_at is not None:
+            ns.completed_at = completed_at
+
+        await db.commit()
+
+
+async def _load_job_status_from_db(
+    job_id: str,
+) -> Optional[FleetSyncJobStatus]:
+    """Load fleet sync job status from DB (#1707)."""
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(FleetSyncJobModel).where(FleetSyncJobModel.job_id == job_id)
+        )
+        db_job = result.scalar_one_or_none()
+        if not db_job:
+            return None
+
+        ns_result = await db.execute(
+            select(FleetSyncNodeStateModel).where(
+                FleetSyncNodeStateModel.job_id == job_id
+            )
+        )
+        node_states = ns_result.scalars().all()
+
+        return FleetSyncJobStatus(
+            job_id=db_job.job_id,
+            status=db_job.status,
+            strategy=db_job.strategy,
+            total_nodes=db_job.total_nodes,
+            completed_nodes=db_job.completed_nodes,
+            failed_nodes=db_job.failed_nodes,
+            nodes=[
+                FleetSyncNodeStatus(
+                    node_id=ns.node_id,
+                    hostname=ns.hostname,
+                    status=ns.status,
+                    message=ns.message,
+                    started_at=ns.started_at,
+                    completed_at=ns.completed_at,
+                )
+                for ns in node_states
+            ],
+            created_at=db_job.created_at,
+            completed_at=db_job.completed_at,
+        )
+
+
+async def _list_jobs_from_db(limit: int = 10) -> List[FleetSyncJobStatus]:
+    """List recent fleet sync jobs from DB (#1707)."""
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(FleetSyncJobModel)
+            .order_by(FleetSyncJobModel.created_at.desc())
+            .limit(limit)
+        )
+        db_jobs = result.scalars().all()
+
+        jobs = []
+        for db_job in db_jobs:
+            ns_result = await db.execute(
+                select(FleetSyncNodeStateModel).where(
+                    FleetSyncNodeStateModel.job_id == db_job.job_id
+                )
+            )
+            node_states = ns_result.scalars().all()
+
+            jobs.append(
+                FleetSyncJobStatus(
+                    job_id=db_job.job_id,
+                    status=db_job.status,
+                    strategy=db_job.strategy,
+                    total_nodes=db_job.total_nodes,
+                    completed_nodes=db_job.completed_nodes,
+                    failed_nodes=db_job.failed_nodes,
+                    nodes=[
+                        FleetSyncNodeStatus(
+                            node_id=ns.node_id,
+                            hostname=ns.hostname,
+                            status=ns.status,
+                            message=ns.message,
+                            started_at=ns.started_at,
+                            completed_at=ns.completed_at,
+                        )
+                        for ns in node_states
+                    ],
+                    created_at=db_job.created_at,
+                    completed_at=db_job.completed_at,
+                )
+            )
+
+        return jobs
 
 
 async def _get_tracker_for_db(db: AsyncSession):
@@ -215,7 +405,7 @@ async def refresh_version(
         logger.error("Failed to refresh version: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to refresh version: {e}",
+            detail="Failed to refresh version",
         )
 
 
@@ -764,20 +954,96 @@ async def sync_node(
     )
 
 
+async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
+    """Phase 1: sync all regular nodes via Ansible batches.
+
+    Helper for _run_fleet_sync_job (#1707 refactor).
+    """
+    batch_size = job.batch_size
+    for i in range(0, len(regular_nodes), batch_size):
+        batch = regular_nodes[i : i + batch_size]
+
+        tasks = []
+        for node_state in batch:
+            node_state.status = "syncing"
+            node_state.started_at = datetime.utcnow()
+            await _update_node_state_db(
+                job.job_id,
+                node_state.node_id,
+                status="syncing",
+                started_at=node_state.started_at,
+            )
+            task = asyncio.create_task(
+                _sync_single_node(executor, node_state, job.restart, job.job_id)
+            )
+            tasks.append(task)
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await _update_job_status_db(job.job_id)
+
+        if job.strategy == "rolling" and i + batch_size < len(regular_nodes):
+            await asyncio.sleep(5)
+
+
+async def _sync_slm_self_node(
+    executor, job: FleetSyncJob, slm_self_node: NodeSyncState
+) -> None:
+    """Phase 2: sync SLM self-node LAST (#1209).
+
+    Helper for _run_fleet_sync_job. Persists final status to DB before
+    the self-sync restart kills this process (#1707).
+    """
+    slm_self_node.status = "syncing"
+    slm_self_node.started_at = datetime.utcnow()
+    await _update_node_state_db(
+        job.job_id,
+        slm_self_node.node_id,
+        status="syncing",
+        started_at=slm_self_node.started_at,
+    )
+
+    if job.restart:
+        logger.info(
+            "Fleet sync %s: starting SLM self-sync for %s",
+            job.job_id,
+            slm_self_node.node_id,
+        )
+        # Persist final status BEFORE self-sync restart kills
+        # this process (#1707).
+        failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
+        pre_status = "failed" if failed_count == len(job.nodes) else "completed"
+        await _update_node_state_db(
+            job.job_id,
+            slm_self_node.node_id,
+            status="success",
+            completed_at=datetime.utcnow(),
+        )
+        await _update_job_status_db(
+            job.job_id, status=pre_status, completed_at=datetime.utcnow()
+        )
+        # Fire-and-forget — restart kills this process,
+        # but all nodes are already done and persisted.
+        await _sync_slm_from_code_source(slm_self_node.node_id)
+        slm_self_node.status = "success"
+        slm_self_node.completed_at = datetime.utcnow()
+    else:
+        await _sync_single_node(
+            executor, slm_self_node, restart=False, job_id=job.job_id
+        )
+
+
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     """Background task to execute fleet sync job using Ansible playbooks.
 
     Processes nodes according to the specified strategy and batch size.
-
-    Issue #1209: The SLM self-node (identified by matching
-    settings.external_url hostname) is always synced LAST and uses the
-    fire-and-forget _sync_slm_from_code_source path instead of Ansible,
-    because the Ansible restart kills this very process.
+    Issue #1209: SLM self-node synced LAST (restart kills process).
+    Issue #1707: All state persisted to DB for restart survival.
     """
     executor = get_playbook_executor()
     job.status = "running"
+    await _update_job_status_db(job.job_id, status="running")
 
-    # --- Separate SLM self-node from regular nodes (#1209) ---
+    # Separate SLM self-node from regular nodes (#1209)
     slm_own_ip = urlparse(settings.external_url).hostname or ""
     regular_nodes: list[NodeSyncState] = []
     slm_self_node: Optional[NodeSyncState] = None
@@ -795,62 +1061,23 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
             slm_self_node.node_id,
         )
 
-    batch_size = job.batch_size
-
     try:
-        # --- Phase 1: sync all regular nodes via Ansible ---
-        for i in range(0, len(regular_nodes), batch_size):
-            batch = regular_nodes[i : i + batch_size]
+        await _sync_regular_nodes(executor, job, regular_nodes)
 
-            tasks = []
-            for node_state in batch:
-                node_state.status = "syncing"
-                node_state.started_at = datetime.utcnow()
-                task = asyncio.create_task(
-                    _sync_single_node(executor, node_state, job.restart)
-                )
-                tasks.append(task)
+        if slm_self_node:
+            await _sync_slm_self_node(executor, job, slm_self_node)
 
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-            if job.strategy == "rolling" and i + batch_size < len(regular_nodes):
-                await asyncio.sleep(5)
-
-        # --- Phase 2: sync SLM self-node LAST (#1209) ---
-        if slm_self_node and job.restart:
-            slm_self_node.status = "syncing"
-            slm_self_node.started_at = datetime.utcnow()
-            logger.info(
-                "Fleet sync %s: starting SLM self-sync for %s",
-                job.job_id,
-                slm_self_node.node_id,
-            )
-            # Use the self-sync path which rsyncs then restarts.
-            # This is fire-and-forget — the restart kills this process,
-            # but all other nodes are already done.
-            await _sync_slm_from_code_source(slm_self_node.node_id)
-            slm_self_node.status = "success"
-            slm_self_node.completed_at = datetime.utcnow()
-        elif slm_self_node:
-            # No restart requested — just sync code via Ansible (no restart tag)
-            slm_self_node.status = "syncing"
-            slm_self_node.started_at = datetime.utcnow()
-            await _sync_single_node(executor, slm_self_node, restart=False)
-
-        # Calculate final status
         failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
-        if failed_count == len(job.nodes):
-            job.status = "failed"
-        elif failed_count > 0:
-            job.status = "completed"
-        else:
-            job.status = "completed"
+        job.status = "failed" if failed_count == len(job.nodes) else "completed"
 
     except Exception as e:
         logger.error("Fleet sync job %s failed: %s", job.job_id, e)
         job.status = "failed"
 
     job.completed_at = datetime.utcnow()
+    await _update_job_status_db(
+        job.job_id, status=job.status, completed_at=job.completed_at
+    )
     logger.info(
         "Fleet sync job %s completed: %d/%d successful",
         job.job_id,
@@ -859,11 +1086,17 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     )
 
 
-async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) -> None:
+async def _sync_single_node(
+    executor,
+    node_state: NodeSyncState,
+    restart: bool,
+    job_id: Optional[str] = None,
+) -> None:
     """Sync a single node using Ansible playbook and update its state.
 
     Issue #1209: Also updates node version in DB on success so the
     code-sync GUI reflects the correct status.
+    Issue #1707: Persists node state to DB for restart survival.
     """
     try:
         # Build playbook parameters
@@ -894,9 +1127,19 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
 
     except Exception as e:
         node_state.status = "failed"
-        node_state.message = str(e)
+        node_state.message = "Operation failed"
         node_state.completed_at = datetime.utcnow()
         logger.error("Node sync failed for %s: %s", node_state.node_id, e)
+
+    # Persist node state to DB (#1707)
+    if job_id:
+        await _update_node_state_db(
+            job_id,
+            node_state.node_id,
+            status=node_state.status,
+            message=node_state.message,
+            completed_at=node_state.completed_at,
+        )
 
 
 async def _update_fleet_node_version(node_id: str) -> None:
@@ -1038,9 +1281,9 @@ async def sync_fleet(
             nodes_queued=0,
         )
 
-    # Create job with node states and store it
+    # Create job with node states and persist to DB (#1707)
     job = _build_fleet_sync_job_from_nodes(nodes, request)
-    _fleet_sync_jobs[job.job_id] = job
+    await _persist_fleet_sync_job(job)
 
     if request.strategy != "manual":
         task = asyncio.create_task(_run_fleet_sync_job(job))
@@ -1065,43 +1308,17 @@ async def get_fleet_sync_job_status(
     Get status of a fleet sync job (Issue #741 Phase 8).
 
     Returns detailed status including per-node sync progress.
+    Reads from DB so results survive service restarts (#1707).
     """
-    job = _fleet_sync_jobs.get(job_id)
+    job_status = await _load_job_status_from_db(job_id)
 
-    if not job:
+    if not job_status:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found",
         )
 
-    # Build node status list
-    node_statuses = [
-        FleetSyncNodeStatus(
-            node_id=ns.node_id,
-            hostname=ns.hostname,
-            status=ns.status,
-            message=ns.message,
-            started_at=ns.started_at,
-            completed_at=ns.completed_at,
-        )
-        for ns in job.nodes.values()
-    ]
-
-    # Calculate counts
-    completed_count = sum(1 for n in job.nodes.values() if n.status == "success")
-    failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
-
-    return FleetSyncJobStatus(
-        job_id=job.job_id,
-        status=job.status,
-        strategy=job.strategy,
-        total_nodes=len(job.nodes),
-        completed_nodes=completed_count,
-        failed_nodes=failed_count,
-        nodes=node_statuses,
-        created_at=job.created_at,
-        completed_at=job.completed_at,
-    )
+    return job_status
 
 
 @router.get("/fleet/jobs", response_model=List[FleetSyncJobStatus])
@@ -1111,45 +1328,10 @@ async def list_fleet_sync_jobs(
 ) -> List[FleetSyncJobStatus]:
     """
     List recent fleet sync jobs (Issue #741 Phase 8).
+
+    Reads from DB so results survive service restarts (#1707).
     """
-    jobs = sorted(
-        _fleet_sync_jobs.values(),
-        key=lambda j: j.created_at,
-        reverse=True,
-    )[:limit]
-
-    result = []
-    for job in jobs:
-        node_statuses = [
-            FleetSyncNodeStatus(
-                node_id=ns.node_id,
-                hostname=ns.hostname,
-                status=ns.status,
-                message=ns.message,
-                started_at=ns.started_at,
-                completed_at=ns.completed_at,
-            )
-            for ns in job.nodes.values()
-        ]
-
-        completed_count = sum(1 for n in job.nodes.values() if n.status == "success")
-        failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
-
-        result.append(
-            FleetSyncJobStatus(
-                job_id=job.job_id,
-                status=job.status,
-                strategy=job.strategy,
-                total_nodes=len(job.nodes),
-                completed_nodes=completed_count,
-                failed_nodes=failed_count,
-                nodes=node_statuses,
-                created_at=job.created_at,
-                completed_at=job.completed_at,
-            )
-        )
-
-    return result
+    return await _list_jobs_from_db(limit=limit)
 
 
 @router.get("/nodes/{node_id}/package")
@@ -1612,8 +1794,8 @@ async def run_schedule(
     # Create a fleet sync job
     job = _create_fleet_sync_job(nodes, schedule)
 
-    # Store job and start background task
-    _fleet_sync_jobs[job.job_id] = job
+    # Persist job to DB and start background task (#1707)
+    await _persist_fleet_sync_job(job)
     task = asyncio.create_task(_run_fleet_sync_job(job))
     _running_tasks[job.job_id] = task
 

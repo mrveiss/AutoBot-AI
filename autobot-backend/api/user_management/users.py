@@ -140,10 +140,10 @@ async def create_user(
             user=_user_to_response(user),
         )
 
-    except DuplicateUserError as e:
+    except DuplicateUserError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -269,10 +269,10 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User {user_id} not found",
         )
-    except DuplicateUserError as e:
+    except DuplicateUserError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -379,10 +379,10 @@ async def change_password(
     # Check rate limit before attempting password change
     try:
         await rate_limiter.check_rate_limit(user_id)
-    except RateLimitExceeded as e:
+    except RateLimitExceeded:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=str(e),
+            detail="Internal server error",
         )
 
     try:

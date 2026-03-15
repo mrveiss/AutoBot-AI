@@ -138,7 +138,7 @@ async def _resolve_db_url(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to resolve secret '%s': %s", db_secret_id, exc)
+        logger.error("Failed to resolve database secret: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve database credentials",

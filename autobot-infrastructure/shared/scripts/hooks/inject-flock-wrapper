@@ -32,7 +32,7 @@ FLOCK_BLOCK=$(cat <<'FLOCK_EOF'
 # Prevents stash cross-contamination when multiple worktrees commit in parallel.
 _COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || git rev-parse --git-dir)"
 exec 200>"${_COMMON_DIR}/pre-commit.lock"
-flock -x 200
+flock -x -w 120 200 || { echo "⚠️  pre-commit lock timeout (120s) — skipping serialization" >&2; }
 # --- END AUTOBOT_FLOCK ---
 FLOCK_EOF
 )

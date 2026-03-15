@@ -375,7 +375,11 @@ async def generate_embedding(
     except Exception as e:
         logger.error("Embedding generation failed: %s", e)
         processing_time = time.time() - start_time
-        return {"success": False, "error": str(e), "processing_time": processing_time}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "processing_time": processing_time,
+        }
 
 
 @with_error_handling(
@@ -477,7 +481,11 @@ async def get_multimodal_stats(
             search_engine = await get_npu_search_engine()
             search_engine_status = await search_engine.get_health_status()
         except Exception as e:
-            search_engine_status = {"error": str(e), "status": "unavailable"}
+            logger.exception("Unexpected error: %s", e)
+            search_engine_status = {
+                "error": "Internal server error",
+                "status": "unavailable",
+            }
 
         # Issue #675: Extract model availability for top-level access
         model_availability = processor_stats.get("model_availability", {})
@@ -503,7 +511,7 @@ async def get_multimodal_stats(
         logger.error("Failed to get multimodal stats: %s", e)
         return {
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
             "timestamp": time.time(),
             # Issue #675: Include model unavailable status in error response
             "vision_models_available": False,
@@ -675,7 +683,11 @@ async def combine_multimodal_inputs(
     except Exception as e:
         logger.error("Multi-modal fusion failed: %s", e)
         processing_time = time.time() - start_time
-        return {"success": False, "error": str(e), "processing_time": processing_time}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "processing_time": processing_time,
+        }
 
 
 # Performance monitoring endpoints
@@ -718,7 +730,11 @@ async def get_performance_stats(
 
     except Exception as e:
         logger.error("Failed to get performance stats: %s", e)
-        return {"success": False, "error": str(e), "timestamp": time.time()}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "timestamp": time.time(),
+        }
 
 
 @with_error_handling(
@@ -749,7 +765,11 @@ async def optimize_performance(
 
     except Exception as e:
         logger.error("Performance optimization failed: %s", e)
-        return {"success": False, "error": str(e), "timestamp": time.time()}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "timestamp": time.time(),
+        }
 
 
 @with_error_handling(
@@ -773,7 +793,11 @@ async def get_performance_summary(
 
     except Exception as e:
         logger.error("Failed to get performance summary: %s", e)
-        return {"success": False, "error": str(e), "timestamp": time.time()}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "timestamp": time.time(),
+        }
 
 
 @with_error_handling(
@@ -819,7 +843,11 @@ async def update_batch_size(
 
     except Exception as e:
         logger.error("Failed to update batch size: %s", e)
-        return {"success": False, "error": str(e), "timestamp": time.time()}
+        return {
+            "success": False,
+            "error": "Internal server error",
+            "timestamp": time.time(),
+        }
 
 
 # Health check endpoint

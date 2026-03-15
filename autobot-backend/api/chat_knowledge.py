@@ -543,7 +543,7 @@ async def create_chat_context(request_data: CreateContextRequest, request: Reque
 
     except Exception as e:
         logger.error("Failed to create context: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class AssociateFileRequest(BaseModel):
@@ -584,7 +584,7 @@ async def associate_file_with_chat(
 
     except Exception as e:
         logger.error("Failed to associate file: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -602,7 +602,8 @@ async def upload_file_to_chat(
     try:
         # Save uploaded file
         file_path = os.path.join(
-            chat_knowledge_manager.storage_dir, f"{chat_id}_{file.filename}"
+            chat_knowledge_manager.storage_dir,
+            f"{chat_id}_{os.path.basename(file.filename)}",
         )
 
         content = await file.read()
@@ -611,7 +612,7 @@ async def upload_file_to_chat(
                 await f.write(content)
         except OSError as e:
             logger.error("Failed to write uploaded file %s: %s", file_path, e)
-            raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save file")
 
         # Associate with chat
         association = await chat_knowledge_manager.associate_file(
@@ -625,7 +626,7 @@ async def upload_file_to_chat(
 
     except Exception as e:
         logger.error("Failed to upload file: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class AddKnowledgeRequest(BaseModel):
@@ -651,7 +652,7 @@ async def add_temporary_knowledge(request: AddKnowledgeRequest):
 
     except Exception as e:
         logger.error("Failed to add temporary knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -673,7 +674,7 @@ async def get_pending_knowledge_decisions(chat_id: str):
 
     except Exception as e:
         logger.error("Failed to get pending knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class KnowledgeDecisionRequest(BaseModel):
@@ -704,7 +705,7 @@ async def apply_knowledge_decision(request: KnowledgeDecisionRequest):
 
     except Exception as e:
         logger.error("Failed to apply knowledge decision: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class CompileChatRequest(BaseModel):
@@ -733,7 +734,7 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
 
     except Exception as e:
         logger.error("Failed to compile chat: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class SearchRequest(BaseModel):
@@ -761,7 +762,7 @@ async def search_chat_knowledge(request: SearchRequest):
 
     except Exception as e:
         logger.error("Failed to search knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -805,7 +806,7 @@ async def get_chat_context(chat_id: str):
 
     except Exception as e:
         logger.error("Failed to get chat context: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -825,7 +826,7 @@ async def health_check():
         }
     except Exception as e:
         logger.error("Chat knowledge health check failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -894,7 +895,7 @@ async def get_session_facts(session_id: str, request: Request):
 
     except Exception as e:
         logger.error(f"Failed to get facts for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _preserve_single_fact(
@@ -932,7 +933,11 @@ async def _preserve_single_fact(
 
         except Exception as e:
             logger.error(f"Error preserving fact {fact_id}: {e}")
-            return {"status": "error", "fact_id": fact_id, "error": str(e)}
+            return {
+                "status": "error",
+                "fact_id": fact_id,
+                "error": "Internal server error",
+            }
 
 
 def _count_preserve_results(results: list, session_id: str) -> tuple[int, int, list]:
@@ -1027,7 +1032,7 @@ async def preserve_session_facts(
 
     except Exception as e:
         logger.error(f"Failed to preserve facts for session {session_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 if __name__ == "__main__":

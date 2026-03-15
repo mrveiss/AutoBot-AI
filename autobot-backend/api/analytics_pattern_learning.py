@@ -955,7 +955,7 @@ class PatternLearningEngine:
             self.learning_phase = LearningPhase.COLLECTING
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "patterns_analyzed": patterns_analyzed,
             }
 
@@ -1166,7 +1166,8 @@ async def health_check() -> Dict[str, Any]:
             "redis_connected": engine.redis_client is not None,
         }
     except Exception as e:
+        logger.exception("Unexpected error: %s", e)
         return {
             "status": "degraded",
-            "error": str(e),
+            "error": "Internal server error",
         }

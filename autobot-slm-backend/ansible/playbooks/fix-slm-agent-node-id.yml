@@ -26,7 +26,7 @@
           Group=autobot
           WorkingDirectory=/opt/autobot
           ExecStart=/usr/bin/python3 -m slm.agent.agent \
-              --admin-url https://172.16.168.19 \
+              --admin-url https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }} \
               --node-id 01-Backend \
               --interval 30 \
               --services autobot-backend ollama
@@ -34,7 +34,7 @@
           RestartSec=10
           Environment=PYTHONPATH=/opt/autobot
           Environment=SLM_NODE_ID=01-Backend
-          Environment=SLM_ADMIN_URL=https://172.16.168.19
+          Environment=SLM_ADMIN_URL=https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}
           Environment=PYTHONUNBUFFERED=1
           StandardOutput=journal
           StandardError=journal

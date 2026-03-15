@@ -186,7 +186,7 @@ class RumAgent {
   }
 
   private generateSessionId(): string {
-    return 'rum_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now()
+    return 'rum_' + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('') + '_' + Date.now()
   }
 
   private initialize(): void {

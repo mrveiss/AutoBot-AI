@@ -213,9 +213,7 @@ async def execute_elevated_command(session_token: str, command: str):
         raise HTTPException(status_code=408, detail="Command execution timed out")
     except Exception as e:
         logger.error("Failed to execute elevated command: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Command execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Command execution failed")
 
 
 @with_error_handling(

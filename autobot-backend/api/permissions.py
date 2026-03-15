@@ -171,7 +171,7 @@ async def get_permission_status(admin_check: bool = Depends(check_admin_permissi
         )
     except Exception as e:
         logger.error(f"Failed to get permission status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/mode", response_model=PermissionModeResponse)
@@ -199,7 +199,7 @@ async def get_permission_mode(
         )
     except Exception as e:
         logger.error(f"Failed to get permission mode: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/mode", response_model=PermissionModeResponse)
@@ -254,7 +254,7 @@ async def set_permission_mode(
         raise
     except Exception as e:
         logger.error(f"Failed to set permission mode: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/rules", response_model=PermissionRulesResponse)
@@ -299,7 +299,7 @@ async def get_permission_rules(admin_check: bool = Depends(check_admin_permissio
         )
     except Exception as e:
         logger.error(f"Failed to get permission rules: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/rules")
@@ -347,7 +347,7 @@ async def add_permission_rule(
         raise
     except Exception as e:
         logger.error(f"Failed to add permission rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/rules")
@@ -376,7 +376,7 @@ async def remove_permission_rule(
         raise
     except Exception as e:
         logger.error(f"Failed to remove permission rule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/check", response_model=CheckCommandResponse)
@@ -403,7 +403,7 @@ async def check_command(
         )
     except Exception as e:
         logger.error(f"Failed to check command: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/memory/{project_path:path}", response_model=ProjectApprovalsResponse)
@@ -438,7 +438,7 @@ async def get_project_approvals(
         )
     except Exception as e:
         logger.error(f"Failed to get project approvals: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/memory/{project_path:path}")
@@ -474,7 +474,7 @@ async def clear_project_approvals(
         raise
     except Exception as e:
         logger.error(f"Failed to clear project approvals: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/memory")
@@ -515,9 +515,9 @@ async def store_approval(
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to store approval: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.error("Failed to store approval")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/memory/stats")
@@ -533,4 +533,4 @@ async def get_memory_stats(admin_check: bool = Depends(check_admin_permission)):
         return stats
     except Exception as e:
         logger.error(f"Failed to get memory stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

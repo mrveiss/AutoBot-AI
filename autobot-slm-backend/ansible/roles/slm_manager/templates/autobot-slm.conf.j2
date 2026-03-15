@@ -136,6 +136,7 @@ server {
 
     # Main AutoBot backend proxy (user backend skills, cache, etc.)
     # /autobot-api/* → https://main_backend/api/* (strips /autobot-api prefix)
+    # Issue #1791: inject X-Internal-API-Key for service auth + WebSocket support
     location /autobot-api/ {
         proxy_pass https://{{ autobot_backend_host | default('172.16.168.20') }}:{{ autobot_backend_port | default(8443) }}/api/;
         proxy_http_version 1.1;
@@ -144,9 +145,15 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+{% if autobot_internal_api_key %}
+        proxy_set_header X-Internal-API-Key "{{ autobot_internal_api_key }}";
+{% endif %}
+        # WebSocket support for /processes/{id}/stream (#1777)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
     }
 
     # noVNC WebSocket/HTTP proxy — Issue #1002

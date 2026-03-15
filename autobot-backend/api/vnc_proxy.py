@@ -181,7 +181,7 @@ async def get_vnc_client(vnc_type: str, current_user: dict = Depends(get_current
                 )
     except aiohttp.ClientError as e:
         logger.error("Failed to fetch vnc.html from %s: %s", endpoint, e)
-        raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
 @with_error_handling(
@@ -232,7 +232,7 @@ async def proxy_vnc_assets(
                 )
     except aiohttp.ClientError as e:
         logger.error("Failed to fetch asset %s from %s: %s", path, endpoint, e)
-        raise HTTPException(status_code=503, detail=f"VNC server unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="VNC server unavailable")
 
 
 @router.websocket("/{vnc_type}/websockify")
@@ -274,10 +274,10 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
 
     except aiohttp.ClientError as e:
         logger.error("[%s] Failed to connect to VNC WebSocket: %s", vnc_type, e)
-        await websocket.close(code=1011, reason=f"VNC server unavailable: {str(e)}")
+        await websocket.close(code=1011, reason="VNC server unavailable")
     except Exception as e:
         logger.error("[%s] WebSocket proxy error: %s", vnc_type, e)
-        await websocket.close(code=1011, reason=str(e))
+        await websocket.close(code=1011, reason="Internal server error")
     finally:
         logger.info("VNC WebSocket proxy closed: %s", vnc_type)
         # Record disconnection event for MCP
@@ -322,5 +322,5 @@ async def get_vnc_status(vnc_type: str, current_user: dict = Depends(get_current
             "vnc_type": vnc_type,
             "endpoint": endpoint,
             "accessible": False,
-            "error": str(e),
+            "error": "Internal server error",
         }

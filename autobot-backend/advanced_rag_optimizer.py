@@ -86,6 +86,8 @@ class AdvancedRAGOptimizer:
     6. GPU acceleration for embedding operations
     """
 
+    MAX_CACHE_ENTRIES = 500  # Hard ceiling to prevent unbounded growth. Issue #1732.
+
     def __init__(self):
         """Initialize RAG optimizer with search configuration. Issue #620."""
         self.kb = None
@@ -154,6 +156,60 @@ class AdvancedRAGOptimizer:
         """Initialize performance tracking components. Issue #620."""
         self.query_cache = {}
         self.cache_ttl_seconds = 300  # 5 minutes
+
+    def _evict_cache(self) -> None:
+        """Enforce MAX_CACHE_ENTRIES: sweep expired first, then oldest. Issue #1732."""
+        if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
+            return
+        now = time.time()
+        expired = [
+            k
+            for k, v in self.query_cache.items()
+            if now - v["timestamp"] > self.cache_ttl_seconds
+        ]
+        for k in expired:
+            del self.query_cache[k]
+        if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
+            return
+        overage = len(self.query_cache) - self.MAX_CACHE_ENTRIES + 1
+        oldest = sorted(
+            self.query_cache, key=lambda k: self.query_cache[k]["timestamp"]
+        )
+        for k in oldest[:overage]:
+            del self.query_cache[k]
+        logger.debug(
+            "Cache eviction: removed %d expired + %d oldest entries",
+            len(expired),
+            overage,
+        )
+
+    def _make_cache_key(
+        self, query: str, max_results: int, enable_reranking: bool
+    ) -> str:
+        """Build a deterministic cache key from search parameters. Issue #1548."""
+        return f"{query}|{max_results}|{enable_reranking}"
+
+    def _get_cached_result(
+        self, key: str
+    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+        """Return cached result if present and within TTL, else None. Issue #1548."""
+        entry = self.query_cache.get(key)
+        if entry is None:
+            return None
+        if time.time() - entry["timestamp"] > self.cache_ttl_seconds:
+            del self.query_cache[key]
+            return None
+        logger.debug("Cache hit for key: %s", key[:80])
+        return entry["result"]
+
+    def _set_cached_result(
+        self,
+        key: str,
+        result: Tuple[List[SearchResult], RAGMetrics],
+    ) -> None:
+        """Store result in cache with current timestamp. Evicts if over limit. Issue #1548."""
+        self._evict_cache()
+        self.query_cache[key] = {"result": result, "timestamp": time.time()}
 
     async def initialize(self):
         """Initialize knowledge base and components."""
@@ -528,6 +584,12 @@ class AdvancedRAGOptimizer:
         try:
             logger.info("Advanced search: '%s' (max_results=%s)", query, max_results)
 
+            # Cache read — skip all heavy operations on hit (Issue #1548)
+            cache_key = self._make_cache_key(query, max_results, enable_reranking)
+            cached = self._get_cached_result(cache_key)
+            if cached is not None:
+                return cached
+
             # Step 1: Query analysis and context optimization
             query_start = time.time()
             context = self._analyze_query_context(query)
@@ -552,7 +614,10 @@ class AdvancedRAGOptimizer:
 
             self._log_search_completion(metrics, context)
 
-            return optimized_results, metrics
+            # Cache write — store result before returning (Issue #1548)
+            result = (optimized_results, metrics)
+            self._set_cached_result(cache_key, result)
+            return result
 
         except Exception as e:
             logger.error("Advanced search failed: %s", e)

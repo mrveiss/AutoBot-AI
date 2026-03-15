@@ -585,7 +585,7 @@ async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
         logger.error("Browser VM connection error: %s", e)
         raise HTTPException(
             status_code=503,
-            detail=f"Browser VM unavailable: {str(e)}",
+            detail="Browser VM unavailable",
         )
 
 

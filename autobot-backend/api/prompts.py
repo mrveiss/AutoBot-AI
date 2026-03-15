@@ -15,6 +15,14 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
+
+def _validate_prompt_id(prompt_id: str) -> str:
+    """Ensure prompt_id has no path traversal (#1733)."""
+    if ".." in prompt_id or prompt_id.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid prompt ID")
+    return prompt_id
+
+
 logger = logging.getLogger(__name__)
 
 # Cache for prompts to avoid re-reading files on every request
@@ -270,7 +278,7 @@ async def get_prompts(admin_check: bool = Depends(check_admin_permission)):
         raise
     except Exception as e:
         logger.error("Error getting prompts: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error getting prompts: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error getting prompts")
 
 
 @with_error_handling(
@@ -370,12 +378,10 @@ async def save_prompt(
         return _build_prompt_save_response(prompt_id, file_path, content, prompts_dir)
     except OSError as e:
         logger.error("Failed to write prompt file %s: %s", prompt_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to save prompt file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to save prompt file")
     except Exception as e:
         logger.error("Error saving prompt %s: %s", prompt_id, str(e))
-        raise HTTPException(status_code=500, detail=f"Error saving prompt: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error saving prompt")
 
 
 @with_error_handling(
@@ -442,9 +448,7 @@ async def revert_prompt(
         logger.error(
             "Failed to read/write prompt file during revert %s: %s", prompt_id, e
         )
-        raise HTTPException(
-            status_code=500, detail=f"Failed to access prompt file: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to access prompt file")
     except Exception as e:
         logger.error("Error reverting prompt %s: %s", prompt_id, str(e))
-        raise HTTPException(status_code=500, detail=f"Error reverting prompt: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error reverting prompt")

@@ -37,10 +37,8 @@ async def get_workflow_metrics(workflow_id: str):
 
         return {"success": True, "workflow_id": workflow_id, "metrics": stats}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get workflow metrics: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get workflow metrics")
 
 
 @with_error_handling(
@@ -60,10 +58,8 @@ async def get_performance_summary(
 
         return {"success": True, "performance_summary": summary}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get performance summary: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get performance summary")
 
 
 @with_error_handling(
@@ -79,10 +75,8 @@ async def get_current_system_metrics():
 
         return {"success": True, "system_metrics": metrics}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get system metrics: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get system metrics")
 
 
 # CPU/memory time-series via Prometheus — extracted from monitoring_compat.py (Issue #1283)
@@ -150,10 +144,8 @@ async def get_system_summary(
 
         return {"success": True, "resource_summary": summary}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get resource summary: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get resource summary")
 
 
 # Health check moved to consolidated health service
@@ -176,10 +168,8 @@ async def export_workflow_metrics(
 
         return {"success": True, "format": format, "data": export_data}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to export metrics: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to export metrics")
 
 
 @with_error_handling(
@@ -197,10 +187,8 @@ async def export_system_metrics(
 
         return {"success": True, "format": format, "data": export_data}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to export system data: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to export system data")
 
 
 @with_error_handling(
@@ -220,10 +208,8 @@ async def start_system_monitoring():
             "collection_interval": system_monitor.collection_interval,
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start monitoring: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to start monitoring")
 
 
 @with_error_handling(
@@ -239,10 +225,8 @@ async def stop_system_monitoring():
 
         return {"success": True, "message": "System monitoring stopped"}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to stop monitoring: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to stop monitoring")
 
 
 @with_error_handling(
@@ -282,7 +266,5 @@ async def get_metrics_dashboard():
 
         return {"success": True, "dashboard": dashboard_data}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get dashboard data: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get dashboard data")

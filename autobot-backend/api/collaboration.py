@@ -409,8 +409,7 @@ async def share_secret_with_session(
         await db.commit()
 
         logger.info(
-            f"User {user_id} shared secret {secret_id} "
-            f"with {len(recipient_ids)} participants in session {session_id}"
+            f"User shared secret with {len(recipient_ids)} participants in session {session_id}"
         )
 
         return {

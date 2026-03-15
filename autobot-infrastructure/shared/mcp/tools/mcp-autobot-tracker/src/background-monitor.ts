@@ -536,7 +536,7 @@ export class BackgroundMonitor {
 
     // Check disk space
     try {
-      const { stdout } = await execAsync(`df -h ${PathConstants.PROJECT_ROOT}`);
+      const { stdout } = await execAsync('df -h ' + JSON.stringify(PathConstants.PROJECT_ROOT));
       const diskInfo = stdout.split('\n')[1].split(/\s+/);
       healthData.system.disk = {
         usage: diskInfo[4],

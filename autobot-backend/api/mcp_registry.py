@@ -731,12 +731,10 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
         raise
     except aiohttp.ClientError as e:
         logger.error("HTTP error fetching tool details from %s: %s", bridge_name, e)
-        raise HTTPException(
-            status_code=502, detail=f"Failed to connect to MCP bridge: {str(e)}"
-        )
+        raise HTTPException(status_code=502, detail="Failed to connect to MCP bridge")
     except Exception as e:
         logger.error("Failed to get tool details: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(

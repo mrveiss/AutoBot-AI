@@ -1,4 +1,25 @@
 {
   "url": "https://context7.com/mrveiss/autobot-ai",
-  "public_key": "pk_2lkpZukfMqQ54FxypyPxu"
+  "public_key": "pk_2lkpZukfMqQ54FxypyPxu",
+  "projectTitle": "AutoBot AI Platform",
+  "description": "Autonomous AI-powered Linux administration platform with multi-modal AI, 20+ specialized agents, distributed fleet management via SLM, NPU hardware acceleration, RAG knowledge pipelines, and RBAC security across a 6-VM architecture",
+  "folders": [
+    "docs"
+  ],
+  "excludeFolders": [
+    "docs/archives",
+    "docs/fixes",
+    "docs/screenshots",
+    "docs/plans",
+    "docs/reports/legacy"
+  ],
+  "rules": [
+    "Always use autobot_shared.redis_client.get_redis_client() for Redis connections, never direct redis.Redis()",
+    "Always use autobot_shared.ssot_config.config for configuration values, never hardcode IPs",
+    "The SLM (Service Lifecycle Manager) on 172.16.168.19 manages the fleet via Ansible playbooks",
+    "AutoBot uses Ollama for LLM inference - configure via AUTOBOT_OLLAMA_HOST environment variable",
+    "The chat pipeline flows through ChatWorkflowManager -> LLMHandlerMixin._prepare_llm_request_params()",
+    "Use Python logging.getLogger(__name__) for backend, createLogger() for frontend - never print() or console.log()",
+    "Backend HTTPS on port 8443, Redis on 172.16.168.23:6379 with 4 databases (main, knowledge, prompts, analytics)"
+  ]
 }

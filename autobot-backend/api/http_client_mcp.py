@@ -708,7 +708,7 @@ async def execute_http_request(
         )
     except aiohttp.ClientError as e:
         logger.error("HTTP client error: %s", e)
-        raise HTTPException(status_code=502, detail=f"HTTP request failed: {str(e)}")
+        raise HTTPException(status_code=502, detail="HTTP request failed")
 
 
 @with_error_handling(

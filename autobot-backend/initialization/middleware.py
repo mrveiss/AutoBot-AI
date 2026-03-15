@@ -119,11 +119,38 @@ def configure_service_auth(app: FastAPI):
         logger.warning("⚠️ Service auth middleware not available: %s", e2)
 
 
+def configure_llm_awareness(app: FastAPI):
+    """
+    Configure LLM awareness middleware
+
+    Injects system awareness context (phase, maturity, capabilities) into LLM
+    prompts for /api/chat, /api/llm, /api/intelligent-agent, and /api/workflow
+    endpoints. If the middleware module is unavailable, logs a warning and
+    continues without it.
+
+    Args:
+        app: FastAPI application instance
+
+    Example:
+        ```python
+        configure_llm_awareness(app)
+        ```
+    """
+    try:
+        from middleware.llm_awareness_middleware import LLMAwarenessMiddleware
+
+        app.add_middleware(LLMAwarenessMiddleware)
+        logger.info("LLM Awareness Middleware enabled")
+    except ImportError as e:
+        logger.warning("LLM awareness middleware not available: %s", e)
+
+
 def configure_middleware(
     app: FastAPI,
     allow_origins: Optional[List[str]] = None,
     gzip_minimum_size: int = 1000,
     enable_service_auth: bool = True,
+    enable_llm_awareness: bool = True,
 ):
     """
     Configure all middleware for FastAPI application
@@ -133,6 +160,7 @@ def configure_middleware(
         allow_origins: List of allowed CORS origins (default: load from config)
         gzip_minimum_size: Minimum size for GZip compression (default: 1000 bytes)
         enable_service_auth: Enable service authentication middleware (default: True)
+        enable_llm_awareness: Enable LLM awareness context injection (default: True)
 
     Example:
         ```python
@@ -142,7 +170,7 @@ def configure_middleware(
         configure_middleware(app)
         ```
     """
-    logger.info("⚙️ Configuring middleware...")
+    logger.info("Configuring middleware...")
 
     # Configure CORS
     configure_cors(app, allow_origins)
@@ -154,7 +182,13 @@ def configure_middleware(
     if enable_service_auth:
         configure_service_auth(app)
 
-    logger.info("✅ All middleware configured successfully")
+    # Configure LLM Awareness context injection (optional)
+    # Must be registered after service auth so awareness context is applied
+    # only to authenticated requests that reach the route handlers.
+    if enable_llm_awareness:
+        configure_llm_awareness(app)
+
+    logger.info("All middleware configured successfully")
 
 
 __all__ = [
@@ -162,4 +196,5 @@ __all__ = [
     "configure_cors",
     "configure_gzip",
     "configure_service_auth",
+    "configure_llm_awareness",
 ]

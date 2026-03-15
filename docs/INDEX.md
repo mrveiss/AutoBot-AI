@@ -132,6 +132,23 @@
 
 ---
 
+## How-To Guides
+
+| Guide | Description |
+|-------|-------------|
+| [SLM Bash Execution](guides/slm-bash-execution.md) | Execute bash commands on target node groups via SLM |
+| [Chat Ollama Configuration](guides/chat-ollama-configuration.md) | Configure Chat module with local Ollama instance |
+| [Visual Workflow Parallel Execution](guides/visual-workflow-parallel-execution.md) | Define parallel shell script workflows across fleet |
+| [Codebase Analytics API](guides/codebase-analytics-api.md) | Retrieve API coverage reports programmatically |
+| [RAG Workflow with PDF](guides/rag-pdf-workflow.md) | RAG pipeline with PDF document repository |
+| [Vision VNC UI Testing](guides/vision-vnc-ui-testing.md) | Automated UI testing via Vision module and VNC |
+| [SLM Docker Ansible Deployment](guides/slm-docker-ansible-deployment.md) | Deploy Docker containers via SLM Ansible playbooks |
+| [Real-Time Monitoring](guides/realtime-monitoring-notifications.md) | Service monitoring with alert notifications |
+| [LLM Middleware & Telemetry](guides/llm-middleware-telemetry.md) | Custom middleware for LLM prompt interception |
+| [Distributed Task Failover](guides/distributed-task-failover-redis.md) | Redis-backed task failover between worker nodes |
+
+---
+
 ## Workflow Management
 
 | Document | Description |
@@ -220,4 +237,4 @@
 
 ---
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-15

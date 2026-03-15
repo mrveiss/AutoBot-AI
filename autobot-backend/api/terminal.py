@@ -111,6 +111,7 @@ See Also:
 import asyncio
 import json
 import logging
+import shlex
 import signal
 import time
 import uuid
@@ -216,7 +217,7 @@ async def create_terminal_session(
             )
         except Exception as e:
             logger.warning("Failed to setup SSH keys for session %s: %s", session_id, e)
-            ssh_key_result = {"error": str(e)}
+            ssh_key_result = {"error": "Internal server error"}
 
     logger.info("Created terminal session: %s", session_id)
 
@@ -379,7 +380,7 @@ async def setup_ssh_keys(
         return result
     except Exception as e:
         logger.error("Failed to setup SSH keys: %s", e)
-        raise HTTPException(status_code=500, detail=f"SSH key setup failed: {e}")
+        raise HTTPException(status_code=500, detail="SSH key setup failed")
 
 
 @with_error_handling(
@@ -1061,10 +1062,11 @@ async def terminal_health_check(
             },
         }
     except Exception as e:
+        logger.exception("Unexpected error: %s", e)
         return {
             "status": "degraded",
             "service": "consolidated_terminal_system",
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -1105,9 +1107,10 @@ async def get_terminal_system_status(
             },
         }
     except Exception as e:
+        logger.exception("Unexpected error: %s", e)
         return {
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -1320,8 +1323,16 @@ async def admin_execute_command(body: AdminExecuteRequest) -> dict:
                 "exit_code": 1,
             }
     try:
-        proc = await asyncio.create_subprocess_shell(
-            body.command,
+        cmd_parts = shlex.split(body.command)
+    except ValueError as exc:
+        return {
+            "stdout": "",
+            "stderr": f"Invalid command syntax: {exc}",
+            "exit_code": 1,
+        }
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

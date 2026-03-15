@@ -1994,7 +1994,7 @@ async def test_connection(
         return ConnectionTestResponse(
             success=False,
             message="Connection test failed",
-            error=str(e)[:500],
+            error="Internal server error"[:500],
         )
 
 

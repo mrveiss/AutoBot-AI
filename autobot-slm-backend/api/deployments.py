@@ -242,10 +242,10 @@ async def create_deployment(
             deployment.node_id,
         )
         return deployment
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -286,10 +286,10 @@ async def cancel_deployment(
         logger.info("Deployment cancelled: %s", deployment_id)
         return deployment
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -312,10 +312,10 @@ async def rollback_deployment(
         logger.info("Deployment rollback initiated: %s", deployment_id)
         return deployment
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -340,8 +340,8 @@ async def retry_deployment(
         logger.info("Deployment retry initiated: %s", deployment_id)
         return deployment
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )

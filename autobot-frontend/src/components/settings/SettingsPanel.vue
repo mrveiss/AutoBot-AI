@@ -214,6 +214,7 @@ const updateBackendSetting = (key: string, value: any) => {
   // Handle nested settings for memory and agents
   if (key.includes('.')) {
     const keys = key.split('.')
+    if (keys.some(k => k === '__proto__' || k === 'constructor' || k === 'prototype')) return
     let obj: any = settings.value.backend
     for (let i = 0; i < keys.length - 1; i++) {
       if (!obj![keys[i]]) obj![keys[i]] = {}
@@ -234,6 +235,7 @@ const updateLLMSetting = (key: string, value: any) => {
     settings.value.backend.llm = {}
   }
   const keys = key.split('.')
+  if (keys.some(k => k === '__proto__' || k === 'constructor' || k === 'prototype')) return
   let obj: any = settings.value.backend.llm
   for (let i = 0; i < keys.length - 1; i++) {
     if (!obj![keys[i]]) obj![keys[i]] = {}

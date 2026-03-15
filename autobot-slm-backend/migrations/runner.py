@@ -47,6 +47,7 @@ MIGRATIONS = [
     "fix_services_memory_bytes_bigint",
     "add_role_metadata_fields",
     "widen_code_status_column",
+    "add_fleet_sync_jobs_table",
 ]
 
 

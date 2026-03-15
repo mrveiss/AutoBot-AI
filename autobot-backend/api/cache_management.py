@@ -76,17 +76,17 @@ def _clear_single_redis_database(db_name: str, db_number: int) -> dict:
             "database": db_number,
             "keys_cleared": keys_before,
         }
-    except Exception as e:
+    except Exception:
         logger.error(
             "Failed to clear Redis database %s (%s): %s",
             db_name,
             db_number,
-            str(e),
+            "Internal server error",
         )
         return {
             "name": db_name,
             "database": db_number,
-            "error": str(e),
+            "error": "Internal server error",
             "keys_cleared": 0,
         }
 
@@ -154,19 +154,19 @@ async def get_cache_stats():
                 "connected": True,
             }
             total_keys += key_count
-        except Exception as e:
+        except Exception:
             logger.warning(
                 "Could not get stats for Redis database %s (%s): %s",
                 db_name,
                 db_number,
-                str(e),
+                "Internal server error",
             )
             stats["redis_databases"][db_name] = {
                 "database": db_number,
                 "key_count": 0,
                 "memory_usage": "0B",
                 "connected": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     stats["total_redis_keys"] = total_keys
@@ -377,9 +377,7 @@ async def get_advanced_cache_stats(
 
     except Exception as e:
         logger.error("Error getting cache stats: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Error getting cache stats: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting cache stats")
 
 
 @with_error_handling(
@@ -423,7 +421,7 @@ async def warm_cache(
 
     except Exception as e:
         logger.error("Error warming cache: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error warming cache: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error warming cache")
 
 
 @with_error_handling(
@@ -455,9 +453,7 @@ async def invalidate_cache(
 
     except Exception as e:
         logger.error("Error invalidating cache: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Error invalidating cache: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error invalidating cache")
 
 
 @with_error_handling(
@@ -501,7 +497,7 @@ async def clear_all_cache(
 
     except Exception as e:
         logger.error("Error clearing cache: %s", e)
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
 async def _warm_templates_cache() -> bool:
@@ -629,7 +625,7 @@ async def cache_health_check():
 
     except Exception as e:
         logger.error("Error checking cache health: %s", e)
-        return {"status": "unhealthy", "error": str(e)}
+        return {"status": "unhealthy", "error": "Internal server error"}
 
 
 # =========================================================================

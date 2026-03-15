@@ -188,7 +188,7 @@ async def enhanced_semantic_search(request: SearchRequest):
         raise
     except Exception as e:
         logger.error("Enhanced search failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @with_error_handling(
@@ -217,9 +217,7 @@ async def get_hardware_status():
 
     except Exception as e:
         logger.error("Failed to get hardware status: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get hardware status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get hardware status")
 
 
 @with_error_handling(
@@ -250,7 +248,7 @@ async def benchmark_search_performance(request: BenchmarkRequest):
 
     except Exception as e:
         logger.error("Benchmark failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Benchmark failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Benchmark failed")
 
 
 @with_error_handling(
@@ -282,7 +280,7 @@ async def optimize_search_engine(request: OptimizationRequest):
 
     except Exception as e:
         logger.error("Optimization failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Optimization failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Optimization failed")
 
 
 @with_error_handling(
@@ -329,7 +327,7 @@ async def get_performance_analytics():
     except Exception as e:
         logger.error("Failed to get performance analytics: %s", e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to get performance analytics: {str(e)}"
+            status_code=500, detail="Failed to get performance analytics"
         )
 
 
@@ -369,7 +367,7 @@ async def test_npu_connectivity():
         logger.warning("NPU connectivity test failed: %s", e)
         return {
             "connectivity": "failed",
-            "error": str(e),
+            "error": "Internal server error",
             "fallback_available": True,
             "timestamp": time.time(),
         }
@@ -554,6 +552,6 @@ async def health_check():
         return {
             "status": "unhealthy",
             "service": "enhanced_search",
-            "error": str(e),
+            "error": "Internal server error",
             "timestamp": time.time(),
         }

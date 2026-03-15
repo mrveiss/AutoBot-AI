@@ -661,13 +661,13 @@ async def _verify_redis(host: str) -> dict:
                 "message": "Connection timed out",
             }
         )
-    except Exception as e:
+    except Exception:
         is_healthy = False
         checks.append(
             {
                 "name": "connectivity",
                 "status": "failed",
-                "message": str(e)[:200],
+                "message": "Operation failed"[:200],
             }
         )
 
