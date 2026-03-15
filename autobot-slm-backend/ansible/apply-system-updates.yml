@@ -35,11 +35,15 @@
         msg: "Insufficient disk space: {{ available_space.stdout }}GB available, need at least 5GB"
       when: available_space.stdout | int < 5
 
-    - name: Check if dpkg is locked
-      ansible.builtin.wait_for:
-        path: /var/lib/dpkg/lock-frontend
-        state: absent
-        timeout: 300
+    - name: Wait for dpkg lock to be released
+      ansible.builtin.shell: |
+        fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock 2>/dev/null
+      register: dpkg_lock_check
+      until: dpkg_lock_check.rc != 0
+      retries: 60
+      delay: 5
+      changed_when: false
+      failed_when: false
       when: ansible_os_family == "Debian"
 
   tasks:
@@ -135,7 +139,7 @@
 
     - name: Apply specific package updates
       ansible.builtin.apt:
-        name: "{{ specific_packages }}"
+        name: "{{ specific_packages.split(',') if specific_packages is string else specific_packages }}"
         state: latest
         update_cache: true
         force_apt_get: true
