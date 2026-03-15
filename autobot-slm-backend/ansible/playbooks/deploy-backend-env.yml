@@ -18,11 +18,11 @@
     backend_host: "0.0.0.0"
     backend_port: 8443
     backend_workers: 1  # Issue #876: Single worker to prevent deadlock
-    backend_redis_host: 172.16.168.23
+    backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
     backend_redis_port: 6379
     backend_redis_password: ""
     backend_secret_key: "{{ lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true) }}"
-    backend_cors_origins: "http://172.16.168.21,https://172.16.168.21,http://172.16.168.19,https://172.16.168.19"
+    backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
     backend_llm_provider: "ollama"
     backend_llm_endpoint: "http://127.0.0.1:11434"
     backend_llm_model: "mistral:7b-instruct"

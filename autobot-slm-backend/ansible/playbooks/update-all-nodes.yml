@@ -4,7 +4,7 @@
 # Pulls directly from GitHub to /opt/autobot/code_source on the SLM node (.19),
 # then uses git archive to create deploy tarballs. (#1170)
 #
-# Runs FROM: 172.16.168.19 (SLM Manager) — NOT from the dev machine.
+# Runs FROM: SLM Manager host (see inventory) — NOT from the dev machine.
 #
 # Usage:
 #   ansible-playbook playbooks/update-all-nodes.yml
@@ -392,7 +392,7 @@
           - "======================================================="
           - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
-    # ----- Backend (172.16.168.20) -----
+    # ----- Backend -----
     - name: "[PLAY 2] Backend | Deploy autobot-backend"
       unarchive:
         src: "{{ deploy_tmp }}/backend.tar.gz"
@@ -491,7 +491,7 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, restart]
 
-    # ----- Frontend (172.16.168.21) -----
+    # ----- Frontend -----
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
@@ -550,7 +550,7 @@
       when: "'02-Frontend' in inventory_hostname"
       tags: [frontend, restart]
 
-    # ----- NPU Worker (172.16.168.22) -----
+    # ----- NPU Worker -----
     - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
       unarchive:
         src: "{{ deploy_tmp }}/npu-worker.tar.gz"
@@ -623,7 +623,7 @@
         - npu_status.rc | default(0) != 0
       tags: [npu, npu-worker, restart]
 
-    # ----- Browser Worker (172.16.168.25) -----
+    # ----- Browser Worker -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
         src: "{{ deploy_tmp }}/browser-worker.tar.gz"

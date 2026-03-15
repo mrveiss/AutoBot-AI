@@ -318,5 +318,5 @@
           - "New key installed at ~/.ssh/autobot_key"
           - "Old key backed up at ~/.ssh/autobot_key.bak"
           - ""
-          - "To verify: ssh -i ~/.ssh/autobot_key autobot@172.16.168.19"
+          - "To verify: ssh -i ~/.ssh/autobot_key autobot@{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
           - "=========================================================="

@@ -20,7 +20,7 @@
 #   -e "slm_admin_user=myuser" -e "slm_admin_password=mypass"
 #
 # Override API URL:
-#   -e "slm_api_url=https://172.16.168.19"
+#   -e "slm_api_url=https://<slm-host>"
 ---
 - name: Seed Fleet Nodes into SLM Database
   hosts: localhost

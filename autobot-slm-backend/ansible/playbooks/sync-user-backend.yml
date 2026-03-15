@@ -1,7 +1,7 @@
 ---
 # Sync User Backend Code to Main Server
 # Syncs autobot-backend and autobot-shared from local machine to /opt/autobot
-# This playbook runs locally on the WSL machine (172.16.168.20)
+# This playbook runs locally on the WSL machine (backend host)
 
 - name: Sync User Backend Code
   hosts: autobot-host
@@ -10,7 +10,7 @@
     local_autobot_root: "/home/kali/Desktop/AutoBot"
     backend_user: "autobot"
     backend_install_dir: "/opt/autobot"
-    backend_host: "172.16.168.20"
+    backend_host: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
 
   tasks:
     - name: Stop backend service before sync
@@ -94,4 +94,4 @@
           - "Backend health: {{ health_check.status | default('Unknown - check logs') }}"
           - ""
           - "Test login:"
-          - "curl -k -X POST https://172.16.168.21/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin\"}'"
+          - "curl -k -X POST https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin\"}'"

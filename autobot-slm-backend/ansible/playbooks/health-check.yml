@@ -439,7 +439,7 @@
   tasks:
     - name: Test frontend to backend connectivity
       uri:
-        url: "http://172.16.168.21/api/health"
+        url: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}/api/health"
         method: GET
         timeout: 15
       register: frontend_backend_test
@@ -448,7 +448,7 @@
 
     - name: Test backend to database connectivity
       uri:
-        url: "https://172.16.168.20:8443/api/system/redis"  # Issue #956: HTTPS:8443
+        url: "https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_port | default(8443) }}/api/system/redis"  # Issue #956: HTTPS:8443
         method: GET
         timeout: 15
         validate_certs: false
@@ -458,7 +458,7 @@
 
     - name: Test backend to AI/ML connectivity
       uri:
-        url: "https://172.16.168.20:8443/api/ai/status"  # Issue #956: HTTPS:8443
+        url: "https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_port | default(8443) }}/api/ai/status"  # Issue #956: HTTPS:8443
         method: GET
         timeout: 30
         validate_certs: false
@@ -508,11 +508,11 @@
           - "🌐 Browser VM: {{ overall_health.browser_vm.services_status }}"
           - ""
           - "📊 Service Endpoints:"
-          - "  Frontend: http://172.16.168.21"
-          - "  Backend: https://172.16.168.20:8443/api"
-          - "  Database: redis://172.16.168.23:6379"
-          - "  AI Stack: http://172.16.168.24:8080"
-          - "  Browser: http://172.16.168.25:3000"
+          - "  Frontend: http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+          - "  Backend: https://{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ backend_port | default(8443) }}/api"
+          - "  Database: redis://{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ redis_port | default(6379) }}"
+          - "  AI Stack: http://{{ hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ ai_stack_port | default(8080) }}"
+          - "  Browser: http://{{ hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1') }}:{{ browser_port | default(3000) }}"
           - ""
           - "🔍 For detailed analysis, check individual VM logs:"
           - "  sudo journalctl -u autobot-* --since '1 hour ago'"
