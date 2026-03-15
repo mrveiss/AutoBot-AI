@@ -14,32 +14,36 @@ service_auth_rate_limit_window: 300
 service_auth_rate_limit_max_failures: 10
 service_auth_timestamp_window: 300
 service_auth_key_ttl_days: 90
+service_auth_rotation_days: 80
+service_auth_rotation_timer_enabled: true
 
 # Key storage paths
 service_auth_keys_dir: /etc/autobot/service-keys
 service_auth_config_dir: /etc/autobot
 
-# Service definitions - maps inventory groups to service IDs
+# Service definitions - maps inventory groups to service IDs.
+# Host IPs are resolved from inventory (ansible_host), not hardcoded here.
 service_auth_services:
   main-backend:
     group: backend
-    host: "172.16.168.20"
   frontend:
     group: frontend
-    host: "172.16.168.21"
   npu-worker:
     group: npu
-    host: "172.16.168.22"
   redis-stack:
     group: database
-    host: "172.16.168.23"
   ai-stack:
     group: aiml
-    host: "172.16.168.24"
   browser-service:
     group: browser
-    host: "172.16.168.25"
 
-# Redis connection for key storage
-service_auth_redis_host: "172.16.168.23"
+# Redis connection for key storage.
+# Override via inventory group_vars or -e flags. Falls back to the
+# ansible_host of the first host in the 'database' inventory group.
+service_auth_redis_host: >-
+  {{ hostvars[groups['database'][0]]['ansible_host']
+     | default('127.0.0.1') }}
 service_auth_redis_port: 6379
+
+# Ansible working directory for rotation playbook invocation
+autobot_ansible_dir: /opt/autobot/autobot-slm-backend/ansible

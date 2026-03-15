@@ -190,6 +190,19 @@
       tags: ['base', 'common']
 
     # ===========================================
+    # Phase 1.5: Service Authentication (#1734)
+    # Deploy service auth keys during node enrollment.
+    # Keys must exist in Redis before this step — run
+    # generate_service_keys.py or deploy-service-auth.yml first.
+    # ===========================================
+    - name: "Phase 1.5 - Service Authentication Keys"
+      ansible.builtin.include_role:
+        name: service_auth
+      vars:
+        service_auth_enabled: true
+      tags: ['service_auth', 'keys']
+
+    # ===========================================
     # Phase 2: Role-Specific Configuration
     # ===========================================
     - name: "Phase 2 - Role-Specific Setup for {{ node_role }}"
