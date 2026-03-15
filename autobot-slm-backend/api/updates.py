@@ -288,17 +288,42 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
 def _parse_discover_output(output: str) -> List[dict]:
     """Parse AUTOBOT_UPDATES_JSON markers from Ansible output.
 
-    Each marker line contains JSON with hostname, packages, etc.
-    Returns list of per-host result dicts.
+    Ansible's default callback wraps long msg values across multiple
+    lines, so we search the full output and extract JSON by matching
+    balanced braces rather than parsing line-by-line (#1789).
     """
+    import re
+
     results = []
     marker = "AUTOBOT_UPDATES_JSON:"
-    for line in output.split("\n"):
-        idx = line.find(marker)
+    start = 0
+
+    while True:
+        idx = output.find(marker, start)
         if idx == -1:
+            break
+
+        brace_start = output.find("{", idx + len(marker))
+        if brace_start == -1:
+            break
+
+        depth = 0
+        pos = brace_start
+        while pos < len(output):
+            if output[pos] == "{":
+                depth += 1
+            elif output[pos] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            pos += 1
+
+        if depth != 0:
+            start = idx + 1
             continue
-        json_str = line[idx + len(marker) :].strip()
-        json_str = json_str.rstrip('"').rstrip("'")
+
+        json_str = output[brace_start : pos + 1]
+        json_str = re.sub(r"\n\s*", "", json_str)
         try:
             data = json.loads(json_str)
             results.append(data)
@@ -307,6 +332,8 @@ def _parse_discover_output(output: str) -> List[dict]:
                 "Failed to parse discover JSON: %.200s",
                 json_str,
             )
+        start = pos + 1
+
     return results
 
 
