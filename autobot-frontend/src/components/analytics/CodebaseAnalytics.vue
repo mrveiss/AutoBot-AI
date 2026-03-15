@@ -2307,7 +2307,7 @@ const loadCachedDuplicates = async () => {
 
 const loadCachedDependencies = async () => {
   const backendUrl = await appConfig.getServiceUrl('backend')
-  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/dependencies/cached`)
+  const resp = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/analytics/dependencies/cached`))
   if (!resp.ok) return
   const data = await resp.json()
   if (data.status === 'success' && data.dependency_data) {
@@ -2317,7 +2317,7 @@ const loadCachedDependencies = async () => {
 
 const loadCachedImportTree = async () => {
   const backendUrl = await appConfig.getServiceUrl('backend')
-  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/import-tree/cached`)
+  const resp = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/analytics/import-tree/cached`))
   if (!resp.ok) return
   const data = await resp.json()
   if (data.status === 'success' && data.import_tree) {
@@ -2643,7 +2643,7 @@ const loadDeclarations = async () => {
 const loadDuplicates = async () => {
   loadingProgress.duplicates = true
   try {
-    const ok = await dupTask.start()
+    const ok = await dupTask.start(undefined, sourceIdQuery.value)
     if (ok && dupTask.result.value) {
       const data = dupTask.result.value as Record<string, unknown>
       duplicateAnalysis.value = Array.isArray(data.duplicates)
