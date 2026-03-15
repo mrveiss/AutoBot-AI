@@ -1397,6 +1397,10 @@ async def get_vectorization_status(req: Request):
 
 _REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
 _REINDEX_DEFAULT_BATCH_SIZE = 20
+_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
+
+# Concurrency guard for reindex task (#1513)
+_reindex_running = False
 
 
 class ReindexWithContextRequest(BaseModel):
@@ -1405,6 +1409,7 @@ class ReindexWithContextRequest(BaseModel):
     collection_name: Optional[str] = Field(
         default=None,
         max_length=200,
+        pattern=_REINDEX_COLLECTION_PATTERN,
         description="ChromaDB collection (defaults to knowledge_vectors)",
     )
     batch_size: int = Field(
@@ -1422,26 +1427,47 @@ class ReindexWithContextResponse(BaseModel):
     message: str
 
 
-async def _fetch_unenriched_chunks(collection, batch_size: int, offset: int) -> list:
-    """Fetch a batch and filter to chunks without context.
+async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
+    """Fetch IDs of chunks without context using where filter.
+
+    Returns list of all unenriched chunk IDs. (#1513)
+    """
+    all_ids = []
+    offset = 0
+    while True:
+        results = await collection.get(
+            where={"has_context": {"$ne": True}},
+            limit=batch_size,
+            offset=offset,
+            include=["metadatas"],
+        )
+        ids = results.get("ids", [])
+        if not ids:
+            break
+        all_ids.extend(ids)
+        offset += len(ids)
+    return all_ids
+
+
+async def _fetch_chunks_by_ids(collection, chunk_ids: list) -> list:
+    """Fetch full chunk data for a list of IDs.
 
     Returns list of (id, document, metadata) tuples. (#1513)
     """
     results = await collection.get(
-        limit=batch_size,
-        offset=offset,
+        ids=chunk_ids,
         include=["documents", "metadatas"],
     )
     ids = results.get("ids", [])
     documents = results.get("documents", [])
     metadatas = results.get("metadatas", [])
 
-    unenriched = []
+    chunks = []
     for i, chunk_id in enumerate(ids):
         meta = metadatas[i] if i < len(metadatas) else {}
-        if not meta.get("has_context"):
-            unenriched.append((chunk_id, documents[i], meta))
-    return unenriched
+        doc = documents[i] if i < len(documents) else ""
+        chunks.append((chunk_id, doc, meta))
+    return chunks
 
 
 async def _enrich_document_group(
@@ -1454,6 +1480,13 @@ async def _enrich_document_group(
 
     Returns number of chunks enriched. (#1513)
     """
+    context = _build_pipeline_context(doc_id, chunks)
+    context = await cognifier.process(context)
+    return await _upsert_enriched_chunks(collection, chunks, context)
+
+
+def _build_pipeline_context(doc_id: str, chunks: list) -> PipelineContext:
+    """Build PipelineContext from raw chunk tuples (#1513)."""
     context = PipelineContext()
     try:
         context.document_id = UUID(doc_id)
@@ -1469,13 +1502,17 @@ async def _enrich_document_group(
             document_type=meta.get("document_type", "unknown"),
         )
         context.chunks.append(processed)
+    return context
 
-    context = await cognifier.process(context)
 
+async def _upsert_enriched_chunks(
+    collection, original_chunks: list, context: PipelineContext
+) -> int:
+    """Upsert enriched chunks back to ChromaDB (#1513)."""
     update_ids = []
     update_docs = []
     update_metas = []
-    for i, (chunk_id, _, original_meta) in enumerate(chunks):
+    for i, (chunk_id, _, original_meta) in enumerate(original_chunks):
         if i < len(context.chunks):
             enriched = context.chunks[i]
             updated_meta = {**original_meta, **enriched.metadata}
@@ -1492,16 +1529,42 @@ async def _enrich_document_group(
     return len(update_ids)
 
 
+async def _process_id_batch(collection, cognifier, chunk_ids: list) -> int:
+    """Process a batch of chunk IDs: fetch, group, enrich (#1513)."""
+    chunks = await _fetch_chunks_by_ids(collection, chunk_ids)
+    doc_groups = defaultdict(list)
+    for chunk_id, doc_text, meta in chunks:
+        did = meta.get("document_id", "unknown")
+        doc_groups[did].append((chunk_id, doc_text, meta))
+
+    enriched = 0
+    for did, group in doc_groups.items():
+        try:
+            enriched += await _enrich_document_group(collection, cognifier, did, group)
+        except Exception:
+            logger.exception("Failed to enrich doc '%s'", did)
+    return enriched
+
+
 async def _reindex_with_context_task(
     collection_name: str,
     batch_size: int,
 ) -> None:
     """Background task: enrich unenriched chunks with context.
 
-    Queries ChromaDB for chunks missing has_context metadata,
-    groups by document_id, runs ContextGeneratorCognifier,
-    and upserts enriched chunks back. (#1513)
+    Collects unenriched IDs up front via where filter, then
+    processes in batches to avoid ordering issues. (#1513)
     """
+    global _reindex_running  # noqa: PLW0603
+    try:
+        _reindex_running = True
+        await _run_reindex(collection_name, batch_size)
+    finally:
+        _reindex_running = False
+
+
+async def _run_reindex(collection_name: str, batch_size: int) -> None:
+    """Core reindex logic, separated for testability (#1513)."""
     cognifier = ContextGeneratorCognifier()
     client = await get_async_chromadb_client()
 
@@ -1511,48 +1574,37 @@ async def _reindex_with_context_task(
         logger.exception("Failed to get collection '%s'", collection_name)
         return
 
-    total_count = await collection.count()
-    if total_count == 0:
-        logger.info(
-            "Collection '%s' is empty, nothing to enrich",
-            collection_name,
-        )
+    try:
+        all_ids = await _fetch_unenriched_ids(collection, batch_size)
+    except Exception:
+        logger.exception("Failed to fetch unenriched chunk IDs")
+        return
+
+    if not all_ids:
+        logger.info("No unenriched chunks in '%s'", collection_name)
         return
 
     enriched_total = 0
-    offset = 0
-
-    while offset < total_count:
+    for i in range(0, len(all_ids), batch_size):
+        batch_ids = all_ids[i : i + batch_size]
         try:
-            unenriched = await _fetch_unenriched_chunks(collection, batch_size, offset)
+            enriched_total += await _process_id_batch(collection, cognifier, batch_ids)
         except Exception:
-            logger.exception("Failed to fetch chunks at offset %d", offset)
-            break
-
-        if unenriched:
-            doc_groups = defaultdict(list)
-            for chunk_id, doc_text, meta in unenriched:
-                did = meta.get("document_id", "unknown")
-                doc_groups[did].append((chunk_id, doc_text, meta))
-
-            for did, group in doc_groups.items():
-                try:
-                    count = await _enrich_document_group(
-                        collection, cognifier, did, group
-                    )
-                    enriched_total += count
-                except Exception:
-                    logger.exception("Failed to enrich doc '%s'", did)
-
-        offset += batch_size
+            logger.exception("Failed batch at index %d", i)
 
     logger.info(
-        "Reindex complete: enriched %d chunks in '%s'",
+        "Reindex complete: enriched %d/%d chunks in '%s'",
         enriched_total,
+        len(all_ids),
         collection_name,
     )
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reindex_with_context",
+    error_code_prefix="KNOWLEDGE",
+)
 @router.post(
     "/reindex_with_context",
     response_model=ReindexWithContextResponse,
@@ -1574,6 +1626,12 @@ async def reindex_with_context(
                 "Contextual retrieval is disabled. "
                 "Set CONTEXT_ENABLED=true to enable."
             ),
+        )
+
+    if _reindex_running:
+        raise HTTPException(
+            status_code=409,
+            detail="A reindex task is already running.",
         )
 
     col = request.collection_name or _REINDEX_DEFAULT_COLLECTION
