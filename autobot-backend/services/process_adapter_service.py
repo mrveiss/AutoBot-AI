@@ -2,11 +2,26 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Process Adapter Service (#1406)
+Process Adapter Service (#1406, #1751)
 
 Spawns background subprocesses, tracks their lifecycle, and enforces
 per-agent concurrency limits. Queued processes run automatically when
 a concurrency slot opens.
+
+Boundary with long_running_operations (#1751):
+    ProcessAdapterService — OS-level subprocess management.
+        Runs external programs via asyncio.create_subprocess_exec, captures
+        stdout/stderr, enforces timeouts and per-agent concurrency, persists
+        exit codes and logs to the process_runs SQL table.
+
+    long_running_operations (utils/) — In-process async task framework.
+        Manages Python coroutines (indexing, test suites, security scans)
+        with checkpoint/resume, WebSocket progress streaming, and
+        OperationStatus tracking via the OperationManager singleton.
+
+    When to use which:
+        - External CLI tool / shell command  →  ProcessAdapterService
+        - Python async function / coroutine  →  long_running_operations
 """
 
 import asyncio

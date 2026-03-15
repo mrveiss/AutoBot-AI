@@ -786,6 +786,41 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+async def _seed_agent_registry() -> None:
+    """Populate agents table from DEFAULT_AGENT_CONFIGS (#1754)."""
+    logger.info("[ 97%%] Agent Registry: Seeding agents table...")
+    try:
+        from services.agent_registry_service import seed_agents_from_config
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            count = await seed_agents_from_config(session)
+        logger.info("[ 97%%] Agent Registry: %d agents seeded", count)
+    except Exception as e:
+        logger.warning("Agent registry seeding failed: %s", e)
+
+
+async def _init_process_adapter(app: FastAPI) -> None:
+    """Start ProcessAdapterService queue dispatcher (#1748).
+
+    NON-CRITICAL: process management endpoints return 503 until this completes.
+    """
+    logger.info("[ 96%%] Process Adapter: Initializing...")
+    try:
+        from api.process_management import set_process_adapter_service
+        from services.process_adapter_service import ProcessAdapterService
+        from user_management.database import get_async_session_factory
+
+        svc = ProcessAdapterService(session_factory=get_async_session_factory())
+        await svc.start()
+        app.state.process_adapter_service = svc
+        set_process_adapter_service(svc)
+        logger.info("[ 96%%] Process Adapter: Dispatcher started")
+    except Exception as e:
+        logger.warning("Process adapter initialization failed: %s", e)
+        app.state.process_adapter_service = None
+
+
 async def _recover_index_queue():
     """Restore queued indexing jobs from Redis after restart (#1717)."""
     try:
@@ -837,6 +872,8 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
         await _recover_index_queue()
+        await _init_process_adapter(app)
+        await _seed_agent_registry()
 
         await update_app_state_multi(
             initialization_status="ready",
@@ -890,6 +927,14 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # Issue #1748: Stop process adapter dispatcher
+        if (
+            hasattr(app.state, "process_adapter_service")
+            and app.state.process_adapter_service
+        ):
+            await app.state.process_adapter_service.stop()
+            logger.info("✅ Process adapter stopped")
 
         # Issue #1233: Shutdown dedicated I/O thread pools
         shutdown_io_executors()
