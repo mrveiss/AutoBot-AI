@@ -503,7 +503,7 @@ async def get_embedding_stats() -> JSONResponse:
         return JSONResponse(
             {
                 "status": "error",
-                "message": str(e),
+                "message": "Internal server error",
                 "embedding_stats": None,
             }
         )
@@ -548,7 +548,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
         return JSONResponse(
             {
                 "status": "error",
-                "message": str(e),
+                "message": "Operation failed",
             }
         )
 
@@ -581,20 +581,16 @@ async def get_codebase_problems(
             )
             code_collection = None
 
-    # Fallback to Redis if ChromaDB fails
+    # Issue #1759: Problems are stored to ChromaDB only (not Redis).
+    # When ChromaDB is unavailable, return no_data directly.
     if not code_collection:
-        all_problems, success = await _fetch_problems_from_redis(
-            problem_type, source_id=source_id
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "ChromaDB unavailable. Run indexing first.",
+                "problems": [],
+            }
         )
-        if not success:
-            return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "problems": [],
-                }
-            )
-        storage_type = "redis"
 
     # Sort by severity (high, medium, low)
     severity_order = {"high": 0, "medium": 1, "low": 2}
