@@ -170,6 +170,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
             _active_tasks,
             _current_indexing_task_id,
             _index_queue,
+            _persist_queue_entry,
             _run_indexing_subprocess,
             _tasks_lock,
         )
@@ -187,14 +188,14 @@ async def _trigger_indexing(source: CodeSource) -> None:
                 _active_tasks[task_id] = task
                 task.add_done_callback(_create_cleanup_callback(task_id))
             else:
-                _index_queue.append(
-                    {
-                        "source_id": source.id,
-                        "root_path": source.clone_path,
-                        "queued_at": datetime.now().isoformat(),
-                        "requested_by": "sync",
-                    }
-                )
+                entry = {
+                    "source_id": source.id,
+                    "root_path": source.clone_path,
+                    "queued_at": datetime.now().isoformat(),
+                    "requested_by": "sync",
+                }
+                _index_queue.append(entry)
+                await _persist_queue_entry(entry)
     except Exception as exc:
         logger.warning("Could not trigger indexing for %s: %s", source.id, exc)
 
