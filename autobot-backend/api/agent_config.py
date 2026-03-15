@@ -679,18 +679,89 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
+    # Include specialized agents in the combined response (#1794)
+    from services.claude_agent_service import SpecializedAgentService
+
+    spec_service = SpecializedAgentService()
+    specialized_agents = spec_service.list_agents()
+
     return JSONResponse(
         status_code=200,
         content={
             "agents": backend_agents,
+            "specialized_agents": specialized_agents,
             "summary": {
                 "total": len(backend_agents),
+                "total_specialized": len(specialized_agents),
                 "healthy": healthy_count,
                 "disconnected": len(backend_agents) - healthy_count,
             },
             "timestamp": datetime.now().isoformat(),
         },
     )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_specialized_agents",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/specialized")
+async def list_specialized_agents(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """List all AutoBot specialized agents from .claude/agents/ (#1794).
+
+    Returns agent definitions parsed from markdown files including
+    name, description, tools, color, model, and category.
+
+    Issue #744: Requires admin authentication.
+    """
+    from services.claude_agent_service import SpecializedAgentService
+
+    service = SpecializedAgentService()
+    agents = service.list_agents()
+    categories = service.get_categories_summary(agents)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "agents": agents,
+            "total_count": len(agents),
+            "categories": categories,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_specialized_agent",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/specialized/{agent_id}")
+async def get_specialized_agent(
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get a single AutoBot specialized agent by ID (#1794).
+
+    Returns full agent definition including the system prompt.
+
+    Issue #744: Requires admin authentication.
+    """
+    from services.claude_agent_service import SpecializedAgentService
+
+    service = SpecializedAgentService()
+    agent = service.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Specialized agent '{agent_id}' not found",
+        )
+
+    return JSONResponse(status_code=200, content=agent)
 
 
 @with_error_handling(

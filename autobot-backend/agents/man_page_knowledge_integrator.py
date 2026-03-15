@@ -155,7 +155,7 @@ class ManPageParser:
 
         # Look for option patterns like: -f, --flag
         option_pattern = re.compile(
-            r"^\s*(-\w+(?:,\s*--[\w][\w-]{0,50})*|\s*--[\w][\w-]{0,50})"
+            r"^\s*(-\w+(?:,\s*--[\w][\w-]{0,50}){0,10}|\s*--[\w][\w-]{0,50})"
             r"\s+(.*?)(?=^\s*-|\Z)",
             re.MULTILINE | re.DOTALL,
         )

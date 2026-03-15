@@ -16,6 +16,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+
+permissions:
+  contents: read
+
 jobs:
   security-tests:
     runs-on: self-hosted

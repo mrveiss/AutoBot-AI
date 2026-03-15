@@ -499,6 +499,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #1794: Agent Registry — browse backend + Claude agents
+  {
+    path: '/agent-registry',
+    name: 'agent-registry',
+    component: () => import('@/views/AgentRegistryView.vue'),
+    meta: {
+      title: 'Agent Registry',
+      icon: 'fas fa-robot',
+      description: 'Browse and monitor all registered agents',
+      requiresAuth: true
+    }
+  },
   // Issue #899: Code Intelligence Tools
   {
     path: '/code-intelligence',

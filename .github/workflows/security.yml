@@ -22,6 +22,11 @@ concurrency:
 env:
   NODE_VERSION: '20'
 
+
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   dependency-security:
     name: Dependency Security Scan

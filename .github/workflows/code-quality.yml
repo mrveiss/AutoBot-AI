@@ -18,6 +18,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+
+permissions:
+  contents: read
+
 jobs:
   code-quality:
     runs-on: self-hosted

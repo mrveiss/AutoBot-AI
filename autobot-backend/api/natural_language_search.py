@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
 _NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
-_CAMEL_CASE_RE = re.compile(r"\b[A-Z][a-z]{1,30}(?:[A-Z][a-z]{1,30}){1,10}\b")
+_CAMEL_CASE_RE = re.compile(r"\b(?:[A-Z][a-z]{1,30}){2,10}\b")
 _SNAKE_CASE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 _QUOTED_STRING_RE = re.compile(r'"([^"]+)"|\'([^\']+)\'')
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")
