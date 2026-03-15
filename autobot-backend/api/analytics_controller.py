@@ -100,7 +100,6 @@ class AnalyticsController:
         self.code_index_path = PATH.PROJECT_ROOT / "mcp-tools" / "code-index-mcp"
 
         # Performance tracking
-        self.api_call_tracker = defaultdict(list)
         self.websocket_activity = defaultdict(int)
         self.system_bottlenecks = []
 
