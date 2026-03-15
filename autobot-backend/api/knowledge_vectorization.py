@@ -14,9 +14,10 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
+from auth_middleware import check_admin_permission, get_current_user
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
@@ -312,7 +313,9 @@ async def _perform_uncached_batch_check(
 
 
 @router.post("/vectorization_status")
-async def check_vectorization_status_batch(request: dict, req: Request):
+async def check_vectorization_status_batch(
+    request: dict, req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Check vectorization status for multiple facts in a single efficient batch operation.
 
@@ -587,6 +590,7 @@ async def vectorize_existing_facts(
     batch_size: int = 50,
     batch_delay: float = 0.5,
     skip_existing: bool = True,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Generate vector embeddings for facts in Redis.
@@ -1043,7 +1047,11 @@ async def _vectorize_fact_background(
 )
 @router.post("/vectorize_fact/{fact_id}")
 async def vectorize_individual_fact(
-    fact_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
+    fact_id: str,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Vectorize a single fact by ID with progress tracking.
@@ -1090,7 +1098,9 @@ async def vectorize_individual_fact(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_job/{job_id}")
-async def get_vectorization_job_status(job_id: str, req: Request):
+async def get_vectorization_job_status(
+    job_id: str, req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Get the status of a vectorization job.
 
@@ -1151,7 +1161,9 @@ def _collect_failed_keys(keys: list, results: list) -> List[str]:
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_jobs/failed")
-async def get_failed_vectorization_jobs(req: Request):
+async def get_failed_vectorization_jobs(
+    req: Request, _user: dict = Depends(get_current_user)
+):
     """
     Get all failed vectorization jobs from Redis.
 
@@ -1207,7 +1219,11 @@ async def get_failed_vectorization_jobs(req: Request):
 )
 @router.post("/vectorize_jobs/{job_id}/retry")
 async def retry_vectorization_job(
-    job_id: str, req: Request, background_tasks: BackgroundTasks, force: bool = False
+    job_id: str,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    force: bool = False,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Retry a failed vectorization job.
@@ -1254,7 +1270,9 @@ async def retry_vectorization_job(
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/{job_id}")
-async def delete_vectorization_job(job_id: str, req: Request):
+async def delete_vectorization_job(
+    job_id: str, req: Request, _admin: bool = Depends(check_admin_permission)
+):
     """
     Delete a vectorization job record from Redis.
 
@@ -1293,7 +1311,9 @@ async def delete_vectorization_job(job_id: str, req: Request):
     error_code_prefix="KNOWLEDGE",
 )
 @router.delete("/vectorize_jobs/failed/clear")
-async def clear_failed_vectorization_jobs(req: Request):
+async def clear_failed_vectorization_jobs(
+    req: Request, _admin: bool = Depends(check_admin_permission)
+):
     """
     Clear all failed vectorization jobs from Redis.
 
@@ -1355,7 +1375,9 @@ async def clear_failed_vectorization_jobs(req: Request):
 )
 @router.post("/vectorize_facts/background")
 async def start_background_vectorization(
-    req: Request, background_tasks: BackgroundTasks
+    req: Request,
+    background_tasks: BackgroundTasks,
+    _admin: bool = Depends(check_admin_permission),
 ):
     """
     Start background vectorization of all pending facts.
@@ -1384,7 +1406,9 @@ async def start_background_vectorization(
     error_code_prefix="KNOWLEDGE",
 )
 @router.get("/vectorize_facts/status")
-async def get_vectorization_status(req: Request):
+async def get_vectorization_status(
+    req: Request, _user: dict = Depends(get_current_user)
+):
     """Get the status of background vectorization"""
     vectorizer = get_background_vectorizer()
 
@@ -1615,6 +1639,7 @@ async def _run_reindex(collection_name: str, batch_size: int) -> None:
 async def reindex_with_context(
     request: ReindexWithContextRequest,
     background_tasks: BackgroundTasks,
+    _admin: bool = Depends(check_admin_permission),
 ) -> ReindexWithContextResponse:
     """Retroactively enrich chunks with contextual retrieval.
 
