@@ -52,6 +52,13 @@ slm_encryption_key: ""
 slm_admin_password: ""
 
 # ==========================================================
+# Main Backend Proxy (#1791)
+# ==========================================================
+# Internal API key shared between SLM and main backend.
+# Set via Ansible Vault or inventory; injected into nginx proxy.
+autobot_internal_api_key: ""
+
+# ==========================================================
 # Grafana Configuration
 # Issue #853: Support both local and external Grafana
 # ==========================================================
