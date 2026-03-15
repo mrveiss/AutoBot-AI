@@ -86,6 +86,8 @@ class AdvancedRAGOptimizer:
     6. GPU acceleration for embedding operations
     """
 
+    MAX_CACHE_ENTRIES = 500  # Hard ceiling to prevent unbounded growth. Issue #1732.
+
     def __init__(self):
         """Initialize RAG optimizer with search configuration. Issue #620."""
         self.kb = None
@@ -155,6 +157,32 @@ class AdvancedRAGOptimizer:
         self.query_cache = {}
         self.cache_ttl_seconds = 300  # 5 minutes
 
+    def _evict_cache(self) -> None:
+        """Enforce MAX_CACHE_ENTRIES: sweep expired first, then oldest. Issue #1732."""
+        if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
+            return
+        now = time.time()
+        expired = [
+            k
+            for k, v in self.query_cache.items()
+            if now - v["timestamp"] > self.cache_ttl_seconds
+        ]
+        for k in expired:
+            del self.query_cache[k]
+        if len(self.query_cache) < self.MAX_CACHE_ENTRIES:
+            return
+        overage = len(self.query_cache) - self.MAX_CACHE_ENTRIES + 1
+        oldest = sorted(
+            self.query_cache, key=lambda k: self.query_cache[k]["timestamp"]
+        )
+        for k in oldest[:overage]:
+            del self.query_cache[k]
+        logger.debug(
+            "Cache eviction: removed %d expired + %d oldest entries",
+            len(expired),
+            overage,
+        )
+
     def _make_cache_key(
         self, query: str, max_results: int, enable_reranking: bool
     ) -> str:
@@ -179,7 +207,8 @@ class AdvancedRAGOptimizer:
         key: str,
         result: Tuple[List[SearchResult], RAGMetrics],
     ) -> None:
-        """Store result in cache with current timestamp. Issue #1548."""
+        """Store result in cache with current timestamp. Evicts if over limit. Issue #1548."""
+        self._evict_cache()
         self.query_cache[key] = {"result": result, "timestamp": time.time()}
 
     async def initialize(self):
