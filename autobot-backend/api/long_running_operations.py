@@ -9,6 +9,13 @@ This module provides FastAPI endpoints for managing long-running operations
 with proper timeout handling, progress tracking, and checkpoint/resume capabilities.
 
 Integrated with the existing AutoBot backend architecture.
+
+Boundary with ProcessAdapterService (#1751):
+    This module manages in-process Python async tasks (codebase indexing,
+    test suites, code analysis) with checkpoint/resume and WebSocket progress.
+
+    For OS-level subprocess management (CLI tools, shell commands), see
+    services/process_adapter_service.py and api/process_management.py.
 """
 
 import asyncio

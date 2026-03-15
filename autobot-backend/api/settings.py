@@ -6,12 +6,15 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from celery.result import AsyncResult
 from celery_app import celery_app
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
+from sqlalchemy.ext.asyncio import AsyncSession
 from tasks.system_tasks import (
     check_available_updates,
     initialize_rbac,
@@ -92,15 +95,28 @@ async def get_settings_explicit():
     error_code_prefix="SETTINGS",
 )
 @router.post("/")
-async def save_settings(settings_data: dict):
-    """Save application settings"""
+async def save_settings(
+    settings_data: dict,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Save application settings (#1747: records audit revision)."""
     try:
-        # Only save if there's actual data to save
         if not settings_data:
             logger.warning("Received empty settings data, skipping save")
             return {"status": "skipped", "message": "No data to save"}
 
+        before_config = ConfigService.get_full_config()
         result = ConfigService.save_full_config(settings_data)
+
+        # Issue #1747: Record config revision
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="settings",
+            before_config=before_config,
+            after_config=settings_data,
+            source="api",
+            created_by="admin",
+        )
         return result
     except Exception as e:
         logger.error("Error saving settings: %s", str(e))
@@ -113,15 +129,27 @@ async def save_settings(settings_data: dict):
     error_code_prefix="SETTINGS",
 )
 @router.post("/settings")
-async def save_settings_explicit(settings_data: dict):
-    """Save application settings - explicit /settings endpoint for frontend compatibility"""
+async def save_settings_explicit(
+    settings_data: dict,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Save application settings — frontend compat (#1747: audit trail)."""
     try:
-        # Only save if there's actual data to save
         if not settings_data:
             logger.warning("Received empty settings data, skipping save")
             return {"status": "skipped", "message": "No data to save"}
 
+        before_config = ConfigService.get_full_config()
         result = ConfigService.save_full_config(settings_data)
+
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="settings",
+            before_config=before_config,
+            after_config=settings_data,
+            source="api",
+            created_by="admin",
+        )
         return result
     except Exception as e:
         logger.error("Error saving settings: %s", str(e))
@@ -149,10 +177,23 @@ async def get_backend_settings():
     error_code_prefix="SETTINGS",
 )
 @router.post("/backend")
-async def save_backend_settings(backend_settings: dict):
-    """Save backend-specific settings"""
+async def save_backend_settings(
+    backend_settings: dict,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Save backend-specific settings (#1747: audit trail)."""
     try:
+        before_config = ConfigService.get_backend_settings()
         result = ConfigService.update_backend_settings(backend_settings)
+
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="backend",
+            before_config=before_config,
+            after_config=backend_settings,
+            source="api",
+            created_by="admin",
+        )
         return result
     except Exception as e:
         logger.error("Error saving backend settings: %s", str(e))
@@ -180,11 +221,23 @@ async def get_full_config():
     error_code_prefix="SETTINGS",
 )
 @router.post("/config")
-async def save_full_config(config_data: dict):
-    """Save complete application configuration to config.yaml"""
+async def save_full_config(
+    config_data: dict,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Save complete application configuration (#1747: audit trail)."""
     try:
-        # Save the complete configuration to config.yaml and reload
+        before_config = ConfigService.get_full_config()
         result = ConfigService.save_full_config(config_data)
+
+        await ConfigRevisionService(session).create_revision(
+            entity_type="system",
+            entity_id="config",
+            before_config=before_config,
+            after_config=config_data,
+            source="api",
+            created_by="admin",
+        )
         return result
     except Exception as e:
         logger.error("Error saving full config: %s", str(e))
