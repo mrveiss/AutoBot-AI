@@ -291,111 +291,33 @@ class SeqAnalyticsSetup:
         print(f"✅ Created {len(created_alerts)} critical alerts")
         return created_alerts
 
+    def _build_test_log_entries(self):
+        """Build test log entries for analytics verification (#1792)."""
+        now = datetime.utcnow().isoformat() + "Z"
+        base = {"Application": "AutoBot"}
+
+        def _entry(level, message, source, **extra):
+            return {"@t": now, "@l": level, "@mt": message, "Source": source, **base, **extra}
+
+        return [
+            _entry("Information", "AutoBot system started successfully", "System", LogType="System"),
+            _entry("Information", "Backend service initialized on port 8001", "Backend-Main", ProcessID="12345"),
+            _entry("Information", "Container started successfully", "Docker-autobot-redis", ContainerName="autobot-redis", LogType="DockerContainer"),
+            _entry("Information", "NPU worker ready for processing", "Docker-autobot-npu-worker", ContainerName="autobot-npu-worker", LogType="DockerContainer"),
+            _entry("Information", "WebSocket connection established", "GlobalWebSocketService", ConnectionType="Global"),
+            _entry("Information", "API request completed in 45ms", "Backend-API", ResponseTime="45ms"),
+            _entry("Warning", "High memory usage detected: 85%", "System-Monitor", MemoryUsage="85%"),
+            _entry("Error", "Database connection failed - retrying", "Backend-Database", Error="ConnectionTimeout"),
+            _entry("Warning", "WebSocket disconnection detected", "GlobalWebSocketService", DisconnectionReason="timeout"),
+            _entry("Information", "Chat message processed successfully", "ChatInterface", MessageType="user"),
+            _entry("Information", "User authentication successful", "AuthService", AuthType="session"),
+        ]
+
     def send_test_logs_for_analysis(self):
         """Send comprehensive test logs to verify analytics."""
         print("🧪 Sending comprehensive test logs for analytics verification...")
 
-        test_logs = [
-            # System startup logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "AutoBot system started successfully",
-                "Source": "System",
-                "Application": "AutoBot",
-                "LogType": "System",
-            },
-            # Backend logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "Backend service initialized on port 8001",
-                "Source": "Backend-Main",
-                "Application": "AutoBot",
-                "ProcessID": "12345",
-            },
-            # Docker container logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "Container started successfully",
-                "Source": "Docker-autobot-redis",
-                "Application": "AutoBot",
-                "ContainerName": "autobot-redis",
-                "LogType": "DockerContainer",
-            },
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "NPU worker ready for processing",
-                "Source": "Docker-autobot-npu-worker",
-                "Application": "AutoBot",
-                "ContainerName": "autobot-npu-worker",
-                "LogType": "DockerContainer",
-            },
-            # WebSocket logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "WebSocket connection established",
-                "Source": "GlobalWebSocketService",
-                "Application": "AutoBot",
-                "ConnectionType": "Global",
-            },
-            # Performance logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "API request completed in 45ms",
-                "Source": "Backend-API",
-                "Application": "AutoBot",
-                "ResponseTime": "45ms",
-            },
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Warning",
-                "@mt": "High memory usage detected: 85%",
-                "Source": "System-Monitor",
-                "Application": "AutoBot",
-                "MemoryUsage": "85%",
-            },
-            # Error simulation
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Error",
-                "@mt": "Database connection failed - retrying",
-                "Source": "Backend-Database",
-                "Application": "AutoBot",
-                "Error": "ConnectionTimeout",
-            },
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Warning",
-                "@mt": "WebSocket disconnection detected",
-                "Source": "GlobalWebSocketService",
-                "Application": "AutoBot",
-                "DisconnectionReason": "timeout",
-            },
-            # Chat system logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "Chat message processed successfully",
-                "Source": "ChatInterface",
-                "Application": "AutoBot",
-                "MessageType": "user",
-            },
-            # Security logs
-            {
-                "@t": datetime.utcnow().isoformat() + "Z",
-                "@l": "Information",
-                "@mt": "User authentication successful",
-                "Source": "AuthService",
-                "Application": "AutoBot",
-                "AuthType": "session",
-            },
-        ]
-
+        test_logs = self._build_test_log_entries()
         headers = {
             "Content-Type": "application/vnd.serilog.clef",
             "User-Agent": "AutoBot-SeqSetup/1.0",
@@ -453,7 +375,7 @@ class SeqAnalyticsSetup:
         print(f"   🧪 Test logs sent: {test_logs_sent}")
         print(f"\n🌐 Access Seq at: {self.seq_url}")
         print(f"   Username: {self.username}")
-        print(f"   Password: {self.password}")
+        print("   Password: ********")
 
         return True
 

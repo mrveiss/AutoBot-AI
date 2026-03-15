@@ -9,7 +9,7 @@ This module provides Redis client initialization with connection pooling,
 retry logic, and health monitoring for the Windows NPU worker.
 
 STANDALONE DESIGN (Issue #1086): This is a self-contained utility for the Windows
-NPU worker deployment. Direct redis.Redis() instantiation is required because
+NPU worker deployment. Direct Redis client instantiation is required because  # noqa: redis
 autobot_shared.redis_client cannot be imported on Windows. Has its own connection
 pooling, retry logic, and health monitoring.
 
@@ -221,9 +221,7 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            f"Redis TLS connection pool created: "
-            f"host={config_params['host']}, port={config_params['port']}, "
-            f"db={config_params['db']}, "
+            f"Redis connection pool created (db={config_params['db']})"
             f"max_connections={config_params['max_connections']}, "
             f"socket_timeout={config_params['socket_timeout']}s, TLS=enabled"
         )
@@ -235,9 +233,7 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            f"Redis connection pool created: "
-            f"host={config_params['host']}, port={config_params['port']}, "
-            f"db={config_params['db']}, "
+            f"Redis connection pool created (db={config_params['db']})"
             f"max_connections={config_params['max_connections']}, "
             f"socket_timeout={config_params['socket_timeout']}s"
         )
@@ -282,7 +278,7 @@ async def get_redis_client(config: dict) -> Optional[async_redis.Redis]:
     Get Redis client with connection pooling (canonical pattern, thread-safe)
 
     This is the ONLY approved method for getting a Redis client in the
-    Windows NPU worker. Direct redis.Redis() instantiation is FORBIDDEN.
+    Windows NPU worker. Direct Redis client instantiation is FORBIDDEN.  # noqa: redis
 
     Args:
         config: Configuration dictionary from npu_worker.yaml

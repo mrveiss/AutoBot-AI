@@ -61,7 +61,10 @@ def create_seq_api_key(
             response = session.post(f"{seq_url}/api/apikeys", json=api_key_data)
             if response.status_code in [200, 201]:
                 api_key_info = response.json()
-                print(f"✅ Created API key: {api_key_info.get('Token', 'unknown')}")
+                print(
+                    "✅ Created API key: ****"
+                    + api_key_info.get("Token", "unknown")[-4:]
+                )
                 return api_key_info.get("Token")
             else:
                 print(f"⚠️  Could not create API key: {response.status_code}")

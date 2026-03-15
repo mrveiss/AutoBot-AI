@@ -278,7 +278,7 @@ class SecurityValidator:
         print(f"\n🔍 Hardcoded Secrets Found: {len(remaining_secrets)}")
         for secret in remaining_secrets:
             print(f"  • {secret['type']} in {secret['file']}:{secret['line']}")
-            print(f"    {secret['content']}")
+            print(f"    [redacted — line {secret.get('line', '?')}]")
 
         # Overall assessment
         total_issues = len(self.vulnerabilities_found) + len(remaining_secrets)
