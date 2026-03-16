@@ -195,7 +195,15 @@ async def test_langchain_redis():
             logger.info("Using langchain-community Redis")
             modern_langchain = False
 
-        from langchain_community.embeddings import OllamaEmbeddings
+        try:
+            from langchain_ollama import OllamaEmbeddings
+        except ImportError:
+            from langchain_community.embeddings import OllamaEmbeddings
+
+            logger.warning(
+                "langchain-ollama not installed, using deprecated "
+                "langchain_community fallback"
+            )
 
         # Initialize embedding model
         embeddings = OllamaEmbeddings(
