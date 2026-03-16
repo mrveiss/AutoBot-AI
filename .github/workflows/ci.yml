@@ -92,23 +92,21 @@ jobs:
         EOF
 
     - name: Run code quality checks
-      continue-on-error: true
       run: |
         source .venv/bin/activate
-        echo "🔍 Running code quality checks..."
-        echo "Note: Checks are in warn-only mode while Issue #173 is being addressed."
+        echo "Running code quality checks..."
 
-        # Code formatting check
+        # Code formatting check (matches pre-commit black config)
         echo "Checking code formatting with black..."
-        black --check autobot-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88 || echo "⚠️ Code formatting issues found"
+        black --check autobot-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88
 
-        # Import sorting check
+        # Import sorting check (matches pre-commit isort config)
         echo "Checking import sorting with isort..."
-        isort --check-only autobot-backend/ autobot-slm-backend/ autobot-shared/ || echo "⚠️ Import sorting issues found"
+        isort --check-only --profile=black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/
 
-        # Linting
+        # Linting (uses project .flake8 config — same as pre-commit)
         echo "Running flake8 linter..."
-        flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
+        flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/
 
     - name: Run security analysis
       run: |
