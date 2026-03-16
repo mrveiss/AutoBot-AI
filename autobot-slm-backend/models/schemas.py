@@ -46,14 +46,30 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     """User response (excludes password)."""
 
-    id: int
+    id: Any
     username: str
     is_active: bool
-    is_admin: bool
+    is_admin: bool = False
     created_at: datetime
     last_login: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        """Map UUID User model fields to legacy schema fields (#1900)."""
+        if hasattr(obj, "is_platform_admin") and not hasattr(obj, "is_admin"):
+            # user_management.models.user.User uses is_platform_admin
+            data = {
+                "id": obj.id,
+                "username": obj.username,
+                "is_active": obj.is_active,
+                "is_admin": obj.is_platform_admin,
+                "created_at": obj.created_at,
+                "last_login": getattr(obj, "last_login_at", None),
+            }
+            return cls(**data)
+        return super().model_validate(obj, **kwargs)
 
 
 # =============================================================================

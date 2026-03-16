@@ -192,25 +192,6 @@ class Setting(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class User(Base):
-    """SLM admin user model for authentication.
-
-    Stored in the slm_users table to avoid a table-name collision with the
-    user_management.models.user.User model, which owns the 'users' table with
-    a UUID primary key (Issue #1854).
-    """
-
-    __tablename__ = "slm_users"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(64), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
-    is_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    last_login = Column(DateTime, nullable=True)
-
-
 class EventType(str, enum.Enum):
     """Node event type enumeration."""
 
