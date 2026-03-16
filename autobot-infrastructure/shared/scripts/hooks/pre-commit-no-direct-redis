@@ -43,30 +43,104 @@ get_staged_python_files() {
         grep -v -E '^autobot-shared/redis_client\.py$' || true
 }
 
-# Check a Python file for direct redis.Redis() calls
+# Check a Python file for direct redis.Redis() calls.
+#
+# Uses Python's tokenize module so that comments, docstrings, and ordinary
+# string literals are never mistaken for executable code.  This eliminates
+# false positives from docstring text such as:
+#   """Direct redis.Redis() instantiation is required because …"""
+#
+# Suppression: add  # noqa: redis  to any line that must be exempt.
+#
+# Issue #1829 — false positives on comments/docstrings
 check_direct_redis() {
     local file="$1"
-    local line_num=0
+    local violations
+    violations=$(python3 - "$file" <<'PYEOF'
+import sys
+import re
+import tokenize
+import io
 
-    while IFS= read -r line; do
-        ((line_num++))
+PATTERN = re.compile(r'(?:^|[\s(,=+\[{])(?:aio)?redis\.Redis\s*\(')
+NOQA    = re.compile(r'#\s*noqa:.*\bredis\b', re.IGNORECASE)
 
-        # Skip empty lines
-        [[ -z "$line" ]] && continue
+path = sys.argv[1]
 
-        # Skip comments
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+try:
+    with open(path, 'rb') as fh:
+        src = fh.read()
+except OSError as exc:
+    print(f"  SKIP  {path}: {exc}", file=sys.stderr)
+    sys.exit(0)
 
-        # Skip noqa exemption
-        echo "$line" | grep -q 'noqa: redis' && continue
+# Collect line text for reporting and noqa lookup.
+try:
+    lines = src.decode('utf-8', errors='replace').splitlines()
+except Exception:
+    sys.exit(0)
 
-        # Match redis.Redis( or aioredis.Redis( — direct instantiation
-        if echo "$line" | grep -qE '(^|[[:space:]])((aio)?redis)\.Redis\s*\('; then
-            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
-            echo "    ${line:0:100}"
+# Token types that represent executable code — everything else is skipped.
+# OP, NAME, NUMBER, STRING (non-docstring), NEWLINE, NL, INDENT, DEDENT, …
+# We only want to flag tokens whose type is NAME or OP that are part of an
+# expression, but the easiest approach is: collect all tokens, skip the
+# ones that are COMMENT or STRING, then check the *source line* only when
+# we encounter a non-comment, non-string token that contains the pattern.
+#
+# Strategy: build a set of line numbers that are "code lines" — i.e. lines
+# that contain at least one token that is NOT a comment or string literal.
+# Then check only those lines for the redis.Redis( pattern.
+
+try:
+    tokens = list(tokenize.tokenize(io.BytesIO(src).readline))
+except tokenize.TokenError:
+    # Untokenisable file — fall back to skipping it silently.
+    sys.exit(0)
+
+# Lines that belong exclusively to comments or string literals.
+non_code_lines = set()
+code_lines     = set()
+
+for tok in tokens:
+    if tok.type in (tokenize.COMMENT, tokenize.STRING, tokenize.ENCODING,
+                    tokenize.NEWLINE, tokenize.NL, tokenize.INDENT,
+                    tokenize.DEDENT, tokenize.ENDMARKER):
+        # Mark every physical line this token spans as non-code (tentative).
+        for ln in range(tok.start[0], tok.end[0] + 1):
+            if ln not in code_lines:
+                non_code_lines.add(ln)
+    else:
+        # A real code token — its line is definitely a code line.
+        lno = tok.start[0]
+        code_lines.add(lno)
+        non_code_lines.discard(lno)
+
+found = False
+for lno in sorted(code_lines):
+    idx = lno - 1  # lines list is 0-based
+    if idx < 0 or idx >= len(lines):
+        continue
+    line_text = lines[idx]
+    # Honour noqa suppression.
+    if NOQA.search(line_text):
+        continue
+    if PATTERN.search(line_text):
+        print(f"{lno}:{line_text[:120]}")
+        found = True
+
+sys.exit(1 if found else 0)
+PYEOF
+)
+    local py_exit=$?
+    if [[ $py_exit -ne 0 ]]; then
+        while IFS= read -r entry; do
+            local lno="${entry%%:*}"
+            local text="${entry#*:}"
+            echo -e "  ${RED}VIOLATION${NC} ${file}:${lno}"
+            echo "    ${text}"
             ((VIOLATIONS++))
-        fi
-    done < "$file"
+        done <<< "$violations"
+    fi
 }
 
 main() {
