@@ -144,7 +144,10 @@ def _init_langchain_embeddings(embedding_model, ollama_base_url):
     except ImportError:
         from langchain_community.embeddings import OllamaEmbeddings
 
-        logger.info("Using community ollama embeddings")
+        logger.warning(
+            "langchain-ollama not installed, using deprecated "
+            "langchain_community.embeddings.OllamaEmbeddings fallback"
+        )
 
     return OllamaEmbeddings(
         model=embedding_model,

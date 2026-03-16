@@ -383,8 +383,17 @@ class AutoBotVectorStoreAnalysis:
         fixes_attempted = []
 
         try:
-            from langchain_community.embeddings import OllamaEmbeddings
             from langchain_redis import RedisVectorStore
+
+            try:
+                from langchain_ollama import OllamaEmbeddings
+            except ImportError:
+                from langchain_community.embeddings import OllamaEmbeddings
+
+                logger.warning(
+                    "langchain-ollama not installed, using deprecated "
+                    "langchain_community fallback"
+                )
 
             embeddings = OllamaEmbeddings(
                 model="nomic-embed-text:latest",
@@ -626,6 +635,10 @@ class AutoBotVectorStoreAnalysis:
             except ImportError:
                 from langchain_community.embeddings import OllamaEmbeddings
 
+                logger.warning(
+                    "langchain-ollama not installed, using deprecated "
+                    "langchain_community fallback"
+                )
                 fixes_attempted.append("Using langchain-community embeddings")
 
             embeddings = OllamaEmbeddings(
