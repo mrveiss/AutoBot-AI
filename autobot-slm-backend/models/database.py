@@ -193,9 +193,14 @@ class Setting(Base):
 
 
 class User(Base):
-    """User model for authentication."""
+    """SLM admin user model for authentication.
 
-    __tablename__ = "users"
+    Stored in the slm_users table to avoid a table-name collision with the
+    user_management.models.user.User model, which owns the 'users' table with
+    a UUID primary key (Issue #1854).
+    """
+
+    __tablename__ = "slm_users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(64), unique=True, nullable=False, index=True)
