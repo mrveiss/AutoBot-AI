@@ -3302,7 +3302,23 @@
     "status": "Estado del agente",
     "config": "Configuración de agente",
     "orchestrator": "Orquestador",
-    "translate": "Traducir"
+    "translate": "Traducir",
+    "registry": {
+      "title": "Registro de agentes",
+      "subtitle": "Explorar y supervisar todos los agentes registrados",
+      "backendAgents": "Agentes de backend",
+      "specializedAgents": "Agentes especializados",
+      "refresh": "Actualizar",
+      "loading": "Cargando agentes...",
+      "error": "Error",
+      "noBackendAgents": "No hay agentes de backend configurados",
+      "noSpecializedAgents": "No se encontraron agentes especializados",
+      "systemPrompt": "Prompt del sistema",
+      "noModel": "sin modelo",
+      "defaultModel": "predeterminado",
+      "moreCount": "+{count} más",
+      "summaryStats": "{backend} backend \u2022 {specialized} agentes especializados"
+    }
   },
   "errors": {
     "generic": "Algo salió mal. Inténtelo de nuevo.",

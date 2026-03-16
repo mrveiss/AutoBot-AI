@@ -3302,7 +3302,23 @@
     "status": "Agentenstatus",
     "config": "Agentenkonfiguration",
     "orchestrator": "Orchestrator",
-    "translate": "Übersetzen"
+    "translate": "Übersetzen",
+    "registry": {
+      "title": "Agentenregister",
+      "subtitle": "Alle registrierten Agenten durchsuchen und überwachen",
+      "backendAgents": "Backend-Agenten",
+      "specializedAgents": "Spezialisierte Agenten",
+      "refresh": "Aktualisieren",
+      "loading": "Agenten werden geladen...",
+      "error": "Fehler",
+      "noBackendAgents": "Keine Backend-Agenten konfiguriert",
+      "noSpecializedAgents": "Keine spezialisierten Agenten gefunden",
+      "systemPrompt": "System-Prompt",
+      "noModel": "kein Modell",
+      "defaultModel": "Standard",
+      "moreCount": "+{count} weitere",
+      "summaryStats": "{backend} Backend \u2022 {specialized} spezialisierte Agenten"
+    }
   },
   "errors": {
     "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",

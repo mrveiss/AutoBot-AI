@@ -3302,7 +3302,23 @@
     "status": "État de l'agent",
     "config": "Configuration de l'agent",
     "orchestrator": "Orchestrateur",
-    "translate": "Traduire"
+    "translate": "Traduire",
+    "registry": {
+      "title": "Registre des agents",
+      "subtitle": "Parcourir et surveiller tous les agents enregistrés",
+      "backendAgents": "Agents backend",
+      "specializedAgents": "Agents spécialisés",
+      "refresh": "Actualiser",
+      "loading": "Chargement des agents...",
+      "error": "Erreur",
+      "noBackendAgents": "Aucun agent backend configuré",
+      "noSpecializedAgents": "Aucun agent spécialisé trouvé",
+      "systemPrompt": "Prompt système",
+      "noModel": "aucun modèle",
+      "defaultModel": "par défaut",
+      "moreCount": "+{count} de plus",
+      "summaryStats": "{backend} backend \u2022 {specialized} agents spécialisés"
+    }
   },
   "errors": {
     "generic": "Une erreur est survenue. Veuillez réessayer.",

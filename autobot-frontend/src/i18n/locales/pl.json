@@ -3302,7 +3302,23 @@
     "status": "Status agenta",
     "config": "Konfiguracja agenta",
     "orchestrator": "Orkiestrator",
-    "translate": "Tłumacz"
+    "translate": "Tłumacz",
+    "registry": {
+      "title": "Rejestr agentów",
+      "subtitle": "Przeglądaj i monitoruj wszystkich zarejestrowanych agentów",
+      "backendAgents": "Agenci backendowi",
+      "specializedAgents": "Agenci wyspecjalizowani",
+      "refresh": "Odśwież",
+      "loading": "Ładowanie agentów...",
+      "error": "Błąd",
+      "noBackendAgents": "Brak skonfigurowanych agentów backendowych",
+      "noSpecializedAgents": "Nie znaleziono wyspecjalizowanych agentów",
+      "systemPrompt": "Prompt systemowy",
+      "noModel": "brak modelu",
+      "defaultModel": "domyślny",
+      "moreCount": "+{count} więcej",
+      "summaryStats": "{backend} backendowych \u2022 {specialized} wyspecjalizowanych agentów"
+    }
   },
   "errors": {
     "generic": "Coś poszło nie tak. Spróbuj ponownie.",

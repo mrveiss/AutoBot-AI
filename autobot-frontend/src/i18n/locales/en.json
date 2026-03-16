@@ -3303,7 +3303,23 @@
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
-    "translate": "Translate"
+    "translate": "Translate",
+    "registry": {
+      "title": "Agent Registry",
+      "subtitle": "Browse and monitor all registered agents",
+      "backendAgents": "Backend Agents",
+      "specializedAgents": "Specialized Agents",
+      "refresh": "Refresh",
+      "loading": "Loading agents...",
+      "error": "Error",
+      "noBackendAgents": "No backend agents configured",
+      "noSpecializedAgents": "No specialized agents found",
+      "systemPrompt": "System Prompt",
+      "noModel": "no model",
+      "defaultModel": "default",
+      "moreCount": "+{count} more",
+      "summaryStats": "{backend} backend \u2022 {specialized} specialized agents"
+    }
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
