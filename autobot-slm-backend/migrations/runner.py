@@ -48,6 +48,9 @@ MIGRATIONS = [
     "add_role_metadata_fields",
     "widen_code_status_column",
     "add_fleet_sync_jobs_table",
+    # Issue #1854: rename SLM admin table to avoid FK collision with
+    # user_management users table (UUID PK).
+    "rename_users_to_slm_users",
 ]
 
 
