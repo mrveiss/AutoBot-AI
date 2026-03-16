@@ -38,7 +38,10 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
-_PROJECT_ROOT = Path(__file__).parent.parent
+# Use .parent (autobot-backend/) so paths work in both Docker (/app/autobot-backend/)
+# and bare-metal deployments.  .parent.parent was wrong in Docker — resolved to /app
+# instead of /app/autobot-backend/, causing schema/data lookups to miss. (#1861)
+_PROJECT_ROOT = Path(__file__).parent
 
 
 @dataclass
