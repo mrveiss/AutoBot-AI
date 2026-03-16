@@ -1649,8 +1649,8 @@ curl -sk "https://172.16.168.20:8443/api/knowledge_base/entries?limit=5" \
 
 **Fixes:**
 
-- Verify `pypdf` is installed: `pip list | grep pypdf`. If missing, install it on the
-  backend conda environment.
+- Verify `pypdf` is installed: `pip list | grep pypdf`. If missing, install it into the
+  backend venv (`/opt/autobot/autobot-backend/venv`).
 - Check if the PDF contains actual text (not scanned images). `pypdf` cannot OCR images.
   For scanned PDFs, pre-process with an OCR tool before uploading.
 - Check the upload response `word_count` -- if 0, no text was extracted.

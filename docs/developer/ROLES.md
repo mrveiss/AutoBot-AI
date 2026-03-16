@@ -165,7 +165,7 @@ These conflicts drive the default fleet layout:
 | **Internal port** | 8001 (uvicorn HTTP, localhost only) |
 | **External port** | 8443 (nginx HTTPS reverse proxy) |
 | **Install dir** | `/opt/autobot/autobot-backend` |
-| **Python** | 3.12 (conda env: `/home/autobot/miniconda3/envs/autobot-backend`) |
+| **Python** | 3.12 (deadsnakes PPA venv: `/opt/autobot/autobot-backend/venv`) |
 | **Node.js** | — |
 | **System packages** | `build-essential libssl-dev ffmpeg libsndfile1 libsndfile1-dev portaudio19-dev tesseract-ocr libtesseract-dev nginx` |
 | **External deps** | Redis :6379, PostgreSQL :5432, Ollama :11434, ChromaDB :8000 |
@@ -187,7 +187,7 @@ These conflicts drive the default fleet layout:
 | **Systemd service** | `autobot-celery` |
 | **Port** | — (no HTTP; uses Redis as broker) |
 | **Install dir** | Shares `/opt/autobot/autobot-backend` venv with `backend` |
-| **Python** | 3.12 (shared conda env with `backend`) |
+| **Python** | 3.12 (shared deadsnakes PPA venv with `backend`) |
 | **Node.js** | — |
 | **System packages** | — (shared with `backend`) |
 | **External deps** | Redis :6379 (broker + result backend), PostgreSQL :5432 |
@@ -560,7 +560,7 @@ optional roles:
 │  celery workers   │       ┌─────────────────────────────────────────────────┐
 │  ollama :11434    │       │  .23  DATABASES                                  │
 │  (Python 3.12     │──────▶│  Redis Stack :6379   redis_exporter :9121        │
-│   conda env)      │       │  PostgreSQL :5432    (backend user mgmt)          │
+│   deadsnakes venv)│       │  PostgreSQL :5432    (backend user mgmt)          │
 └───────────────────┘       └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -612,7 +612,7 @@ Provisioned by: `playbooks/deploy_role.yml` (postgresql role)
 
 **Only active when** `AUTOBOT_DEPLOYMENT_MODE != single_user`.
 Set `AUTOBOT_DEPLOYMENT_MODE=single_company` (or higher) to enable.
-Schema applied by: `alembic upgrade head` inside the backend conda env
+Schema applied by: `alembic upgrade head` inside the backend venv
 Credentials file: `/etc/autobot/db-credentials.env` (prefix `AUTOBOT_DB_`)
 
 ### SQLite on `.20` — Backend Primary Storage

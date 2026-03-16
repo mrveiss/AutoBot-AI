@@ -241,7 +241,7 @@ git diff --staged           # Ensure nothing unexpectedly left staged
 **Deployment Verification Checklist — after deploying to ANY remote server:**
 
 1. **No .env override conflicts:** `grep -E "(HOST|PORT|PASSWORD)" /path/to/.env`
-2. **Correct Python interpreter:** `which python3` — Main: Python 3.12 conda env; SLM/fleet: Python 3.10 venv `/opt/autobot/venv`
+2. **Correct Python interpreter:** `which python3` — All nodes: Python 3.12 deadsnakes PPA venv at `/opt/autobot/<component>/venv` (Issue #1898)
 3. **Database migrations current:** `cd /opt/autobot && source venv/bin/activate && alembic current`
 4. **Service actually restarted:** `sudo systemctl status autobot-backend --no-pager && journalctl -u autobot-backend -n 50 --no-pager`
 5. **Endpoints responding:** `curl -sk https://localhost:8443/api/health | jq`
@@ -356,9 +356,9 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - If Black and isort conflict: run Black first, then isort, then `git add -u` before committing
 
 **CI/Production Parity:**
-- CI runs Python 3.10 (deadsnakes PPA) — never use 3.11+ features or 3.13-only packages
+- CI runs Python 3.12 (deadsnakes PPA) — never use 3.13-only packages (Issue #1898)
 - Match production dependency versions exactly — never upgrade major versions without explicit approval
-- Backend: conda env (Python 3.12 on `.20`), SLM/fleet: venv Python 3.10 on `/opt/autobot/venv`
+- All nodes: deadsnakes PPA python3.12 venv at `/opt/autobot/<component>/venv`
 
 **Branch Strategy:**
 - Always target `Dev_new_gui` for PRs and merges unless explicitly told otherwise

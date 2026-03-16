@@ -121,14 +121,14 @@
         path: "{{ backend_install_dir }}/.env"
       register: env_file
 
-    - name: Check conda environment
+    - name: Check Python venv
       shell: |
-        if [ -d /home/autobot/miniconda3/envs/autobot-backend ]; then
-          /home/autobot/miniconda3/envs/autobot-backend/bin/python --version
+        if [ -f {{ backend_code_dir }}/venv/bin/python ]; then
+          {{ backend_code_dir }}/venv/bin/python --version
           echo "---"
-          /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn --version
+          {{ backend_code_dir }}/venv/bin/uvicorn --version
         else
-          echo "Conda environment not found"
+          echo "Python venv not found at {{ backend_code_dir }}/venv"
         fi
       become_user: autobot
       register: conda_check
@@ -146,7 +146,7 @@
           {% endif %}
           .env file exists: {{ env_file.stat.exists }}
 
-          Conda environment:
+          Python venv:
           {{ conda_check.stdout }}
         dest: "{{ diagnostic_output_dir }}/08-environment.txt"
 
@@ -158,7 +158,7 @@
       shell: |
         cd {{ backend_code_dir }}
         export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
-        /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+        {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('Python version:', sys.version)
         print('Python path:', sys.path[:5])
@@ -227,7 +227,7 @@
       shell: |
         cd {{ backend_code_dir }}
         export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
-        timeout 10s /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --workers 1 2>&1 || echo "Manual start attempt completed/timeout"
+        timeout 10s {{ backend_code_dir }}/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --workers 1 2>&1 || echo "Manual start attempt completed/timeout"
       become_user: autobot
       register: manual_start
       failed_when: false

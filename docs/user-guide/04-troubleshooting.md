@@ -16,19 +16,17 @@ sudo ./setup_agent.sh
 ```
 
 #### Issue: Python version conflicts
-**Symptoms**: "Python 3.10 not found" or version mismatch errors
+**Symptoms**: "Python 3.12 not found" or version mismatch errors
 **Solution**:
 ```bash
-# Check pyenv installation
-pyenv versions
-
-# Install correct Python version
-pyenv install 3.10.13
-pyenv global 3.10.13
+# Install Python 3.12 via deadsnakes PPA (Issue #1898)
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
 
 # Recreate virtual environment
 rm -rf venv
-python -m venv venv
+python3.12 -m venv venv
 ```
 
 ### Runtime Issues

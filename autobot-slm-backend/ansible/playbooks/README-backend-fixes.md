@@ -65,7 +65,7 @@ ansible-playbook playbooks/fix-backend-symlink.yml -e "symlink_action=restore"
 **Fixes:**
 - Corrects `.env` path in systemd service
 - Updates PYTHONPATH to include all required directories
-- Verifies conda environment
+- Verifies Python venv
 - Tests imports
 
 ```bash
@@ -181,7 +181,7 @@ ansible autobot-backend -m shell -a "journalctl -u autobot-backend -n 50 --no-pa
    ```bash
    ssh autobot@172.16.168.20
    cd /opt/autobot/autobot-user-backend
-   source /home/autobot/miniconda3/envs/autobot-backend/bin/activate
+   source /opt/autobot/autobot-backend/venv/bin/activate
    uvicorn main:app --host 0.0.0.0 --port 8443
    ```
 

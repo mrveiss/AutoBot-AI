@@ -24,19 +24,19 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Install Python 3.10 via deadsnakes PPA
+    - name: Install Python 3.12 via deadsnakes PPA
       run: |
-        if ! command -v python3.10 &> /dev/null; then
+        if ! command -v python3.12 &> /dev/null; then
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt-get update -y
-          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
+          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
         fi
 
     - name: Free disk space and set up venv
       run: |
         pip cache purge 2>/dev/null || true
         rm -rf .venv 2>/dev/null || true
-        python3.10 -m venv .venv
+        python3.12 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
         echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
@@ -213,19 +213,19 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - name: Install Python 3.10 via deadsnakes PPA
+    - name: Install Python 3.12 via deadsnakes PPA
       run: |
-        if ! command -v python3.10 &> /dev/null; then
+        if ! command -v python3.12 &> /dev/null; then
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt-get update -y
-          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
+          sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
         fi
 
     - name: Free disk space and set up venv
       run: |
         pip cache purge 2>/dev/null || true
         rm -rf .venv 2>/dev/null || true
-        python3.10 -m venv .venv
+        python3.12 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
         echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH

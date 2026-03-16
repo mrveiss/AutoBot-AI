@@ -16,7 +16,7 @@ OpenVINO (Open Visual Inference and Neural Network Optimization) provides CPU an
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| OpenVINO Runtime | ✅ Installed | `venv/lib/python3.10/site-packages/openvino/` |
+| OpenVINO Runtime | ✅ Installed | `venv/lib/python3.12/site-packages/openvino/` |
 | CPU Plugin | ✅ Available | `libopenvino_intel_cpu_plugin.so` |
 | GPU Plugin | ✅ Installed | `libopenvino_intel_gpu_plugin.so` |
 | NPU Plugin | ✅ Installed | `libopenvino_intel_npu_plugin.so` |

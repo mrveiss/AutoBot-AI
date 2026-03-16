@@ -10,7 +10,7 @@ Type=simple
 User={{ backend_user }}
 Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
-Environment="PATH=/home/{{ backend_user }}/miniconda3/envs/autobot-backend/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot-shared:{{ backend_install_dir | dirname }}"
 EnvironmentFile=/opt/autobot/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
