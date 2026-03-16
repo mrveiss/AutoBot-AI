@@ -349,7 +349,7 @@ function buildConfig(): AutoBotConfig {
     aistack: getEnv('VITE_AI_STACK_HOST', '172.16.168.24'),
     browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
     ollama: getEnv('VITE_OLLAMA_HOST', '127.0.0.1'),
-    slm: getEnv('VITE_SLM_HOST', '172.16.168.19'),
+    slm: getEnv('VITE_SLM_HOST', ''),
   };
 
   // Service ports
@@ -469,12 +469,17 @@ function buildConfig(): AutoBotConfig {
     },
 
     get slmUrl(): string {
+      // Issue #1875: When vm.slm is empty, use relative /slm path
+      // for Docker/nginx deployments where SLM is proxied
+      if (!vm.slm) return '/slm';
       return `${httpProtocol}://${vm.slm}:${port.slm}`;
     },
 
     get slmAdminUrl(): string {
       // Issue #729: SLM Admin is behind nginx on port 443
       // Nginx proxies / -> slm-admin:5174, /api/ -> slm-server:8000
+      // Issue #1875: When vm.slm is empty, use relative /slm path
+      if (!vm.slm) return '/slm';
       return `https://${vm.slm}`;
     },
   };
@@ -638,6 +643,9 @@ export function getApiTimeout(): number {
 
 /**
  * Get SLM Backend URL (Issue #725).
+ * Returns relative '/slm' when VITE_SLM_HOST is not set,
+ * enabling proxy mode where nginx routes SLM API calls.
+ * Bare-metal deployments set VITE_SLM_HOST to the SLM IP.
  */
 export function getSLMUrl(): string {
   return getConfig().slmUrl;
