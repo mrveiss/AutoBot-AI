@@ -255,7 +255,7 @@ interface LLMFilteringResult {
 const props = defineProps<{
   analysis: EnvironmentAnalysisResult | null
   loading: boolean
-  error: string
+  error: string | null
   useAiFiltering: boolean
   aiFilteringModel: string
   aiFilteringPriority: string
@@ -264,7 +264,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   refresh: []
-  export: [format: string]
+  export: [format: 'md' | 'json']
   'update:use-ai-filtering': [value: boolean]
   'update:ai-filtering-priority': [value: string]
 }>()

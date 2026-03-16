@@ -422,12 +422,12 @@ interface OwnershipAnalysisResult {
 const props = defineProps<{
   analysis: OwnershipAnalysisResult | null
   loading: boolean
-  error: string
+  error: string | null
 }>()
 
 const emit = defineEmits<{
   refresh: []
-  export: [format: string]
+  export: [format: 'md' | 'json']
 }>()
 
 const viewMode = ref<'overview' | 'files' | 'contributors' | 'gaps'>('overview')

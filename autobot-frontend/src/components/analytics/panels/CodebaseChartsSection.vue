@@ -277,7 +277,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'export-section': [section: string, format: string]
+  'export-section': [section: string, format: 'md' | 'json']
   'load-unified-report': []
   'load-chart-data': []
   'update:selected-category': [value: string]

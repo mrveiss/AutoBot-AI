@@ -1,8 +1,5 @@
 # AutoBot CI/CD Pipeline
 # Uses self-hosted runner to avoid GitHub Actions quota limits
-#
-# NOTE: Code quality checks are set to warn-only mode while Issue #173
-# is being addressed. Once fixed, change continue-on-error to false.
 
 name: AutoBot CI/CD Pipeline
 
@@ -184,17 +181,14 @@ jobs:
         npm ci
 
     - name: Run frontend linting
-      continue-on-error: true
       run: |
         cd autobot-frontend
-        npm run lint || echo "⚠️ Frontend linting issues found"
+        npm run lint
 
     - name: Run frontend type checking
-      continue-on-error: true
       run: |
         cd autobot-frontend
-        # Type check application code only (skip tests for now)
-        npx vue-tsc --noEmit -p tsconfig.app.json || echo "⚠️ App type checking issues found - continuing CI"
+        npx vue-tsc --noEmit -p tsconfig.app.json
 
     - name: Build frontend
       run: |

@@ -385,13 +385,13 @@ interface CrossLanguageAnalysisResult {
 const props = defineProps<{
   analysis: CrossLanguageAnalysisResult | null
   loading: boolean
-  error: string
+  error: string | null
 }>()
 
 const emit = defineEmits<{
   refresh: []
   'run-full-scan': []
-  export: [format: string]
+  export: [format: 'md' | 'json']
 }>()
 
 const expanded = reactive({

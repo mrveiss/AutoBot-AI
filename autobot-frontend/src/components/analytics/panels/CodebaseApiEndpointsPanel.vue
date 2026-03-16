@@ -275,12 +275,12 @@ interface ApiEndpointAnalysisResult {
 const props = defineProps<{
   analysis: ApiEndpointAnalysisResult | null
   loading: boolean
-  error: string
+  error: string | null
 }>()
 
 const emit = defineEmits<{
   refresh: []
-  export: [format: string]
+  export: [format: 'md' | 'json']
 }>()
 
 const expanded = reactive({ orphaned: false, missing: false, used: false })

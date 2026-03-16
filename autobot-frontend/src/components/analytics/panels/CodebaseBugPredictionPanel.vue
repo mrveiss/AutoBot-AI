@@ -343,15 +343,15 @@ interface BugPredictionResult {
 const props = defineProps<{
   analysis: BugPredictionResult | null
   loading: boolean
-  error: string
+  error: string | null
   wasInterrupted: boolean
-  taskCurrentStep?: string
+  taskCurrentStep?: string | null
   taskProgress?: number
 }>()
 
 const emit = defineEmits<{
   refresh: []
-  export: [format: string]
+  export: [format: 'md' | 'json']
 }>()
 
 const PAGE_SIZE = 50
