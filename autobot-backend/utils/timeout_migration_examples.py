@@ -671,7 +671,7 @@ class ExistingOperationMigrator:
             Test result dictionary.
         """
         future = executor.submit(self._run_single_test, test_file)
-        test_result = await asyncio.get_event_loop().run_in_executor(
+        test_result = await asyncio.get_running_loop().run_in_executor(
             None, lambda: future.result(timeout=300)
         )
         return test_result

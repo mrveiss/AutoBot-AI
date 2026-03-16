@@ -194,11 +194,12 @@ class GPUSemanticChunker:
 
             try:
                 # Load model in thread pool to avoid blocking
-                loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     logger.info("Loading GPU embedding model...")
-                    self._embedding_model = await loop.run_in_executor(
-                        executor, self._load_model_with_optimizations
+                    self._embedding_model = (
+                        await asyncio.get_running_loop().run_in_executor(
+                            executor, self._load_model_with_optimizations
+                        )
                     )
 
                 logger.info("GPU model loading completed")
@@ -370,9 +371,8 @@ class GPUSemanticChunker:
                         return embeddings
 
                 # Execute in thread pool
-                loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    batch_embeddings = await loop.run_in_executor(
+                    batch_embeddings = await asyncio.get_running_loop().run_in_executor(
                         executor, gpu_encode_batch, batch_sentences
                     )
 

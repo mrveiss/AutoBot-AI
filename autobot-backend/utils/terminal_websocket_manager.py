@@ -370,7 +370,7 @@ class TerminalWebSocketManager:
         """
         try:
             return await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(
+                asyncio.get_running_loop().run_in_executor(
                     None, self.output_queue.get, True, 0.1
                 ),
                 timeout=0.2,
@@ -424,7 +424,7 @@ class TerminalWebSocketManager:
                 processed_input = self.input_processor(text)
 
             # Write to PTY in executor to avoid blocking
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None, os.write, self.pty_fd, processed_input.encode("utf-8")
             )
 

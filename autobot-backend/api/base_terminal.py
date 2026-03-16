@@ -80,7 +80,7 @@ class BaseTerminalWebSocket(ABC):
 
         # Schedule async output sender
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             self._output_sender_task = asyncio.run_coroutine_threadsafe(
                 self._async_output_sender(), loop
             )
@@ -175,7 +175,7 @@ class BaseTerminalWebSocket(ABC):
                 try:
                     # Wait for message with timeout
                     message = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
+                        asyncio.get_running_loop().run_in_executor(
                             None, self.output_queue.get, True, 0.1
                         ),
                         timeout=0.2,

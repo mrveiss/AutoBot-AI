@@ -129,11 +129,15 @@ def _handle_sync_error_tracking(
     }
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            _schedule_error_tracking(error, error_context)
-        else:
+        asyncio.get_running_loop()
+        # A running loop exists — schedule as a task
+        _schedule_error_tracking(error, error_context)
+    except RuntimeError:
+        # No running loop — run synchronously
+        try:
             _run_error_tracking(error, error_context)
+        except Exception:
+            logger.error("Error in %s: %s", func.__name__, error)
     except Exception:
         logger.error("Error in %s: %s", func.__name__, error)
 

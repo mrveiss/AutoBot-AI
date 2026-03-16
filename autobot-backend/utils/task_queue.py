@@ -627,8 +627,9 @@ class TaskQueue:
             return await func(*args, **kwargs)
         else:
             # Run sync function in thread pool
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+            return await asyncio.get_running_loop().run_in_executor(
+                None, lambda: func(*args, **kwargs)
+            )
 
     async def _handle_task_completion(self, task: Task, result: TaskResult) -> None:
         """Handle task completion (success or failure)."""

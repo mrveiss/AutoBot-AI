@@ -579,7 +579,7 @@ class TestContextGeneratorDisabled:
         cog = ContextGeneratorCognifier()
         ctx = _make_context()
         original_contents = [c.content for c in ctx.chunks]
-        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        result = asyncio.run(cog.process(ctx))
         assert [c.content for c in result.chunks] == original_contents
 
     def test_empty_chunks_returns_early(self):
@@ -589,7 +589,7 @@ class TestContextGeneratorDisabled:
 
         cog = ContextGeneratorCognifier()
         ctx = _make_context(n_chunks=0)
-        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        result = asyncio.run(cog.process(ctx))
         assert result.chunks == []
 
 
@@ -624,7 +624,7 @@ class TestContextGeneratorEnabled:
         )
 
         ctx = _make_context(n_chunks=2)
-        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        result = asyncio.run(cog.process(ctx))
 
         for chunk in result.chunks:
             assert chunk.metadata["has_context"] is True
@@ -651,7 +651,7 @@ class TestContextGeneratorEnabled:
         cog.llm.chat_completion = AsyncMock(return_value=chunk_resp)
 
         ctx = _make_context(n_chunks=2)
-        asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        asyncio.run(cog.process(ctx))
 
         assert cog.llm.chat_completion.call_count == 2
 
@@ -667,7 +667,7 @@ class TestContextGeneratorEnabled:
         cog.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM down"))
 
         ctx = _make_context(n_chunks=1)
-        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        result = asyncio.run(cog.process(ctx))
 
         assert result.chunks[0].metadata["has_context"] is False
         assert result.chunks[0].metadata["contextual_text"] == ""
@@ -690,6 +690,6 @@ class TestContextGeneratorEnabled:
 
         ctx = _make_context(n_chunks=1)
         original = ctx.chunks[0].content
-        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        result = asyncio.run(cog.process(ctx))
 
         assert result.chunks[0].content == f"ctx sentence\n\n{original}"

@@ -82,12 +82,11 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     Returns:
         Analysis result or None if timed out
     """
-    loop = asyncio.get_event_loop()
     try:
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
         analysis = await asyncio.wait_for(
-            loop.run_in_executor(
+            asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 lambda: DuplicateCodeDetector(
                     project_root=project_root,

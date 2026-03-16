@@ -121,7 +121,7 @@ class CloudRequestBatcher:
             raise RuntimeError("Batcher is shutting down")
 
         request_id = str(uuid4())
-        future = asyncio.get_event_loop().create_future()
+        future = asyncio.get_running_loop().create_future()
         batched_request = BatchedRequest(
             request_id=request_id, payload=payload, future=future
         )

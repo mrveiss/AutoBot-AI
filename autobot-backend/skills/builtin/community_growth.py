@@ -202,8 +202,7 @@ class CommunityGrowthSkill(BaseSkill):
                         )
             return results
 
-        loop = asyncio.get_event_loop()
-        matches = await loop.run_in_executor(None, _sync_search)
+        matches = await asyncio.get_running_loop().run_in_executor(None, _sync_search)
         return {"success": True, "matches": matches}
 
     async def _reddit_reply(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -228,9 +227,10 @@ class CommunityGrowthSkill(BaseSkill):
             comment = submission.reply(content)
             return f"https://reddit.com{comment.permalink}"
 
-        loop = asyncio.get_event_loop()
         try:
-            comment_url = await loop.run_in_executor(None, _sync_reply)
+            comment_url = await asyncio.get_running_loop().run_in_executor(
+                None, _sync_reply
+            )
             return {"success": True, "comment_url": comment_url}
         except Exception as exc:
             logger.exception("reddit_reply failed for post %s", post_id)
@@ -262,9 +262,10 @@ class CommunityGrowthSkill(BaseSkill):
                 post.flair.select(flair)
             return f"https://reddit.com{post.permalink}"
 
-        loop = asyncio.get_event_loop()
         try:
-            post_url = await loop.run_in_executor(None, _sync_post)
+            post_url = await asyncio.get_running_loop().run_in_executor(
+                None, _sync_post
+            )
             return {"success": True, "post_url": post_url}
         except Exception as exc:
             logger.exception("reddit_post failed to r/%s", subreddit)

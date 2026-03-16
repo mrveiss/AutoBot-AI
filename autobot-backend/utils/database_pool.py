@@ -226,7 +226,7 @@ class AsyncSQLiteConnectionPool:
 
     async def initialize(self):
         """Initialize the async pool."""
-        self._executor = asyncio.get_event_loop().run_in_executor
+        self._executor = asyncio.get_running_loop().run_in_executor
 
     @asynccontextmanager
     async def get_connection(self):

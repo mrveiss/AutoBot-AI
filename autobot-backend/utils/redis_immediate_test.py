@@ -207,7 +207,7 @@ class RedisCircuitBreaker:
             self.failure_count = 0
             self.is_circuit_open = False
             try:
-                self.last_success_time = asyncio.get_event_loop().time()
+                self.last_success_time = asyncio.get_running_loop().time()
             except RuntimeError:
                 # No event loop running, use 0
                 self.last_success_time = 0
@@ -217,7 +217,7 @@ class RedisCircuitBreaker:
         with self._lock:
             self.failure_count += 1
             try:
-                self.last_failure_time = asyncio.get_event_loop().time()
+                self.last_failure_time = asyncio.get_running_loop().time()
             except RuntimeError:
                 # No event loop running, use 0
                 self.last_failure_time = 0

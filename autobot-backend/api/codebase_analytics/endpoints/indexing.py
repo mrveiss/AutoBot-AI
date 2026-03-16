@@ -159,13 +159,12 @@ def _start_next_queued_job() -> None:
         return
     next_job = _index_queue.popleft()
     # Remove from Redis queue (#1717: keep in-memory and Redis in sync)
-    loop = asyncio.get_event_loop()
-    loop.create_task(_pop_queue_entry_redis())
+    asyncio.get_running_loop().create_task(_pop_queue_entry_redis())
     next_path = next_job.get("root_path", str(PATH.PROJECT_ROOT))
     next_source_id = next_job.get("source_id")
     next_task_id = str(uuid.uuid4())
     _current_indexing_task_id = next_task_id
-    task = loop.create_task(
+    task = asyncio.get_running_loop().create_task(
         _run_indexing_subprocess(next_task_id, next_path, source_id=next_source_id)
     )
     _active_tasks[next_task_id] = task

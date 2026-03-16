@@ -975,7 +975,7 @@ def create_lifespan_manager():
         _executor = ThreadPoolExecutor(
             max_workers=MAX_WORKER_THREADS, thread_name_prefix="autobot_worker"
         )
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.set_default_executor(_executor)
         logger.info(
             "🧵 Bounded thread pool configured (max %d workers)", MAX_WORKER_THREADS
