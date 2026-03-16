@@ -40,6 +40,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
     environment:
       - POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
       - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:-autobot}
@@ -129,7 +130,7 @@ services:
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
       - SLM_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
-      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
+      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/slm_users
       - SLM_POSTGRES_HOST=autobot-postgres
     depends_on:
       autobot-redis:
