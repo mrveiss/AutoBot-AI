@@ -9,6 +9,7 @@ Training orchestration for code completion model.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -33,7 +34,9 @@ class CompletionTrainer:
 
     def __init__(
         self,
-        model_dir: str = "/opt/autobot/models",
+        model_dir: str = os.path.join(
+            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"), "models"
+        ),
         language: Optional[str] = None,
         pattern_type: Optional[str] = None,
         device: Optional[str] = None,
@@ -48,7 +51,14 @@ class CompletionTrainer:
             device: Device for training (auto-detect if None)
         """
         self.model_dir = Path(model_dir)
-        self.model_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Could not create model_dir %s: %s — directory will be created on first save",
+                self.model_dir,
+                exc,
+            )
 
         self.language = language
         self.pattern_type = pattern_type
