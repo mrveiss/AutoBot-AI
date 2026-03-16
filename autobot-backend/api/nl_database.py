@@ -17,7 +17,7 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_rbac import require_auth
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from services.nl_database_service import get_nl_database_service
@@ -182,7 +182,7 @@ def _extract_user_id(request: Request) -> Optional[str]:
 async def nl_query(
     body: NLQueryRequest,
     request: Request,
-    _auth=Depends(require_auth),
+    _auth=Depends(get_current_user),
 ) -> NLQueryResponse:
     """Execute a natural language query against a database."""
     service = get_nl_database_service()
@@ -213,7 +213,7 @@ async def nl_query(
     tags=["nl-database"],
 )
 async def get_schema(
-    _auth=Depends(require_auth),
+    _auth=Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get information about trained database schemas."""
     service = get_nl_database_service()
@@ -233,7 +233,7 @@ async def get_schema(
 async def train_on_db(
     body: TrainRequest,
     request: Request,
-    _auth=Depends(require_auth),
+    _auth=Depends(get_current_user),
 ) -> TrainResponse:
     """Train the NL service on an external database schema."""
     service = get_nl_database_service()
@@ -262,7 +262,7 @@ async def train_on_db(
 async def get_history(
     request: Request,
     limit: int = Query(default=50, ge=1, le=500, description="Max entries to return"),
-    _auth=Depends(require_auth),
+    _auth=Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """Retrieve query history for the current user."""
     service = get_nl_database_service()
