@@ -15,6 +15,7 @@ import stat
 from pathlib import Path
 from typing import Optional
 
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -219,9 +220,11 @@ class Settings(BaseSettings):
         "SLM_EXTERNAL_URL", "https://172.16.168.19"  # noqa: ssot-fallback
     )
 
-    class Config:
-        env_prefix = "SLM_"
-        env_file = ".env"
+    model_config = ConfigDict(
+        env_prefix="SLM_",
+        env_file=".env",
+        extra="ignore",
+    )
 
 
 settings = Settings()
