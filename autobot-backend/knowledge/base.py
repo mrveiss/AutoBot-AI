@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
-import aioredis
 import redis
 from config import ConfigManager
 from llama_index.core import Settings, VectorStoreIndex
@@ -22,6 +21,7 @@ from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from redis import asyncio as aioredis
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
 from utils.knowledge_base_timeouts import kb_timeouts

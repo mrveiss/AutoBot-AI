@@ -1,4 +1,4 @@
-# AutoBot Docker Compose — Single-Node Deployment
+# AutoBot Docker Compose — Single-Node Deployment (#1809)
 # All core services on one machine. Frontend at /, SLM at /slm.
 #
 # Usage:
@@ -13,7 +13,7 @@
 services:
   # ---- Data Layer ----
 
-  redis:
+  autobot-redis:
     image: redis/redis-stack:7.4.0-v1
     container_name: autobot-redis
     restart: unless-stopped
@@ -32,7 +32,28 @@ services:
     networks:
       - autobot
 
-  chromadb:
+  autobot-postgres:
+    image: postgres:16-bookworm
+    container_name: autobot-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    environment:
+      - POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:-autobot}
+      - POSTGRES_DB=${AUTOBOT_DB_NAME:-autobot_slm}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_DB_USER:-autobot}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - autobot
+
+  autobot-chromadb:
     image: chromadb/chroma:0.5.23
     container_name: autobot-chromadb
     restart: unless-stopped
@@ -53,12 +74,15 @@ services:
 
   # ---- Application Layer ----
 
-  backend:
+  autobot-backend:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
+    image: autobot/backend:latest
     container_name: autobot-backend
     restart: unless-stopped
+    env_file:
+      - docker/.env.docker
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
@@ -66,16 +90,20 @@ services:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_DEPLOYMENT_MODE=local
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
-      - AUTOBOT_REDIS_HOST=redis
+      - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-http://ollama:11434}
+      - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-http://autobot-ollama:11434}
       - AUTOBOT_BACKEND_HOST=0.0.0.0
       - AUTOBOT_BACKEND_PORT=8000
       - AUTOBOT_LLM_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
       - AUTOBOT_DEFAULT_LLM_MODEL=${AUTOBOT_DEFAULT_LLM_MODEL:-mistral:7b-instruct}
       - AUTOBOT_EMBEDDING_MODEL=${AUTOBOT_EMBEDDING_MODEL:-nomic-embed-text:latest}
+      - AUTOBOT_LLM_FAILSAFE_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
+      - AUTOBOT_LLM_FAILSAFE_ENDPOINT=${AUTOBOT_OLLAMA_HOST:-http://autobot-ollama:11434}
+      - AUTOBOT_CHROMADB_HOST=autobot-chromadb
+      - AUTOBOT_CHROMADB_PORT=8000
     depends_on:
-      redis:
+      autobot-redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/system/health"]
@@ -86,10 +114,11 @@ services:
     networks:
       - autobot
 
-  slm:
+  autobot-slm:
     build:
       context: .
       dockerfile: docker/slm/Dockerfile
+    image: autobot/slm:latest
     container_name: autobot-slm
     restart: unless-stopped
     volumes:
@@ -98,10 +127,15 @@ services:
     environment:
       - AUTOBOT_ENVIRONMENT=production
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
-      - AUTOBOT_REDIS_HOST=redis
+      - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
+      - SLM_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
+      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/slm_users
+      - SLM_POSTGRES_HOST=autobot-postgres
     depends_on:
-      redis:
+      autobot-redis:
+        condition: service_healthy
+      autobot-postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -112,18 +146,19 @@ services:
     networks:
       - autobot
 
-  frontend:
+  autobot-frontend:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
+    image: autobot/frontend:latest
     container_name: autobot-frontend
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     depends_on:
-      - backend
-      - slm
+      - autobot-backend
+      - autobot-slm
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
       interval: 30s
@@ -134,7 +169,7 @@ services:
 
   # ---- Optional: Local LLM ----
 
-  ollama:
+  autobot-ollama:
     image: ollama/ollama:latest
     container_name: autobot-ollama
     restart: unless-stopped
@@ -145,7 +180,7 @@ services:
     environment:
       - OLLAMA_ORIGINS=*
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -157,7 +192,7 @@ services:
 
   # ---- Optional: Monitoring ----
 
-  prometheus:
+  autobot-prometheus:
     image: prom/prometheus:v2.53.0
     container_name: autobot-prometheus
     restart: unless-stopped
@@ -170,7 +205,7 @@ services:
     profiles:
       - monitoring
 
-  grafana:
+  autobot-grafana:
     image: grafana/grafana:11.1.0
     container_name: autobot-grafana
     restart: unless-stopped
@@ -182,13 +217,14 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autobot}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
-      - prometheus
+      - autobot-prometheus
     networks:
       - autobot
     profiles:
       - monitoring
 
 volumes:
+  postgres_data:
   redis_data:
   chroma_data:
   backend_data:
