@@ -24,6 +24,17 @@ _AGENTS_DIR = _REPO_ROOT / ".claude" / "agents"
 # Agent categories inferred from name + description keywords.
 _CATEGORY_RULES: List[tuple] = [
     (
+        "analysis",
+        [
+            "skeptic",
+            "architect",
+            "performance",
+            "security",
+            "auditor",
+            "review",
+        ],
+    ),
+    (
         "implementation",
         [
             "engineer",
@@ -33,17 +44,6 @@ _CATEGORY_RULES: List[tuple] = [
             "database",
             "devops",
             "testing",
-        ],
-    ),
-    (
-        "analysis",
-        [
-            "skeptic",
-            "architect",
-            "performance",
-            "security",
-            "auditor",
-            "review",
         ],
     ),
     (
