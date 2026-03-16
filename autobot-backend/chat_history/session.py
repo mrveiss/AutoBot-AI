@@ -48,6 +48,30 @@ class SessionMixin:
     - self._extract_conversation_metadata(): method
     """
 
+    @staticmethod
+    def _sanitize_session_id(session_id: str) -> None:
+        """
+        Validate session_id to prevent path traversal attacks. Issue #1825.
+
+        Accepts UUID-like strings and alphanumeric strings with hyphens/underscores.
+        Rejects any ID containing '..', '/', '\\', or null bytes.
+
+        Args:
+            session_id: The session identifier to validate.
+
+        Raises:
+            ValueError: If session_id contains path traversal characters.
+        """
+        if not session_id:
+            raise ValueError("session_id must not be empty")
+        if "\x00" in session_id:
+            raise ValueError("session_id must not contain null bytes")
+        if ".." in session_id or "/" in session_id or "\\" in session_id:
+            raise ValueError(
+                "session_id must not contain path traversal characters "
+                f"('..', '/', '\\'): {session_id!r}"
+            )
+
     def _try_get_from_cache(self, session_id: str) -> Optional[List[Dict[str, Any]]]:
         """Try to get session from Redis cache. (Issue #315 - extracted)"""
         if not self.redis_client:
@@ -202,6 +226,8 @@ class SessionMixin:
 
         if not session_id:
             session_id = f"chat-{int(time.time() * 1000)}-{str(uuid.uuid4())[:8]}"
+        else:
+            self._sanitize_session_id(session_id)
 
         current_time = time.strftime("%Y-%m-%d %H:%M:%S")
         session_title = title or session_name or f"Chat {session_id[:13]}"
@@ -264,6 +290,8 @@ class SessionMixin:
             List of messages in the session
         """
         try:
+            self._sanitize_session_id(session_id)
+
             # Try Redis cache first (Issue #315 - uses helper)
             cached_messages = self._try_get_from_cache(session_id)
             if cached_messages is not None:
@@ -459,6 +487,7 @@ class SessionMixin:
         Issue #665, #620: Refactored to use extracted helper methods.
         """
         try:
+            self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
             await self._ensure_chats_directory_exists(chats_directory)
 
@@ -684,6 +713,7 @@ class SessionMixin:
         Issue #620: Refactored to use extracted helper methods.
         """
         try:
+            self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
 
             deleted = await self._delete_session_files(session_id, chats_directory)
@@ -728,6 +758,7 @@ class SessionMixin:
             True if update successful, False otherwise
         """
         try:
+            self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
             chat_file = await self._resolve_session_file_path(
                 session_id, chats_directory
@@ -775,6 +806,7 @@ class SessionMixin:
             Issue #620: Refactored to use existing helpers.
         """
         try:
+            self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
 
             # Resolve file path using existing helper
@@ -858,6 +890,7 @@ class SessionMixin:
             Username of session owner, or None if not found/set
         """
         try:
+            self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
             chat_file = f"{chats_directory}/{session_id}_chat.json"
 
