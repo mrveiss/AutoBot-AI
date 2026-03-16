@@ -252,6 +252,7 @@ async def _fetch_session_messages_or_raise(
     Fetch session messages and raise ResourceNotFoundError if session not found.
 
     Issue #620.
+    Issue #1797: Granular exception mapping for session load failures.
 
     Args:
         chat_history_manager: Chat history manager instance
@@ -263,17 +264,32 @@ async def _fetch_session_messages_or_raise(
 
     Raises:
         ResourceNotFoundError: If session does not exist
+        ValidationError: If session data is corrupted (ValueError)
+        InternalError: If session cannot be accessed (PermissionError)
     """
-    messages = await chat_history_manager.get_session_messages(session_id, limit=limit)
+    (
+        AutoBotError,
+        InternalError,
+        ResourceNotFoundError,
+        ValidationError,
+        get_error_code,
+    ) = get_exceptions_lazy()
+
+    try:
+        messages = await chat_history_manager.get_session_messages(
+            session_id, limit=limit
+        )
+    except FileNotFoundError:
+        logger.warning("Session file not found for session %s", session_id)
+        raise ResourceNotFoundError(f"Session {session_id} not found")
+    except PermissionError:
+        logger.error("Permission denied accessing session %s", session_id)
+        raise InternalError("Unable to access chat session")
+    except ValueError as exc:
+        logger.error("Corrupted session data for session %s: %s", session_id, exc)
+        raise ValidationError("Chat session data is corrupted")
 
     if messages is None:
-        (
-            AutoBotError,
-            InternalError,
-            ResourceNotFoundError,
-            ValidationError,
-            get_error_code,
-        ) = get_exceptions_lazy()
         raise ResourceNotFoundError(f"Session {session_id} not found")
 
     return messages
