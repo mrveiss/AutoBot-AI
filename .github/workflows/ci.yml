@@ -113,11 +113,13 @@ jobs:
         source .venv/bin/activate
         echo "🔒 Running security analysis..."
 
-        # Security vulnerability scan
-        bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
+        # Security vulnerability scan — fail on medium+ severity/confidence
+        bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ \
+          --severity-level medium --confidence-level medium \
+          -f json -o bandit-report.json
         if [ -f bandit-report.json ]; then
           echo "Security report generated"
-          cat bandit-report.json | python -m json.tool || echo "No security issues to report"
+          python -m json.tool < bandit-report.json || true
         fi
 
     - name: Run unit tests for security modules
@@ -133,7 +135,7 @@ jobs:
         done
 
         if [ -n "$TEST_FILES" ]; then
-          python -m pytest $TEST_FILES -v --tb=short --cov=autobot-backend --cov-report=xml --cov-report=term || echo "⚠️ Some tests failed"
+          python -m pytest $TEST_FILES -v --tb=short --cov=autobot-backend --cov-report=xml --cov-report=term
         else
           echo "⚠️ No security unit test files found - skipping"
         fi
@@ -145,7 +147,7 @@ jobs:
         # Integration tests remain in shared directory (#734)
         TEST_DIR="infrastructure/shared/tests/integration"
         if [ -d "$TEST_DIR" ]; then
-          python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5 || echo "⚠️ Some integration tests failed"
+          python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5
         else
           echo "⚠️ No integration test directory found - skipping"
         fi
@@ -196,7 +198,7 @@ jobs:
     - name: Run frontend unit tests
       run: |
         cd autobot-frontend
-        npm run test:unit || echo "⚠️ Frontend tests failing due to mocking issues - continuing CI"
+        npm run test:unit
 
     - name: Cleanup
       if: always()
@@ -284,11 +286,13 @@ jobs:
         test -f requirements.txt || (echo "❌ requirements.txt missing" && exit 1)
         echo "✅ All required files present"
 
-        # Test configuration loading
-        python3 -c 'from config import config; print("✅ Configuration system working")' || echo "⚠️ Config import check needs path setup"
+        # Test configuration loading (PYTHONPATH includes backend for imports)
+        PYTHONPATH="autobot-backend:autobot-shared:$PYTHONPATH" \
+          python3 -c 'from config import config; print("Configuration system working")'
 
         # Test core imports
-        python3 -c 'from security.enhanced_security_layer import EnhancedSecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("✅ Core imports working")' || echo "⚠️ Import check needs path setup"
+        PYTHONPATH="autobot-backend:autobot-shared:$PYTHONPATH" \
+          python3 -c 'from security.enhanced_security_layer import EnhancedSecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
 
     - name: Generate deployment artifact
       run: |
