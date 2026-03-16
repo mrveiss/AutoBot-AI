@@ -11,12 +11,17 @@ PostgreSQL replaces SQLite for all database operations (Issue #786).
 import logging
 import os
 import secrets
+import stat
 from pathlib import Path
 from typing import Optional
 
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
+
+# Filename for the auto-generated persistent keys file inside data_dir.
+# Issue #1726 — keeps keys stable across restarts when env vars are absent.
+_SLM_KEYS_FILE = ".slm_keys"
 
 
 def _get_cors_origins() -> list:
@@ -100,24 +105,92 @@ class Settings(BaseSettings):
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
 
-    def validate_secrets(self) -> None:
-        """Generate random keys if not configured.
+    def _keys_file_path(self) -> Path:
+        """Return the path to the persisted-keys file inside data_dir.
 
-        Logs CRITICAL warnings — keys won't persist across restarts.
+        Issue #1726 — keys are stored in the SLM data directory so they
+        survive service restarts and code deployments.
         """
+        return self.data_dir / _SLM_KEYS_FILE
+
+    def _load_persisted_keys(self) -> dict:
+        """Read key=value pairs from the persisted-keys file.
+
+        Returns an empty dict when the file is absent or unreadable.
+        Issue #1726.
+        """
+        path = self._keys_file_path()
+        if not path.exists():
+            return {}
+        try:
+            pairs: dict = {}
+            for raw_line in path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if line and "=" in line and not line.startswith("#"):
+                    k, _, v = line.partition("=")
+                    pairs[k.strip()] = v.strip()
+            return pairs
+        except OSError as exc:
+            logger.error("Failed to read SLM keys file %s: %s", path, exc)
+            return {}
+
+    def _write_persisted_keys(self, secret_key: str, encryption_key: str) -> None:
+        """Write generated keys to the persisted-keys file (mode 0600).
+
+        Issue #1726.
+        """
+        path = self._keys_file_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = (
+            "# AutoBot SLM — auto-generated persistent keys\n"
+            "# Generated once on first startup when env vars are absent.\n"
+            "# Do NOT commit this file. Protect it like a password.\n"
+            f"SLM_SECRET_KEY={secret_key}\n"
+            f"SLM_ENCRYPTION_KEY={encryption_key}\n"
+        )
+        path.write_text(content, encoding="utf-8")
+        path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        logger.info("SLM persistent keys written to %s", path)
+
+    def validate_secrets(self) -> None:
+        """Ensure secret_key and encryption_key are set and persistent.
+
+        Priority:
+          1. SLM_SECRET_KEY / SLM_ENCRYPTION_KEY environment variables
+             (set by Ansible via EnvironmentFile=/etc/autobot/slm-secrets.env)
+          2. Persisted keys file at <data_dir>/.slm_keys
+             (created automatically on first startup when env vars are absent)
+
+        Issue #1726 — random keys caused token invalidation on every restart.
+        """
+        both_set = self.secret_key and self.encryption_key
+        persisted = {} if both_set else self._load_persisted_keys()
+        need_write = False
+
         if not self.secret_key:
-            self.secret_key = secrets.token_urlsafe(32)
-            logger.critical(
-                "SLM_SECRET_KEY not set - using random key. "
-                "Tokens invalidate on restart. "
-                "Set SLM_SECRET_KEY in environment."
-            )
+            if persisted.get("SLM_SECRET_KEY"):
+                self.secret_key = persisted["SLM_SECRET_KEY"]
+                logger.info("SLM_SECRET_KEY loaded from persisted keys file.")
+            else:
+                self.secret_key = secrets.token_urlsafe(48)
+                need_write = True
+
         if not self.encryption_key:
-            self.encryption_key = secrets.token_urlsafe(32)
-            logger.critical(
-                "SLM_ENCRYPTION_KEY not set - using random key. "
-                "Encrypted data unreadable after restart. "
-                "Set SLM_ENCRYPTION_KEY in environment."
+            if persisted.get("SLM_ENCRYPTION_KEY"):
+                self.encryption_key = persisted["SLM_ENCRYPTION_KEY"]
+                logger.info("SLM_ENCRYPTION_KEY loaded from persisted keys file.")
+            else:
+                self.encryption_key = secrets.token_urlsafe(48)
+                need_write = True
+
+        if need_write:
+            self._write_persisted_keys(self.secret_key, self.encryption_key)
+            logger.warning(
+                "SLM secret keys were not set via environment variables. "
+                "Keys have been auto-generated and saved to %s. "
+                "For production deployments use Ansible or set "
+                "SLM_SECRET_KEY and SLM_ENCRYPTION_KEY explicitly.",
+                self._keys_file_path(),
             )
 
     # VNC defaults (configurable via env vars)

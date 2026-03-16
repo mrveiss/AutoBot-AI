@@ -97,6 +97,8 @@ secrets.conf
 secrets.key
 **/secrets.key
 .infra_encryption_key
+# SLM auto-generated persistent keys file (Issue #1726)
+**/.slm_keys
 
 # Authentication tokens
 *.token
