@@ -92,13 +92,45 @@
         - ansible_os_family == "Debian"
         - _esm_upgradable | default([]) | length > 0
 
+    - name: Resolve installed versions for ESM packages via dpkg-query
+      ansible.builtin.shell: |
+        dpkg-query -W -f='${Package}=${Version}\n' \
+          {{ _esm_upgradable | map(attribute='package') | join(' ') }} \
+          2>/dev/null || true
+      register: _esm_dpkg_raw
+      changed_when: false
+      when:
+        - ansible_os_family == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
+    - name: Build ESM installed-version lookup dict from dpkg-query output
+      ansible.builtin.set_fact:
+        _esm_installed_versions: >-
+          {{
+            dict(
+              _esm_dpkg_raw.stdout_lines | default([])
+              | select('match', '^[^=]+=.+')
+              | map('regex_replace', '^([^=]+)=(.+)$', '\1')
+              | zip(
+                  _esm_dpkg_raw.stdout_lines | default([])
+                  | select('match', '^[^=]+=.+')
+                  | map('regex_replace', '^([^=]+)=(.+)$', '\2')
+                )
+            )
+          }}
+      when:
+        - ansible_os_family == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
     - name: Append ESM-only package entry (not in apt list) to parsed packages
       ansible.builtin.set_fact:
         parsed_packages: >-
           {{
             parsed_packages | default([])
             + [{'p': item.package, 'r': 'esm-security',
-                'a': item.version, 'c': 'unknown'}]
+                'a': item.version,
+                'c': (_esm_installed_versions | default({})
+                      ).get(item.package, 'unknown')}]
           }}
       loop: "{{ _esm_upgradable | default([]) }}"
       loop_control:
