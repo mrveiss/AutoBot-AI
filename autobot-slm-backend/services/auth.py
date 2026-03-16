@@ -16,11 +16,11 @@ from config import settings
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
-from models.database import User
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from user_management.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class AuthService:
         if not self.verify_password(password, user.password_hash):
             return None
 
-        user.last_login = datetime.utcnow()
+        user.last_login_at = datetime.utcnow()
         await db.commit()
 
         return user
@@ -100,9 +100,14 @@ class AuthService:
             )
 
         user = User(
+            email=f"{user_data.username}@slm.local",
             username=user_data.username,
             password_hash=self.hash_password(user_data.password),
-            is_admin=user_data.is_admin,
+            is_platform_admin=user_data.is_admin,
+            is_active=True,
+            is_verified=False,
+            mfa_enabled=False,
+            preferences={},
         )
         db.add(user)
         await db.commit()
@@ -120,7 +125,7 @@ class AuthService:
     async def create_token_response(self, user: User) -> TokenResponse:
         """Create a token response for a user."""
         access_token = self.create_access_token(
-            data={"sub": user.username, "admin": user.is_admin}
+            data={"sub": user.username, "admin": user.is_platform_admin}
         )
         return TokenResponse(
             access_token=access_token,
@@ -230,7 +235,5 @@ async def _get_user_for_api_key(db: AsyncSession, user_id):
     Returns:
         User instance or None
     """
-    from user_management.models.user import User
-
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()

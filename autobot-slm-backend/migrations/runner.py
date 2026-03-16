@@ -51,6 +51,9 @@ MIGRATIONS = [
     # Issue #1854: rename SLM admin table to avoid FK collision with
     # user_management users table (UUID PK).
     "rename_users_to_slm_users",
+    # Issue #1900: consolidate slm_users (integer PK) into users (UUID PK)
+    # and drop the now-orphaned slm_users table.
+    "consolidate_slm_users_to_uuid",
 ]
 
 

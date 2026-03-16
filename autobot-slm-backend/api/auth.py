@@ -10,7 +10,7 @@ import logging
 from api.security import create_audit_log
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.schemas import TokenRequest, TokenResponse, UserCreate, UserResponse
-from services.auth import auth_service, get_current_user, require_admin
+from services.auth import auth_service, get_current_user, get_slm_db, require_admin
 from services.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -23,7 +23,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def login(
     http_request: Request,
     body: TokenRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_slm_db)],
+    audit_db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Authenticate and get access token. Records audit log entry (Issue #998)."""
     client_ip = http_request.client.host if http_request.client else None
@@ -31,7 +32,7 @@ async def login(
 
     if not user:
         await create_audit_log(
-            db,
+            audit_db,
             category="auth",
             action="login",
             username=body.username,
@@ -42,6 +43,7 @@ async def login(
             success=False,
             error_message="Invalid username or password",
         )
+        await audit_db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -50,7 +52,7 @@ async def login(
 
     logger.info("User logged in: %s", user.username)
     await create_audit_log(
-        db,
+        audit_db,
         category="auth",
         action="login",
         user_id=str(user.id),
@@ -61,13 +63,14 @@ async def login(
         response_status=200,
         success=True,
     )
+    await audit_db.commit()
     return await auth_service.create_token_response(user)
 
 
 @router.post("/users", response_model=UserResponse)
 async def create_user(
     user_data: UserCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_slm_db)],
     _: Annotated[dict, Depends(require_admin)],
 ) -> UserResponse:
     """Create a new user (admin only)."""
@@ -88,7 +91,7 @@ async def get_current_user_info(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     current_user: Annotated[dict, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_slm_db)],
 ) -> TokenResponse:
     """Refresh access token."""
     username = current_user.get("sub")

@@ -185,24 +185,29 @@ async def _ensure_admin_user():
     When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
     admin password always matches. This makes the secrets file the
     single source of truth for the admin credential.
+
+    Uses the user_management UserService and slm_users database (Issue #1900).
     """
     import os
     import secrets
 
-    from models.database import User
     from services.auth import auth_service
-    from sqlalchemy import select
+    from user_management.database import get_slm_session
+    from user_management.services import TenantContext, UserService
+    from user_management.services.user_service import DuplicateUserError
 
     env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
 
-    async with db_service.session() as db:
-        result = await db.execute(select(User).where(User.username == "admin"))
-        existing = result.scalar_one_or_none()
+    async with get_slm_session() as db:
+        context = TenantContext(is_platform_admin=True)
+        user_service = UserService(db, context)
+
+        existing = await user_service.get_user_by_username("admin")
 
         if existing:
             if env_password:
                 existing.password_hash = auth_service.hash_password(env_password)
-                await db.commit()
+                await db.flush()
                 logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
             return
 
@@ -211,14 +216,17 @@ async def _ensure_admin_user():
             password = secrets.token_urlsafe(16)
             logger.critical("Initial admin password set — CHANGE IMMEDIATELY")
 
-        admin_user = User(
-            username="admin",
-            password_hash=auth_service.hash_password(password),
-            is_admin=True,
-        )
-        db.add(admin_user)
-        await db.commit()
-        logger.warning("Created default admin user (username: admin)")
+        try:
+            await user_service.create_user(
+                email="admin@slm.local",
+                username="admin",
+                password=password,
+                display_name="SLM Admin",
+                is_platform_admin=True,
+            )
+            logger.warning("Created default admin user (username: admin)")
+        except DuplicateUserError:
+            logger.info("Admin user already exists (race condition avoided)")
 
 
 async def _seed_default_roles():
