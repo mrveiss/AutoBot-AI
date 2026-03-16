@@ -170,13 +170,12 @@ class TestCategorizeAgent:
         """Names with skeptic/architect/security etc map to analysis."""
         assert _categorize_agent(name, description) == expected
 
-    def test_implementation_wins_over_analysis_without_override(self):
-        """'testing' keyword hits implementation first; no reviewer override."""
-        # "Security Auditor" + "Pen testing" -> "testing" matches
-        # implementation first, and no "review"/"analysis" in combined
-        # text triggers the override.
+    def test_analysis_checked_before_implementation(self):
+        """Analysis keywords checked first — 'security' matches before 'testing'."""
+        # "Security Auditor" + "Pen testing" -> "security" matches
+        # analysis first (#1844), even though "testing" is in the text.
         result = _categorize_agent("Security Auditor", "Pen testing")
-        assert result == "implementation"
+        assert result == "analysis"
 
     @pytest.mark.parametrize(
         "name,description,expected",
