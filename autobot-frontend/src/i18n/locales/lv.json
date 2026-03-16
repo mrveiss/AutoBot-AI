@@ -3302,7 +3302,23 @@
     "status": "Aģenta statuss",
     "config": "Aģenta konfigurācija",
     "orchestrator": "Orķestrators",
-    "translate": "Tulkot"
+    "translate": "Tulkot",
+    "registry": {
+      "title": "Aģentu reģistrs",
+      "subtitle": "Pārlūkot un uzraudzīt visus reģistrētos aģentus",
+      "backendAgents": "Aizmugures aģenti",
+      "specializedAgents": "Specializētie aģenti",
+      "refresh": "Atsvaidzināt",
+      "loading": "Ielādē aģentus...",
+      "error": "Kļūda",
+      "noBackendAgents": "Nav konfigurētu aizmugures aģentu",
+      "noSpecializedAgents": "Nav atrasts neviens specializētais aģents",
+      "systemPrompt": "Sistēmas uzvedne",
+      "noModel": "nav modeļa",
+      "defaultModel": "noklusējuma",
+      "moreCount": "+{count} vēl",
+      "summaryStats": "{backend} aizmugures \u2022 {specialized} specializētie aģenti"
+    }
   },
   "errors": {
     "generic": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",

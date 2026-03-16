@@ -3290,7 +3290,23 @@
     "status": "Agent Status",
     "config": "Agent Configuration",
     "orchestrator": "Orchestrator",
-    "translate": "Translate"
+    "translate": "Translate",
+    "registry": {
+      "title": "سجل الوكلاء",
+      "subtitle": "تصفح ومراقبة جميع الوكلاء المسجلين",
+      "backendAgents": "وكلاء الواجهة الخلفية",
+      "specializedAgents": "وكلاء متخصصون",
+      "refresh": "تحديث",
+      "loading": "جارٍ تحميل الوكلاء...",
+      "error": "خطأ",
+      "noBackendAgents": "لا توجد وكلاء خلفية مهيأة",
+      "noSpecializedAgents": "لم يتم العثور على وكلاء متخصصين",
+      "systemPrompt": "موجه النظام",
+      "noModel": "بدون نموذج",
+      "defaultModel": "افتراضي",
+      "moreCount": "+{count} إضافي",
+      "summaryStats": "{backend} خلفي \u2022 {specialized} وكلاء متخصصون"
+    }
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",

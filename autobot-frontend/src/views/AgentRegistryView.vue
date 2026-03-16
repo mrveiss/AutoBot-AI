@@ -11,9 +11,11 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAgentRegistry, type SpecializedAgent, type BackendAgent } from '@/composables/useAgentRegistry'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('AgentRegistryView')
 
 const {
@@ -86,11 +88,11 @@ onMounted(async () => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-primary">Agent Registry</h2>
+        <h2 class="text-2xl font-bold text-primary">{{ $t('agent.registry.title') }}</h2>
         <p class="text-sm text-secondary mt-1">
-          Browse and monitor all registered agents
+          {{ $t('agent.registry.subtitle') }}
           <span v-if="summary" class="ml-2">
-            &bull; {{ summary.total }} backend &bull; {{ summary.total_specialized }} specialized agents
+            &bull; {{ $t('agent.registry.summaryStats', { backend: summary.total, specialized: summary.total_specialized }) }}
           </span>
         </p>
       </div>
@@ -107,7 +109,7 @@ onMounted(async () => {
         >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Refresh
+        {{ $t('agent.registry.refresh') }}
       </button>
     </div>
 
@@ -118,7 +120,7 @@ onMounted(async () => {
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-autobot-error">Error</h3>
+          <h3 class="text-sm font-medium text-autobot-error">{{ $t('agent.registry.error') }}</h3>
           <p class="text-sm text-autobot-error mt-1">{{ error }}</p>
         </div>
       </div>
@@ -136,7 +138,7 @@ onMounted(async () => {
               : 'border-transparent text-secondary hover:text-primary hover:border-default'
           ]"
         >
-          Backend Agents
+          {{ $t('agent.registry.backendAgents') }}
           <span v-if="summary" class="ml-1 text-xs text-tertiary">({{ summary.total }})</span>
         </button>
         <button
@@ -148,7 +150,7 @@ onMounted(async () => {
               : 'border-transparent text-secondary hover:text-primary hover:border-default'
           ]"
         >
-          Specialized Agents
+          {{ $t('agent.registry.specializedAgents') }}
           <span v-if="summary" class="ml-1 text-xs text-tertiary">({{ summary.total_specialized }})</span>
         </button>
       </nav>
@@ -160,14 +162,14 @@ onMounted(async () => {
       <div v-if="isLoading && backendAgents.length === 0" class="flex items-center justify-center py-12">
         <div class="text-center">
           <div class="animate-spin rounded-sm h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p class="text-secondary mt-4">Loading agents...</p>
+          <p class="text-secondary mt-4">{{ $t('agent.registry.loading') }}</p>
         </div>
       </div>
 
       <!-- Backend Agents Tab -->
       <div v-show="activeTab === 'backend' && !isLoading">
         <div v-if="backendAgents.length === 0" class="text-center py-12">
-          <p class="text-secondary">No backend agents configured</p>
+          <p class="text-secondary">{{ $t('agent.registry.noBackendAgents') }}</p>
         </div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
@@ -193,7 +195,7 @@ onMounted(async () => {
             </div>
             <div class="mt-3 flex items-center gap-2 flex-wrap">
               <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                {{ agent.model || 'no model' }}
+                {{ agent.model || $t('agent.registry.noModel') }}
               </span>
               <span class="text-xs text-tertiary">P{{ agent.priority }}</span>
               <span class="text-xs text-tertiary">{{ agent.config_source }}</span>
@@ -208,7 +210,7 @@ onMounted(async () => {
                   {{ task }}
                 </span>
                 <span v-if="agent.tasks.length > 3" class="text-[10px] text-tertiary">
-                  +{{ agent.tasks.length - 3 }} more
+                  {{ $t('agent.registry.moreCount', { count: agent.tasks.length - 3 }) }}
                 </span>
               </div>
             </div>
@@ -229,7 +231,7 @@ onMounted(async () => {
                 : 'bg-card text-secondary border-default hover:border-autobot-info'
             ]"
           >
-            All ({{ specializedAgents.length }})
+            {{ $t('common.all') }} ({{ specializedAgents.length }})
           </button>
           <button
             v-for="cat in categoryList"
@@ -247,7 +249,7 @@ onMounted(async () => {
         </div>
 
         <div v-if="filteredSpecializedAgents.length === 0" class="text-center py-12">
-          <p class="text-secondary">No specialized agents found</p>
+          <p class="text-secondary">{{ $t('agent.registry.noSpecializedAgents') }}</p>
         </div>
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div
@@ -291,7 +293,7 @@ onMounted(async () => {
                   {{ tool }}
                 </span>
                 <span v-if="agent.tools.length > 4" class="text-[10px] text-tertiary">
-                  +{{ agent.tools.length - 4 }} more
+                  {{ $t('agent.registry.moreCount', { count: agent.tools.length - 4 }) }}
                 </span>
               </div>
             </div>
@@ -321,7 +323,7 @@ onMounted(async () => {
                   getColorClasses(selectedAgent.color)
                 ]"
               >
-                {{ selectedAgent.model || 'default' }}
+                {{ selectedAgent.model || $t('agent.registry.defaultModel') }}
               </span>
               <h3 class="text-lg font-semibold text-primary">{{ selectedAgent.name }}</h3>
             </div>
@@ -355,7 +357,7 @@ onMounted(async () => {
               <p class="text-xs text-tertiary">{{ selectedAgent.source_file }}</p>
               <!-- System Prompt -->
               <div class="mt-4">
-                <h4 class="text-sm font-medium text-primary mb-2">System Prompt</h4>
+                <h4 class="text-sm font-medium text-primary mb-2">{{ $t('agent.registry.systemPrompt') }}</h4>
                 <pre class="text-xs text-secondary bg-gray-50 dark:bg-gray-800 rounded p-4 overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ selectedAgent.system_prompt }}</pre>
               </div>
             </div>
