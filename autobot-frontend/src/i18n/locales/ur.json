@@ -115,5 +115,8 @@
       "moreCount": "+{count} \u0645\u0632\u06cc\u062f",
       "summaryStats": "{backend} \u0628\u06cc\u06a9 \u0627\u06cc\u0646\u0688 \u2022 {specialized} \u0645\u0627\u06c1\u0631 \u0627\u06cc\u062c\u0646\u0679\u0633"
     }
+  },
+  "_meta": {
+    "dir": "rtl"
   }
 }

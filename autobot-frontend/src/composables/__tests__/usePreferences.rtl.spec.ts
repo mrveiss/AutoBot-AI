@@ -48,9 +48,24 @@ vi.mock('@/utils/debugUtils', () => ({
 }))
 
 // Mock @/i18n so we can intercept setLocale and apply the same RTL dir logic
-// the real worktree implementation uses, without loading actual locale files.
-vi.mock('@/i18n', () => {
-  const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
+// the real implementation uses. Direction is derived from locale _meta.dir fields
+// rather than a hardcoded set (#1812).
+vi.mock('@/i18n', async () => {
+  // Eagerly load all locale files to build RTL set from _meta.dir
+  const localeModules = import.meta.glob(
+    '@/i18n/locales/*.json',
+    { eager: true },
+  ) as Record<string, { default?: Record<string, unknown> } & Record<string, unknown>>
+
+  const RTL_LOCALES = new Set<string>()
+  for (const [path, mod] of Object.entries(localeModules)) {
+    const code = path.replace(/.*\//, '').replace('.json', '')
+    const messages = mod.default ?? mod
+    const meta = messages._meta as Record<string, string> | undefined
+    if (meta?.dir === 'rtl') {
+      RTL_LOCALES.add(code)
+    }
+  }
 
   const setLocale = vi.fn().mockImplementation(async (locale: string) => {
     lastSetLocaleCall = locale
@@ -63,6 +78,9 @@ vi.mock('@/i18n', () => {
   return {
     setLocale,
     loadLocaleMessages: vi.fn().mockResolvedValue(true),
+    getLocaleDir: vi.fn().mockImplementation((locale: string) =>
+      RTL_LOCALES.has(locale) ? 'rtl' : 'ltr',
+    ),
     default: {
       global: {
         locale: { value: 'en' },
