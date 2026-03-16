@@ -835,16 +835,30 @@ async def send_message(
     llm_service = get_llm_service(request)
     memory_interface = get_memory_interface(request)
 
-    # Process the chat message
-    response_data = await process_chat_message(
-        message,
-        chat_history_manager,
-        llm_service,
-        memory_interface,
-        knowledge_base,
-        config,
-        request_id,
-    )
+    # Process the chat message with a 30-second timeout (Issue #1797)
+    try:
+        response_data = await asyncio.wait_for(
+            process_chat_message(
+                message,
+                chat_history_manager,
+                llm_service,
+                memory_interface,
+                knowledge_base,
+                config,
+                request_id,
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error("[%s] Chat message processing timed out after 30s", request_id)
+        (
+            AutoBotError,
+            InternalError,
+            ResourceNotFoundError,
+            ValidationError,
+            get_error_code,
+        ) = get_exceptions_lazy()
+        raise InternalError("Chat message processing timed out. Please try again.")
 
     return JSONResponse(
         status_code=200,
@@ -1274,18 +1288,47 @@ async def merge_messages(existing: List[Dict], new: List[Dict]) -> List[Dict]:
 async def _merge_chat_messages(
     chat_history_manager, chat_id: str, new_messages: List[Dict], request_id: str
 ) -> List[Dict]:
-    """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted)."""
+    """Merge new messages with existing to preserve backend-added ones (Issue #398: extracted).
+
+    Issue #1797: Granular exception mapping for session load failures.
+    """
     try:
         existing_messages = await chat_history_manager.load_session(chat_id)
         merged_messages = await merge_messages(existing_messages, new_messages)
         logger.info(
-            f"[{request_id}] Merged {len(existing_messages)} existing + "
-            f"{len(new_messages)} new = {len(merged_messages)} total messages"
+            "[%s] Merged %d existing + %d new = %d total messages",
+            request_id,
+            len(existing_messages),
+            len(new_messages),
+            len(merged_messages),
         )
         return merged_messages
+    except FileNotFoundError:
+        logger.warning(
+            "[%s] Session file not found for %s, using new messages",
+            request_id,
+            chat_id,
+        )
+        return new_messages
+    except PermissionError:
+        logger.warning(
+            "[%s] Unable to access chat session %s, using new messages",
+            request_id,
+            chat_id,
+        )
+        return new_messages
+    except ValueError:
+        logger.warning(
+            "[%s] Chat session data is corrupted for %s, using new messages",
+            request_id,
+            chat_id,
+        )
+        return new_messages
     except Exception as merge_error:
         logger.warning(
-            f"[{request_id}] Message merge failed, using new messages only: {merge_error}"
+            "[%s] Message merge failed, using new messages only: %s",
+            request_id,
+            merge_error,
         )
         return new_messages
 
