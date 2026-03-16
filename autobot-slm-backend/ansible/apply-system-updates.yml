@@ -212,12 +212,7 @@
       ansible.builtin.systemd:
         name: "{{ item }}"
         state: started
-      loop:
-        - autobot-backend
-        - autobot-slm-backend
-        - autobot-npu-worker
-        - nginx
-        - redis-stack-server
+      loop: "{{ slm_services_to_monitor | default([]) }}"
       ignore_errors: true
       when: "'slm_nodes' in group_names"
 
