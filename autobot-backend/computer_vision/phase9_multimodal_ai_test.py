@@ -75,7 +75,7 @@ async def test_multimodal_processor():
         processing_intent=ProcessingIntent.CONTENT_GENERATION,
         content="Generate a summary of AutoBot's capabilities",
         metadata={"source": "test"},
-        timestamp=asyncio.get_event_loop().time(),
+        timestamp=asyncio.get_running_loop().time(),
     )
 
     try:
@@ -100,7 +100,7 @@ async def test_multimodal_processor():
             processing_intent=ProcessingIntent.SCREEN_ANALYSIS,
             content=test_image_bytes,
             metadata={"source": "synthetic_test"},
-            timestamp=asyncio.get_event_loop().time(),
+            timestamp=asyncio.get_running_loop().time(),
         )
 
         result = await multimodal_processor.process_input(image_input)
@@ -124,7 +124,7 @@ async def test_multimodal_processor():
                 "image": base64.b64encode(test_image_bytes).decode("utf-8"),
             },
             metadata={"source": "combined_test"},
-            timestamp=asyncio.get_event_loop().time(),
+            timestamp=asyncio.get_running_loop().time(),
         )
 
         result = await multimodal_processor.process_input(combined_input)
@@ -220,7 +220,7 @@ async def test_voice_processing_system():
             duration=duration,
             format="raw",
             channels=1,
-            timestamp=asyncio.get_event_loop().time(),
+            timestamp=asyncio.get_running_loop().time(),
             metadata={"source": "synthetic_test"},
         )
 
@@ -420,7 +420,7 @@ async def test_integration():
             processing_intent=ProcessingIntent.AUTOMATION_TASK,
             content=test_image_bytes,
             metadata={"integration_test": True},
-            timestamp=asyncio.get_event_loop().time(),
+            timestamp=asyncio.get_running_loop().time(),
         )
 
         modal_result = await multimodal_processor.process_input(modal_input)

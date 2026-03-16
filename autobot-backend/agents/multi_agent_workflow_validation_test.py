@@ -193,8 +193,7 @@ class MultiAgentWorkflowValidator:
         # Execute requests in parallel using asyncio
         async def make_request(endpoint):
             try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
+                response = await asyncio.get_running_loop().run_in_executor(
                     None, lambda: requests.get(f"{self.base_url}{endpoint}", timeout=5)
                 )
                 return {

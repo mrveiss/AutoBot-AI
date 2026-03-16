@@ -148,7 +148,7 @@ class TestTaskOutcomeJudge:
         judge = TaskOutcomeJudge()
         import asyncio
 
-        prompt = asyncio.get_event_loop().run_until_complete(
+        prompt = asyncio.run(
             judge._prepare_judgment_prompt(
                 subject={"goal": "my goal", "output": "my output"},
                 criteria=[],

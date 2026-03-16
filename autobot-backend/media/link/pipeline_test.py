@@ -144,7 +144,7 @@ class TestLinkPipelineErrorHandling:
 
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(_run())
+        result = asyncio.run(_run())
         assert result["processing_status"] == "error"
 
 

@@ -125,7 +125,7 @@ class DevelopmentSpeedupAgent:
             "quality_issues",
         ]
         report = {
-            "analysis_timestamp": asyncio.get_event_loop().time(),
+            "analysis_timestamp": asyncio.get_running_loop().time(),
             "root_path": root_path,
         }
         for i, key in enumerate(report_keys):

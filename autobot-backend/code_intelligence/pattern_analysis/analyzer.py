@@ -220,12 +220,11 @@ class CodePatternAnalyzer:
         """Run regex detection on a batch of files."""
         if not self._regex_detector:
             return []
-        loop = asyncio.get_event_loop()
         executor = get_analytics_executor()
         results = []
         for fp in file_paths:
             try:
-                opps = await loop.run_in_executor(
+                opps = await asyncio.get_running_loop().run_in_executor(
                     executor, self._regex_detector.detect_in_file, fp
                 )
                 results.extend(opps)
@@ -237,12 +236,11 @@ class CodePatternAnalyzer:
         """Run complexity analysis on a batch of files."""
         if not self._complexity_analyzer:
             return []
-        loop = asyncio.get_event_loop()
         executor = get_analytics_executor()
         modules = []
         for fp in file_paths:
             try:
-                module = await loop.run_in_executor(
+                module = await asyncio.get_running_loop().run_in_executor(
                     executor, self._complexity_analyzer.analyze_file, fp
                 )
                 modules.append(module)
@@ -254,13 +252,12 @@ class CodePatternAnalyzer:
         """Run anti-pattern detection on a batch of files."""
         if not self._anti_pattern_detector:
             return {"modularization": [], "other_patterns": []}
-        loop = asyncio.get_event_loop()
         executor = get_analytics_executor()
         modularization: List = []
         other_patterns: List = []
         for fp in file_paths:
             try:
-                file_result = await loop.run_in_executor(
+                file_result = await asyncio.get_running_loop().run_in_executor(
                     executor,
                     self._anti_pattern_detector.analyze_file,
                     fp,
@@ -576,8 +573,7 @@ class CodePatternAnalyzer:
 
         try:
             # Issue #1233: Use dedicated analytics executor
-            loop = asyncio.get_event_loop()
-            report = await loop.run_in_executor(
+            report = await asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 self._clone_detector.detect_clones,
                 directory,
@@ -614,8 +610,7 @@ class CodePatternAnalyzer:
 
         try:
             # Issue #1233: Use dedicated analytics executor
-            loop = asyncio.get_event_loop()
-            opportunities = await loop.run_in_executor(
+            opportunities = await asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 self._regex_detector.detect_in_directory,
                 directory,
@@ -641,8 +636,7 @@ class CodePatternAnalyzer:
 
         try:
             # Issue #1233: Use dedicated analytics executor
-            loop = asyncio.get_event_loop()
-            modules = await loop.run_in_executor(
+            modules = await asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 self._complexity_analyzer.analyze_directory,
                 directory,
@@ -680,8 +674,7 @@ class CodePatternAnalyzer:
 
         try:
             # Issue #1233: Use dedicated analytics executor
-            loop = asyncio.get_event_loop()
-            report = await loop.run_in_executor(
+            report = await asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 self._anti_pattern_detector.analyze_directory,
                 directory,

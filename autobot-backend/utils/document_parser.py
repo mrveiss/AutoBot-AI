@@ -73,8 +73,7 @@ class DocumentParser:
             )
 
         # Run extraction in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        text, metadata = await loop.run_in_executor(
+        text, metadata = await asyncio.get_running_loop().run_in_executor(
             None, self._extract_text_sync, file_path, extension
         )
 

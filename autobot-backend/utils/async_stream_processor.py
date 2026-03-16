@@ -396,7 +396,7 @@ async def process_llm_stream(
         Tuple of (accumulated_content, completed_successfully)
     """
     processor = StreamProcessorFactory.create_processor(provider, max_chunks)
-    processor.start_time = asyncio.get_event_loop().time()
+    processor.start_time = asyncio.get_running_loop().time()
 
     logger.info(
         "Starting %s stream processing (max_chunks: %s, max_buffer: %d MB)",
@@ -416,7 +416,7 @@ async def process_llm_stream(
         chunk_count = 0
 
     accumulated_content = "".join(content_parts)
-    processing_time = asyncio.get_event_loop().time() - processor.start_time
+    processing_time = asyncio.get_running_loop().time() - processor.start_time
     completed_successfully = _determine_stream_completion(completion_signal)
 
     _log_stream_completion(
@@ -437,7 +437,7 @@ async def process_stream_with_cancellation(
     Combines natural completion detection with cancellation tokens.
     """
 
-    start_time = asyncio.get_event_loop().time()
+    start_time = asyncio.get_running_loop().time()
 
     try:
         # Check cancellation before starting
@@ -451,7 +451,7 @@ async def process_stream_with_cancellation(
         if hasattr(cancellation_token, "raise_if_cancelled"):
             cancellation_token.raise_if_cancelled()
 
-        processing_time = asyncio.get_event_loop().time() - start_time
+        processing_time = asyncio.get_running_loop().time() - start_time
 
         return StreamProcessingResult(
             content=content,
@@ -467,7 +467,7 @@ async def process_stream_with_cancellation(
         )
 
     except Exception as e:
-        processing_time = asyncio.get_event_loop().time() - start_time
+        processing_time = asyncio.get_running_loop().time() - start_time
 
         return StreamProcessingResult(
             content="",

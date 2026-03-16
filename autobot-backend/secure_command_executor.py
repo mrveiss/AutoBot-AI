@@ -497,7 +497,7 @@ class SecureCommandExecutor:
                 "command": command,
                 "risk": risk.value,
                 "reasons": reasons,
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": asyncio.get_running_loop().time(),
             }
             return await self.require_approval_callback(approval_data)
 
@@ -652,7 +652,7 @@ class SecureCommandExecutor:
             "command": command,
             "risk": risk.value,
             "reasons": reasons,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
             "approved": True,
             "executed": False,
             "auto_approved_by": auto_approved_by,
@@ -678,7 +678,7 @@ class SecureCommandExecutor:
             "command": command,
             "risk": risk.value,
             "reasons": reasons,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
             "approved": False,
             "executed": False,
         }

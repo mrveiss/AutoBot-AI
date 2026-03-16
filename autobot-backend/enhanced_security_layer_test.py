@@ -168,7 +168,7 @@ class TestEnhancedSecurityLayer:
             "command": "mkdir test",
             "risk": CommandRisk.MODERATE.value,
             "reasons": ["Moderate risk"],
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
 
         result = await self.security._command_approval_callback(approval_data)
@@ -181,7 +181,7 @@ class TestEnhancedSecurityLayer:
             "command": "rm file.txt",
             "risk": CommandRisk.HIGH.value,
             "reasons": ["High risk"],
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
 
         # Start approval in background
@@ -207,7 +207,7 @@ class TestEnhancedSecurityLayer:
             "command": "rm file.txt",
             "risk": CommandRisk.HIGH.value,
             "reasons": ["High risk"],
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         }
 
         # Mock asyncio.wait_for to raise TimeoutError

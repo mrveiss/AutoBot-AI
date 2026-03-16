@@ -3158,7 +3158,7 @@ async def _wait_with_watchdog(
     for _SUBPROCESS_PROGRESS_TIMEOUT seconds, kills the subprocess.
     """
     last_progress_hash = None
-    last_progress_time = asyncio.get_event_loop().time()
+    last_progress_time = asyncio.get_running_loop().time()
 
     while True:
         try:
@@ -3182,7 +3182,7 @@ async def _wait_with_watchdog(
                 progress.get("total"),
                 progress.get("operation"),
             )
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
 
             if progress_hash != last_progress_hash:
                 last_progress_hash = progress_hash

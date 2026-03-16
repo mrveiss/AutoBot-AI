@@ -110,7 +110,7 @@ class TestAudioPipelineWhisper:
             return await pipe._process_audio(media_input)
 
         with patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", False):
-            result = asyncio.get_event_loop().run_until_complete(_run())
+            result = asyncio.run(_run())
         assert result["processing_status"] == "unavailable"
 
     def test_run_whisper_writes_temp_file_and_cleans_up(self):

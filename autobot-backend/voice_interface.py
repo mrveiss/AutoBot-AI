@@ -181,11 +181,11 @@ def _vosk_recognize_blocking(
         callback=callback,
     ):
         logger.debug("Vosk listening started...")
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
         speech_detected = False
 
         while True:
-            elapsed = asyncio.get_event_loop().time() - start_time
+            elapsed = asyncio.get_running_loop().time() - start_time
 
             if result := _check_vosk_timeout(elapsed, timeout, speech_detected):
                 return result

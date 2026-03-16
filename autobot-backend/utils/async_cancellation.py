@@ -317,7 +317,7 @@ async def _execute_sync_with_cancellation(
     """Execute sync operation with cancellation checks"""
 
     # Run in thread pool with periodic cancellation checks
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # Create a future that will be resolved in the thread
     future = loop.create_future()

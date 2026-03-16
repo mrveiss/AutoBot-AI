@@ -142,11 +142,10 @@ class AutoBotSemanticChunker:
             batch_sentences = sentences[i : i + batch_size]
 
             # Run embedding computation in thread pool to avoid blocking event loop
-            loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=max_workers
             ) as executor:
-                embeddings = await loop.run_in_executor(
+                embeddings = await asyncio.get_running_loop().run_in_executor(
                     executor,
                     lambda: self._embedding_model.encode(
                         batch_sentences,
@@ -364,13 +363,16 @@ class AutoBotSemanticChunker:
                 model = self._load_model_with_retry(device)
                 return self._optimize_loaded_model(model, device)
 
-            loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 logger.info(
                     "Loading embedding model '%s' in background thread...",
                     self.embedding_model_name,
                 )
-                self._embedding_model = await loop.run_in_executor(executor, load_model)
+                self._embedding_model = (
+                    await asyncio.get_running_loop().run_in_executor(
+                        executor, load_model
+                    )
+                )
                 logger.info("Embedding model loading completed")
 
         except Exception as e:
@@ -546,32 +548,24 @@ class AutoBotSemanticChunker:
         import asyncio
 
         try:
-            # Try to get existing event loop
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're in an async context, we shouldn't use this sync method
-                logger.warning(
-                    "Using sync embedding method in async context. "
-                    "Use _compute_sentence_embeddings_async instead."
-                )
-                logger.warning(
-                    "WARNING: Model initialization may block event loop - use async method instead"
-                )
-                # Fall back to direct computation (blocking) - creates a new sync version for
-                # fallback
-                if self._embedding_model is None:
-                    self._sync_initialize_model()
-                embeddings = self._embedding_model.encode(
-                    sentences, convert_to_tensor=False
-                )
-                return np.array(embeddings)
-            else:
-                # Run the async version
-                return loop.run_until_complete(
-                    self._compute_sentence_embeddings_async(sentences)
-                )
+            asyncio.get_running_loop()
+            # A running loop exists — we're in an async context; sync method should not block
+            logger.warning(
+                "Using sync embedding method in async context. "
+                "Use _compute_sentence_embeddings_async instead."
+            )
+            logger.warning(
+                "WARNING: Model initialization may block event loop - use async method instead"
+            )
+            # Fall back to direct computation (blocking)
+            if self._embedding_model is None:
+                self._sync_initialize_model()
+            embeddings = self._embedding_model.encode(
+                sentences, convert_to_tensor=False
+            )
+            return np.array(embeddings)
         except RuntimeError:
-            # No event loop, create one
+            # No running loop — run the async version synchronously
             return asyncio.run(self._compute_sentence_embeddings_async(sentences))
 
     def _compute_semantic_distances(self, embeddings: np.ndarray) -> List[float]:

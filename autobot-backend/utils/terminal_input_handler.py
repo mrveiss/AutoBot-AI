@@ -285,9 +285,8 @@ class TerminalInputHandler:
             return self._get_testing_response(prompt, default)
 
         # Run input in thread pool to avoid blocking event loop
-        loop = asyncio.get_event_loop()
         try:
-            return await loop.run_in_executor(
+            return await asyncio.get_running_loop().run_in_executor(
                 None, lambda: self.get_input(prompt, timeout, default)
             )
         except InputTimeoutError:

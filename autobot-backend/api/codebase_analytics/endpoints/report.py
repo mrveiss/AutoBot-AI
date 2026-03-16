@@ -1561,13 +1561,12 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
         DuplicateAnalysis or None if analysis fails
     """
     try:
-        loop = asyncio.get_event_loop()
         project_root = str(Path(__file__).resolve().parents[4])
 
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
         analysis = await asyncio.wait_for(
-            loop.run_in_executor(
+            asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 lambda: DuplicateCodeDetector(project_root=project_root).run_analysis(),
             ),
@@ -1641,13 +1640,12 @@ async def _get_bug_prediction(
 
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
-        loop = asyncio.get_event_loop()
 
         # Issue #554: Pass semantic analysis flag
         predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic)
 
         result = await asyncio.wait_for(
-            loop.run_in_executor(
+            asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 lambda: predictor.analyze_directory(pattern="*.py", limit=limit),
             ),

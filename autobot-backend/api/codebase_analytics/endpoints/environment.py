@@ -93,9 +93,9 @@ async def _run_environment_analysis(analyzer, path: str, pattern_list: list):
         if asyncio.iscoroutine(coro):
             return await asyncio.wait_for(coro, timeout=ANALYSIS_TIMEOUT)
         else:
-            loop = asyncio.get_event_loop()
             return await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: coro), timeout=ANALYSIS_TIMEOUT
+                asyncio.get_running_loop().run_in_executor(None, lambda: coro),
+                timeout=ANALYSIS_TIMEOUT,
             )
     except asyncio.TimeoutError:
         logger.warning(
@@ -136,9 +136,9 @@ async def _run_llm_filtered_analysis(
         if asyncio.iscoroutine(coro):
             return await asyncio.wait_for(coro, timeout=LLM_ANALYSIS_TIMEOUT)
         else:
-            loop = asyncio.get_event_loop()
             return await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: coro), timeout=LLM_ANALYSIS_TIMEOUT
+                asyncio.get_running_loop().run_in_executor(None, lambda: coro),
+                timeout=LLM_ANALYSIS_TIMEOUT,
             )
     except asyncio.TimeoutError:
         logger.warning(

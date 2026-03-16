@@ -379,9 +379,9 @@ class ResearchBrowserSession:
         if not self.page or not self.interaction_required:
             return True
 
-        start_time = asyncio.get_event_loop().time()
+        start_time = asyncio.get_running_loop().time()
 
-        while asyncio.get_event_loop().time() - start_time < timeout_seconds:
+        while asyncio.get_running_loop().time() - start_time < timeout_seconds:
             try:
                 # Check if interaction is still required
                 interaction_data = await self.page.evaluate(

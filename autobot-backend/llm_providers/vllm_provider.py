@@ -69,8 +69,9 @@ class VLLMProvider:
             logger.info("Initializing vLLM with model: %s", self.model_name)
 
             # Initialize vLLM in a thread to avoid blocking
-            loop = asyncio.get_event_loop()
-            self.llm = await loop.run_in_executor(None, self._create_vllm_instance)
+            self.llm = await asyncio.get_running_loop().run_in_executor(
+                None, self._create_vllm_instance
+            )
 
             self.is_initialized = True
             logger.info("vLLM model %s initialized successfully", self.model_name)
@@ -141,8 +142,7 @@ class VLLMProvider:
             sampling_params = self._create_sampling_params(**kwargs)
             start_time = time.time()
 
-            loop = asyncio.get_event_loop()
-            outputs = await loop.run_in_executor(
+            outputs = await asyncio.get_running_loop().run_in_executor(
                 None, self._generate_completion, prompt, sampling_params
             )
 

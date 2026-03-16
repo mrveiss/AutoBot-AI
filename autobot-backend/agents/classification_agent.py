@@ -81,13 +81,9 @@ class ClassificationAgent(StandardizedAgent):
         import asyncio
 
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(self.initialize_communication(self.capabilities))
-            else:
-                loop.run_until_complete(
-                    self.initialize_communication(self.capabilities)
-                )
+            asyncio.get_running_loop()
+            # A running loop exists — schedule as a task
+            asyncio.create_task(self.initialize_communication(self.capabilities))
         except RuntimeError:
             # Event loop not available yet, will initialize later
             logger.debug(
