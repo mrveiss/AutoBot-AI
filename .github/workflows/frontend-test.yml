@@ -55,15 +55,15 @@ jobs:
 
       - name: Run unit tests
         working-directory: autobot-frontend
-        run: npm run test:unit || echo "⚠️ Unit tests failed - continuing"
+        run: npm run test:unit
 
       - name: Run integration tests
         working-directory: autobot-frontend
-        run: npm run test:integration || echo "⚠️ Integration tests failed - continuing"
+        run: npm run test:integration
 
       - name: Generate coverage report
         working-directory: autobot-frontend
-        run: npm run test:coverage || echo "⚠️ Coverage generation failed - continuing"
+        run: npm run test:coverage
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
