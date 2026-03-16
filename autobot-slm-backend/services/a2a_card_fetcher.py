@@ -80,7 +80,7 @@ async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
     from services.database import db_service
     from sqlalchemy import select
 
-    async with db_service.get_session() as db:
+    async with db_service.session() as db:
         result = await db.execute(select(Node).where(Node.node_id == node_id))
         node = result.scalar_one_or_none()
         if node is None:
@@ -103,7 +103,7 @@ async def _refresh_all_backend_nodes() -> None:
     from services.database import db_service
     from sqlalchemy import select
 
-    async with db_service.get_session() as db:
+    async with db_service.session() as db:
         result = await db.execute(
             select(Node).where(Node.status.in_(["online", "enrolled"]))
         )
@@ -177,7 +177,7 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     from services.database import db_service
     from sqlalchemy import select, update
 
-    async with db_service.get_session() as db:
+    async with db_service.session() as db:
         result = await db.execute(
             select(ExternalAgent).where(ExternalAgent.id == agent_id)
         )
@@ -215,7 +215,7 @@ async def _refresh_all_external_agents() -> None:
     from services.database import db_service
     from sqlalchemy import select
 
-    async with db_service.get_session() as db:
+    async with db_service.session() as db:
         result = await db.execute(
             select(ExternalAgent).where(ExternalAgent.enabled.is_(True))
         )
