@@ -11,15 +11,28 @@ import logging.handlers
 import os
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from config import config_manager
+if TYPE_CHECKING:
+    from config.manager import ConfigManager
 
 # Module-level logger for logging_manager itself
 _logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for log types
 _LOG_TYPES = ("backend", "frontend", "llm", "debug", "audit")
+
+
+def _get_config_manager() -> "ConfigManager":
+    """Return the config_manager singleton via a lazy import.
+
+    Imported here (not at module level) to break the circular import chain:
+    logging_manager -> config -> manager -> loader -> model_constants -> (back).
+    Ref: issue #1862.
+    """
+    from config import config_manager as _cm  # noqa: PLC0415
+
+    return _cm
 
 
 class LoggingManager:
@@ -69,14 +82,14 @@ class LoggingManager:
                     logger.addHandler(handler)
 
                 # Add console handler for development
-                if config_manager.get("deployment.mode", "local") == "local":
+                if _get_config_manager().get("deployment.mode", "local") == "local":
                     console_handler = logging.StreamHandler()
                     console_handler.setFormatter(cls._get_formatter())
                     logger.addHandler(console_handler)
 
             # Set log level
             log_level = getattr(
-                logging, config_manager.get("logging.level", "INFO").upper()
+                logging, _get_config_manager().get("logging.level", "INFO").upper()
             )
             logger.setLevel(log_level)
 
@@ -108,7 +121,7 @@ class LoggingManager:
     @classmethod
     def _get_file_handler(cls, log_type: str) -> Optional[logging.Handler]:
         """Get file handler for specific log type"""
-        log_file = config_manager.get(f"logging.file_handlers.{log_type}")
+        log_file = _get_config_manager().get(f"logging.file_handlers.{log_type}")
         if not log_file:
             # Fallback to default path using environment-configurable logs directory
             logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
@@ -119,8 +132,10 @@ class LoggingManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Use rotating file handler to prevent large log files
-        max_bytes = config_manager.get("logging.rotation.max_bytes", 10485760)  # 10MB
-        backup_count = config_manager.get("logging.rotation.backup_count", 5)
+        max_bytes = _get_config_manager().get(
+            "logging.rotation.max_bytes", 10485760
+        )  # 10MB
+        backup_count = _get_config_manager().get("logging.rotation.backup_count", 5)
 
         handler = logging.handlers.RotatingFileHandler(
             log_file, maxBytes=max_bytes, backupCount=backup_count
@@ -132,7 +147,7 @@ class LoggingManager:
     @classmethod
     def _get_formatter(cls) -> logging.Formatter:
         """Get log formatter"""
-        log_format = config_manager.get(
+        log_format = _get_config_manager().get(
             "logging.format", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
         return logging.Formatter(log_format)
@@ -165,7 +180,7 @@ class LoggingManager:
         log_types_to_rotate = list(_LOG_TYPES) if not log_type else [log_type]
 
         for lt in log_types_to_rotate:
-            log_file = config_manager.get(f"logging.file_handlers.{lt}")
+            log_file = _get_config_manager().get(f"logging.file_handlers.{lt}")
             if log_file and os.path.exists(log_file):
                 # Create backup using environment-configurable paths
                 logs_dir = os.getenv("AUTOBOT_LOGS_DIR", "logs")
