@@ -33,33 +33,22 @@
       changed_when: false
       when: ansible_os_family == "Debian"
 
-    - name: Get security sources
-      ansible.builtin.shell: |
-        grep -l security /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null | head -1 || echo ""
-      register: security_source
-      changed_when: false
-      when: ansible_os_family == "Debian"
-
-    - name: Check security updates separately
-      ansible.builtin.shell: |
-        apt list --upgradable 2>/dev/null | grep -i security | head -200 || true
-      register: security_updates_raw
-      changed_when: false
-      when: ansible_os_family == "Debian"
-
     - name: Parse upgradable packages into JSON
       ansible.builtin.set_fact:
         parsed_packages: >-
           {{
             upgradable_raw.stdout_lines | default([])
-            | map('regex_replace', '^([^ /]+)/\S+ (\S+) \S+ \[upgradable from: ([^\]]+)\]$', '{"p":"\1","a":"\2","c":"\3"}')
+            | map('regex_replace',
+                '^([^ /]+)/(\S+) (\S+) \S+ \[upgradable from: ([^\]]+)\]$',
+                '{"p":"\1","r":"\2","a":"\3","c":"\4"}')
             | select('match', '^\{')
             | list
           }}
         held_list: "{{ (held_packages.stdout_lines | default([])) }}"
         security_pkgs: >-
           {{
-            security_updates_raw.stdout_lines | default([])
+            upgradable_raw.stdout_lines | default([])
+            | select('search', '-security')
             | map('regex_replace', '^([^ /]+)/.*', '\1')
             | list
           }}
