@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from services.claude_agent_service import (
+from services.specialized_agent_service import (
     SpecializedAgentService,
     _categorize_agent,
     _extract_system_prompt_excerpt,
