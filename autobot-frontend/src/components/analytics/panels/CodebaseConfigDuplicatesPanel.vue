@@ -129,12 +129,12 @@ interface ConfigDuplicatesResult {
 const props = defineProps<{
   analysis: ConfigDuplicatesResult | null
   loading: boolean
-  error: string
+  error: string | null
 }>()
 
 const emit = defineEmits<{
   refresh: []
-  export: [format: string]
+  export: [format: 'md' | 'json']
 }>()
 
 function truncateValue(value: string, maxLength = 50): string {

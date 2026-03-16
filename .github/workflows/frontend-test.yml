@@ -1,8 +1,5 @@
 # Frontend Testing Suite workflow
 # Uses self-hosted runner to avoid GitHub Actions quota limits
-#
-# NOTE: Type checking and linting are set to warn-only mode while Issue #173
-# is being addressed. Once fixed, change continue-on-error to false.
 
 name: Frontend Testing Suite
 
@@ -50,19 +47,11 @@ jobs:
 
       - name: Run type checking
         working-directory: autobot-frontend
-        continue-on-error: true
-        run: |
-          npm run type-check || {
-            echo "⚠️ Type checking failed - see Issue #173 for tracking"
-          }
+        run: npm run type-check
 
       - name: Run linting
         working-directory: autobot-frontend
-        continue-on-error: true
-        run: |
-          npm run lint || {
-            echo "⚠️ Linting failed - see Issue #173 for tracking"
-          }
+        run: npm run lint
 
       - name: Run unit tests
         working-directory: autobot-frontend
