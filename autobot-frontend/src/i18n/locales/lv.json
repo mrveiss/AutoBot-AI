@@ -3805,6 +3805,7 @@
     }
   },
   "_meta": {
+    "dir": "ltr",
     "batch": "4-C",
     "issue": "#1358",
     "scope": "Zināšanu sakne K-Z (20 komponenti)",

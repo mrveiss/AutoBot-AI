@@ -3806,6 +3806,7 @@
     }
   },
   "_meta": {
+    "dir": "ltr",
     "batch": "4-C",
     "issue": "#1358",
     "scope": "Knowledge Root K-Z (20 components)",

@@ -7,9 +7,6 @@ import en from './locales/en.json'
 
 export type MessageSchema = typeof en
 
-// Locales that use right-to-left text direction (#1337)
-const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
-
 // Derive supported locales from locale files on disk — no manual sync needed (#1675)
 const localeModules = import.meta.glob('./locales/*.json')
 export const SUPPORTED_LOCALES = Object.keys(localeModules)
@@ -64,15 +61,25 @@ export async function loadLocaleMessages(locale: string): Promise<boolean> {
 }
 
 /**
+ * Read the text direction from a locale's _meta.dir field.
+ * Returns 'rtl' or 'ltr'. Falls back to 'ltr' if _meta.dir is absent. (#1812)
+ */
+export function getLocaleDir(locale: string): 'rtl' | 'ltr' {
+  const messages = i18n.global.getLocaleMessage(locale)
+  const meta = messages._meta as Record<string, string> | undefined
+  return meta?.dir === 'rtl' ? 'rtl' : 'ltr'
+}
+
+/**
  * Set the active locale. Loads the locale file if not yet loaded.
- * Also updates the html[dir] attribute for RTL languages (#1337).
+ * Also updates the html[dir] attribute for RTL languages (#1337, #1812).
  */
 export async function setLocale(locale: string): Promise<void> {
   await loadLocaleMessages(locale)
   i18n.global.locale.value = locale
   localStorage.setItem('autobot-language', locale)
   document.documentElement.setAttribute('lang', locale)
-  document.documentElement.setAttribute('dir', RTL_LOCALES.has(locale) ? 'rtl' : 'ltr')
+  document.documentElement.setAttribute('dir', getLocaleDir(locale))
 }
 
 export default i18n
