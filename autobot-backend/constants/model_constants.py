@@ -10,7 +10,12 @@ All LLM model configuration is centralized here.
 
 MIGRATION (Issue #763):
     All values now use ConfigRegistry with five-tier fallback:
-    Cache → Redis → Environment → Registry Defaults → Caller Default
+    Cache -> Redis -> Environment -> Registry Defaults -> Caller Default
+
+    Issue #1882: ConfigRegistry calls moved out of class/dataclass body to
+    avoid circular imports during ConfigManager init. Class attributes now use
+    static fallback values identical to what ConfigRegistry returns when Redis
+    is unreachable. Call ConfigRegistry directly for live/Redis-backed values.
 
 Usage:
     from constants.model_constants import ModelConstants
@@ -21,7 +26,7 @@ Usage:
     # Use model endpoints
     ollama_url = ModelConstants.get_ollama_url()
 
-    # Preferred: Use ConfigRegistry directly
+    # Preferred: Use ConfigRegistry directly for live values
     from config.registry import ConfigRegistry
     model_name = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
@@ -30,8 +35,6 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
-
-from config.registry import ConfigRegistry
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
@@ -52,39 +55,35 @@ class ModelConstants:
     SSOT Migration (Issue #763):
         All models now use ConfigRegistry with five-tier fallback.
 
+    Issue #1882: ConfigRegistry calls removed from class body to break the
+    circular import triggered during ConfigManager init. Class attributes now
+    hold static defaults; use ConfigRegistry directly for live Redis-backed
+    values:
+        from config.registry import ConfigRegistry
+        model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+
     Usage remains unchanged for backward compatibility:
         from constants.model_constants import ModelConstants
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
     """
 
     # =========================================================================
-    # DEFAULT MODELS - Read from ConfigRegistry with fallbacks
+    # DEFAULT MODELS - Static fallback values (Issue #1882: no import-time
+    # ConfigRegistry calls — use ConfigRegistry directly for live values)
     # =========================================================================
 
-    DEFAULT_OLLAMA_MODEL: str = ConfigRegistry.get("llm.default_model", FALLBACK_MODEL)
-    DEFAULT_OPENAI_MODEL: str = ConfigRegistry.get(
-        "llm.openai_model", FALLBACK_OPENAI_MODEL
-    )
-    DEFAULT_ANTHROPIC_MODEL: str = ConfigRegistry.get(
-        "llm.anthropic_model", FALLBACK_ANTHROPIC_MODEL
-    )
-    DEFAULT_GOOGLE_MODEL: str = ConfigRegistry.get(
-        "llm.google_model", FALLBACK_GOOGLE_MODEL
-    )
+    DEFAULT_OLLAMA_MODEL: str = FALLBACK_MODEL
+    DEFAULT_OPENAI_MODEL: str = FALLBACK_OPENAI_MODEL
+    DEFAULT_ANTHROPIC_MODEL: str = FALLBACK_ANTHROPIC_MODEL
+    DEFAULT_GOOGLE_MODEL: str = FALLBACK_GOOGLE_MODEL
 
     # Additional model types
-    EMBEDDING_MODEL: str = ConfigRegistry.get(
-        "llm.embedding_model", "nomic-embed-text:latest"
-    )
-    CLASSIFICATION_MODEL: str = ConfigRegistry.get(
-        "llm.classification_model", FALLBACK_MODEL
-    )
-    REASONING_MODEL: str = ConfigRegistry.get("llm.reasoning_model", FALLBACK_MODEL)
-    RAG_MODEL: str = ConfigRegistry.get("llm.rag_model", FALLBACK_MODEL)
-    CODING_MODEL: str = ConfigRegistry.get("llm.coding_model", FALLBACK_MODEL)
-    ORCHESTRATOR_MODEL: str = ConfigRegistry.get(
-        "llm.orchestrator_model", FALLBACK_MODEL
-    )
+    EMBEDDING_MODEL: str = "nomic-embed-text:latest"
+    CLASSIFICATION_MODEL: str = FALLBACK_MODEL
+    REASONING_MODEL: str = FALLBACK_MODEL
+    RAG_MODEL: str = FALLBACK_MODEL
+    CODING_MODEL: str = FALLBACK_MODEL
+    ORCHESTRATOR_MODEL: str = FALLBACK_MODEL
 
     # =========================================================================
     # MODEL PROVIDERS
@@ -96,8 +95,8 @@ class ModelConstants:
     PROVIDER_GOOGLE: str = "google"
     PROVIDER_LM_STUDIO: str = "lm_studio"
 
-    # Current provider from ConfigRegistry
-    CURRENT_PROVIDER: str = ConfigRegistry.get("llm.provider", "ollama")
+    # Current provider - static default; use ConfigRegistry for live value
+    CURRENT_PROVIDER: str = "ollama"
 
     # =========================================================================
     # MODEL ENDPOINTS
@@ -109,7 +108,10 @@ class ModelConstants:
         Get Ollama service URL.
 
         Issue #763: Now uses ConfigRegistry with NetworkConstants fallback.
+        Issue #1882: ConfigRegistry imported lazily inside method body to
+        avoid circular imports during ConfigManager init.
         """
+        from config.registry import ConfigRegistry
         from constants.network_constants import NetworkConstants
 
         host = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_VM_IP)
@@ -157,8 +159,14 @@ class ModelConfig:
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
 
-    # Timeouts (in seconds) - Issue #763: Now uses ConfigRegistry
-    DEFAULT_TIMEOUT: int = int(ConfigRegistry.get("timeout.llm", "30"))
+    # Timeouts (in seconds)
+    # Issue #763: Was ConfigRegistry.get("timeout.llm", "30").
+    # Issue #1882: Moved to static default to break circular import during
+    # ConfigManager init. Registry default for "timeout.llm" is 120 (see
+    # config/registry_defaults.py). Use ConfigRegistry directly for live value:
+    #   from config.registry import ConfigRegistry
+    #   timeout = int(ConfigRegistry.get("timeout.llm", "120"))
+    DEFAULT_TIMEOUT: int = 120
     LONG_GENERATION_TIMEOUT: int = 120
 
     # Retry settings

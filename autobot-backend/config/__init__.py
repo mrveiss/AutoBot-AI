@@ -23,6 +23,12 @@ Architecture:
 
 Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkConstants.
     Cycle: network_constants → ConfigRegistry → src.config.__init__ → manager → network_constants
+
+    Issue #1882: model_constants previously imported ConfigRegistry at module level AND
+    called ConfigRegistry.get() in class/dataclass body (executed at import time), creating
+    a second cycle: manager → loader → defaults → model_constants → config.registry.
+    Fixed by removing the module-level ConfigRegistry import from model_constants and
+    making ConfigRegistry calls in ModelConstants.get_ollama_url() lazy (inside the method).
 """
 
 import logging
