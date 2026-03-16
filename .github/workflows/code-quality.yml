@@ -1,10 +1,6 @@
 # GitHub Actions workflow for code quality enforcement
 # Runs on every push and pull request
 # Uses self-hosted runner to avoid GitHub Actions quota limits
-#
-# NOTE: Code quality checks are set to warn-only mode while Issue #173
-# (2,576 Flake8 violations) is being addressed. Once fixed, change
-# continue-on-error to false for strict enforcement.
 
 name: Code Quality
 
@@ -53,27 +49,24 @@ jobs:
         python -m pip install black isort flake8 autoflake bandit[toml]
 
     - name: Check code formatting with Black
-      continue-on-error: true
       run: |
         source .venv/bin/activate
         python3 -m black --check --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Black formatting check failed"
           echo "Run 'python3 -m black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/' to fix"
-          echo "See Issue #173 for tracking"
+          exit 1
         }
 
     - name: Check import sorting with isort
-      continue-on-error: true
       run: |
         source .venv/bin/activate
         python3 -m isort --check --profile=black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ isort check failed"
           echo "Run 'python3 -m isort --profile=black --line-length=88 autobot-user-backend/ autobot-slm-backend/ autobot-shared/' to fix"
-          echo "See Issue #173 for tracking"
+          exit 1
         }
 
     - name: Lint with flake8
-      continue-on-error: true
       run: |
         source .venv/bin/activate
         python3 -m flake8 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ \
@@ -83,11 +76,10 @@ jobs:
           --statistics \
           --count || {
           echo "⚠️ flake8 linting issues found"
-          echo "See Issue #173 for tracking"
+          exit 1
         }
 
     - name: Check for unused imports with autoflake
-      continue-on-error: true
       run: |
         source .venv/bin/activate
         python3 -m autoflake --check --recursive \
@@ -95,15 +87,15 @@ jobs:
           --remove-unused-variables \
           autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Unused imports/variables detected"
-          echo "See Issue #173 for tracking"
+          exit 1
         }
 
     - name: Security check with bandit
-      continue-on-error: true
       run: |
         source .venv/bin/activate
         python3 -m bandit -c .bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Security issues detected - review bandit output"
+          exit 1
         }
 
     - name: Check Ansible agent code drift (#1629)
@@ -119,8 +111,7 @@ jobs:
       run: |
         echo "Code Quality Check Complete"
         echo ""
-        echo "Note: Checks are in warn-only mode while Issue #173 is being addressed."
-        echo "Once violations are fixed, strict enforcement will be enabled."
+        echo "All checks enforce strict mode — failures will block the pipeline."
 
     - name: Cleanup virtual environment
       if: always()
