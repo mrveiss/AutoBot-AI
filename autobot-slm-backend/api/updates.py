@@ -363,9 +363,18 @@ async def _resolve_host_to_node(
     return None
 
 
-def _classify_severity(pkg_name: str, security_packages: List[str]) -> str:
-    """Classify package update severity."""
-    if pkg_name in security_packages:
+def _classify_severity(
+    pkg_name: str, security_packages: List[str], repo: str = ""
+) -> str:
+    """Classify package update severity.
+
+    A package is classified as 'security' when its name appears in the
+    security_packages list (packages whose apt repo field contained '-security')
+    OR when the repo field captured from the apt output itself contains '-security'.
+    Using both signals handles cases where the Ansible grep and the regex capture
+    produce slightly different sets.
+    """
+    if "-security" in repo or pkg_name in security_packages:
         return "security"
     return "standard"
 
@@ -521,7 +530,7 @@ async def _store_host_packages(
                 continue
         if not isinstance(pkg, dict) or pkg.get("p") in held:
             continue
-        severity = _classify_severity(pkg["p"], security_pkgs)
+        severity = _classify_severity(pkg["p"], security_pkgs, pkg.get("r", ""))
         await _upsert_update_info(db, node_id, pkg, severity)
         count += 1
 
