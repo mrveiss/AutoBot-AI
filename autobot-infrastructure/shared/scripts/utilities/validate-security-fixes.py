@@ -21,75 +21,69 @@ class SecurityValidator:
         self.vulnerabilities_found = []
         self.fixes_verified = []
 
+    def _build_rg_command(self, pattern: str, excluded_paths: List[str]) -> List[str]:
+        """Build ripgrep command for a single secret pattern (#1792).
+
+        Returns the full argv list ready for subprocess.run.
+        """
+        base_cmd = [
+            "rg", pattern, str(self.project_root),
+            "--type", "py",
+            "--type", "js",
+            "--type", "ts",
+            "--type", "sh",
+            "--ignore-case",
+            "--line-number",
+        ]
+        return base_cmd + [f"--glob=!{path}" for path in excluded_paths]
+
+    def _parse_rg_output(self, stdout: str, description: str) -> List[Dict]:
+        """Parse ripgrep line-number output into finding dicts (#1792).
+
+        Skips lines annotated with 'pragma: allowlist secret'.
+        """
+        findings = []
+        for line in stdout.strip().split("\n"):
+            if ":" not in line:
+                continue
+            file_path, line_num, content = line.split(":", 2)
+            if "pragma: allowlist secret" in content:
+                continue
+            findings.append(
+                {
+                    "type": description,
+                    "file": file_path,
+                    "line": line_num,
+                    "content": content.strip(),
+                }
+            )
+        return findings
+
     def scan_for_hardcoded_secrets(self) -> List[Dict]:
-        """Scan codebase for remaining hardcoded secrets"""
+        """Scan codebase for remaining hardcoded secrets (#1792)."""
         print("🔍 Scanning for hardcoded secrets...")
 
         patterns = [
             (r'password\s*[=:]\s*["\'][^"\']{4,}["\']', "Hardcoded password"),
             (r'api_key\s*[=:]\s*["\'][^"\']{10,}["\']', "Hardcoded API key"),
             (r'token\s*[=:]\s*["\'][^"\']{10,}["\']', "Hardcoded token"),
-            (
-                r'redis\.Redis\([^)]*password=["\'][^"\']+["\']',
-                "Redis hardcoded password",
-            ),
+            (r'redis\.Redis\([^)]*password=["\'][^"\']+["\']', "Redis hardcoded password"),
             (r'sshpass\s+-p\s+["\'][^"\']+["\']', "SSH hardcoded password"),
         ]
-
         excluded_paths = [
-            "reports/",
-            "archives/",
-            "docs/",
-            "node_modules/",
-            ".git/",
-            "tests/results/",
-            "reports/finished/",
-            ".claude/",
+            "reports/", "archives/", "docs/", "node_modules/",
+            ".git/", "tests/results/", "reports/finished/", ".claude/",
         ]
 
         findings = []
-
         for pattern, description in patterns:
             try:
-                result = subprocess.run(
-                    [
-                        "rg",
-                        pattern,
-                        str(self.project_root),
-                        "--type",
-                        "py",
-                        "--type",
-                        "js",
-                        "--type",
-                        "ts",
-                        "--type",
-                        "sh",
-                        "--ignore-case",
-                        "--line-number",
-                    ]
-                    + [f"--glob=!{path}" for path in excluded_paths],
-                    capture_output=True,
-                    text=True,
-                )
-
+                cmd = self._build_rg_command(pattern, excluded_paths)
+                result = subprocess.run(cmd, capture_output=True, text=True)
                 if result.stdout:
-                    for line in result.stdout.strip().split("\n"):
-                        if ":" in line:
-                            file_path, line_num, content = line.split(":", 2)
-                            # Skip files with pragma allowlist secret
-                            if "pragma: allowlist secret" in content:
-                                continue
-                            findings.append(
-                                {
-                                    "type": description,
-                                    "file": file_path,
-                                    "line": line_num,
-                                    "content": content.strip(),
-                                }
-                            )
+                    findings.extend(self._parse_rg_output(result.stdout, description))
             except subprocess.CalledProcessError:
                 pass  # ripgrep not found or no matches
-
         return findings
 
     def validate_redis_password_fixes(self) -> bool:
