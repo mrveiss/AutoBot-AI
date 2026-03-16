@@ -277,3 +277,95 @@ class TestHeartbeatVersionTracking:
         assert response.update_available is False
         assert response.latest_version is None
         assert response.update_url is None
+
+
+class TestHasFailedAutobotService:
+    """Unit tests for _has_failed_autobot_service (Issue #1709).
+
+    Verifies the function checks monitored services only (extra_data["services"]),
+    not discovered_services, so failed non-monitored autobot-* units (e.g. autobot-vnc
+    on a headless browser node) do not cause false code_current_service_failed reports.
+    """
+
+    @staticmethod
+    def _call(extra_data):
+        """Import and call the function under test."""
+        import importlib
+        import os
+
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+        module = importlib.import_module("api.nodes")
+        return module._has_failed_autobot_service(extra_data)
+
+    def test_returns_false_when_extra_data_is_none(self):
+        """None extra_data must not raise and must return False."""
+        assert self._call(None) is False
+
+    def test_returns_false_when_no_services_key(self):
+        """Missing services dict returns False (nothing monitored)."""
+        assert self._call({"discovered_services": []}) is False
+
+    def test_returns_false_when_monitored_services_empty(self):
+        """Empty services dict returns False."""
+        assert self._call({"services": {}}) is False
+
+    def test_returns_false_when_monitored_autobot_service_is_active(self):
+        """autobot-playwright running → no failure."""
+        extra_data = {
+            "services": {
+                "autobot-playwright": {"active": True, "status": "active"},
+                "nginx": {"active": True, "status": "active"},
+            }
+        }
+        assert self._call(extra_data) is False
+
+    def test_returns_true_when_monitored_autobot_service_is_failed(self):
+        """autobot-playwright failed in monitored list → failure detected."""
+        extra_data = {
+            "services": {
+                "autobot-playwright": {"active": False, "status": "failed"},
+            }
+        }
+        assert self._call(extra_data) is True
+
+    def test_returns_false_for_failed_non_monitored_autobot_vnc(self):
+        """Issue #1709: autobot-vnc failed in discovered_services but NOT monitored.
+
+        Browser node .25 runs autobot-playwright (monitored) but may have
+        autobot-vnc registered as a systemd unit in failed state when VNC is not
+        in use. The old code scanned discovered_services and flagged this as a
+        failure. The new code only checks extra_data["services"].
+        """
+        extra_data = {
+            # Monitored services (slm_services_to_monitor): playwright is healthy.
+            "services": {
+                "autobot-playwright": {"active": True, "status": "active"},
+                "nginx": {"active": True, "status": "active"},
+            },
+            # discovered_services: includes a failed autobot-vnc unit.
+            "discovered_services": [
+                {"name": "autobot-playwright", "status": "running"},
+                {"name": "autobot-vnc", "status": "failed"},
+                {"name": "nginx", "status": "running"},
+            ],
+        }
+        assert self._call(extra_data) is False
+
+    def test_returns_false_for_non_autobot_failed_service_in_monitored(self):
+        """A failed non-autobot monitored service (e.g. nginx) is not flagged."""
+        extra_data = {
+            "services": {
+                "autobot-playwright": {"active": True, "status": "active"},
+                "nginx": {"active": False, "status": "failed"},
+            }
+        }
+        assert self._call(extra_data) is False
+
+    def test_handles_malformed_service_info_gracefully(self):
+        """Non-dict service info in the monitored map must not raise."""
+        extra_data = {
+            "services": {
+                "autobot-playwright": None,
+            }
+        }
+        assert self._call(extra_data) is False
