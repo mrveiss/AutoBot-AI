@@ -733,8 +733,22 @@ class LLMFailsafeAgent:
         return self.tier_health
 
 
-# Global instance for easy access
-llm_failsafe = LLMFailsafeAgent()
+# Module-level singleton — created on first use to avoid import-time side effects.
+_llm_failsafe: Optional["LLMFailsafeAgent"] = None
+
+
+def get_llm_failsafe() -> "LLMFailsafeAgent":
+    """
+    Return the shared LLMFailsafeAgent singleton, creating it on first call.
+
+    Deferred instantiation prevents AgentConfigurationError from being raised
+    at import time when environment variables are not yet configured.
+    """
+    global _llm_failsafe
+    if _llm_failsafe is None:
+        logger.debug("Initializing LLMFailsafeAgent singleton")
+        _llm_failsafe = LLMFailsafeAgent()
+    return _llm_failsafe
 
 
 async def get_robust_llm_response(
@@ -750,14 +764,14 @@ async def get_robust_llm_response(
     Returns:
         LLMResponse with guaranteed content (even if degraded)
     """
-    return await llm_failsafe.get_response(prompt, context)
+    return await get_llm_failsafe().get_response(prompt, context)
 
 
 def get_llm_system_status() -> Dict[str, Any]:
     """Get current LLM system status"""
-    return llm_failsafe.get_system_status()
+    return get_llm_failsafe().get_system_status()
 
 
 async def perform_llm_health_check() -> Dict[LLMTier, bool]:
     """Perform health check on all LLM tiers"""
-    return await llm_failsafe.health_check()
+    return await get_llm_failsafe().health_check()
