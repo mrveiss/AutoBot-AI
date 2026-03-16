@@ -817,27 +817,8 @@ def _handle_security_report_command(secrets_manager: SecretsManager, args) -> in
     return 0
 
 
-def _create_argument_parser() -> argparse.ArgumentParser:
-    """Create and configure argument parser.
-
-    Helper for main (Issue #825).
-    """
-    parser = argparse.ArgumentParser(
-        description="AutoBot Secrets Management System",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python scripts/secrets_manager.py --add --name "api_key" --type "api_key" --scope "general"
-  python scripts/secrets_manager.py --list --scope "general"
-  python scripts/secrets_manager.py --list --scope "chat" --chat-id "chat_123"
-  python scripts/secrets_manager.py --get --secret-id "abc123..." --chat-id "chat_123"
-  python scripts/secrets_manager.py --transfer --secret-id "abc123..." --chat-id "chat_123"
-  python scripts/secrets_manager.py --cleanup-chat "chat_456" --transfer
-  python scripts/secrets_manager.py --security-report
-        """,
-    )
-
-    # Actions
+def _add_action_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register action flags on the argument parser (#1792)."""
     parser.add_argument("--add", action="store_true", help="Add new secret")
     parser.add_argument("--list", action="store_true", help="List secrets")
     parser.add_argument("--get", action="store_true", help="Get secret value")
@@ -851,7 +832,9 @@ Examples:
         "--security-report", action="store_true", help="Generate security report"
     )
 
-    # Parameters
+
+def _add_parameter_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register parameter and option flags on the argument parser (#1792)."""
     parser.add_argument("--secret-id", help="Secret ID")
     parser.add_argument("--name", help="Secret name")
     parser.add_argument("--value", help="Secret value (will prompt if not provided)")
@@ -875,13 +858,34 @@ Examples:
         action="store_true",
         help="Transfer secrets to general instead of deleting",
     )
-
-    # Options
     parser.add_argument(
         "--secrets-dir", default="data/secrets", help="Secrets directory"
     )
     parser.add_argument("--json", action="store_true", help="Output in JSON format")
 
+
+def _create_argument_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser (#1792).
+
+    Helper for main. Actions registered via _add_action_arguments,
+    parameters via _add_parameter_arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="AutoBot Secrets Management System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/secrets_manager.py --add --name "api_key" --type "api_key" --scope "general"
+  python scripts/secrets_manager.py --list --scope "general"
+  python scripts/secrets_manager.py --list --scope "chat" --chat-id "chat_123"
+  python scripts/secrets_manager.py --get --secret-id "abc123..." --chat-id "chat_123"
+  python scripts/secrets_manager.py --transfer --secret-id "abc123..." --chat-id "chat_123"
+  python scripts/secrets_manager.py --cleanup-chat "chat_456" --transfer
+  python scripts/secrets_manager.py --security-report
+        """,
+    )
+    _add_action_arguments(parser)
+    _add_parameter_arguments(parser)
     return parser
 
 

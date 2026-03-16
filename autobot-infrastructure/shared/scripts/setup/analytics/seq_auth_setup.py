@@ -80,76 +80,83 @@ def create_seq_api_key(
         return None
 
 
+def _find_seq_container() -> str:
+    """Find the running Seq Docker container name (#1792).
+
+    Returns the first matching container name, or empty string if none found.
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["docker", "ps", "--format", "{{.Names}}", "--filter", "name=seq"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    containers = [line for line in result.stdout.strip().split("\n") if line]
+    return containers[0] if containers else ""
+
+
+def _prompt_new_password() -> str:
+    """Prompt user for a new password with confirmation (#1792).
+
+    Returns the confirmed password, or empty string on mismatch/blank.
+    """
+    new_password = input("Enter new admin password: ").strip()
+    confirm_password = input("Confirm new password: ").strip()
+    if new_password != confirm_password:
+        print("❌ Passwords do not match")
+        return ""
+    return new_password
+
+
+def _run_seqcli_password_reset(seq_container: str, new_password: str) -> bool:
+    """Execute seqcli password reset inside the given Docker container (#1792).
+
+    Returns True on success, False on failure.
+    """
+    import subprocess
+
+    reset_command = [
+        "docker", "exec", seq_container,
+        "seqcli", "user", "update",
+        "-n", "admin",
+        "-p", new_password,
+        "-s", "http://localhost",
+    ]
+    print("🔐 Resetting admin password...")
+    result = subprocess.run(reset_command, capture_output=True, text=True)
+    if result.returncode == 0:
+        print("✅ Password reset successfully")
+        os.environ["SEQ_PASSWORD"] = new_password
+        print("💡 Password set in environment variable SEQ_PASSWORD")
+        return True
+    print(f"❌ Password reset failed: {result.stderr}")
+    return False
+
+
 def reset_seq_admin_password(seq_url=None, new_password=None):
-    """Reset Seq admin password using Docker container access."""
+    """Reset Seq admin password using Docker container access (#1792)."""
+    import subprocess
 
     seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
-
     print("🔄 Attempting to reset Seq admin password...")
 
     try:
-        import subprocess
-
-        # Find the Seq container
-        result = subprocess.run(
-            ["docker", "ps", "--format", "{{.Names}}", "--filter", "name=seq"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        seq_containers = [line for line in result.stdout.strip().split("\n") if line]
-
-        if not seq_containers:
+        seq_container = _find_seq_container()
+        if not seq_container:
             print("❌ No Seq container found")
             return False
-
-        seq_container = seq_containers[0]
         print(f"📦 Found Seq container: {seq_container}")
 
-        # Get new password if not provided
         if not new_password:
-            new_password = input("Enter new admin password: ").strip()
-            confirm_password = input("Confirm new password: ").strip()
-
-            if new_password != confirm_password:
-                print("❌ Passwords do not match")
-                return False
+            new_password = _prompt_new_password()
 
         if not new_password:
             print("❌ Password cannot be empty")
             return False
 
-        # Reset password using seqcli in the container
-        reset_command = [
-            "docker",
-            "exec",
-            seq_container,
-            "seqcli",
-            "user",
-            "update",
-            "-n",
-            "admin",
-            "-p",
-            new_password,
-            "-s",
-            "http://localhost",
-        ]
-
-        print("🔐 Resetting admin password...")
-        result = subprocess.run(reset_command, capture_output=True, text=True)
-
-        if result.returncode == 0:
-            print("✅ Password reset successfully")
-
-            # Set environment variable for future use
-            os.environ["SEQ_PASSWORD"] = new_password
-            print("💡 Password set in environment variable SEQ_PASSWORD")
-
-            return True
-        else:
-            print(f"❌ Password reset failed: {result.stderr}")
-            return False
+        return _run_seqcli_password_reset(seq_container, new_password)
 
     except subprocess.CalledProcessError as e:
         print(f"❌ Docker command failed: {e}")
