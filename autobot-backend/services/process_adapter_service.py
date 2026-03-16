@@ -29,7 +29,7 @@ import logging
 import os
 import signal as signal_module
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from models.process_run import ProcessRun, ProcessRunStatus
@@ -218,7 +218,7 @@ class ProcessAdapterService:
         async with self._session_factory() as session:
             row = await session.get(ProcessRun, run_id)
             row.status = ProcessRunStatus.RUNNING.value
-            row.started_at = datetime.now(UTC)
+            row.started_at = datetime.now(timezone.utc)
             cmd, args, timeout = row.command, row.args or [], row.timeout_seconds
             await session.commit()
         logger.info("Process %s started", run_id)
@@ -263,7 +263,7 @@ class ProcessAdapterService:
                 row.signal = sig_name
                 row.log_excerpt = excerpt
                 row.log_path = log_path
-                row.completed_at = datetime.now(UTC)
+                row.completed_at = datetime.now(timezone.utc)
             await session.commit()
         logger.info(
             "Process %s finalised: status=%s exit=%s", run_id, status, exit_code
@@ -276,7 +276,7 @@ class ProcessAdapterService:
             if row:
                 row.status = ProcessRunStatus.FAILED.value
                 row.log_excerpt = reason[:_LOG_EXCERPT_MAX]
-                row.completed_at = datetime.now(UTC)
+                row.completed_at = datetime.now(timezone.utc)
             await session.commit()
 
     async def _create_run_row(

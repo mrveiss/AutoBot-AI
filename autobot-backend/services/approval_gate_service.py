@@ -11,7 +11,7 @@ notifications for pending approvals.
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
@@ -316,7 +316,7 @@ class ApprovalGateService:
 
         approval.status = new_status.value
         approval.decided_by_user = decided_by
-        approval.decided_at = datetime.now(UTC)
+        approval.decided_at = datetime.now(timezone.utc)
 
         if comment:
             c = ApprovalComment(
