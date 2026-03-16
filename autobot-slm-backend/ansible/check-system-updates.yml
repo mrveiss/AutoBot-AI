@@ -52,7 +52,60 @@
             | map('regex_replace', '^([^ /]+)/.*', '\1')
             | list
           }}
+        apt_pkg_names: >-
+          {{
+            upgradable_raw.stdout_lines | default([])
+            | select('match', '^[a-zA-Z0-9]')
+            | map('regex_replace', '^([^ /]+)/.*', '\1')
+            | list
+          }}
       when: ansible_os_family == "Debian"
+
+    - name: Collect Ubuntu Pro ESM security status
+      ansible.builtin.shell: |
+        pro security-status --format json 2>/dev/null || true
+      register: esm_status_raw
+      changed_when: false
+      when: ansible_os_family == "Debian"
+
+    - name: Set ESM package facts when pro output is available
+      ansible.builtin.set_fact:
+        _esm_upgradable: >-
+          {{
+            (esm_status_raw.stdout | from_json).get('packages', [])
+            | selectattr('status', 'equalto', 'upgrade_available')
+            | list
+          }}
+      when:
+        - ansible_os_family == "Debian"
+        - esm_status_raw.stdout | default('') | regex_search('^\s*\{') is not none
+
+    - name: Merge ESM security package names into security list
+      ansible.builtin.set_fact:
+        security_pkgs: >-
+          {{
+            (security_pkgs | default([]))
+            + (_esm_upgradable | map(attribute='package') | list)
+            | unique
+          }}
+      when:
+        - ansible_os_family == "Debian"
+        - _esm_upgradable | default([]) | length > 0
+
+    - name: Append ESM-only package entry (not in apt list) to parsed packages
+      ansible.builtin.set_fact:
+        parsed_packages: >-
+          {{
+            parsed_packages | default([])
+            + [{'p': item.package, 'r': 'esm-security',
+                'a': item.version, 'c': 'unknown'}]
+          }}
+      loop: "{{ _esm_upgradable | default([]) }}"
+      loop_control:
+        label: "{{ item.package }}"
+      when:
+        - ansible_os_family == "Debian"
+        - item.package not in (apt_pkg_names | default([]))
 
     - name: Output discovered packages as JSON
       ansible.builtin.debug:
