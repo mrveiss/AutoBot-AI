@@ -680,7 +680,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
     # Include specialized agents in the combined response (#1794)
-    from services.claude_agent_service import SpecializedAgentService
+    from services.specialized_agent_service import SpecializedAgentService
 
     spec_service = SpecializedAgentService()
     specialized_agents = spec_service.list_agents()
@@ -717,7 +717,7 @@ async def list_specialized_agents(
 
     Issue #744: Requires admin authentication.
     """
-    from services.claude_agent_service import SpecializedAgentService
+    from services.specialized_agent_service import SpecializedAgentService
 
     service = SpecializedAgentService()
     agents = service.list_agents()
@@ -750,7 +750,7 @@ async def get_specialized_agent(
 
     Issue #744: Requires admin authentication.
     """
-    from services.claude_agent_service import SpecializedAgentService
+    from services.specialized_agent_service import SpecializedAgentService
 
     service = SpecializedAgentService()
     agent = service.get_agent(agent_id)
