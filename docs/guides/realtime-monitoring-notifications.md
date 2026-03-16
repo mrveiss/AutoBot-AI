@@ -430,7 +430,7 @@ curl -sk -H "Authorization: Bearer $TOKEN" \
     },
     "python": {
         "version": "3.12.2",
-        "executable": "/home/autobot/miniconda3/envs/autobot-backend/bin/python3"
+        "executable": "/opt/autobot/autobot-backend/venv/bin/python3"
     },
     "cache": {
         "status": "active",

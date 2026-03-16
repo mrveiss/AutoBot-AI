@@ -1,6 +1,6 @@
 ---
 # Fix Backend Environment Configuration
-# Issue #893: Corrects PYTHONPATH, .env paths, and conda environment
+# Issue #893: Corrects PYTHONPATH, .env paths, and Python venv
 #
 # Usage from SLM server:
 #   ansible-playbook playbooks/fix-backend-environment.yml
@@ -22,24 +22,26 @@
 
   tasks:
     # ============================================================
-    # Phase 1: Verify Conda Environment
+    # Phase 1: Verify Python venv
     # ============================================================
 
-    - name: Check if conda environment exists
+    - name: Check if Python venv exists
       stat:
-        path: /home/autobot/miniconda3/envs/autobot-backend
-      register: conda_env
+        path: "{{ backend_code_dir }}/venv/bin/python"
+      register: venv_python
 
-    - name: Verify uvicorn in conda environment
+    - name: Verify uvicorn in venv
       stat:
-        path: /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn
+        path: "{{ backend_code_dir }}/venv/bin/uvicorn"
       register: uvicorn_binary
-      when: conda_env.stat.exists
+      when: venv_python.stat.exists
 
-    - name: Fail if conda environment missing
+    - name: Fail if venv missing
       fail:
-        msg: "Conda environment autobot-backend not found! Run backend role deployment first."
-      when: not conda_env.stat.exists or not uvicorn_binary.stat.exists
+        msg: >-
+          Python venv not found at {{ backend_code_dir }}/venv.
+          Run backend role deployment first (Issue #1898: deadsnakes PPA + python3.12 -m venv).
+      when: not venv_python.stat.exists or not uvicorn_binary.stat.exists
 
     # ============================================================
     # Phase 2: Verify .env File Location
@@ -125,14 +127,14 @@
       shell: |
         cd {{ backend_code_dir }}
         export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
-        /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+        {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('PYTHONPATH:', sys.path[:5])
         try:
             import main
-            print('✅ SUCCESS: main.py imports correctly')
+            print('SUCCESS: main.py imports correctly')
         except Exception as e:
-            print('❌ ERROR:', str(e))
+            print('ERROR:', str(e))
             import traceback
             traceback.print_exc()
             exit(1)
@@ -176,9 +178,9 @@
           Environment configuration fixed!
 
           Changes applied:
-          - ✅ .env path: {{ backend_install_dir }}/.env
-          - ✅ PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
-          - ✅ Conda env: /home/autobot/miniconda3/envs/autobot-backend
+          - .env path: {{ backend_install_dir }}/.env
+          - PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
+          - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.12)
 
           Next steps:
           1. Monitor: journalctl -u autobot-backend -f

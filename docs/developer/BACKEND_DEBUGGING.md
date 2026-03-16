@@ -207,8 +207,8 @@ which python3
 python3 --version
 /opt/autobot/venv/bin/python --version
 
-# Conda env (main backend on WSL)
-conda activate autobot-backend
+# Python venv (main backend on WSL — deadsnakes PPA + python3.12)
+source /opt/autobot/autobot-backend/venv/bin/activate
 python --version
 ```
 

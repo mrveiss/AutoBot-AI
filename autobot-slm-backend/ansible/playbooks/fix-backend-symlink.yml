@@ -97,7 +97,7 @@
           shell: |
             cd {{ backend_code_dir }}
             export PYTHONPATH=/opt/autobot:{{ backend_code_dir }}
-            /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+            {{ backend_code_dir }}/venv/bin/python -c "
             try:
                 from backend.models.user import User
                 print('SUCCESS: backend.models import works with symlink')

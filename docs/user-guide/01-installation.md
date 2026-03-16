@@ -373,11 +373,10 @@ sudo ./setup_agent.sh
 
 **Issue: Python version not found**
 ```bash
-# Install pyenv for Python version management
-curl https://pyenv.run | bash
-exec $SHELL  # Restart shell
-pyenv install 3.10.13
-pyenv global 3.10.13
+# Install Python 3.12 via deadsnakes PPA (Issue #1898)
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get update
+sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
 ```
 
 **Issue: Redis connection failed**

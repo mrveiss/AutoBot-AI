@@ -45,7 +45,7 @@ AutoBot is a self-hosted platform that combines a conversational AI assistant wi
 | CPU | 8 cores | 16+ cores |
 | Storage | 50 GB | 200 GB+ (model + knowledge base storage) |
 | GPU | — | NVIDIA (CUDA) or Intel NPU for accelerated inference |
-| Python | 3.10 | 3.12 (conda env) |
+| Python | 3.12 | 3.12 (deadsnakes PPA + venv) |
 | Node.js | 18 | 20 |
 
 ---

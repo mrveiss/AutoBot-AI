@@ -25,7 +25,7 @@
   pip:
     requirements: /opt/autobot/app/requirements.txt
     virtualenv: /opt/autobot/venv
-    virtualenv_python: python3.10
+    virtualenv_python: python3.12
   become_user: autobot
 
 - name: Copy AutoBot application files

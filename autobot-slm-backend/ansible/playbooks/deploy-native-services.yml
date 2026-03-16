@@ -467,9 +467,9 @@
     - name: Install Python dependencies for AI services
       apt:
         name:
-          - python3.10
-          - python3.10-venv
-          - python3.10-dev
+          - python3.12
+          - python3.12-venv
+          - python3.12-dev
           - build-essential
           - pkg-config
           - libssl-dev
@@ -498,7 +498,7 @@
     - name: Create Python virtual environment
       shell: |
         cd /opt/autobot
-        python3.10 -m venv venv
+        python3.12 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
       become_user: autobot-service
