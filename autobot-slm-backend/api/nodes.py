@@ -1451,17 +1451,32 @@ async def _update_heartbeat_code_status(
 
 
 def _has_failed_autobot_service(extra_data: dict | None) -> bool:
-    """Check if any autobot-* service is failed or crash-looping.
+    """Check if any explicitly monitored autobot-* service is failed or crash-looping.
 
     Issue #1605: Prevents code_status=up_to_date when service is broken.
+    Issue #1709: Scope narrowed to monitored services only (extra_data["services"]).
+    Previously checked discovered_services (all systemd units), which caused false
+    positives on nodes like .25 where non-primary autobot-* units (e.g. autobot-vnc)
+    are present but not expected to run in headless mode.
+
+    The "services" dict contains only the services from slm_services_to_monitor —
+    the set the operator has declared this node should run. A failed unit outside
+    that set (e.g. autobot-vnc when VNC is not in use) must not flag the monitored
+    service as broken.
+
+    Format: {"service-name": {"active": bool, "status": "<systemctl is-active output>"}}
+    Failure statuses: "failed", "crash-loop".
     """
     if not extra_data:
         return False
-    for svc in extra_data.get("discovered_services", []):
-        name = svc.get("name", "")
+    monitored = extra_data.get("services", {})
+    if not monitored:
+        return False
+    for name, info in monitored.items():
         if not name.startswith("autobot"):
             continue
-        if svc.get("status") in ("failed", "crash-loop"):
+        svc_status = info.get("status", "") if isinstance(info, dict) else ""
+        if svc_status in ("failed", "crash-loop"):
             return True
     return False
 
