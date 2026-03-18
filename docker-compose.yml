@@ -104,6 +104,8 @@ services:
       - AUTOBOT_LLM_FAILSAFE_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
+      - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
     depends_on:
       autobot-redis:
         condition: service_healthy
