@@ -18,9 +18,11 @@ RUN npm ci
 COPY autobot-frontend/ ./
 
 # Build-time env vars for Vite (overridable via --build-arg)
-ARG VITE_BACKEND_HOST=autobot-backend
-ARG VITE_BACKEND_PORT=8000
-ARG VITE_HTTP_PROTOCOL=http
+# Empty defaults = proxy mode: frontend uses relative URLs through nginx,
+# which reverse-proxies /api/* to the backend container.
+ARG VITE_BACKEND_HOST=
+ARG VITE_BACKEND_PORT=
+ARG VITE_HTTP_PROTOCOL=
 
 RUN npm run build
 
