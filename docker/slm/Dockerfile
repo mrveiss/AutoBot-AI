@@ -46,7 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv \
-    curl openssh-client sshpass rsync ansible \
+    curl git openssh-client sshpass rsync ansible \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r autobot && useradd -r -g autobot -d /app autobot
