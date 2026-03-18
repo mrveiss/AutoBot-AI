@@ -75,6 +75,9 @@ RUN mkdir -p /app/data /app/logs /app/autobot-slm-backend/data \
 RUN ln -s /app/autobot-shared /app/autobot_shared \
     && ln -s /app/autobot-shared /app/autobot-slm-backend/autobot_shared
 
+# Copy entrypoint script (runs migrations before app start)
+COPY docker/slm/entrypoint.sh /app/entrypoint.sh
+
 USER autobot
 
 ENV PYTHONPATH=/app:/app/autobot-slm-backend:/app/autobot-shared
@@ -83,9 +86,10 @@ ENV AUTOBOT_LOG_LEVEL=INFO
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python3.12", "-m", "uvicorn", "main:app", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--workers", "1", "--app-dir", "/app/autobot-slm-backend"]
