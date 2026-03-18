@@ -105,6 +105,8 @@ services:
     depends_on:
       autobot-redis:
         condition: service_healthy
+      autobot-chromadb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/system/health"]
       interval: 20s
