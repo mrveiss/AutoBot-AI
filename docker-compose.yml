@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
     ports:
       - "${AUTOBOT_REDIS_PORT:-6379}:6379"
-      - "8001:8001"  # RedisInsight UI
+      - "127.0.0.1:8001:8001"  # RedisInsight UI (localhost only)
     volumes:
       - redis_data:/data
     environment:
@@ -29,8 +29,20 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   autobot-postgres:
     image: postgres:16-bookworm
@@ -50,8 +62,20 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   autobot-chromadb:
     image: chromadb/chroma:0.5.23
@@ -69,8 +93,20 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   # ---- Application Layer ----
 
@@ -117,8 +153,21 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
+      - autobot-app
 
   autobot-worker:
     build:
@@ -185,8 +234,21 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
+      - autobot-app
 
   autobot-frontend:
     build:
@@ -206,8 +268,20 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
 
   # ---- Optional: Local LLM ----
 
@@ -227,8 +301,20 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - ollama
 
@@ -242,8 +328,20 @@ services:
       - "9090:9090"
     volumes:
       - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - monitoring
 
@@ -260,8 +358,20 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - autobot-prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - monitoring
 
@@ -278,5 +388,7 @@ volumes:
   grafana_data:
 
 networks:
-  autobot:
+  autobot-data:
+    driver: bridge
+  autobot-app:
     driver: bridge
