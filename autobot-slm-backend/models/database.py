@@ -96,6 +96,7 @@ class Node(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     node_id = Column(String(64), unique=True, nullable=False, index=True)
     hostname = Column(String(255), nullable=False)
+    ansible_name = Column(String(255), nullable=True)  # Issue #1814
     ip_address = Column(String(45), nullable=False)
     status = Column(String(20), default=NodeStatus.PENDING.value)
     roles = Column(JSON, default=list)

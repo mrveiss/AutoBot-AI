@@ -432,6 +432,7 @@ async def create_node(
     node = Node(
         node_id=node_id,
         hostname=node_data.hostname,
+        ansible_name=node_data.ansible_name,  # Issue #1814
         ip_address=node_data.ip_address,
         roles=node_data.roles,
         ssh_user=node_data.ssh_user,
@@ -1395,6 +1396,7 @@ async def replace_node(
     new_node = Node(
         node_id=new_node_id,
         hostname=node_data.hostname,
+        ansible_name=node_data.ansible_name,  # Issue #1814
         ip_address=node_data.ip_address,
         roles=node_data.roles,
         ssh_user=node_data.ssh_user,
