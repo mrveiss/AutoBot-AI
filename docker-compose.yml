@@ -198,6 +198,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    volumes:
+      # Override nginx config at runtime (default: HTTP-only)
+      # For TLS: set AUTOBOT_NGINX_CONF=./docker/nginx/nginx-ssl.conf in .env
+      - ${AUTOBOT_NGINX_CONF:-./docker/nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
+      # TLS certificates directory (mounted read-only)
+      # Generate dev certs: bash docker/certs/generate-self-signed.sh
+      - ${AUTOBOT_TLS_CERT_DIR:-./docker/certs}:/etc/nginx/certs:ro
     depends_on:
       - autobot-backend
       - autobot-slm
