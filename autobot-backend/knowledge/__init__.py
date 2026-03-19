@@ -36,9 +36,11 @@ Usage:
     result = await kb.store_fact("Content", {"category": "general"})
 
 Lazy Loading (#1514):
-    Importing ``knowledge.pipeline.*`` no longer triggers the full
-    dependency chain (redis, llama_index, chromadb).  Heavy classes are
-    loaded on first access via ``__getattr__``.
+    The ``knowledge/__init__.py`` module body no longer eagerly imports
+    ``knowledge.base`` and its mixin siblings (which pull in redis,
+    llama_index, and chromadb).  All heavy classes are deferred to
+    ``knowledge/_composed.py`` and loaded on first attribute access
+    via PEP 562 ``__getattr__``.
 """
 
 __all__ = [
@@ -65,53 +67,21 @@ __all__ = [
 def __getattr__(name: str):
     """Lazy-load heavy knowledge base classes on first access (#1514).
 
-    This avoids pulling redis, llama_index, and chromadb when only
-    ``knowledge.pipeline.*`` subpackages are imported.
+    ``__all__`` is the single source of truth for exported names.
+    Each name is resolved via ``getattr(knowledge._composed, name)``
+    and cached in module globals so subsequent accesses skip this
+    function.
+
+    Note: if a sibling mixin module (knowledge/base.py, etc.) ever
+    adds a top-level ``from knowledge import X``, it will create a
+    circular import through _composed.py.  Keep such imports inside
+    function bodies.
     """
     if name not in __all__:
         raise AttributeError(f"module 'knowledge' has no attribute {name!r}")
 
-    from knowledge._composed import (  # noqa: F811
-        BulkOperationsMixin,
-        CategoriesMixin,
-        CollectionsMixin,
-        DocumentsMixin,
-        FactsMixin,
-        IndexMixin,
-        KnowledgeBase,
-        KnowledgeBaseCore,
-        MetadataMixin,
-        RelationsMixin,
-        SearchMixin,
-        StatsMixin,
-        SuggestionsMixin,
-        TagsMixin,
-        VersioningMixin,
-        get_knowledge_base,
-        reset_knowledge_base,
-    )
+    from knowledge import _composed
 
-    # Populate module globals so subsequent accesses skip __getattr__
-    globals().update(
-        {
-            "KnowledgeBase": KnowledgeBase,
-            "get_knowledge_base": get_knowledge_base,
-            "reset_knowledge_base": reset_knowledge_base,
-            "KnowledgeBaseCore": KnowledgeBaseCore,
-            "StatsMixin": StatsMixin,
-            "IndexMixin": IndexMixin,
-            "SearchMixin": SearchMixin,
-            "FactsMixin": FactsMixin,
-            "DocumentsMixin": DocumentsMixin,
-            "TagsMixin": TagsMixin,
-            "CategoriesMixin": CategoriesMixin,
-            "CollectionsMixin": CollectionsMixin,
-            "SuggestionsMixin": SuggestionsMixin,
-            "MetadataMixin": MetadataMixin,
-            "VersioningMixin": VersioningMixin,
-            "BulkOperationsMixin": BulkOperationsMixin,
-            "RelationsMixin": RelationsMixin,
-        }
-    )
-
-    return globals()[name]
+    value = getattr(_composed, name)
+    globals()[name] = value
+    return value
