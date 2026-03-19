@@ -130,6 +130,11 @@ class Node(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    @property
+    def ansible_target(self) -> str:
+        """Best identifier for Ansible --limit targeting (#1814)."""
+        return self.ansible_name or self.ip_address
+
 
 class Deployment(Base):
     """Deployment model for tracking role deployments."""

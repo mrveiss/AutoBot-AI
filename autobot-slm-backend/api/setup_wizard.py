@@ -184,7 +184,7 @@ async def _generate_dynamic_inventory(
             }
             if node.ssh_port and node.ssh_port != 22:
                 host_vars["ansible_port"] = node.ssh_port
-            inventory_name = node.ansible_name or node.ip_address  # #1814
+            inventory_name = node.ansible_target  # #1814
             hosts[inventory_name] = host_vars
             node_id_to_hostname[node.node_id] = node.hostname
             node_id_to_ip[node.node_id] = node.ip_address

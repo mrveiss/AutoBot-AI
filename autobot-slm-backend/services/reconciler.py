@@ -471,7 +471,7 @@ class ReconcilerService:
         )
 
         # Try to restart the SLM agent via Ansible (#1814: prefer ansible_name)
-        ansible_target = node.ansible_name or node.ip_address
+        ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
             ansible_target,
             "slm-agent",
@@ -758,7 +758,7 @@ class ReconcilerService:
         )
 
         # Try to restart via Ansible (#1814: prefer ansible_name)
-        ansible_target = node.ansible_name or node.ip_address
+        ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
             ansible_target,
             service.service_name,
