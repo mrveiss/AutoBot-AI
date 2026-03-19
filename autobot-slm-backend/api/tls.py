@@ -1017,9 +1017,10 @@ async def _execute_cert_deployment(
     if chain_path:
         extra_vars["chain_file"] = chain_path
 
+    ansible_target = node.ansible_name or node.ip_address  # #1814
     result = await executor.execute_playbook(
         playbook_name="deploy-certificate.yml",
-        limit=[node.hostname],
+        limit=[ansible_target],
         extra_vars=extra_vars,
     )
 

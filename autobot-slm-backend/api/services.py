@@ -375,9 +375,10 @@ async def scan_node_services(
         from services.playbook_executor import get_playbook_executor
 
         executor = get_playbook_executor()
+        ansible_target = node.ansible_name or node.ip_address  # #1814
         result = await executor.execute_playbook(
             playbook_name="discover-services.yml",
-            limit=[node.hostname],
+            limit=[ansible_target],
         )
 
         if not result.get("success"):

@@ -54,6 +54,8 @@ MIGRATIONS = [
     # Issue #1900: consolidate slm_users (integer PK) into users (UUID PK)
     # and drop the now-orphaned slm_users table.
     "consolidate_slm_users_to_uuid",
+    # Issue #1814: add ansible_name column for proper Ansible targeting
+    "add_node_ansible_name",
 ]
 
 
