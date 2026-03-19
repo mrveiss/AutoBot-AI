@@ -91,6 +91,39 @@ class FleetSyncJob:
 _running_tasks: Dict[str, asyncio.Task] = {}
 
 
+async def reconcile_stale_fleet_sync_jobs() -> int:
+    """Mark stale 'running' fleet sync jobs as failed on startup (#1729).
+
+    Called during SLM backend lifespan init. Any job left in 'running'
+    status from a prior process crash is marked 'failed' with a message
+    explaining it was interrupted by a service restart.
+
+    Returns:
+        Number of stale jobs reconciled.
+    """
+    from services.database import db_service
+
+    async with db_service.session() as db:
+        result = await db.execute(
+            select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
+        )
+        stale_jobs = result.scalars().all()
+
+        for job in stale_jobs:
+            job.status = "failed"
+            job.completed_at = datetime.utcnow()
+            logger.warning(
+                "Reconciled stale fleet sync job %s "
+                "(was 'running', marked 'failed')",
+                job.job_id,
+            )
+
+        if stale_jobs:
+            await db.commit()
+
+    return len(stale_jobs)
+
+
 async def _persist_fleet_sync_job(
     job: FleetSyncJob,
 ) -> None:
@@ -1261,6 +1294,16 @@ async def sync_fleet(
     If node_ids is None, syncs all outdated nodes.
     Supports rolling, immediate, graceful, and manual strategies.
     """
+    # Reject if a fleet sync is already running (#1730)
+    running_result = await db.execute(
+        select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
+    )
+    if running_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Fleet sync already in progress",
+        )
+
     # Get target nodes
     if request.node_ids:
         result = await db.execute(
