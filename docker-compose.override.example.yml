@@ -1,0 +1,52 @@
+# AutoBot Docker Compose — Development Override (#1911)
+# Activated automatically by Docker Compose when present.
+# Provides: live code reloading, debug ports, relaxed health checks.
+#
+# Usage:
+#   docker compose up -d                  # Automatically uses this override
+#   docker compose -f docker-compose.yml up -d  # Skip override (production)
+#
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+services:
+  autobot-backend:
+    volumes:
+      - ./autobot-backend:/app/autobot-backend
+      - ./autobot-shared:/app/autobot-shared
+    command: ["python3.12", "-m", "uvicorn", "main:app",
+              "--host", "0.0.0.0", "--port", "8000",
+              "--reload", "--reload-dir", "/app/autobot-backend",
+              "--app-dir", "/app/autobot-backend"]
+    environment:
+      - AUTOBOT_ENVIRONMENT=development
+      - AUTOBOT_LOG_LEVEL=DEBUG
+    ports:
+      - "5678:5678"  # debugpy
+    healthcheck:
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 180s
+
+  autobot-slm:
+    volumes:
+      - ./autobot-slm-backend:/app/autobot-slm-backend
+      - ./autobot-shared:/app/autobot-shared
+    command: ["python3.12", "-m", "uvicorn", "main:app",
+              "--host", "0.0.0.0", "--port", "8000",
+              "--reload", "--reload-dir", "/app/autobot-slm-backend",
+              "--app-dir", "/app/autobot-slm-backend"]
+    environment:
+      - AUTOBOT_ENVIRONMENT=development
+      - AUTOBOT_LOG_LEVEL=DEBUG
+    healthcheck:
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+
+  autobot-frontend:
+    volumes:
+      - ./autobot-frontend/dist:/usr/share/nginx/html

@@ -291,6 +291,7 @@ wheels/
 # === DOCKER ===
 .dockerignore
 Dockerfile.*
+docker-compose.override.yml
 
 # === MISC ===
 .Python
