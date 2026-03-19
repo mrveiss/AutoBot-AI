@@ -140,11 +140,14 @@ async def lifespan(app: FastAPI):
     await _seed_default_agents()
 
     # Reconcile stale fleet sync jobs from prior crash (#1729)
-    from api.code_sync import reconcile_stale_fleet_sync_jobs
+    try:
+        from api.code_sync import reconcile_stale_fleet_sync_jobs
 
-    reconciled = await reconcile_stale_fleet_sync_jobs()
-    if reconciled:
-        logger.warning("Reconciled %d stale fleet sync job(s)", reconciled)
+        reconciled = await reconcile_stale_fleet_sync_jobs()
+        if reconciled:
+            logger.warning("Reconciled %d stale fleet sync job(s)", reconciled)
+    except Exception:
+        logger.exception("Failed to reconcile stale fleet sync jobs")
 
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
