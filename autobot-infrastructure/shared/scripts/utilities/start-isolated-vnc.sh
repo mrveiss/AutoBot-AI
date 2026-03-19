@@ -1,12 +1,25 @@
 #!/bin/bash
-# Start VNC with complete isolation from local display
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Start VNC with complete isolation from local display (#1939)
+# Uses VncAuth (password-protected). Requires ~/.vnc/passwd.
 
-# Kill any existing VNC sessions
-vncserver -kill :2 2>/dev/null
+set -e
+
+# Verify VNC password exists
+if [ ! -f "$HOME/.vnc/passwd" ]; then
+    echo "VNC password not set. Run 'vncpasswd' first."
+    exit 1
+fi
+
+# Kill any existing VNC sessions on display :2
+vncserver -kill :2 2>/dev/null || true
 
 # Kill any XFCE processes that might be on wrong display
-pkill -f xfce4-panel 2>/dev/null
-pkill -f xfdesktop 2>/dev/null
+pkill -f xfce4-panel 2>/dev/null || true
+pkill -f xfdesktop 2>/dev/null || true
 
 # Start VNC in completely clean environment - no local display access
 env -i \
@@ -18,9 +31,8 @@ env -i \
     vncserver :2 \
     -geometry 1920x1080 \
     -depth 24 \
-    -SecurityTypes None \
-    -localhost no \
-    --I-KNOW-THIS-IS-INSECURE
+    -SecurityTypes VncAuth,TLSVnc \
+    -localhost no
 
-echo "VNC server started on display :2"
-echo "Access via: http://192.168.168.17:6080/vnc.html"
+echo "VNC server started on display :2 (password-protected)"
+echo "Connect with a VNC client on port 5902"
