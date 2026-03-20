@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -32,8 +33,6 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -471,9 +470,10 @@ class ReconcilerService:
             message=f"Attempting to restart SLM agent on {node.hostname}",
         )
 
-        # Try to restart the SLM agent via Ansible
+        # Try to restart the SLM agent via Ansible (#1814: prefer ansible_name)
+        ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
-            node.hostname,
+            ansible_target,
             "slm-agent",
         )
 
@@ -757,9 +757,10 @@ class ReconcilerService:
             message=f"Attempting to restart {service.service_name} on {node.hostname}",
         )
 
-        # Try to restart via Ansible
+        # Try to restart via Ansible (#1814: prefer ansible_name)
+        ansible_target = node.ansible_target
         success = await self._restart_service_via_ansible(
-            node.hostname,
+            ansible_target,
             service.service_name,
         )
 

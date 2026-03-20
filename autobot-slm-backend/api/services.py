@@ -375,9 +375,10 @@ async def scan_node_services(
         from services.playbook_executor import get_playbook_executor
 
         executor = get_playbook_executor()
+        ansible_target = node.ansible_target  # #1814
         result = await executor.execute_playbook(
             playbook_name="discover-services.yml",
-            limit=[node.hostname],
+            limit=[ansible_target],
         )
 
         if not result.get("success"):
@@ -388,7 +389,7 @@ async def scan_node_services(
         # Extract service facts from Ansible result
         # service_facts returns ansible_facts.services as a dict
         services_data = (
-            result.get("facts", {}).get(node.hostname, {}).get("services", {})
+            result.get("facts", {}).get(ansible_target, {}).get("services", {})
         )
 
         if not services_data:
