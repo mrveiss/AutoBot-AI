@@ -10,7 +10,7 @@
 # self-hosted runner (github-runner, user 'martins').
 #
 # Usage: Run this script on the self-hosted runner machine (github-runner)
-# as user 'martins': bash setup-runner-pyenv.sh
+# as user 'martins': bash setup-runner-python.sh
 
 set -e  # Exit on error
 
