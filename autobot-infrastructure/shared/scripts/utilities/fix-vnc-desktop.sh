@@ -34,8 +34,10 @@ EOF
 chmod +x /home/kali/.vnc/xstartup
 chown kali:kali /home/kali/.vnc/xstartup
 
-# Create VNC password
-echo "kali" | vncpasswd -f > /home/kali/.vnc/passwd
+# Create VNC password (random, displayed once)
+VNC_PASSWORD="${VNC_PASSWORD:-$(openssl rand -base64 12)}"
+echo "$VNC_PASSWORD" | vncpasswd -f > /home/kali/.vnc/passwd
+echo "Generated VNC password: $VNC_PASSWORD"
 chmod 600 /home/kali/.vnc/passwd
 chown kali:kali /home/kali/.vnc/passwd
 
@@ -109,4 +111,4 @@ ss -tlnp | grep -E "5901|6080" || echo "Waiting for ports..."
 
 echo ""
 echo "Done! Access noVNC at http://localhost:6080"
-echo "VNC password: kali"
+echo "VNC password was displayed during setup (search output above)"

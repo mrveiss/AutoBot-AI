@@ -70,7 +70,9 @@ EOF
 # Ensure password file exists
 mkdir -p /home/kali/.vnc
 if [ ! -f /home/kali/.vnc/passwd ]; then
-    x11vnc -storepasswd kali /home/kali/.vnc/passwd
+    VNC_PASSWORD="${VNC_PASSWORD:-$(openssl rand -base64 12)}"
+    x11vnc -storepasswd "$VNC_PASSWORD" /home/kali/.vnc/passwd
+    echo "Generated VNC password: $VNC_PASSWORD"
 fi
 chown -R kali:kali /home/kali/.vnc
 
@@ -101,4 +103,4 @@ ss -tlnp | grep -E "5900|6080" || echo "Ports not yet listening"
 
 echo ""
 echo "Done! noVNC should be at http://localhost:6080"
-echo "VNC password: kali"
+echo "VNC password was displayed during setup (search output above)"
