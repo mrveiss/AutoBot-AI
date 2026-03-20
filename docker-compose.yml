@@ -146,8 +146,12 @@ services:
       - AUTOBOT_REDIS_PORT=6379
       - CELERY_BROKER_URL=redis://autobot-redis:6379/1
       - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/2
+      - AUTOBOT_CHROMADB_HOST=autobot-chromadb
+      - AUTOBOT_CHROMADB_PORT=8000
     depends_on:
       autobot-redis:
+        condition: service_healthy
+      autobot-chromadb:
         condition: service_healthy
     networks:
       - autobot
@@ -179,8 +183,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 20s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
     networks:
       - autobot
 
