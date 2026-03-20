@@ -92,18 +92,24 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-http://autobot-ollama:11434}
+      - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-autobot-ollama}
+      - AUTOBOT_OLLAMA_PORT=11434
+      - AUTOBOT_OLLAMA_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_BACKEND_HOST=0.0.0.0
       - AUTOBOT_BACKEND_PORT=8000
       - AUTOBOT_LLM_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
       - AUTOBOT_DEFAULT_LLM_MODEL=${AUTOBOT_DEFAULT_LLM_MODEL:-mistral:7b-instruct}
       - AUTOBOT_EMBEDDING_MODEL=${AUTOBOT_EMBEDDING_MODEL:-nomic-embed-text:latest}
       - AUTOBOT_LLM_FAILSAFE_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
-      - AUTOBOT_LLM_FAILSAFE_ENDPOINT=${AUTOBOT_OLLAMA_HOST:-http://autobot-ollama:11434}
+      - AUTOBOT_LLM_FAILSAFE_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
+      - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
     depends_on:
       autobot-redis:
+        condition: service_healthy
+      autobot-chromadb:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/system/health"]
@@ -111,6 +117,42 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    networks:
+      - autobot
+
+  autobot-worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: autobot/backend:latest
+    container_name: autobot-worker
+    restart: unless-stopped
+    command: >
+      python3.12 -m celery -A celery_app worker
+      --loglevel=info
+      --queues=celery,deployments,provisioning,services
+      --concurrency=2
+    working_dir: /app/autobot-backend
+    env_file:
+      - docker/.env.docker
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    environment:
+      - AUTOBOT_ENVIRONMENT=production
+      - AUTOBOT_DEPLOYMENT_MODE=local
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+      - AUTOBOT_REDIS_HOST=autobot-redis
+      - AUTOBOT_REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://autobot-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/2
+      - AUTOBOT_CHROMADB_HOST=autobot-chromadb
+      - AUTOBOT_CHROMADB_PORT=8000
+    depends_on:
+      autobot-redis:
+        condition: service_healthy
+      autobot-chromadb:
+        condition: service_healthy
     networks:
       - autobot
 
@@ -141,8 +183,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 20s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 60s
     networks:
       - autobot
 

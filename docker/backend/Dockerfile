@@ -68,6 +68,10 @@ COPY autobot-shared/ /app/autobot-shared/
 # Copy backend source
 COPY autobot-backend/ /app/autobot-backend/
 
+# Copy shared config files (llm_models, permission_rules) into backend config dir
+COPY autobot-infrastructure/shared/config/llm_models.yaml /app/autobot-backend/config/llm_models.yaml
+COPY autobot-infrastructure/shared/config/permission_rules.yaml /app/autobot-backend/config/permission_rules.yaml
+
 # Create required directories (including /opt/autobot for model storage)
 RUN mkdir -p /app/data /app/logs /app/autobot-backend/data /opt/autobot/data \
     && chown -R autobot:autobot /app /opt/autobot
