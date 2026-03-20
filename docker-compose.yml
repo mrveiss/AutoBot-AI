@@ -1,5 +1,6 @@
 # AutoBot Docker Compose — Single-Node Deployment (#1809)
 # All core services on one machine. Frontend at /, SLM at /slm.
+# Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
 # Usage:
 #   docker compose up -d                    # Start all core services
@@ -10,6 +11,12 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   # ---- Data Layer ----
 
@@ -19,7 +26,7 @@ services:
     restart: unless-stopped
     ports:
       - "${AUTOBOT_REDIS_PORT:-6379}:6379"
-      - "8001:8001"  # RedisInsight UI
+      - "127.0.0.1:8001:8001"  # RedisInsight UI (localhost only)
     volumes:
       - redis_data:/data
     environment:
@@ -29,15 +36,23 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   autobot-postgres:
     image: postgres:16-bookworm
     container_name: autobot-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
@@ -50,15 +65,23 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   autobot-chromadb:
     image: chromadb/chroma:0.5.23
     container_name: autobot-chromadb
     restart: unless-stopped
     ports:
-      - "8100:8000"
+      - "127.0.0.1:8100:8000"
     volumes:
       - chroma_data:/chroma/chroma
     environment:
@@ -69,8 +92,16 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
 
   # ---- Application Layer ----
 
@@ -117,8 +148,17 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
+      - autobot-app
 
   autobot-worker:
     build:
@@ -185,8 +225,17 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-data
+      - autobot-app
 
   autobot-frontend:
     build:
@@ -206,8 +255,16 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
 
   # ---- Optional: Local LLM ----
 
@@ -216,7 +273,7 @@ services:
     container_name: autobot-ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     environment:
@@ -227,8 +284,16 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 8G  # 7B models need ~5.5GB; increase for larger models
+          cpus: '4.0'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - ollama
 
@@ -239,11 +304,24 @@ services:
     container_name: autobot-prometheus
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - monitoring
 
@@ -252,7 +330,7 @@ services:
     container_name: autobot-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
@@ -260,8 +338,21 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - autobot-prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     networks:
-      - autobot
+      - autobot-app
     profiles:
       - monitoring
 
@@ -278,5 +369,7 @@ volumes:
   grafana_data:
 
 networks:
-  autobot:
+  autobot-data:
+    driver: bridge
+  autobot-app:
     driver: bridge
