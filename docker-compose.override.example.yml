@@ -1,10 +1,17 @@
 # AutoBot Docker Compose — Development Override (#1911)
-# Activated automatically by Docker Compose when present.
+# Activated automatically when copied to docker-compose.override.yml.
 # Provides: live code reloading, debug ports, relaxed health checks.
 #
 # Usage:
-#   docker compose up -d                  # Automatically uses this override
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#   docker compose up -d                  # Automatically uses the override
 #   docker compose -f docker-compose.yml up -d  # Skip override (production)
+#
+# Known limitations:
+#   - autobot-shared changes require container restart (pip -e install at boot)
+#   - Frontend: run `npm run build` on host; dist/ is served by nginx (no HMR)
+#   - On WSL2 (core.symlinks=false): symlinks are recreated at container start
+#   - env_file from base compose is still active; these vars override it
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -15,29 +22,52 @@ services:
     volumes:
       - ./autobot-backend:/app/autobot-backend
       - ./autobot-shared:/app/autobot-shared
-    command: ["python3.12", "-m", "uvicorn", "main:app",
-              "--host", "0.0.0.0", "--port", "8000",
-              "--reload", "--reload-dir", "/app/autobot-backend",
-              "--app-dir", "/app/autobot-backend"]
+    command: >
+      bash -c "
+        ln -sf /app/autobot-shared /app/autobot_shared &&
+        ln -sf /app/autobot-shared /app/autobot-backend/autobot_shared &&
+        pip install -e /app/autobot-shared --quiet &&
+        python3.12 -m uvicorn main:app
+          --host 0.0.0.0 --port 8000
+          --reload
+          --reload-dir /app/autobot-backend
+          --reload-dir /app/autobot-shared
+          --app-dir /app/autobot-backend
+      "
     environment:
       - AUTOBOT_ENVIRONMENT=development
       - AUTOBOT_LOG_LEVEL=DEBUG
     ports:
-      - "5678:5678"  # debugpy
+      # debugpy remote debugging — to enable, install debugpy in container:
+      #   docker exec -it autobot-backend pip install debugpy
+      # then restart with: python -m debugpy --listen 0.0.0.0:5678 -m uvicorn ...
+      - "5678:5678"
     healthcheck:
       interval: 30s
       timeout: 15s
       retries: 10
       start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4.0'
 
   autobot-slm:
     volumes:
       - ./autobot-slm-backend:/app/autobot-slm-backend
       - ./autobot-shared:/app/autobot-shared
-    command: ["python3.12", "-m", "uvicorn", "main:app",
-              "--host", "0.0.0.0", "--port", "8000",
-              "--reload", "--reload-dir", "/app/autobot-slm-backend",
-              "--app-dir", "/app/autobot-slm-backend"]
+    command: >
+      bash -c "
+        ln -sf /app/autobot-shared /app/autobot_shared &&
+        pip install -e /app/autobot-shared --quiet &&
+        python3.12 -m uvicorn main:app
+          --host 0.0.0.0 --port 8000
+          --reload
+          --reload-dir /app/autobot-slm-backend
+          --reload-dir /app/autobot-shared
+          --app-dir /app/autobot-slm-backend
+      "
     environment:
       - AUTOBOT_ENVIRONMENT=development
       - AUTOBOT_LOG_LEVEL=DEBUG
@@ -47,6 +77,8 @@ services:
       retries: 10
       start_period: 60s
 
+  # Frontend: mount pre-built dist/ into nginx.
+  # Run `npm run build` on host after changes — no HMR in this mode.
   autobot-frontend:
     volumes:
       - ./autobot-frontend/dist:/usr/share/nginx/html
