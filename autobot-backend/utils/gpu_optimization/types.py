@@ -89,6 +89,7 @@ class GPUCapabilities:
     """GPU hardware capabilities"""
 
     name: str = ""
+    vendor: str = "unknown"  # "nvidia", "amd", "intel", "unknown"
     tensor_cores: bool = False
     mixed_precision: bool = False
     cuda_version: Optional[str] = None
@@ -101,6 +102,7 @@ class GPUCapabilities:
         """Convert to dictionary."""
         return {
             "name": self.name,
+            "vendor": self.vendor,
             "tensor_cores": self.tensor_cores,
             "mixed_precision": self.mixed_precision,
             "cuda_version": self.cuda_version,
@@ -115,6 +117,7 @@ class GPUCapabilities:
         """Create from dictionary."""
         return cls(
             name=data.get("name", ""),
+            vendor=data.get("vendor", "unknown"),
             tensor_cores=data.get("tensor_cores", False),
             mixed_precision=data.get("mixed_precision", False),
             cuda_version=data.get("cuda_version"),
