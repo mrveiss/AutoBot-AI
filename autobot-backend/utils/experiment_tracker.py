@@ -1,0 +1,96 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+Experiment Tracker — structured logging for performance experiments.
+
+Inspired by flash-moe's 58-experiment results.tsv pattern.
+Stores experiments in Redis for cross-session persistence.
+
+Usage:
+    tracker = ExperimentTracker()
+    await tracker.log(
+        name="FMA dequant kernel",
+        hypothesis="Rearranging math enables GPU FMA units",
+        area="inference",
+        measurement={"tok_per_sec_before": 3.90, "tok_per_sec_after": 4.36},
+        result="kept",
+        rationale="12% throughput improvement",
+    )
+"""
+
+import json
+import logging
+import time
+import uuid
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
+
+from autobot_shared.redis_client import get_redis_client
+
+logger = logging.getLogger(__name__)
+
+REDIS_KEY = "autobot:experiments"
+
+
+@dataclass
+class ExperimentRecord:
+    """A single performance experiment record."""
+
+    experiment_id: str
+    name: str
+    hypothesis: str
+    area: str
+    measurement: Dict[str, Any]
+    result: str  # kept, discarded, inconclusive
+    rationale: str
+    timestamp: float = field(default_factory=time.time)
+    related_issue: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dict for Redis storage."""
+        return asdict(self)
+
+
+class ExperimentTracker:
+    """Track performance experiments in Redis."""
+
+    async def log(
+        self,
+        name: str,
+        hypothesis: str,
+        area: str,
+        measurement: Dict[str, Any],
+        result: str,
+        rationale: str,
+        related_issue: Optional[str] = None,
+    ) -> ExperimentRecord:
+        """Log a new experiment."""
+        record = ExperimentRecord(
+            experiment_id=f"exp-{uuid.uuid4().hex[:8]}",
+            name=name,
+            hypothesis=hypothesis,
+            area=area,
+            measurement=measurement,
+            result=result,
+            rationale=rationale,
+            related_issue=related_issue,
+        )
+        redis_client = await get_redis_client(async_client=True, database="analytics")
+        if redis_client:
+            await redis_client.rpush(REDIS_KEY, json.dumps(record.to_dict()))
+        logger.info("Experiment logged: %s -> %s", name, result)
+        return record
+
+    async def list_experiments(
+        self, area: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """List all experiments, optionally filtered by area."""
+        redis_client = await get_redis_client(async_client=True, database="analytics")
+        if not redis_client:
+            return []
+        raw = await redis_client.lrange(REDIS_KEY, 0, -1)
+        records = [json.loads(r) for r in raw]
+        if area:
+            records = [r for r in records if r.get("area") == area]
+        return records
