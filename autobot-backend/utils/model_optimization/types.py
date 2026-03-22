@@ -10,10 +10,76 @@ Contains enums, dataclasses, and type definitions for model optimization.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+# Bytes-per-parameter for common quantization levels (Issue #1966).
+_QUANT_BPP: Dict[str, float] = {
+    "F32": 4.0,
+    "F16": 2.0,
+    "BF16": 2.0,
+    "Q8_0": 1.0,
+    "Q8": 1.0,
+    "Q6_K": 0.75,
+    "Q5_K_M": 0.625,
+    "Q5_K_S": 0.625,
+    "Q5_1": 0.625,
+    "Q5_0": 0.625,
+    "Q4_K_M": 0.5,
+    "Q4_K_S": 0.5,
+    "Q4_1": 0.5,
+    "Q4_0": 0.5,
+    "Q3_K_M": 0.375,
+    "Q3_K_S": 0.375,
+    "Q3_K_L": 0.375,
+    "Q2_K": 0.25,
+    "IQ4_XS": 0.5,
+    "IQ3_XXS": 0.375,
+    "IQ2_XXS": 0.25,
+}
+_DEFAULT_BPP = 0.5
+
+
+def _parse_parameter_billions(parameter_size: str) -> float:
+    """Parse parameter size string to billions (Issue #1966).
+
+    Supports "7B", "13B", "500M", "1.5B". Returns 7.0 on failure.
+    """
+    s = parameter_size.strip().upper()
+    try:
+        if s.endswith("M"):
+            return float(s[:-1]) / 1000.0
+        if s.endswith("B"):
+            return float(s[:-1])
+    except ValueError:
+        pass
+    logger.debug(
+        "Could not parse parameter_size %r, using 7B default",
+        parameter_size,
+    )
+    return 7.0
+
+
+def estimate_model_memory_gb(
+    parameter_size: str,
+    quantization: str,
+    context_tokens: int = 2048,
+) -> float:
+    """Estimate LLM memory requirement in GB (Issue #1966).
+
+    Formula: memory = (params_B * bpp) + (0.000008 * params_B * ctx) + 0.5
+    Components: weight storage + KV cache + CUDA/runtime overhead.
+    """
+    params_b = _parse_parameter_billions(parameter_size)
+    bpp = _QUANT_BPP.get(quantization.strip().upper(), _DEFAULT_BPP)
+    weight_gb = params_b * bpp
+    kv_cache_gb = 0.000008 * params_b * context_tokens
+    return weight_gb + kv_cache_gb + 0.5
 
 
 class TaskComplexity(Enum):
@@ -48,18 +114,20 @@ class SystemResources:
     cpu_percent: float
     memory_percent: float
     available_memory_gb: float
+    gpu_vram_gb: float = 0.0  # Available GPU VRAM in GB (Issue #1966)
 
     def allows_large_models(self) -> bool:
         """Tell if system can handle large models."""
         return self.memory_percent < 70 and self.cpu_percent < 60
 
     def get_max_model_size_gb(self) -> float:
-        """Tell what max model size system can handle."""
-        if self.cpu_percent > 80 or self.available_memory_gb < 4:
-            return 4.0
-        elif self.available_memory_gb < 8:
-            return 8.0
-        return float("inf")
+        """Tell max model memory the system can handle (Issue #1966).
+
+        Uses 80% of available memory as safety margin to prevent OOM.
+        """
+        if self.cpu_percent > 90 or self.available_memory_gb < 2:
+            return 1.0
+        return self.available_memory_gb * 0.8
 
     def to_dict(self) -> Dict[str, float]:
         """Convert to dict for backward compatibility."""
@@ -67,6 +135,7 @@ class SystemResources:
             "cpu_percent": self.cpu_percent,
             "memory_percent": self.memory_percent,
             "available_memory_gb": self.available_memory_gb,
+            "gpu_vram_gb": self.gpu_vram_gb,
         }
 
 
@@ -236,25 +305,33 @@ class ModelInfo:
             # Specialized tasks prefer advanced models
             return self.performance_level == ModelPerformanceLevel.ADVANCED
 
+    def estimate_memory_gb(self, context_tokens: int = 2048) -> float:
+        """Estimate memory this model needs in GB (Issue #1966)."""
+        return estimate_model_memory_gb(
+            self.parameter_size, self.quantization, context_tokens
+        )
+
     def fits_resource_constraints(
         self, resources: "SystemResources | Dict[str, float]"
     ) -> bool:
-        """Check if this model fits within available system resources."""
-        # Support both SystemResources and dict for backward compatibility
-        if isinstance(resources, SystemResources):
-            max_size = resources.get_max_model_size_gb()
-            return self.size_gb <= max_size
-        else:
-            # Dict format (backward compatibility)
-            available_memory_gb = resources.get("available_memory_gb", 8.0)
-            cpu_percent = resources.get("cpu_percent", 50.0)
+        """Check if this model fits within available resources (#1966).
 
-            if cpu_percent > 80 or available_memory_gb < 4:
-                return self.size_gb < 4.0
-            elif available_memory_gb < 8:
-                return self.size_gb < 8.0
-            else:
-                return True  # No resource constraints
+        Uses actual memory estimation instead of static thresholds.
+        Checks GPU VRAM when available (flash-moe explicit budgeting).
+        """
+        estimated = self.estimate_memory_gb()
+        if isinstance(resources, SystemResources):
+            if resources.gpu_vram_gb > 0:
+                if estimated > resources.gpu_vram_gb:
+                    return False
+            max_mem = resources.get_max_model_size_gb()
+            return estimated <= max_mem
+        else:
+            available = resources.get("available_memory_gb", 8.0)
+            cpu = resources.get("cpu_percent", 50.0)
+            if cpu > 90 or available < 2:
+                return estimated <= 1.0
+            return estimated <= available * 0.8
 
     def is_underperforming(self, avg_success_rate: float) -> bool:
         """Check if this model is underperforming compared to average."""
