@@ -56,13 +56,24 @@ class HardwareDetector:
         # Check CPU (always available)
         detected.add("cpu")
 
-        # Check Intel Arc/NPU (placeholder for future OpenVINO integration)
+        # Check Intel Arc/NPU via OpenVINO (Issue #1950 — real detection)
         try:
-            # This would check for Intel Arc graphics and NPU
-            detected.add("intel_arc")
-            detected.add("openvino")
+            import openvino as ov
+
+            core = ov.Core()
+            devices = core.available_devices
+            if "NPU" in devices:
+                detected.add("openvino_npu")
+                detected.add("openvino")
+            if any(d.startswith("GPU") for d in devices):
+                detected.add("intel_arc")
+                detected.add("openvino")
+            elif "CPU" in devices and "openvino" not in detected:
+                detected.add("openvino")
+        except ImportError:
+            logger.debug("OpenVINO not installed — Intel acceleration unavailable")
         except Exception as e:
-            logger.debug("Intel Arc/NPU detection unavailable: %s", e)
+            logger.debug("OpenVINO detection failed: %s", e)
 
         return detected
 
