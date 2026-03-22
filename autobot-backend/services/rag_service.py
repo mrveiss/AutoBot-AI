@@ -10,10 +10,13 @@ Handles initialization, caching, error handling, and graceful degradation.
 """
 
 import asyncio
+import json
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
@@ -25,6 +28,7 @@ from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cach
 from type_defs.common import Metadata
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("rag_service")
 
@@ -303,6 +307,60 @@ class RAGService:
         except Exception as exc:
             logger.debug("Semantic cache store failed: %s", exc)
 
+    async def _emit_retrieval_feedback(
+        self,
+        query: str,
+        retrieved_ids: List[str],
+        ranked_ids: List[str],
+    ) -> None:
+        """Publish a rag_retrieval live event after each search. Issue #1516.
+
+        Fires publish_live_event("global", "rag_retrieval", ...) so that
+        Neural Mesh RAG (#1994) consumers can observe retrieval patterns in
+        real time via the /ws/live WebSocket endpoint.
+        """
+        payload = {
+            "query_text": query,
+            "retrieved_chunk_ids": retrieved_ids,
+            "final_ranked_ids": ranked_ids,
+            "timestamp": time.time(),
+        }
+        try:
+            await publish_live_event("global", "rag_retrieval", payload)
+        except Exception as exc:
+            logger.debug("Live event publish failed (non-fatal): %s", exc)
+
+    async def _store_feedback_in_stream(
+        self,
+        query: str,
+        retrieved_ids: List[str],
+        ranked_ids: List[str],
+    ) -> None:
+        """Append retrieval feedback to a dated Redis stream. Issue #1516.
+
+        Stream key: rag:feedback:{YYYY-MM-DD}  (UTC date).
+        TTL: 7 days so the mesh trainer has a rolling window of signal.
+        """
+        _STREAM_TTL_SECONDS = 7 * 24 * 3600
+        date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+        stream_key = f"rag:feedback:{date_key}"
+        entry = {
+            "query_text": query,
+            "retrieved_chunk_ids": json.dumps(retrieved_ids, ensure_ascii=False),
+            "final_ranked_ids": json.dumps(ranked_ids, ensure_ascii=False),
+            "timestamp": str(time.time()),
+        }
+        try:
+            redis = await get_redis_client(async_client=True, database="main")
+            if redis is None:
+                logger.debug("Redis unavailable; skipping feedback stream write")
+                return
+            await redis.xadd(stream_key, entry)
+            await redis.expire(stream_key, _STREAM_TTL_SECONDS)
+            logger.debug("Wrote retrieval feedback to %s", stream_key)
+        except Exception as exc:
+            logger.debug("Feedback stream write failed (non-fatal): %s", exc)
+
     async def _check_cache_tiers(
         self,
         query: str,
@@ -390,6 +448,19 @@ class RAGService:
         # Store in semantic + topic caches for future lookups
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
+
+        # Emit retrieval feedback event and persist to Redis stream (#1516)
+        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        await self._emit_retrieval_feedback(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=retrieved_ids,
+        )
+        await self._store_feedback_in_stream(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=retrieved_ids,
+        )
 
         return results, metrics
 
