@@ -3,8 +3,17 @@
 # Author: mrveiss
 """Tests for LLM cost tracker pricing. Issue #1961."""
 
+from datetime import date, timedelta
+from unittest.mock import patch
+
 import pytest
-from services.llm_cost_tracker import MODEL_PRICING
+from services.llm_cost_tracker import (
+    MODEL_PRICING,
+    PRICING_STALENESS_DAYS,
+    PRICING_VERSION,
+    LLMCostTracker,
+    _check_pricing_staleness,
+)
 
 
 class TestModelPricingCompleteness:
@@ -20,7 +29,9 @@ class TestModelPricingCompleteness:
         "gpt-4.1-mini",
         "gpt-4.1-nano",
         # OpenAI reasoning
+        "o3",
         "o3-mini",
+        "o4-mini",
         # Google Gemini 2.5
         "gemini-2.5-pro",
         "gemini-2.5-flash",
@@ -97,3 +108,108 @@ class TestModelPricingCompleteness:
         gpt41 = MODEL_PRICING["gpt-4.1"]["input"]
         turbo = MODEL_PRICING["gpt-4-turbo"]["input"]
         assert gpt41 < turbo, "GPT-4.1 input should cost less than GPT-4-turbo"
+
+    def test_o3_more_expensive_than_o3_mini(self):
+        """o3 reasoning should cost more than o3-mini."""
+        o3 = MODEL_PRICING["o3"]["input"]
+        o3_mini = MODEL_PRICING["o3-mini"]["input"]
+        assert o3 >= o3_mini, "o3 input should cost at least as much as o3-mini"
+
+    def test_deepseek_api_models_have_positive_price(self):
+        """DeepSeek hosted API models should have a positive price."""
+        for model in ("deepseek-v3", "deepseek-r1-api"):
+            assert (
+                MODEL_PRICING[model]["input"] > 0
+            ), f"{model} should have positive input price"
+            assert (
+                MODEL_PRICING[model]["output"] > 0
+            ), f"{model} should have positive output price"
+
+    def test_pricing_version_is_valid_iso_date(self):
+        """PRICING_VERSION must be a valid ISO date string."""
+        try:
+            date.fromisoformat(PRICING_VERSION)
+        except ValueError:
+            pytest.fail(f"PRICING_VERSION {PRICING_VERSION!r} is not a valid ISO date")
+
+
+class TestPricingStaleness:
+    """Verify the staleness detection logic. Issue #1961."""
+
+    def test_fresh_pricing_emits_no_warning(self, caplog):
+        """No warning when pricing was updated today."""
+        today = date.today().isoformat()
+        with patch("services.llm_cost_tracker.PRICING_VERSION", today):
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
+                _check_pricing_staleness()
+        assert not any("days old" in r.message for r in caplog.records)
+
+    def test_stale_pricing_emits_warning(self, caplog):
+        """A WARNING must be emitted when the pricing table is past the threshold."""
+        stale_date = (
+            date.today() - timedelta(days=PRICING_STALENESS_DAYS + 1)
+        ).isoformat()
+        with patch("services.llm_cost_tracker.PRICING_VERSION", stale_date):
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
+                _check_pricing_staleness()
+        assert any("days old" in r.message for r in caplog.records)
+
+    def test_invalid_pricing_version_emits_warning(self, caplog):
+        """An invalid PRICING_VERSION string must emit a WARNING."""
+        with patch("services.llm_cost_tracker.PRICING_VERSION", "not-a-date"):
+            import logging
+
+            with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
+                _check_pricing_staleness()
+        assert any("valid ISO date" in r.message for r in caplog.records)
+
+
+class TestUnknownModelFallback:
+    """Verify pattern-based pricing heuristics for unknown models. Issue #1961."""
+
+    def setup_method(self):
+        self.tracker = LLMCostTracker()
+
+    def test_unknown_claude_sonnet_variant_uses_sonnet_pricing(self):
+        """An unrecognised claude-sonnet-X model should be priced like claude-sonnet."""
+        cost = self.tracker.calculate_cost(
+            "claude-sonnet-5-future", 1_000_000, 1_000_000
+        )
+        expected_input = MODEL_PRICING["claude-sonnet-4-20250514"]["input"]
+        expected_output = MODEL_PRICING["claude-sonnet-4-20250514"]["output"]
+        assert cost == round(expected_input + expected_output, 6)
+
+    def test_unknown_claude_opus_variant_uses_opus_pricing(self):
+        """An unrecognised claude-opus-X model should use opus-tier pricing."""
+        cost = self.tracker.calculate_cost("claude-opus-5-future", 1_000_000, 1_000_000)
+        expected_input = MODEL_PRICING["claude-opus-4-20250514"]["input"]
+        expected_output = MODEL_PRICING["claude-opus-4-20250514"]["output"]
+        assert cost == round(expected_input + expected_output, 6)
+
+    def test_unknown_gpt41_variant_uses_gpt41_pricing(self):
+        """An unrecognised gpt-4.1-X model should be resolved via substring match."""
+        # "gpt-4.1-preview" contains "gpt-4.1" so it will match the known key.
+        cost = self.tracker.calculate_cost("gpt-4.1-preview", 1_000_000, 1_000_000)
+        expected_input = MODEL_PRICING["gpt-4.1"]["input"]
+        expected_output = MODEL_PRICING["gpt-4.1"]["output"]
+        assert cost == round(expected_input + expected_output, 6)
+
+    def test_fully_unknown_model_returns_zero(self, caplog):
+        """A model with no name-pattern match must return 0.0 and log a warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="services.llm_cost_tracker"):
+            cost = self.tracker.calculate_cost("totally-unknown-xyz-model", 100, 100)
+        assert cost == 0.0
+        assert any("no pricing entry" in r.message for r in caplog.records)
+
+    def test_known_model_does_not_use_fallback(self):
+        """An exactly-known model must use its own pricing, not the fallback."""
+        exact_pricing = MODEL_PRICING["gpt-4o"]
+        cost = self.tracker.calculate_cost("gpt-4o", 1_000_000, 1_000_000)
+        expected = round(exact_pricing["input"] + exact_pricing["output"], 6)
+        assert cost == expected
