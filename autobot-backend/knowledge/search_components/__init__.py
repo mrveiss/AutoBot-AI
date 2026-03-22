@@ -19,6 +19,7 @@ Note: Package is named search_components to avoid conflict with search.py.
 """
 
 from .analytics import SearchAnalytics, get_analytics
+from .bm25 import BM25Scorer
 from .helpers import (
     build_search_result,
     decode_redis_hash,
@@ -33,6 +34,8 @@ from .response_builder import ResponseBuilder, get_response_builder
 from .tag_filter import TagFilter
 
 __all__ = [
+    # BM25 scoring (#1720)
+    "BM25Scorer",
     # Helper functions
     "decode_redis_hash",
     "matches_category",
