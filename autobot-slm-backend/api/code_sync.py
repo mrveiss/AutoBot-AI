@@ -1850,13 +1850,14 @@ async def run_schedule(
             job_id=None,
         )
 
-    # Create a fleet sync job
-    job = _create_fleet_sync_job(nodes, schedule)
+    # Guard: prevent overlapping fleet sync jobs (#1979)
+    async with _fleet_sync_lock:
+        await assert_no_running_sync(db)
 
-    # Persist job to DB and start background task (#1707)
-    await _persist_fleet_sync_job(job)
-    task = asyncio.create_task(_run_fleet_sync_job(job))
-    _running_tasks[job.job_id] = task
+        job = _create_fleet_sync_job(nodes, schedule)
+        await _persist_fleet_sync_job(job)
+        task = asyncio.create_task(_run_fleet_sync_job(job))
+        _running_tasks[job.job_id] = task
 
     # Update schedule last_run
     schedule.last_run = datetime.utcnow()
