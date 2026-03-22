@@ -6,15 +6,96 @@ Result Reranking Module
 
 Issue #381: Extracted from search.py god class refactoring.
 Contains cross-encoder reranking functionality.
+Issue #2004: Configurable blend weights (RerankWeights, compute_blended_score,
+recency_score) replace the hardcoded 0.8/0.2 split.
 """
 
 import asyncio
 import logging
 import math
 import threading
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RerankWeights:
+    """Blend weights for multi-factor reranker scoring.
+
+    Issue #2004: Replaces the hardcoded 0.8 * reranker + 0.2 * vector split.
+    Weights do not need to sum to 1.0; compute_blended_score normalises them.
+
+    Attributes:
+        reranker: Weight for the cross-encoder reranker score.
+        vector:   Weight for the original vector-similarity score.
+        edge:     Weight for graph edge strength (Neural Mesh phase 3+).
+        recency:  Weight for time-based recency score (Neural Mesh phase 3+).
+    """
+
+    reranker: float = 0.8
+    vector: float = 0.2
+    edge: float = 0.0
+    recency: float = 0.0
+
+
+def recency_score(days_since_access: float) -> float:
+    """Return a 0-1 recency score that decays with age.
+
+    Issue #2004: Used by compute_blended_score when RerankWeights.recency > 0.
+
+    Args:
+        days_since_access: Number of days since the document was last accessed.
+
+    Returns:
+        1.0 for a document accessed today, approaching 0 for very old ones.
+        Formula: 1 / (1 + days_since_access).
+    """
+    return 1.0 / (1.0 + days_since_access)
+
+
+def compute_blended_score(
+    reranker_score: float,
+    vector_score: float,
+    edge_weight: float = 0.0,
+    recency_score_value: float = 0.0,
+    weights: Optional[RerankWeights] = None,
+) -> float:
+    """Compute a weighted blend of reranker, vector, edge, and recency scores.
+
+    Issue #2004: Replaces the hardcoded 0.8 * reranker + 0.2 * original
+    expression in _apply_rerank_scores().
+
+    Weights are normalised so that callers do not need to ensure they sum
+    to exactly 1.0.  If the total weight is 0 the function falls back to
+    the plain reranker score.
+
+    Args:
+        reranker_score:      Sigmoid-normalised cross-encoder score (0-1).
+        vector_score:        Original vector-similarity score (0-1).
+        edge_weight:         Graph edge strength contribution (0-1).
+        recency_score_value: Time-based recency score (0-1).
+        weights:             RerankWeights instance; defaults to RerankWeights().
+
+    Returns:
+        Blended score in the same 0-1 range.
+    """
+    if weights is None:
+        weights = RerankWeights()
+
+    total_weight = weights.reranker + weights.vector + weights.edge + weights.recency
+    if total_weight == 0.0:
+        logger.warning("All RerankWeights are zero; returning raw reranker score")
+        return reranker_score
+
+    blended = (
+        weights.reranker * reranker_score
+        + weights.vector * vector_score
+        + weights.edge * edge_weight
+        + weights.recency * recency_score_value
+    )
+    return blended / total_weight
 
 
 class ResultReranker:
@@ -40,39 +121,58 @@ class ResultReranker:
             self._cross_encoder = await asyncio.to_thread(get_cross_encoder)
         return self._cross_encoder
 
-    def _apply_rerank_scores(self, results: List[Dict[str, Any]], scores: list) -> None:
+    def _apply_rerank_scores(
+        self,
+        results: List[Dict[str, Any]],
+        scores: list,
+        weights: Optional[RerankWeights] = None,
+    ) -> None:
         """Apply rerank scores to results.
 
         Issue #281: Extracted helper.
         Issue #1533: Normalize raw cross-encoder logits with sigmoid
         so rerank_score stays in 0-1 range. Combine with original
         similarity score instead of overwriting it.
+        Issue #2004: Blend is now driven by compute_blended_score() so
+        caller-supplied weights replace the former hardcoded 0.8/0.2 split.
         """
+        effective_weights = weights if weights is not None else RerankWeights()
         for i, result in enumerate(results):
             # Sigmoid: raw logits → 0-1 probability
             normalized = 1.0 / (1.0 + math.exp(-float(scores[i])))
             original_score = result.get("score", 0)
             result["original_score"] = original_score
-            result["rerank_score"] = normalized * 0.8 + original_score * 0.2
+            result["rerank_score"] = compute_blended_score(
+                reranker_score=normalized,
+                vector_score=original_score,
+                weights=effective_weights,
+            )
         results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
         for result in results:
             result["score"] = result.get("rerank_score", 0)
 
     async def rerank(
-        self, query: str, results: List[Dict[str, Any]], top_k: Optional[int] = None
+        self,
+        query: str,
+        results: List[Dict[str, Any]],
+        top_k: Optional[int] = None,
+        weights: Optional[RerankWeights] = None,
     ) -> List[Dict[str, Any]]:
         """
         Rerank results using cross-encoder for improved relevance.
 
         Issue #281 refactor.
+        Issue #2004: Optional weights parameter forwards blend configuration
+        to _apply_rerank_scores(); defaults to RerankWeights() (0.8/0.2).
 
         Args:
-            query: Search query
-            results: Search results to rerank
-            top_k: Optional limit on returned results
+            query:   Search query.
+            results: Search results to rerank.
+            top_k:   Optional limit on returned results.
+            weights: Optional RerankWeights for multi-factor blending.
 
         Returns:
-            Reranked results list
+            Reranked results list.
         """
         try:
             try:
@@ -87,7 +187,7 @@ class ResultReranker:
             cross_encoder = await self._ensure_cross_encoder()
             pairs = [(query, r.get("content", "")) for r in results]
             scores = await asyncio.to_thread(cross_encoder.predict, pairs)
-            self._apply_rerank_scores(results, scores)
+            self._apply_rerank_scores(results, scores, weights=weights)
 
             return results[:top_k] if top_k else results
 

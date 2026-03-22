@@ -9,10 +9,11 @@ Loads configuration from config/complete.yaml under knowledge.rag section.
 All reranking parameters are configurable without code changes.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from constants.model_constants import model_config
+from knowledge.search_components.reranking import RerankWeights
 from type_defs.common import Metadata
 
 from autobot_shared.logging_manager import get_llm_logger
@@ -44,6 +45,8 @@ class RAGConfig:
     # Reranking
     enable_reranking: bool = True
     reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
+    rerank_weights: RerankWeights = field(default_factory=RerankWeights)
 
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
@@ -111,6 +114,9 @@ class RAGConfig:
         """
         Create RAGConfig from dictionary.
 
+        Issue #2004: Deserialises the nested ``rerank_weights`` sub-dict into
+        a RerankWeights dataclass so callers can pass plain YAML structures.
+
         Args:
             config_dict: Configuration dictionary from YAML
 
@@ -118,8 +124,14 @@ class RAGConfig:
             RAGConfig instance
         """
         # Extract only known fields
-        known_fields = {field.name for field in cls.__dataclass_fields__.values()}
+        known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered_config = {k: v for k, v in config_dict.items() if k in known_fields}
+
+        # Deserialise nested RerankWeights when the value is a plain dict.
+        if isinstance(filtered_config.get("rerank_weights"), dict):
+            filtered_config["rerank_weights"] = RerankWeights(
+                **filtered_config["rerank_weights"]
+            )
 
         return cls(**filtered_config)
 
@@ -140,6 +152,13 @@ class RAGConfig:
             "max_context_length": self.max_context_length,
             "enable_reranking": self.enable_reranking,
             "reranking_model": self.reranking_model,
+            # Issue #2004: serialise as a plain dict for YAML round-trips.
+            "rerank_weights": {
+                "reranker": self.rerank_weights.reranker,
+                "vector": self.rerank_weights.vector,
+                "edge": self.rerank_weights.edge,
+                "recency": self.rerank_weights.recency,
+            },
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
