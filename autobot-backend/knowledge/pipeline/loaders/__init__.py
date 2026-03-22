@@ -8,11 +8,13 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
+from knowledge.pipeline.loaders.mesh_seeder import MeshSeeder
 from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 from knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
 
 __all__ = [
     "ChromaDBLoader",
+    "MeshSeeder",
     "RedisGraphLoader",
     "SQLiteLoader",
 ]
