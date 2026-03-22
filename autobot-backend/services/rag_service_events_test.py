@@ -290,3 +290,155 @@ class TestStoreFeedbackInStream:
                 retrieved_ids=["c1"],
                 ranked_ids=["c1"],
             )
+
+
+# =============================================================================
+# Complexity field integration tests (Issue #2024)
+# =============================================================================
+
+
+class TestComplexityInEmitRetrievalFeedback:
+    """Tests that _emit_retrieval_feedback passes complexity in the payload. Issue #2024."""
+
+    def _make_service(self):
+        from services.rag_service import RAGService
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = True
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_payload_contains_complexity_field(self):
+        """Payload includes a complexity field when explicitly provided."""
+        with patch(
+            "services.rag_service.publish_live_event", new_callable=AsyncMock
+        ) as mock_pub:
+            svc = self._make_service()
+            await svc._emit_retrieval_feedback(
+                query="what is redis",
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+                complexity="simple",
+            )
+        payload = mock_pub.call_args[0][2]
+        assert "complexity" in payload
+
+    @pytest.mark.asyncio
+    async def test_payload_complexity_matches_classifier_output(self):
+        """Payload complexity value matches what QueryClassifier returns for the query."""
+        from knowledge.search_components.query_classifier import (
+            QueryClassifier,
+            QueryComplexity,
+        )
+
+        classifier = QueryClassifier()
+        query = "compare redis and memcached advantages and disadvantages"
+        expected_complexity = classifier.classify(query).value
+
+        with patch(
+            "services.rag_service.publish_live_event", new_callable=AsyncMock
+        ) as mock_pub:
+            svc = self._make_service()
+            await svc._emit_retrieval_feedback(
+                query=query,
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+                complexity=expected_complexity,
+            )
+        payload = mock_pub.call_args[0][2]
+        assert payload["complexity"] == expected_complexity
+        assert payload["complexity"] in {c.value for c in QueryComplexity}
+
+    @pytest.mark.asyncio
+    async def test_default_complexity_is_simple(self):
+        """When no complexity is passed, the default is 'simple'."""
+        with patch(
+            "services.rag_service.publish_live_event", new_callable=AsyncMock
+        ) as mock_pub:
+            svc = self._make_service()
+            await svc._emit_retrieval_feedback(
+                query="q",
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+            )
+        payload = mock_pub.call_args[0][2]
+        assert payload["complexity"] == "simple"
+
+
+class TestComplexityInStoreFeedbackInStream:
+    """Tests that _store_feedback_in_stream persists complexity in the stream. Issue #2024."""
+
+    def _make_service(self):
+        from services.rag_service import RAGService
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = True
+        return svc
+
+    def _make_redis_mock(self):
+        mock_redis = AsyncMock()
+        mock_redis.xadd = AsyncMock(return_value=b"1234-0")
+        mock_redis.expire = AsyncMock(return_value=True)
+        return mock_redis
+
+    @pytest.mark.asyncio
+    async def test_stream_entry_contains_complexity_field(self):
+        """Redis stream entry includes a complexity field."""
+        mock_redis = self._make_redis_mock()
+
+        with patch(
+            "services.rag_service.get_redis_client",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ):
+            svc = self._make_service()
+            await svc._store_feedback_in_stream(
+                query="q",
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+                complexity="moderate",
+            )
+
+        entry = mock_redis.xadd.call_args[0][1]
+        assert "complexity" in entry
+
+    @pytest.mark.asyncio
+    async def test_stream_entry_complexity_matches_passed_value(self):
+        """Stream entry complexity equals the value forwarded from the classifier."""
+        mock_redis = self._make_redis_mock()
+
+        with patch(
+            "services.rag_service.get_redis_client",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ):
+            svc = self._make_service()
+            await svc._store_feedback_in_stream(
+                query="trace the chain of events that caused the outage",
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+                complexity="multi_hop",
+            )
+
+        entry = mock_redis.xadd.call_args[0][1]
+        assert entry["complexity"] == "multi_hop"
+
+    @pytest.mark.asyncio
+    async def test_default_complexity_persisted_as_simple(self):
+        """When no complexity kwarg is provided, stream entry defaults to 'simple'."""
+        mock_redis = self._make_redis_mock()
+
+        with patch(
+            "services.rag_service.get_redis_client",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ):
+            svc = self._make_service()
+            await svc._store_feedback_in_stream(
+                query="q",
+                retrieved_ids=["c1"],
+                ranked_ids=["c1"],
+            )
+
+        entry = mock_redis.xadd.call_args[0][1]
+        assert entry["complexity"] == "simple"

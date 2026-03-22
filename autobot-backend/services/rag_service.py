@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from knowledge.search_components.query_classifier import get_query_classifier
 from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
@@ -312,17 +313,25 @@ class RAGService:
         query: str,
         retrieved_ids: List[str],
         ranked_ids: List[str],
+        complexity: str = "simple",
     ) -> None:
         """Publish a rag_retrieval live event after each search. Issue #1516.
 
         Fires publish_live_event("global", "rag_retrieval", ...) so that
         Neural Mesh RAG (#1994) consumers can observe retrieval patterns in
         real time via the /ws/live WebSocket endpoint.
+
+        Args:
+            query: Raw query string.
+            retrieved_ids: Chunk IDs retrieved before reranking.
+            ranked_ids: Final ordered chunk IDs after reranking.
+            complexity: QueryComplexity.value string (Issue #2024).
         """
         payload = {
             "query_text": query,
             "retrieved_chunk_ids": retrieved_ids,
             "final_ranked_ids": ranked_ids,
+            "complexity": complexity,
             "timestamp": time.time(),
         }
         try:
@@ -335,11 +344,18 @@ class RAGService:
         query: str,
         retrieved_ids: List[str],
         ranked_ids: List[str],
+        complexity: str = "simple",
     ) -> None:
         """Append retrieval feedback to a dated Redis stream. Issue #1516.
 
         Stream key: rag:feedback:{YYYY-MM-DD}  (UTC date).
         TTL: 7 days so the mesh trainer has a rolling window of signal.
+
+        Args:
+            query: Raw query string.
+            retrieved_ids: Chunk IDs retrieved before reranking.
+            ranked_ids: Final ordered chunk IDs after reranking.
+            complexity: QueryComplexity.value string (Issue #2024).
         """
         _STREAM_TTL_SECONDS = 7 * 24 * 3600
         date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
@@ -348,6 +364,7 @@ class RAGService:
             "query_text": query,
             "retrieved_chunk_ids": json.dumps(retrieved_ids, ensure_ascii=False),
             "final_ranked_ids": json.dumps(ranked_ids, ensure_ascii=False),
+            "complexity": complexity,
             "timestamp": str(time.time()),
         }
         try:
@@ -449,17 +466,23 @@ class RAGService:
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
 
+        # Classify query complexity for feedback tagging (Issue #2024)
+        classifier = get_query_classifier()
+        complexity = classifier.classify(query)
+
         # Emit retrieval feedback event and persist to Redis stream (#1516)
         retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,
             ranked_ids=retrieved_ids,
+            complexity=complexity.value,
         )
         await self._store_feedback_in_stream(
             query=query,
             retrieved_ids=retrieved_ids,
             ranked_ids=retrieved_ids,
+            complexity=complexity.value,
         )
 
         return results, metrics
