@@ -15,9 +15,11 @@ from datetime import datetime
 from typing import Optional, Tuple
 
 from croniter import croniter
-from models.database import CodeStatus, FleetSyncJobModel, Node, UpdateSchedule
+from fastapi import HTTPException
+from models.database import CodeStatus, Node, UpdateSchedule
 from services.code_distributor import get_code_distributor
 from services.database import db_service
+from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -234,16 +236,18 @@ async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
 
     try:
         async with db_service.session() as db:
-            # Skip if a fleet sync job is already running (#1979)
-            running = await db.execute(
-                select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
-            )
-            if running.scalar_one_or_none():
-                logger.info(
-                    "Skipping schedule '%s' — fleet sync already running",
-                    schedule.name,
-                )
-                return False, "Fleet sync already in progress"
+            # Guard: prevent overlapping fleet sync jobs (#1979).
+            # Hold fleet_sync_lock while checking so concurrent API requests and
+            # background schedule firings cannot both pass the guard simultaneously.
+            async with fleet_sync_lock:
+                try:
+                    await assert_no_running_sync(db)
+                except HTTPException:
+                    logger.warning(
+                        "Skipping schedule '%s' — fleet sync already running (#1979)",
+                        schedule.name,
+                    )
+                    return False, "Fleet sync already in progress"
 
             # Determine target nodes based on schedule configuration
             nodes = await _get_target_nodes(db, schedule)
