@@ -25,7 +25,10 @@ def _get_ssot_ollama_url() -> str:
 
         return get_config().ollama_url
     except Exception:
-        return os.getenv("AUTOBOT_OLLAMA_HOST", "http://127.0.0.1:11434")
+        return os.getenv(
+            "AUTOBOT_OLLAMA_ENDPOINT",
+            os.getenv("AUTOBOT_OLLAMA_HOST", "http://127.0.0.1:11434"),
+        )
 
 
 def _get_ssot_ollama_endpoint() -> str:
