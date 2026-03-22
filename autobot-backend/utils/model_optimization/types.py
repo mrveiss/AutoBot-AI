@@ -327,6 +327,9 @@ class ModelInfo:
             max_mem = resources.get_max_model_size_gb()
             return estimated <= max_mem
         else:
+            gpu_vram = resources.get("gpu_vram_gb", 0.0)
+            if gpu_vram > 0 and estimated > gpu_vram:
+                return False
             available = resources.get("available_memory_gb", 8.0)
             cpu = resources.get("cpu_percent", 50.0)
             if cpu > 90 or available < 2:
