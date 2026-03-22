@@ -46,6 +46,7 @@ from pydantic import BaseModel
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
+from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
 from services.sync_orchestrator import get_sync_orchestrator
@@ -90,9 +91,8 @@ class FleetSyncJob:
 # In-memory tracking for running asyncio tasks only (not job state)
 _running_tasks: Dict[str, asyncio.Task] = {}
 
-# Serialise the check-and-insert in sync_fleet so two concurrent
-# requests cannot both pass the "no running job" guard (#1730, #1937).
-_fleet_sync_lock = asyncio.Lock()
+# fleet_sync_lock and assert_no_running_sync live in services/fleet_sync_guard.py
+# so schedule_executor.py can also import them without a circular dependency (#1979).
 
 
 async def reconcile_stale_fleet_sync_jobs() -> int:
@@ -127,22 +127,6 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
             await db.commit()
 
     return count
-
-
-async def assert_no_running_sync(db) -> None:
-    """Raise 409 if a fleet sync is already running (#1730).
-
-    Shared guard for sync_fleet, run_schedule, and execute_schedule.
-    Must be called inside ``_fleet_sync_lock`` to prevent TOCTOU races.
-    """
-    running_result = await db.execute(
-        select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
-    )
-    if running_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Fleet sync already in progress",
-        )
 
 
 async def _persist_fleet_sync_job(
@@ -1317,7 +1301,7 @@ async def sync_fleet(
     Supports rolling, immediate, graceful, and manual strategies.
     """
     # Lock covers check-through-persist to prevent TOCTOU race (#1937)
-    async with _fleet_sync_lock:
+    async with fleet_sync_lock:
         await assert_no_running_sync(db)
 
         # Get target nodes
@@ -1851,7 +1835,7 @@ async def run_schedule(
         )
 
     # Guard: prevent overlapping fleet sync jobs (#1979)
-    async with _fleet_sync_lock:
+    async with fleet_sync_lock:
         await assert_no_running_sync(db)
 
         job = _create_fleet_sync_job(nodes, schedule)
