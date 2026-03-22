@@ -18,13 +18,18 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
+
+# Pricing was last verified on this date. A WARNING is emitted at import time
+# if this is older than PRICING_STALENESS_DAYS days. (#1961)
+PRICING_VERSION: str = "2026-03-22"
+PRICING_STALENESS_DAYS: int = 90
 
 
 class LLMProvider(str, Enum):
@@ -65,7 +70,9 @@ MODEL_PRICING: Dict[str, Dict[str, float]] = {
     # OpenAI reasoning models
     "o1": {"input": 15.00, "output": 60.00},
     "o1-mini": {"input": 3.00, "output": 12.00},
+    "o3": {"input": 2.00, "output": 8.00},
     "o3-mini": {"input": 1.10, "output": 4.40},
+    "o4-mini": {"input": 1.10, "output": 4.40},
     # Google Gemini 2.5 (2025-2026)
     "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
     "gemini-2.5-flash": {"input": 0.15, "output": 0.60},
@@ -73,6 +80,9 @@ MODEL_PRICING: Dict[str, Dict[str, float]] = {
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
     "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    # DeepSeek hosted API models (2025)
+    "deepseek-v3": {"input": 0.27, "output": 1.10},
+    "deepseek-r1-api": {"input": 0.55, "output": 2.19},
     # Local/Ollama models (free)
     "llama3": {"input": 0.0, "output": 0.0},
     "llama3.1": {"input": 0.0, "output": 0.0},
@@ -90,6 +100,37 @@ MODEL_PRICING: Dict[str, Dict[str, float]] = {
     "gemma2": {"input": 0.0, "output": 0.0},
     "gemma3": {"input": 0.0, "output": 0.0},
 }
+
+
+def _check_pricing_staleness() -> None:
+    """
+    Emit a WARNING if PRICING_VERSION is older than PRICING_STALENESS_DAYS.
+
+    Called once at module import time. Helps operators discover when the
+    pricing table needs a refresh. Issue #1961.
+    """
+    try:
+        version_date = date.fromisoformat(PRICING_VERSION)
+    except ValueError:
+        logger.warning(
+            "PRICING_VERSION %r is not a valid ISO date; cannot check staleness.",
+            PRICING_VERSION,
+        )
+        return
+
+    age_days = (date.today() - version_date).days
+    if age_days > PRICING_STALENESS_DAYS:
+        logger.warning(
+            "LLM pricing table is %d days old (last verified %s, threshold %d days). "
+            "Review MODEL_PRICING in llm_cost_tracker.py and update PRICING_VERSION. "
+            "Issue #1961.",
+            age_days,
+            PRICING_VERSION,
+            PRICING_STALENESS_DAYS,
+        )
+
+
+_check_pricing_staleness()
 
 
 @dataclass
@@ -220,11 +261,63 @@ class LLMCostTracker:
             )
         return self._redis_client
 
+    # Pattern-based pricing fallbacks for unknown models (#1961).
+    # Ordered from most specific to least specific.
+    _FALLBACK_PATTERNS: List[tuple] = [
+        ("claude-opus", "claude-opus-4-20250514"),
+        ("claude-sonnet", "claude-sonnet-4-20250514"),
+        ("claude-haiku", "claude-haiku-4-5-20251001"),
+        ("claude", "claude-sonnet-4-20250514"),
+        ("gpt-4o", "gpt-4o"),
+        ("gpt-4.1", "gpt-4.1"),
+        ("gpt-4", "gpt-4-turbo"),
+        ("gpt-3.5", "gpt-3.5-turbo"),
+        ("o1-mini", "o1-mini"),
+        ("o3-mini", "o3-mini"),
+        ("o4-mini", "o4-mini"),
+        ("o1", "o1"),
+        ("o3", "o3"),
+        ("gemini-2.5", "gemini-2.5-pro"),
+        ("gemini-2.0", "gemini-2.0-flash"),
+        ("gemini-1.5", "gemini-1.5-pro"),
+        ("gemini", "gemini-2.0-flash"),
+        ("deepseek-v3", "deepseek-v3"),
+        ("deepseek-r1", "deepseek-r1-api"),
+    ]
+
+    def _estimate_pricing_by_pattern(
+        self, model_lower: str
+    ) -> Optional[Dict[str, float]]:
+        """
+        Return pricing estimate for an unknown model using name-pattern heuristics.
+
+        Iterates _FALLBACK_PATTERNS in order and returns the pricing for the
+        first pattern that matches as a substring. Returns None if no pattern
+        matches (caller should treat the model as local/free). Issue #1961.
+        """
+        for pattern, reference_model in self._FALLBACK_PATTERNS:
+            if pattern in model_lower:
+                pricing = MODEL_PRICING.get(reference_model)
+                if pricing:
+                    logger.warning(
+                        "Unknown model %r matched fallback pattern %r; "
+                        "using %r pricing as estimate. Verify in MODEL_PRICING. (#1961)",
+                        model_lower,
+                        pattern,
+                        reference_model,
+                    )
+                    return pricing
+        return None
+
     def calculate_cost(
         self, model: str, input_tokens: int, output_tokens: int
     ) -> float:
         """
         Calculate cost for a given model and token counts.
+
+        For models not in MODEL_PRICING, a pattern-based heuristic is applied
+        before falling back to $0.00 for unrecognised (presumed local) models.
+        Issue #1961 added the heuristic fallback.
 
         Args:
             model: Model name (e.g., "claude-3-5-sonnet-20241022")
@@ -237,7 +330,7 @@ class LLMCostTracker:
         # Normalize model name (handle variations)
         model_lower = model.lower()
 
-        # Find matching pricing
+        # Exact / prefix / substring match against known pricing keys
         pricing = None
         for model_key, price_data in MODEL_PRICING.items():
             if model_key.lower() in model_lower or model_lower in model_key.lower():
@@ -245,8 +338,16 @@ class LLMCostTracker:
                 break
 
         if pricing is None:
-            # Default to zero for unknown models (assume local/free)
-            logger.warning("Unknown model pricing for: %s, assuming free", model)
+            # Pattern-based heuristic for unknown cloud models (#1961)
+            pricing = self._estimate_pricing_by_pattern(model_lower)
+
+        if pricing is None:
+            logger.warning(
+                "Unknown model %r has no pricing entry and matched no fallback pattern; "
+                "cost recorded as $0.00. Add to MODEL_PRICING in llm_cost_tracker.py "
+                "if this is a paid API model. (#1961)",
+                model,
+            )
             return 0.0
 
         # Calculate cost (pricing is per 1M tokens)
