@@ -1,4 +1,4 @@
-# AutoBot Docker Compose — Development Override (#1911)
+# AutoBot Docker Compose — Development Override (#1911, #1985)
 # Activated automatically when copied to docker-compose.override.yml.
 # Provides: live code reloading, debug ports, relaxed health checks.
 #
@@ -8,10 +8,19 @@
 #   docker compose -f docker-compose.yml up -d  # Skip override (production)
 #
 # Known limitations:
-#   - autobot-shared changes require container restart (pip -e install at boot)
-#   - Frontend: run `npm run build` on host; dist/ is served by nginx (no HMR)
-#   - On WSL2 (core.symlinks=false): symlinks are recreated at container start
+#   - autobot-shared changes require container restart (pip -e at boot)
+#   - Frontend: run `npm run build` on host; dist/ is served by nginx
 #   - env_file from base compose is still active; these vars override it
+#
+# Dev entrypoint (#1985):
+#   Bind mounts replace directories that the Dockerfile populated with
+#   symlinks and pip-installed packages.  The dev-entrypoint.sh scripts
+#   run at container start to:
+#     1. Recreate symlinks destroyed by bind mounts
+#     2. Re-install autobot-shared as editable pip package
+#     3. Exec the original command (uvicorn with --reload)
+#   This fixes ImportError on WSL2 where symlinks cannot be created
+#   on the host filesystem (core.symlinks=false).
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
@@ -19,28 +28,29 @@
 
 services:
   autobot-backend:
+    # Dev entrypoint restores symlinks and pip packages before starting
+    # the application. See docker/backend/dev-entrypoint.sh for details.
+    entrypoint: ["/app/docker/backend/dev-entrypoint.sh"]
     volumes:
       - ./autobot-backend:/app/autobot-backend
       - ./autobot-shared:/app/autobot-shared
+      # Mount the dev entrypoint script into the container
+      - ./docker/backend/dev-entrypoint.sh:/app/docker/backend/dev-entrypoint.sh
     command: >
-      bash -c "
-        ln -sf /app/autobot-shared /app/autobot_shared &&
-        ln -sf /app/autobot-shared /app/autobot-backend/autobot_shared &&
-        pip install -e /app/autobot-shared --quiet &&
-        python3.12 -m uvicorn main:app
-          --host 0.0.0.0 --port 8000
-          --reload
-          --reload-dir /app/autobot-backend
-          --reload-dir /app/autobot-shared
-          --app-dir /app/autobot-backend
-      "
+      python3.12 -m uvicorn main:app
+        --host 0.0.0.0 --port 8000
+        --reload
+        --reload-dir /app/autobot-backend
+        --reload-dir /app/autobot-shared
+        --app-dir /app/autobot-backend
     environment:
       - AUTOBOT_ENVIRONMENT=development
       - AUTOBOT_LOG_LEVEL=DEBUG
     ports:
       # debugpy remote debugging — to enable, install debugpy in container:
       #   docker exec -it autobot-backend pip install debugpy
-      # then restart with: python -m debugpy --listen 0.0.0.0:5678 -m uvicorn ...
+      # then restart with:
+      #   python -m debugpy --listen 0.0.0.0:5678 -m uvicorn ...
       - "5678:5678"
     healthcheck:
       interval: 30s
@@ -54,20 +64,21 @@ services:
           cpus: '4.0'
 
   autobot-slm:
+    # Dev entrypoint restores symlinks, pip packages, and runs migrations
+    # before starting the application. Replaces the production entrypoint.
+    entrypoint: ["/app/docker/slm/dev-entrypoint.sh"]
     volumes:
       - ./autobot-slm-backend:/app/autobot-slm-backend
       - ./autobot-shared:/app/autobot-shared
+      # Mount the dev entrypoint script into the container
+      - ./docker/slm/dev-entrypoint.sh:/app/docker/slm/dev-entrypoint.sh
     command: >
-      bash -c "
-        ln -sf /app/autobot-shared /app/autobot_shared &&
-        pip install -e /app/autobot-shared --quiet &&
-        python3.12 -m uvicorn main:app
-          --host 0.0.0.0 --port 8000
-          --reload
-          --reload-dir /app/autobot-slm-backend
-          --reload-dir /app/autobot-shared
-          --app-dir /app/autobot-slm-backend
-      "
+      python3.12 -m uvicorn main:app
+        --host 0.0.0.0 --port 8000
+        --reload
+        --reload-dir /app/autobot-slm-backend
+        --reload-dir /app/autobot-shared
+        --app-dir /app/autobot-slm-backend
     environment:
       - AUTOBOT_ENVIRONMENT=development
       - AUTOBOT_LOG_LEVEL=DEBUG
