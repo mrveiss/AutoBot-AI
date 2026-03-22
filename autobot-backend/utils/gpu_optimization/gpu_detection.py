@@ -5,20 +5,38 @@
 GPU Detection Module
 
 Issue #381: Extracted from gpu_acceleration_optimizer.py god class refactoring.
+Issue #1959: Expanded beyond RTX to support all NVIDIA, AMD, and Intel GPUs.
 Contains GPU availability checking and capability detection.
 """
 
 import logging
 import subprocess
+from pathlib import Path
 from typing import Any, Dict
 
 from .types import GPUCapabilities
 
 logger = logging.getLogger(__name__)
 
+# NVIDIA GPU families known to have tensor cores
+_TENSOR_CORE_FAMILIES = {
+    "RTX",
+    "A100",
+    "A10",
+    "A30",
+    "A40",
+    "A6000",
+    "H100",
+    "H200",
+    "L40",
+    "L4",
+    "T4",
+    "V100",
+}
 
-def check_gpu_availability() -> bool:
-    """Check if NVIDIA GPU is available."""
+
+def _check_nvidia_gpu() -> bool:
+    """Check if an NVIDIA GPU is available via nvidia-smi."""
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
@@ -26,9 +44,70 @@ def check_gpu_availability() -> bool:
             text=True,
             timeout=5,
         )
-        return result.returncode == 0 and "RTX" in result.stdout
+        return result.returncode == 0 and len(result.stdout.strip()) > 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
     except Exception:
         return False
+
+
+def _check_amd_gpu() -> bool:
+    """Check if an AMD GPU is available via rocm-smi or sysfs."""
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showid"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    except Exception:
+        pass
+    # Sysfs fallback: AMD vendor ID = 0x1002
+    return _check_sysfs_vendor("0x1002")
+
+
+def _check_intel_gpu() -> bool:
+    """Check if an Intel discrete GPU is available via sysfs."""
+    # Intel vendor ID = 0x8086
+    return _check_sysfs_vendor("0x8086")
+
+
+def _check_sysfs_vendor(vendor_id: str) -> bool:
+    """Check sysfs DRM devices for a specific PCI vendor ID."""
+    drm_path = Path("/sys/class/drm")
+    if not drm_path.exists():
+        return False
+    try:
+        for card_dir in drm_path.iterdir():
+            vendor_file = card_dir / "device" / "vendor"
+            if vendor_file.exists():
+                content = vendor_file.read_text(encoding="utf-8").strip()
+                if content == vendor_id:
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def _has_tensor_cores(gpu_name: str) -> bool:
+    """Check if an NVIDIA GPU has tensor cores based on name."""
+    name_upper = gpu_name.upper()
+    return any(family in name_upper for family in _TENSOR_CORE_FAMILIES)
+
+
+def check_gpu_availability() -> bool:
+    """Check if any supported GPU is available."""
+    if _check_nvidia_gpu():
+        return True
+    if _check_amd_gpu():
+        return True
+    if _check_intel_gpu():
+        return True
+    return False
 
 
 def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
@@ -38,8 +117,25 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
     if not gpu_available:
         return capabilities
 
+    # Try NVIDIA first (most common for ML workloads)
+    if _check_nvidia_gpu():
+        capabilities = _detect_nvidia_capabilities(capabilities)
+    elif _check_amd_gpu():
+        capabilities.vendor = "amd"
+        capabilities = _detect_amd_capabilities(capabilities)
+    elif _check_intel_gpu():
+        capabilities.vendor = "intel"
+        capabilities.name = "Intel GPU (detected via sysfs)"
+
+    return capabilities
+
+
+def _detect_nvidia_capabilities(
+    capabilities: GPUCapabilities,
+) -> GPUCapabilities:
+    """Detect NVIDIA GPU capabilities via nvidia-smi + pynvml."""
+    capabilities.vendor = "nvidia"
     try:
-        # Get detailed GPU information
         result = subprocess.run(
             [
                 "nvidia-smi",
@@ -50,7 +146,6 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
             text=True,
             timeout=10,
         )
-
         if result.returncode == 0:
             parts = result.stdout.strip().split(", ")
             if len(parts) >= 3:
@@ -61,19 +156,60 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
                 capabilities.name = gpu_name
                 capabilities.memory_gb = round(memory_mb / 1024, 1)
                 capabilities.cuda_version = cuda_version
-                capabilities.tensor_cores = "RTX" in gpu_name
+                capabilities.tensor_cores = _has_tensor_cores(gpu_name)
                 capabilities.mixed_precision = True
-
-        # Try to get compute capability using nvidia-ml-py if available
-        capabilities = _detect_detailed_capabilities(capabilities)
-
     except Exception as e:
-        logger.error("Error detecting GPU capabilities: %s", e)
+        logger.error("Error detecting NVIDIA GPU capabilities: %s", e)
 
+    capabilities = _detect_detailed_capabilities(capabilities)
     return capabilities
 
 
-def _detect_detailed_capabilities(capabilities: GPUCapabilities) -> GPUCapabilities:
+def _detect_amd_capabilities(
+    capabilities: GPUCapabilities,
+) -> GPUCapabilities:
+    """Detect AMD GPU capabilities via rocm-smi."""
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showproductname"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            for line in result.stdout.strip().splitlines():
+                if "GPU" in line or ":" in line:
+                    capabilities.name = line.strip()
+                    break
+
+        mem_result = subprocess.run(
+            ["rocm-smi", "--showmeminfo", "vram"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if mem_result.returncode == 0:
+            for line in mem_result.stdout.splitlines():
+                if "total" in line.lower():
+                    parts = line.split()
+                    for part in parts:
+                        try:
+                            mem_mb = float(part)
+                            if mem_mb > 100:
+                                capabilities.memory_gb = round(mem_mb / 1024, 1)
+                                break
+                        except ValueError:
+                            continue
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    except Exception as e:
+        logger.error("Error detecting AMD GPU capabilities: %s", e)
+    return capabilities
+
+
+def _detect_detailed_capabilities(
+    capabilities: GPUCapabilities,
+) -> GPUCapabilities:
     """Detect detailed capabilities using pynvml if available."""
     try:
         import pynvml
@@ -84,7 +220,6 @@ def _detect_detailed_capabilities(capabilities: GPUCapabilities) -> GPUCapabilit
         major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
         capabilities.compute_capability = f"{major}.{minor}"
 
-        # Get additional device info
         multiprocessor_count = pynvml.nvmlDeviceGetMultiProcessorCount(handle)
         capabilities.multiprocessor_count = multiprocessor_count
 
@@ -98,7 +233,9 @@ def _detect_detailed_capabilities(capabilities: GPUCapabilities) -> GPUCapabilit
     return capabilities
 
 
-def get_gpu_capabilities_dict(gpu_available: bool) -> Dict[str, Any]:
+def get_gpu_capabilities_dict(
+    gpu_available: bool,
+) -> Dict[str, Any]:
     """Get GPU capabilities as a dictionary (legacy interface)."""
     capabilities = detect_gpu_capabilities(gpu_available)
     return capabilities.to_dict()
