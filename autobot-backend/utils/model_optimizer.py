@@ -394,11 +394,16 @@ class ModelOptimizer:
     def _filter_models_by_resources(
         self, models: List[ModelInfo], resources: Dict[str, float]
     ) -> List[ModelInfo]:
-        """Filter models based on available system resources."""
+        """Filter models based on available system resources (Issue #1966).
+
+        Forwards gpu_vram_gb from the dict when present so VRAM-aware
+        filtering is not silently bypassed on the legacy dict API path.
+        """
         system_resources = SystemResources(
             cpu_percent=resources.get("cpu_percent", 50.0),
             memory_percent=resources.get("memory_percent", 50.0),
             available_memory_gb=resources.get("available_memory_gb", 8.0),
+            gpu_vram_gb=resources.get("gpu_vram_gb", 0.0),
         )
         return self._model_selector.filter_by_resources(models, system_resources)
 

@@ -24,6 +24,7 @@ from .types import (
     SystemResources,
     TaskComplexity,
     TaskRequest,
+    estimate_model_memory_gb,
 )
 
 __all__ = [
@@ -36,6 +37,8 @@ __all__ = [
     # Constants
     "CODE_TASK_TYPES",
     "CODE_COMPLEXITY_KEYWORDS",
+    # Memory estimation (Issue #1966)
+    "estimate_model_memory_gb",
     # Analyzers and selectors
     "SystemResourceAnalyzer",
     "ModelPerformanceTracker",
