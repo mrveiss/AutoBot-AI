@@ -3101,6 +3101,18 @@ async def _run_indexing_phases(
     )
     update_phase("scan", "completed")
 
+    # Issue #1712: Log analysis result counts before batch storage
+    logger.info(
+        "[Task %s] #1712 pre-store: %d functions, %d classes, "
+        "%d problems, %d hardcodes, %d files",
+        task_id,
+        len(analysis_results.get("all_functions", [])),
+        len(analysis_results.get("all_classes", [])),
+        len(analysis_results.get("all_problems", [])),
+        len(analysis_results.get("all_hardcodes", [])),
+        len(analysis_results.get("files", {})),
+    )
+
     batch_ids, batch_documents, batch_metadatas = await _prepare_batch_data(
         analysis_results,
         task_id,
@@ -3252,6 +3264,51 @@ async def _run_indexing_subprocess(
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
 
 
+async def _verify_chromadb_storage(task_id: str, analysis_results: Dict) -> None:
+    """Verify ChromaDB actually contains the indexed data (#1712).
+
+    Queries ChromaDB after indexing to compare expected vs actual
+    item counts. Logs WARNING if data appears to be missing.
+    """
+    try:
+        collection = await get_code_collection_async()
+        if not collection:
+            logger.warning(
+                "[Task %s] #1712 verify: ChromaDB collection unavailable",
+                task_id,
+            )
+            return
+
+        total_count = await collection.count()
+        expected_funcs = len(analysis_results.get("all_functions", []))
+        expected_classes = len(analysis_results.get("all_classes", []))
+        expected_problems = len(analysis_results.get("all_problems", []))
+        expected_total = expected_funcs + expected_classes + 1  # +1 stats
+
+        logger.info(
+            "[Task %s] #1712 verify: ChromaDB has %d items "
+            "(expected ~%d: %d funcs + %d classes + 1 stats + "
+            "%d problems stored during scan)",
+            task_id,
+            total_count,
+            expected_total,
+            expected_funcs,
+            expected_classes,
+            expected_problems,
+        )
+
+        if total_count < expected_total // 2 and expected_total > 10:
+            logger.warning(
+                "[Task %s] #1712 DATA LOSS DETECTED: ChromaDB has %d "
+                "items but expected ~%d. Check batch storage logs.",
+                task_id,
+                total_count,
+                expected_total,
+            )
+    except Exception as e:
+        logger.warning("[Task %s] #1712 verify failed: %s", task_id, e)
+
+
 async def do_indexing_with_progress(
     task_id: str, root_path: str, source_id: Optional[str] = None
 ):
@@ -3298,6 +3355,10 @@ async def do_indexing_with_progress(
         )
 
         update_phase("finalize", "running")
+
+        # Issue #1712: Post-indexing verification — log expected vs actual
+        await _verify_chromadb_storage(task_id, analysis_results)
+
         _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
         # #1179: Persist final completed state to Redis
