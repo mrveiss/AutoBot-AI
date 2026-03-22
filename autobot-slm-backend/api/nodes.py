@@ -1539,6 +1539,17 @@ async def node_heartbeat(
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
 
+        # Auto-populate ansible_name from agent's OS hostname (#1986)
+        if not node.ansible_name and heartbeat.extra_data:
+            os_hostname = heartbeat.extra_data.get("hostname")
+            if os_hostname and os_hostname.strip():
+                node.ansible_name = os_hostname.strip()
+                logger.info(
+                    "Auto-set ansible_name='%s' for node %s",
+                    node.ansible_name,
+                    node_id,
+                )
+
         latest_version = await _update_heartbeat_code_status(
             db, node, heartbeat.extra_data
         )
