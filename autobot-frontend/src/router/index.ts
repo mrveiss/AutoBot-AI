@@ -483,7 +483,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Component Showcase',
       icon: 'fas fa-palette',
       description: 'Technical Precision component library',
-      hideInNav: false, // Set to true to hide from navigation
+      hideInNav: true, // Issue #2071: Dev-only component showcase, hidden from navigation
       requiresAuth: false
     }
   },
