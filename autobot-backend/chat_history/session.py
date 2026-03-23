@@ -284,7 +284,6 @@ class SessionMixin:
         Load a specific chat session with Redis cache-first strategy.
 
         Raises:
-            FileNotFoundError: If the session file exists but cannot be opened.
             PermissionError: If access to the session file is denied.
             ValueError: If the session data is corrupted or cannot be decoded.
 

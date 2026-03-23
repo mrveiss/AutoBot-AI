@@ -196,7 +196,11 @@ class MessagesMixin:
         Returns:
             List[Dict[str, Any]]: List of messages in the session.
         """
-        messages = await self.load_session(session_id)
+        try:
+            messages = await self.load_session(session_id)
+        except (PermissionError, ValueError) as exc:
+            logger.error("Failed to load session %s: %s", session_id, exc)
+            return []
 
         # Use model-aware limit if not explicitly provided
         if limit is None:
@@ -220,7 +224,11 @@ class MessagesMixin:
         Returns:
             int: Number of messages in the session.
         """
-        messages = await self.load_session(session_id)
+        try:
+            messages = await self.load_session(session_id)
+        except (PermissionError, ValueError) as exc:
+            logger.error("Failed to load session %s: %s", session_id, exc)
+            return 0
         return len(messages)
 
     def _message_matches_filter(
