@@ -8,15 +8,63 @@ export interface ApiResponse<T = any> {
 }
 
 // Chat API Types
+//
+// Canonical ChatMessage type — single source of truth for all chat messages.
+// Matches backend ChatMessageRequest (content, role, message_type, session_id)
+// while preserving frontend-specific fields (sender, type, status, attachments).
+// Issue #2066: Unified from four divergent definitions.
+
+/** All valid sender/speaker values across frontend rendering contexts. */
+export type MessageSender =
+  | 'user'
+  | 'assistant'
+  | 'bot'        // Legacy alias for 'assistant' in some WebSocket paths
+  | 'system'
+  | 'error'
+  | 'thought'
+  | 'tool-code'
+  | 'tool-output';
+
+/** Display-layer message type used for filtering in the chat UI. */
+export type ChatMessageDisplayType =
+  | 'thought'
+  | 'planning'
+  | 'debug'
+  | 'utility'
+  | 'sources'
+  | 'json'
+  | 'response'
+  | 'message'
+  | 'command_approval_request'
+  | 'overseer_plan'
+  | 'overseer_step'
+  | 'terminal_output'
+  | 'terminal_command';
+
 export interface ChatMessage {
   id: string;
+  /** Message text content — canonical field name, matches backend `content`. */
   content: string;
-  sender: 'user' | 'assistant' | 'system';
-  timestamp: string;
-  messageType?: string;
-  type?: string;
+  /** Speaker identity for frontend rendering. Backend equivalent: `role`. */
+  sender: MessageSender;
+  timestamp: string | Date;
+  /** Backend message type identifier (snake_case, e.g. 'llm_response'). */
+  message_type?: string;
+  /** Frontend display type for UI filtering (thought, planning, debug, etc.). */
+  type?: ChatMessageDisplayType | string;
+  /** Session this message belongs to (matches backend `session_id`). */
+  session_id?: string;
+  /** Delivery status — frontend-only, not persisted to backend. */
+  status?: 'sending' | 'sent' | 'error';
+  /** Error detail when status is 'error' — frontend-only. */
+  error?: string;
   attachments?: FileAttachment[];
-  metadata?: Record<string, any>;
+  metadata?: {
+    model?: string;
+    tokens?: number;
+    duration?: number;
+    [key: string]: any;
+  };
 }
 
 export interface ChatSession {
