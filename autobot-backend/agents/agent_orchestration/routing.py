@@ -51,6 +51,56 @@ class AgentRouter:
         self.agent_capabilities = agent_capabilities
         self.llm_interface = llm_interface
 
+    async def _check_learned_strategy(
+        self, request: str, context: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Query TaskPatternLearner for a learned strategy (#2105).
+
+        Checks Redis for a previously learned strategy matching the
+        task type derived from context or quick-route analysis.
+        """
+        task_type = (context or {}).get("task_type")
+        if not task_type:
+            quick = self.quick_route_analysis(request)
+            agent = quick.get("primary_agent")
+            task_type = agent.value if hasattr(agent, "value") else str(agent)
+
+        try:
+            from agents.task_pattern_learner import TaskPatternLearner
+
+            learner = TaskPatternLearner()
+            strategy = await learner.get_learned_strategy(task_type)
+            if strategy and strategy.confidence > 0.7:
+                logger.info(
+                    "Using learned strategy for %s (confidence=%.2f)",
+                    task_type,
+                    strategy.confidence,
+                )
+                return {
+                    "strategy": "single_agent",
+                    "primary_agent": self._resolve_agent_type(strategy.best_approach),
+                    "confidence": strategy.confidence,
+                    "reasoning": (
+                        f"Learned strategy: {strategy.best_approach} "
+                        f"(samples={strategy.sample_size})"
+                    ),
+                    "source": "learned",
+                }
+        except Exception as exc:
+            logger.debug("Learned strategy lookup failed: %s", exc)
+        return None
+
+    def _resolve_agent_type(self, approach: str) -> AgentType:
+        """Map a learned approach string to an AgentType enum (#2105)."""
+        try:
+            return AgentType(approach)
+        except ValueError:
+            approach_lower = approach.lower()
+            for agent_type in AgentType:
+                if agent_type.value in approach_lower:
+                    return agent_type
+            return AgentType.CHAT
+
     async def determine_routing(
         self,
         request: str,
@@ -71,6 +121,11 @@ class AgentRouter:
             quick_routing = self.quick_route_analysis(request)
             if quick_routing["confidence"] > 0.8:
                 return quick_routing
+
+            # Check learned strategies before LLM fallback (#2105)
+            learned = await self._check_learned_strategy(request, context)
+            if learned:
+                return learned
 
             # Use LLM for complex routing decisions
             system_prompt = self._get_routing_system_prompt()
