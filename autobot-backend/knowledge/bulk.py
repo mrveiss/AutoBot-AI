@@ -1232,7 +1232,7 @@ class BulkOperationsMixin:
                 """Delete fact with concurrency limit."""
                 async with semaphore:
                     try:
-                        return await self.delete_fact(fact_id)
+                        return await self.delete_fact(fact_id, _skip_bm25_refresh=True)
                     except Exception as e:
                         return {"status": "error", "message": str(e)}
 
@@ -1252,6 +1252,10 @@ class BulkOperationsMixin:
                     deleted += 1
                 else:
                     errors += 1
+
+            # Single BM25 refresh after all deletions (#2079)
+            if deleted > 0:
+                self._schedule_bm25_refresh()
 
             return {
                 "status": "success",

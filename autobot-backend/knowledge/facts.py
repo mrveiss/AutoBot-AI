@@ -438,6 +438,8 @@ class FactsMixin:
 
         Called after fact mutations so IDF values stay current.
         Uses ``asyncio.create_task`` to avoid blocking the caller.
+        Callers performing bulk mutations should skip per-item calls
+        and invoke this once after the batch completes (#2079).
         """
         # _get_keyword_searcher is defined on SearchMixin (same composed class)
         if not hasattr(self, "_get_keyword_searcher"):
@@ -1055,11 +1057,17 @@ class FactsMixin:
             except Exception as e:
                 logger.warning("Could not delete vector for fact %s: %s", fact_id, e)
 
-    async def delete_fact(self, fact_id: str) -> dict:
+    async def delete_fact(
+        self, fact_id: str, *, _skip_bm25_refresh: bool = False
+    ) -> dict:
         """Delete a fact from Redis and ChromaDB. Issue #620.
 
         Args:
             fact_id: ID of the fact to delete
+            _skip_bm25_refresh: If True, skip per-item BM25 stats
+                refresh. Callers doing bulk deletes should set this
+                and call ``_schedule_bm25_refresh()`` once after the
+                batch completes (#2079).
 
         Returns:
             Dict with status
@@ -1085,7 +1093,8 @@ class FactsMixin:
                 self._decrement_stat("total_vectors"),
             )
 
-            self._schedule_bm25_refresh()
+            if not _skip_bm25_refresh:
+                self._schedule_bm25_refresh()
             logger.info("Deleted fact %s", fact_id)
             return {"status": "success", "fact_id": fact_id, "action": "deleted"}
 
