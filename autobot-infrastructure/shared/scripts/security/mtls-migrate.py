@@ -74,15 +74,24 @@ class MTLSMigration:
     def _save_admin_credentials(self, username: str, password: str) -> None:
         """Save admin credentials to secure file (not in app config)."""
         self.ADMIN_CREDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Intentional clear-text storage: emergency recovery
+        # credentials with restricted file permissions (0o600).
+        # This file is NOT in app config and is gitignored.
+        creds_content = (
+            "# Redis Admin Credentials - Issue #725\n"
+            "# DO NOT use in application - emergency recovery only\n"
+            f"# Created: {datetime.datetime.now().isoformat()}\n"
+            f"REDIS_ADMIN_USER={username}\n"
+            f"REDIS_ADMIN_PASSWORD={password}\n"  # noqa: S105
+        )
         with open(self.ADMIN_CREDS_FILE, "w", encoding="utf-8") as f:
-            f.write("# Redis Admin Credentials - Issue #725\n")
-            f.write("# DO NOT use in application - emergency recovery only\n")
-            f.write(f"# Created: {datetime.datetime.now().isoformat()}\n")
-            f.write(f"REDIS_ADMIN_USER={username}\n")
-            f.write(f"REDIS_ADMIN_PASSWORD={password}\n")
+            f.write(creds_content)
         # Secure file permissions (owner read/write only)
         os.chmod(self.ADMIN_CREDS_FILE, 0o600)
-        logger.info(f"Admin credentials saved to: {self.ADMIN_CREDS_FILE}")
+        logger.info(
+            "Admin credentials saved to: %s",
+            self.ADMIN_CREDS_FILE,
+        )
 
     def _get_admin_credentials(self) -> Optional[tuple]:
         """Get admin credentials from secure file."""

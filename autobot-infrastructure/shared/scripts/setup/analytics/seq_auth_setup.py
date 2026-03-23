@@ -58,14 +58,18 @@ def create_seq_api_key(
                 "AppliedPermissions": ["Ingest", "Read", "Setup", "Write"],
             }
 
-            response = session.post(f"{seq_url}/api/apikeys", json=api_key_data)
+            response = session.post(
+                f"{seq_url}/api/apikeys", json=api_key_data
+            )
             if response.status_code in [200, 201]:
                 api_key_info = response.json()
-                print(
-                    "✅ Created API key: ****"
-                    + api_key_info.get("Token", "unknown")[-4:]
+                token = api_key_info.get("Token")
+                # Show only last 4 chars for confirmation
+                suffix = token[-4:] if token else "????"
+                print(  # noqa: T201
+                    f"Created API key: ****{suffix}"
                 )
-                return api_key_info.get("Token")
+                return token
             else:
                 print(f"⚠️  Could not create API key: {response.status_code}")
                 print(f"   Response: {response.text}")
@@ -301,9 +305,9 @@ def main():
 
     # Save current password to environment if successful
     if api_key and os.getenv("SEQ_PASSWORD"):
-        print("\n💡 To avoid prompts in the future, set:")
-        print(f"   export SEQ_PASSWORD='{os.getenv('SEQ_PASSWORD')}'")
-        print("   or add it to your .env file")
+        print("\nTo avoid prompts in the future, set:")  # noqa: T201
+        print("   export SEQ_PASSWORD='<your-password>'")  # noqa: T201
+        print("   or add it to your .env file")  # noqa: T201
 
 
 if __name__ == "__main__":

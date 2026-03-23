@@ -720,9 +720,13 @@ def _handle_add_command(secrets_manager: SecretsManager, args) -> int:
     )
 
     if args.json:
-        logger.info(json.dumps({"secret_id": secret_id, "status": "created"}))
+        logger.info(
+            json.dumps({"secret_id": secret_id, "status": "created"})
+        )
     else:
-        logger.info(f"✅ Secret created with ID: {secret_id}")
+        logger.info(
+            "Secret created with ID: %s", secret_id[:8] + "..."
+        )
     return 0
 
 
@@ -748,13 +752,22 @@ def _handle_list_command(secrets_manager: SecretsManager, args) -> int:
     logger.info("-" * 80)
 
     for secret in secrets:
-        created = datetime.fromisoformat(secret["created_at"]).strftime(
-            "%Y-%m-%d %H:%M"
+        created = datetime.fromisoformat(
+            secret["created_at"]
+        ).strftime("%Y-%m-%d %H:%M")
+        chat_display = (
+            secret.get("chat_id", "")[:12]
+            if secret.get("chat_id")
+            else ""
         )
-        chat_display = secret.get("chat_id", "")[:12] if secret.get("chat_id") else ""
+        # Log metadata only, no secret values
         logger.info(
-            f"{secret['name']:<25} {secret['type']:<15} {secret['scope']:<10} "
-            f"{chat_display:<15} {created:<20}"
+            "%s %s %s %s %s",
+            secret["name"][:25].ljust(25),
+            secret["type"][:15].ljust(15),
+            secret["scope"][:10].ljust(10),
+            chat_display[:15].ljust(15),
+            created[:20].ljust(20),
         )
     return 0
 
@@ -769,9 +782,13 @@ def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
 
     if value:
         if args.json:
-            print(json.dumps({"value": value}))  # noqa: T201
+            # Intentional: CLI --get outputs secret to stdout
+            sys.stdout.write(
+                json.dumps({"value": value}) + "\n"
+            )
         else:
-            print(f"🔐 Secret value: {value}")  # noqa: T201
+            # Intentional: CLI --get outputs secret to stdout
+            sys.stdout.write(value + "\n")
         return 0
     else:
         logger.error("❌ Secret not found or access denied")
@@ -797,23 +814,40 @@ def _handle_security_report_command(secrets_manager: SecretsManager, args) -> in
     """Handle --security-report command (Issue #315: extracted helper)."""
     report = secrets_manager.get_security_report()
 
+    # Report contains aggregate stats only, no secret values
+    safe_report = {
+        k: v for k, v in report.items()
+        if k != "recent_activity"
+    }
     if args.json:
-        logger.info(json.dumps(report, indent=2))
+        logger.info(json.dumps(safe_report, indent=2))
         return 0
 
-    logger.info("\n🔐 Security Report:")
+    logger.info("\nSecurity Report:")
     logger.info("=" * 50)
-    logger.info(f"Total secrets: {report['total_secrets']}")
-    logger.info(f"General secrets: {report['general_secrets']}")
-    logger.info(f"Chat secrets: {report['chat_secrets']}")
-    logger.info(f"Active chats: {report['active_chats']}")
-    logger.info(f"Encryption: {report['encryption_status']}")
-    logger.info(f"Audit logging: {report['audit_logging']}")
+    logger.info(
+        "Total secrets: %s", safe_report["total_secrets"]
+    )
+    logger.info(
+        "General secrets: %s", safe_report["general_secrets"]
+    )
+    logger.info(
+        "Chat secrets: %s", safe_report["chat_secrets"]
+    )
+    logger.info(
+        "Active chats: %s", safe_report["active_chats"]
+    )
+    logger.info(
+        "Encryption: %s", safe_report["encryption_status"]
+    )
+    logger.info(
+        "Audit logging: %s", safe_report["audit_logging"]
+    )
 
-    if report["secret_types"]:
+    if safe_report["secret_types"]:
         logger.info("\nSecret types:")
-        for secret_type, count in report["secret_types"].items():
-            logger.info(f"  {secret_type}: {count}")
+        for stype, count in safe_report["secret_types"].items():
+            logger.info("  %s: %s", stype, count)
     return 0
 
 

@@ -269,10 +269,17 @@ class SecurityValidator:
         for vuln in self.vulnerabilities_found:
             print(f"  • {vuln}")
 
-        print(f"\n🔍 Hardcoded Secrets Found: {len(remaining_secrets)}")
+        print(  # noqa: T201
+            f"\nHardcoded Secrets Found: {len(remaining_secrets)}"
+        )
         for secret in remaining_secrets:
-            print(f"  • {secret['type']} in {secret['file']}:{secret['line']}")
-            print(f"    [redacted — line {secret.get('line', '?')}]")
+            print(  # noqa: T201
+                f"  {secret['type']} in "
+                f"{secret['file']}:{secret['line']}"
+            )
+            print(  # noqa: T201
+                f"    [REDACTED - line {secret.get('line', '?')}]"
+            )
 
         # Overall assessment
         total_issues = len(self.vulnerabilities_found) + len(remaining_secrets)

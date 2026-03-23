@@ -219,10 +219,8 @@ class SecretMaskingExtension(Extension):
                     masks_applied += 1
 
                     logger.debug(
-                        "[Issue #658] Masked %s: %s -> %s",
+                        "[Issue #658] Masked %s pattern",
                         name,
-                        secret[:4] + "...",
-                        masked[:8] + "...",
                     )
             except Exception as e:
                 logger.error(

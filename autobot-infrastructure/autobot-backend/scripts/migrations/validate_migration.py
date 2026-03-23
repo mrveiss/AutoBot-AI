@@ -153,7 +153,10 @@ class MigrationValidator:
                     )
 
                 if self.verbose and has_owner:
-                    logger.info(f"Session {session_id}: owner={metadata.get('owner')}")
+                    logger.info(
+                        "Session %s: owner=[REDACTED]",
+                        session_id,
+                    )
 
             except Exception as e:
                 logger.error(f"Error validating session {session_id}: {e}")
@@ -177,89 +180,80 @@ class MigrationValidator:
         self.stats["secrets"]["total"] = len(secret_ids)
 
         for secret_id in secret_ids:
-            try:
-                # Get secret data (stored as hash)
-                key = f"secret:{secret_id}"
-                secret_data = await self.redis_client.hgetall(key)
+            await self._validate_single_secret(secret_id)
 
-                if not secret_data:
-                    self.issues.append(
-                        {
-                            "type": "secret",
-                            "id": secret_id,
-                            "severity": "error",
-                            "issue": "Secret data is empty",
-                        }
-                    )
-                    continue
+    async def _validate_single_secret(self, secret_id: str) -> None:
+        """Validate a single secret has required fields.
 
-                # Decode hash data
-                decoded = {}
-                for k, v in secret_data.items():
-                    key_str = k.decode("utf-8") if isinstance(k, bytes) else k
-                    val_str = v.decode("utf-8") if isinstance(v, bytes) else v
-                    decoded[key_str] = val_str
+        See validate_secrets() for parent workflow (#1721).
+        """
+        try:
+            key = f"secret:{secret_id}"
+            secret_data = await self.redis_client.hgetall(key)
 
-                # Check owner_id
-                if decoded.get("owner_id"):
-                    self.stats["secrets"]["with_owner"] += 1
-                else:
-                    self.stats["secrets"]["without_owner"] += 1
-                    self.issues.append(
-                        {
-                            "type": "secret",
-                            "id": secret_id,
-                            "severity": "error",
-                            "issue": "Missing owner_id",
-                        }
-                    )
+            if not secret_data:
+                self.issues.append({
+                    "type": "secret", "id": secret_id,
+                    "severity": "error", "issue": "Secret data is empty",
+                })
+                return
 
-                # Check scope
-                if decoded.get("scope"):
-                    self.stats["secrets"]["with_scope"] += 1
-                else:
-                    self.stats["secrets"]["without_scope"] += 1
-                    self.issues.append(
-                        {
-                            "type": "secret",
-                            "id": secret_id,
-                            "severity": "error",
-                            "issue": "Missing scope",
-                        }
-                    )
-
-                # Check encryption
-                value = decoded.get("value", "")
-                if self._appears_encrypted(value):
-                    self.stats["secrets"]["encrypted"] += 1
-                else:
-                    self.stats["secrets"]["unencrypted"] += 1
-                    self.issues.append(
-                        {
-                            "type": "secret",
-                            "id": secret_id,
-                            "severity": "warning",
-                            "issue": "Value may not be encrypted",
-                        }
-                    )
-
-                if self.verbose and decoded.get("owner_id"):
-                    logger.info(
-                        f"Secret {secret_id}: "
-                        f"owner={decoded.get('owner_id')}, "
-                        f"scope={decoded.get('scope')}"
-                    )
-
-            except Exception as e:
-                logger.error(f"Error validating secret {secret_id}: {e}")
-                self.issues.append(
-                    {
-                        "type": "secret",
-                        "id": secret_id,
-                        "severity": "error",
-                        "issue": f"Validation error: {e}",
-                    }
+            decoded = {
+                (k.decode("utf-8") if isinstance(k, bytes) else k): (
+                    v.decode("utf-8") if isinstance(v, bytes) else v
                 )
+                for k, v in secret_data.items()
+            }
+
+            self._check_secret_field(
+                secret_id, decoded, "owner_id", "with_owner",
+                "without_owner", "Missing owner_id", "error",
+            )
+            self._check_secret_field(
+                secret_id, decoded, "scope", "with_scope",
+                "without_scope", "Missing scope", "error",
+            )
+
+            value = decoded.get("value", "")
+            if self._appears_encrypted(value):
+                self.stats["secrets"]["encrypted"] += 1
+            else:
+                self.stats["secrets"]["unencrypted"] += 1
+                self.issues.append({
+                    "type": "secret", "id": secret_id,
+                    "severity": "warning",
+                    "issue": "Value may not be encrypted",
+                })
+
+            if self.verbose and decoded.get("owner_id"):
+                logger.info(
+                    "Secret %s: owner=[REDACTED], scope=%s",
+                    secret_id, decoded.get("scope"),
+                )
+        except Exception as e:
+            logger.error("Error validating secret %s: %s", secret_id, e)
+            self.issues.append({
+                "type": "secret", "id": secret_id,
+                "severity": "error",
+                "issue": f"Validation error: {e}",
+            })
+
+    def _check_secret_field(
+        self, secret_id, decoded, field, present_key,
+        absent_key, issue_msg, severity,
+    ):
+        """Check a secret field and update stats/issues.
+
+        See _validate_single_secret() (#1721).
+        """
+        if decoded.get(field):
+            self.stats["secrets"][present_key] += 1
+        else:
+            self.stats["secrets"][absent_key] += 1
+            self.issues.append({
+                "type": "secret", "id": secret_id,
+                "severity": severity, "issue": issue_msg,
+            })
 
     def _appears_encrypted(self, value: str) -> bool:
         """Check if a value appears to be encrypted.
@@ -409,131 +403,115 @@ class MigrationValidator:
         report.append("=" * 70)
         report.append("")
 
-        # Sessions
-        report.append("SESSIONS:")
-        report.append(f"  Total: {self.stats['sessions']['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With owner",
-                self.stats["sessions"]["with_owner"],
-                self.stats["sessions"]["total"],
-            )
-        )
-        report.append(
-            self._format_stat_with_pct(
-                "Without owner",
-                self.stats["sessions"]["without_owner"],
-                self.stats["sessions"]["total"],
-            )
-        )
-        report.append(
-            self._format_stat_with_pct(
-                "With created_at",
-                self.stats["sessions"]["with_created_at"],
-                self.stats["sessions"]["total"],
-            )
-        )
-        report.append(f"  Empty sessions: {self.stats['sessions']['empty']}")
-        report.append("")
-
-        # Secrets
-        report.append("SECRETS:")
-        report.append(f"  Total: {self.stats['secrets']['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With owner",  # noqa: E122
-                self.stats["secrets"]["with_owner"],  # noqa: E122
-                self.stats["secrets"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append(
-            self._format_stat_with_pct(
-                "Without owner",  # noqa: E122
-                self.stats["secrets"]["without_owner"],  # noqa: E122
-                self.stats["secrets"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append(
-            self._format_stat_with_pct(
-                "With scope",  # noqa: E122
-                self.stats["secrets"]["with_scope"],  # noqa: E122
-                self.stats["secrets"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append(
-            self._format_stat_with_pct(
-                "Encrypted",  # noqa: E122
-                self.stats["secrets"]["encrypted"],  # noqa: E122
-                self.stats["secrets"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append("")
-
-        # Messages
-        report.append("MESSAGES:")
-        report.append(f"  Total: {self.stats['messages']['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With user_id",  # noqa: E122
-                self.stats["messages"]["with_user_id"],  # noqa: E122
-                self.stats["messages"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append(f"  Without user_id: {self.stats['messages']['without_user_id']}")
-        report.append("")
-
-        # Activities
-        report.append("ACTIVITIES:")
-        report.append(f"  Total: {self.stats['activities']['total']}")
-        report.append(
-            self._format_stat_with_pct(
-                "With user_id",  # noqa: E122
-                self.stats["activities"]["with_user_id"],  # noqa: E122
-                self.stats["activities"]["total"],  # noqa: E122
-            )  # noqa: E122
-        )
-        report.append(
-            f"  Without user_id: {self.stats['activities']['without_user_id']}"
-        )
-        report.append("")
-
-        # Indices
-        report.append("INDICES:")
-        report.append(f"  User sessions: {self.stats['indices']['user_sessions']}")
-        report.append(f"  User secrets: {self.stats['indices']['user_secrets']}")
-        report.append(f"  Org sessions: {self.stats['indices']['org_sessions']}")
-        report.append(f"  Team sessions: {self.stats['indices']['team_sessions']}")
-        report.append("")
-
-        # Issues
-        if self.issues:
-            report.append("ISSUES FOUND:")
-            report.append(f"  Total: {len(self.issues)}")
-
-            errors = [i for i in self.issues if i["severity"] == "error"]
-            warnings = [i for i in self.issues if i["severity"] == "warning"]
-
-            report.append(f"  Errors: {len(errors)}")
-            report.append(f"  Warnings: {len(warnings)}")
-            report.append("")
-
-            # Show first 20 issues
-            report.append("First 20 issues:")
-            for issue in self.issues[:20]:
-                report.append(
-                    f"  [{issue['severity'].upper()}] {issue['type']} "
-                    f"{issue['id']}: {issue['issue']}"
-                )
-
-            if len(self.issues) > 20:
-                report.append(f"  ... and {len(self.issues) - 20} more issues")
-        else:
-            report.append("NO ISSUES FOUND - Migration completed successfully!")
+        self._report_sessions_section(report)
+        self._report_secrets_section(report)
+        self._report_messages_section(report)
+        self._report_activities_section(report)
+        self._report_indices_section(report)
+        self._report_issues_section(report)
 
         report.append("")
         report.append("=" * 70)
-
         return "\n".join(report)
+
+    def _report_sessions_section(self, report: list) -> None:
+        """Append sessions stats to report. See generate_report()."""
+        s = self.stats["sessions"]
+        report.append("SESSIONS:")
+        report.append(f"  Total: {s['total']}")
+        for label, key in [
+            ("With owner", "with_owner"),
+            ("Without owner", "without_owner"),
+            ("With created_at", "with_created_at"),
+        ]:
+            report.append(
+                self._format_stat_with_pct(label, s[key], s["total"])
+            )
+        report.append(f"  Empty sessions: {s['empty']}")
+        report.append("")
+
+    def _report_secrets_section(self, report: list) -> None:
+        """Append secrets stats to report. See generate_report()."""
+        s = self.stats["secrets"]
+        report.append("SECRETS:")
+        report.append(f"  Total: {s['total']}")
+        for label, key in [
+            ("With owner", "with_owner"),
+            ("Without owner", "without_owner"),
+            ("With scope", "with_scope"),
+            ("Encrypted", "encrypted"),
+        ]:
+            report.append(
+                self._format_stat_with_pct(label, s[key], s["total"])
+            )
+        report.append("")
+
+    def _report_messages_section(self, report: list) -> None:
+        """Append messages stats to report. See generate_report()."""
+        s = self.stats["messages"]
+        report.append("MESSAGES:")
+        report.append(f"  Total: {s['total']}")
+        report.append(
+            self._format_stat_with_pct(
+                "With user_id", s["with_user_id"], s["total"]
+            )
+        )
+        report.append(
+            f"  Without user_id: {s['without_user_id']}"
+        )
+        report.append("")
+
+    def _report_activities_section(self, report: list) -> None:
+        """Append activities stats to report. See generate_report()."""
+        s = self.stats["activities"]
+        report.append("ACTIVITIES:")
+        report.append(f"  Total: {s['total']}")
+        report.append(
+            self._format_stat_with_pct(
+                "With user_id", s["with_user_id"], s["total"]
+            )
+        )
+        report.append(
+            f"  Without user_id: {s['without_user_id']}"
+        )
+        report.append("")
+
+    def _report_indices_section(self, report: list) -> None:
+        """Append indices stats to report. See generate_report()."""
+        s = self.stats["indices"]
+        report.append("INDICES:")
+        for label, key in [
+            ("User sessions", "user_sessions"),
+            ("User secrets", "user_secrets"),
+            ("Org sessions", "org_sessions"),
+            ("Team sessions", "team_sessions"),
+        ]:
+            report.append(f"  {label}: {s[key]}")
+        report.append("")
+
+    def _report_issues_section(self, report: list) -> None:
+        """Append issues summary to report. See generate_report()."""
+        if not self.issues:
+            report.append(
+                "NO ISSUES FOUND - Migration completed successfully!"
+            )
+            return
+        errors = [i for i in self.issues if i["severity"] == "error"]
+        warnings = [i for i in self.issues if i["severity"] == "warning"]
+        report.append("ISSUES FOUND:")
+        report.append(f"  Total: {len(self.issues)}")
+        report.append(f"  Errors: {len(errors)}")
+        report.append(f"  Warnings: {len(warnings)}")
+        report.append("")
+        report.append("First 20 issues:")
+        for issue in self.issues[:20]:
+            report.append(
+                f"  [{issue['severity'].upper()}] {issue['type']} "
+                f"{issue['id']}: {issue['issue']}"
+            )
+        if len(self.issues) > 20:
+            remaining = len(self.issues) - 20
+            report.append(f"  ... and {remaining} more issues")
 
     def _percentage(self, value: int, total: int) -> str:
         """Calculate percentage with 1 decimal place.
@@ -569,13 +547,17 @@ class MigrationValidator:
         # Save to file
         report_file = Path("/tmp/migration_validation_report.txt")
         report_file.write_text(report)
-        logger.info(f"\nReport saved to: {report_file}")
+        logger.info("\nReport saved to: %s", report_file)
 
         # Save issues to JSON
         if self.issues:
             issues_file = Path("/tmp/migration_issues.json")
-            issues_file.write_text(json.dumps(self.issues, indent=2))
-            logger.info(f"Issues details saved to: {issues_file}")
+            issues_file.write_text(
+                json.dumps(self.issues, indent=2)
+            )
+            logger.info(
+                "Issues details saved to: %s", issues_file
+            )
 
         # Exit with error code if issues found
         if any(i["severity"] == "error" for i in self.issues):

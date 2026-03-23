@@ -658,9 +658,14 @@ def audit_log(
     """Log security-relevant operations for audit trail"""
     client_id = get_client_id(request)
     status = "SUCCESS" if success else "FAILED"
+    # Redact secret_id to prevent sensitive data in logs
+    safe_id = secret_id[:8] + "..." if secret_id and len(secret_id) > 8 else secret_id
     logger.info(
-        f"[Secrets Audit] {status} | Operation: {operation} | "
-        f"SecretID: {secret_id} | Client: {client_id} | {details}"
+        "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
+        status,
+        operation,
+        safe_id,
+        client_id,
     )
 
 

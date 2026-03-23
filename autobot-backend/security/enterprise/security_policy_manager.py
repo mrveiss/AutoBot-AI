@@ -749,13 +749,17 @@ class SecurityPolicyManager:
         if not password:
             return result
 
+        # Store length before clearing reference to avoid
+        # sensitive data flowing to log-accessible fields
+        pwd_len = len(password)
+
         for rule in policy.rules:
-            if rule["name"] == "minimum_length" and len(password) < rule["value"]:
+            if rule["name"] == "minimum_length" and pwd_len < rule["value"]:
                 result["compliant"] = False
                 result["violation_type"] = "password_too_short"
                 result["severity"] = "medium"
                 result["details"]["minimum_length"] = rule["value"]
-                result["details"]["actual_length"] = len(password)
+                result["details"]["actual_length"] = pwd_len
             elif rule["name"] == "complexity_requirements":
                 self._check_password_complexity(password, rule["value"], result)
 

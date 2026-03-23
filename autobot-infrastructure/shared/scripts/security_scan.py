@@ -39,102 +39,102 @@ class SecurityScanner:
         }
 
     def run_dependency_security_scan(self) -> Dict[str, Any]:
-        """Scan dependencies for known vulnerabilities"""
-        logger.info("🔍 Running dependency security scan...")
+        """Scan dependencies for known vulnerabilities."""
+        logger.info("Running dependency security scan...")
         results = {}
+        results["pip_audit"] = self._scan_pip_audit()
+        results["safety"] = self._scan_safety()
+        results["npm_audit"] = self._scan_npm_audit()
+        return results
 
-        # Python dependency audit
+    def _scan_pip_audit(self) -> Dict[str, Any]:
+        """Run pip-audit Python dependency scan."""
         try:
             logger.info("Checking Python dependencies with pip-audit...")
-            pip_audit_cmd = [
-                sys.executable,
-                "-m",
-                "pip_audit",
-                "--format=json",
-                "--require",
+            cmd = [
+                sys.executable, "-m", "pip_audit",
+                "--format=json", "--require",
                 str(self.project_root / "requirements.txt"),
             ]
-            result = subprocess.run(pip_audit_cmd, capture_output=True, text=True)
-
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                results["pip_audit"] = {"status": "clean", "vulnerabilities": []}
-                logger.info("✅ No Python dependency vulnerabilities found")
-            else:
-                try:
-                    vulns = json.loads(result.stdout)
-                    results["pip_audit"] = {
-                        "status": "vulnerabilities_found",
-                        "vulnerabilities": vulns,
-                    }
-                    logger.warning(
-                        f"⚠️ Found {len(vulns)} Python dependency vulnerabilities"
-                    )
-                except json.JSONDecodeError:
-                    results["pip_audit"] = {"status": "error", "message": result.stderr}
+                logger.info("No Python dependency vulnerabilities found")
+                return {"status": "clean", "vulnerabilities": []}
+            try:
+                vulns = json.loads(result.stdout)
+                logger.warning(
+                    "Found %s Python dependency vulnerabilities",
+                    len(vulns),
+                )
+                return {
+                    "status": "vulnerabilities_found",
+                    "vulnerabilities": vulns,
+                }
+            except json.JSONDecodeError:
+                return {"status": "error", "message": result.stderr}
         except FileNotFoundError:
-            logger.warning("pip-audit not found. Install with: pip install pip-audit")
-            results["pip_audit"] = {"status": "tool_missing"}
+            logger.warning(
+                "pip-audit not found. Install with: pip install pip-audit"
+            )
+            return {"status": "tool_missing"}
 
-        # Safety check (alternative Python security scanner)
+    def _scan_safety(self) -> Dict[str, Any]:
+        """Run safety Python dependency scan."""
         try:
             logger.info("Checking Python dependencies with safety...")
-            safety_cmd = [sys.executable, "-m", "safety", "check", "--json"]
-            result = subprocess.run(safety_cmd, capture_output=True, text=True)
-
+            cmd = [sys.executable, "-m", "safety", "check", "--json"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                results["safety"] = {"status": "clean", "vulnerabilities": []}
-                logger.info("✅ Safety check passed")
-            else:
-                try:
-                    vulns = json.loads(result.stdout)
-                    results["safety"] = {
-                        "status": "vulnerabilities_found",
-                        "vulnerabilities": vulns,
-                    }
-                    logger.warning("⚠️ Safety found %s vulnerabilities", len(vulns))
-                except json.JSONDecodeError:
-                    results["safety"] = {"status": "error", "message": result.stderr}
-        except FileNotFoundError:
-            logger.warning("safety not found. Install with: pip install safety")
-            results["safety"] = {"status": "tool_missing"}
-
-        # Node.js dependency audit (if package.json exists)
-        npm_dir = self.project_root / "autobot-vue"
-        if (npm_dir / "package.json").exists():
+                logger.info("Safety check passed")
+                return {"status": "clean", "vulnerabilities": []}
             try:
-                logger.info("Checking Node.js dependencies...")
-                npm_audit_cmd = ["npm", "audit", "--json", "--audit-level=moderate"]
-                result = subprocess.run(
-                    npm_audit_cmd, capture_output=True, text=True, cwd=npm_dir
+                vulns = json.loads(result.stdout)
+                logger.warning(
+                    "Safety found %s vulnerabilities", len(vulns)
                 )
+                return {
+                    "status": "vulnerabilities_found",
+                    "vulnerabilities": vulns,
+                }
+            except json.JSONDecodeError:
+                return {"status": "error", "message": result.stderr}
+        except FileNotFoundError:
+            logger.warning(
+                "safety not found. Install with: pip install safety"
+            )
+            return {"status": "tool_missing"}
 
-                audit_data = json.loads(result.stdout)
-                if (
-                    audit_data.get("metadata", {})
-                    .get("vulnerabilities", {})
-                    .get("total", 0)
-                    == 0
-                ):
-                    results["npm_audit"] = {"status": "clean", "vulnerabilities": 0}
-                    logger.info("✅ No Node.js dependency vulnerabilities found")
-                else:
-                    vuln_count = audit_data["metadata"]["vulnerabilities"]["total"]
-                    results["npm_audit"] = {
-                        "status": "vulnerabilities_found",
-                        "vulnerabilities": vuln_count,
-                        "details": audit_data,
-                    }
-                    logger.warning(
-                        f"⚠️ Found {vuln_count} Node.js dependency vulnerabilities"
-                    )
-
-            except (FileNotFoundError, json.JSONDecodeError) as e:
-                logger.warning("Error running npm audit: %s", e)
-                results["npm_audit"] = {"status": "error", "message": str(e)}
-        else:
-            results["npm_audit"] = {"status": "not_applicable"}
-
-        return results
+    def _scan_npm_audit(self) -> Dict[str, Any]:
+        """Run npm audit for Node.js dependencies."""
+        npm_dir = self.project_root / "autobot-vue"
+        if not (npm_dir / "package.json").exists():
+            return {"status": "not_applicable"}
+        try:
+            logger.info("Checking Node.js dependencies...")
+            cmd = ["npm", "audit", "--json", "--audit-level=moderate"]
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, cwd=npm_dir
+            )
+            audit_data = json.loads(result.stdout)
+            total = (
+                audit_data.get("metadata", {})
+                .get("vulnerabilities", {})
+                .get("total", 0)
+            )
+            if total == 0:
+                logger.info("No Node.js dependency vulnerabilities found")
+                return {"status": "clean", "vulnerabilities": 0}
+            logger.warning(
+                "Found %s Node.js dependency vulnerabilities", total
+            )
+            return {
+                "status": "vulnerabilities_found",
+                "vulnerabilities": total,
+                "details": audit_data,
+            }
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logger.warning("Error running npm audit: %s", e)
+            return {"status": "error", "message": str(e)}
 
     def run_static_analysis_scan(self) -> Dict[str, Any]:
         """Run static application security testing (SAST)"""
@@ -248,12 +248,17 @@ class SecurityScanner:
                         if combined_pattern.search(line):
                             found_secrets.append(
                                 {
-                                    "file": str(py_file.relative_to(self.project_root)),
+                                    "file": str(
+                                        py_file.relative_to(
+                                            self.project_root
+                                        )
+                                    ),
                                     "line": i,
                                     "pattern": "potential_secret",
-                                    "line_content": line.strip()[
-                                        :100
-                                    ],  # Truncate for safety
+                                    "line_content": (
+                                        "[REDACTED - potential "
+                                        "secret detected]"
+                                    ),
                                 }
                             )
                 except Exception as e:
@@ -531,16 +536,26 @@ class SecurityScanner:
         logger.info("\n" + "=" * 50)
         logger.info("🛡️ SECURITY SCAN SUMMARY")
         logger.info("=" * 50)
-        logger.info(
-            f"{status_emoji.get(summary['overall_status'], '❓')} Overall Status: {summary['overall_status'].upper()}"
+        overall = summary["overall_status"].upper()
+        emoji = status_emoji.get(
+            summary["overall_status"], "?"
         )
-        logger.info("🔴 Critical Issues: %s", summary["critical_issues"])
-        logger.info("🟡 Warnings: %s", summary["warnings"])
+        logger.info(
+            "%s Overall Status: %s", emoji, overall
+        )
+        logger.info(
+            "Critical Issues: %s", summary["critical_issues"]
+        )
+        logger.info(
+            "Warnings: %s", summary["warnings"]
+        )
 
         if summary.get("recommendations"):
-            logger.info("\n📋 Recommended Actions:")
-            for i, rec in enumerate(summary["recommendations"], 1):
-                logger.info("  %s. %s", i, rec)
+            logger.info("\nRecommended Actions:")
+            for idx, rec in enumerate(
+                summary["recommendations"], 1
+            ):
+                logger.info("  %s. %s", idx, rec)
 
         logger.info("=" * 50)
 
