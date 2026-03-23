@@ -225,3 +225,108 @@ class TestMeshSeederRelationshipEdges:
         assert edges[0]["from_node"] == str(src_id)
         assert edges[0]["to_node"] == str(tgt_id)
         assert edges[0]["weight"] == 0.9
+
+
+class TestMeshSeederSimilarToEdges:
+    """SIMILAR_TO edge generation via cosine similarity of embeddings (#2049)."""
+
+    def _make_nodes(self, n: int) -> List[Any]:
+        """Return n minimal node dicts."""
+        return [{"id": f"n_{i}"} for i in range(n)]
+
+    def test_none_embeddings_returns_empty(self):
+        seeder = MeshSeeder()
+        nodes = self._make_nodes(3)
+        assert seeder._build_similar_to_edges(nodes, None) == []
+
+    def test_single_embedding_returns_empty(self):
+        import numpy as np
+
+        seeder = MeshSeeder()
+        nodes = self._make_nodes(1)
+        embeddings = np.array([[1.0, 0.0]])
+        assert seeder._build_similar_to_edges(nodes, embeddings) == []
+
+    def test_identical_embeddings_produce_similar_to_edge(self):
+        import numpy as np
+
+        seeder = MeshSeeder(similarity_threshold=0.82)
+        nodes = self._make_nodes(2)
+        # Identical unit vectors → cosine similarity == 1.0
+        embeddings = np.array([[1.0, 0.0], [1.0, 0.0]])
+        edges = seeder._build_similar_to_edges(nodes, embeddings)
+
+        assert len(edges) == 1
+        assert edges[0]["edge_type"] == "SIMILAR_TO"
+        assert edges[0]["from_node"] == "n_0"
+        assert edges[0]["to_node"] == "n_1"
+        assert abs(edges[0]["weight"] - 1.0) < 1e-6
+
+    def test_orthogonal_embeddings_produce_no_edge(self):
+        import numpy as np
+
+        seeder = MeshSeeder(similarity_threshold=0.82)
+        nodes = self._make_nodes(2)
+        # Orthogonal vectors → cosine similarity == 0.0
+        embeddings = np.array([[1.0, 0.0], [0.0, 1.0]])
+        edges = seeder._build_similar_to_edges(nodes, embeddings)
+
+        assert edges == []
+
+    def test_threshold_boundary_excluded(self):
+        """Pairs strictly below threshold must be excluded."""
+        import numpy as np
+
+        seeder = MeshSeeder(similarity_threshold=0.90)
+        nodes = self._make_nodes(2)
+        # cosine similarity ≈ 0.8 < 0.90
+        embeddings = np.array([[1.0, 0.0], [0.6, 0.8]])
+        edges = seeder._build_similar_to_edges(nodes, embeddings)
+
+        assert edges == []
+
+    def test_threshold_boundary_included(self):
+        """Pairs at exactly the threshold must be included."""
+        import numpy as np
+
+        seeder = MeshSeeder(similarity_threshold=0.6)
+        nodes = self._make_nodes(2)
+        # cosine similarity == 0.6
+        embeddings = np.array([[1.0, 0.0], [0.6, 0.8]])
+        edges = seeder._build_similar_to_edges(nodes, embeddings)
+
+        assert len(edges) == 1
+
+    def test_zero_vector_handled_without_division_error(self):
+        """A zero-norm embedding must not raise ZeroDivisionError."""
+        import numpy as np
+
+        seeder = MeshSeeder(similarity_threshold=0.5)
+        nodes = self._make_nodes(2)
+        embeddings = np.array([[0.0, 0.0], [1.0, 0.0]])
+        # Should not raise; similarity to zero vector is 0.0
+        edges = seeder._build_similar_to_edges(nodes, embeddings)
+        assert isinstance(edges, list)
+
+    @pytest.mark.asyncio
+    async def test_load_wires_similar_to_edges_from_context_metadata(self):
+        """Embeddings in context.metadata['embeddings'] flow into SIMILAR_TO edges."""
+        from uuid import uuid4
+
+        import numpy as np
+
+        doc_id = uuid4()
+        chunks = [
+            _make_chunk(doc_id, 0, "a.txt"),
+            _make_chunk(doc_id, 1, "a.txt"),
+        ]
+        ctx = _context_with(chunks=chunks)
+        # Identical embeddings → similarity == 1.0 > default threshold 0.82
+        ctx.metadata["embeddings"] = np.array([[1.0, 0.0], [1.0, 0.0]])
+
+        seeder = MeshSeeder()
+        # Without embeddings: 1 PART_OF + 1 NEXT = 2. With identical embeddings: +1 SIMILAR_TO.
+        result_without = await seeder.load(_context_with(chunks=chunks))
+        result_with = await seeder.load(ctx)
+
+        assert result_with["edges_created"] > result_without["edges_created"]

@@ -11,6 +11,7 @@ import logging
 from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 
@@ -49,6 +50,7 @@ class MeshSeeder(BaseLoader):
         chunks = context.chunks or []
         entities = context.entities or []
         relationships = context.relationships or []
+        embeddings: Optional[np.ndarray] = context.metadata.get("embeddings")
 
         nodes = self._build_node_list(chunks)
         edges: List[_EdgeDict] = []
@@ -58,6 +60,7 @@ class MeshSeeder(BaseLoader):
             edges.extend(self._build_entity_edges(nodes, entities))
         if relationships:
             edges.extend(self._build_relationship_edges(relationships))
+        edges.extend(self._build_similar_to_edges(nodes, embeddings))
 
         if self.db:
             await self._persist_edges(edges)
@@ -178,6 +181,37 @@ class MeshSeeder(BaseLoader):
             }
             for r in relationships
         ]
+
+    def _compute_cosine_similarity(self, embeddings: np.ndarray) -> np.ndarray:
+        """Return pairwise cosine similarity matrix for the given embedding array (#2049)."""
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        normalized = embeddings / norms
+        return normalized @ normalized.T
+
+    def _build_similar_to_edges(
+        self,
+        nodes: List[Dict[str, Any]],
+        embeddings: Optional[np.ndarray] = None,
+    ) -> List[_EdgeDict]:
+        """Create SIMILAR_TO edges for chunk pairs with cosine similarity >= threshold (#2049)."""
+        if embeddings is None or len(embeddings) < 2:
+            return []
+        similarity_matrix = self._compute_cosine_similarity(embeddings)
+        edges: List[_EdgeDict] = []
+        for i in range(len(nodes)):
+            for j in range(i + 1, len(nodes)):
+                if similarity_matrix[i, j] >= self.similarity_threshold:
+                    edges.append(
+                        {
+                            "from_node": nodes[i]["id"],
+                            "to_node": nodes[j]["id"],
+                            "edge_type": "SIMILAR_TO",
+                            "origin": "seeder",
+                            "weight": float(similarity_matrix[i, j]),
+                        }
+                    )
+        return edges
 
     # ------------------------------------------------------------------
     # Persistence
