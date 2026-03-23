@@ -600,10 +600,15 @@ async def upload_file_to_chat(
 ):
     """Upload a file and associate it with a chat"""
     try:
-        # Save uploaded file
-        file_path = os.path.join(
-            chat_knowledge_manager.storage_dir,
-            f"{chat_id}_{os.path.basename(file.filename)}",
+        # Save uploaded file (#1721)
+        from autobot_shared.security.path_validator import validate_relative_path
+
+        safe_name = f"{chat_id}_{os.path.basename(file.filename)}"
+        file_path = str(
+            validate_relative_path(
+                safe_name,
+                chat_knowledge_manager.storage_dir,
+            )
         )
 
         content = await file.read()

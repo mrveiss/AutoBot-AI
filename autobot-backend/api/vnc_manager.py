@@ -1639,12 +1639,17 @@ async def save_session_screenshot(
     if screenshot_result["status"] != "success":
         return {"status": "error", "message": "Screenshot capture failed"}
 
-    # Save screenshot to session-specific directory
-    screenshot_dir = Path(f"/tmp/vnc_sessions/{session_id}")  # nosec B108
+    # Validate session directory path (#1721)
+    from autobot_shared.security.path_validator import validate_relative_path
+
+    vnc_base = Path("/tmp/vnc_sessions")  # nosec B108
+    screenshot_dir = validate_relative_path(session_id, vnc_base)
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    screenshot_path = screenshot_dir / f"screenshot_{timestamp}.png"
+    screenshot_path = validate_relative_path(
+        f"screenshot_{timestamp}.png", screenshot_dir
+    )
 
     # Decode and save
     image_data = base64.b64decode(screenshot_result["image_data"])
