@@ -56,6 +56,14 @@ class RAGConfig:
     enable_advanced_rag: bool = True
     fallback_to_basic_search: bool = True
 
+    # Neural Mesh RAG feature flags (Phase 3, Issue #2059)
+    mesh_retriever_enabled: bool = False
+    mesh_seed_edges: bool = True
+    mesh_edge_learner: bool = False
+    mesh_edge_discoverer: bool = False
+    mesh_pruner: bool = False
+    mesh_node_promoter: bool = False
+
     # Issue #556: Category-based filtering for chat RAG
     # Default categories to search when no specific categories are specified
     # Available categories: system_knowledge, user_knowledge, autobot_knowledge
@@ -165,6 +173,13 @@ class RAGConfig:
             "fallback_to_basic_search": self.fallback_to_basic_search,
             "default_chat_categories": self.default_chat_categories,
             "enable_smart_category_selection": self.enable_smart_category_selection,
+            # Neural Mesh RAG feature flags (Issue #2059)
+            "mesh_retriever_enabled": self.mesh_retriever_enabled,
+            "mesh_seed_edges": self.mesh_seed_edges,
+            "mesh_edge_learner": self.mesh_edge_learner,
+            "mesh_edge_discoverer": self.mesh_edge_discoverer,
+            "mesh_pruner": self.mesh_pruner,
+            "mesh_node_promoter": self.mesh_node_promoter,
         }
 
 
