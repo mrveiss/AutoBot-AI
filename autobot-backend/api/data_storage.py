@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from utils.catalog_http_exceptions import raise_server_error
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_relative_path
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])
 logger = logging.getLogger(__name__)
@@ -31,12 +32,14 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 
 
 def _safe_data_path(user_segment: str) -> Path:
-    """Resolve a user-supplied path segment under DATA_DIR safely (#1733)."""
-    resolved = (DATA_DIR / user_segment).resolve()
-    data_root = DATA_DIR.resolve()
-    if not str(resolved).startswith(str(data_root) + "/") and resolved != data_root:
+    """Resolve a user-supplied path segment under DATA_DIR safely.
+
+    Uses shared path validator (#1721).
+    """
+    try:
+        return validate_relative_path(user_segment, DATA_DIR)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid path")
-    return resolved
 
 
 class StorageCategory(BaseModel):
@@ -557,8 +560,9 @@ async def delete_conversation(
         files_deleted = []
         errors = []
 
-        transcript_path = (
-            DATA_DIR / "conversation_transcripts" / f"{conversation_id}.json"
+        transcripts_base = DATA_DIR / "conversation_transcripts"
+        transcript_path = validate_relative_path(
+            f"{conversation_id}.json", transcripts_base
         )
         if transcript_path.exists():
             try:
@@ -569,7 +573,7 @@ async def delete_conversation(
 
         chats_dir = DATA_DIR / "chats"
         for suffix in ["_chat.json", "_terminal_transcript.txt"]:
-            chat_file = chats_dir / f"{conversation_id}{suffix}"
+            chat_file = validate_relative_path(f"{conversation_id}{suffix}", chats_dir)
             if chat_file.exists():
                 try:
                     chat_file.unlink()

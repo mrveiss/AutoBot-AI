@@ -19,9 +19,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import docker
 from docker.errors import DockerException, ImageNotFound
 
+import docker
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -371,9 +371,12 @@ class SecureSandboxExecutor:
         """
         config = config or SandboxConfig(execution_mode=SandboxExecutionMode.SCRIPT)
 
+        # Sanitize language for safe temp file suffix (#1721)
+        safe_lang = "".join(c for c in language if c.isalnum()) or "sh"
+
         # Create temporary script file
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=f".{language}", delete=False
+            mode="w", suffix=f".{safe_lang}", delete=False
         ) as f:
             f.write(script_content)
             script_path = f.name

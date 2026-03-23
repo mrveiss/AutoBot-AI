@@ -18,6 +18,9 @@ from typing import Any, Dict, List
 
 import aiofiles
 
+from autobot_shared.security.path_validator import validate_relative_path
+from autobot_shared.ssot_config import PROJECT_ROOT
+
 from .models import StateSnapshot
 from .types import TrackingMetric
 
@@ -272,10 +275,13 @@ async def export_state_data_to_file(
         report_generator: Optional async callable for markdown format
     """
     # Ensure output goes to data directory
+    data_base = Path("data/reports/state_tracking")
     if not output_path.startswith("data/"):
-        output_path = f"data/reports/state_tracking/{Path(output_path).name}"
+        safe_name = Path(output_path).name
+        output_file = validate_relative_path(safe_name, data_base)
+    else:
+        output_file = validate_relative_path(output_path, PROJECT_ROOT)
 
-    output_file = Path(output_path)
     # Issue #358 - avoid blocking
     await asyncio.to_thread(output_file.parent.mkdir, parents=True, exist_ok=True)
 

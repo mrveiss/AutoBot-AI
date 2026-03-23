@@ -43,6 +43,8 @@ from services.agent_secrets_integration import (
     get_agent_secrets_integration,
 )
 
+from autobot_shared.security.path_validator import validate_relative_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -245,7 +247,7 @@ class TerminalSecretsService:
 
         # Sanitize key name for filename
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in key_name)
-        key_path = os.path.join(temp_dir, f"{safe_name}")
+        key_path = str(validate_relative_path(safe_name, temp_dir))
 
         # Write key to file
         with open(key_path, "w", encoding="utf-8") as f:
@@ -351,7 +353,7 @@ class TerminalSecretsService:
         Returns:
             Path to the askpass script
         """
-        askpass_script = os.path.join(temp_dir, "askpass.sh")
+        askpass_script = str(validate_relative_path("askpass.sh", temp_dir))
         with open(askpass_script, "w", encoding="utf-8") as f:
             f.write("#!/bin/bash\ncat\n")
         os.chmod(askpass_script, 0o700)

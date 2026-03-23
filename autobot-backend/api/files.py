@@ -30,6 +30,7 @@ from utils.path_validation import is_invalid_name
 from utils.paths_manager import ensure_data_directory, get_data_path
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_relative_path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -291,19 +292,14 @@ def validate_and_resolve_path(path: str) -> Path:
             status_code=400, detail="Invalid path: encoded traversal not allowed"
         )
 
-    # Resolve the full path within sandbox
-    full_path = SANDBOXED_ROOT / clean_path
-
-    # Use realpath for canonical path resolution (prevents symlink attacks)
+    # Validate via shared security module (#1721)
     try:
-        canonical_full = full_path.resolve(strict=False)
-        canonical_sandbox = SANDBOXED_ROOT.resolve()
-        canonical_full.relative_to(canonical_sandbox)
+        return validate_relative_path(clean_path, SANDBOXED_ROOT)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Path outside sandbox not allowed")
-
-    # Return the canonical (absolute) path to prevent CWD-related issues
-    return canonical_full
+        raise HTTPException(
+            status_code=400,
+            detail="Path outside sandbox not allowed",
+        )
 
 
 def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
@@ -1304,21 +1300,17 @@ def _validate_admin_path(path: str) -> Path:
     """Resolve and validate an absolute path for the SLM admin file browser.
 
     Restricts access to pre-approved base directories (Issue #984).
+    Uses shared path validator (#1721).
     """
+    from autobot_shared.security.path_validator import validate_path
+
     try:
-        resolved = Path(path).resolve()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid path")
-    for allowed in _ADMIN_ALLOWED_DIRS:
-        try:
-            resolved.relative_to(allowed)
-            return resolved
-        except ValueError:
-            continue
-    raise HTTPException(
-        status_code=403,
-        detail=f"Path outside allowed directories: {path}",
-    )
+        return validate_path(path, allowed_roots=list(_ADMIN_ALLOWED_DIRS))
+    except ValueError:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Path outside allowed directories: {path}",
+        )
 
 
 def _entry_to_file_item(entry: Path) -> dict:

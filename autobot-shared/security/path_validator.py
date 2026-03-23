@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",
@@ -69,12 +69,59 @@ def validate_path(
         root_resolved = Path(os.path.realpath(root))
         try:
             resolved.relative_to(root_resolved)
-            if must_exist and not resolved.exists():
-                raise ValueError(f"Path does not exist: {resolved}")
-            return resolved
         except ValueError:
-            if must_exist and not resolved.exists():
-                raise
             continue
+        # Path is within this root — check existence if required
+        if must_exist and not resolved.exists():
+            raise ValueError("Path does not exist")
+        return resolved
 
     raise ValueError("Path is outside allowed directories")
+
+
+def validate_relative_path(
+    user_segment: str,
+    base_dir: Union[str, Path],
+    *,
+    must_exist: bool = False,
+) -> Path:
+    """Join *user_segment* onto *base_dir* and verify no escape.
+
+    Designed for the common pattern where a user supplies a filename
+    or relative sub-path that should stay under a known directory.
+
+    Parameters
+    ----------
+    user_segment:
+        User-supplied path component (filename, sub-path).
+    base_dir:
+        Trusted root directory the result must remain within.
+    must_exist:
+        When *True*, require the resolved path to exist on disk.
+
+    Returns
+    -------
+    pathlib.Path
+        The resolved, validated path.
+
+    Raises
+    ------
+    ValueError
+        If the resolved path escapes *base_dir*, contains null
+        bytes, or (when *must_exist*) does not exist.
+    """
+    if not user_segment or "\x00" in user_segment:
+        raise ValueError("Invalid path segment: empty or contains null bytes")
+
+    base = Path(os.path.realpath(str(base_dir)))
+    resolved = Path(os.path.realpath(str(base / user_segment)))
+
+    try:
+        resolved.relative_to(base)
+    except ValueError:
+        raise ValueError("Path traversal detected: segment escapes base directory")
+
+    if must_exist and not resolved.exists():
+        raise ValueError(f"Path does not exist: {resolved}")
+
+    return resolved
