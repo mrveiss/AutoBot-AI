@@ -74,19 +74,37 @@ class APIKeyService(BaseService):
         return result.scalar_one_or_none()
 
     async def validate_key(self, plaintext_key: str) -> Optional[APIKey]:
-        """Validate an API key and record usage."""
-        key_hash = self._hash_key(plaintext_key)
+        """Validate an API key and record usage (#2083).
 
+        Tries HMAC-SHA256 hash first; falls back to legacy SHA-256 for
+        pre-#1721 keys and re-hashes them in place so future lookups
+        use the stronger algorithm.
+        """
+        key_hash = self._hash_key(plaintext_key)
         query = select(APIKey).where(APIKey.key_hash == key_hash)
         result = await self.session.execute(query)
         api_key = result.scalar_one_or_none()
+
+        if api_key is None:
+            api_key = await self._try_legacy_hash(plaintext_key)
 
         if not api_key or not api_key.is_valid:
             return None
 
         api_key.record_usage()
         await self.session.flush()
+        return api_key
 
+    async def _try_legacy_hash(self, plaintext_key: str) -> Optional[APIKey]:
+        """Check legacy SHA-256 hash and migrate to HMAC (#2083)."""
+        legacy_hash = self._hash_key_legacy(plaintext_key)
+        query = select(APIKey).where(APIKey.key_hash == legacy_hash)
+        result = await self.session.execute(query)
+        api_key = result.scalar_one_or_none()
+        if api_key is not None:
+            api_key.key_hash = self._hash_key(plaintext_key)
+            await self.session.flush()
+            logger.info("Migrated API key %s to HMAC-SHA256", api_key.id)
         return api_key
 
     async def revoke_key(self, key_id: uuid.UUID, user_id: uuid.UUID) -> bool:
@@ -126,7 +144,7 @@ class APIKeyService(BaseService):
 
     @staticmethod
     def _hash_key(key: str) -> str:
-        """Hash an API key using HMAC-SHA256 (#1721).
+        """Hash an API key using HMAC-SHA256 (#1721, #2083).
 
         Uses a fixed application-level key so that hashes remain
         deterministic for lookup while being stronger than bare SHA-256.
@@ -136,6 +154,11 @@ class APIKeyService(BaseService):
             msg=key.encode("utf-8"),
             digestmod=hashlib.sha256,
         ).hexdigest()
+
+    @staticmethod
+    def _hash_key_legacy(key: str) -> str:
+        """Hash using bare SHA-256 (pre-#1721 format, for migration)."""
+        return hashlib.sha256(key.encode()).hexdigest()
 
     @staticmethod
     def _calculate_expiration(expires_days: Optional[int]) -> Optional[datetime]:
