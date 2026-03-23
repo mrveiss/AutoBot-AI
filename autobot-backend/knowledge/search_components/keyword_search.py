@@ -70,10 +70,18 @@ class KeywordSearcher:
         When the corpus stats key is absent (first run or after flush),
         triggers an initial ``recompute_corpus_stats()`` so BM25 uses
         real IDF values instead of falling back to defaults (#2033).
+        Uses Redis EXISTS check instead of comparing total_docs to avoid
+        false-positive recompute on single-document KBs (#2082).
         """
         if self._bm25 is None:
+            stats_exist = False
+            if self.redis_client:
+                try:
+                    stats_exist = await self.redis_client.exists(_CORPUS_STATS_KEY)
+                except Exception:
+                    pass
             self._bm25 = await self._load_corpus_stats()
-            if self._bm25.total_docs == _DEFAULT_TOTAL_DOCS:
+            if not stats_exist:
                 await self.recompute_corpus_stats()
                 self._bm25 = await self._load_corpus_stats()
         return self._bm25
