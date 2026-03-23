@@ -90,17 +90,11 @@ export interface AutoBotSettings {
 
 // ============================================================================
 // Chat Models
+// Issue #2066: ChatMessage is now defined canonically in types/api.ts.
+// Re-exported here for backward compatibility.
 // ============================================================================
 
-export interface ChatMessage {
-  id: string
-  sender: 'user' | 'bot' | 'system' | 'error' | 'thought' | 'tool-code' | 'tool-output'
-  text: string
-  timestamp: string
-  message_type?: string
-  metadata?: Record<string, any>
-  session_id?: string
-}
+export type { ChatMessage, MessageSender, ChatMessageDisplayType } from '@/types/api'
 
 export interface ChatSession {
   id: string
@@ -460,7 +454,7 @@ export interface WorkflowResponse {
 // Utility Types
 // ============================================================================
 
-export type MessageSender = ChatMessage['sender']
+// MessageSender re-exported from '@/types/api' above (Issue #2066)
 export type TaskStatus = AgentTask['status']
 export type TaskPriority = AgentTask['priority']
 export type LogLevel = BackendSettings['log_level']
@@ -476,12 +470,12 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 // Type Guards and Validators
 // ============================================================================
 
-export function isChatMessage(obj: any): obj is ChatMessage {
+export function isChatMessage(obj: any): obj is import('@/types/api').ChatMessage {
   return obj &&
     typeof obj.id === 'string' &&
     typeof obj.sender === 'string' &&
-    typeof obj.text === 'string' &&
-    typeof obj.timestamp === 'string'
+    typeof obj.content === 'string' &&
+    (typeof obj.timestamp === 'string' || obj.timestamp instanceof Date)
 }
 
 export function isWebSocketEvent(obj: any): obj is WebSocketEvent {
@@ -506,7 +500,7 @@ export function isApiError(obj: any): obj is ApiError {
 // Default Values and Constants
 // ============================================================================
 
-export const DEFAULT_CHAT_MESSAGE: Partial<ChatMessage> = {
+export const DEFAULT_CHAT_MESSAGE: Partial<import('@/types/api').ChatMessage> = {
   sender: 'user',
   message_type: 'text',
   metadata: {}

@@ -2,21 +2,14 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import type { ChatMessage } from '@/types/api'
 
 // Create scoped logger for ChatRepository
 const logger = createLogger('ChatRepository')
 
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp?: string
-  metadata?: {
-    model?: string
-    tokens?: number
-    duration?: number
-  }
-}
+// Issue #2066: ChatMessage is now the canonical type from types/api.ts.
+// Re-exported here for backward compatibility with models/repositories/index.ts.
+export type { ChatMessage } from '@/types/api'
 
 export interface ChatSession {
   id: string

@@ -3,31 +3,13 @@ import { defineStore } from 'pinia'
 import { generateChatId, generateMessageId } from '@/utils/ChatIdGenerator.js'
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
+import type { ChatMessage } from '@/types/api'
+
+// Issue #2066: ChatMessage is now the canonical type from types/api.ts.
+// Re-export so existing consumers that import from this store still work.
+export type { ChatMessage } from '@/types/api'
 
 const logger = createLogger('useChatStore')
-
-export interface ChatMessage {
-  id: string
-  content: string
-  sender: 'user' | 'assistant' | 'system'
-  timestamp: Date
-  status?: 'sending' | 'sent' | 'error'
-  error?: string // Error message if status is 'error'
-  type?: 'thought' | 'planning' | 'debug' | 'utility' | 'sources' | 'json' | 'response' | 'message' | 'command_approval_request' | 'overseer_plan' | 'overseer_step' | 'terminal_output' | 'terminal_command' // For filtering
-  attachments?: Array<{
-    id: string
-    name: string
-    type: string
-    size: number
-    url: string
-  }>
-  metadata?: {
-    model?: string
-    tokens?: number
-    duration?: number
-    [key: string]: any // Allow additional metadata fields
-  }
-}
 
 // Issue #608: User context for session tracking
 export interface UserContext {
