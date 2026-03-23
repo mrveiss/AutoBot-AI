@@ -112,8 +112,8 @@ async def get_chat_workflow_manager(request: Request) -> Any:
 # Simple utility functions to replace missing imports
 def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str, str]:
     """Simple error handler replacement"""
-    logger.error("[%s] API error: %s", request_id, str(error))
-    return {"error": str(error)}
+    logger.exception("[%s] API error", request_id)
+    return {"error": "An internal error occurred"}
 
 
 def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
@@ -1100,7 +1100,7 @@ async def _stream_direct_response(
         )
         error_data = {
             "type": "error",
-            "content": f"Error processing command approval: {str(e)}",
+            "content": "Error processing command approval",
             "request_id": request_id,
         }
         yield f"data: {json.dumps(error_data)}\n\n"
@@ -1189,7 +1189,11 @@ async def _stream_graph_resume(
 
     except Exception as e:
         logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        evt = {
+            "type": "error",
+            "content": "An internal error occurred",
+            "request_id": request_id,
+        }
         yield f"data: {json.dumps(evt)}\n\n"
 
 

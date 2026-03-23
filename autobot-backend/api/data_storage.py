@@ -312,9 +312,9 @@ async def get_storage_stats():
             categories=categories,
         )
 
-    except Exception as e:
-        logger.error("Error getting storage stats: %s", str(e))
-        raise_server_error("STORAGE_0001", f"Error getting storage stats: {str(e)}")
+    except Exception:
+        logger.exception("Error getting storage stats")
+        raise_server_error("STORAGE_0001", "Error getting storage stats")
 
 
 @with_error_handling(
@@ -336,9 +336,9 @@ async def get_database_files_endpoint():
             "total_size_human": format_size(total_size),
         }
 
-    except Exception as e:
-        logger.error("Error getting database files: %s", str(e))
-        raise_server_error("STORAGE_0002", f"Error getting database files: {str(e)}")
+    except Exception:
+        logger.exception("Error getting database files")
+        raise_server_error("STORAGE_0002", "Error getting database files")
 
 
 @with_error_handling(
@@ -398,9 +398,9 @@ async def get_category_details(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error getting category details: %s", str(e))
-        raise_server_error("STORAGE_0003", f"Error getting category details: {str(e)}")
+    except Exception:
+        logger.exception("Error getting category details")
+        raise_server_error("STORAGE_0003", "Error getting category details")
 
 
 def _scan_and_remove_files(
@@ -421,8 +421,8 @@ def _scan_and_remove_files(
                     item.unlink()
                 files_removed += 1
                 bytes_freed += file_size
-            except (OSError, PermissionError) as e:
-                errors.append(f"Error removing {item.name}: {str(e)}")
+            except (OSError, PermissionError):
+                errors.append(f"Error removing {item.name}")
     return files_removed, bytes_freed, errors
 
 
@@ -483,9 +483,9 @@ async def cleanup_category(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error during cleanup: %s", str(e))
-        raise_server_error("STORAGE_0004", f"Error during cleanup: {str(e)}")
+    except Exception:
+        logger.exception("Error during cleanup")
+        raise_server_error("STORAGE_0004", "Error during cleanup")
 
 
 @with_error_handling(
@@ -534,9 +534,9 @@ async def cleanup_old_backups(
             ),
         }
 
-    except Exception as e:
-        logger.error("Error cleaning up old backups: %s", str(e))
-        raise_server_error("STORAGE_0005", f"Error cleaning up old backups: {str(e)}")
+    except Exception:
+        logger.exception("Error cleaning up old backups")
+        raise_server_error("STORAGE_0005", "Error cleaning up old backups")
 
 
 @with_error_handling(
@@ -564,8 +564,8 @@ async def delete_conversation(
             try:
                 transcript_path.unlink()
                 files_deleted.append(str(transcript_path.name))
-            except (OSError, PermissionError) as e:
-                errors.append(f"Error deleting transcript: {str(e)}")
+            except (OSError, PermissionError):
+                errors.append("Error deleting transcript")
 
         chats_dir = DATA_DIR / "chats"
         for suffix in ["_chat.json", "_terminal_transcript.txt"]:
@@ -592,9 +592,9 @@ async def delete_conversation(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error("Error deleting conversation: %s", str(e))
-        raise_server_error("STORAGE_0006", f"Error deleting conversation: {str(e)}")
+    except Exception:
+        logger.exception("Error deleting conversation")
+        raise_server_error("STORAGE_0006", "Error deleting conversation")
 
 
 @with_error_handling(
@@ -638,8 +638,6 @@ async def get_conversations_summary():
             "total_size_human": format_size(transcripts_size + chats_size),
         }
 
-    except Exception as e:
-        logger.error("Error getting conversations summary: %s", str(e))
-        raise_server_error(
-            "STORAGE_0007", f"Error getting conversations summary: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Error getting conversations summary")
+        raise_server_error("STORAGE_0007", "Error getting conversations summary")

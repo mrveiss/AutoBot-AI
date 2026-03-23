@@ -136,8 +136,9 @@ async def debug_redis_connection():
                     if item == "num_docs" and i + 1 < len(ft_info):
                         indexed_docs = int(ft_info[i + 1])
                         break
-            except Exception as e:
-                indexed_docs = f"Error: {e}"
+            except Exception:
+                logger.exception("Error querying FT.INFO")
+                indexed_docs = "Error: unable to query index"
 
             return vector_keys, indexed_docs
 

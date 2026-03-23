@@ -414,7 +414,7 @@ async def _process_with_rag_agent(
         return {
             "status": "partial_success",
             "synthesized_response": (
-                f"Found {len(all_results)} relevant documents but synthesis failed: {str(e)}"
+                f"Found {len(all_results)} relevant documents" " but synthesis failed"
             ),
             "results": all_results,
             "total_results": len(all_results),

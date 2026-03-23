@@ -1152,11 +1152,12 @@ async def _execute_decommission(
     """Run decommission playbook; fail deployment on error (#1369)."""
     try:
         result = await _run_decommission_playbook(node_id, backup)
-    except Exception as e:
-        await _fail_deployment(db, deployment, str(e))
+    except Exception:
+        logger.exception("Decommission playbook failed for node %s", node_id)
+        await _fail_deployment(db, deployment, "Playbook execution failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Decommission playbook failed: {str(e)[:300]}",
+            detail="Decommission playbook failed",
         )
 
     if not result["success"]:
@@ -2171,7 +2172,7 @@ async def renew_node_certificate(
         return CertificateActionResponse(
             action="renew",
             success=False,
-            message=f"Certificate renewal failed: {e}",
+            message="Certificate renewal failed",
         )
 
 
@@ -2231,7 +2232,7 @@ async def deploy_node_certificate(
         return CertificateActionResponse(
             action="deploy",
             success=False,
-            message=f"Certificate deployment failed: {e}",
+            message="Certificate deployment failed",
         )
 
 

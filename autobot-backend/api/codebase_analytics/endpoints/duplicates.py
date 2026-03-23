@@ -556,9 +556,9 @@ async def _run_dup_analysis(task_id: str) -> None:
         await _manager.update_progress(task_id, "Processing results", 80.0)
         result = _process_and_cache_analysis(analysis, project_root)
         await _manager.complete_task(task_id, result)
-    except Exception as e:
-        logger.error("Duplicate analysis failed: %s", e)
-        await _manager.fail_task(task_id, str(e))
+    except Exception:
+        logger.exception("Duplicate analysis failed")
+        await _manager.fail_task(task_id, "Analysis failed")
 
 
 @router.get("/duplicates/cached")

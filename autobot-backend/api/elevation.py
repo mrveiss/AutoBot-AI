@@ -298,12 +298,13 @@ async def run_elevated_command(command: str) -> dict:
 
     except (OSError, IOError) as e:
         logger.error("Command execution failed due to system error: %s", e)
-        return {"stdout": "", "stderr": f"System error: {str(e)}", "return_code": 1}
+        return {"stdout": "", "stderr": "System error", "return_code": 1}
     except asyncio.TimeoutError as e:
         logger.error("Command execution failed due to timeout: %s", e)
         return {"stdout": "", "stderr": "Command timed out", "return_code": 124}
-    except Exception as e:
-        return {"stdout": "", "stderr": str(e), "return_code": 1}
+    except Exception:
+        logger.exception("Command execution failed")
+        return {"stdout": "", "stderr": "An internal error occurred", "return_code": 1}
 
 
 @with_error_handling(
