@@ -64,16 +64,32 @@ export interface LLMResponse {
 }
 
 // System Health Types
+
+/**
+ * All status values that the backend health endpoint may return.
+ * Backend sends: 'healthy', 'unhealthy', 'degraded'.
+ * Frontend display layer uses: 'healthy', 'warning', 'error'.
+ * Legacy values kept for backward compatibility: 'online', 'offline'.
+ */
+export type ServiceHealthStatusValue =
+  | 'healthy'
+  | 'unhealthy'
+  | 'degraded'
+  | 'warning'
+  | 'error'
+  | 'online'
+  | 'offline';
+
 export interface ServiceStatus {
   name: string;
   version?: string;
-  status: 'online' | 'warning' | 'error' | 'offline';
-  statusText: string;
+  status: ServiceHealthStatusValue;
+  statusText?: string;
   responseTime?: number;
-  lastCheck?: number;
+  lastCheck?: number | string;
   consecutiveFailures?: number;
   error?: string;
-  timestamp?: number;
+  timestamp?: number | string;
   details?: Record<string, any>;
 }
 

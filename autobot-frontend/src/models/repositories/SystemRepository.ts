@@ -2,11 +2,11 @@ import { ApiRepository } from './ApiRepository'
 import type { AutoBotSettings, SystemMetrics, DiagnosticsReport } from '@/types/models'
 
 export interface HealthCheckResponse {
-  status: 'healthy' | 'warning' | 'error'
+  status: 'healthy' | 'unhealthy' | 'degraded' | 'warning' | 'error'
   version: string
   uptime: number
   services: Record<string, {
-    status: 'up' | 'down' | 'degraded'
+    status: 'up' | 'down' | 'degraded' | 'healthy' | 'unhealthy'
     latency?: number
     message?: string
   }>
