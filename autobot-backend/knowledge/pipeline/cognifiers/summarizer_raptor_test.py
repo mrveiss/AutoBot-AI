@@ -1,12 +1,15 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for RAPTOR recursive clustering in HierarchicalSummarizer (#2027)."""
+"""Tests for RAPTOR recursive clustering in HierarchicalSummarizer (#2027, #2051)."""
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import numpy as np
 import pytest
 
 sklearn = pytest.importorskip("sklearn")
 
+from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.summarizer import HierarchicalSummarizer
 
 
@@ -69,8 +72,6 @@ class TestBuildRaptorTree:
     @pytest.mark.asyncio
     async def test_single_chunk_no_clustering(self):
         s = HierarchicalSummarizer()
-        from unittest.mock import MagicMock
-
         chunk = MagicMock()
         chunk.content = "Single chunk content"
         embeddings = np.array([[1.0, 0.0]])
@@ -78,3 +79,68 @@ class TestBuildRaptorTree:
         assert "L0" in tree
         assert len(tree["L0"]) == 1
         assert "L1" not in tree
+
+
+class TestProcessPopulatesRaptorTree:
+    """Verify process() wires build_raptor_tree when embeddings are present (#2051)."""
+
+    @pytest.mark.asyncio
+    async def test_raptor_tree_set_when_embeddings_present(self):
+        """process() must populate context.raptor_tree when context.embeddings is set."""
+        s = HierarchicalSummarizer()
+
+        # Stub every LLM call so no real network I/O occurs.
+        stub_summary = MagicMock()
+        stub_summary.id = "s1"
+        stub_summary.content = "stub"
+        stub_summary.parent_summary_id = None
+        stub_summary.child_summary_ids = []
+
+        context = PipelineContext()
+        chunk = MagicMock()
+        chunk.content = "chunk content"
+        chunk.id = "c1"
+        chunk.document_id = "doc1"
+        context.chunks = [chunk]
+        context.embeddings = np.array([[1.0, 0.0]])
+
+        fake_tree = {"L0": [chunk]}
+
+        with patch.object(
+            s, "_summarize_text", new=AsyncMock(return_value=stub_summary)
+        ):
+            with patch.object(
+                s, "build_raptor_tree", new=AsyncMock(return_value=fake_tree)
+            ):
+                result = await s.process(context)
+
+        assert result.raptor_tree is not None
+        assert "L0" in result.raptor_tree
+
+    @pytest.mark.asyncio
+    async def test_raptor_tree_skipped_when_no_embeddings(self):
+        """process() must leave context.raptor_tree as None when no embeddings."""
+        s = HierarchicalSummarizer()
+
+        stub_summary = MagicMock()
+        stub_summary.id = "s1"
+        stub_summary.content = "stub"
+        stub_summary.parent_summary_id = None
+        stub_summary.child_summary_ids = []
+
+        context = PipelineContext()
+        chunk = MagicMock()
+        chunk.content = "chunk content"
+        chunk.id = "c1"
+        chunk.document_id = "doc1"
+        context.chunks = [chunk]
+        # embeddings intentionally left as None
+
+        with patch.object(
+            s, "_summarize_text", new=AsyncMock(return_value=stub_summary)
+        ):
+            with patch.object(s, "build_raptor_tree", new=AsyncMock()) as mock_brt:
+                result = await s.process(context)
+
+        mock_brt.assert_not_called()
+        assert result.raptor_tree is None

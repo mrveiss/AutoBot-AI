@@ -25,6 +25,8 @@ class PipelineContext:
         self.summaries: List[Any] = []
         self.metadata: Dict[str, Any] = {}
         self.document_id: Optional[UUID] = None
+        self.embeddings: Optional[Any] = None  # numpy array of chunk embeddings (#2051)
+        self.raptor_tree: Optional[Dict] = None  # RAPTOR level hierarchy (#2051)
 
 
 class PipelineResult:
