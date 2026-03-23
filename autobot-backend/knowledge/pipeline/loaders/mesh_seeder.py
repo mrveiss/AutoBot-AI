@@ -208,20 +208,19 @@ class MeshSeeder(BaseLoader):
         if embeddings is None or len(embeddings) < 2:
             return []
         similarity_matrix = self._compute_cosine_similarity(embeddings)
-        edges: List[_EdgeDict] = []
-        for i in range(len(nodes)):
-            for j in range(i + 1, len(nodes)):
-                if similarity_matrix[i, j] >= self.similarity_threshold:
-                    edges.append(
-                        {
-                            "from_node": nodes[i]["id"],
-                            "to_node": nodes[j]["id"],
-                            "edge_type": "SIMILAR_TO",
-                            "origin": "seeder",
-                            "weight": float(similarity_matrix[i, j]),
-                        }
-                    )
-        return edges
+        # Vectorized extraction of above-threshold pairs (#2081)
+        upper = np.triu(similarity_matrix, k=1)
+        rows, cols = np.where(upper >= self.similarity_threshold)
+        return [
+            {
+                "from_node": nodes[int(r)]["id"],
+                "to_node": nodes[int(c)]["id"],
+                "edge_type": "SIMILAR_TO",
+                "origin": "seeder",
+                "weight": float(upper[r, c]),
+            }
+            for r, c in zip(rows, cols)
+        ]
 
     # ------------------------------------------------------------------
     # Persistence

@@ -1021,8 +1021,8 @@ async def _vectorize_fact_background(
         # Perform vectorization (Issue #665: uses helper)
         await _perform_vectorization(kb_instance, fact_id, job_id, job_data)
 
-    except Exception as e:
-        error_msg = str(e)
+    except Exception:
+        error_msg = "Vectorization did not succeed"
         logger.error(
             f"Error in vectorization job {job_id} for fact {fact_id}: {error_msg}"
         )
@@ -1133,7 +1133,7 @@ async def _vectorize_single_document(kb, document_id: str) -> dict:
         return {"id": document_id, "status": "error", "error": error_msg}
     except Exception as e:
         logger.error("Vectorization error for %s: %s", document_id, e)
-        return {"id": document_id, "status": "error", "error": str(e)}
+        return {"id": document_id, "status": "error", "error": "Vectorization failed"}
 
 
 @with_error_handling(

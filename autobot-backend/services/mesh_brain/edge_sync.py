@@ -23,38 +23,50 @@ class MeshEdgeSync:
         self.redis = redis
         self.min_weight = min_weight
 
+    @staticmethod
+    def _collect_nodes(edges: list[dict]) -> set[str]:
+        """Return the set of all node IDs touched by the given edge list (#2053)."""
+        nodes: set[str] = set()
+        for edge in edges:
+            nodes.add(str(edge["from_node"]))
+            nodes.add(str(edge["to_node"]))
+        return nodes
+
     async def sync(self) -> int:
-        """Sync edges above min_weight to Redis. Returns count synced."""
+        """Sync edges above min_weight to Redis. Returns count synced.
+
+        Stale entries are removed by deleting each touched node's sorted-set
+        key before writing fresh ZADD entries (#2053).
+        """
         edges = await self.db.fetch_edges(min_weight=self.min_weight)
         if not edges:
             logger.info("No edges above weight %.2f to sync", self.min_weight)
             return 0
 
-        synced = 0
+        nodes_touched = self._collect_nodes(edges)
         pipe = self.redis.pipeline()
-        nodes_touched = set()
+        self._clear_stale_keys(pipe, nodes_touched)
+        synced = self._enqueue_zadd(pipe, edges)
+        await pipe.execute()
+        logger.info("Synced %d edges across %d nodes", synced, len(nodes_touched))
+        return synced
 
+    @staticmethod
+    def _clear_stale_keys(pipe, nodes: set[str]) -> None:
+        """Delete sorted-set keys for all nodes before re-writing (#2053)."""
+        for node_id in nodes:
+            pipe.delete(f"mesh:edges:{node_id}")
+
+    @staticmethod
+    def _enqueue_zadd(pipe, edges: list[dict]) -> int:
+        """Queue ZADD commands for every edge (bidirectional). Returns edge count."""
         for edge in edges:
             from_node = str(edge["from_node"])
             to_node = str(edge["to_node"])
             weight = float(edge["weight"])
-
-            key = f"mesh:edges:{from_node}"
-            pipe.zadd(key, {to_node: weight})
-            nodes_touched.add(from_node)
-
-            rev_key = f"mesh:edges:{to_node}"
-            pipe.zadd(rev_key, {from_node: weight})
-            nodes_touched.add(to_node)
-            synced += 1
-
-        await pipe.execute()
-        logger.info(
-            "Synced %d edges across %d nodes",
-            synced,
-            len(nodes_touched),
-        )
-        return synced
+            pipe.zadd(f"mesh:edges:{from_node}", {to_node: weight})
+            pipe.zadd(f"mesh:edges:{to_node}", {from_node: weight})
+        return len(edges)
 
     async def get_neighbors(
         self,

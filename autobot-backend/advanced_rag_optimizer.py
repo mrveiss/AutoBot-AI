@@ -670,7 +670,13 @@ class AdvancedRAGOptimizer:
         metrics: RAGMetrics,
     ) -> List[SearchResult]:
         """Diversify and optionally rerank results (Issue #665: extracted helper)."""
-        diversified_results = self._diversify_results(results)
+        # #2103: Skip crude word-overlap diversity when reranking is enabled
+        # — the reranker's blend weights (RerankWeights) handle scoring,
+        # and _diversify_results would drop results before they can be scored.
+        if enable_reranking:
+            diversified_results = results
+        else:
+            diversified_results = self._diversify_results(results)
 
         if enable_reranking and len(diversified_results) > 1:
             rerank_start = time.time()

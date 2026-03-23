@@ -14,8 +14,9 @@ from services.mesh_brain.edge_sync import MeshEdgeSync
 
 
 def _make_redis_mock():
-    """Return a Redis mock with a pipeline that tracks zadd/execute calls."""
+    """Return a Redis mock with a pipeline that tracks delete/zadd/execute calls."""
     pipe = AsyncMock()
+    pipe.delete = MagicMock()
     pipe.zadd = MagicMock()
     pipe.execute = AsyncMock(return_value=[])
 
@@ -117,3 +118,48 @@ class TestMeshEdgeSync:
         pipe.execute.assert_awaited_once()
         # 2 edges × 2 directions = 4 zadd calls
         assert pipe.zadd.call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_sync_deletes_stale_keys_before_writing(self):
+        """delete() is called for every touched node before any zadd (#2053)."""
+        edges = [{"from_node": "A", "to_node": "B", "weight": 0.8}]
+        db = _make_db_mock(edges)
+        redis, pipe = _make_redis_mock()
+
+        syncer = MeshEdgeSync(db=db, redis=redis, min_weight=0.5)
+        await syncer.sync()
+
+        deleted_keys = {call.args[0] for call in pipe.delete.call_args_list}
+        assert "mesh:edges:A" in deleted_keys
+        assert "mesh:edges:B" in deleted_keys
+
+        # Verify delete was queued before zadd in the call sequence
+        all_calls = pipe.method_calls
+        method_names = [c[0] for c in all_calls]
+        last_delete = max(i for i, n in enumerate(method_names) if n == "delete")
+        first_zadd = min(i for i, n in enumerate(method_names) if n == "zadd")
+        assert last_delete < first_zadd, "all deletes must precede first zadd"
+
+    @pytest.mark.asyncio
+    async def test_sync_does_not_leave_orphaned_entries(self):
+        """A node absent from the current sync has its key deleted (#2053)."""
+        first_edges = [
+            {"from_node": "A", "to_node": "B", "weight": 0.9},
+            {"from_node": "A", "to_node": "C", "weight": 0.7},
+        ]
+        second_edges = [{"from_node": "A", "to_node": "B", "weight": 0.9}]
+
+        db = _make_db_mock(second_edges)
+        redis, pipe = _make_redis_mock()
+        _ = first_edges  # second sync drops C; its key must be cleaned on next sync
+
+        syncer = MeshEdgeSync(db=db, redis=redis, min_weight=0.5)
+        await syncer.sync()
+
+        deleted_keys = {call.args[0] for call in pipe.delete.call_args_list}
+        # Only nodes in the current sync are touched — A and B get fresh keys
+        assert "mesh:edges:A" in deleted_keys
+        assert "mesh:edges:B" in deleted_keys
+        # C is not in this sync batch; its key is not written OR orphaned here
+        zadd_keys = {call.args[0] for call in pipe.zadd.call_args_list}
+        assert "mesh:edges:C" not in zadd_keys

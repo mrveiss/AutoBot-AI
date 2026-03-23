@@ -275,7 +275,7 @@ async def export_state_data_to_file(
         report_generator: Optional async callable for markdown format
     """
     # Ensure output goes to data directory
-    data_base = Path("data/reports/state_tracking")
+    data_base = PROJECT_ROOT / "data/reports/state_tracking"  # #2163
     if not output_path.startswith("data/"):
         safe_name = Path(output_path).name
         output_file = validate_relative_path(safe_name, data_base)

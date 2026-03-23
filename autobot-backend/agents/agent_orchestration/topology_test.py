@@ -9,6 +9,7 @@ using in-memory stubs — no database required.
 """
 
 import dataclasses
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -39,13 +40,16 @@ def _make_connection(
     )
 
 
-def _make_db(connection: AgentConnection | None = None) -> AsyncMock:
+def _make_db(
+    connection: AgentConnection | None = None, delete_count: int = 0
+) -> AsyncMock:
     """Return a mock that satisfies the AgentTopologyDB Protocol."""
     db = AsyncMock()
     db.get_agent_connections.return_value = [connection] if connection else []
     db.get_or_create_agent_connection.return_value = connection or _make_connection()
     db.update_agent_connection.return_value = None
     db.record_agent_task.return_value = None
+    db.delete_weak_connections.return_value = delete_count
     return db
 
 
@@ -201,4 +205,37 @@ def test_agent_connection_dataclass_fields():
         "weight",
         "co_success_count",
         "co_failure_count",
+        "last_updated",
     }
+
+
+@pytest.mark.asyncio
+async def test_prune_weak_connections_calls_db():
+    """prune_weak_connections forwards min_weight and a UTC cutoff to delete_weak_connections."""
+    db = _make_db(delete_count=0)
+    topology = AgentTopology(db)
+
+    before_call = datetime.now(tz=timezone.utc)
+    await topology.prune_weak_connections(min_weight=0.2, inactive_days=30)
+    after_call = datetime.now(tz=timezone.utc)
+
+    db.delete_weak_connections.assert_awaited_once()
+    call_kwargs = db.delete_weak_connections.await_args.kwargs
+    assert call_kwargs["min_weight"] == 0.2
+
+    cutoff: datetime = call_kwargs["inactive_since"]
+    # The cutoff must be 30 days before the call, within a 1-second tolerance.
+    expected_low = before_call - timedelta(days=30) - timedelta(seconds=1)
+    expected_high = after_call - timedelta(days=30) + timedelta(seconds=1)
+    assert expected_low <= cutoff <= expected_high
+
+
+@pytest.mark.asyncio
+async def test_prune_returns_count():
+    """prune_weak_connections returns the integer row count reported by the db."""
+    db = _make_db(delete_count=7)
+    topology = AgentTopology(db)
+
+    result = await topology.prune_weak_connections()
+
+    assert result == 7
