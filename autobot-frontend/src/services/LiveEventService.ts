@@ -12,8 +12,12 @@
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
-type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
-type LiveEventCallback = (event: LiveEvent) => void
+export type LiveEventConnectionState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'error'
+export type LiveEventCallback = (event: LiveEvent) => void
 
 /** Parsed live event received from the server */
 export interface LiveEvent {
@@ -48,7 +52,7 @@ class LiveEventService {
   private readonly channelListeners = new Map<string, Set<LiveEventCallback>>()
 
   readonly isConnected: Ref<boolean> = ref(false)
-  readonly connectionState: Ref<ConnectionState> = ref('disconnected')
+  readonly connectionState: Ref<LiveEventConnectionState> = ref('disconnected')
 
   private getUrl(token?: string): string {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -273,5 +277,40 @@ class LiveEventService {
 }
 
 const liveEventService = new LiveEventService()
+
+// Auto-connect with delay to allow app initialization.
+// Only connect if this is the first import and not already connected.
+if (typeof window !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- one-time init flag on window with no type definition
+  const win = window as any
+
+  if (!win._autobotLiveEventInitialized) {
+    win._autobotLiveEventInitialized = true
+
+    setTimeout(() => {
+      if (
+        !liveEventService.isConnected.value &&
+        liveEventService.connectionState.value !== 'connecting'
+      ) {
+        liveEventService
+          .connect()
+          .then(() => {
+            // Subscribe to the global channel by default so
+            // rag_retrieval and other broadcast events are received.
+            liveEventService.subscribe('global', (event) => {
+              logger.debug('Global live event received:', {
+                event_type: event.event_type,
+                event_id: event.event_id,
+              })
+            })
+          })
+          .catch((error: unknown) => {
+            logger.error('Initial LiveEventService connection failed:', error)
+          })
+      }
+    }, 1000)
+  }
+}
+
 export default liveEventService
 export { LiveEventService }
