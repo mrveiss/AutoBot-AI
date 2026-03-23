@@ -28,9 +28,24 @@
         </div>
 
         <!-- Search results -->
-        <div v-if="searchResults.length > 0" class="search-results">
+        <div
+          v-if="searching || searchError || searchResults.length > 0 || showNoResults"
+          class="search-results"
+        >
+          <div v-if="searching" class="search-status">
+            <i class="fas fa-spinner fa-spin"></i>
+            {{ $t('knowledge.share.searching') }}
+          </div>
+          <div v-else-if="searchError" class="search-status search-status--error">
+            <i class="fas fa-exclamation-circle"></i>
+            {{ searchError }}
+          </div>
+          <div v-else-if="showNoResults" class="search-status">
+            {{ $t('knowledge.share.noResults') }}
+          </div>
           <div
             v-for="result in searchResults"
+            v-else
             :key="`${result.type}-${result.id}`"
             class="search-result-item"
             @click="addEntity(result)"
@@ -102,13 +117,17 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { apiService } from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
+const logger = createLogger('ShareKnowledgeDialog')
 
 /**
  * Share Knowledge Dialog Component
  *
  * Issue #679: Dialog for sharing knowledge with users and groups.
+ * Issue #2072: Replaced mock user search data with real API call.
  */
 
 // Types
@@ -144,6 +163,9 @@ const searchResults = ref<ShareEntity[]>([])
 const currentAccess = ref<ShareEntity[]>([])
 const saving = ref(false)
 const originalAccess = ref<ShareEntity[]>([])
+const searching = ref(false)
+const searchError = ref<string | null>(null)
+const showNoResults = ref(false)
 
 // Computed
 const hasChanges = computed(() => {
@@ -190,21 +212,41 @@ const initializeAccessList = () => {
 }
 
 const handleSearch = async () => {
-  if (searchQuery.value.length < 2) {
+  const query = searchQuery.value
+  if (query.length < 2) {
     searchResults.value = []
+    searchError.value = null
+    showNoResults.value = false
     return
   }
 
-  // TODO: Call API to search users and groups
-  // Placeholder mock data
-  searchResults.value = [
-    { id: 'user1', name: 'John Doe', type: 'user' as const },
-    { id: 'user2', name: 'Jane Smith', type: 'user' as const },
-    { id: 'group1', name: 'Engineering Team', type: 'group' as const },
-    { id: 'group2', name: 'Security Team', type: 'group' as const },
-  ].filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
+  searching.value = true
+  searchError.value = null
+  showNoResults.value = false
+  searchResults.value = []
+
+  try {
+    const url = `/api/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
+    const response = await apiService.get<{
+      users: ShareEntity[]
+      available: boolean
+      message: string
+    }>(url)
+
+    if (!response.available) {
+      searchError.value = response.message || t('knowledge.share.searchUnavailable')
+      logger.debug('User search not available: %s', response.message)
+      return
+    }
+
+    searchResults.value = response.users
+    showNoResults.value = response.users.length === 0
+  } catch (err) {
+    logger.error('User search failed: %o', err)
+    searchError.value = t('knowledge.share.searchError')
+  } finally {
+    searching.value = false
+  }
 }
 
 const addEntity = (entity: ShareEntity) => {
@@ -223,6 +265,8 @@ const addEntity = (entity: ShareEntity) => {
   // Clear search
   searchQuery.value = ''
   searchResults.value = []
+  searchError.value = null
+  showNoResults.value = false
 }
 
 const removeEntity = (entity: ShareEntity) => {
@@ -384,6 +428,21 @@ const closeDialog = () => {
   border-radius: 0.375rem;
   max-height: 200px;
   overflow-y: auto;
+}
+
+.search-status {
+  padding: 0.75rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.search-status--error {
+  color: #ef4444;
 }
 
 .search-result-item {
