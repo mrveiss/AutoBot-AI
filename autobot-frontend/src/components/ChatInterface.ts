@@ -44,11 +44,6 @@ export function useChatInterface() {
   // Knowledge base state with proper typing
   const kbStatus = ref<KnowledgeBaseStatus>({
     status: 'loading',
-    message: 'Loading knowledge base status...',
-    progress: 0,
-    current_operation: null,
-    documents_processed: 0,
-    documents_total: 0,
     last_updated: null
   })
 

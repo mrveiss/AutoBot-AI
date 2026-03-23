@@ -142,13 +142,23 @@ export interface KnowledgeBaseStats {
 }
 
 export interface KnowledgeBaseStatus {
-  status: 'loading' | 'ready' | 'error' | 'empty';
-  message: string;
-  progress: number;
-  current_operation: string | null;
-  documents_processed: number;
-  documents_total: number;
+  status: 'loading' | 'ready' | 'error' | 'empty' | 'online' | 'offline';
   last_updated: string | null;
+  // Fields from backend /api/knowledge_base/stats response
+  total_documents?: number;
+  total_chunks?: number;
+  total_facts?: number;
+  total_vectors?: number;
+  categories?: string[];
+  db_size?: number;
+  initialized?: boolean;
+  rag_available?: boolean;
+  // Fields only available during active operations (not sent by stats endpoint)
+  progress?: number;
+  current_operation?: string | null;
+  documents_processed?: number;
+  documents_total?: number;
+  message?: string;
 }
 
 // Terminal Types
