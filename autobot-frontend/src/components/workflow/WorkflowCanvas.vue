@@ -6,8 +6,9 @@
         <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
           <i class="fas fa-plus"></i> {{ $t('workflow.canvas.addStep') }}
         </button>
-        <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition')">
+        <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition') + ' (coming soon — #2140)'" :class="{ 'btn-experimental': true }">
           <i class="fas fa-code-branch"></i> {{ $t('workflow.canvas.condition') }}
+          <span class="badge-experimental">beta</span>
         </button>
         <div class="toolbar-divider"></div>
         <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')">
@@ -266,6 +267,8 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .tool-btn.primary { background: var(--color-primary); color: var(--text-on-primary); border-color: var(--color-primary); }
 .tool-btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
 .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tool-btn.btn-experimental { opacity: 0.85; position: relative; }
+.badge-experimental { font-size: 9px; padding: 1px 4px; background: var(--color-warning); color: #000; border-radius: 3px; font-weight: 700; text-transform: uppercase; line-height: 1; }
 .toolbar-divider { width: 1px; height: 24px; background: var(--border-default); margin: 0 4px; }
 
 .canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; }

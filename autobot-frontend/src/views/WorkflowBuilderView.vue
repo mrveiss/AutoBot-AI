@@ -790,6 +790,17 @@ function handleNodesConnected(sourceId: string, targetId: string): void {
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
+  // #2182: Warn when unsupported node types will be dropped on save
+  const unsupportedNodes = workflowNodes.value.filter(
+    (n) => n.type !== 'step',
+  );
+  if (unsupportedNodes.length > 0) {
+    const types = [...new Set(unsupportedNodes.map((n) => n.type))];
+    showToast(
+      `${types.join(', ')} nodes are not yet supported and will be excluded. See #2140.`,
+      'warning',
+    );
+  }
   const steps = exportCanvasToSteps();
   if (steps.length === 0) {
     showToast('Add at least one step before saving', 'warning');
