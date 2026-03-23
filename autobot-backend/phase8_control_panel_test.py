@@ -37,7 +37,9 @@ def test_api_connectivity():
             print(f"❌ API returned status code: {response.status_code}")  # noqa: print
             return False
     except requests.exceptions.ConnectionError:
-        print("❌ Cannot connect to backend API at http://localhost:8001")  # noqa: print
+        print(
+            "❌ Cannot connect to backend API at http://localhost:8001"
+        )  # noqa: print
         return False
     except Exception as e:
         print(f"❌ API connectivity test failed: {e}")  # noqa: print
@@ -182,7 +184,9 @@ def test_api_endpoints():
             capabilities = response.json()
             print(f"✅ Streaming capabilities: {capabilities}")  # noqa: print
         else:
-            print(f"❌ Capabilities check failed: {response.status_code}")  # noqa: print
+            print(
+                f"❌ Capabilities check failed: {response.status_code}"
+            )  # noqa: print
     except Exception as e:
         print(f"❌ Capabilities check error: {e}")  # noqa: print
 

@@ -326,5 +326,7 @@ async def test_redis_connection_immediate(
                 )
                 return None
     except Exception as e:
-        logger.error(f"❌ Redis connection test error for database {database}: {str(e)}")
+        logger.error(
+            f"❌ Redis connection test error for database {database}: {str(e)}"
+        )
         return None

@@ -149,9 +149,9 @@ class WebSocketManager:
                 else:
                     # Reset state and try again
                     async with self._lock:
-                        self.connection_states[
-                            connection_id
-                        ] = ConnectionState.CONNECTED
+                        self.connection_states[connection_id] = (
+                            ConnectionState.CONNECTED
+                        )
 
     async def _send_heartbeat(
         self, connection_id: str, websocket: WebSocket, current_time: float

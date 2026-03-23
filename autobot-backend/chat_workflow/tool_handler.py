@@ -613,7 +613,9 @@ class ToolHandlerMixin:
         )
         yield self._build_waiting_message(command, result)
 
-        logger.info("🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command)
+        logger.info(
+            "🔍 [APPROVAL POLLING] Waiting for approval of command: %s", command
+        )
         logger.info(
             "🔍 [APPROVAL POLLING] Chat session: %s, Terminal session: %s",
             session_id,
@@ -1027,7 +1029,9 @@ class ToolHandlerMixin:
                 },
             )
         else:
-            additional_response_parts.append(f"\n\n❌ Command execution failed: {error}")
+            additional_response_parts.append(
+                f"\n\n❌ Command execution failed: {error}"
+            )
             yield WorkflowMessage(
                 type="error",
                 content=f"Command failed: {error}",

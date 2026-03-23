@@ -183,7 +183,9 @@ async def monitor_workflow_progress(session, base_url, workflow_id):
                         break
 
                 else:
-                    print(f"   ❌ Status check failed: {response.status}")  # noqa: print
+                    print(
+                        f"   ❌ Status check failed: {response.status}"
+                    )  # noqa: print
                     break
 
         except Exception as e:

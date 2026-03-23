@@ -498,9 +498,9 @@ class VueAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.75,
-            false_positive_reason=""
-            if confidence >= 0.75
-            else "Context may make this acceptable",
+            false_positive_reason=(
+                "" if confidence >= 0.75 else "Context may make this acceptable"
+            ),
             rule_id=rule_id,
             tags=["vue", prefix.split("-")[0], category.value],
         )

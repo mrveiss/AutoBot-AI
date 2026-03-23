@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for the Governance Engine and Skill Promoter (Phase 6 / Issue #951)."""
+
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch

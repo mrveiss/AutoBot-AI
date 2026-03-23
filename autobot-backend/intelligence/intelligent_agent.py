@@ -83,9 +83,9 @@ class AgentState:
             "is_wsl": self.os_info.is_wsl,
             "package_manager": self.os_info.package_manager,
             "shell": self.os_info.shell,
-            "capabilities": list(self.os_info.capabilities)
-            if self.os_info.capabilities
-            else [],
+            "capabilities": (
+                list(self.os_info.capabilities) if self.os_info.capabilities else []
+            ),
         }
 
     def add_to_context(self, entry_type: str, content: Any, **extra) -> None:

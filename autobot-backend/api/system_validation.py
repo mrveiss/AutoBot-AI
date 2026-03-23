@@ -158,9 +158,7 @@ async def run_quick_validation():
         overall_status = (
             "healthy"
             if overall_score >= 80
-            else "degraded"
-            if overall_score >= 60
-            else "unhealthy"
+            else "degraded" if overall_score >= 60 else "unhealthy"
         )
 
         return {

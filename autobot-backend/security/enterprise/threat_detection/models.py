@@ -382,9 +382,7 @@ class UserProfile:
             "risk_level": (
                 "high"
                 if self.risk_score > 0.7
-                else "medium"
-                if self.risk_score > 0.4
-                else "low"
+                else "medium" if self.risk_score > 0.4 else "low"
             ),
             "profile_age_days": (datetime.utcnow() - self.last_updated).days,
             "total_actions": sum(self.baseline_actions.values()),

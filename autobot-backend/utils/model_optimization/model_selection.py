@@ -11,8 +11,13 @@ Contains model filtering and selection logic.
 import logging
 from typing import List
 
-from .types import (ModelInfo, ModelPerformanceLevel, SystemResources,
-                    TaskComplexity, TaskRequest)
+from .types import (
+    ModelInfo,
+    ModelPerformanceLevel,
+    SystemResources,
+    TaskComplexity,
+    TaskRequest,
+)
 
 logger = logging.getLogger(__name__)
 

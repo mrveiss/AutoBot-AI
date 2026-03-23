@@ -22,12 +22,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import httpx
+from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 

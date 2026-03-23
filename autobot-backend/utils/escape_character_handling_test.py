@@ -74,7 +74,7 @@ def test_ansi_escape_sequences():
         },
         {
             "name": "Control characters",
-            "input": "Hello\x07\x08World\x7F",
+            "input": "Hello\x07\x08World\x7f",
             "expected": "HelloWorld",
         },
         {

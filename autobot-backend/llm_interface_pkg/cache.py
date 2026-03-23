@@ -301,15 +301,21 @@ class LLMResponseCache:
             if redis_client:
                 # Optimize metadata storage - only keep essential data
                 essential_metadata = {
-                    "request_id": response.metadata.get("request_id")
-                    if response.metadata
-                    else None,
-                    "chunks_received": response.metadata.get("chunks_received")
-                    if response.metadata
-                    else None,
-                    "streaming": response.metadata.get("streaming", False)
-                    if response.metadata
-                    else False,
+                    "request_id": (
+                        response.metadata.get("request_id")
+                        if response.metadata
+                        else None
+                    ),
+                    "chunks_received": (
+                        response.metadata.get("chunks_received")
+                        if response.metadata
+                        else None
+                    ),
+                    "streaming": (
+                        response.metadata.get("streaming", False)
+                        if response.metadata
+                        else False
+                    ),
                 }
 
                 data = {

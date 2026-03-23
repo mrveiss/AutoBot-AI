@@ -892,9 +892,11 @@ class TagsMixin:
                 "success": True,
                 "tag": tag,
                 "deleted": deleted > 0,
-                "message": "Tag style reset to defaults"
-                if deleted
-                else "No custom style existed",
+                "message": (
+                    "Tag style reset to defaults"
+                    if deleted
+                    else "No custom style existed"
+                ),
             }
 
         except Exception as e:

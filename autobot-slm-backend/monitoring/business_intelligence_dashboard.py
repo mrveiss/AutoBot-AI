@@ -960,9 +960,7 @@ class BusinessIntelligenceDashboard:
         health_color = (
             "#28a745"
             if health_score >= 80
-            else "#ffc107"
-            if health_score >= 60
-            else "#dc3545"
+            else "#ffc107" if health_score >= 60 else "#dc3545"
         )
 
         roi_percent = round(summary.get("total_roi_percent", 0), 1)

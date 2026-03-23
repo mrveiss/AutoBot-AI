@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for the skill repo sync engine (Phase 3)."""
+
 import os
 import tempfile
 import textwrap
@@ -10,8 +11,7 @@ import pytest
 from skills.models import SkillState
 from skills.sync.local_sync import LocalDirSync
 
-SAMPLE_SKILL_MD = textwrap.dedent(
-    """\
+SAMPLE_SKILL_MD = textwrap.dedent("""\
     ---
     name: sample-skill
     version: 1.0.0
@@ -20,8 +20,7 @@ SAMPLE_SKILL_MD = textwrap.dedent(
     ---
     # Sample Skill
     Do a thing.
-"""
-)
+""")
 
 SAMPLE_SKILL_PY = "# skill.py placeholder"
 

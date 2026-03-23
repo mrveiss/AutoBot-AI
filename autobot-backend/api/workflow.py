@@ -62,9 +62,9 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
             query="network security scanning tools", focus="tools"
         )
         result = await research_agent.research_specific_tools(request)
-        ctx.step[
-            "result"
-        ] = f"Research completed: {result.get('summary', 'Tools researched')}"
+        ctx.step["result"] = (
+            f"Research completed: {result.get('summary', 'Tools researched')}"
+        )
     elif "installation guide" in action_lower:
         result = await research_agent.get_tool_installation_guide("nmap")
         guide = result.get("installation_guide", "Guide obtained")
@@ -171,9 +171,9 @@ async def _handle_network_discovery_step(ctx: WorkflowStepContext) -> None:
     result = await network_discovery_agent.execute(ctx.action, discovery_context)
     status = result.get("status")
     hosts_found = result.get("hosts_found", 0)
-    ctx.step[
-        "result"
-    ] = f"Network discovery completed: {status} - Found {hosts_found} hosts"
+    ctx.step["result"] = (
+        f"Network discovery completed: {status} - Found {hosts_found} hosts"
+    )
     ctx.step["discovery_results"] = result
 
 
@@ -187,31 +187,31 @@ async def _handle_system_commands_step(ctx: WorkflowStepContext) -> None:
     if "install tool" in action_lower:
         tool_info = {"name": "nmap", "package_name": "nmap"}
         result = await cmd_agent.install_tool(tool_info, ctx.workflow_id)
-        ctx.step[
-            "result"
-        ] = f"Installation result: {result.get('response', 'Tool installed')}"
+        ctx.step["result"] = (
+            f"Installation result: {result.get('response', 'Tool installed')}"
+        )
     elif "verify installation" in action_lower:
         result = await cmd_agent.execute_command_with_output(
             "nmap --version", ctx.workflow_id
         )
-        ctx.step[
-            "result"
-        ] = f"Verification result: {result.get('output', 'Tool verified')}"
+        ctx.step["result"] = (
+            f"Verification result: {result.get('output', 'Tool verified')}"
+        )
     else:
         result = await cmd_agent.execute_command_with_output(
             ctx.action, ctx.workflow_id
         )
-        ctx.step[
-            "result"
-        ] = f"Command executed: {result.get('output', 'Command completed')}"
+        ctx.step["result"] = (
+            f"Command executed: {result.get('output', 'Command completed')}"
+        )
 
 
 async def _handle_fallback_step(ctx: WorkflowStepContext, agent_type: str) -> None:
     """Handle unknown agent type with fallback (Issue #336 - extracted handler, Issue #322 - context)."""
     result = await ctx.orchestrator.execute_goal(f"{agent_type}: {ctx.action}")
-    ctx.step[
-        "result"
-    ] = f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+    ctx.step["result"] = (
+        f"Executed by {agent_type}: {result.get('response', 'Task completed')}"
+    )
 
 
 # Issue #336: Dispatch table for agent step handlers

@@ -39,7 +39,9 @@ async def test_security_endpoints():
                 response = requests.get("http://localhost:8001/api/hello", timeout=2)
                 if response.status_code == 200:
                     server_ready = True
-                    print(f"✅ Server ready after {attempt + 1} attempts")  # noqa: print
+                    print(
+                        f"✅ Server ready after {attempt + 1} attempts"
+                    )  # noqa: print
                     break
             except Exception:
                 pass

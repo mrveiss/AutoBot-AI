@@ -127,7 +127,12 @@ def _print_security_analysis(results: dict) -> None:
         ]
         print("   • Top security issues:")  # noqa: print
         for issue in security_issues[:3]:
-            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            severity_emoji = {
+                "critical": "🔴",
+                "high": "🟠",
+                "medium": "🟡",
+                "low": "🟢",
+            }
             emoji = severity_emoji.get(issue["severity"], "⚪")
             print(  # noqa: print
                 f"     {emoji} {issue['description']} ({issue['file_path']}:{issue['line_number']})"
@@ -214,7 +219,12 @@ def _print_detailed_issues(results: dict) -> None:
         )
 
         for issue in sorted_issues[:5]:
-            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            severity_emoji = {
+                "critical": "🔴",
+                "high": "🟠",
+                "medium": "🟡",
+                "low": "🟢",
+            }
             emoji = severity_emoji.get(issue["severity"], "⚪")
 
             print(f"   {emoji} {issue['description']}")  # noqa: print

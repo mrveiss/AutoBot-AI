@@ -218,12 +218,12 @@ class TestJudgeIntegration:
         reject_judgment.criterion_scores = []
         reject_judgment.improvement_suggestions = ["Use safer alternative"]
 
-        mock_judges[
-            "workflow_step_judge"
-        ].evaluate_workflow_step.return_value = reject_judgment
-        mock_judges[
-            "security_risk_judge"
-        ].evaluate_command_security.return_value = reject_judgment
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = (
+            reject_judgment
+        )
+        mock_judges["security_risk_judge"].evaluate_command_security.return_value = (
+            reject_judgment
+        )
 
         with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
             "api.workflow_automation.WorkflowStepJudge",
@@ -270,9 +270,9 @@ class TestJudgeIntegration:
         from api.workflow_automation import WorkflowAutomationManager
 
         # Configure judge to raise exception
-        mock_judges[
-            "workflow_step_judge"
-        ].evaluate_workflow_step.side_effect = Exception("Judge error")
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.side_effect = (
+            Exception("Judge error")
+        )
 
         with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
             "api.workflow_automation.WorkflowStepJudge",
@@ -342,9 +342,9 @@ class TestJudgeIntegration:
         detailed_judgment.criterion_scores = criterion_scores
         detailed_judgment.improvement_suggestions = []
 
-        mock_judges[
-            "workflow_step_judge"
-        ].evaluate_workflow_step.return_value = detailed_judgment
+        mock_judges["workflow_step_judge"].evaluate_workflow_step.return_value = (
+            detailed_judgment
+        )
 
         # Test that all criteria are evaluated
         with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(

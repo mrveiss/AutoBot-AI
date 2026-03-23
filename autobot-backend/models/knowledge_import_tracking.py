@@ -5,6 +5,7 @@
 Knowledge Base Import Tracking Model
 Tracks which files have been imported into the knowledge base
 """
+
 import hashlib
 from datetime import datetime
 from pathlib import Path
@@ -26,8 +27,7 @@ class ImportTracker:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS imported_files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
@@ -41,26 +41,19 @@ class ImportTracker:
                 facts_count INTEGER DEFAULT 0,
                 metadata TEXT
             )
-        """
-        )
+        """)
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_file_path ON imported_files(file_path)
-        """
-        )
+        """)
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_import_status ON imported_files(import_status)
-        """
-        )
+        """)
 
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_category ON imported_files(category)
-        """
-        )
+        """)
 
         conn.commit()
         conn.close()
@@ -217,14 +210,12 @@ class ImportTracker:
                 (category,),
             )
         else:
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT file_path, file_hash, file_size, category, import_status,
                        imported_at, last_checked, error_message, facts_count
                 FROM imported_files
                 ORDER BY imported_at DESC
-            """
-            )
+            """)
 
         columns = [
             "file_path",
@@ -249,8 +240,7 @@ class ImportTracker:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute(
-            """
+        cursor.execute("""
             SELECT
                 COUNT(*) as total_files,
                 SUM(CASE WHEN import_status = 'imported' THEN 1 ELSE 0 END) as imported,
@@ -259,8 +249,7 @@ class ImportTracker:
                 SUM(facts_count) as total_facts,
                 SUM(file_size) as total_size
             FROM imported_files
-        """
-        )
+        """)
 
         result = cursor.fetchone()
         conn.close()

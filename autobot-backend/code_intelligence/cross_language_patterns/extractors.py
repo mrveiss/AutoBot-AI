@@ -247,9 +247,7 @@ class PythonPatternExtractor(BasePatternExtractor):
             (
                 base.id
                 if isinstance(base, ast.Name)
-                else base.attr
-                if isinstance(base, ast.Attribute)
-                else ""
+                else base.attr if isinstance(base, ast.Attribute) else ""
             )
             for base in node.bases
         ]

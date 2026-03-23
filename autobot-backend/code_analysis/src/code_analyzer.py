@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
+from config import UnifiedConfig
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.redis_client import get_redis_client
-from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -490,13 +490,15 @@ from utils.{module_name}_utils import {func.name}
         metrics = {
             "total_lines_of_code": total_lines,
             "duplicate_lines": duplicate_lines,
-            "duplication_percentage": (duplicate_lines / total_lines * 100)
-            if total_lines > 0
-            else 0,
+            "duplication_percentage": (
+                (duplicate_lines / total_lines * 100) if total_lines > 0 else 0
+            ),
             "average_function_length": total_lines / len(functions) if functions else 0,
-            "average_complexity": sum(f.complexity for f in functions) / len(functions)
-            if functions
-            else 0,
+            "average_complexity": (
+                sum(f.complexity for f in functions) / len(functions)
+                if functions
+                else 0
+            ),
             "functions_by_complexity": {
                 "low": len([f for f in functions if f.complexity <= 5]),
                 "medium": len([f for f in functions if 5 < f.complexity <= 10]),

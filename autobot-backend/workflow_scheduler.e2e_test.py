@@ -220,7 +220,9 @@ async def test_queue_operations():
     # Test set max concurrent
     workflow_scheduler.queue.set_max_concurrent(5)
     updated_status = workflow_scheduler.queue.get_queue_status()
-    print(f"✅ Max concurrent set to: {updated_status['max_concurrent']}")  # noqa: print
+    print(
+        f"✅ Max concurrent set to: {updated_status['max_concurrent']}"
+    )  # noqa: print
 
     # Test 3: List queued and running workflows
     print("\n📝 Test 3: List Queue Contents...")  # noqa: print

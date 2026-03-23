@@ -494,13 +494,15 @@ class Phase9MonitoringSystemTest:
                 "efficiency_monitoring": efficiency_success,
                 "config_updates": config_update_success,
                 "multimodal_optimization": optimization_success,
-                "optimization_result": {
-                    "success": optimization_result.success,
-                    "performance_improvement": optimization_result.performance_improvement,
-                    "applied_optimizations": optimization_result.applied_optimizations,
-                }
-                if optimization_success
-                else None,
+                "optimization_result": (
+                    {
+                        "success": optimization_result.success,
+                        "performance_improvement": optimization_result.performance_improvement,
+                        "applied_optimizations": optimization_result.applied_optimizations,
+                    }
+                    if optimization_success
+                    else None
+                ),
                 "success": efficiency_success and config_update_success,
             }
 
@@ -634,9 +636,9 @@ class Phase9MonitoringSystemTest:
             self.test_results["configuration_management"] = {
                 "gpu_config_accessible": config_accessible,
                 "baselines_configured": baselines_configured,
-                "config_updates_work": update_success and change_applied
-                if config_accessible
-                else False,
+                "config_updates_work": (
+                    update_success and change_applied if config_accessible else False
+                ),
                 "baseline_count": len(baselines),
                 "success": config_accessible and baselines_configured,
             }
@@ -670,14 +672,16 @@ class Phase9MonitoringSystemTest:
             "total_tests": total_tests,
             "successful_tests": successful_tests,
             "failed_tests": total_tests - successful_tests,
-            "success_rate": round((successful_tests / total_tests) * 100, 1)
-            if total_tests > 0
-            else 0,
-            "overall_status": "PASS"
-            if successful_tests == total_tests
-            else "PARTIAL"
-            if successful_tests > 0
-            else "FAIL",
+            "success_rate": (
+                round((successful_tests / total_tests) * 100, 1)
+                if total_tests > 0
+                else 0
+            ),
+            "overall_status": (
+                "PASS"
+                if successful_tests == total_tests
+                else "PARTIAL" if successful_tests > 0 else "FAIL"
+            ),
             "test_results": self.test_results,
             "alerts_received": self.alerts_received,
             "system_info": {

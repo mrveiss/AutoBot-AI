@@ -276,9 +276,7 @@ class BackgroundTaskManager:
         task["result"] = result
         await self._save_to_redis(task_id)
         sid = (task.get("params") or {}).get("source_id", "")
-        await self._save_latest_result(
-            result, task["completed_at"], source_id=sid
-        )
+        await self._save_latest_result(result, task["completed_at"], source_id=sid)
 
     async def _save_latest_result(
         self, result: Any, completed_at: str, source_id: str = ""

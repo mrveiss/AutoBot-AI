@@ -11,11 +11,20 @@ import ast
 import logging
 from typing import Dict, List, Optional, Set
 
-from .constants import (DEBUG_MODE_VARS, HTTP_METHODS, INSECURE_RANDOM_FUNCS,
-                        LOAD_FUNCS, OWASP_MAPPING, PICKLE_MODULES,
-                        VALIDATION_ATTRS, VALIDATION_FUNCS,
-                        WEAK_HASH_ALGORITHMS, YAML_LOADER_ARGS,
-                        SecuritySeverity, VulnerabilityType)
+from .constants import (
+    DEBUG_MODE_VARS,
+    HTTP_METHODS,
+    INSECURE_RANDOM_FUNCS,
+    LOAD_FUNCS,
+    OWASP_MAPPING,
+    PICKLE_MODULES,
+    VALIDATION_ATTRS,
+    VALIDATION_FUNCS,
+    WEAK_HASH_ALGORITHMS,
+    YAML_LOADER_ARGS,
+    SecuritySeverity,
+    VulnerabilityType,
+)
 from .finding import SecurityFinding
 
 logger = logging.getLogger(__name__)

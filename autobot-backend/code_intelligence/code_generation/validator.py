@@ -123,9 +123,9 @@ class CodeValidator:
         line_count = len(code.splitlines())
 
         return ValidationResult(
-            status=ValidationStatus.VALID
-            if not errors
-            else ValidationStatus.STYLE_ERROR,
+            status=(
+                ValidationStatus.VALID if not errors else ValidationStatus.STYLE_ERROR
+            ),
             is_valid=len(errors) == 0,
             errors=errors,
             warnings=warnings,

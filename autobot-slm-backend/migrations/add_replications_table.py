@@ -25,8 +25,7 @@ def migrate(db_url: str) -> None:
     # Create replications table
     if not table_exists(cursor, "replications"):
         logger.info("Creating replications table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE replications (
                 id SERIAL PRIMARY KEY,
                 replication_id VARCHAR(64) UNIQUE NOT NULL,
@@ -42,8 +41,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_replications_source_node", "replications", "source_node_id"
         )
@@ -60,8 +58,7 @@ def migrate(db_url: str) -> None:
     # Create update_info table if it doesn't exist
     if not table_exists(cursor, "update_info"):
         logger.info("Creating update_info table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE update_info (
                 id SERIAL PRIMARY KEY,
                 update_id VARCHAR(64) UNIQUE NOT NULL,
@@ -75,8 +72,7 @@ def migrate(db_url: str) -> None:
                 applied_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_update_info_node_id", "update_info", "node_id"
         )

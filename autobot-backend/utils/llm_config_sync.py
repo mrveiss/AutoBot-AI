@@ -281,9 +281,9 @@ class LLMConfigurationSynchronizer:
             )
 
             # Step 2: Populate available models list
-            results[
-                "models_result"
-            ] = await LLMConfigurationSynchronizer.ensure_models_populated()
+            results["models_result"] = (
+                await LLMConfigurationSynchronizer.ensure_models_populated()
+            )
 
             # Determine overall status
             sync_ok = results["sync_result"]["status"] in [

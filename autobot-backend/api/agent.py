@@ -11,6 +11,7 @@ This module provides:
 
 Consolidated from agent.py and agent_enhanced.py per Issue #708.
 """
+
 import asyncio
 import json
 import logging

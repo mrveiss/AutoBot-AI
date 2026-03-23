@@ -433,9 +433,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=SIMILARITY_MEDIUM
-                if HAS_ANALYTICS_INFRASTRUCTURE
-                else 0.7,
+                min_similarity=(
+                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
+                ),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

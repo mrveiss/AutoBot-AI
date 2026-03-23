@@ -55,8 +55,7 @@ class MarkdownReferenceSystem:
 
     def _create_documents_table(self, conn: sqlite3.Connection) -> None:
         """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS markdown_documents (
                 file_path TEXT PRIMARY KEY,
                 file_name TEXT NOT NULL,
@@ -70,13 +69,11 @@ class MarkdownReferenceSystem:
                 tags TEXT,
                 metadata_json TEXT
             )
-        """
-        )
+        """)
 
     def _create_cross_references_table(self, conn: sqlite3.Connection) -> None:
         """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS markdown_cross_references (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_file TEXT NOT NULL,
@@ -88,13 +85,11 @@ class MarkdownReferenceSystem:
                 FOREIGN KEY (source_file) REFERENCES markdown_documents(file_path),
                 FOREIGN KEY (target_file) REFERENCES markdown_documents(file_path)
             )
-        """
-        )
+        """)
 
     def _create_sections_table(self, conn: sqlite3.Connection) -> None:
         """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS markdown_sections (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT NOT NULL,
@@ -107,8 +102,7 @@ class MarkdownReferenceSystem:
                 created_at TIMESTAMP NOT NULL,
                 FOREIGN KEY (file_path) REFERENCES markdown_documents(file_path)
             )
-        """
-        )
+        """)
 
     def _create_markdown_indexes(self, conn: sqlite3.Connection) -> None:
         """Issue #665: Extracted from _init_markdown_tables to reduce function length."""
@@ -655,13 +649,11 @@ class MarkdownReferenceSystem:
 
         Issue #620.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT document_type, COUNT(*), SUM(word_count), AVG(word_count)
             FROM markdown_documents
             GROUP BY document_type
-        """
-        )
+        """)
         doc_stats = {}
         for row in cursor.fetchall():
             doc_stats[row[0]] = {
@@ -677,13 +669,11 @@ class MarkdownReferenceSystem:
 
         Issue #620.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT reference_type, COUNT(*)
             FROM markdown_cross_references
             GROUP BY reference_type
-        """
-        )
+        """)
         return {row[0]: row[1] for row in cursor.fetchall()}
 
     def _get_section_stats(self, conn: sqlite3.Connection) -> Dict[str, int]:
@@ -692,14 +682,12 @@ class MarkdownReferenceSystem:
 
         Issue #620.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT section_level, COUNT(*)
             FROM markdown_sections
             GROUP BY section_level
             ORDER BY section_level
-        """
-        )
+        """)
         return {f"level_{row[0]}": row[1] for row in cursor.fetchall()}
 
     def _get_document_totals(self, conn: sqlite3.Connection) -> tuple:
@@ -708,15 +696,13 @@ class MarkdownReferenceSystem:
 
         Issue #620.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT
                 COUNT(*) as total_documents,
                 SUM(word_count) as total_words,
                 COUNT(DISTINCT directory) as total_directories
             FROM markdown_documents
-        """
-        )
+        """)
         return cursor.fetchone()
 
     def get_markdown_statistics(self) -> Dict[str, Any]:

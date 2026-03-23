@@ -871,9 +871,9 @@ class SearchAnalytics:
             "total_searches": len(self.events),
             "unique_queries": len(self.query_counts),
             "avg_results": self.get_average_results_count(),
-            "failed_search_rate": failed_count / len(self.events)
-            if self.events
-            else 0.0,
+            "failed_search_rate": (
+                failed_count / len(self.events) if self.events else 0.0
+            ),
             "click_through_rate": self.get_click_through_rate(),
             "avg_duration_ms": sum(durations) / len(durations) if durations else 0,
             "popular_queries": self.get_popular_queries(5),

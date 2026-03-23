@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for the Autonomous Skill Development builtin skill (Issue #951)."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest

@@ -61,8 +61,7 @@ class CommandManualManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS command_manuals (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         command_name TEXT UNIQUE NOT NULL,
@@ -78,28 +77,21 @@ class CommandManualManager:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
-                """
-                )
+                """)
 
                 # Create index for faster searches
-                cursor.execute(
-                    """
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_command_name
                     ON command_manuals(command_name)
-                """
-                )
-                cursor.execute(
-                    """
+                """)
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_category
                     ON command_manuals(category)
-                """
-                )
-                cursor.execute(
-                    """
+                """)
+                cursor.execute("""
                     CREATE INDEX IF NOT EXISTS idx_risk_level
                     ON command_manuals(risk_level)
-                """
-                )
+                """)
 
                 conn.commit()
                 logger.info("Command manuals database initialized successfully")

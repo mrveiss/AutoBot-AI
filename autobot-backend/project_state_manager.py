@@ -127,8 +127,7 @@ class ProjectStateManager:
 
     def _create_project_phases_table(self, cursor: sqlite3.Cursor) -> None:
         """Create project_phases table."""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS project_phases (
                 phase_id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -140,13 +139,11 @@ class ProjectStateManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
 
     def _create_phase_capabilities_table(self, cursor: sqlite3.Cursor) -> None:
         """Create phase_capabilities table."""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS phase_capabilities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 phase_id TEXT NOT NULL,
@@ -160,13 +157,11 @@ class ProjectStateManager:
                 validation_details TEXT,
                 FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
             )
-        """
-        )
+        """)
 
     def _create_validation_results_table(self, cursor: sqlite3.Cursor) -> None:
         """Create validation_results table."""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS validation_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 phase_id TEXT NOT NULL,
@@ -178,20 +173,17 @@ class ProjectStateManager:
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (phase_id) REFERENCES project_phases (phase_id)
             )
-        """
-        )
+        """)
 
     def _create_project_state_table(self, cursor: sqlite3.Cursor) -> None:
         """Create project_state table."""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS project_state (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
 
     def _init_database(self):
         """Initialize SQLite database for state tracking"""

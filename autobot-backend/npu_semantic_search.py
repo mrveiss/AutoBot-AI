@@ -963,7 +963,9 @@ class NPUSemanticSearch:
                             "description": f"AutoBot {modality} embeddings",
                         },
                     )
-                    logger.info(f"✅ Created new ChromaDB collection: {collection_name}")
+                    logger.info(
+                        f"✅ Created new ChromaDB collection: {collection_name}"
+                    )
 
                 self.collections[modality] = collection
 

@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Base sync interface for skill repositories (Phase 3)."""
+
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List

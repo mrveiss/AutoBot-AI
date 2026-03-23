@@ -10,6 +10,7 @@ without requiring a cross-codebase import.
 
 Called by main.py lifespan via _seed_default_agents().
 """
+
 import logging
 
 from models.database import Agent

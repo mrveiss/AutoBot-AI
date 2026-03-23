@@ -437,8 +437,8 @@ class TestSecurityEdgeCases:
             # Binary data
             b"\x00\x01\x02\xff",
             # Unicode edge cases
-            "\U0001F4A9\U0001F631\U0001F4AF",  # Emojis
-            "\u202E" + "normal text",  # Right-to-left override
+            "\U0001f4a9\U0001f631\U0001f4af",  # Emojis
+            "\u202e" + "normal text",  # Right-to-left override
         ]
 
         for malformed_input in malformed_inputs:

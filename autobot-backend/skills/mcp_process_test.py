@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for MCPProcessManager."""
+
 import pytest
 from skills.mcp_process import MCPProcessManager, get_mcp_manager
 

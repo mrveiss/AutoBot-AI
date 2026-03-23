@@ -345,12 +345,12 @@ def _process_search_results(
                 {
                     "id": pattern_id,
                     "similarity": similarity,
-                    "document": results["documents"][0][i]
-                    if results.get("documents")
-                    else "",
-                    "metadata": results["metadatas"][0][i]
-                    if results.get("metadatas")
-                    else {},
+                    "document": (
+                        results["documents"][0][i] if results.get("documents") else ""
+                    ),
+                    "metadata": (
+                        results["metadatas"][0][i] if results.get("metadatas") else {}
+                    ),
                 }
             )
 

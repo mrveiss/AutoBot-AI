@@ -56,7 +56,9 @@ async def final_workflow_test():
     print("5. Workflow Response Creation Test:")  # noqa: print
     workflow_response = await orchestrator.create_workflow_response(user_message)
     response_steps = workflow_response.get("workflow_steps", [])
-    print(f"   ✅ Workflow response contains {len(response_steps)} steps")  # noqa: print
+    print(
+        f"   ✅ Workflow response contains {len(response_steps)} steps"
+    )  # noqa: print
     assert len(response_steps) > 0, "Workflow response should contain steps"
     assert (
         len(response_steps) == 8

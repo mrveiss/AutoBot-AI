@@ -79,8 +79,7 @@ class TaskStorage:
         """Initialize task execution history table"""
         try:
             async with self._get_connection() as conn:
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS task_execution_history (
                         task_id TEXT PRIMARY KEY,
                         task_name TEXT NOT NULL,
@@ -101,28 +100,21 @@ class TaskStorage:
                         subtask_ids_json TEXT,
                         metadata_json TEXT
                     )
-                """
-                )
+                """)
 
                 # Indexes for common queries
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_task_status
                     ON task_execution_history(status)
-                """
-                )
-                await conn.execute(
-                    """
+                """)
+                await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_task_created
                     ON task_execution_history(created_at)
-                """
-                )
-                await conn.execute(
-                    """
+                """)
+                await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_task_agent
                     ON task_execution_history(agent_type)
-                """
-                )
+                """)
 
                 await conn.commit()
         except aiosqlite.Error as e:
@@ -268,23 +260,19 @@ class TaskStorage:
                 total = (await cursor.fetchone())[0]
 
                 # Tasks by status
-                cursor = await conn.execute(
-                    """
+                cursor = await conn.execute("""
                     SELECT status, COUNT(*)
                     FROM task_execution_history
                     GROUP BY status
-                """
-                )
+                """)
                 by_status = {row[0]: row[1] for row in await cursor.fetchall()}
 
                 # Tasks by priority
-                cursor = await conn.execute(
-                    """
+                cursor = await conn.execute("""
                     SELECT priority, COUNT(*)
                     FROM task_execution_history
                     GROUP BY priority
-                """
-                )
+                """)
                 by_priority = {row[0]: row[1] for row in await cursor.fetchall()}
 
                 return {

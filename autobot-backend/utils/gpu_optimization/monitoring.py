@@ -281,10 +281,10 @@ async def monitor_gpu_acceleration_efficiency(
         efficiency_report["overall_efficiency"] = _calculate_overall_efficiency(
             efficiency_report["efficiency_scores"]
         )
-        efficiency_report[
-            "optimization_opportunities"
-        ] = identify_optimization_opportunities(
-            gpu_metrics, capabilities, current_optimizations
+        efficiency_report["optimization_opportunities"] = (
+            identify_optimization_opportunities(
+                gpu_metrics, capabilities, current_optimizations
+            )
         )
 
         logger.info(

@@ -29,7 +29,9 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM, SemanticAnalysisMixin)
+        SIMILARITY_MEDIUM,
+        SemanticAnalysisMixin,
+    )
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
@@ -1031,7 +1033,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         Scores now degrade gracefully instead of immediately hitting 0.
         """
         from code_intelligence.shared.scoring import (
-            calculate_score_from_severity_counts, get_risk_level_from_score)
+            calculate_score_from_severity_counts,
+            get_risk_level_from_score,
+        )
 
         by_severity, by_type, by_owasp = self._aggregate_findings_by_category()
         security_score = calculate_score_from_severity_counts(by_severity)

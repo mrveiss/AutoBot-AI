@@ -237,12 +237,12 @@ class ValidationDuplication:
         return {
             "duplication_id": self.duplication_id,
             "validation_type": self.validation_type,
-            "python_location": self.python_location.to_dict()
-            if self.python_location
-            else None,
-            "typescript_location": self.typescript_location.to_dict()
-            if self.typescript_location
-            else None,
+            "python_location": (
+                self.python_location.to_dict() if self.python_location else None
+            ),
+            "typescript_location": (
+                self.typescript_location.to_dict() if self.typescript_location else None
+            ),
             "python_code": self.python_code,
             "typescript_code": self.typescript_code,
             "similarity_score": self.similarity_score,
@@ -274,12 +274,12 @@ class APIContractMismatch:
             "endpoint_path": self.endpoint_path,
             "http_method": self.http_method,
             "mismatch_type": self.mismatch_type,
-            "backend_location": self.backend_location.to_dict()
-            if self.backend_location
-            else None,
-            "frontend_location": self.frontend_location.to_dict()
-            if self.frontend_location
-            else None,
+            "backend_location": (
+                self.backend_location.to_dict() if self.backend_location else None
+            ),
+            "frontend_location": (
+                self.frontend_location.to_dict() if self.frontend_location else None
+            ),
             "backend_definition": self.backend_definition,
             "frontend_call": self.frontend_call,
             "severity": self.severity.value,

@@ -131,9 +131,11 @@ async def oauth_callback(
             (),
             {
                 "username": user.username,
-                "is_admin": user.is_platform_admin
-                if hasattr(user, "is_platform_admin")
-                else False,
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 
@@ -173,9 +175,11 @@ async def ldap_login(
             (),
             {
                 "username": user.username,
-                "is_admin": user.is_platform_admin
-                if hasattr(user, "is_platform_admin")
-                else False,
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 
@@ -225,9 +229,11 @@ async def saml_callback(
             (),
             {
                 "username": user.username,
-                "is_admin": user.is_platform_admin
-                if hasattr(user, "is_platform_admin")
-                else False,
+                "is_admin": (
+                    user.is_platform_admin
+                    if hasattr(user, "is_platform_admin")
+                    else False
+                ),
             },
         )()
 

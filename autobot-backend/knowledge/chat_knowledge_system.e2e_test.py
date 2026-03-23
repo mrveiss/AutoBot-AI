@@ -85,8 +85,7 @@ class ChatKnowledgeSystemTester:
 
         # Create a temporary test file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 # Test Python file for chat knowledge system
 def test_function():
     '''Example function for testing'''
@@ -94,8 +93,7 @@ def test_function():
 
 if __name__ == "__main__":
     print(test_function())  # noqa: print
-"""
-            )
+""")
             test_file_path = f.name
 
         self.test_files.append(test_file_path)

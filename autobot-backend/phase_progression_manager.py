@@ -632,9 +632,9 @@ class PhaseProgressionManager:
             rules = self.progression_rules.get(phase_name, {})
             prerequisites_met, _ = await self._validate_prerequisites(rules)
             if not prerequisites_met:
-                progression_result[
-                    "reason"
-                ] = f"Prerequisites not met: {rules.get('prerequisites', [])}"
+                progression_result["reason"] = (
+                    f"Prerequisites not met: {rules.get('prerequisites', [])}"
+                )
                 return progression_result
 
             if await self._create_phase_infrastructure(phase_name, rules):

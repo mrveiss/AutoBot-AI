@@ -1319,9 +1319,7 @@ async def get_machine_profile(
         "cpu_count": psutil.cpu_count(logical=False),
         "cpu_count_logical": psutil.cpu_count(logical=True),
         "memory_total_gb": round(psutil.virtual_memory().total / (1024**3), 2),
-        "memory_available_gb": round(
-            psutil.virtual_memory().available / (1024**3), 2
-        ),
+        "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2),
         "disk_total_gb": round(psutil.disk_usage("/").total / (1024**3), 2),
         "disk_free_gb": round(psutil.disk_usage("/").free / (1024**3), 2),
     }
@@ -1739,9 +1737,7 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> Optional[dic
         content = (
             content_raw.decode("utf-8")
             if isinstance(content_raw, bytes)
-            else str(content_raw)
-            if content_raw
-            else ""
+            else str(content_raw) if content_raw else ""
         )
 
         fact_title = metadata.get("title", metadata.get("command", "Untitled"))
@@ -1993,9 +1989,7 @@ def _extract_fact_content(fact_data: dict) -> str:
     return (
         content_raw.decode("utf-8")
         if isinstance(content_raw, bytes)
-        else str(content_raw)
-        if content_raw
-        else ""
+        else str(content_raw) if content_raw else ""
     )
 
 
@@ -2016,9 +2010,7 @@ def _extract_fact_created_at(fact_data: dict) -> str:
     return (
         created_at_raw.decode("utf-8")
         if isinstance(created_at_raw, bytes)
-        else str(created_at_raw)
-        if created_at_raw
-        else ""
+        else str(created_at_raw) if created_at_raw else ""
     )
 
 

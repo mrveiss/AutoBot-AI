@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Unit tests for Skills System DB models."""
+
 from skills.models import (
     GovernanceConfig,
     GovernanceMode,

@@ -449,9 +449,7 @@ def _get_hostname(nodes: Dict[str, Any], node_id: str) -> str:
     return (
         node.hostname
         if hasattr(node, "hostname")
-        else node
-        if isinstance(node, str)
-        else "unknown"
+        else node if isinstance(node, str) else "unknown"
     )
 
 

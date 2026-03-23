@@ -499,9 +499,9 @@ class ConversationFlowAnalyzer:
     def _extract_flow_patterns(self) -> List[FlowPattern]:
         """Extract common flow patterns."""
         # Group flows by intent sequence (as tuple for hashability)
-        sequence_groups: Dict[
-            Tuple[IntentCategory, ...], List[ConversationFlow]
-        ] = defaultdict(list)
+        sequence_groups: Dict[Tuple[IntentCategory, ...], List[ConversationFlow]] = (
+            defaultdict(list)
+        )
 
         for flow in self._flows:
             # Use first 5 intents as pattern key

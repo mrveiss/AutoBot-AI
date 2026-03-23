@@ -171,8 +171,7 @@ class AsyncEnhancedMemoryManager:
 
         Issue #620.
         """
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 task_id TEXT PRIMARY KEY,
                 description TEXT NOT NULL,
@@ -192,8 +191,7 @@ class AsyncEnhancedMemoryManager:
                 markdown_reference TEXT,
                 FOREIGN KEY (parent_task_id) REFERENCES tasks(task_id)
             )
-            """
-        )
+            """)
 
     async def _create_execution_records_table(self, conn) -> None:
         """
@@ -201,8 +199,7 @@ class AsyncEnhancedMemoryManager:
 
         Issue #620.
         """
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS execution_records (
                 record_id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
@@ -215,8 +212,7 @@ class AsyncEnhancedMemoryManager:
                 agent_context TEXT, -- JSON object
                 FOREIGN KEY (task_id) REFERENCES tasks(task_id)
             )
-            """
-        )
+            """)
 
     async def _create_memory_entries_table(self, conn) -> None:
         """
@@ -224,8 +220,7 @@ class AsyncEnhancedMemoryManager:
 
         Issue #620.
         """
-        await conn.execute(
-            """
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS memory_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT NOT NULL,
@@ -237,8 +232,7 @@ class AsyncEnhancedMemoryManager:
                 reference_path TEXT,
                 UNIQUE(category, content_hash)
             )
-            """
-        )
+            """)
 
     async def _create_tables(self, conn) -> None:
         """
@@ -492,9 +486,9 @@ class AsyncEnhancedMemoryManager:
                             priority=Priority(row[3]),
                             created_at=datetime.fromtimestamp(row[4]),
                             updated_at=datetime.fromtimestamp(row[5]),
-                            completed_at=datetime.fromtimestamp(row[6])
-                            if row[6]
-                            else None,
+                            completed_at=(
+                                datetime.fromtimestamp(row[6]) if row[6] else None
+                            ),
                             assigned_agent=row[7],
                             parent_task_id=row[8],
                             tags=json.loads(row[9] or "[]"),

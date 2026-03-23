@@ -7,6 +7,7 @@ Skill Gap Detector (Phase 4)
 Identifies when AutoBot lacks a capability by monitoring agent outputs
 and failed tool calls.
 """
+
 import logging
 import re
 from dataclasses import dataclass

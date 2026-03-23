@@ -126,9 +126,11 @@ class ChromaDBLoader(BaseLoader):
             {
                 "level": summary.level,
                 "document_id": str(summary.source_document_id),
-                "parent_summary_id": str(summary.parent_summary_id)
-                if summary.parent_summary_id
-                else None,
+                "parent_summary_id": (
+                    str(summary.parent_summary_id)
+                    if summary.parent_summary_id
+                    else None
+                ),
                 "key_topics": ",".join(summary.key_topics),
                 "word_count": summary.word_count,
             }

@@ -1,4 +1,5 @@
 """Per-query context tracker preventing redundant chunk reads (#1994, #2005)."""
+
 import logging
 
 logger = logging.getLogger(__name__)

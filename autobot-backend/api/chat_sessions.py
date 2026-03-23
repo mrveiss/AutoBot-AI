@@ -1095,9 +1095,9 @@ def _process_kb_deletion_result(result: dict, kb_cleanup_result: dict) -> None:
     kb_cleanup_result["facts_preserved"] = result.get("preserved_count", 0)
 
     if result.get("errors"):
-        kb_cleanup_result[
-            "cleanup_error"
-        ] = f"{len(result['errors'])} errors during cleanup"
+        kb_cleanup_result["cleanup_error"] = (
+            f"{len(result['errors'])} errors during cleanup"
+        )
 
 
 def _log_kb_cleanup_result(

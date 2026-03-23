@@ -551,9 +551,7 @@ def _calculate_alert_status(name: str, data: str, current_costs: dict) -> dict:
         "status": (
             "exceeded"
             if percent_used >= 100
-            else "warning"
-            if percent_used >= 75
-            else "ok"
+            else "warning" if percent_used >= 75 else "ok"
         ),
         "remaining_usd": max(threshold - current, 0),
     }

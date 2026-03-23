@@ -8,6 +8,7 @@ Covers:
 - _parse_parameter_billions() for all documented string formats
 - ModelInfo.fits_resource_constraints() with SystemResources and dict resources
 """
+
 import pytest
 from utils.model_optimization.types import (
     ModelInfo,

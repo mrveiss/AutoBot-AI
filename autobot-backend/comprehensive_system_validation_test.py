@@ -652,9 +652,9 @@ class AutoBotSystemValidator:
                 "failed": failed,
                 "warnings": warnings,
                 "skipped": skipped,
-                "success_rate": f"{(passed/total_tests*100):.1f}%"
-                if total_tests > 0
-                else "0%",
+                "success_rate": (
+                    f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"
+                ),
             },
             "execution_info": {
                 "total_duration": f"{total_duration:.2f}s",

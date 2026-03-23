@@ -12,6 +12,7 @@ Governance modes:
   SEMI_AUTO  — gap detected → generate → create pending approval → notify admin
   LOCKED     — gap is logged only, no generation
 """
+
 import logging
 from typing import Any, Dict
 

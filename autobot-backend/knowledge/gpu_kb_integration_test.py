@@ -47,16 +47,13 @@ async def test_chunker_optimization():
 
         # Test chunking performance
         print("\n⚡ Testing chunking performance...")  # noqa: print
-        test_text = (
-            """
+        test_text = """
         AutoBot is an advanced Linux administration platform designed for intelligent automation.
         The system utilizes cutting-edge AI technologies to manage Linux environments efficiently.
         Through machine learning and natural language processing, AutoBot can understand complex system requirements.
         The platform provides autonomous decision-making capabilities for routine administrative tasks.
         Security and reliability are paramount in AutoBot's architectural design.
-        """
-            * 3
-        )  # Make text longer for meaningful test
+        """ * 3  # Make text longer for meaningful test
 
         start_time = time.time()
 

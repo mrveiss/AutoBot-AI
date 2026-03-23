@@ -24,8 +24,7 @@ def migrate(db_url: str) -> None:
 
     if not table_exists(cursor, "node_credentials"):
         logger.info("Creating node_credentials table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE node_credentials (
                 id SERIAL PRIMARY KEY,
                 credential_id VARCHAR(64) UNIQUE NOT NULL,
@@ -45,8 +44,7 @@ def migrate(db_url: str) -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(node_id, credential_type, name)
             )
-        """
-        )
+        """)
 
         # Create indexes
         create_index_if_not_exists(

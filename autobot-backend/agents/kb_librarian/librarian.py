@@ -477,14 +477,11 @@ class EnhancedKBLibrarian:
         if not tools:
             return
 
-        tool_summaries = [
-            f"""
+        tool_summaries = [f"""
 {i}. {tool['name']}
    Purpose: {tool.get('purpose', 'N/A')}
    Installation: {tool.get('installation', 'N/A')[:200]}...
-"""
-            for i, tool in enumerate(tools, 1)
-        ]
+""" for i, tool in enumerate(tools, 1)]
 
         summary_content = f"""
 Tool Research Results: {tool_type}

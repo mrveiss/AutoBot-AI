@@ -655,14 +655,12 @@ class NLDatabaseService:
 
         conn = await asyncpg.connect(db_url)
         try:
-            rows = await conn.fetch(
-                """
+            rows = await conn.fetch("""
                 SELECT table_name, column_name, data_type, is_nullable
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                 ORDER BY table_name, ordinal_position
-                """
-            )
+                """)
             # Build CREATE TABLE statements from column info
             tables: Dict[str, List[str]] = {}
             for row in rows:

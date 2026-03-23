@@ -98,15 +98,13 @@ def get_connection(db_url: str = None) -> psycopg2.extensions.connection:
 def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
     """Create migrations tracking table if it doesn't exist (#786)."""
     with conn.cursor() as cur:
-        cur.execute(
-            """
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS migrations_applied (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE,
                 applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
     conn.commit()
 
 

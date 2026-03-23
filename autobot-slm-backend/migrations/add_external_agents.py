@@ -23,8 +23,7 @@ def migrate(db_url: str) -> None:
 
     if not table_exists(cursor, "external_agents"):
         logger.info("Creating external_agents table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE external_agents (
                 id          SERIAL PRIMARY KEY,
                 name        VARCHAR(100) NOT NULL,
@@ -45,8 +44,7 @@ def migrate(db_url: str) -> None:
                 created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor,
             "idx_external_agents_base_url",

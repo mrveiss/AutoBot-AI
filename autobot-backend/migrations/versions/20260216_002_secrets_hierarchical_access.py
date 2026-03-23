@@ -9,6 +9,7 @@ Create Date: 2026-02-16
 
 Issue #685: Add org_id and team_ids for hierarchical secret access
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

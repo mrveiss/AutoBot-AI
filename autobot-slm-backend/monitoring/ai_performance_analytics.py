@@ -664,9 +664,9 @@ else:
             if llm_trend is not None:
                 trends["llm"] = llm_trend
 
-            trends[
-                "recommendations"
-            ] = await self._generate_performance_recommendations(trends)
+            trends["recommendations"] = (
+                await self._generate_performance_recommendations(trends)
+            )
 
             return trends
 

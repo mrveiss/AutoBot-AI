@@ -9,6 +9,7 @@ Routes queries by complexity:
   COMPLEX    -> full pipeline: hybrid + anchor lookup + PPR + rerank
   MULTI_HOP  -> same as COMPLEX
 """
+
 import asyncio
 import logging
 import time

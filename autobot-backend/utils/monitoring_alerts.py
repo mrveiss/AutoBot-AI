@@ -271,9 +271,9 @@ class MonitoringAlertsManager:
         self.alert_rules: Dict[str, AlertRule] = {}
         self.active_alerts: Dict[str, Alert] = {}
         self.notification_channels: Dict[str, AlertNotificationChannel] = {}
-        self.metric_history: Dict[
-            str, List[Tuple[float, float]]
-        ] = {}  # metric_path -> [(timestamp, value)]
+        self.metric_history: Dict[str, List[Tuple[float, float]]] = (
+            {}
+        )  # metric_path -> [(timestamp, value)]
         self.redis_client = None
         self.running = False
         self.check_interval = 30  # seconds
@@ -836,7 +836,9 @@ class MonitoringAlertsManager:
                         f"Could not update alert acknowledgment in Redis: {e}"
                     )
 
-            logger.info(f"👤 Alert acknowledged: {alert.rule_name} by {acknowledged_by}")
+            logger.info(
+                f"👤 Alert acknowledged: {alert.rule_name} by {acknowledged_by}"
+            )
             return True
         return False
 

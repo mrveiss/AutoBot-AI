@@ -81,9 +81,9 @@ class PlanStep:
             "depends_on": self.depends_on,
             "blocks": self.blocks,
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "reflection": self.reflection,
             "tools_used": self.tools_used,
             "action_event_ids": self.action_event_ids,
@@ -261,9 +261,9 @@ class ExecutionPlan:
             "current_step_number": self.current_step_number,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "version": self.version,
             "update_history": self.update_history,
             "total_steps": self.total_steps,

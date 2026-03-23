@@ -617,9 +617,9 @@ class KnowledgePerformanceTest:
                     # Category filter
                     url = f"{self.backend_url}/api/knowledge_base/facts/by_category"
                     params = {
-                        "category": categories[op_id % len(categories)]
-                        if categories
-                        else None,
+                        "category": (
+                            categories[op_id % len(categories)] if categories else None
+                        ),
                         "limit": 50,
                     }
                     start = time.perf_counter()
@@ -770,14 +770,14 @@ class KnowledgePerformanceTest:
         report["summary"] = {
             "total_requests": total_requests,
             "total_successful": total_successful,
-            "overall_success_rate": (total_successful / total_requests * 100)
-            if total_requests > 0
-            else 0,
+            "overall_success_rate": (
+                (total_successful / total_requests * 100) if total_requests > 0 else 0
+            ),
             "tests_passed": tests_passed,
             "tests_failed": tests_failed,
-            "pass_rate": (tests_passed / len(self.results) * 100)
-            if self.results
-            else 0,
+            "pass_rate": (
+                (tests_passed / len(self.results) * 100) if self.results else 0
+            ),
         }
 
         # Performance analysis for each test
@@ -788,15 +788,19 @@ class KnowledgePerformanceTest:
                 "passed": result.passed,
                 "margin_ms": result.target_ms - result.p95_latency_ms,
                 "margin_percentage": (
-                    (result.target_ms - result.p95_latency_ms) / result.target_ms * 100
-                )
-                if result.target_ms > 0
-                else 0,
+                    (
+                        (result.target_ms - result.p95_latency_ms)
+                        / result.target_ms
+                        * 100
+                    )
+                    if result.target_ms > 0
+                    else 0
+                ),
                 "success_rate": (
-                    result.successful_requests / result.total_requests * 100
-                )
-                if result.total_requests > 0
-                else 0,
+                    (result.successful_requests / result.total_requests * 100)
+                    if result.total_requests > 0
+                    else 0
+                ),
             }
 
         # Pass/Fail summary
