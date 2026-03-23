@@ -3317,7 +3317,7 @@
       "noModel": "nav modeļa",
       "defaultModel": "noklusējuma",
       "moreCount": "+{count} vēl",
-      "summaryStats": "{backend} aizmugures \u2022 {specialized} specializētie aģenti"
+      "summaryStats": "{backend} aizmugures • {specialized} specializētie aģenti"
     }
   },
   "errors": {
@@ -6053,6 +6053,13 @@
     "plugins": "Spraudņi",
     "slmAdmin": "SLM administrācija",
     "slmAdminTitle": "Atvērt SLM administrācijas paneli",
-    "profileSettings": "Profila iestatījumi"
+    "profileSettings": "Profila iestatījumi",
+    "vision": "Vision",
+    "preferences": "Preferences",
+    "llmConfig": "LLM Config",
+    "browserAutomation": "Browser",
+    "devSpeedup": "Dev Tools",
+    "agentRegistry": "Agents",
+    "codeIntelligence": "Code Intel"
   }
 }
