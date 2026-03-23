@@ -245,7 +245,7 @@ def _create_api_error_response(
         APIErrorResponse object
     """
     trace_id = f"{func_operation}_{int(time.time() * 1000)}"
-    error_code = f"{error_code_prefix}_{abs(hash(str(e))) % 10000:04d}"
+    error_code = f"{error_code_prefix}_{abs(hash(type(e).__name__)) % 10000:04d}"
     status_code = APIErrorResponse.get_status_code_for_category(category)
 
     return APIErrorResponse(

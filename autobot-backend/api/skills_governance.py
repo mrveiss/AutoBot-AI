@@ -93,7 +93,7 @@ async def detect_gap(
         pkg = await gen.generate(req.task)
     except Exception as exc:  # intentionally broad: LLM call can fail in many ways
         logger.warning("Skill generation failed: %s", exc)
-        return {"success": False, "errors": [str(exc)], "draft": None}
+        return {"success": False, "errors": ["Skill generation failed"], "draft": None}
 
     validator = SkillValidator()
     result = await validator.validate(pkg["skill_md"], pkg.get("skill_py"))
