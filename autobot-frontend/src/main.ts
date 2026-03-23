@@ -40,6 +40,7 @@ import ApiPlugin from './plugins/api'
 
 // Import global services
 import './services/GlobalWebSocketService'
+import './services/LiveEventService'
 
 // Import async component error handling setup
 import { setupAsyncComponentErrorHandler } from './utils/asyncComponentHelpers'
