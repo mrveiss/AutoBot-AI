@@ -281,8 +281,6 @@ async def _run_provisioning_task(
     node_ids: Optional[list[str]],
 ) -> None:
     """Run Ansible provisioning in background (#1384)."""
-    global _provision_state
-
     _write_provision_log(
         f"\n{'=' * 60}\n"
         f"Provisioning started at {time.strftime('%Y-%m-%d %H:%M:%S')}\n"

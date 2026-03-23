@@ -423,8 +423,6 @@ async def cancel_indexing_job():
     - task_id: The cancelled job's task ID
     - message: Status message
     """
-    global _current_indexing_task_id
-
     # All accesses to shared state under lock
     async with _tasks_lock:
         if _current_indexing_task_id is None:
