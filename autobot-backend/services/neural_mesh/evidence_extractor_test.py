@@ -210,6 +210,38 @@ class TestSplitSentences:
 
         assert parts == []
 
+    def test_split_does_not_break_on_dr(self):
+        """'Dr. Smith is here.' must not be split into two fragments (#2170)."""
+        extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
+
+        parts = extractor._split_sentences("Dr. Smith is here.")
+
+        assert parts == ["Dr. Smith is here."]
+
+    def test_split_does_not_break_on_eg(self):
+        """'e.g. this example is valid.' must remain as one sentence (#2170)."""
+        extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
+
+        parts = extractor._split_sentences("e.g. this example is valid.")
+
+        assert parts == ["e.g. this example is valid."]
+
+    def test_split_does_not_break_on_us(self):
+        """'U.S. is a country.' must not be split after the abbreviation (#2170)."""
+        extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
+
+        parts = extractor._split_sentences("U.S. is a country.")
+
+        assert parts == ["U.S. is a country."]
+
+    def test_split_still_breaks_on_real_sentence_end(self):
+        """Two genuine sentences still split correctly even with fix applied (#2170)."""
+        extractor = EvidenceExtractor(reranker=AsyncMock(), max_evidence=15)
+
+        parts = extractor._split_sentences("First sentence. Second sentence.")
+
+        assert parts == ["First sentence.", "Second sentence."]
+
 
 # =============================================================================
 # Relevance ordering
