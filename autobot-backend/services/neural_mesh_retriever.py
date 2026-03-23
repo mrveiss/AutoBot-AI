@@ -10,12 +10,27 @@ Routes queries by complexity:
   MULTI_HOP  -> same as COMPLEX
 """
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Coroutine, Protocol
+from typing import Any, Callable, Coroutine, Optional, Protocol
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Agentic tool registry — maps LLM-visible names to human descriptions.
+# Issue #2136: A-RAG ReAct loop for COMPLEX / MULTI_HOP queries.
+# =============================================================================
+
+AVAILABLE_TOOLS: dict[str, str] = {
+    "semantic_search": "Find chunks by meaning similarity",
+    "keyword_search": "Find chunks by exact term matching (BM25)",
+    "mesh_expand": "Follow graph edges from known nodes",
+    "raptor_retrieve": "Search hierarchical summaries at multiple levels",
+    "anchor_lookup": "Find pre-computed topic entry points",
+    "decompose_query": "Break into sub-questions and solve sequentially",
+}
 
 
 # =============================================================================
@@ -79,6 +94,7 @@ class NeuralMeshRetriever:
         reranker: Any,
         classifier: Any,
         mesh_db: Any,
+        llm: Optional[Callable[..., Coroutine[Any, Any, str]]] = None,
     ) -> None:
         """Inject all dependencies.
 
@@ -90,6 +106,8 @@ class NeuralMeshRetriever:
             reranker:       ResultReranker instance.
             classifier:     QueryClassifier instance.
             mesh_db:        Object satisfying _AnchorDB protocol.
+            llm:            Optional async callable(prompt) -> str for A-RAG
+                            ReAct loop (#2136). When None, agentic path is off.
         """
         self.chroma_search = chroma_search
         self.hybrid_search = hybrid_search
@@ -98,6 +116,7 @@ class NeuralMeshRetriever:
         self.reranker = reranker
         self.classifier = classifier
         self.mesh_db = mesh_db
+        self.llm = llm
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -122,7 +141,9 @@ class NeuralMeshRetriever:
             return await self._simple_retrieve(query, top_k)
         if value == "moderate":
             return await self._moderate_retrieve(query, top_k)
-        # complex or multi_hop both use the full pipeline
+        # complex / multi_hop: prefer agentic ReAct loop when an LLM is wired in
+        if value in ("complex", "multi_hop") and self.llm is not None:
+            return await self.retrieve_agentic(query, top_k)
         return await self._full_retrieve(query, top_k)
 
     # ------------------------------------------------------------------
@@ -176,6 +197,171 @@ class NeuralMeshRetriever:
             anchor_used=anchor_used,
             nodes_explored=len(expanded_scores),
         )
+
+    # ------------------------------------------------------------------
+    # A-RAG ReAct loop (Issue #2136)
+    # ------------------------------------------------------------------
+
+    async def retrieve_agentic(
+        self, query: str, top_k: int = 5, max_steps: int = 5
+    ) -> MeshRetrievalResult:
+        """ReAct loop: LLM selects retrieval tools iteratively. Issue #2136.
+
+        Only activated for COMPLEX/MULTI_HOP queries when self.llm is set.
+        Falls back gracefully — a DONE action at any step ends the loop.
+
+        Args:
+            query:     Raw user query string.
+            top_k:     Maximum chunks to return.
+            max_steps: Upper bound on LLM-tool iterations.
+
+        Returns:
+            MeshRetrievalResult assembled from accumulated tool results.
+        """
+        context_tracker: list[dict] = []
+        accumulated: list = []
+
+        for _ in range(max_steps):
+            action = await self._select_next_action(query, context_tracker)
+            if action["tool"] == "DONE":
+                break
+            results = await self._execute_tool(
+                action["tool"], action.get("params", {}), query
+            )
+            context_tracker.append(
+                {"tool": action["tool"], "result_count": len(results)}
+            )
+            accumulated.extend(results)
+
+        chunks = await self._finalize_agentic(query, accumulated, top_k)
+        self._fire_learner(query, chunks)
+        return MeshRetrievalResult(
+            chunks=chunks,
+            expanded=True,
+            complexity="complex",
+            nodes_explored=len(accumulated),
+        )
+
+    async def _finalize_agentic(
+        self, query: str, accumulated: list, top_k: int
+    ) -> list:
+        """Deduplicate and rerank accumulated agentic results. Issue #2136.
+
+        Args:
+            query:       Original query for reranker scoring.
+            accumulated: Raw combined results from all tool calls.
+            top_k:       Number of results to keep after reranking.
+
+        Returns:
+            Ranked and deduplicated result list capped at top_k.
+        """
+        if not accumulated:
+            return []
+        seen: set[str] = set()
+        unique: list = []
+        for r in accumulated:
+            cid = self._chunk_id(r)
+            if cid not in seen:
+                seen.add(cid)
+                unique.append(r)
+        return await self.reranker.rerank(query, unique, top_k=top_k)
+
+    async def _select_next_action(self, query: str, context_so_far: list) -> dict:
+        """Ask the LLM which tool to invoke next. Issue #2136.
+
+        Builds a structured prompt and parses the JSON response.  On any
+        failure the loop receives {"tool": "DONE"} so retrieval degrades
+        gracefully rather than crashing.
+
+        Args:
+            query:          The original user query.
+            context_so_far: List of {"tool": ..., "result_count": ...} dicts.
+
+        Returns:
+            Parsed action dict with at least a "tool" key.
+        """
+        prompt = (
+            f"Query: {query}\n"
+            f"Steps taken: {json.dumps(context_so_far)}\n"
+            f"Available tools: {json.dumps(AVAILABLE_TOOLS)}\n\n"
+            "Choose next tool or DONE. Respond as JSON: "
+            '{"tool": "...", "params": {...}} or {"tool": "DONE"}'
+        )
+        raw = await self.llm(prompt)
+        return self._parse_action(raw)
+
+    async def _execute_tool(self, tool_name: str, params: dict, query: str) -> list:
+        """Dispatch a tool name to the appropriate retrieval method. Issue #2136.
+
+        Unrecognised tool names are logged and return an empty list so the
+        ReAct loop can continue or terminate via DONE on the next step.
+
+        Args:
+            tool_name: One of the keys in AVAILABLE_TOOLS.
+            params:    Optional parameters forwarded from the LLM action.
+            query:     Original query, used as default input for all tools.
+
+        Returns:
+            List of result dicts from the dispatched method.
+        """
+        top_k = params.get("top_k", 5)
+        dispatch: dict[str, Any] = {
+            "semantic_search": lambda: self.chroma_search(query, top_k),
+            "keyword_search": lambda: self.hybrid_search(query, top_k),
+            "mesh_expand": lambda: self._agentic_mesh_expand(query, top_k),
+            "raptor_retrieve": lambda: self.chroma_search(query, top_k),
+            "anchor_lookup": lambda: self._agentic_anchor_lookup(query, top_k),
+            "decompose_query": lambda: self.hybrid_search(query, top_k),
+        }
+        handler = dispatch.get(tool_name)
+        if handler is None:
+            logger.warning(
+                "_execute_tool: unknown tool %r; returning empty list", tool_name
+            )
+            return []
+        return await handler()
+
+    async def _agentic_mesh_expand(self, query: str, top_k: int) -> list:
+        """Seed hybrid search then PPR-expand; returns merged results. Issue #2136."""
+        seeds = await self.hybrid_search(query, top_k)
+        seed_ids = [self._chunk_id(r) for r in seeds[:5]]
+        expanded = await self.ppr.rank(seed_ids, top_k=top_k * 2, max_iterations=5)
+        return self._merge_with_expansion(seeds, expanded)
+
+    async def _agentic_anchor_lookup(self, query: str, top_k: int) -> list:
+        """Seed hybrid search then inject anchor nodes; returns seed list. Issue #2136."""
+        seeds = await self.hybrid_search(query, top_k)
+        seed_ids = [self._chunk_id(r) for r in seeds[:5]]
+        anchors = await self._find_anchors(seed_ids)
+        if anchors:
+            anchor_results = [
+                {"chunk_id": a, "score": 0.5, "content": ""} for a in anchors
+            ]
+            return seeds + anchor_results
+        return seeds
+
+    def _parse_action(self, llm_output: str) -> dict:
+        """Parse a JSON action from LLM output. Issue #2136.
+
+        Tries to extract {"tool": ..., "params": ...}.  Returns
+        {"tool": "DONE"} on any parse or validation failure so the ReAct
+        loop degrades gracefully.
+
+        Args:
+            llm_output: Raw string returned by self.llm().
+
+        Returns:
+            Dict with at minimum a "tool" key.
+        """
+        try:
+            action = json.loads(llm_output.strip())
+            if isinstance(action, dict) and "tool" in action:
+                return action
+        except (json.JSONDecodeError, AttributeError):
+            logger.warning(
+                "_parse_action: could not parse LLM output as JSON; using DONE"
+            )
+        return {"tool": "DONE"}
 
     # ------------------------------------------------------------------
     # Private helpers
