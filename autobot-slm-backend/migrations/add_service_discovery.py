@@ -18,7 +18,6 @@ import logging
 import sys
 
 import psycopg2
-
 from migrations.utils import (
     add_column_if_not_exists,
     create_index_if_not_exists,
@@ -84,8 +83,7 @@ def migrate(db_url: str) -> None:
     # 2. Create node_configs table
     logger.info("Creating node_configs table...")
     if not table_exists(cursor, "node_configs"):
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE node_configs (
                 id SERIAL PRIMARY KEY,
                 node_id VARCHAR(64),
@@ -96,8 +94,7 @@ def migrate(db_url: str) -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(node_id, config_key)
             )
-        """
-        )
+        """)
     create_index_if_not_exists(
         cursor, "ix_node_configs_node_id", "node_configs", "node_id"
     )
@@ -108,8 +105,7 @@ def migrate(db_url: str) -> None:
     # 3. Create service_conflicts table
     logger.info("Creating service_conflicts table...")
     if not table_exists(cursor, "service_conflicts"):
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE service_conflicts (
                 id SERIAL PRIMARY KEY,
                 service_name_a VARCHAR(128) NOT NULL,
@@ -119,8 +115,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(service_name_a, service_name_b)
             )
-        """
-        )
+        """)
     create_index_if_not_exists(
         cursor, "ix_service_conflicts_a", "service_conflicts", "service_name_a"
     )

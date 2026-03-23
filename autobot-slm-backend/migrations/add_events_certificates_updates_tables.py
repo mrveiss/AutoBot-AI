@@ -28,8 +28,7 @@ def migrate(db_url: str) -> None:
     # Create node_events table
     if not table_exists(cursor, "node_events"):
         logger.info("Creating node_events table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE node_events (
                 id SERIAL PRIMARY KEY,
                 event_id VARCHAR(64) UNIQUE NOT NULL,
@@ -40,8 +39,7 @@ def migrate(db_url: str) -> None:
                 details JSONB DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_node_events_node_id", "node_events", "node_id"
         )
@@ -58,8 +56,7 @@ def migrate(db_url: str) -> None:
     # Create certificates table
     if not table_exists(cursor, "certificates"):
         logger.info("Creating certificates table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE certificates (
                 id SERIAL PRIMARY KEY,
                 certificate_id VARCHAR(64) UNIQUE NOT NULL,
@@ -72,8 +69,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_certificates_node_id", "certificates", "node_id"
         )
@@ -84,8 +80,7 @@ def migrate(db_url: str) -> None:
     # Create update_info table
     if not table_exists(cursor, "update_info"):
         logger.info("Creating update_info table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE update_info (
                 id SERIAL PRIMARY KEY,
                 update_id VARCHAR(64) UNIQUE NOT NULL,
@@ -99,8 +94,7 @@ def migrate(db_url: str) -> None:
                 applied_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_update_info_node_id", "update_info", "node_id"
         )

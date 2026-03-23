@@ -85,7 +85,6 @@ from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
-
 from backend.utils.redis_management.config import (
     PoolConfig,
     RedisConfig,
