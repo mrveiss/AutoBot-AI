@@ -65,9 +65,17 @@ class KeywordSearcher:
         return BM25Scorer(_DEFAULT_TOTAL_DOCS, _DEFAULT_AVG_LENGTH, {})
 
     async def _get_bm25(self) -> BM25Scorer:
-        """Return cached BM25Scorer, loading from Redis on first call (#1720)."""
+        """Return cached BM25Scorer, loading from Redis on first call (#1720).
+
+        When the corpus stats key is absent (first run or after flush),
+        triggers an initial ``recompute_corpus_stats()`` so BM25 uses
+        real IDF values instead of falling back to defaults (#2033).
+        """
         if self._bm25 is None:
             self._bm25 = await self._load_corpus_stats()
+            if self._bm25.total_docs == _DEFAULT_TOTAL_DOCS:
+                await self.recompute_corpus_stats()
+                self._bm25 = await self._load_corpus_stats()
         return self._bm25
 
     def _invalidate_bm25_cache(self) -> None:

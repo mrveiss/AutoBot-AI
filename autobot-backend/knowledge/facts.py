@@ -433,6 +433,21 @@ class FactsMixin:
     initialized: bool
     embedding_model_name: str
 
+    def _schedule_bm25_refresh(self) -> None:
+        """Schedule a background BM25 corpus-stats recompute (#2033).
+
+        Called after fact mutations so IDF values stay current.
+        Uses ``asyncio.create_task`` to avoid blocking the caller.
+        """
+        # _get_keyword_searcher is defined on SearchMixin (same composed class)
+        if not hasattr(self, "_get_keyword_searcher"):
+            return
+        try:
+            searcher = self._get_keyword_searcher()
+            asyncio.create_task(searcher.recompute_corpus_stats())
+        except Exception as exc:
+            logger.warning("BM25 stats refresh scheduling failed: %s", exc)
+
     async def _find_fact_by_unique_key(
         self, unique_key: str
     ) -> Optional[Dict[str, Any]]:
@@ -682,6 +697,7 @@ class FactsMixin:
             self._increment_stat("total_facts"),
             self._increment_stat("total_vectors"),
         )
+        self._schedule_bm25_refresh()
         return {"status": "success", "fact_id": fact_id, "action": "created"}
 
     async def store_fact(
@@ -1069,6 +1085,7 @@ class FactsMixin:
                 self._decrement_stat("total_vectors"),
             )
 
+            self._schedule_bm25_refresh()
             logger.info("Deleted fact %s", fact_id)
             return {"status": "success", "fact_id": fact_id, "action": "deleted"}
 
