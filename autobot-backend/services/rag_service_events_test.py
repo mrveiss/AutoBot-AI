@@ -442,3 +442,262 @@ class TestComplexityInStoreFeedbackInStream:
 
         entry = mock_redis.xadd.call_args[0][1]
         assert entry["complexity"] == "simple"
+
+
+# =============================================================================
+# retrieved_ids vs ranked_ids separation tests (Issue #2035)
+# =============================================================================
+
+
+class TestRetrievedVsRankedIdsSeparation:
+    """Verify that advanced_search emits distinct retrieved_ids and ranked_ids.
+
+    Issue #2035: feedback events were passing ranked_ids=retrieved_ids (same list).
+    After reranking, retrieved_ids must reflect hybrid_score order (pre-rerank)
+    and ranked_ids must reflect rerank_score order (post-rerank).
+    """
+
+    def _make_service(self):
+        """Build a RAGService instance with a stub config and bypassed init."""
+        from services.rag_config import RAGConfig
+        from services.rag_service import RAGService
+
+        svc = RAGService.__new__(RAGService)
+        svc._initialized = True
+        cfg = RAGConfig()
+        cfg.enable_advanced_rag = True
+        svc.config = cfg
+        return svc
+
+    def _make_result(self, chunk_id: str, hybrid_score: float, rerank_score: float):
+        """Construct a SearchResult with controlled scores."""
+        from advanced_rag_optimizer import SearchResult
+
+        return SearchResult(
+            content="content",
+            metadata={"chunk_id": chunk_id},
+            semantic_score=hybrid_score,
+            keyword_score=0.0,
+            hybrid_score=hybrid_score,
+            relevance_rank=1,
+            source_path=chunk_id,
+            rerank_score=rerank_score,
+        )
+
+    @pytest.mark.asyncio
+    async def test_ranked_ids_follow_rerank_score_order(self):
+        """ranked_ids are in rerank_score descending order (post-rerank)."""
+        from advanced_rag_optimizer import RAGMetrics
+
+        # Results arrive from the optimizer already sorted by rerank_score desc:
+        # chunk_b rerank=0.9, chunk_a rerank=0.6, chunk_c rerank=0.3
+        results = [
+            self._make_result("chunk_b", hybrid_score=0.5, rerank_score=0.9),
+            self._make_result("chunk_a", hybrid_score=0.8, rerank_score=0.6),
+            self._make_result("chunk_c", hybrid_score=0.3, rerank_score=0.3),
+        ]
+        svc = self._make_service()
+
+        with patch(
+            "services.rag_service.RAGService._check_cache_tiers",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rag_service.RAGService.initialize",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "services.rag_service.RAGService._execute_and_cache_search",
+            new_callable=AsyncMock,
+            return_value=(results, RAGMetrics()),
+        ), patch(
+            "services.rag_service.RAGService._store_in_semantic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_in_topic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._emit_retrieval_feedback",
+            new_callable=AsyncMock,
+        ) as mock_emit, patch(
+            "services.rag_service.RAGService._store_feedback_in_stream",
+            new_callable=AsyncMock,
+        ):
+            await svc.advanced_search(query="test")
+
+        _, kwargs = mock_emit.call_args
+        assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a", "chunk_c"]
+
+    @pytest.mark.asyncio
+    async def test_retrieved_ids_follow_hybrid_score_order(self):
+        """retrieved_ids are in hybrid_score descending order (pre-rerank)."""
+        from advanced_rag_optimizer import RAGMetrics
+
+        # hybrid_score order: chunk_a=0.8, chunk_b=0.5, chunk_c=0.3
+        # rerank_score order: chunk_b=0.9, chunk_a=0.6, chunk_c=0.3
+        results = [
+            self._make_result("chunk_b", hybrid_score=0.5, rerank_score=0.9),
+            self._make_result("chunk_a", hybrid_score=0.8, rerank_score=0.6),
+            self._make_result("chunk_c", hybrid_score=0.3, rerank_score=0.3),
+        ]
+        svc = self._make_service()
+
+        with patch(
+            "services.rag_service.RAGService._check_cache_tiers",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rag_service.RAGService.initialize",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "services.rag_service.RAGService._execute_and_cache_search",
+            new_callable=AsyncMock,
+            return_value=(results, RAGMetrics()),
+        ), patch(
+            "services.rag_service.RAGService._store_in_semantic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_in_topic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._emit_retrieval_feedback",
+            new_callable=AsyncMock,
+        ) as mock_emit, patch(
+            "services.rag_service.RAGService._store_feedback_in_stream",
+            new_callable=AsyncMock,
+        ):
+            await svc.advanced_search(query="test")
+
+        _, kwargs = mock_emit.call_args
+        assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b", "chunk_c"]
+
+    @pytest.mark.asyncio
+    async def test_retrieved_ids_differ_from_ranked_ids_when_reranking_changes_order(
+        self,
+    ):
+        """When reranking reorders results, retrieved_ids != ranked_ids."""
+        from advanced_rag_optimizer import RAGMetrics
+
+        # Reranking promotes chunk_b above chunk_a despite lower hybrid_score
+        results = [
+            self._make_result("chunk_b", hybrid_score=0.5, rerank_score=0.9),
+            self._make_result("chunk_a", hybrid_score=0.8, rerank_score=0.6),
+        ]
+        svc = self._make_service()
+
+        with patch(
+            "services.rag_service.RAGService._check_cache_tiers",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rag_service.RAGService.initialize",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "services.rag_service.RAGService._execute_and_cache_search",
+            new_callable=AsyncMock,
+            return_value=(results, RAGMetrics()),
+        ), patch(
+            "services.rag_service.RAGService._store_in_semantic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_in_topic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._emit_retrieval_feedback",
+            new_callable=AsyncMock,
+        ) as mock_emit, patch(
+            "services.rag_service.RAGService._store_feedback_in_stream",
+            new_callable=AsyncMock,
+        ):
+            await svc.advanced_search(query="test")
+
+        _, kwargs = mock_emit.call_args
+        assert kwargs["retrieved_ids"] != kwargs["ranked_ids"]
+        assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b"]
+        assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a"]
+
+    @pytest.mark.asyncio
+    async def test_retrieved_and_ranked_ids_identical_when_order_unchanged(self):
+        """When hybrid_score and rerank_score yield the same order, lists are equal."""
+        from advanced_rag_optimizer import RAGMetrics
+
+        # Both scores rank chunk_a first
+        results = [
+            self._make_result("chunk_a", hybrid_score=0.9, rerank_score=0.95),
+            self._make_result("chunk_b", hybrid_score=0.5, rerank_score=0.4),
+        ]
+        svc = self._make_service()
+
+        with patch(
+            "services.rag_service.RAGService._check_cache_tiers",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rag_service.RAGService.initialize",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "services.rag_service.RAGService._execute_and_cache_search",
+            new_callable=AsyncMock,
+            return_value=(results, RAGMetrics()),
+        ), patch(
+            "services.rag_service.RAGService._store_in_semantic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_in_topic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._emit_retrieval_feedback",
+            new_callable=AsyncMock,
+        ) as mock_emit, patch(
+            "services.rag_service.RAGService._store_feedback_in_stream",
+            new_callable=AsyncMock,
+        ):
+            await svc.advanced_search(query="test")
+
+        _, kwargs = mock_emit.call_args
+        assert kwargs["retrieved_ids"] == kwargs["ranked_ids"] == ["chunk_a", "chunk_b"]
+
+    @pytest.mark.asyncio
+    async def test_stream_store_receives_same_separation(self):
+        """_store_feedback_in_stream receives the same retrieved/ranked split."""
+        from advanced_rag_optimizer import RAGMetrics
+
+        results = [
+            self._make_result("chunk_b", hybrid_score=0.5, rerank_score=0.9),
+            self._make_result("chunk_a", hybrid_score=0.8, rerank_score=0.6),
+        ]
+        svc = self._make_service()
+
+        with patch(
+            "services.rag_service.RAGService._check_cache_tiers",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rag_service.RAGService.initialize",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "services.rag_service.RAGService._execute_and_cache_search",
+            new_callable=AsyncMock,
+            return_value=(results, RAGMetrics()),
+        ), patch(
+            "services.rag_service.RAGService._store_in_semantic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_in_topic_cache",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._emit_retrieval_feedback",
+            new_callable=AsyncMock,
+        ), patch(
+            "services.rag_service.RAGService._store_feedback_in_stream",
+            new_callable=AsyncMock,
+        ) as mock_store:
+            await svc.advanced_search(query="test")
+
+        _, kwargs = mock_store.call_args
+        assert kwargs["retrieved_ids"] == ["chunk_a", "chunk_b"]
+        assert kwargs["ranked_ids"] == ["chunk_b", "chunk_a"]

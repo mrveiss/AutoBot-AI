@@ -470,18 +470,24 @@ class RAGService:
         classifier = get_query_classifier()
         complexity = classifier.classify(query)
 
-        # Emit retrieval feedback event and persist to Redis stream (#1516)
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        # Emit retrieval feedback event and persist to Redis stream (#1516, #2035)
+        # ranked_ids: results are already sorted by rerank_score (post-rerank order).
+        # retrieved_ids: re-sort by hybrid_score to recover pre-rerank retrieval order.
+        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
+        retrieved_ids = [
+            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
+        ]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
             complexity=complexity.value,
         )
         await self._store_feedback_in_stream(
             query=query,
             retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
             complexity=complexity.value,
         )
 
