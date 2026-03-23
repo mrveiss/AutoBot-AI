@@ -57,9 +57,38 @@
           :status-message="`Trend: ${qualityScore.trend}`"
         />
       </div>
-      <!-- TODO: implement securityScore in backend (#920) -->
-      <!-- TODO: implement performanceScore in backend (#920) -->
-      <!-- TODO: implement redisScore in backend (#920) -->
+      <!-- Issue #2068: Security, Performance, Redis score cards — detailed scores available in
+           the Codebase Analytics dashboard. Showing "Not Available" placeholder here. -->
+      <div class="score-card score-card--unavailable">
+        <div class="unavailable-card-header">
+          <i class="fas fa-shield-alt"></i>
+          <span>{{ $t('analytics.codeIntelligence.securityScore') }}</span>
+        </div>
+        <div class="unavailable-card-body">
+          <i class="fas fa-info-circle"></i>
+          <span>{{ $t('analytics.codeIntelligence.scoreNotAvailable') }}</span>
+        </div>
+      </div>
+      <div class="score-card score-card--unavailable">
+        <div class="unavailable-card-header">
+          <i class="fas fa-tachometer-alt"></i>
+          <span>{{ $t('analytics.codeIntelligence.performanceScore') }}</span>
+        </div>
+        <div class="unavailable-card-body">
+          <i class="fas fa-info-circle"></i>
+          <span>{{ $t('analytics.codeIntelligence.scoreNotAvailable') }}</span>
+        </div>
+      </div>
+      <div class="score-card score-card--unavailable">
+        <div class="unavailable-card-header">
+          <i class="fas fa-database"></i>
+          <span>{{ $t('analytics.codeIntelligence.redisScore') }}</span>
+        </div>
+        <div class="unavailable-card-body">
+          <i class="fas fa-info-circle"></i>
+          <span>{{ $t('analytics.codeIntelligence.scoreNotAvailable') }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Empty state for scores -->
@@ -298,6 +327,33 @@ onMounted(async () => {
   padding: var(--spacing-4);
   display: flex;
   justify-content: center;
+}
+
+/* Issue #2068: Placeholder cards for scores not yet available in this component */
+.score-card--unavailable {
+  flex-direction: column;
+  gap: var(--spacing-2);
+  opacity: 0.6;
+}
+
+.unavailable-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: 0.8rem;
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.unavailable-card-body {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: 0.875rem;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-style: italic;
 }
 
 .empty-state {
