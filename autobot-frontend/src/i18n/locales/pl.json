@@ -3317,7 +3317,7 @@
       "noModel": "brak modelu",
       "defaultModel": "domyślny",
       "moreCount": "+{count} więcej",
-      "summaryStats": "{backend} backendowych \u2022 {specialized} wyspecjalizowanych agentów"
+      "summaryStats": "{backend} backendowych • {specialized} wyspecjalizowanych agentów"
     }
   },
   "errors": {
@@ -6053,6 +6053,13 @@
     "plugins": "Wtyczki",
     "slmAdmin": "Administracja SLM",
     "slmAdminTitle": "Otwórz panel administracyjny SLM",
-    "profileSettings": "Ustawienia profilu"
+    "profileSettings": "Ustawienia profilu",
+    "vision": "Vision",
+    "preferences": "Preferences",
+    "llmConfig": "LLM Config",
+    "browserAutomation": "Browser",
+    "devSpeedup": "Dev Tools",
+    "agentRegistry": "Agents",
+    "codeIntelligence": "Code Intel"
   }
 }
