@@ -352,8 +352,12 @@ export function useKnowledgeVectorization() {
   const _tryBatchEndpoint = async (
     documentIds: string[]
   ): Promise<{ succeeded: string[], failed: string[] }> => {
+    const knowledgeTimeout = appConfig.getTimeout('knowledge')
+    const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
     const response = await apiClient.post('/api/knowledge_base/vectorize_documents', {
       document_ids: documentIds
+    }, {
+      timeout: batchTimeout
     })
     const data = await parseApiResponse(response)
 
@@ -390,27 +394,40 @@ export function useKnowledgeVectorization() {
     try {
       // Issue #2077: use single batch request instead of N+1 individual requests
       return await _tryBatchEndpoint(documentIds)
-    } catch (batchError) {
-      // Batch endpoint unavailable — fall back to individual per-document requests
+    } catch (batchError: unknown) {
+      // Only fall back for 404/405 (endpoint not found); rethrow real errors
+      const status = (batchError as Record<string, unknown>)?.response
+        ? ((batchError as Record<string, Record<string, unknown>>).response?.status as number)
+        : undefined
+      if (status && status !== 404 && status !== 405) {
+        throw batchError
+      }
+
       logger.warn(
         'Batch vectorization endpoint unavailable, falling back to individual requests:',
         batchError
       )
 
-      const results = await Promise.allSettled(
-        documentIds.map(docId => vectorizeDocument(docId))
-      )
+      try {
+        const results = await Promise.allSettled(
+          documentIds.map(docId => vectorizeDocument(docId))
+        )
 
-      results.forEach((result, index) => {
-        const docId = documentIds[index]
-        if (result.status === 'fulfilled' && result.value) {
-          succeeded.push(docId)
-        } else {
-          failed.push(docId)
-        }
-      })
+        results.forEach((result, index) => {
+          const docId = documentIds[index]
+          if (result.status === 'fulfilled' && result.value) {
+            succeeded.push(docId)
+          } else {
+            failed.push(docId)
+          }
+        })
 
-      return { succeeded, failed }
+        return { succeeded, failed }
+      } catch (fallbackError) {
+        logger.error('Fallback vectorization also failed:', fallbackError)
+        documentIds.forEach(id => setDocumentStatus(id, 'failed', 0, String(fallbackError)))
+        return { succeeded: [], failed: documentIds }
+      }
     }
   }
 

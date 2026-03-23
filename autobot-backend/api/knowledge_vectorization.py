@@ -22,7 +22,7 @@ from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from redis.exceptions import RedisError
 from type_defs.common import Metadata
 from utils.async_chromadb_client import get_async_chromadb_client
@@ -1105,6 +1105,17 @@ class BatchVectorizeRequest(BaseModel):
         description="List of document IDs to vectorize (max 100 per request)",
     )
 
+    @field_validator("document_ids")
+    @classmethod
+    def validate_document_ids(cls, v: List[str]) -> List[str]:
+        """Deduplicate and validate individual document IDs."""
+        seen: dict[str, None] = {}
+        for item in v:
+            if not isinstance(item, str) or not item.strip() or len(item) > 255:
+                raise ValueError(f"Invalid document ID: {item!r}")
+            seen[item] = None
+        return list(seen)
+
 
 async def _vectorize_single_document(kb, document_id: str) -> dict:
     """
@@ -1160,9 +1171,15 @@ async def batch_vectorize_documents(
         "Starting batch vectorization for %d documents", len(request.document_ids)
     )
 
-    results = [
-        await _vectorize_single_document(kb, doc_id) for doc_id in request.document_ids
-    ]
+    semaphore = asyncio.Semaphore(10)
+
+    async def _bounded_vectorize(doc_id: str) -> dict:
+        async with semaphore:
+            return await _vectorize_single_document(kb, doc_id)
+
+    results = await asyncio.gather(
+        *[_bounded_vectorize(doc_id) for doc_id in request.document_ids]
+    )
 
     succeeded = sum(1 for r in results if r["status"] == "success")
     logger.info(
