@@ -1092,6 +1092,92 @@ async def vectorize_individual_fact(
     }
 
 
+# ===== BATCH DOCUMENT VECTORIZATION (Issue #2077) =====
+
+
+class BatchVectorizeRequest(BaseModel):
+    """Request model for batch document vectorization. Issue #2077."""
+
+    document_ids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="List of document IDs to vectorize (max 100 per request)",
+    )
+
+
+async def _vectorize_single_document(kb, document_id: str) -> dict:
+    """
+    Vectorize a single document by ID, returning a per-document result dict.
+
+    Reuses kb.vectorize_existing_fact() to avoid duplicating vectorization logic.
+    Returns result dict with id, status, and optional error. Issue #2077.
+    """
+    try:
+        result = await kb.vectorize_existing_fact(fact_id=document_id)
+        if result.get("status") == "success" and result.get("vector_indexed"):
+            return {"id": document_id, "status": "success"}
+        error_msg = result.get("message", "Vectorization did not produce a vector")
+        logger.warning("Vectorization failed for %s: %s", document_id, error_msg)
+        return {"id": document_id, "status": "error", "error": error_msg}
+    except Exception as e:
+        logger.error("Vectorization error for %s: %s", document_id, e)
+        return {"id": document_id, "status": "error", "error": str(e)}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_vectorize_documents",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post("/vectorize_documents")
+async def batch_vectorize_documents(
+    request: BatchVectorizeRequest,
+    req: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
+    """
+    Vectorize multiple documents in a single request.
+
+    Eliminates the N+1 HTTP round-trips the frontend would otherwise make by
+    accepting a list of document IDs and processing them server-side.
+
+    Issue #2077: replaces Promise.allSettled N+1 workaround in
+    useKnowledgeVectorization.ts.
+
+    Args:
+        request: BatchVectorizeRequest with list of document IDs
+
+    Returns:
+        Per-document results with aggregate succeeded/total counts
+    """
+    kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+    if kb is None:
+        raise HTTPException(status_code=500, detail="Knowledge base not initialized")
+
+    logger.info(
+        "Starting batch vectorization for %d documents", len(request.document_ids)
+    )
+
+    results = [
+        await _vectorize_single_document(kb, doc_id) for doc_id in request.document_ids
+    ]
+
+    succeeded = sum(1 for r in results if r["status"] == "success")
+    logger.info(
+        "Batch vectorization complete: %d/%d succeeded",
+        succeeded,
+        len(request.document_ids),
+    )
+
+    return {
+        "results": results,
+        "total": len(request.document_ids),
+        "succeeded": succeeded,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_vectorization_job_status",
