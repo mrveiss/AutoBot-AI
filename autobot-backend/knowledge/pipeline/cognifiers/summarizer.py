@@ -352,10 +352,33 @@ class HierarchicalSummarizer(BaseCognifier):
             level_key = f"L{level}"
             tree[level_key] = summaries
             current_items = summaries
-            current_embeddings = np.random.rand(
-                len(summaries), current_embeddings.shape[1]
+            current_embeddings = self._compute_level_embeddings(
+                groups, labels, current_embeddings
             )
         return tree
+
+    @staticmethod
+    def _compute_level_embeddings(
+        groups: Dict[int, list],
+        labels,
+        parent_embeddings,
+    ):
+        """Compute embeddings for the next RAPTOR level (#2044).
+
+        Uses mean-pooling of child embeddings per cluster instead of
+        random vectors so that L2+ clustering is semantically meaningful.
+        """
+        import numpy as np
+
+        dim = parent_embeddings.shape[1]
+        level_embeddings = []
+        for cluster_id in sorted(groups.keys()):
+            mask = labels == cluster_id
+            if mask.any():
+                level_embeddings.append(parent_embeddings[mask].mean(axis=0))
+            else:
+                level_embeddings.append(np.zeros(dim))
+        return np.array(level_embeddings)
 
     async def _summarize_groups(
         self,
