@@ -745,11 +745,8 @@ class SyslogDestination(LogDestination):
         try:
             if use_tls:
                 context = self._create_ssl_context()
-                # Wrap socket with SSL
-                if self.config.ssl_verify:
-                    sock = context.wrap_socket(sock, server_hostname=host)
-                else:
-                    sock = context.wrap_socket(sock)
+                # Always pass server_hostname for proper TLS verification
+                sock = context.wrap_socket(sock, server_hostname=host)
 
             sock.connect((host, port))
 
@@ -829,10 +826,10 @@ class SyslogDestination(LogDestination):
             try:
                 if protocol == SyslogProtocol.TCP_TLS:
                     context = self._create_ssl_context()
-                    if self.config.ssl_verify:
-                        sock = context.wrap_socket(sock, server_hostname=host)
-                    else:
-                        sock = context.wrap_socket(sock)
+                    # Always pass server_hostname for proper TLS
+                    sock = context.wrap_socket(
+                        sock, server_hostname=host
+                    )
 
                 sock.connect((host, port))
                 self._healthy = True
@@ -1277,74 +1274,156 @@ class LogForwarder:
         self.logger.info("Log forwarding service stopped")
 
 
-def main():
-    """CLI entry point."""
-    parser = argparse.ArgumentParser(description="AutoBot Log Forwarding Service")
-    parser.add_argument("--start", action="store_true", help="Start the log forwarder")
-    parser.add_argument("--config", type=str, help="Path to configuration file")
-    parser.add_argument(
-        "--test-destinations", action="store_true", help="Test all destinations"
+def _build_argument_parser() -> argparse.ArgumentParser:
+    """Build CLI argument parser for log forwarder. See main()."""
+    parser = argparse.ArgumentParser(
+        description="AutoBot Log Forwarding Service"
     )
     parser.add_argument(
-        "--add-seq", type=str, metavar="URL", help="Add Seq destination"
+        "--start", action="store_true", help="Start the log forwarder"
     )
     parser.add_argument(
-        "--add-elasticsearch",
-        type=str,
-        metavar="URL",
+        "--config", type=str, help="Path to configuration file"
+    )
+    parser.add_argument(
+        "--test-destinations", action="store_true",
+        help="Test all destinations",
+    )
+    parser.add_argument(
+        "--add-seq", type=str, metavar="URL",
+        help="Add Seq destination",
+    )
+    parser.add_argument(
+        "--add-elasticsearch", type=str, metavar="URL",
         help="Add Elasticsearch destination",
     )
     parser.add_argument(
-        "--add-loki", type=str, metavar="URL", help="Add Loki destination"
+        "--add-loki", type=str, metavar="URL",
+        help="Add Loki destination",
     )
     parser.add_argument(
-        "--add-syslog",
-        type=str,
-        metavar="HOST:PORT",
+        "--add-syslog", type=str, metavar="HOST:PORT",
         help="Add Syslog destination (e.g., 192.168.168.49:514)",
     )
     parser.add_argument(
-        "--syslog-protocol",
-        type=str,
-        choices=["udp", "tcp", "tcp_tls"],
-        default="udp",
+        "--syslog-protocol", type=str,
+        choices=["udp", "tcp", "tcp_tls"], default="udp",
         help="Syslog protocol: udp (default), tcp, or tcp_tls",
     )
     parser.add_argument(
-        "--syslog-name",
-        type=str,
-        default="syslog-default",
+        "--syslog-name", type=str, default="syslog-default",
         help="Name for syslog destination",
     )
     parser.add_argument(
-        "--ssl-verify",
-        action="store_true",
+        "--ssl-verify", action="store_true",
         help="Verify SSL certificates (for tcp_tls)",
     )
     parser.add_argument(
-        "--ssl-ca-cert", type=str, help="Path to CA certificate for SSL verification"
+        "--ssl-ca-cert", type=str,
+        help="Path to CA certificate for SSL verification",
     )
     parser.add_argument(
-        "--scope",
-        type=str,
-        choices=["global", "per_host"],
+        "--scope", type=str, choices=["global", "per_host"],
         default="global",
         help="Destination scope: global (all hosts) or per_host",
     )
     parser.add_argument(
-        "--target-hosts",
-        type=str,
+        "--target-hosts", type=str,
         help="Comma-separated list of target hosts (for per_host scope)",
     )
     parser.add_argument(
-        "--list", action="store_true", help="List configured destinations"
+        "--list", action="store_true",
+        help="List configured destinations",
     )
+    return parser
 
+
+def _handle_add_destinations(args, forwarder: "LogForwarder") -> bool:
+    """Process --add-* CLI flags. Returns True if any added. See main()."""
+    added = False
+
+    if args.add_seq:
+        cfg = DestinationConfig(
+            name="seq-default", type=DestinationType.SEQ,
+            url=args.add_seq,
+        )
+        forwarder.add_destination(cfg)
+        print(f"Added Seq destination: {args.add_seq}")
+        added = True
+
+    if args.add_elasticsearch:
+        cfg = DestinationConfig(
+            name="elasticsearch-default",
+            type=DestinationType.ELASTICSEARCH,
+            url=args.add_elasticsearch,
+        )
+        forwarder.add_destination(cfg)
+        print(f"Added Elasticsearch destination: {args.add_elasticsearch}")
+        added = True
+
+    if args.add_loki:
+        cfg = DestinationConfig(
+            name="loki-default", type=DestinationType.LOKI,
+            url=args.add_loki,
+        )
+        forwarder.add_destination(cfg)
+        print(f"Added Loki destination: {args.add_loki}")
+        added = True
+
+    if args.add_syslog:
+        scope = DestinationScope(args.scope)
+        target_hosts = []
+        if args.target_hosts:
+            target_hosts = [
+                h.strip() for h in args.target_hosts.split(",")
+            ]
+        cfg = DestinationConfig(
+            name=args.syslog_name, type=DestinationType.SYSLOG,
+            url=args.add_syslog,
+            syslog_protocol=SyslogProtocol(args.syslog_protocol),
+            ssl_verify=args.ssl_verify, ssl_ca_cert=args.ssl_ca_cert,
+            scope=scope, target_hosts=target_hosts,
+        )
+        forwarder.add_destination(cfg)
+        proto = f" ({args.syslog_protocol})"
+        sc = f" [scope: {args.scope}]"
+        hosts = (
+            f" [hosts: {args.target_hosts}]"
+            if args.target_hosts else ""
+        )
+        print(f"Added Syslog destination: {args.add_syslog}{proto}{sc}{hosts}")
+        added = True
+
+    return added
+
+
+def _handle_list_destinations(forwarder: "LogForwarder") -> None:
+    """Print configured destinations. See main()."""
+    print("\nConfigured Destinations:")
+    for dest in forwarder.destinations.values():
+        status = "enabled" if dest.config.enabled else "disabled"
+        scope = dest.config.scope.value
+        url = dest.config.url or dest.config.file_path
+        line = (
+            f"  - {dest.config.name} ({dest.config.type.value}): "
+            f"{url} [{status}] [scope: {scope}]"
+        )
+        if dest.config.type == DestinationType.SYSLOG:
+            line += f" [protocol: {dest.config.syslog_protocol.value}]"
+        if (
+            dest.config.scope == DestinationScope.PER_HOST
+            and dest.config.target_hosts
+        ):
+            line += f" [hosts: {', '.join(dest.config.target_hosts)}]"
+        print(line)
+
+
+def main():
+    """CLI entry point."""
+    parser = _build_argument_parser()
     args = parser.parse_args()
-
     forwarder = LogForwarder(config_path=args.config)
 
-    # Handle signal for graceful shutdown
     def signal_handler(signum, frame):
         forwarder.stop()
         sys.exit(0)
@@ -1352,74 +1431,10 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    if args.add_seq:
-        config = DestinationConfig(
-            name="seq-default", type=DestinationType.SEQ, url=args.add_seq
-        )
-        forwarder.add_destination(config)
-        print(f"Added Seq destination: {args.add_seq}")
-
-    if args.add_elasticsearch:
-        config = DestinationConfig(
-            name="elasticsearch-default",
-            type=DestinationType.ELASTICSEARCH,
-            url=args.add_elasticsearch,
-        )
-        forwarder.add_destination(config)
-        print(f"Added Elasticsearch destination: {args.add_elasticsearch}")
-
-    if args.add_loki:
-        config = DestinationConfig(
-            name="loki-default", type=DestinationType.LOKI, url=args.add_loki
-        )
-        forwarder.add_destination(config)
-        print(f"Added Loki destination: {args.add_loki}")
-
-    if args.add_syslog:
-        # Parse scope and target hosts
-        scope = DestinationScope(args.scope)
-        target_hosts = []
-        if args.target_hosts:
-            target_hosts = [h.strip() for h in args.target_hosts.split(",")]
-
-        config = DestinationConfig(
-            name=args.syslog_name,
-            type=DestinationType.SYSLOG,
-            url=args.add_syslog,
-            syslog_protocol=SyslogProtocol(args.syslog_protocol),
-            ssl_verify=args.ssl_verify,
-            ssl_ca_cert=args.ssl_ca_cert,
-            scope=scope,
-            target_hosts=target_hosts,
-        )
-        forwarder.add_destination(config)
-        protocol_info = f" ({args.syslog_protocol})"
-        scope_info = f" [scope: {args.scope}]"
-        hosts_info = f" [hosts: {args.target_hosts}]" if args.target_hosts else ""
-        print(
-            f"Added Syslog destination: {args.add_syslog}{protocol_info}{scope_info}{hosts_info}"
-        )
+    added = _handle_add_destinations(args, forwarder)
 
     if args.list:
-        print("\nConfigured Destinations:")
-        for dest in forwarder.destinations.values():
-            status = "enabled" if dest.config.enabled else "disabled"
-            scope = dest.config.scope.value
-            url = dest.config.url or dest.config.file_path
-            line = f"  - {dest.config.name} ({dest.config.type.value}): {url} [{status}] [scope: {scope}]"
-
-            # Add protocol info for syslog
-            if dest.config.type == DestinationType.SYSLOG:
-                line += f" [protocol: {dest.config.syslog_protocol.value}]"
-
-            # Add target hosts for per_host scope
-            if (
-                dest.config.scope == DestinationScope.PER_HOST
-                and dest.config.target_hosts
-            ):
-                line += f" [hosts: {', '.join(dest.config.target_hosts)}]"
-
-            print(line)
+        _handle_list_destinations(forwarder)
 
     if args.test_destinations:
         print("\nTesting destinations...")
@@ -1431,17 +1446,10 @@ def main():
     if args.start:
         forwarder.start()
 
-    if not any(
-        [
-            args.start,
-            args.add_seq,
-            args.add_elasticsearch,
-            args.add_loki,
-            args.add_syslog,
-            args.list,
-            args.test_destinations,
-        ]
-    ):
+    has_action = any([
+        args.start, added, args.list, args.test_destinations,
+    ])
+    if not has_action:
         parser.print_help()
 
 
