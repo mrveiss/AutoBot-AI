@@ -345,40 +345,89 @@ export function useKnowledgeVectorization() {
   }
 
   /**
-   * Vectorize multiple documents in batch
-   * TODO: Replace with actual backend call when batch vectorization endpoint is available
+   * Attempt batch vectorization via the dedicated batch endpoint.
+   * Returns the per-document result map on success, throws on network/server error.
+   * Issue #2077: POST /api/knowledge_base/vectorize_documents
+   */
+  const _tryBatchEndpoint = async (
+    documentIds: string[]
+  ): Promise<{ succeeded: string[], failed: string[] }> => {
+    const knowledgeTimeout = appConfig.getTimeout('knowledge')
+    const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
+    const response = await apiClient.post('/api/knowledge_base/vectorize_documents', {
+      document_ids: documentIds
+    }, {
+      timeout: batchTimeout
+    })
+    const data = await parseApiResponse(response)
+
+    const succeeded: string[] = []
+    const failed: string[] = []
+
+    for (const result of data.results ?? []) {
+      if (result.status === 'success') {
+        setDocumentStatus(result.id, 'vectorized', 100)
+        succeeded.push(result.id)
+      } else {
+        setDocumentStatus(result.id, 'failed', 0, result.error)
+        failed.push(result.id)
+      }
+    }
+
+    return { succeeded, failed }
+  }
+
+  /**
+   * Vectorize multiple documents in batch.
    *
-   * Expected endpoint: POST /api/knowledge_base/vectorize_documents
-   * Body: { document_ids: string[] }
+   * Calls POST /api/knowledge_base/vectorize_documents (Issue #2077) to eliminate
+   * N+1 HTTP round-trips. Falls back to individual per-document requests if the
+   * batch endpoint is unavailable (graceful degradation).
    */
   const vectorizeBatch = async (documentIds: string[]): Promise<{ succeeded: string[], failed: string[] }> => {
     const succeeded: string[] = []
     const failed: string[] = []
 
-    try {
-      // Mark all as pending
-      documentIds.forEach(id => setDocumentStatus(id, 'pending', 0))
+    // Mark all as pending before starting
+    documentIds.forEach(id => setDocumentStatus(id, 'pending', 0))
 
-      // Process documents in parallel using Promise.allSettled - eliminates N+1 sequential calls
-      const results = await Promise.allSettled(
-        documentIds.map(docId => vectorizeDocument(docId))
+    try {
+      // Issue #2077: use single batch request instead of N+1 individual requests
+      return await _tryBatchEndpoint(documentIds)
+    } catch (batchError: unknown) {
+      // Only fall back for 404/405 (endpoint not found); rethrow real errors
+      const status = (batchError as Record<string, unknown>)?.response
+        ? ((batchError as Record<string, Record<string, unknown>>).response?.status as number)
+        : undefined
+      if (status && status !== 404 && status !== 405) {
+        throw batchError
+      }
+
+      logger.warn(
+        'Batch vectorization endpoint unavailable, falling back to individual requests:',
+        batchError
       )
 
-      // Process results
-      results.forEach((result, index) => {
-        const docId = documentIds[index]
-        if (result.status === 'fulfilled' && result.value) {
-          succeeded.push(docId)
-        } else {
-          failed.push(docId)
-        }
-      })
+      try {
+        const results = await Promise.allSettled(
+          documentIds.map(docId => vectorizeDocument(docId))
+        )
 
-      return { succeeded, failed }
-    } catch (error) {
-      logger.error('Failed to vectorize batch:', error)
-      documentIds.forEach(id => setDocumentStatus(id, 'failed', 0, String(error)))
-      return { succeeded, failed: documentIds }
+        results.forEach((result, index) => {
+          const docId = documentIds[index]
+          if (result.status === 'fulfilled' && result.value) {
+            succeeded.push(docId)
+          } else {
+            failed.push(docId)
+          }
+        })
+
+        return { succeeded, failed }
+      } catch (fallbackError) {
+        logger.error('Fallback vectorization also failed:', fallbackError)
+        documentIds.forEach(id => setDocumentStatus(id, 'failed', 0, String(fallbackError)))
+        return { succeeded: [], failed: documentIds }
+      }
     }
   }
 
