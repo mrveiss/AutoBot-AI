@@ -37,6 +37,10 @@ class EdgeLearner:
     Consumes rag:feedback:{date} Redis streams from Phase 1 (#2024).
     Reinforces edges between co-retrieved chunks. Creates new CO_RETRIEVED
     edges after co_access_count >= threshold.
+
+    Cursor tracking: _cursors maps stream_key -> last consumed entry ID so
+    that repeated calls to consume_feedback_stream() only read NEW entries
+    instead of re-processing the entire stream from the start. Fix: #2102.
     """
 
     def __init__(
@@ -52,6 +56,9 @@ class EdgeLearner:
         self.ema_decay = ema_decay
         self.creation_threshold = creation_threshold
         self.initial_weight = initial_weight
+        # Per-stream cursor: stream_key -> last processed Redis entry ID.
+        # Prevents duplicate processing when the scheduler loops every second.
+        self._cursors: dict[str, str] = {}
 
     async def on_retrieval(self, event: dict) -> None:
         """Process a single retrieval feedback event.
@@ -114,30 +121,48 @@ class EdgeLearner:
             )
 
     async def consume_feedback_stream(self, date_key: str | None = None) -> int:
-        """Consume all events from a dated feedback stream.
+        """Consume only NEW events from a dated feedback stream. Fix: #2102.
+
+        Uses a per-stream cursor (_cursors) to remember the last processed
+        Redis entry ID so repeated calls by the scheduler do not re-process
+        the same events.  Starts from the beginning only on the first call
+        for a given date key.
 
         Stream key: rag:feedback:{YYYY-MM-DD}
 
         Returns:
-            Number of events processed.
+            Number of NEW events processed in this call.
         """
         if date_key is None:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
         stream_key = f"rag:feedback:{date_key}"
-        last_id = "0-0"
+        # Resume from last seen ID; "0-0" means read from the very beginning.
+        resume_id = self._cursors.get(stream_key, "0-0")
         processed = 0
 
         while True:
-            entries = await self.redis.xrange(stream_key, min=last_id, count=100)
+            entries = await self.redis.xrange(stream_key, min=resume_id, count=100)
             if not entries:
                 break
             for entry_id, fields in entries:
+                # Skip the exact ID we already processed on a previous call.
+                if entry_id == resume_id and processed == 0:
+                    continue
                 await self.on_retrieval(fields)
-                last_id = entry_id
+                resume_id = entry_id
                 processed += 1
             if len(entries) < 100:
                 break
 
-        logger.info("EdgeLearner: consumed %d events from %s", processed, stream_key)
+        # Persist cursor only when we actually advanced past at least one entry.
+        if processed > 0:
+            self._cursors[stream_key] = resume_id
+
+        if processed:
+            logger.info(
+                "EdgeLearner: consumed %d new events from %s", processed, stream_key
+            )
+        else:
+            logger.debug("EdgeLearner: no new events in %s", stream_key)
         return processed
