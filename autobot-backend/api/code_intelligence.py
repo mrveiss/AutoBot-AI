@@ -2266,14 +2266,21 @@ async def clear_stuck_sec_tasks(
 # These GET stubs prevent 404s and return a consistent "not yet implemented" response.
 
 
-@router.get("/security-findings")
-async def get_security_findings():
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_security_findings",
+    error_code_prefix="CODE_INTEL",
+)
+@router.get("/security/findings")
+async def get_security_findings(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Placeholder for security findings summary (Issue #2068).
 
     Full security analysis is available via POST /security/analyze.
     Returns an empty findings list with a descriptive message.
     """
-    logger.debug("GET /security-findings called — returning placeholder response")
+    logger.debug("GET /security/findings called — returning placeholder response")
     return {
         "findings": [],
         "score": None,
@@ -2282,14 +2289,21 @@ async def get_security_findings():
     }
 
 
-@router.get("/performance-findings")
-async def get_performance_findings():
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_performance_findings",
+    error_code_prefix="CODE_INTEL",
+)
+@router.get("/performance/findings")
+async def get_performance_findings(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Placeholder for performance findings summary (Issue #2068).
 
     Full performance analysis is available via POST /performance/analyze.
     Returns an empty findings list with a descriptive message.
     """
-    logger.debug("GET /performance-findings called — returning placeholder response")
+    logger.debug("GET /performance/findings called — returning placeholder response")
     return {
         "findings": [],
         "score": None,
@@ -2298,14 +2312,21 @@ async def get_performance_findings():
     }
 
 
-@router.get("/redis-findings")
-async def get_redis_findings():
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_redis_findings",
+    error_code_prefix="CODE_INTEL",
+)
+@router.get("/redis/findings")
+async def get_redis_findings(
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Placeholder for Redis optimization findings summary (Issue #2068).
 
     Full Redis analysis is available via POST /redis/analyze.
     Returns an empty findings list with a descriptive message.
     """
-    logger.debug("GET /redis-findings called — returning placeholder response")
+    logger.debug("GET /redis/findings called — returning placeholder response")
     return {
         "findings": [],
         "score": None,
