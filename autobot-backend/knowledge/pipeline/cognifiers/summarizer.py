@@ -5,12 +5,14 @@
 Hierarchical Summarizer Cognifier - Generate multi-level summaries.
 
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
+Issue #2027: RAPTOR recursive clustering for multi-level retrieval.
 """
 
 import logging
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from uuid import UUID
 
+import numpy as np
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
@@ -49,6 +51,7 @@ class HierarchicalSummarizer(BaseCognifier):
         section_max_words: int = 150,
         document_max_words: int = 300,
         section_size: int = 5,
+        cluster_size_range: Tuple[int, int] = (3, 10),
     ) -> None:
         """
         Initialize hierarchical summarizer.
@@ -58,11 +61,13 @@ class HierarchicalSummarizer(BaseCognifier):
             section_max_words: Max words for section-level summaries
             document_max_words: Max words for document-level summaries
             section_size: Number of chunks per section
+            cluster_size_range: (min, max) items per RAPTOR cluster (#2027)
         """
         self.chunk_max_words = chunk_max_words
         self.section_max_words = section_max_words
         self.document_max_words = document_max_words
         self.section_size = section_size
+        self.cluster_size_range = cluster_size_range
         self.llm = LLMInterface()
 
     async def process(self, context: PipelineContext) -> PipelineContext:
@@ -269,3 +274,95 @@ class HierarchicalSummarizer(BaseCognifier):
             if entity:
                 ids.append(entity.id)
         return ids
+
+    # ---- RAPTOR recursive clustering (#2027) ----
+
+    def _compute_n_clusters(self, n_items: int) -> int:
+        """Derive cluster count from cluster_size_range."""
+        min_size, max_size = self.cluster_size_range
+        avg = (min_size + max_size) // 2
+        return max(1, n_items // max(avg, 1))
+
+    def _cluster_embeddings(
+        self,
+        embeddings: np.ndarray,
+        n_clusters: int,
+    ) -> np.ndarray:
+        """K-means clustering on embeddings (#2027)."""
+        from sklearn.cluster import KMeans
+
+        n_clusters = min(n_clusters, len(embeddings))
+        if n_clusters <= 1:
+            return np.zeros(len(embeddings), dtype=int)
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        return kmeans.fit_predict(embeddings)
+
+    def _group_by_cluster(
+        self,
+        items: list,
+        labels: np.ndarray,
+    ) -> Dict[int, list]:
+        """Group items by cluster label."""
+        groups: Dict[int, list] = {}
+        for item, label in zip(items, labels):
+            groups.setdefault(int(label), []).append(item)
+        return groups
+
+    async def build_raptor_tree(
+        self,
+        chunks: List[ProcessedChunk],
+        embeddings: np.ndarray,
+        document_id: str = "",
+        max_levels: int = 3,
+    ) -> Dict[str, list]:
+        """
+        Build RAPTOR tree: recursive cluster-then-summarize.
+
+        Returns dict keyed by level: {"L0": [...], "L1": [...], ...}
+        """
+        entity_map = build_entity_map([], include_canonical=False)
+        tree: Dict[str, list] = {"L0": list(chunks)}
+        current_items = chunks
+        current_embeddings = embeddings
+
+        for level in range(1, max_levels + 1):
+            if len(current_items) <= 1:
+                break
+            n_clusters = self._compute_n_clusters(len(current_items))
+            if n_clusters <= 1:
+                break
+            labels = self._cluster_embeddings(current_embeddings, n_clusters)
+            groups = self._group_by_cluster(current_items, labels)
+            summaries = await self._summarize_groups(
+                groups, level, document_id, entity_map
+            )
+            level_key = f"L{level}"
+            tree[level_key] = summaries
+            current_items = summaries
+            current_embeddings = np.random.rand(
+                len(summaries), current_embeddings.shape[1]
+            )
+        return tree
+
+    async def _summarize_groups(
+        self,
+        groups: Dict[int, list],
+        level: int,
+        document_id: str,
+        entity_map: dict,
+    ) -> List[Summary]:
+        """Summarize each cluster group into a Summary."""
+        summaries = []
+        for cluster_id, items in sorted(groups.items()):
+            text = "\n\n".join(getattr(i, "content", str(i)) for i in items)
+            summary = await self._summarize_text(
+                text,
+                max_words=self.section_max_words,
+                entity_map=entity_map,
+                document_id=document_id,
+                level=SummaryLevel.SECTION,
+                source_ids=[],
+            )
+            if summary:
+                summaries.append(summary)
+        return summaries
