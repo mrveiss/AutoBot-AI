@@ -9,7 +9,7 @@ REST API for user management operations.
 
 import logging
 import uuid
-from typing import Optional
+from typing import List, Optional
 
 from api.user_management.dependencies import (
     get_current_user,
@@ -75,6 +75,27 @@ class RoleAssignmentResponse(BaseModel):
     role_id: uuid.UUID
 
 
+class UserSearchResult(BaseModel):
+    """A single user result for the sharing dialog search."""
+
+    id: str
+    name: str
+    type: str = "user"
+
+
+class UserSearchResponse(BaseModel):
+    """Response for user search used by sharing features.
+
+    Issue #2072: Provides a search endpoint safe to call in all deployment
+    modes; returns an empty list with a message when user management is
+    unavailable rather than raising an error.
+    """
+
+    users: List[UserSearchResult]
+    available: bool
+    message: str
+
+
 # -------------------------------------------------------------------------
 # User CRUD Endpoints
 # -------------------------------------------------------------------------
@@ -110,6 +131,94 @@ async def list_users(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/search",
+    response_model=UserSearchResponse,
+    summary="Search users for sharing",
+    description=(
+        "Search users by name or username for use in sharing dialogs. "
+        "Safe to call in all deployment modes — returns empty list with "
+        "available=False when user management is not enabled. Issue #2072."
+    ),
+)
+async def search_users_for_sharing(
+    q: str = Query("", description="Search query (name or username)"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+) -> UserSearchResponse:
+    """Search users by name/username for the knowledge sharing dialog.
+
+    Works in all deployment modes:
+    - single_user: Returns available=False with an empty list.
+    - multi-user with postgres: Returns matching users from the database.
+    """
+    from user_management.config import DeploymentMode, get_deployment_config
+
+    config = get_deployment_config()
+
+    if config.mode == DeploymentMode.SINGLE_USER:
+        logger.debug("search_users_for_sharing: single_user mode, returning unavailable")
+        return UserSearchResponse(
+            users=[],
+            available=False,
+            message="User search is not available in single-user mode",
+        )
+
+    if not config.postgres_enabled:
+        logger.debug("search_users_for_sharing: postgres disabled, returning unavailable")
+        return UserSearchResponse(
+            users=[],
+            available=False,
+            message="User search requires database support",
+        )
+
+    return await _search_users_from_db(q, limit)
+
+
+async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
+    """Perform a database user search and return sharing-compatible results.
+
+    Issue #2072: Helper that performs the actual DB search so the main
+    endpoint stays within the 30-line target.
+    """
+    from user_management.database import get_async_session
+    from user_management.services import TenantContext
+
+    try:
+        async for session in get_async_session():
+            context = TenantContext(org_id=None, user_id=None, is_platform_admin=True)
+            service = UserService(session, context)
+            search_term = q.strip() if q.strip() else None
+            users, _ = await service.list_users(
+                limit=limit,
+                offset=0,
+                search=search_term,
+                include_inactive=False,
+            )
+            results = [
+                UserSearchResult(
+                    id=str(user.id),
+                    name=user.display_name or user.username,
+                    type="user",
+                )
+                for user in users
+            ]
+            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
+            return UserSearchResponse(
+                users=results,
+                available=True,
+                message="",
+            )
+    except Exception:
+        logger.exception("search_users_for_sharing: database query failed")
+        return UserSearchResponse(
+            users=[],
+            available=False,
+            message="User search temporarily unavailable",
+        )
+
+    return UserSearchResponse(users=[], available=True, message="")
 
 
 @router.post(
