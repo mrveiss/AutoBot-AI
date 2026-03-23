@@ -154,8 +154,14 @@ class MeshDB:
         edge_id: str,
         weight: Optional[float] = None,
         co_access_count: Optional[int] = None,
+        edge_type: Optional[str] = None,
+        origin: Optional[str] = None,
     ) -> None:
-        """Partially update an edge's weight and/or co_access_count (#2055)."""
+        """Partially update an edge's mutable fields (#2055, #2117).
+
+        Supports weight, co_access_count (EdgeLearner) and edge_type, origin
+        (EdgeDiscoverer) in a single generic method.
+        """
         updates: list[str] = ["last_reinforced = NOW()"]
         params: dict[str, Any] = {"edge_id": edge_id}
         if weight is not None:
@@ -164,6 +170,12 @@ class MeshDB:
         if co_access_count is not None:
             updates.append("co_access_count = :co_access_count")
             params["co_access_count"] = co_access_count
+        if edge_type is not None:
+            updates.append("edge_type = :edge_type")
+            params["edge_type"] = edge_type
+        if origin is not None:
+            updates.append("origin = :origin")
+            params["origin"] = origin
         sql = text(
             f"UPDATE mesh_edges SET {', '.join(updates)} WHERE id = :edge_id::uuid"
         )
@@ -195,6 +207,52 @@ class MeshDB:
             rows = await conn.execute(
                 sql, {"node_id": node_id, "min_weight": min_weight}
             )
+            return [dict(r) for r in rows.mappings()]
+
+    async def fetch_candidate_edges(
+        self,
+        edge_type: str,
+        min_weight: float,
+        min_co_access: int,
+        origin: str,
+        limit: int,
+    ) -> list[dict]:
+        """Return high-weight, well-travelled edges for EdgeDiscoverer (#2117).
+
+        Joins mesh_edges with mesh_nodes to include from_content/to_content so
+        the LLM can read the chunk text when naming the relationship.
+        """
+        sql = text(
+            """
+            SELECT e.id::text          AS id,
+                   e.from_node::text   AS from_node,
+                   e.to_node::text     AS to_node,
+                   e.edge_type,
+                   e.weight,
+                   e.origin,
+                   e.co_access_count,
+                   fn.chunk_id         AS from_chunk_id,
+                   tn.chunk_id         AS to_chunk_id
+            FROM mesh_edges e
+            JOIN mesh_nodes fn ON fn.id = e.from_node
+            JOIN mesh_nodes tn ON tn.id = e.to_node
+            WHERE e.edge_type      = :edge_type
+              AND e.weight         >= :min_weight
+              AND e.co_access_count >= :min_co_access
+              AND e.origin         = :origin
+            ORDER BY e.weight DESC
+            LIMIT :limit
+            """
+        )
+        params: dict[str, Any] = {
+            "edge_type": edge_type,
+            "min_weight": min_weight,
+            "min_co_access": min_co_access,
+            "origin": origin,
+            "limit": limit,
+        }
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(sql, params)
             return [dict(r) for r in rows.mappings()]
 
     async def fetch_edges(self, min_weight: float = 0.5) -> list[dict]:
