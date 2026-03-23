@@ -801,18 +801,20 @@ async def _read_single_file_for_batch(path: str) -> dict:
         Dict with either 'result' or 'error' key
     """
     try:
-        if not is_path_allowed(path):
-            return {"error": {"path": path, "error": "Access denied"}}
+        safe_path = _validated_path(path)
+    except HTTPException:
+        return {"error": {"path": path, "error": "Access denied"}}
 
-        path_exists = await run_in_file_executor(os.path.exists, path)
+    try:
+        path_exists = await run_in_file_executor(os.path.exists, safe_path)
         if not path_exists:
             return {"error": {"path": path, "error": "File not found"}}
 
-        is_file = await run_in_file_executor(os.path.isfile, path)
+        is_file = await run_in_file_executor(os.path.isfile, safe_path)
         if not is_file:
             return {"error": {"path": path, "error": "Not a file"}}
 
-        file_size = await run_in_file_executor(os.path.getsize, path)
+        file_size = await run_in_file_executor(os.path.getsize, safe_path)
         if file_size > MAX_FILE_SIZE:
             return {
                 "error": {
@@ -821,7 +823,7 @@ async def _read_single_file_for_batch(path: str) -> dict:
                 }
             }
 
-        async with aiofiles.open(path, "r", encoding="utf-8") as f:
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
             content = await f.read()
 
         return {"result": {"path": path, "content": content, "size_bytes": file_size}}
@@ -1054,13 +1056,10 @@ async def create_directory_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
     try:
-        await run_in_file_executor(os.makedirs, request.path, exist_ok=True)
+        await run_in_file_executor(os.makedirs, safe_path, exist_ok=True)
 
         return {
             "success": True,
@@ -1086,29 +1085,26 @@ async def list_directory_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    is_dir = await run_in_file_executor(os.path.isdir, request.path)
+    is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
         )
 
     try:
-        dir_contents = await run_in_file_executor(os.listdir, request.path)
+        dir_contents = await run_in_file_executor(os.listdir, safe_path)
 
         # Check all entries in parallel - eliminates N+1 sequential I/O
         # Issue #718: Use dedicated file I/O executor
-        full_paths = [os.path.join(request.path, name) for name in dir_contents]
+        full_paths = [os.path.join(safe_path, name) for name in dir_contents]
         is_dir_checks = await asyncio.gather(
             *[run_in_file_executor(os.path.isdir, fp) for fp in full_paths]
         )
@@ -1264,32 +1260,23 @@ async def move_file_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.source):
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: Source path not in allowed directories",
-        )
+    safe_source = _validated_path(request.source)
+    safe_dest = _validated_path(request.destination)
 
-    if not is_path_allowed(request.destination):
-        raise HTTPException(
-            status_code=403,
-            detail="Access denied: Destination path not in allowed directories",
-        )
-
-    source_exists = await run_in_file_executor(os.path.exists, request.source)
+    source_exists = await run_in_file_executor(os.path.exists, safe_source)
     if not source_exists:
         raise HTTPException(
             status_code=404, detail=f"Source not found: {request.source}"
         )
 
-    dest_exists = await run_in_file_executor(os.path.exists, request.destination)
+    dest_exists = await run_in_file_executor(os.path.exists, safe_dest)
     if dest_exists:
         raise HTTPException(
             status_code=409, detail=f"Destination already exists: {request.destination}"
         )
 
     try:
-        await run_in_file_executor(shutil.move, request.source, request.destination)
+        await run_in_file_executor(shutil.move, safe_source, safe_dest)
 
         return {
             "success": True,
@@ -1316,18 +1303,15 @@ async def search_files_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    is_dir = await run_in_file_executor(os.path.isdir, request.path)
+    is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
@@ -1340,7 +1324,7 @@ async def search_files_mcp(
         def _search_files() -> list:
             """Blocking file search wrapped for thread executor"""
             matches = []
-            for root, dirs, files in os.walk(request.path):
+            for root, dirs, files in os.walk(safe_path):
                 for filename in files:
                     # Check pattern + exclusions using helper (Issue #315 - reduces nesting)
                     if _should_include_file(filename, pattern, exclude_patterns):
@@ -1375,18 +1359,15 @@ async def directory_tree_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
         raise HTTPException(
             status_code=404, detail=f"Directory not found: {request.path}"
         )
 
-    is_dir = await run_in_file_executor(os.path.isdir, request.path)
+    is_dir = await run_in_file_executor(os.path.isdir, safe_path)
     if not is_dir:
         raise HTTPException(
             status_code=400, detail=f"Path is not a directory: {request.path}"
@@ -1416,7 +1397,7 @@ async def directory_tree_mcp(
         return tree
 
     try:
-        tree = await run_in_file_executor(build_tree, request.path)
+        tree = await run_in_file_executor(build_tree, safe_path)
 
         return {"success": True, "root_path": request.path, "tree": tree}
     except Exception:
@@ -1438,19 +1419,16 @@ async def get_file_info_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
     if not path_exists:
         raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
 
     try:
-        stat_info = await run_in_file_executor(os.stat, request.path)
-        is_dir = await run_in_file_executor(os.path.isdir, request.path)
-        is_file = await run_in_file_executor(os.path.isfile, request.path)
+        stat_info = await run_in_file_executor(os.stat, safe_path)
+        is_dir = await run_in_file_executor(os.path.isdir, safe_path)
+        is_file = await run_in_file_executor(os.path.isfile, safe_path)
 
         info = {
             "path": request.path,
