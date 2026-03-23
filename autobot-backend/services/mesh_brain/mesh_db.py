@@ -3,6 +3,7 @@
 # Author: mrveiss
 """Async PostgreSQL client for Neural Mesh RAG graph operations (#2055)."""
 import logging
+from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy import text
@@ -284,6 +285,198 @@ class MeshDB:
         async with self.engine.connect() as conn:
             row = await conn.execute(sql, {"node_a": node_a, "node_b": node_b})
             return row.scalar() or 0
+
+    # ------------------------------------------------------------------
+    # MeshPruner operations
+    # ------------------------------------------------------------------
+
+    async def decay_edges(
+        self,
+        origins: list[str],
+        not_reinforced_since: datetime,
+        decay_factor: float,
+    ) -> int:
+        """Multiply weight by decay_factor for matching edges. Returns count affected (#2178)."""
+        sql = text(
+            """
+            UPDATE mesh_edges
+            SET weight = weight * :factor,
+                last_reinforced = NOW()
+            WHERE origin = ANY(:origins)
+              AND (last_reinforced IS NULL OR last_reinforced < :cutoff)
+            """
+        )
+        async with self.engine.begin() as conn:
+            result = await conn.execute(
+                sql,
+                {
+                    "factor": decay_factor,
+                    "origins": origins,
+                    "cutoff": not_reinforced_since,
+                },
+            )
+        logger.debug("Decayed %d edges factor=%.3f", result.rowcount, decay_factor)
+        return result.rowcount
+
+    async def delete_edges(self, max_weight: float) -> int:
+        """Delete edges at or below max_weight. Returns count deleted (#2178)."""
+        sql = text("DELETE FROM mesh_edges WHERE weight <= :max_weight")
+        async with self.engine.begin() as conn:
+            result = await conn.execute(sql, {"max_weight": max_weight})
+        logger.debug(
+            "Deleted %d edges at or below weight=%.3f", result.rowcount, max_weight
+        )
+        return result.rowcount
+
+    async def archive_orphan_nodes(self, no_access_since: datetime) -> int:
+        """Archive nodes with no edges and no access since cutoff. Returns count (#2178)."""
+        sql = text(
+            """
+            WITH archived AS (
+                DELETE FROM mesh_nodes n
+                WHERE (last_accessed IS NULL OR last_accessed < :cutoff)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM mesh_edges e
+                      WHERE e.from_node = n.id OR e.to_node = n.id
+                  )
+                RETURNING n.*
+            )
+            INSERT INTO mesh_nodes_archive
+            SELECT * FROM archived
+            ON CONFLICT DO NOTHING
+            """
+        )
+        async with self.engine.begin() as conn:
+            result = await conn.execute(sql, {"cutoff": no_access_since})
+        logger.debug("Archived %d orphan nodes", result.rowcount)
+        return result.rowcount
+
+    async def merge_duplicate_edges(self) -> int:
+        """Merge edges with same from/to but different types; keep highest weight (#2178)."""
+        sql = text(
+            """
+            WITH ranked AS (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY from_node, to_node
+                           ORDER BY weight DESC
+                       ) AS rn
+                FROM mesh_edges
+            ),
+            deleted AS (
+                DELETE FROM mesh_edges
+                WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
+                RETURNING id
+            )
+            SELECT COUNT(*) FROM deleted
+            """
+        )
+        async with self.engine.begin() as conn:
+            result = await conn.execute(sql)
+            count = result.scalar() or 0
+        logger.debug("Merged %d duplicate edges", count)
+        return count
+
+    async def get_graph_density(self) -> float:
+        """Return avg edges per node (#2178)."""
+        sql = text(
+            """
+            SELECT CASE WHEN COUNT(DISTINCT n.id) = 0 THEN 0.0
+                        ELSE COUNT(e.id)::float / COUNT(DISTINCT n.id)
+                   END
+            FROM mesh_nodes n
+            LEFT JOIN mesh_edges e ON e.from_node = n.id
+            """
+        )
+        async with self.engine.connect() as conn:
+            result = await conn.execute(sql)
+            return float(result.scalar() or 0.0)
+
+    # ------------------------------------------------------------------
+    # NodePromoter operations
+    # ------------------------------------------------------------------
+
+    async def get_promotion_candidates(
+        self, min_access: int, min_edges: int
+    ) -> list[dict]:
+        """Return nodes with access_count >= min_access, edge_count >= min_edges, not anchor (#2178)."""
+        sql = text(
+            """
+            SELECT n.id::text,
+                   n.chunk_id,
+                   n.node_type,
+                   n.access_count,
+                   COUNT(e.id) AS edge_count
+            FROM mesh_nodes n
+            LEFT JOIN mesh_edges e ON e.from_node = n.id
+            WHERE n.is_anchor = FALSE
+              AND n.access_count >= :min_access
+            GROUP BY n.id
+            HAVING COUNT(e.id) >= :min_edges
+            """
+        )
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(
+                sql, {"min_access": min_access, "min_edges": min_edges}
+            )
+            return [dict(r) for r in rows.mappings()]
+
+    async def get_stale_anchors(
+        self, max_access: int, inactive_days: int
+    ) -> list[dict]:
+        """Return anchor nodes with access below threshold, inactive for N days (#2178)."""
+        sql = text(
+            """
+            SELECT id::text, chunk_id, node_type, access_count, last_accessed
+            FROM mesh_nodes
+            WHERE is_anchor = TRUE
+              AND access_count <= :max_access
+              AND (last_accessed IS NULL
+                   OR last_accessed < NOW() - make_interval(days => :inactive_days))
+            """
+        )
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(
+                sql, {"max_access": max_access, "inactive_days": inactive_days}
+            )
+            return [dict(r) for r in rows.mappings()]
+
+    async def get_neighborhood(self, node_id: str, hops: int) -> list[dict]:
+        """BFS to collect nodes within N hops. Returns list of dicts with content (#2178)."""
+        sql = text(
+            """
+            WITH RECURSIVE bfs AS (
+                SELECT id, 0 AS depth
+                FROM mesh_nodes
+                WHERE id = :node_id::uuid
+                UNION
+                SELECT e.to_node, b.depth + 1
+                FROM bfs b
+                JOIN mesh_edges e ON e.from_node = b.id
+                WHERE b.depth < :hops
+            )
+            SELECT DISTINCT n.id::text, n.chunk_id, n.node_type, n.raptor_level
+            FROM bfs b
+            JOIN mesh_nodes n ON n.id = b.id
+            """
+        )
+        async with self.engine.connect() as conn:
+            rows = await conn.execute(sql, {"node_id": node_id, "hops": hops})
+            return [dict(r) for r in rows.mappings()]
+
+    async def promote_to_anchor(self, node_id: str) -> None:
+        """Set is_anchor=True for node_id (#2178)."""
+        sql = text("UPDATE mesh_nodes SET is_anchor = TRUE WHERE id = :node_id::uuid")
+        async with self.engine.begin() as conn:
+            await conn.execute(sql, {"node_id": node_id})
+        logger.info("Promoted node %s to anchor", node_id)
+
+    async def demote_anchor(self, node_id: str) -> None:
+        """Set is_anchor=False for node_id (#2178)."""
+        sql = text("UPDATE mesh_nodes SET is_anchor = FALSE WHERE id = :node_id::uuid")
+        async with self.engine.begin() as conn:
+            await conn.execute(sql, {"node_id": node_id})
+        logger.info("Demoted anchor node %s", node_id)
 
     # ------------------------------------------------------------------
     # Evolution log

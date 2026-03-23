@@ -72,6 +72,14 @@ def _mappings_result(rows):
     return r
 
 
+def _rowcount_result(count: int):
+    """Return a mock result whose rowcount attribute equals count."""
+    r = MagicMock()
+    r.rowcount = count
+    r.scalar = MagicMock(return_value=count)
+    return r
+
+
 # =============================================================================
 # Tests — create_node
 # =============================================================================
@@ -335,3 +343,133 @@ class TestUpdateAccessCount:
         conn.execute.assert_awaited_once()
         params = conn.execute.call_args[0][1]
         assert _NODE_UUID in params["node_ids"]
+
+
+# =============================================================================
+# Tests — decay_edges
+# =============================================================================
+
+
+class TestDecayEdges:
+    """MeshDB.decay_edges passes correct SQL params and returns rowcount."""
+
+    @pytest.mark.asyncio
+    async def test_decay_edges_passes_correct_params(self):
+        from datetime import datetime, timezone
+
+        engine, conn = _make_engine()
+        conn.execute = AsyncMock(return_value=_rowcount_result(3))
+        db = MeshDB(engine)
+        cutoff = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        count = await db.decay_edges(
+            origins=["seeder", "learner"],
+            not_reinforced_since=cutoff,
+            decay_factor=0.9,
+        )
+
+        assert count == 3
+        params = conn.execute.call_args[0][1]
+        assert params["factor"] == 0.9
+        assert params["cutoff"] == cutoff
+        assert "seeder" in params["origins"]
+
+
+# =============================================================================
+# Tests — delete_edges
+# =============================================================================
+
+
+class TestDeleteEdges:
+    """MeshDB.delete_edges returns rowcount of deleted rows."""
+
+    @pytest.mark.asyncio
+    async def test_delete_edges_returns_count(self):
+        engine, conn = _make_engine()
+        conn.execute = AsyncMock(return_value=_rowcount_result(5))
+        db = MeshDB(engine)
+
+        count = await db.delete_edges(max_weight=0.1)
+
+        assert count == 5
+        params = conn.execute.call_args[0][1]
+        assert params["max_weight"] == 0.1
+
+
+# =============================================================================
+# Tests — get_promotion_candidates
+# =============================================================================
+
+
+class TestGetPromotionCandidates:
+    """MeshDB.get_promotion_candidates forwards min_access and min_edges."""
+
+    @pytest.mark.asyncio
+    async def test_get_promotion_candidates_filters_correctly(self):
+        rows = [
+            {
+                "id": _NODE_UUID,
+                "chunk_id": "c-1",
+                "node_type": "doc",
+                "access_count": 10,
+                "edge_count": 4,
+            }
+        ]
+        engine, conn = _make_engine(mappings=rows)
+        db = MeshDB(engine)
+
+        result = await db.get_promotion_candidates(min_access=5, min_edges=3)
+
+        assert len(result) == 1
+        assert result[0]["id"] == _NODE_UUID
+        params = conn.execute.call_args[0][1]
+        assert params["min_access"] == 5
+        assert params["min_edges"] == 3
+
+
+# =============================================================================
+# Tests — promote_to_anchor
+# =============================================================================
+
+
+class TestPromoteToAnchor:
+    """MeshDB.promote_to_anchor executes UPDATE with correct node_id."""
+
+    @pytest.mark.asyncio
+    async def test_promote_to_anchor_updates_flag(self):
+        engine, conn = _make_engine()
+        db = MeshDB(engine)
+
+        await db.promote_to_anchor(_NODE_UUID)
+
+        conn.execute.assert_awaited_once()
+        params = conn.execute.call_args[0][1]
+        assert params["node_id"] == _NODE_UUID
+
+
+# =============================================================================
+# Tests — get_graph_density
+# =============================================================================
+
+
+class TestGetGraphDensity:
+    """MeshDB.get_graph_density returns a float value."""
+
+    @pytest.mark.asyncio
+    async def test_get_graph_density_returns_float(self):
+        engine, conn = _make_engine(scalar=2.5)
+        db = MeshDB(engine)
+
+        density = await db.get_graph_density()
+
+        assert isinstance(density, float)
+        assert density == 2.5
+
+    @pytest.mark.asyncio
+    async def test_get_graph_density_returns_zero_when_empty(self):
+        engine, conn = _make_engine(scalar=None)
+        db = MeshDB(engine)
+
+        density = await db.get_graph_density()
+
+        assert density == 0.0
