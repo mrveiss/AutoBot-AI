@@ -76,7 +76,7 @@ class RelationshipExtractor(BaseCognifier):
         Args:
             batch_size: Number of chunks to process per LLM batch
             mode: Extraction mode — "llm", "nlp", or "auto"
-            nlp_threshold: Total char count above which auto selects NLP
+            nlp_threshold: Chunk count above which auto selects NLP (#2052)
         """
         self.batch_size = batch_size
         self.mode = mode
@@ -85,18 +85,18 @@ class RelationshipExtractor(BaseCognifier):
 
     def _select_mode(self, chunks: List[ProcessedChunk]) -> str:
         """
-        Choose extraction mode based on total input size.
+        Choose extraction mode based on chunk count (#2052).
 
-        Issue #2026: mirrors EntityExtractor auto-select logic.
+        Uses the same unit (chunk count) as EntityExtractor so both
+        extractors select the same mode for the same input.
 
         Args:
             chunks: Chunks to be processed
 
         Returns:
-            "nlp" when total characters exceed nlp_threshold, else "llm"
+            "nlp" when chunk count exceeds nlp_threshold, else "llm"
         """
-        total_chars = sum(len(c.content) for c in chunks)
-        return "nlp" if total_chars > self.nlp_threshold else "llm"
+        return "nlp" if len(chunks) > self.nlp_threshold else "llm"
 
     async def process(self, context: PipelineContext) -> PipelineContext:
         """
