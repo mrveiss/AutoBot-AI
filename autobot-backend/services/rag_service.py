@@ -355,7 +355,8 @@ class RAGService:
         """Append retrieval feedback to a dated Redis stream. Issue #1516.
 
         Stream key: rag:feedback:{YYYY-MM-DD}  (UTC date).
-        TTL: 7 days so the mesh trainer has a rolling window of signal.
+        TTL: 30 days so Neural Mesh Phase 3 (#2056) can consume the data
+        before it expires. Increased from 7 days — Fix: #2102.
 
         Args:
             query: Raw query string.
@@ -363,7 +364,7 @@ class RAGService:
             ranked_ids: Final ordered chunk IDs after reranking.
             complexity: QueryComplexity.value string (Issue #2024).
         """
-        _STREAM_TTL_SECONDS = 7 * 24 * 3600
+        _STREAM_TTL_SECONDS = 30 * 24 * 3600
         date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
         stream_key = f"rag:feedback:{date_key}"
         entry = {

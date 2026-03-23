@@ -192,3 +192,62 @@ class TestEdgeLearnerConsumeFeedbackStream:
         today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
         expected_key = f"rag:feedback:{today}"
         redis.xrange.assert_awaited_once_with(expected_key, min="0-0", count=100)
+
+    @pytest.mark.asyncio
+    async def test_cursor_persists_between_calls_no_duplicate_processing(self):
+        """Second call uses exclusive cursor — no re-processing. Fix: #2102."""
+        db = _make_db_mock()
+        redis = _make_redis_mock()
+
+        entry_a = ("1-0", {"final_ranked_ids": json.dumps(["A", "B"])})
+        entry_b = ("2-0", {"final_ranked_ids": json.dumps(["C", "D"])})
+
+        # First call: two entries processed, cursor advances to "2-1".
+        # Second call: xrange(min="2-1") returns nothing — all consumed.
+        redis.xrange = AsyncMock(
+            side_effect=[
+                [entry_a, entry_b],  # first consume call
+                [],  # second call — cursor "2-1" excludes everything
+            ]
+        )
+
+        learner = _make_learner(db, redis)
+
+        count_first = await learner.consume_feedback_stream(date_key="2026-03-23")
+        assert count_first == 2
+
+        db.update_access_count.reset_mock()
+
+        count_second = await learner.consume_feedback_stream(date_key="2026-03-23")
+        assert count_second == 0
+        db.update_access_count.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cursor_advances_when_new_entries_arrive(self):
+        """New entries after cursor are consumed. Fix: #2102."""
+        db = _make_db_mock()
+        redis = _make_redis_mock()
+
+        entry_a = ("1-0", {"final_ranked_ids": json.dumps(["A", "B"])})
+        entry_b = ("2-0", {"final_ranked_ids": json.dumps(["C", "D"])})
+        entry_c = ("3-0", {"final_ranked_ids": json.dumps(["E", "F"])})
+
+        # First call: only entry_a, cursor advances to "1-1".
+        # Second call: xrange(min="1-1") returns entry_b + entry_c.
+        redis.xrange = AsyncMock(
+            side_effect=[
+                [entry_a],  # first call
+                [entry_b, entry_c],  # second call — new entries only
+            ]
+        )
+
+        learner = _make_learner(db, redis)
+
+        count_first = await learner.consume_feedback_stream(date_key="2026-03-23")
+        assert count_first == 1
+
+        db.update_access_count.reset_mock()
+
+        count_second = await learner.consume_feedback_stream(date_key="2026-03-23")
+        assert count_second == 2
+        assert db.update_access_count.await_count == 2

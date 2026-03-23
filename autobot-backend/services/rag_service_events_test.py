@@ -154,7 +154,7 @@ class TestEmitRetrievalFeedback:
 class TestStoreFeedbackInStream:
     """Tests for RAGService._store_feedback_in_stream()."""
 
-    _SEVEN_DAYS_SECONDS = 7 * 24 * 3600
+    _THIRTY_DAYS_SECONDS = 30 * 24 * 3600
 
     def _make_service(self):
         from services.rag_service import RAGService
@@ -237,8 +237,8 @@ class TestStoreFeedbackInStream:
         assert json.loads(entry["final_ranked_ids"]) == ["b"]
 
     @pytest.mark.asyncio
-    async def test_expire_set_to_seven_days(self):
-        """Stream key TTL is set to 7 days (604800 seconds)."""
+    async def test_expire_set_to_thirty_days(self):
+        """Stream key TTL is set to 30 days (2592000 seconds). Fix: #2102."""
         mock_redis = self._make_redis_mock()
 
         with patch(
@@ -255,7 +255,7 @@ class TestStoreFeedbackInStream:
 
         assert mock_redis.expire.called
         ttl_arg = mock_redis.expire.call_args[0][1]
-        assert ttl_arg == self._SEVEN_DAYS_SECONDS
+        assert ttl_arg == self._THIRTY_DAYS_SECONDS
 
     @pytest.mark.asyncio
     async def test_redis_unavailable_does_not_raise(self):
