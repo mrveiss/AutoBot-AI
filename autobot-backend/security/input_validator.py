@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 _VALID_URL_SCHEMES = frozenset({"http", "https"})
 
 # Issue #380: Pre-compiled regex patterns for frequently used operations
+# #1721: Use [^<]*(?:<(?!/script\b)[^<]*)* to avoid bad-tag-filter bypass
 _SCRIPT_TAG_RE = re.compile(
-    r"<script\b[^>]*>[\s\S]*?</script\s*>", re.IGNORECASE | re.DOTALL
+    r"<script\b[^>]*>[^<]*(?:<(?!/script\b)[^<]*)*</script\s*>",
+    re.IGNORECASE | re.DOTALL,
 )
 _EVENT_HANDLER_RE = re.compile(r'\s*on\w+\s*=\s*["\'][^"\']*["\']', re.IGNORECASE)
 _DANGEROUS_LINK_RE = re.compile(

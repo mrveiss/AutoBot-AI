@@ -827,16 +827,18 @@ async def add_url_to_knowledge(
         raise InternalError("Knowledge base not initialized")
 
     try:
-        validate_url(request.url, allow_private=False)
+        validated_url = validate_url(request.url, allow_private=False)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    logger.info("Fetching content from URL: %s", request.url)
+    logger.info("Fetching content from URL: %s", validated_url)
 
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                request.url, timeout=aiohttp.ClientTimeout(total=30)
+                validated_url,
+                timeout=aiohttp.ClientTimeout(total=30),
+                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
             ) as response:
                 if response.status != 200:
                     raise HTTPException(
@@ -846,7 +848,7 @@ async def add_url_to_knowledge(
 
                 # Use safe HTML parser instead of regex (Issue #549 Code Review)
                 content, extracted_title = _sanitize_html_content(html_content)
-                title = request.title or extracted_title or request.url
+                title = request.title or extracted_title or validated_url
 
     except aiohttp.ClientError:
         raise HTTPException(status_code=400, detail="Failed to fetch URL")
@@ -856,7 +858,7 @@ async def add_url_to_knowledge(
         content,
         {
             "title": title,
-            "source": request.url,
+            "source": validated_url,
             "category": request.category,
             "tags": request.tags,
             "type": "url",

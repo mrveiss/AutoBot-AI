@@ -207,22 +207,36 @@ const updateUserSetting = (key: string, value: any) => {
   markAsChanged()
 }
 
+// #1721: Shared safe nested-set helper to prevent prototype pollution
+const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+function safeNestedSet(root: Record<string, any>, key: string, value: any): void {
+  const keys = key.split('.')
+  if (keys.some(k => _UNSAFE_KEYS.has(k))) return
+  let obj: Record<string, any> = root
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i]
+    if (!Object.prototype.hasOwnProperty.call(obj, k) || typeof obj[k] !== 'object') {
+      obj[k] = Object.create(null) as Record<string, any>
+    }
+    obj = obj[k] as Record<string, any>
+  }
+  const finalKey = keys[keys.length - 1]
+  if (!_UNSAFE_KEYS.has(finalKey)) {
+    obj[finalKey] = value
+  }
+}
+
 const updateBackendSetting = (key: string, value: any) => {
   if (!settings.value.backend) {
     settings.value.backend = {} as BackendSettingsType
   }
   // Handle nested settings for memory and agents
   if (key.includes('.')) {
-    const keys = key.split('.')
-    if (keys.some(k => k === '__proto__' || k === 'constructor' || k === 'prototype')) return
-    let obj: any = settings.value.backend
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (!obj![keys[i]]) obj![keys[i]] = {}
-      obj = obj![keys[i]]
-    }
-    obj![keys[keys.length - 1]] = value
+    safeNestedSet(settings.value.backend as Record<string, any>, key, value)
   } else {
-    (settings.value.backend as any)[key] = value
+    if (!_UNSAFE_KEYS.has(key)) {
+      (settings.value.backend as any)[key] = value
+    }
   }
   markAsChanged()
 }
@@ -234,14 +248,9 @@ const updateLLMSetting = (key: string, value: any) => {
   if (!settings.value.backend.llm) {
     settings.value.backend.llm = {}
   }
-  const keys = key.split('.')
-  if (keys.some(k => k === '__proto__' || k === 'constructor' || k === 'prototype')) return
-  let obj: any = settings.value.backend.llm
-  for (let i = 0; i < keys.length - 1; i++) {
-    if (!obj![keys[i]]) obj![keys[i]] = {}
-    obj = obj![keys[i]]
-  }
-  obj![keys[keys.length - 1]] = value
+  safeNestedSet(
+    settings.value.backend.llm as Record<string, any>, key, value
+  )
   markAsChanged()
 }
 

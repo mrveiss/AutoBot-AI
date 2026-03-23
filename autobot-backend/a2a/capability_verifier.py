@@ -142,18 +142,20 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     from autobot_shared.security.input_sanitizer import validate_url
 
     try:
-        validate_url(remote_url, allow_private=False)
+        validated_url = validate_url(remote_url, allow_private=False)
     except ValueError as exc:
         return CapabilityReport(
             verified=False,
             warnings=[f"Invalid agent URL: {exc}"],
         )
 
-    well_known = remote_url.rstrip("/") + "/.well-known/agent.json"
+    well_known = validated_url.rstrip("/") + "/.well-known/agent.json"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                well_known, timeout=aiohttp.ClientTimeout(total=5)
+                well_known,
+                timeout=aiohttp.ClientTimeout(total=5),
+                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
             ) as resp:
                 if resp.status != 200:
                     return CapabilityReport(

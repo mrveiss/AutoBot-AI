@@ -40,9 +40,19 @@ EXCLUDED_CHUNK_METADATA_KEYS = {"content"}
 _CODE_DEF_PREFIXES = ("def ", "class ", "async def ")
 
 # Issue #380: Pre-compiled regex patterns for Vue and code chunking
-_VUE_TEMPLATE_RE = re.compile(r"<template[^>]*>(.*?)</template>", re.DOTALL)
-_VUE_SCRIPT_RE = re.compile(r"<script[^>]*>(.*?)</script>", re.DOTALL)
-_VUE_STYLE_RE = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL)
+# #1721: Hardened against bad-tag-filter bypass using [^<] negated class
+_VUE_TEMPLATE_RE = re.compile(
+    r"<template[^>]*>([^<]*(?:<(?!/template>)[^<]*)*)</template>",
+    re.DOTALL | re.IGNORECASE,
+)
+_VUE_SCRIPT_RE = re.compile(
+    r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+    re.DOTALL | re.IGNORECASE,
+)
+_VUE_STYLE_RE = re.compile(
+    r"<style[^>]*>([^<]*(?:<(?!/style>)[^<]*)*)</style>",
+    re.DOTALL | re.IGNORECASE,
+)
 _JS_FUNCTION_RE = re.compile(r"^\s*(function|const|let|var|export|async)")
 _MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)")
 

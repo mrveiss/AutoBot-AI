@@ -204,6 +204,9 @@ const emit = defineEmits<{
   'close': [];
 }>();
 
+// #1721: In-memory session host preference (avoids clear-text sessionStorage)
+let _sessionHostChoice: string | null = null;
+
 // State
 const showDialog = ref(false);
 const hosts = ref<InfrastructureHost[]>([]);
@@ -338,8 +341,9 @@ const handleConfirm = async () => {
 
   try {
     // If remember choice is checked, save as session default
+    // #1721: Use in-memory storage instead of sessionStorage for host IDs
     if (rememberChoice.value) {
-      sessionStorage.setItem('autobot_session_ssh_host', selectedHostId.value);
+      _sessionHostChoice = selectedHostId.value;
     }
 
     // Emit selection event with host data

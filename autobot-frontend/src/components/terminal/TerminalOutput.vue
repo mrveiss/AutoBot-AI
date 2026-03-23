@@ -72,10 +72,15 @@ watch(() => props.outputLines, (newLines, oldLines) => {
     const latestLine = newLines[newLines.length - 1]
     if (latestLine) {
       // Strip HTML and ANSI codes for announcement
-      const cleanContent = latestLine.content
+      // #1721: Loop HTML strip to prevent incomplete multi-char sanitization
+      let cleanContent = latestLine.content
         .replace(/\x1b\[[0-9;]*m/g, '')  // Remove ANSI codes
-        .replace(/<[^>]*>/g, '')          // Remove HTML tags
-        .substring(0, 150)                 // Limit to 150 chars
+      let prevContent = ''
+      while (prevContent !== cleanContent) {
+        prevContent = cleanContent
+        cleanContent = cleanContent.replace(/<[^>]*>/g, '')
+      }
+      cleanContent = cleanContent.substring(0, 150)  // Limit to 150 chars
 
       const lineType = latestLine.type ? ` (${latestLine.type})` : ''
       screenReaderStatus.value = `New terminal output${lineType}: ${cleanContent}`

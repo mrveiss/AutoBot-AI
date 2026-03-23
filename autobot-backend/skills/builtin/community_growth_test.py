@@ -9,6 +9,7 @@ External APIs (PRAW, aiohttp) are mocked throughout.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 from skills.builtin.community_growth import CommunityGrowthSkill
@@ -175,7 +176,10 @@ async def test_reddit_reply_posts_comment(skill: CommunityGrowthSkill):
         )
 
     assert result["success"] is True
-    assert "reddit.com" in result["comment_url"]
+    # #1721: Use urlparse host check instead of substring match
+    parsed = urlparse(result["comment_url"])
+    assert parsed.hostname is not None
+    assert parsed.hostname.endswith("reddit.com")
 
 
 # ------------------------------------------------------------------

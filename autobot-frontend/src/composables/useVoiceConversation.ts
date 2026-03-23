@@ -99,12 +99,16 @@ function _getMicContextError(modeLabel: string): string {
 
 /** Strip tool-call markup and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
-  const clean = text
+  // #1721: Loop HTML strip to prevent incomplete multi-char sanitization
+  let clean = text
     .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
     .replace(/<TOOL_CALL[^>]*>|<\/TOOL_CALL>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  let prev = ''
+  while (prev !== clean) {
+    prev = clean
+    clean = clean.replace(/<[^>]+>/g, '')
+  }
+  clean = clean.replace(/\s+/g, ' ').trim()
   if (clean.length <= _MAX_SPEECH_CHARS) return clean
   const truncated = clean.slice(0, _MAX_SPEECH_CHARS)
   const lastBreak = Math.max(

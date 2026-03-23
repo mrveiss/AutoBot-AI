@@ -477,14 +477,14 @@ class CodeValidator:
         if paren_count != 0:
             errors.append(f"Unbalanced parentheses: {paren_count:+d}")
 
-        # Count constructs
-        function_pattern = (
-            r"\bfunction\s+(\w+)|(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[^=])\s*=>"
-        )
+        # Count constructs (patterns hardened against ReDoS, #1721)
+        function_pattern = r"\bfunction\s+(\w+)"
+        arrow_pattern = r"(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*=>"
         class_pattern = r"\bclass\s+(\w+)"
-        import_pattern = r"\bimport\s+.*\bfrom\b"
+        import_pattern = r"\bimport\b[^\n]*\bfrom\b"
 
         functions = re.findall(function_pattern, code)
+        functions += re.findall(arrow_pattern, code)
         classes = re.findall(class_pattern, code)
         imports = re.findall(import_pattern, code)
 
@@ -510,8 +510,13 @@ class CodeValidator:
         elif language in (CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT):
             return cls.validate_typescript(code)
         elif language == CodeLanguage.VUE:
-            # Extract script section and validate
-            script_match = re.search(r"<script[^>]*>(.*?)</script>", code, re.DOTALL)
+            # Extract script section and validate (#1721: use [^<] to avoid
+            # bad-tag-filter / ReDoS on nested angle brackets)
+            script_match = re.search(
+                r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+                code,
+                re.DOTALL | re.IGNORECASE,
+            )
             if script_match:
                 return cls.validate_typescript(script_match.group(1))
             return ValidationResult(is_valid=True)

@@ -8,6 +8,7 @@ Handles API key creation, validation, and management.
 """
 
 import hashlib
+import hmac
 import logging
 import secrets
 import uuid
@@ -125,8 +126,16 @@ class APIKeyService(BaseService):
 
     @staticmethod
     def _hash_key(key: str) -> str:
-        """Hash an API key using SHA256."""
-        return hashlib.sha256(key.encode()).hexdigest()
+        """Hash an API key using HMAC-SHA256 (#1721).
+
+        Uses a fixed application-level key so that hashes remain
+        deterministic for lookup while being stronger than bare SHA-256.
+        """
+        return hmac.new(
+            key=b"autobot-api-key-v1",
+            msg=key.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).hexdigest()
 
     @staticmethod
     def _calculate_expiration(expires_days: Optional[int]) -> Optional[datetime]:
