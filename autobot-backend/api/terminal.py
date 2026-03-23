@@ -745,7 +745,7 @@ async def _run_terminal_message_loop(
             json.dumps(
                 {
                     "type": "error",
-                    "content": f"Terminal error: {str(e)}",
+                    "content": "Terminal error",
                     "timestamp": time.time(),
                 }
             )
@@ -910,7 +910,7 @@ async def _run_ssh_message_loop(
             json.dumps(
                 {
                     "type": "error",
-                    "content": f"SSH terminal error: {str(e)}",
+                    "content": "SSH terminal error",
                     "timestamp": time.time(),
                 }
             )

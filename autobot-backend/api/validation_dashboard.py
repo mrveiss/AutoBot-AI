@@ -213,27 +213,23 @@ async def get_validation_report():
             "timestamp": datetime.now().isoformat(),
         }
 
-    except (ImportError, AttributeError) as e:
-        logger.error(
-            f"Error generating validation report due to missing dependency: {e}"
-        )
+    except (ImportError, AttributeError):
+        logger.exception("Error generating validation report: missing dependency")
         raise_service_unavailable(
             "API_0005",
-            f"Dashboard generator dependency error: {e}",
+            "Dashboard generator dependency error",
         )
-    except (OSError, IOError) as e:
-        logger.error(
-            f"Error generating validation report due to file system error: {e}"
-        )
+    except (OSError, IOError):
+        logger.exception("Error generating validation report: file system error")
         raise_server_error(
             "API_0003",
-            f"File system error generating validation report: {e}",
+            "File system error generating validation report",
         )
-    except Exception as e:
-        logger.error("Error generating validation report: %s", e)
+    except Exception:
+        logger.exception("Error generating validation report")
         raise_server_error(
             "API_0004",
-            f"Unexpected error generating validation report: {e}",
+            "Unexpected error generating validation report",
         )
 
 
@@ -269,26 +265,26 @@ async def get_dashboard_html():
 
         return HTMLResponse(content=html_content)
 
-    except (ImportError, AttributeError) as e:
-        logger.error("Error generating dashboard HTML due to missing dependency: %s", e)
+    except (ImportError, AttributeError):
+        logger.exception("Error generating dashboard HTML: missing dependency")
         return HTMLResponse(
-            content=f"""
+            content="""
             <html><body>
                 <h1>Dashboard Error</h1>
-                <p>Service unavailable: Dashboard generator not available</p>
-                <p>Error: {e}</p>
+                <p>Service unavailable: Dashboard generator
+                not available</p>
             </body></html>
             """,
             status_code=503,
         )
-    except (OSError, IOError) as e:
-        logger.error("Error generating dashboard HTML due to file system error: %s", e)
+    except (OSError, IOError):
+        logger.exception("Error generating dashboard HTML: file system error")
         return HTMLResponse(
-            content=f"""
+            content="""
             <html><body>
                 <h1>Dashboard Error</h1>
-                <p>File system error occurred during dashboard generation</p>
-                <p>Error: {e}</p>
+                <p>File system error occurred during dashboard
+                generation</p>
             </body></html>
             """,
             status_code=500,
@@ -719,7 +715,7 @@ async def get_judge_status():
             )
             judge_metrics[judge_name] = {
                 "error": "Judge not available",
-                "details": str(e),
+                "details": "Dependency not available",
             }
         except Exception as e:
             logger.error("Error getting metrics for %s: %s", judge_name, e)

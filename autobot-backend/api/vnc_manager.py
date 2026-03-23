@@ -1085,7 +1085,7 @@ async def playback_macro(
             logger.error("Error executing macro action %d: %s", i, e)
             return {
                 "status": "error",
-                "message": f"Failed at action {i + 1}/{len(macro.actions)}: {e}",
+                "message": f"Failed at action {i + 1}/{len(macro.actions)}",
             }
 
     elapsed = (datetime.now() - start_time).total_seconds()

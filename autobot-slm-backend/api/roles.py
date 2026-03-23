@@ -367,9 +367,10 @@ async def _run_role_migration(role: Role, target_node_id: str) -> dict:
             extra_vars={"deploy_role": role.name},
         )
     except FileNotFoundError as exc:
+        logger.exception("Playbook not found: %s", role.ansible_playbook)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
+            detail="Ansible playbook not found",
         ) from exc
 
     logger.info(
@@ -596,4 +597,4 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
         return False, "Timeout after 120 seconds"
     except Exception as e:
         logger.exception("SSH command error: %s", e)
-        return False, f"Error: {str(e)[:500]}"
+        return False, "Error: SSH command failed"

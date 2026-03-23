@@ -197,9 +197,9 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
             f"Analysis timed out after {_ANALYSIS_TIMEOUT}s",
             reason="timeout",
         )
-    except Exception as e:
-        logger.error("Pattern analysis failed: %s", e)
-        await _manager.fail_task(task_id, str(e))
+    except Exception:
+        logger.exception("Pattern analysis failed")
+        await _manager.fail_task(task_id, "Analysis failed")
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
@@ -386,9 +386,9 @@ async def _run_summary_analysis(task_id: str, path: str) -> None:
             f"Summary timed out after {_ANALYSIS_TIMEOUT}s",
             reason="timeout",
         )
-    except Exception as e:
-        logger.error("Pattern summary analysis failed: %s", e)
-        await _summary_manager.fail_task(task_id, str(e))
+    except Exception:
+        logger.exception("Pattern summary analysis failed")
+        await _summary_manager.fail_task(task_id, "Summary analysis failed")
 
 
 @router.post("/patterns/summary/analyze")

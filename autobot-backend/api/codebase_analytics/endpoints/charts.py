@@ -261,13 +261,12 @@ async def _get_redis_fallback_chart_data(
             source_id=source_id,
         )
         return total_problems, "redis"
-    except Exception as redis_error:
-        logger.error("Redis query failed: %s", redis_error)
+    except Exception:
+        logger.exception("Redis query failed")
         return JSONResponse(
             {
                 "status": "error",
                 "message": "Failed to retrieve chart data",
-                "error": str(redis_error),
             },
             status_code=500,
         )
