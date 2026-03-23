@@ -314,22 +314,23 @@ class ModelInfo:
     def fits_resource_constraints(
         self, resources: "SystemResources | Dict[str, float]"
     ) -> bool:
-        """Check if this model fits within available resources (#1966).
+        """Check if this model fits within available resources (#1966, #2015).
 
-        Uses actual memory estimation instead of static thresholds.
-        Checks GPU VRAM when available (flash-moe explicit budgeting).
+        When a GPU is present, LLM weights load into VRAM — not system RAM.
+        GPU path: compare estimated memory against gpu_vram_gb and return
+        immediately; system RAM is irrelevant for GPU inference.
+        CPU-only path (gpu_vram_gb == 0): compare against available_memory_gb.
         """
         estimated = self.estimate_memory_gb()
         if isinstance(resources, SystemResources):
             if resources.gpu_vram_gb > 0:
-                if estimated > resources.gpu_vram_gb:
-                    return False
+                return estimated <= resources.gpu_vram_gb
             max_mem = resources.get_max_model_size_gb()
             return estimated <= max_mem
         else:
             gpu_vram = resources.get("gpu_vram_gb", 0.0)
-            if gpu_vram > 0 and estimated > gpu_vram:
-                return False
+            if gpu_vram > 0:
+                return estimated <= gpu_vram
             available = resources.get("available_memory_gb", 8.0)
             cpu = resources.get("cpu_percent", 50.0)
             if cpu > 90 or available < 2:
