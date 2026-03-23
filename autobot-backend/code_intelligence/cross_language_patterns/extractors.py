@@ -59,11 +59,15 @@ _TS_VALIDATION_RE: Pattern = re.compile(
 )
 _TS_ZOD_RE: Pattern = re.compile(r"z\.(?:object|string|number|boolean|array)\s*\(")
 
-# Vue patterns
+# Vue patterns (#1721: hardened against bad-tag-filter bypass)
 _VUE_SCRIPT_RE: Pattern = re.compile(
-    r"<script[^>]*(?:lang=[\"']ts[\"'])?[^>]*>([\s\S]*?)</script>"
+    r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+    re.IGNORECASE,
 )
-_VUE_TEMPLATE_RE: Pattern = re.compile(r"<template>([\s\S]*?)</template>")
+_VUE_TEMPLATE_RE: Pattern = re.compile(
+    r"<template>([^<]*(?:<(?!/template>)[^<]*)*)</template>",
+    re.IGNORECASE,
+)
 
 # Validation patterns (cross-language)
 _VALIDATION_PATTERNS: Dict[str, Pattern] = {

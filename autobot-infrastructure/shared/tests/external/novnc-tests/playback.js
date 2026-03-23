@@ -32,8 +32,8 @@ if (window.setImmediate === undefined) {
         const index = event.data.slice("noVNC immediate trigger:".length);
 
         const callback = _immediateFuncs[index];
-        if (callback === undefined) {
-            return;
+        if (typeof callback !== 'function') {
+            return;  // #1721: validate callback type before invocation
         }
 
         delete _immediateFuncs[index];

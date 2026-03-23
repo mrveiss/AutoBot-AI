@@ -10,6 +10,7 @@ Extended with desktop interaction controls (Issue #74)
 import asyncio
 import base64
 import logging
+import re
 import subprocess  # nosec B404
 import tempfile
 from datetime import datetime
@@ -303,6 +304,10 @@ _XDOTOOL_ALLOWED_SUBCMDS = frozenset(
     }
 )
 
+# Safe pattern for xdotool arguments: alphanumeric, common punctuation,
+# spaces (for type command text).  Blocks shell metacharacters (#1721).
+_XDOTOOL_SAFE_ARG_RE = re.compile(r"^[\w\s.,+\-/:@=]+$")
+
 
 def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
     """
@@ -310,20 +315,33 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
 
     Helper for desktop interaction endpoints (Issue #74).
     Args are validated against an allowlist of subcommands (#1721).
+    Individual arguments are sanitised to prevent command injection.
     """
     if not args or args[0] not in _XDOTOOL_ALLOWED_SUBCMDS:
         return {
             "status": "error",
-            "message": f"Disallowed xdotool subcommand: {args[0] if args else '(empty)'}",
+            "message": (
+                "Disallowed xdotool subcommand: " f"{args[0] if args else '(empty)'}"
+            ),
         }
-    sanitized = [str(a) for a in args]
+    # Validate each argument against safe-character pattern (#1721)
+    sanitized: list[str] = []
+    for arg in args:
+        s = str(arg)
+        if not _XDOTOOL_SAFE_ARG_RE.match(s):
+            return {
+                "status": "error",
+                "message": "Argument contains disallowed characters",
+            }
+        sanitized.append(s)
     try:
-        result = subprocess.run(  # nosec B607
-            ["xdotool"] + sanitized,
+        result = subprocess.run(  # nosec B603 B607
+            ["/usr/bin/xdotool"] + sanitized,
             capture_output=True,
             text=True,
             encoding="utf-8",
             timeout=timeout,
+            shell=False,
             env={"DISPLAY": ":1"},
         )
         if result.returncode != 0:

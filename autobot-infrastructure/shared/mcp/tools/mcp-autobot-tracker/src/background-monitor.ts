@@ -3,12 +3,13 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tail } from 'tail';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { NetworkConstants, HealthCheckEndpoints } from './constants/network.js';
 import { PathConstants } from './constants/paths.js';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 interface LogConfig {
   name: string;
@@ -536,7 +537,8 @@ export class BackgroundMonitor {
 
     // Check disk space
     try {
-      const { stdout } = await execAsync('df -h ' + JSON.stringify(PathConstants.PROJECT_ROOT));
+      // #1721: Use execFile to avoid shell injection from env constants
+      const { stdout } = await execFileAsync('df', ['-h', PathConstants.PROJECT_ROOT]);
       const diskInfo = stdout.split('\n')[1].split(/\s+/);
       healthData.system.disk = {
         usage: diskInfo[4],

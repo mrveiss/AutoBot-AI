@@ -1287,7 +1287,14 @@ watch(() => store.currentMessages.length, (newLen, oldLen) => {
     const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*?>/g, '').replace(/</g, '&lt;')
+      // #1721: Loop strip to prevent incomplete multi-char sanitization
+      let preview = latestMessage.content.substring(0, 100)
+      let prev = ''
+      while (prev !== preview) {
+        prev = preview
+        preview = preview.replace(/<[^>]*?>/g, '')
+      }
+      preview = preview.replace(/</g, '&lt;')
       screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
 
       setTimeout(() => {
