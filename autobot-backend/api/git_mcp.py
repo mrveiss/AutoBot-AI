@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field, field_validator
 from type_defs.common import JSONObject, Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
@@ -157,35 +158,19 @@ def _find_git_root(path: Path, allowed_path: Path) -> bool:
 
 def is_repository_allowed(repo_path: str) -> bool:
     """
-    Validate repository path against whitelist
+    Validate repository path against whitelist.
 
-    Security measures:
-    - Exact path matching
-    - Prevent path traversal
-    - Verify git repository exists
-    - Prevent symlink attacks
-
-    Refactored for Issue #315 - reduced nesting depth from 7 to 3
+    Uses shared path validator (#1721) then verifies git root.
     """
     try:
-        raw_path = Path(repo_path)
-        path = raw_path.resolve()
-    except Exception as e:
-        logger.error("Repository validation error for %s: %s", repo_path, e)
+        path = validate_path(repo_path, allowed_roots=ALLOWED_REPOSITORIES)
+    except ValueError:
+        logger.warning("Repository not in whitelist: %s", repo_path)
         return False
 
-    # Check against whitelist
+    # Verify it's actually a git repository
     for allowed in ALLOWED_REPOSITORIES:
         allowed_path = Path(allowed).resolve()
-        if path != allowed_path and not str(path).startswith(str(allowed_path) + "/"):
-            continue
-
-        # Security: Verify resolved path stays within allowed directory
-        if not _is_within_allowed_path(path, allowed_path):
-            logger.warning("Symlink escape attempt detected: %s -> %s", repo_path, path)
-            continue
-
-        # Verify it's actually a git repository (or subdirectory of one)
         if _find_git_root(path, allowed_path):
             return True
 

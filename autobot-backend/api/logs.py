@@ -27,6 +27,7 @@ from type_defs.common import Metadata
 from utils.io_executor import run_in_log_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,14 @@ LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
 
 def _validate_log_path(file_path) -> Path:
-    """Ensure file_path is under LOG_DIR (#1733)."""
-    resolved = Path(file_path).resolve()
-    if not str(resolved).startswith(str(LOG_DIR.resolve())):
+    """Ensure file_path is under LOG_DIR.
+
+    Uses shared path validator (#1721).
+    """
+    try:
+        return validate_relative_path(str(Path(file_path).name), LOG_DIR)
+    except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
-    return resolved
 
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
@@ -535,20 +539,14 @@ async def read_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = LOG_DIR / filename
+        file_path = _validate_log_path(LOG_DIR / filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
-        # Security check - ensure file is within LOG_DIR
-        resolved_path = await run_in_log_executor(file_path.resolve)
-        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
-        if not str(resolved_path).startswith(str(resolved_log_dir)):
-            raise HTTPException(status_code=403, detail="Access denied")
-
         try:
-            # Use extracted helper (Issue #315: reduced nesting)
+            # Use extracted helper (Issue #315)
             selected_lines, total_lines = await _read_log_lines_from_file(
                 file_path, lines, offset, tail
             )
@@ -845,20 +843,14 @@ async def stream_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = LOG_DIR / filename
+        file_path = _validate_log_path(LOG_DIR / filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
-        # Security check
-        resolved_path = await run_in_log_executor(file_path.resolve)
-        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
-        if not str(resolved_path).startswith(str(resolved_log_dir)):
-            raise HTTPException(status_code=403, detail="Access denied")
-
         async def generate():
-            """Generate log file content line by line for streaming response."""
+            """Generate log file content line by line."""
             try:
                 async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     async for line in f:
@@ -888,19 +880,17 @@ async def tail_log(websocket: WebSocket, filename: str):
     await websocket.accept()
 
     try:
-        file_path = LOG_DIR / filename
+        try:
+            file_path = _validate_log_path(LOG_DIR / filename)
+        except HTTPException:
+            await websocket.send_json({"error": "Access denied"})
+            await websocket.close()
+            return
+
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             await websocket.send_json({"error": "Log file not found"})
-            await websocket.close()
-            return
-
-        # Security check
-        resolved_path = await run_in_log_executor(file_path.resolve)
-        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
-        if not str(resolved_path).startswith(str(resolved_log_dir)):
-            await websocket.send_json({"error": "Access denied"})
             await websocket.close()
             return
 
@@ -988,7 +978,7 @@ async def search_logs(
         files_to_search = []
 
         if filename:
-            file_path = LOG_DIR / filename
+            file_path = _validate_log_path(LOG_DIR / filename)
             file_exists = await run_in_log_executor(file_path.exists)
             if file_exists:
                 files_to_search.append(file_path)
@@ -1038,26 +1028,20 @@ async def clear_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = LOG_DIR / filename
+        file_path = _validate_log_path(LOG_DIR / filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
             raise HTTPException(status_code=404, detail="Log file not found")
 
-        # Security check
-        resolved_path = await run_in_log_executor(file_path.resolve)
-        resolved_log_dir = await run_in_log_executor(LOG_DIR.resolve)
-        if not str(resolved_path).startswith(str(resolved_log_dir)):
-            raise HTTPException(status_code=403, detail="Access denied")
-
-        # Don't delete critical logs (Issue #380: use module-level constant)
+        # Don't delete critical logs (#380)
         if filename in _PROTECTED_LOG_FILES:
             raise HTTPException(
-                status_code=403, detail="Cannot clear protected log files"
+                status_code=403,
+                detail="Cannot clear protected log files",
             )
 
-        # Truncate file
-        # Issue #514: Use per-file locking to prevent concurrent write corruption
+        # Truncate file (#514: per-file locking)
         file_lock = await _get_log_file_lock(str(file_path))
         async with file_lock:
             async with aiofiles.open(file_path, "w", encoding="utf-8") as f:

@@ -64,6 +64,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["filesystem_mcp", "mcp"])
@@ -91,49 +92,40 @@ def _should_include_file(filename: str, pattern: str, exclude_patterns: list) ->
 
 def is_path_allowed(path: str) -> bool:
     """
-    Validate path is within allowed directories with security checks
+    Validate path is within allowed directories with security checks.
 
-    Security measures:
-    - Resolves symlinks to prevent symlink attacks
-    - Blocks path traversal (..)
-    - Checks against whitelist of allowed directories
+    Uses shared path validator (#1721) to resolve symlinks and
+    verify containment within allowed directories.
     """
     try:
-        # Convert to absolute path
-        abs_path = os.path.abspath(path)
-
-        # Resolve symlinks to actual path
-        real_path = os.path.realpath(abs_path)
-
-        # Block path traversal attempts
-        if ".." in path:
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return False
-
-        # Verify resolved path matches absolute path (no symlink trickery)
-        if abs_path != real_path and not real_path.startswith(
-            tuple(ALLOWED_DIRECTORIES)
-        ):
-            logger.warning(
-                f"Symlink outside allowed directories blocked: {path} -> {real_path}"
-            )
-            return False
-
-        # Check if path is within allowed directories
-        is_allowed = any(
-            real_path.startswith(allowed_dir) for allowed_dir in ALLOWED_DIRECTORIES
+        validate_path(path, allowed_roots=ALLOWED_DIRECTORIES)
+        return True
+    except ValueError:
+        logger.warning(
+            "Access denied to path outside allowed directories: %s",
+            path,
         )
-
-        if not is_allowed:
-            logger.warning(
-                f"Access denied to path outside allowed directories: {real_path}"
-            )
-
-        return is_allowed
-
-    except Exception as e:
-        logger.error("Path validation error for %s: %s", path, e)
         return False
+
+
+def _validated_path(path: str) -> str:
+    """Validate and return the resolved path string (#1721).
+
+    Unlike ``is_path_allowed`` (which returns a bool), this helper
+    returns the *resolved* path so that downstream ``open()`` calls
+    operate on the validated canonical path rather than the raw
+    user input.  This satisfies CodeQL taint tracking.
+
+    Raises:
+        HTTPException 403 when path is outside allowed directories.
+    """
+    try:
+        return str(validate_path(path, allowed_roots=ALLOWED_DIRECTORIES))
+    except ValueError:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: Path not in allowed directories",
+        )
 
 
 class MCPTool(BaseModel):
@@ -683,23 +675,24 @@ async def read_text_file_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
+    safe_path = _validated_path(request.path)
+
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
+    if not path_exists:
         raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
+            status_code=404,
+            detail=f"File not found: {request.path}",
         )
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
-
-    is_file = await run_in_file_executor(os.path.isfile, request.path)
+    is_file = await run_in_file_executor(os.path.isfile, safe_path)
     if not is_file:
         raise HTTPException(
-            status_code=400, detail=f"Path is not a file: {request.path}"
+            status_code=400,
+            detail=f"Path is not a file: {request.path}",
         )
 
     # Check file size
-    file_size = await run_in_file_executor(os.path.getsize, request.path)
+    file_size = await run_in_file_executor(os.path.getsize, safe_path)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
@@ -707,7 +700,7 @@ async def read_text_file_mcp(
         )
 
     try:
-        async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
             lines = await f.readlines()
 
         # Apply head/tail filters
@@ -748,35 +741,36 @@ async def read_media_file_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
+    safe_path = _validated_path(request.path)
+
+    path_exists = await run_in_file_executor(os.path.exists, safe_path)
+    if not path_exists:
         raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
+            status_code=404,
+            detail=f"File not found: {request.path}",
         )
 
-    path_exists = await run_in_file_executor(os.path.exists, request.path)
-    if not path_exists:
-        raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
-
-    is_file = await run_in_file_executor(os.path.isfile, request.path)
+    is_file = await run_in_file_executor(os.path.isfile, safe_path)
     if not is_file:
         raise HTTPException(
-            status_code=400, detail=f"Path is not a file: {request.path}"
+            status_code=400,
+            detail=f"Path is not a file: {request.path}",
         )
 
     # Check file size
-    file_size = await run_in_file_executor(os.path.getsize, request.path)
+    file_size = await run_in_file_executor(os.path.getsize, safe_path)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413, detail=f"File too large: {file_size} bytes"
         )
 
     # Detect MIME type
-    mime_type, _ = mimetypes.guess_type(request.path)
+    mime_type, _ = mimetypes.guess_type(safe_path)
     if mime_type is None:
         mime_type = "application/octet-stream"
 
     try:
-        async with aiofiles.open(request.path, "rb") as f:
+        async with aiofiles.open(safe_path, "rb") as f:
             file_data = await f.read()
 
         base64_data = base64.b64encode(file_data).decode("utf-8")
@@ -910,31 +904,25 @@ async def write_file_mcp(
 
     Issue #744: Requires admin authentication.
     """
-    if not is_path_allowed(request.path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    safe_path = _validated_path(request.path)
 
     # Create parent directories if needed
-    parent_dir = os.path.dirname(request.path)
+    parent_dir = os.path.dirname(safe_path)
     parent_exists = (
         await run_in_file_executor(os.path.exists, parent_dir) if parent_dir else True
     )
     if parent_dir and not parent_exists:
-        if not is_path_allowed(parent_dir):
-            raise HTTPException(
-                status_code=403, detail="Access denied: Parent directory not allowed"
-            )
+        _validated_path(parent_dir)  # validate parent too
         await run_in_file_executor(os.makedirs, parent_dir, exist_ok=True)
 
     try:
-        # Issue #514: Use per-file locking to prevent concurrent write corruption
-        file_lock = await _get_file_lock(request.path)
+        # Issue #514: Use per-file locking
+        file_lock = await _get_file_lock(safe_path)
         async with file_lock:
-            async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+            async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:
                 await f.write(request.content)
 
-        file_size = await run_in_file_executor(os.path.getsize, request.path)
+        file_size = await run_in_file_executor(os.path.getsize, safe_path)
 
         return {
             "success": True,
@@ -948,30 +936,32 @@ async def write_file_mcp(
         raise HTTPException(status_code=500, detail="Error writing file")
 
 
-async def _validate_file_path(path: str) -> None:
+async def _validate_file_path(path: str) -> str:
     """
     Validate that path is an allowed, existing file.
 
-    Issue #620.
+    Issue #620.  Issue #1721 - returns resolved path.
 
     Args:
         path: File path to validate
 
-    Raises:
-        HTTPException: If path is not allowed, doesn't exist, or isn't a file
-    """
-    if not is_path_allowed(path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    Returns:
+        Resolved safe path string
 
-    path_exists = await run_in_file_executor(os.path.exists, path)
+    Raises:
+        HTTPException: If path is not allowed, doesn't exist,
+        or isn't a file
+    """
+    safe = _validated_path(path)
+
+    path_exists = await run_in_file_executor(os.path.exists, safe)
     if not path_exists:
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
-    is_file = await run_in_file_executor(os.path.isfile, path)
+    is_file = await run_in_file_executor(os.path.isfile, safe)
     if not is_file:
         raise HTTPException(status_code=400, detail=f"Path is not a file: {path}")
+    return safe
 
 
 def _apply_edits_to_content(content: str, edits: list) -> tuple:
@@ -1015,13 +1005,13 @@ async def edit_file_mcp(
     Issue #744: Requires admin authentication.
     Issue #620: Refactored to use extracted helper methods.
     """
-    await _validate_file_path(request.path)
+    safe_path = await _validate_file_path(request.path)
 
     try:
-        # Issue #514: Use per-file locking to prevent concurrent read-modify-write corruption
-        file_lock = await _get_file_lock(request.path)
+        # Issue #514: Use per-file locking
+        file_lock = await _get_file_lock(safe_path)
         async with file_lock:
-            async with aiofiles.open(request.path, "r", encoding="utf-8") as f:
+            async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
                 original_content = await f.read()
 
             content, edits_applied = _apply_edits_to_content(
@@ -1029,7 +1019,7 @@ async def edit_file_mcp(
             )
 
             if not request.dry_run:
-                async with aiofiles.open(request.path, "w", encoding="utf-8") as f:
+                async with aiofiles.open(safe_path, "w", encoding="utf-8") as f:
                     await f.write(content)
 
         return {
@@ -1140,30 +1130,35 @@ async def list_directory_mcp(
         raise HTTPException(status_code=500, detail="Error listing directory")
 
 
-async def _validate_directory_path(path: str) -> None:
+async def _validate_directory_path(path: str) -> str:
     """
     Validate that path is an allowed, existing directory.
 
-    Issue #620: Extracted from list_directory_with_sizes_mcp.
+    Issue #620.  Issue #1721 - returns resolved safe path.
 
     Args:
         path: Directory path to validate
 
-    Raises:
-        HTTPException: If path is not allowed, doesn't exist, or isn't a directory
-    """
-    if not is_path_allowed(path):
-        raise HTTPException(
-            status_code=403, detail="Access denied: Path not in allowed directories"
-        )
+    Returns:
+        Resolved safe path string
 
-    path_exists = await run_in_file_executor(os.path.exists, path)
+    Raises:
+        HTTPException: If path is not allowed, doesn't exist,
+        or isn't a directory
+    """
+    safe = _validated_path(path)
+
+    path_exists = await run_in_file_executor(os.path.exists, safe)
     if not path_exists:
         raise HTTPException(status_code=404, detail=f"Directory not found: {path}")
 
-    is_dir = await run_in_file_executor(os.path.isdir, path)
+    is_dir = await run_in_file_executor(os.path.isdir, safe)
     if not is_dir:
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {path}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path is not a directory: {path}",
+        )
+    return safe
 
 
 async def _build_directory_entries_with_sizes(path: str) -> list:
@@ -1228,12 +1223,12 @@ async def list_directory_with_sizes_mcp(
     Issue #744: Requires admin authentication.
     Issue #620: Refactored to use extracted helper methods.
     """
-    # Validate path (Issue #620: uses helper)
-    await _validate_directory_path(request.path)
+    # Validate path (Issue #620 / #1721: uses helper)
+    safe_path = await _validate_directory_path(request.path)
 
     try:
         # Build entries with sizes (Issue #620: uses helper)
-        entries = await _build_directory_entries_with_sizes(request.path)
+        entries = await _build_directory_entries_with_sizes(safe_path)
 
         # Sort by requested field
         if request.sort_by == "size":
