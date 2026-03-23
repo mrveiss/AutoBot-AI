@@ -138,6 +138,126 @@
                   </div>
                 </router-link>
 
+                <!-- Issue #2071: Vision & AI -->
+                <router-link
+                  to="/vision"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+                      <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.vision') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: Preferences -->
+                <router-link
+                  to="/preferences"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.preferences') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: LLM Configuration -->
+                <router-link
+                  to="/llm-config"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/llm-config'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/llm-config')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.llmConfig') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: Browser Automation -->
+                <router-link
+                  to="/browser-automation"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/browser-automation'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/browser-automation')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.browserAutomation') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: Developer Speedup Tools -->
+                <router-link
+                  to="/dev-speedup"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/dev-speedup'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/dev-speedup')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.devSpeedup') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: Agent Registry -->
+                <router-link
+                  to="/agent-registry"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/agent-registry'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/agent-registry')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+                    </svg>
+                    <span>{{ $t('nav.agentRegistry') }}</span>
+                  </div>
+                </router-link>
+
+                <!-- Issue #2071: Code Intelligence -->
+                <router-link
+                  to="/code-intelligence"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/code-intelligence'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/code-intelligence')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                      <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                    <span>{{ $t('nav.codeIntelligence') }}</span>
+                  </div>
+                </router-link>
+
                 <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
                 <a
                   :href="slmAdminUrl"
@@ -312,6 +432,133 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
                 </svg>
                 <span>{{ $t('nav.plugins') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Vision & AI -->
+            <router-link
+              to="/vision"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
+                  <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.vision') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Preferences -->
+            <router-link
+              to="/preferences"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.preferences') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: LLM Configuration -->
+            <router-link
+              to="/llm-config"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/llm-config'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/llm-config')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.llmConfig') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Browser Automation -->
+            <router-link
+              to="/browser-automation"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/browser-automation'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/browser-automation')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.browserAutomation') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Developer Speedup Tools -->
+            <router-link
+              to="/dev-speedup"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/dev-speedup'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/dev-speedup')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.devSpeedup') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Agent Registry -->
+            <router-link
+              to="/agent-registry"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/agent-registry'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/agent-registry')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+                </svg>
+                <span>{{ $t('nav.agentRegistry') }}</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #2071: Code Intelligence -->
+            <router-link
+              to="/code-intelligence"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/code-intelligence'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/code-intelligence')
+              }"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                </svg>
+                <span>{{ $t('nav.codeIntelligence') }}</span>
               </div>
             </router-link>
 
