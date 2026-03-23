@@ -205,12 +205,23 @@ class WorkflowScheduleRequest:
 class WorkflowQueue:
     """Priority-based workflow execution queue"""
 
-    def __init__(self):
-        """Initialize workflow queue with empty queues and default settings."""
+    def __init__(
+        self,
+        completed_workflows: Optional[Dict[str, "ScheduledWorkflow"]] = None,
+    ):
+        """Initialize workflow queue with empty queues and default settings.
+
+        Args:
+            completed_workflows: Reference to the scheduler's completed_workflows dict.
+                Passed by reference so the queue always sees the current state (#2180).
+        """
         self._queue: List[QueuedWorkflow] = []
         self._running: Dict[str, ScheduledWorkflow] = {}
         self._max_concurrent = WorkflowConfig.DEFAULT_MAX_CONCURRENT  # Issue #376
         self._paused = False
+        self._completed_workflows: Dict[str, ScheduledWorkflow] = (
+            completed_workflows if completed_workflows is not None else {}
+        )
 
     def add(self, workflow: ScheduledWorkflow) -> None:
         """Add workflow to queue with priority scoring"""
@@ -337,12 +348,67 @@ class WorkflowQueue:
         return base_score * complexity_factor * duration_factor
 
     def _dependencies_satisfied(self, workflow: ScheduledWorkflow) -> bool:
-        """Check if workflow dependencies are satisfied"""
+        """Check if all dependency workflows completed successfully (#2180).
+
+        A dependency is satisfied when its workflow ID is present in
+        completed_workflows with status COMPLETED. Any other terminal
+        status (FAILED, CANCELLED) or absence leaves the dependency
+        unsatisfied so the dependent workflow stays queued.
+
+        Circular dependencies are detected via a visited set and logged
+        as a warning; the affected workflow is treated as unsatisfied.
+        """
         if not workflow.dependencies:
             return True
 
-        # This would check against completed workflows in a real implementation
-        # For now, assume dependencies are satisfied
+        return self._check_deps_recursive(workflow.id, workflow.dependencies, set())
+
+    def _check_deps_recursive(
+        self,
+        origin_id: str,
+        dep_ids: List[str],
+        visited: set,
+    ) -> bool:
+        """Recursively verify all deps are satisfied, guarding against cycles.
+
+        Args:
+            origin_id: ID of the workflow we are checking (for cycle detection).
+            dep_ids: Dependency IDs to check at this level.
+            visited: Set of workflow IDs already visited in this traversal.
+
+        Returns:
+            True if every listed dependency completed successfully.
+        """
+        for dep_id in dep_ids:
+            if dep_id == origin_id or dep_id in visited:
+                logger.warning(
+                    "Circular dependency detected for workflow %s (dep %s) — treating as"
+                    " unsatisfied",
+                    origin_id,
+                    dep_id,
+                )
+                return False
+
+            dep_workflow = self._completed_workflows.get(dep_id)
+            if dep_workflow is None:
+                logger.debug(
+                    "Workflow %s waiting — dependency %s not yet completed",
+                    origin_id,
+                    dep_id,
+                )
+                return False
+
+            if dep_workflow.status != WorkflowStatus.COMPLETED:
+                logger.debug(
+                    "Workflow %s waiting — dependency %s has status %s",
+                    origin_id,
+                    dep_id,
+                    dep_workflow.status.value,
+                )
+                return False
+
+            visited.add(dep_id)
+
         return True
 
     def set_max_concurrent(self, max_concurrent: int) -> None:
@@ -358,7 +424,8 @@ class WorkflowScheduler:
         self.storage_path = storage_path
         self.scheduled_workflows: Dict[str, ScheduledWorkflow] = {}
         self.completed_workflows: Dict[str, ScheduledWorkflow] = {}
-        self.queue = WorkflowQueue()
+        # Pass completed_workflows by reference so the queue always sees live state (#2180)
+        self.queue = WorkflowQueue(completed_workflows=self.completed_workflows)
         self._scheduler_task: Optional[asyncio.Task] = None
         self._running = False
         self._workflow_executor: Optional[Callable] = None
