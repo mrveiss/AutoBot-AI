@@ -13,7 +13,8 @@ selection toward historically effective collaborations.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 from typing import Optional, Protocol, runtime_checkable
 
@@ -36,6 +37,9 @@ class AgentConnection:
     weight: float
     co_success_count: int
     co_failure_count: int
+    last_updated: datetime = field(
+        default_factory=lambda: datetime.now(tz=timezone.utc)
+    )
 
 
 @runtime_checkable
@@ -80,6 +84,17 @@ class AgentTopologyDB(Protocol):
         success: bool,
     ) -> None:
         """Append a task history entry for *agent_id*."""
+        ...
+
+    async def delete_weak_connections(
+        self,
+        min_weight: float,
+        inactive_since: datetime,
+    ) -> int:
+        """Delete connections below *min_weight* not updated since *inactive_since*.
+
+        Returns the number of rows deleted.
+        """
         ...
 
 
@@ -196,3 +211,28 @@ class AgentTopology:
                 weight=new_weight,
                 co_failure_count=conn.co_failure_count + 1,
             )
+
+    async def prune_weak_connections(
+        self,
+        min_weight: float = 0.1,
+        inactive_days: int = 60,
+    ) -> int:
+        """Remove weak, inactive agent connections. Returns count deleted.
+
+        Deletes every connection whose weight is below *min_weight* AND whose
+        *last_updated* timestamp is older than *inactive_days* days.
+
+        Issue #2167.
+        """
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=inactive_days)
+        deleted = await self.db.delete_weak_connections(
+            min_weight=min_weight,
+            inactive_since=cutoff,
+        )
+        logger.info(
+            "Pruned %d weak connections (min_weight=%.3f, inactive_days=%d)",
+            deleted,
+            min_weight,
+            inactive_days,
+        )
+        return deleted
