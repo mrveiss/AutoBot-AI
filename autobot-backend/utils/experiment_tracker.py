@@ -79,6 +79,7 @@ class ExperimentTracker:
         redis_client = await get_redis_client(async_client=True, database="analytics")
         if redis_client:
             await redis_client.rpush(REDIS_KEY, json.dumps(record.to_dict()))
+            await redis_client.ltrim(REDIS_KEY, -10000, -1)  # Cap at 10k (#2031)
         logger.info("Experiment logged: %s -> %s", name, result)
         return record
 
