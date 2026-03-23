@@ -368,7 +368,7 @@ class RAGService:
             "timestamp": str(time.time()),
         }
         try:
-            redis = await get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="analytics")
             if redis is None:
                 logger.debug("Redis unavailable; skipping feedback stream write")
                 return
