@@ -330,12 +330,17 @@ class LLMCostTracker:
         # Normalize model name (handle variations)
         model_lower = model.lower()
 
-        # Exact / prefix / substring match against known pricing keys
-        pricing = None
-        for model_key, price_data in MODEL_PRICING.items():
-            if model_key.lower() in model_lower or model_lower in model_key.lower():
-                pricing = price_data
-                break
+        # 1. Exact match — fastest and most precise path
+        pricing = MODEL_PRICING.get(model_lower)
+
+        # 2. Prefix match (longest key first) — handles versioned suffixes such as
+        #    "gpt-4o-2024-11-20" matching "gpt-4o", while preventing "o3" from
+        #    incorrectly matching "o3-mini". Fixes bidirectional substring bug (#2030).
+        if pricing is None:
+            for model_key in sorted(MODEL_PRICING, key=len, reverse=True):
+                if model_lower.startswith(model_key.lower()):
+                    pricing = MODEL_PRICING[model_key]
+                    break
 
         if pricing is None:
             # Pattern-based heuristic for unknown cloud models (#1961)
