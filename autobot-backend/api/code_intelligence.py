@@ -2259,3 +2259,56 @@ async def clear_stuck_sec_tasks(
         "cleared_count": cleaned,
         "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
     }
+
+
+# Issue #2068: Stub GET endpoints for security/performance/redis findings.
+# The full analysis is available via the POST /analyze endpoints above.
+# These GET stubs prevent 404s and return a consistent "not yet implemented" response.
+
+
+@router.get("/security-findings")
+async def get_security_findings():
+    """Placeholder for security findings summary (Issue #2068).
+
+    Full security analysis is available via POST /security/analyze.
+    Returns an empty findings list with a descriptive message.
+    """
+    logger.debug("GET /security-findings called — returning placeholder response")
+    return {
+        "findings": [],
+        "score": None,
+        "message": "Security findings analysis not yet implemented as a GET endpoint. "
+        "Use POST /api/code-intelligence/security/analyze with a path parameter.",
+    }
+
+
+@router.get("/performance-findings")
+async def get_performance_findings():
+    """Placeholder for performance findings summary (Issue #2068).
+
+    Full performance analysis is available via POST /performance/analyze.
+    Returns an empty findings list with a descriptive message.
+    """
+    logger.debug("GET /performance-findings called — returning placeholder response")
+    return {
+        "findings": [],
+        "score": None,
+        "message": "Performance findings analysis not yet implemented as a GET endpoint. "
+        "Use POST /api/code-intelligence/performance/analyze with a path parameter.",
+    }
+
+
+@router.get("/redis-findings")
+async def get_redis_findings():
+    """Placeholder for Redis optimization findings summary (Issue #2068).
+
+    Full Redis analysis is available via POST /redis/analyze.
+    Returns an empty findings list with a descriptive message.
+    """
+    logger.debug("GET /redis-findings called — returning placeholder response")
+    return {
+        "findings": [],
+        "score": None,
+        "message": "Redis optimization findings analysis not yet implemented as a GET endpoint. "
+        "Use POST /api/code-intelligence/redis/analyze with a path parameter.",
+    }

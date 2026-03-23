@@ -1211,7 +1211,11 @@
       "noResultsDescription": "Paste code above and click Analyze to get AI-powered insights",
       "suggestions": "Suggestions",
       "issuesFound": "Issues Found",
-      "analysisHistory": "Analysis History"
+      "analysisHistory": "Analysis History",
+      "securityScore": "Security Score",
+      "performanceScore": "Performance Score",
+      "redisScore": "Redis Usage Score",
+      "scoreNotAvailable": "Not available in this view — see Codebase Analytics"
     },
     "evolution": {
       "title": "Code Evolution",
