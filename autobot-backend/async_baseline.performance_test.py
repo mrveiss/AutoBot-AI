@@ -35,7 +35,7 @@ import aiohttp
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Import canonical Redis client pattern
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(
