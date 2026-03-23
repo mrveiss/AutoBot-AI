@@ -692,47 +692,6 @@ async def recover_index_queue() -> int:
 # =============================================================================
 
 
-async def _store_problem_to_chromadb(
-    collection,
-    problem: Dict,
-    problem_idx: int,
-) -> None:
-    """Store a problem to ChromaDB collection."""
-    if not collection:
-        return
-
-    try:
-        problem_doc = f"""
-Problem: {problem.get('type', 'unknown')}
-Severity: {problem.get('severity', 'medium')}
-File: {problem.get('file_path', '')}
-Line: {problem.get('line', 0)}
-Description: {problem.get('description', '')}
-Suggestion: {problem.get('suggestion', '')}
-        """.strip()
-
-        metadata = {
-            "type": "problem",
-            "problem_type": problem.get("type", "unknown"),
-            "severity": problem.get("severity", "medium"),
-            "file_path": problem.get("file_path", ""),
-            "line_number": str(problem.get("line", 0)),
-            "description": problem.get("description", ""),
-            "suggestion": problem.get("suggestion", ""),
-        }
-
-        # Use dedicated indexing thread pool for ChromaDB operations
-        await _run_in_indexing_thread(
-            lambda: collection.add(
-                ids=[f"problem_{problem_idx}_{problem.get('type', 'unknown')}"],
-                documents=[problem_doc],
-                metadatas=[metadata],
-            )
-        )
-    except Exception as e:
-        logger.debug("Failed to store problem immediately: %s", e)
-
-
 def _prepare_problem_document(
     problem: Dict, problem_idx: int, source_id: Optional[str] = None
 ) -> tuple:
