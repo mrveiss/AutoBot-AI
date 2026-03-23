@@ -137,7 +137,12 @@ class EdgeLearner:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
         stream_key = f"rag:feedback:{date_key}"
-        # Resume from last seen ID; "0-0" means read from the very beginning.
+        # Resume from exclusive lower bound. "0-0" reads from the start.
+        # After processing entry "T-S", we store "T-(S+1)" so the next
+        # xrange call excludes the already-processed entry.
+        # Note: _cursors are ephemeral (lost on process restart), which
+        # causes full re-consumption. Acceptable for now; file a follow-up
+        # for Redis-based cursor persistence before Phase 3 production.
         resume_id = self._cursors.get(stream_key, "0-0")
         processed = 0
 
@@ -146,16 +151,15 @@ class EdgeLearner:
             if not entries:
                 break
             for entry_id, fields in entries:
-                # Skip the exact ID we already processed on a previous call.
-                if entry_id == resume_id and processed == 0:
-                    continue
                 await self.on_retrieval(fields)
-                resume_id = entry_id
+                # Advance cursor past this entry (exclusive lower bound).
+                ts, seq = entry_id.split("-")
+                resume_id = f"{ts}-{int(seq) + 1}"
                 processed += 1
             if len(entries) < 100:
                 break
 
-        # Persist cursor only when we actually advanced past at least one entry.
+        # Persist cursor only when we actually advanced past an entry.
         if processed > 0:
             self._cursors[stream_key] = resume_id
 
