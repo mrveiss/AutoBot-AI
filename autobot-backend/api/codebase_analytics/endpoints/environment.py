@@ -45,34 +45,23 @@ def _validate_env_path_security(path: str, project_root: str) -> Optional[JSONRe
     Returns:
         JSONResponse error if validation fails, None if valid
     """
+    from autobot_shared.security.path_validator import validate_path
+
     try:
-        resolved_path = Path(path).resolve()
-        if not str(resolved_path).startswith(project_root):
-            logger.warning("Path traversal attempt blocked: %s", path)
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "Invalid path: must be within project root",
-                    "total_hardcoded_values": 0,
-                    "categories": {},
-                    "recommendations_count": 0,
-                },
-                status_code=400,
-            )
-    except Exception as e:
-        logger.warning("Invalid path provided: %s - %s", path, e)
+        validate_path(path, allowed_roots=[project_root])
+        return None
+    except ValueError:
+        logger.warning("Path traversal attempt blocked: %s", path)
         return JSONResponse(
             {
                 "status": "error",
-                "message": "Invalid path",
+                "message": "Invalid path: must be within project root",
                 "total_hardcoded_values": 0,
                 "categories": {},
                 "recommendations_count": 0,
             },
             status_code=400,
         )
-
-    return None
 
 
 async def _run_environment_analysis(analyzer, path: str, pattern_list: list):

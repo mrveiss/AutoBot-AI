@@ -385,13 +385,26 @@ class FastDocumentScanner:
         Returns:
             Man page content as string, or None if failed
         """
+        from autobot_shared.security.path_validator import validate_path
+
         try:
+            # Validate path stays within system man directories (#1721)
+            safe_path = str(
+                validate_path(
+                    file_path,
+                    allowed_roots=[
+                        "/usr/share/man",
+                        "/usr/local/share/man",
+                    ],
+                )
+            )
+
             # Try reading file directly (handles .gz)
-            if file_path.endswith(".gz"):
-                with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
+            if safe_path.endswith(".gz"):
+                with gzip.open(safe_path, "rt", encoding="utf-8", errors="ignore") as f:
                     return f.read()
             else:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(safe_path, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
 
         except Exception as file_error:

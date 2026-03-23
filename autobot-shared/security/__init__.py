@@ -14,11 +14,12 @@ from autobot_shared.security.input_sanitizer import (
     sanitize_shell_arg,
     validate_url,
 )
-from autobot_shared.security.path_validator import validate_path
+from autobot_shared.security.path_validator import validate_path, validate_relative_path
 from autobot_shared.security.safe_response import safe_error_response
 
 __all__ = [
     "validate_path",
+    "validate_relative_path",
     "safe_error_response",
     "sanitize_shell_arg",
     "sanitize_ldap_filter",

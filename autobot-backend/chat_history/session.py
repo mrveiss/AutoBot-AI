@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 from chat_history.file_io import run_in_chat_io_executor
 
+from autobot_shared.security.path_validator import validate_relative_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,15 +95,22 @@ class SessionMixin:
     async def _resolve_session_file_path(
         self, session_id: str, chats_directory: str
     ) -> Optional[str]:
-        """Resolve session file path with backward compatibility. (Issue #315 - extracted)"""
-        # Try new naming convention first: {uuid}_chat.json
-        chat_file = f"{chats_directory}/{session_id}_chat.json"
+        """Resolve session file path with backward compatibility.
+
+        Issue #315 - extracted.  Issue #1721 - uses shared path validator.
+        """
+        # Validate paths against chats directory (#1721)
+        chat_file = str(
+            validate_relative_path(f"{session_id}_chat.json", chats_directory)
+        )
         file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)
         if file_exists:
             return chat_file
 
         # Backward compatibility: try old naming convention
-        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        chat_file_old = str(
+            validate_relative_path(f"chat_{session_id}.json", chats_directory)
+        )
         old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             logger.debug("Using legacy file format for session %s", session_id)
@@ -127,7 +136,9 @@ class SessionMixin:
                 return {}
 
         # Try old format for backward compatibility
-        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        chat_file_old = str(
+            validate_relative_path(f"chat_{session_id}.json", chats_directory)
+        )
         old_file_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_file_exists:
             try:
@@ -491,7 +502,9 @@ class SessionMixin:
             chats_directory = self._get_chats_directory()
             await self._ensure_chats_directory_exists(chats_directory)
 
-            chat_file = f"{chats_directory}/{session_id}_chat.json"
+            chat_file = str(
+                validate_relative_path(f"{session_id}_chat.json", chats_directory)
+            )
             current_time = time.strftime("%Y-%m-%d %H:%M:%S")
             session_messages = self._prepare_session_messages(session_id, messages)
 
@@ -629,19 +642,23 @@ class SessionMixin:
         Returns:
             True if at least one session file was deleted.
 
-        Issue #620.
+        Issue #620.  Issue #1721 - uses shared path validator.
         """
         deleted = False
 
         # Delete new format file
-        chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+        chat_file_new = str(
+            validate_relative_path(f"{session_id}_chat.json", chats_directory)
+        )
         new_exists = await run_in_chat_io_executor(os.path.exists, chat_file_new)
         if new_exists:
             await run_in_chat_io_executor(os.remove, chat_file_new)
             deleted = True
 
         # Delete old format file if exists
-        chat_file_old = f"{chats_directory}/chat_{session_id}.json"
+        chat_file_old = str(
+            validate_relative_path(f"chat_{session_id}.json", chats_directory)
+        )
         old_exists = await run_in_chat_io_executor(os.path.exists, chat_file_old)
         if old_exists:
             await run_in_chat_io_executor(os.remove, chat_file_old)
@@ -662,14 +679,20 @@ class SessionMixin:
         Issue #620.
         """
         # Delete terminal log file
-        terminal_log = f"{chats_directory}/{session_id}_terminal.log"
+        terminal_log = str(
+            validate_relative_path(f"{session_id}_terminal.log", chats_directory)
+        )
         log_exists = await run_in_chat_io_executor(os.path.exists, terminal_log)
         if log_exists:
             await run_in_chat_io_executor(os.remove, terminal_log)
             logger.debug("Deleted terminal log for session %s", session_id)
 
         # Delete terminal transcript file
-        terminal_transcript = f"{chats_directory}/{session_id}_terminal_transcript.txt"
+        terminal_transcript = str(
+            validate_relative_path(
+                f"{session_id}_terminal_transcript.txt", chats_directory
+            )
+        )
         transcript_exists = await run_in_chat_io_executor(
             os.path.exists, terminal_transcript
         )
@@ -777,7 +800,9 @@ class SessionMixin:
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # Save updated data (always use new format)
-            chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+            chat_file_new = str(
+                validate_relative_path(f"{session_id}_chat.json", chats_directory)
+            )
             encrypted_data = self._encrypt_data(chat_data)
             async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
                 await f.write(encrypted_data)
@@ -869,8 +894,10 @@ class SessionMixin:
             chat_data: Updated chat data to save
             name: New session name (for logging). Issue #620.
         """
-        # Save updated data (always use new format)
-        chat_file_new = f"{chats_directory}/{session_id}_chat.json"
+        # Save updated data (always use new format, #1721)
+        chat_file_new = str(
+            validate_relative_path(f"{session_id}_chat.json", chats_directory)
+        )
         async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
             await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
 
@@ -892,7 +919,9 @@ class SessionMixin:
         try:
             self._sanitize_session_id(session_id)
             chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/{session_id}_chat.json"
+            chat_file = str(
+                validate_relative_path(f"{session_id}_chat.json", chats_directory)
+            )
 
             # Try new format first
             file_exists = await run_in_chat_io_executor(os.path.exists, chat_file)

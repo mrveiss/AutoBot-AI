@@ -12,6 +12,7 @@ from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_relative_path
 
 router = APIRouter()
 
@@ -346,20 +347,13 @@ async def save_prompt(
             os.path.join(os.path.dirname(__file__), "..", "resources", "prompts"),
         )
 
-        # Sanitize prompt_id to prevent path traversal
-        # Remove any path traversal attempts
+        # Sanitize prompt_id to prevent path traversal (#1721)
         safe_prompt_id = prompt_id.replace("..", "").replace("~", "").strip("/")
-
-        # Convert underscores to directory separators
         relative_path = safe_prompt_id.replace("_", "/")
 
-        # Build the full path
-        file_path = os.path.join(prompts_dir, relative_path)
-
-        # Ensure the resolved path is within prompts_dir
-        # Issue #358 - avoid blocking
-        resolved_path = await asyncio.to_thread(os.path.abspath, file_path)
-        if not resolved_path.startswith(prompts_dir):
+        try:
+            resolved_path = str(validate_relative_path(relative_path, prompts_dir))
+        except ValueError:
             return {"error": "Invalid prompt_id - path traversal detected"}, 400
 
         # Ensure the directory exists
@@ -374,8 +368,10 @@ async def save_prompt(
         async with file_lock:
             async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:
                 await f.write(content)
-        logger.info("Saved prompt %s to %s", prompt_id, file_path)
-        return _build_prompt_save_response(prompt_id, file_path, content, prompts_dir)
+        logger.info("Saved prompt %s to %s", prompt_id, resolved_path)
+        return _build_prompt_save_response(
+            prompt_id, resolved_path, content, prompts_dir
+        )
     except OSError as e:
         logger.error("Failed to write prompt file %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail="Failed to save prompt file")
@@ -403,16 +399,20 @@ async def revert_prompt(
             os.path.abspath,
             os.path.join(os.path.dirname(__file__), "..", "resources", "prompts"),
         )
-        # Check if there is a default version of this prompt
-        default_file_path = os.path.join(
-            prompts_dir, "default", prompt_id.replace("_", "/")
+        # Check if there is a default version of this prompt (#1721)
+        default_file_path = str(
+            validate_relative_path(
+                os.path.join("default", prompt_id.replace("_", "/")),
+                prompts_dir,
+            )
         )
         if await asyncio.to_thread(os.path.exists, default_file_path):
-            # PERFORMANCE FIX: Convert to async file I/O
             async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
                 default_content = await f.read()
-            # Save the default content to the custom prompt location
-            custom_file_path = os.path.join(prompts_dir, prompt_id.replace("_", "/"))
+            # Save default content to custom prompt location
+            custom_file_path = str(
+                validate_relative_path(prompt_id.replace("_", "/"), prompts_dir)
+            )
             await asyncio.to_thread(
                 os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
             )
