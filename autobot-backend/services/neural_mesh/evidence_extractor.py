@@ -49,6 +49,21 @@ class Evidence:
     relevance: float
 
 
+# Negative-lookbehind anchors that prevent splitting after common abbreviations.
+# Each alternative is a fixed-width lookbehind (Python requires this).
+# Referenced by EvidenceExtractor._split_sentences (#2170).
+_ABBREVS = (
+    r"(?<!Dr\.)"
+    r"(?<!Mr\.)"
+    r"(?<!Ms\.)"
+    r"(?<!Mrs\.)"
+    r"(?<!St\.)"
+    r"(?<!vs\.)"
+    r"(?<!e\.g\.)"
+    r"(?<!i\.e\.)"
+    r"(?<!U\.S\.)"
+)
+
 # =============================================================================
 # Extractor
 # =============================================================================
@@ -127,16 +142,18 @@ class EvidenceExtractor:
     def _split_sentences(self, text: str) -> list[str]:
         """Split text into sentences on terminal punctuation.
 
-        Splits on a period, question mark, or exclamation mark followed
-        by whitespace or end-of-string.
+        Splits on a period, question mark, or exclamation mark followed by
+        whitespace, but NOT after common abbreviations such as Dr., Mr., Ms.,
+        Mrs., St., vs., e.g., i.e., or U.S. (#2170).
 
         Args:
             text: Raw paragraph or chunk content.
 
         Returns:
-            List of sentence strings (may include empty strings).
+            List of sentence strings with leading/trailing whitespace stripped.
         """
-        return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        pattern = _ABBREVS + r"(?<=[.!?])\s+"
+        return [s.strip() for s in re.split(pattern, text) if s.strip()]
 
     async def _score_sentences(
         self, query: str, sentences: list[tuple[str, str]]
