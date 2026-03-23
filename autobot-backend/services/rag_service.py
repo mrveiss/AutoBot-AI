@@ -83,7 +83,11 @@ class RAGService:
             logger.info("Initializing AdvancedRAGOptimizer...")
 
             # Create optimizer instance
-            self.optimizer = AdvancedRAGOptimizer()
+            # Issue #2034: Pass rerank_weights at construction time so
+            # RAGConfig.rerank_weights is honoured instead of defaulting to 0.8/0.2.
+            self.optimizer = AdvancedRAGOptimizer(
+                rerank_weights=self.config.rerank_weights
+            )
 
             # Configure from settings
             self.optimizer.hybrid_weight_semantic = self.config.hybrid_weight_semantic

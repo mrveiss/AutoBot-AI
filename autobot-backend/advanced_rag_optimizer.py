@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from constants.model_constants import model_config
+from knowledge.search_components.reranking import RerankWeights, compute_blended_score
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 from autobot_shared.logging_manager import get_llm_logger
@@ -88,10 +89,17 @@ class AdvancedRAGOptimizer:
 
     MAX_CACHE_ENTRIES = 500  # Hard ceiling to prevent unbounded growth. Issue #1732.
 
-    def __init__(self):
-        """Initialize RAG optimizer with search configuration. Issue #620."""
+    def __init__(self, rerank_weights: Optional[RerankWeights] = None):
+        """Initialize RAG optimizer with search configuration. Issue #620.
+
+        Args:
+            rerank_weights: Blend weights forwarded to the cross-encoder scoring
+                step. Defaults to RerankWeights() (legacy 0.8/0.2 split).
+                Issue #2034: enables RAGConfig.rerank_weights to flow through.
+        """
         self.kb = None
         self.semantic_chunker = None
+        self._rerank_weights: RerankWeights = rerank_weights or RerankWeights()
         self._init_search_config()
         self._init_query_patterns()
         self._init_performance_tracking()
@@ -506,6 +514,8 @@ class AdvancedRAGOptimizer:
 
         Issue #1526: Normalize cross-encoder logits with sigmoid before
         combining with hybrid_score so the final rerank_score stays in 0-1.
+        Issue #2034: Use compute_blended_score() with self._rerank_weights so
+        RAGConfig.rerank_weights is honoured instead of always using 0.8/0.2.
         """
         import math
 
@@ -517,7 +527,11 @@ class AdvancedRAGOptimizer:
         for result, ce_score in zip(results, cross_encoder_scores):
             # Sigmoid normalization: raw logits → 0-1 probability
             normalized_ce = 1.0 / (1.0 + math.exp(-float(ce_score)))
-            result.rerank_score = normalized_ce * 0.8 + result.hybrid_score * 0.2
+            result.rerank_score = compute_blended_score(
+                reranker_score=normalized_ce,
+                vector_score=result.hybrid_score,
+                weights=self._rerank_weights,
+            )
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
