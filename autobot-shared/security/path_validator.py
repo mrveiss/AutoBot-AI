@@ -69,13 +69,12 @@ def validate_path(
         root_resolved = Path(os.path.realpath(root))
         try:
             resolved.relative_to(root_resolved)
-            if must_exist and not resolved.exists():
-                raise ValueError(f"Path does not exist: {resolved}")
-            return resolved
         except ValueError:
-            if must_exist and not resolved.exists():
-                raise
             continue
+        # Path is within this root — check existence if required
+        if must_exist and not resolved.exists():
+            raise ValueError("Path does not exist")
+        return resolved
 
     raise ValueError("Path is outside allowed directories")
 
