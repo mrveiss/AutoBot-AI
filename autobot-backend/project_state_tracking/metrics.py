@@ -28,8 +28,11 @@ async def get_redis_metric(redis_client: Any, key: str, default: int = 0) -> int
         value = await redis_client.get(key)
         return int(value) if value else default
 
-    except Exception as e:
-        logger.debug("Redis metric fetch failed for %s: %s", key, e)
+    except Exception:
+        logger.debug(
+            "Redis metric fetch failed for key: %s",
+            key.split(":")[-1] if key else "unknown",
+        )
         return default
 
 

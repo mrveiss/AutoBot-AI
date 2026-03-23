@@ -167,7 +167,10 @@ class EntityOperationsMixin:
 
             await self._store_entity_in_redis(entity_id, entity)
             logger.info(
-                "Created entity: %s (%s) with ID %s", name, entity_type, entity_id
+                "Created entity: %s (%s) with ID %s",
+                name,
+                entity_type,
+                entity_id[:8] + "...",
             )
             return entity
 

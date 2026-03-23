@@ -226,9 +226,12 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            f"Redis connection pool created (db={config_params['db']})"
-            f"max_connections={config_params['max_connections']}, "
-            f"socket_timeout={config_params['socket_timeout']}s, TLS=enabled"
+            "Redis connection pool created "
+            "(db=%s, max_connections=%s, "
+            "socket_timeout=%ss, TLS=enabled)",
+            config_params["db"],
+            config_params["max_connections"],
+            config_params["socket_timeout"],
         )
 
     def _log_plain_connection_info(self, config_params: dict):
@@ -238,9 +241,12 @@ class RedisConnectionManager:
         Helper for _create_connection_pool (#825).
         """
         logger.info(
-            f"Redis connection pool created (db={config_params['db']})"
-            f"max_connections={config_params['max_connections']}, "
-            f"socket_timeout={config_params['socket_timeout']}s"
+            "Redis connection pool created "
+            "(db=%s, max_connections=%s, "
+            "socket_timeout=%ss)",
+            config_params["db"],
+            config_params["max_connections"],
+            config_params["socket_timeout"],
         )
 
     async def health_check(self) -> bool:

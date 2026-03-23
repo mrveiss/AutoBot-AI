@@ -373,9 +373,9 @@ class SeqAnalyticsSetup:
         print(f"   📈 Dashboards created: {len(dashboards)}")
         print(f"   🚨 Alerts created: {len(alerts)}")
         print(f"   🧪 Test logs sent: {test_logs_sent}")
-        print(f"\n🌐 Access Seq at: {self.seq_url}")
-        print(f"   Username: {self.username}")
-        print("   Password: ********")
+        print(f"\nAccess Seq at: {self.seq_url}")  # noqa: T201
+        print(f"   Username: {self.username}")  # noqa: T201
+        print("   Password: [REDACTED]")  # noqa: T201
 
         return True
 

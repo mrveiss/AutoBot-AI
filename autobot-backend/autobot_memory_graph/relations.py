@@ -176,10 +176,10 @@ class RelationOperationsMixin:
             await self._store_outgoing_relation(from_entity_id, relation)
             await self._store_incoming_relation(to_entity_id, reverse_rel)
             logger.debug(
-                "Created relation by ID: %s --[%s]--> %s",
-                from_entity_id[:8],
+                "Created relation by ID: [%s] --[%s]--> [%s]",
+                from_entity_id[:8] if from_entity_id else "?",
                 relation_type,
-                to_entity_id[:8],
+                to_entity_id[:8] if to_entity_id else "?",
             )
             return True
         except Exception as e:
