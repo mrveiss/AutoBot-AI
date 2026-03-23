@@ -103,6 +103,19 @@ class HierarchicalSummarizer(BaseCognifier):
 
         context.summaries = all_summaries
         logger.info("Generated %s summaries", len(all_summaries))
+
+        # RAPTOR tree building (#2051)
+        if getattr(context, "embeddings", None) is not None:
+            try:
+                context.raptor_tree = await self.build_raptor_tree(
+                    chunks, context.embeddings
+                )
+                logger.info(
+                    "Built RAPTOR tree with %d levels", len(context.raptor_tree)
+                )
+            except Exception as exc:
+                logger.warning("RAPTOR tree building failed (non-fatal): %s", exc)
+
         return context
 
     def _group_into_sections(
@@ -361,7 +374,7 @@ class HierarchicalSummarizer(BaseCognifier):
                 entity_map=entity_map,
                 document_id=document_id,
                 level=SummaryLevel.SECTION,
-                source_ids=[],
+                source_chunk_ids=[],
             )
             if summary:
                 summaries.append(summary)
