@@ -74,10 +74,15 @@ class MeshSeeder(BaseLoader):
     # ------------------------------------------------------------------
 
     def _build_node_list(self, chunks: List[Any]) -> List[Dict[str, Any]]:
-        """Map pipeline chunks to lightweight node dicts for edge construction."""
+        """Map pipeline chunks to lightweight node dicts for edge construction.
+
+        node["id"] equals node["chunk_id"] — both use the canonical chunk UUID
+        so that entity edges (which carry source_chunk_ids UUIDs) reference the
+        same ID space as structural edges (#2050).
+        """
         return [
             {
-                "id": f"n_{i}",
+                "id": str(getattr(c, "id", f"chunk_{i}")),
                 "chunk_id": str(getattr(c, "id", f"chunk_{i}")),
                 "source_file": getattr(c, "metadata", {}).get("source_file", ""),
                 "chunk_index": getattr(c, "chunk_index", i),
@@ -136,13 +141,18 @@ class MeshSeeder(BaseLoader):
     def _build_entity_edges(
         self, nodes: List[Dict[str, Any]], entities: List[Any]
     ) -> List[_EdgeDict]:
-        """Create SHARED_ENTITY edges between chunk-pairs that mention the same entity."""
+        """Create SHARED_ENTITY edges between chunk-pairs that mention the same entity.
+
+        Uses a node_ids set to restrict edges to chunks present in the current
+        node list, preventing dangling references to unknown IDs (#2050).
+        """
+        node_ids = {n["id"] for n in nodes}
         entity_to_chunks = self._map_entity_to_chunks(entities)
         edges: List[_EdgeDict] = []
         seen: set = set()
         for chunk_ids in entity_to_chunks.values():
-            chunk_list = sorted(chunk_ids)
-            for a, b in combinations(chunk_list, 2):
+            valid = sorted(cid for cid in chunk_ids if cid in node_ids)
+            for a, b in combinations(valid, 2):
                 key: Tuple[str, str] = (a, b)
                 if key not in seen:
                     seen.add(key)
