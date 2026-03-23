@@ -17,9 +17,11 @@ export const statusIcons = {
   active: 'fas fa-circle',
 
   warning: 'fas fa-exclamation-triangle',
+  degraded: 'fas fa-exclamation-triangle',
   pending: 'fas fa-clock',
 
   error: 'fas fa-times-circle',
+  unhealthy: 'fas fa-times-circle',
   failed: 'fas fa-times-circle',
   offline: 'fas fa-times-circle',
   disconnected: 'fas fa-plug',
@@ -200,9 +202,11 @@ export function getStatusColorClass(status: string): string {
     online: 'text-green-600',
 
     warning: 'text-yellow-600',
+    degraded: 'text-yellow-600',
     pending: 'text-yellow-600',
 
     error: 'text-red-600',
+    unhealthy: 'text-red-600',
     failed: 'text-red-600',
     offline: 'text-red-600',
 
@@ -221,6 +225,45 @@ export function getStatusIconWithColor(status: string): string {
   const icon = getStatusIcon(status)
   const color = getStatusColorClass(status)
   return `${icon} ${color}`
+}
+
+/**
+ * Normalize a backend health status string to a frontend display status.
+ *
+ * Backend health endpoint returns: 'healthy', 'unhealthy', 'degraded'.
+ * Frontend display layer uses: 'healthy', 'warning', 'error'.
+ * Legacy/VM values ('online', 'offline') are also handled.
+ *
+ * Issue #2076: Centralised mapping for all service status consumers.
+ */
+export function normalizeServiceStatus(
+  backendStatus: string,
+): 'healthy' | 'warning' | 'error' {
+  const normalized = backendStatus.toLowerCase()
+  switch (normalized) {
+    case 'healthy':
+    case 'online':
+    case 'up':
+    case 'running':
+    case 'available':
+    case 'connected':
+      return 'healthy'
+    case 'degraded':
+    case 'warning':
+    case 'pending':
+      return 'warning'
+    case 'unhealthy':
+    case 'error':
+    case 'offline':
+    case 'down':
+    case 'unavailable':
+    case 'not_configured':
+    case 'not_initialized':
+    case 'import_error':
+      return 'error'
+    default:
+      return 'error'
+  }
 }
 
 export type StatusType = keyof typeof statusIcons

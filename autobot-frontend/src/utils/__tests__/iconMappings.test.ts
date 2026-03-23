@@ -15,6 +15,7 @@ import {
   getFileIconByMimeType,
   getStatusColorClass,
   getStatusIconWithColor,
+  normalizeServiceStatus,
   type StatusType,
   type FileType,
   type DocumentType,
@@ -83,6 +84,49 @@ describe('iconMappings utility', () => {
 
   // Issue #156 Fix: Removed tests for non-existent functions (getConnectionIcon, getActionIcon, getIcon, iconMappings object)
   // The current API only exports: getFileIcon, getStatusIcon, getPlatformIcon, getDocumentTypeIcon,
-  // getFileIconByMimeType, getStatusColorClass, getStatusIconWithColor
+  // getFileIconByMimeType, getStatusColorClass, getStatusIconWithColor, normalizeServiceStatus
   // Tests for these additional functions should be added as needed
+
+  // ========================================
+  // normalizeServiceStatus() Tests (#2076)
+  // ========================================
+
+  describe('normalizeServiceStatus', () => {
+    it('should map backend healthy values to healthy', () => {
+      expect(normalizeServiceStatus('healthy')).toBe('healthy')
+      expect(normalizeServiceStatus('online')).toBe('healthy')
+      expect(normalizeServiceStatus('up')).toBe('healthy')
+      expect(normalizeServiceStatus('running')).toBe('healthy')
+      expect(normalizeServiceStatus('available')).toBe('healthy')
+      expect(normalizeServiceStatus('connected')).toBe('healthy')
+    })
+
+    it('should map backend degraded values to warning', () => {
+      expect(normalizeServiceStatus('degraded')).toBe('warning')
+      expect(normalizeServiceStatus('warning')).toBe('warning')
+      expect(normalizeServiceStatus('pending')).toBe('warning')
+    })
+
+    it('should map backend unhealthy values to error', () => {
+      expect(normalizeServiceStatus('unhealthy')).toBe('error')
+      expect(normalizeServiceStatus('error')).toBe('error')
+      expect(normalizeServiceStatus('offline')).toBe('error')
+      expect(normalizeServiceStatus('down')).toBe('error')
+      expect(normalizeServiceStatus('unavailable')).toBe('error')
+      expect(normalizeServiceStatus('not_configured')).toBe('error')
+      expect(normalizeServiceStatus('not_initialized')).toBe('error')
+      expect(normalizeServiceStatus('import_error')).toBe('error')
+    })
+
+    it('should handle case-insensitive input', () => {
+      expect(normalizeServiceStatus('HEALTHY')).toBe('healthy')
+      expect(normalizeServiceStatus('Degraded')).toBe('warning')
+      expect(normalizeServiceStatus('UNHEALTHY')).toBe('error')
+    })
+
+    it('should return error for unknown status values', () => {
+      expect(normalizeServiceStatus('unknown-value')).toBe('error')
+      expect(normalizeServiceStatus('')).toBe('error')
+    })
+  })
 })

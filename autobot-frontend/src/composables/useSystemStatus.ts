@@ -119,10 +119,41 @@ const logger = createLogger('useSystemStatus')
 // Helper: map a raw status string to ServiceHealthStatus
 // ---------------------------------------------------------------------------
 
+/**
+ * Map any raw backend/VM status string to a frontend display status.
+ *
+ * Backend health endpoint sends: 'healthy', 'unhealthy', 'degraded'.
+ * VM status endpoint may send: 'online', 'offline', 'warning'.
+ * Frontend displays: 'healthy' | 'warning' | 'error'.
+ *
+ * Issue #2076: Added 'healthy', 'degraded', 'unhealthy' mappings.
+ */
 function toHealthStatus(raw: string): ServiceHealthStatus {
-  if (raw === 'online') return 'healthy'
-  if (raw === 'warning') return 'warning'
-  return 'error'
+  const normalized = raw.toLowerCase()
+  switch (normalized) {
+    case 'healthy':
+    case 'online':
+    case 'up':
+    case 'running':
+    case 'available':
+    case 'connected':
+      return 'healthy'
+    case 'degraded':
+    case 'warning':
+    case 'pending':
+      return 'warning'
+    case 'unhealthy':
+    case 'error':
+    case 'offline':
+    case 'down':
+    case 'unavailable':
+    case 'not_configured':
+    case 'not_initialized':
+    case 'import_error':
+      return 'error'
+    default:
+      return 'error'
+  }
 }
 
 // ---------------------------------------------------------------------------
