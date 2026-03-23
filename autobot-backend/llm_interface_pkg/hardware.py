@@ -121,7 +121,7 @@ class HardwareDetector:
 
     def _select_openvino_npu(self, detected_hardware: Set[str]) -> Optional[str]:
         """Select OpenVINO NPU if available."""
-        return "openvino_npu" if "openvino" in detected_hardware else None
+        return "openvino_npu" if "openvino_npu" in detected_hardware else None
 
     def _select_openvino_variant(self, detected_hardware: Set[str]) -> Optional[str]:
         """Select OpenVINO variant."""
