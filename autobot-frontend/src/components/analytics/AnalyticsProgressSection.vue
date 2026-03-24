@@ -2,9 +2,10 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 
-<!-- Issue #1469: Extracted from CodebaseAnalytics.vue — Progress tracking sections -->
+<!-- Issue #1579: Extracted from CodebaseAnalytics.vue — Progress indicators -->
 <template>
-  <!-- Unified Operation Progress - Issues #1190, #1365, #1366 -->
+  <!-- Unified Operation Progress — Issues #1190, #1365, #1366 -->
+  <!-- Single status bar covering indexing and code-smell operations; shows all available detail -->
   <div
     v-if="analyzing || analyzingCodeSmells || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)')"
     class="progress-container"
@@ -26,9 +27,7 @@
         "></i>
         {{ analyzing ? $t('analytics.codebase.progress.indexingInProgress') : analyzingCodeSmells ? codeSmellsProgressTitle : $t('analytics.codebase.progress.indexingStatus') }}
       </div>
-      <div v-if="currentJobId && analyzing" class="job-id">
-        {{ $t('analytics.codebase.progress.job') }}: {{ currentJobId.substring(0, 8) }}...
-      </div>
+      <div v-if="currentJobId && analyzing" class="job-id">{{ $t('analytics.codebase.progress.job') }}: {{ currentJobId.substring(0, 8) }}...</div>
     </div>
 
     <!-- Phase Progress (active indexing only) -->
@@ -62,9 +61,7 @@
     <div v-if="analyzing && jobBatches && jobBatches.total_batches > 0" class="batch-progress">
       <div class="batch-header">
         <span class="batch-label">{{ $t('analytics.codebase.progress.batchProgress') }}:</span>
-        <span class="batch-count">
-          {{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}
-        </span>
+        <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
       </div>
       <div class="batch-bar">
         <div
@@ -100,25 +97,22 @@
   </div>
 
   <!-- Scan Runner Progress (#1418) -->
-  <div
-    v-if="scanRunnerRunning || scanRunnerResults.length > 0"
-    class="scan-runner-progress"
-  >
+  <div v-if="scanRunner.running.value || scanRunner.results.value.length > 0" class="scan-runner-progress">
     <div class="scan-runner-header">
       <span class="scan-runner-title">
-        <i :class="scanRunnerRunning ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle'"></i>
+        <i :class="scanRunner.running.value ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle'"></i>
         {{ $t('analytics.codebase.scanRunner.title') }}
       </span>
       <span class="scan-runner-count">
-        {{ scanRunnerCompletedCount }} / {{ scanRunnerTotalCount }}
+        {{ scanRunner.completedCount.value }} / {{ scanRunner.totalCount.value }}
       </span>
     </div>
     <div class="mini-progress">
-      <div class="mini-progress-bar" :style="{ width: scanRunnerProgress + '%' }"></div>
+      <div class="mini-progress-bar" :style="{ width: scanRunner.progress.value + '%' }"></div>
     </div>
     <div class="scan-runner-items">
       <div
-        v-for="result in scanRunnerResults"
+        v-for="result in scanRunner.results.value"
         :key="result.id"
         class="scan-runner-item"
         :class="'scan-' + result.status"
@@ -142,6 +136,16 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
+/**
+ * Analytics Progress Section Component
+ *
+ * Displays unified operation progress (indexing + code smells) and scan
+ * runner progress for the codebase analytics dashboard.
+ *
+ * Issue #1579: Extracted from CodebaseAnalytics.vue
+ */
+
+import type { ScanRunnerReturn } from '@/composables/useAnalyticsScanRunner'
 
 interface JobPhase {
   id: string
@@ -166,31 +170,24 @@ interface JobStatsData {
   items_stored: number
 }
 
-interface ScanRunnerResult {
-  id: string
-  label: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-  durationMs?: number | null
-  error?: string
-}
-
 defineProps<{
   analyzing: boolean
   analyzingCodeSmells: boolean
-  progressPercent: number
   progressStatus: string
+  progressPercent: number
   currentJobId: string | null
   jobPhases: JobPhasesData | null
   jobBatches: JobBatchesData | null
   jobStats: JobStatsData | null
+  scanRunner: ScanRunnerReturn
   codeSmellsProgressTitle: string
-  scanRunnerRunning: boolean
-  scanRunnerResults: ScanRunnerResult[]
-  scanRunnerCompletedCount: number
-  scanRunnerTotalCount: number
-  scanRunnerProgress: number
 }>()
 
+defineEmits<{
+  stop: []
+}>()
+
+/** Get icon class for a job phase based on its status. */
 function getPhaseIcon(status: string): string {
   switch (status) {
     case 'completed':
@@ -213,7 +210,7 @@ function getPhaseIcon(status: string): string {
   border: 1px solid var(--border-default);
 }
 
-/* Issue #1190: Idle state */
+/* Issue #1190: Idle state — lighter styling when showing last-known status */
 .progress-container--idle {
   opacity: 0.85;
   border-color: var(--border-subtle, var(--border-default));
@@ -406,26 +403,22 @@ function getPhaseIcon(status: string): string {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
 }
-
 .scan-runner-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-2);
 }
-
 .scan-runner-title {
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
 }
-
 .scan-runner-count {
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
-
 .scan-runner-progress .mini-progress {
   width: 100%;
   height: 4px;
@@ -434,19 +427,16 @@ function getPhaseIcon(status: string): string {
   overflow: hidden;
   margin-bottom: var(--spacing-2);
 }
-
 .scan-runner-progress .mini-progress-bar {
   height: 100%;
   background: var(--color-purple);
   transition: width 0.3s ease;
 }
-
 .scan-runner-items {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-1);
 }
-
 .scan-runner-item {
   display: flex;
   align-items: center;
@@ -456,25 +446,21 @@ function getPhaseIcon(status: string): string {
   border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
 }
-
 .scan-runner-item.scan-completed { color: var(--color-success); }
 .scan-runner-item.scan-failed { color: var(--color-error); }
 .scan-runner-item.scan-running { color: var(--color-info); }
 .scan-runner-item.scan-skipped { color: var(--text-tertiary); }
 .scan-runner-item.scan-pending { color: var(--text-secondary); }
-
 .scan-label {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .scan-duration {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
 }
-
 .scan-error {
   color: var(--color-error);
   font-size: var(--text-xs);

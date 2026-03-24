@@ -5,6 +5,25 @@
       <span v-if="problems && problems.length > 0" class="total-count">
         ({{ problems.length.toLocaleString() }} {{ $t('analytics.problems.total') }})
       </span>
+      <!-- Issue #609: Section Export Buttons -->
+      <div class="section-export-buttons">
+        <button
+          @click="emit('export', 'md')"
+          class="export-btn"
+          :disabled="!problems || problems.length === 0"
+          :title="$t('analytics.problems.exportMarkdown')"
+        >
+          <i class="fas fa-file-alt"></i> MD
+        </button>
+        <button
+          @click="emit('export', 'json')"
+          class="export-btn"
+          :disabled="!problems || problems.length === 0"
+          :title="$t('analytics.problems.exportJson')"
+        >
+          <i class="fas fa-file-code"></i> JSON
+        </button>
+      </div>
     </h3>
     <div v-if="problems && problems.length > 0" class="section-content">
       <!-- Severity Summary Cards -->
@@ -68,7 +87,7 @@
                     {{ problem.severity || 'unknown' }}
                   </span>
                 </div>
-                <div class="item-description">{{ problem.description }}</div>
+                <div class="item-description">{{ problem.description || problem.message }}</div>
                 <div class="item-location">{{ problem.file_path }}{{ problem.line_number ? ':' + problem.line_number : '' }}</div>
                 <div v-if="problem.suggestion" class="item-suggestion">{{ problem.suggestion }}</div>
               </div>
@@ -107,11 +126,15 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface Problem {
   severity: string
-  description: string
+  description?: string
+  message?: string
   file_path: string
+  line?: number
   line_number?: number
   suggestion?: string
+  type?: string
   problem_type?: string
+  category?: string
 }
 
 interface Props {
@@ -119,6 +142,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  export: [format: string]
+}>()
 
 const expandedProblemTypes = ref<Record<string, boolean>>({})
 
@@ -139,7 +165,7 @@ const problemsBySeverity = computed(() => {
 const problemsByType = computed(() => {
   const groups: Record<string, { problems: Problem[], severityCounts: Record<string, number> }> = {}
   props.problems.forEach(p => {
-    const type = p.problem_type || 'unknown'
+    const type = p.problem_type || p.type || 'unknown'
     if (!groups[type]) {
       groups[type] = { problems: [], severityCounts: { critical: 0, high: 0, medium: 0, low: 0 } }
     }
@@ -186,6 +212,33 @@ const getItemSeverityClass = (severity: string): string => {
 .total-count {
   font-size: 0.8em;
   color: var(--text-muted);
+}
+
+.section-export-buttons {
+  display: inline-flex;
+  gap: var(--spacing-1-5);
+  margin-left: auto;
+}
+
+.export-btn {
+  background: var(--bg-tertiary-alpha);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-default);
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-200);
+}
+
+.export-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-on-primary);
+}
+
+.export-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .section-content {
