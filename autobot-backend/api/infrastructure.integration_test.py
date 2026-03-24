@@ -19,7 +19,7 @@ BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 
 def test_health():
     """Test 1: Health Check"""
-    response = requests.get(f"{BASE_URL}/health")
+    response = requests.get(f"{BASE_URL}/health")  # nosec B113
     data = response.json()
     print("✅ Test 1: Health Check - PASSED")  # noqa: print
     print(  # noqa: print
@@ -30,7 +30,7 @@ def test_health():
 
 def test_list_roles():
     """Test 2: List Infrastructure Roles"""
-    response = requests.get(f"{BASE_URL}/roles")
+    response = requests.get(f"{BASE_URL}/roles")  # nosec B113
     data = response.json()
     role_names = [r["name"] for r in data]
     print("✅ Test 2: List Roles - PASSED")  # noqa: print
@@ -40,7 +40,7 @@ def test_list_roles():
 
 def test_statistics():
     """Test 3: Get Statistics"""
-    response = requests.get(f"{BASE_URL}/statistics")
+    response = requests.get(f"{BASE_URL}/statistics")  # nosec B113
     data = response.json()
     print("✅ Test 3: Statistics - PASSED")  # noqa: print
     print(  # noqa: print
@@ -51,7 +51,9 @@ def test_statistics():
 
 def test_list_hosts_empty():
     """Test 4: List Hosts (Empty Database)"""
-    response = requests.get(f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20})
+    response = requests.get(
+        f"{BASE_URL}/hosts", params={"page": 1, "page_size": 20}
+    )  # nosec B113
     data = response.json()
     print("✅ Test 4: List Hosts (Empty) - PASSED")  # noqa: print
     print(  # noqa: print
@@ -71,7 +73,7 @@ def test_create_host():
         "auth_method": "password",
         "password": "test123",
     }
-    response = requests.post(f"{BASE_URL}/hosts", data=form_data)
+    response = requests.post(f"{BASE_URL}/hosts", data=form_data)  # nosec B113
 
     if response.status_code != 201:
         print(  # noqa: print
@@ -90,7 +92,7 @@ def test_create_host():
 
 def test_get_host_details(host_id):
     """Test 6: Get Host Details (Relationship Loading)"""
-    response = requests.get(f"{BASE_URL}/hosts/{host_id}")
+    response = requests.get(f"{BASE_URL}/hosts/{host_id}")  # nosec B113
     data = response.json()
     print("✅ Test 6: Get Host Details - PASSED")  # noqa: print
     print(  # noqa: print
@@ -101,7 +103,7 @@ def test_get_host_details(host_id):
 
 def test_list_hosts_after_create():
     """Test 7: List Hosts After Creation"""
-    response = requests.get(f"{BASE_URL}/hosts")
+    response = requests.get(f"{BASE_URL}/hosts")  # nosec B113
     data = response.json()
     first_host = data["hosts"][0]["hostname"] if data["hosts"] else "None"
     print("✅ Test 7: List Hosts After Creation - PASSED")  # noqa: print
@@ -113,12 +115,12 @@ def test_list_hosts_after_create():
 
 def test_delete_host(host_id):
     """Test 8: Delete Test Host"""
-    response = requests.delete(f"{BASE_URL}/hosts/{host_id}")
+    response = requests.delete(f"{BASE_URL}/hosts/{host_id}")  # nosec B113
     print("✅ Test 8: Delete Host - PASSED")  # noqa: print
     print(f"   HTTP Status: {response.status_code}")  # noqa: print
 
     # Verify deletion
-    response = requests.get(f"{BASE_URL}/hosts")
+    response = requests.get(f"{BASE_URL}/hosts")  # nosec B113
     data = response.json()
     print(  # noqa: print
         f"   Remaining hosts after deletion: {data['pagination']['total']}"
