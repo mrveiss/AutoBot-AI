@@ -271,7 +271,7 @@ class TestListAgents:
     def test_happy_path(self, service, agents_dir):
         """Returns all parseable .md files in sorted order."""
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             agents = service.list_agents()
@@ -291,7 +291,7 @@ class TestListAgents:
         bad_file.chmod(0o000)
 
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             svc = SpecializedAgentService(agents_dir=agents_dir)
@@ -306,7 +306,7 @@ class TestListAgents:
         """Non-.md files in the directory are ignored."""
         (agents_dir / "notes.txt").write_text("ignore me", encoding="utf-8")
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             agents = SpecializedAgentService(agents_dir=agents_dir).list_agents()
@@ -315,7 +315,7 @@ class TestListAgents:
     def test_agent_fields_populated(self, service, agents_dir):
         """Each agent dict contains all expected keys."""
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             agents = service.list_agents()
@@ -338,7 +338,7 @@ class TestListAgents:
         """Agent file without frontmatter uses filename stem as name."""
         (agents_dir / "plain-agent.md").write_text(NO_FRONTMATTER_MD, encoding="utf-8")
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             svc = SpecializedAgentService(agents_dir=agents_dir)
@@ -358,7 +358,7 @@ class TestGetAgent:
     def test_existing_agent(self, service, agents_dir):
         """Returns agent dict with system_prompt for valid ID."""
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             agent = service.get_agent("senior-backend-engineer")
@@ -370,7 +370,7 @@ class TestGetAgent:
     def test_system_prompt_included(self, service, agents_dir):
         """get_agent includes full system_prompt (not just excerpt)."""
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             agent = service.get_agent("senior-backend-engineer")
@@ -419,7 +419,7 @@ class TestGetCategoriesSummary:
     def test_delegates_to_list_agents(self, service, agents_dir):
         """When agents=None, delegates to list_agents()."""
         with patch(
-            "services.claude_agent_service._REPO_ROOT",
+            "services.specialized_agent_service._REPO_ROOT",
             agents_dir.parent,
         ):
             result = service.get_categories_summary()
