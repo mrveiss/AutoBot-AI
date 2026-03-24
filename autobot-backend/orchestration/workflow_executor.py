@@ -220,30 +220,40 @@ class WorkflowExecutor:
         execution_context: Dict[str, Any],
         context: Dict[str, Any],
     ) -> None:
-        """
-        Execute a group of steps concurrently using asyncio.gather.
+        """Execute a group of steps concurrently using asyncio.gather.
 
         Steps within a group have no inter-dependencies and are safe to run
-        in parallel. Issue #2172.
-
-        Args:
-            group: Steps to execute in parallel
-            execution_context: Shared execution context
-            context: Workflow context
+        in parallel.  Issue #2172.  Issue #2204: collect results per-step and
+        merge after gather to avoid concurrent mutation of shared sets/lists.
         """
         if len(group) == 1:
             await self._execute_step_with_agent(group[0], execution_context, context)
             return
 
         logger.info(
-            "Executing %d steps in parallel: %s", len(group), [s["id"] for s in group]
+            "Executing %d steps in parallel: %s",
+            len(group),
+            [s["id"] for s in group],
         )
+        # Issue #2204: each step writes to its own isolated context, merged after.
+        isolated_contexts = [
+            {
+                "step_results": {},
+                "agents_involved": set(),
+                "interactions": [],
+            }
+            for _ in group
+        ]
         await asyncio.gather(
             *(
-                self._execute_step_with_agent(step, execution_context, context)
-                for step in group
+                self._execute_step_with_agent(step, iso_ctx, context)
+                for step, iso_ctx in zip(group, isolated_contexts)
             )
         )
+        for iso_ctx in isolated_contexts:
+            execution_context["step_results"].update(iso_ctx["step_results"])
+            execution_context["agents_involved"].update(iso_ctx["agents_involved"])
+            execution_context["interactions"].extend(iso_ctx["interactions"])
 
     async def _check_step_dependencies(
         self,
