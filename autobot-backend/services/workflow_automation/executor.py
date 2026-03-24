@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
+from services.workflow_secret_service import get_workflow_secret_service
 from type_defs.common import Metadata
 
 from .models import (
@@ -32,6 +33,43 @@ if TYPE_CHECKING:
     from .messaging import WorkflowMessenger
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Issue #2153 — secret resolution helpers (module-level for testability)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_command_secrets(command: str, owner_id: str) -> str:
+    """
+    Replace ${secrets.NAME} tokens in *command* with their plaintext values.
+
+    Returns the original string unchanged if no tokens are present or if the
+    WorkflowSecretService is unavailable.
+
+    SECURITY: the returned string must NEVER be logged. (Issue #2153)
+    """
+    try:
+        return get_workflow_secret_service().resolve_secrets(command, owner_id)
+    except Exception as exc:  # pragma: no cover
+        logger.error("Secret resolution failed for workflow command: %s", exc)
+        return command
+
+
+def _redact_result_secrets(result: Metadata, owner_id: str) -> Metadata:
+    """
+    Replace known secret values in execution result strings with ***.
+
+    Operates on the 'stdout' and 'stderr' fields only. (Issue #2153)
+    """
+    try:
+        svc = get_workflow_secret_service()
+        for field in ("stdout", "stderr"):
+            if isinstance(result.get(field), str):
+                result[field] = svc.redact_secrets(result[field], owner_id)
+    except Exception as exc:  # pragma: no cover
+        logger.error("Secret redaction failed for workflow result: %s", exc)
+    return result
 
 
 class WorkflowExecutor:
@@ -346,9 +384,14 @@ class WorkflowExecutor:
         current_step.status = WorkflowStepStatus.EXECUTING
 
         try:
-            result = await self._execute_command(
-                workflow.session_id, current_step.command
-            )
+            # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
+            owner_id = workflow.owner_id or workflow.session_id
+            resolved_command = _resolve_command_secrets(current_step.command, owner_id)
+
+            result = await self._execute_command(workflow.session_id, resolved_command)
+
+            # Issue #2153: Redact any secret values that may appear in output.
+            result = _redact_result_secrets(result, owner_id)
 
             current_step.status = WorkflowStepStatus.COMPLETED
             current_step.execution_result = result
@@ -387,18 +430,22 @@ class WorkflowExecutor:
             await self.process_next_step(workflow, workflows)
 
     async def _execute_command(self, session_id: str, command: str) -> Metadata:
-        """Execute command via terminal session"""
-        # This would integrate with the existing terminal WebSocket system
-        # For now, simulate command execution
-        logger.info("Executing workflow command: %s", command)
+        """Execute command via terminal session.
 
-        # Simulate command execution delay
+        Note: *command* received here has already had ${secrets.NAME} tokens
+        resolved by the caller.  Do NOT log the command — it may contain live
+        credential values. (Issue #2153)
+        """
+        # Integrates with the terminal WebSocket system when wired up.
+        # Simulate execution for now.
+        logger.info("Executing workflow step (session=%s)", session_id)
+
         await asyncio.sleep(1)
 
         return {
-            "command": command,
+            "command": "[redacted]",
             "exit_code": 0,
-            "stdout": f"Simulated output for: {command}",
+            "stdout": "Simulated output",
             "stderr": "",
             "execution_time": 1.0,
         }

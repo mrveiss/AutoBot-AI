@@ -63,6 +63,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "log_forwarding",
     ),
     ("api.secrets", "/secrets", ["secrets"], "secrets"),
+    # Issue #2153: workflow-scoped encrypted credential storage
+    (
+        "api.workflow_secrets",
+        "/workflow-secrets",
+        ["workflow-secrets", "secrets"],
+        "workflow_secrets",
+    ),
     ("api.registry", "/registry", ["registry"], "registry"),
     # AI and embeddings
     ("api.embeddings", "/embeddings", ["embeddings"], "embeddings"),
