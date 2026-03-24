@@ -9,10 +9,11 @@ Issue #1959: Expanded beyond RTX to support all NVIDIA, AMD, and Intel GPUs.
 Contains GPU availability checking and capability detection.
 """
 
+import functools
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from .types import GPUCapabilities
 
@@ -99,15 +100,26 @@ def _has_tensor_cores(gpu_name: str) -> bool:
     return any(family in name_upper for family in _TENSOR_CORE_FAMILIES)
 
 
+@functools.lru_cache(maxsize=1)
+def _detect_vendor() -> Optional[str]:
+    """Detect GPU vendor, caching the result to avoid duplicate subprocess calls.
+
+    Issue #1990: Both check_gpu_availability() and detect_gpu_capabilities()
+    need the vendor — this runs detection once and caches the result.
+    Use _detect_vendor.cache_clear() to reset (e.g. in tests).
+    """
+    if _check_nvidia_gpu():
+        return "nvidia"
+    if _check_amd_gpu():
+        return "amd"
+    if _check_intel_gpu():
+        return "intel"
+    return None
+
+
 def check_gpu_availability() -> bool:
     """Check if any supported GPU is available."""
-    if _check_nvidia_gpu():
-        return True
-    if _check_amd_gpu():
-        return True
-    if _check_intel_gpu():
-        return True
-    return False
+    return _detect_vendor() is not None
 
 
 def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
@@ -117,13 +129,13 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
     if not gpu_available:
         return capabilities
 
-    # Try NVIDIA first (most common for ML workloads)
-    if _check_nvidia_gpu():
+    vendor = _detect_vendor()
+    if vendor == "nvidia":
         capabilities = _detect_nvidia_capabilities(capabilities)
-    elif _check_amd_gpu():
+    elif vendor == "amd":
         capabilities.vendor = "amd"
         capabilities = _detect_amd_capabilities(capabilities)
-    elif _check_intel_gpu():
+    elif vendor == "intel":
         capabilities.vendor = "intel"
         capabilities.name = "Intel GPU (detected via sysfs)"
 
