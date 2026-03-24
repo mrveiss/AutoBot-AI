@@ -9,6 +9,7 @@ Issue #1959: Expanded beyond RTX to support all NVIDIA, AMD, and Intel GPUs.
 Contains GPU availability checking and capability detection.
 """
 
+import functools
 import logging
 import subprocess
 from pathlib import Path
@@ -17,10 +18,6 @@ from typing import Any, Dict, Optional
 from .types import GPUCapabilities
 
 logger = logging.getLogger(__name__)
-
-# Module-level cache for detected GPU vendor (#1990)
-_cached_vendor: Optional[str] = None
-_vendor_detected: bool = False
 
 # NVIDIA GPU families known to have tensor cores
 _TENSOR_CORE_FAMILIES = {
@@ -103,27 +100,21 @@ def _has_tensor_cores(gpu_name: str) -> bool:
     return any(family in name_upper for family in _TENSOR_CORE_FAMILIES)
 
 
+@functools.lru_cache(maxsize=1)
 def _detect_vendor() -> Optional[str]:
     """Detect GPU vendor, caching the result to avoid duplicate subprocess calls.
 
     Issue #1990: Both check_gpu_availability() and detect_gpu_capabilities()
     need the vendor — this runs detection once and caches the result.
+    Use _detect_vendor.cache_clear() to reset (e.g. in tests).
     """
-    global _cached_vendor, _vendor_detected
-    if _vendor_detected:
-        return _cached_vendor
-
     if _check_nvidia_gpu():
-        _cached_vendor = "nvidia"
-    elif _check_amd_gpu():
-        _cached_vendor = "amd"
-    elif _check_intel_gpu():
-        _cached_vendor = "intel"
-    else:
-        _cached_vendor = None
-
-    _vendor_detected = True
-    return _cached_vendor
+        return "nvidia"
+    if _check_amd_gpu():
+        return "amd"
+    if _check_intel_gpu():
+        return "intel"
+    return None
 
 
 def check_gpu_availability() -> bool:
