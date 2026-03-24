@@ -591,39 +591,7 @@ const {
 })
 
 // =============================================
-// Composable 4: Analytics Debug (#2230)
-// =============================================
-const {
-  testNpuConnection,
-  testAllEndpoints,
-  testDataState,
-  resetState,
-  getSeverityClass,
-  truncateValue,
-  getRiskClass,
-  formatFactorName,
-  getGradeClass,
-  formatTimestamp,
-  getScoreClass,
-  getPriorityClass,
-} = useAnalyticsDebug({
-  rootPath,
-  analyzing,
-  progressStatus,
-  currentJobId: ref(null),
-  currentJobStatus: ref(null),
-  progressPercent,
-  codebaseStats,
-  problemsReport,
-  declarationAnalysis,
-  duplicateAnalysis,
-  stopJobPolling: () => {},
-  t,
-  notify,
-})
-
-// =============================================
-// Composable 5: Dashboard Loaders (pre-existing)
+// Composable 4: Dashboard Loaders (pre-existing)
 // =============================================
 const {
   systemOverview,
@@ -648,7 +616,8 @@ const {
 })
 
 // =============================================
-// Composable 6: Indexing Job (pre-existing)
+// Composable 5: Indexing Job (pre-existing)
+// Initialized before useAnalyticsDebug so real refs are available (#2259)
 // =============================================
 const {
   currentJobId,
@@ -676,8 +645,41 @@ const {
   hardcodeAnalysis,
   chartData,
   showKnowledgeBaseOptIn,
-  onIndexComplete: () => runAllAnalysisScans(),
+  onIndexComplete: () => runAllAnalysisScans(codeIntelFullScans()),
   storageKeyPath: STORAGE_KEY_PATH,
+})
+
+// =============================================
+// Composable 6: Analytics Debug (#2230)
+// Initialized after useIndexingJob so it receives real refs (#2259)
+// =============================================
+const {
+  testNpuConnection,
+  testAllEndpoints,
+  testDataState,
+  resetState,
+  getSeverityClass,
+  truncateValue,
+  getRiskClass,
+  formatFactorName,
+  getGradeClass,
+  formatTimestamp,
+  getScoreClass,
+  getPriorityClass,
+} = useAnalyticsDebug({
+  rootPath,
+  analyzing,
+  progressStatus,
+  currentJobId,
+  currentJobStatus,
+  progressPercent,
+  codebaseStats,
+  problemsReport,
+  declarationAnalysis,
+  duplicateAnalysis,
+  stopJobPolling,
+  t,
+  notify,
 })
 
 // =============================================
@@ -709,6 +711,29 @@ const { exportReport, exportSection } = useCodebaseExport({
 // =============================================
 // Orchestration: Event Handlers + Lifecycle
 // =============================================
+
+// #2258: Bridge code-intel scans into the data-fetcher scan orchestrator.
+// loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
+// uses full POST-based triggers after indexing completes.
+const codeIntelExtraScans = () => [
+  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
+  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
+  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadCachedBugPrediction() },
+  { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadCachedSecurityScore() },
+  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
+]
+
+const codeIntelFullScans = () => [
+  { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
+  { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
+  { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadBugPrediction() },
+  { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadSecurityScore() },
+  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: () => loadPerformanceScore() },
+  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: () => loadRedisHealth() },
+  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
+  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
+  { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
+]
 
 // Issue #208: Pattern Analysis component ref
 interface PatternAnalysisComponent {
@@ -842,7 +867,7 @@ onMounted(async () => {
   }
 
   await checkCurrentIndexingJob()
-  loadCachedAnalyticsData()
+  loadCachedAnalyticsData(codeIntelExtraScans())
   loadSources()
 })
 
