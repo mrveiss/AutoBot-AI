@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import Optional
 
 from api.security import create_audit_log
+from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.schemas import TokenRequest, TokenResponse, UserCreate, UserResponse
 from services.auth import auth_service, get_current_user, get_slm_db, require_admin
@@ -28,11 +29,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _get_client_ip(http_request: Request) -> Optional[str]:
-    """Extract client IP, respecting X-Forwarded-For for load-balanced deployments."""
+    """Extract the real client IP from the request.
+
+    X-Forwarded-For is only trusted when the direct TCP peer is a known
+    reverse proxy (Issue #2239).  An attacker connecting directly cannot
+    spoof their IP via that header.
+    """
+    direct_ip = http_request.client.host if http_request.client else None
     forwarded_for = http_request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return http_request.client.host if http_request.client else None
+    if forwarded_for and direct_ip in settings.trusted_proxies:
+        candidate = forwarded_for.split(",")[0].strip()
+        if candidate:
+            return candidate
+    return direct_ip
 
 
 def _create_mfa_challenge(user: User) -> dict:
