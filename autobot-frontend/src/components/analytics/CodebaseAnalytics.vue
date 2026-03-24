@@ -714,7 +714,7 @@ const { exportReport, exportSection } = useCodebaseExport({
 
 // #2258: Bridge code-intel scans into the data-fetcher scan orchestrator.
 // loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
-// uses full POST-based triggers after indexing completes.
+// uses full re-fetch triggers after indexing completes.
 const codeIntelExtraScans = () => [
   { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
   { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
