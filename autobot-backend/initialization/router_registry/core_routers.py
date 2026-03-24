@@ -66,6 +66,7 @@ from api.vnc_proxy import router as vnc_proxy_router
 from api.voice import router as voice_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
+from api.workflow_permissions import router as workflow_permissions_router  # #2152
 from plugin_manager import router as plugin_manager_router
 from services.knowledge_sync_service import router as knowledge_sync_router
 
@@ -274,6 +275,12 @@ def _get_agent_routers() -> list:
     return [
         (agent_router, "/agent", ["agent"], "agent"),
         (approval_gates_router, "", ["approval-gates"], "approval_gates"),
+        (
+            workflow_permissions_router,
+            "",
+            ["workflow-permissions"],
+            "workflow_permissions",
+        ),  # #2152
         (config_revisions_router, "", ["config-revisions"], "config_revisions"),
         (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
         (

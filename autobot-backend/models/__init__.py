@@ -46,6 +46,10 @@ from models.session_collaboration import SessionCollaboration
 # Task delegation model (#1753)
 from models.task_delegation import TaskDelegation
 
+# Workflow RBAC models (#2152)
+from models.workflow_audit import WorkflowAuditLog
+from models.workflow_permission import WorkflowPermission
+
 __all__ = [
     # Activity models (referenced by User model)
     "TerminalActivityModel",
@@ -75,4 +79,7 @@ __all__ = [
     "ProcessRun",
     "TaskDecomposition",
     "AgentSession",
+    # Workflow RBAC models (#2152)
+    "WorkflowPermission",
+    "WorkflowAuditLog",
 ]
