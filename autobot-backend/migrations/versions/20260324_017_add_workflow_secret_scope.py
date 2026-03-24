@@ -8,8 +8,8 @@ can be scoped to a specific workflow in addition to user/session/shared/group/
 organization scopes.  Also updates the ``scope`` column comment to document the
 new ``workflow`` scope value.
 
-Revision ID: 20260324_015
-Revises: 20260323_014
+Revision ID: 20260324_017
+Revises: 20260324_016
 Issue #2153 — Secret management for workflow credentials.
 """
 
@@ -18,8 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260324_015"
-down_revision: Union[str, None] = "20260323_014"
+revision: str = "20260324_017"
+down_revision: Union[str, None] = "20260324_016"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

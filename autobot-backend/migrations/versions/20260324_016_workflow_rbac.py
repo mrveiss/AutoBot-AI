@@ -4,16 +4,16 @@
 """
 Add workflow_permissions and workflow_audit_log tables (#2152).
 
-Revision ID: 20260324_015
-Revises: 20260323_014
+Revision ID: 20260324_016
+Revises: 20260324_015
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-revision = "20260324_015"
-down_revision = "20260323_014"
+revision = "20260324_016"
+down_revision = "20260324_015"
 branch_labels = None
 depends_on = None
 
