@@ -137,6 +137,21 @@ def is_vnc_running() -> bool:
 
 def start_vnc_server() -> Dict[str, str]:
     """Start VNC server on display :1 with full XFCE desktop"""
+    # Pre-check: VncAuth requires ~/.vnc/passwd to exist
+    vnc_passwd = Path.home() / ".vnc" / "passwd"
+    if not vnc_passwd.exists():
+        logger.error(
+            "VNC passwd file not found at %s; run vncpasswd before starting VNC server",
+            vnc_passwd,
+        )
+        return {
+            "status": "error",
+            "message": (
+                f"VNC passwd file not found at {vnc_passwd}. "
+                "Run `vncpasswd` to create it before starting the VNC server."
+            ),
+        }
+
     try:
         # Start VNC server
         result = subprocess.run(  # nosec B607
