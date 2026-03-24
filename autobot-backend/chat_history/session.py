@@ -294,40 +294,42 @@ class SessionMixin:
         """
         Load a specific chat session with Redis cache-first strategy.
 
+        Raises:
+            PermissionError: If access to the session file is denied.
+            ValueError: If the session data is corrupted or cannot be decoded.
+
+        Issue #1906: Propagate specific exceptions instead of silently returning [].
+
         Args:
             session_id: The session identifier
 
         Returns:
-            List of messages in the session
+            List of messages in the session, or [] if the session does not exist.
         """
-        try:
-            self._sanitize_session_id(session_id)
+        self._sanitize_session_id(session_id)
 
-            # Try Redis cache first (Issue #315 - uses helper)
-            cached_messages = self._try_get_from_cache(session_id)
-            if cached_messages is not None:
-                return cached_messages
+        # Try Redis cache first (Issue #315 - uses helper)
+        cached_messages = self._try_get_from_cache(session_id)
+        if cached_messages is not None:
+            return cached_messages
 
-            logger.debug("Cache MISS for session %s", session_id)
+        logger.debug("Cache MISS for session %s", session_id)
 
-            # Load from file (Issue #620 - uses helper)
-            chat_data = await self._load_session_from_file(session_id)
-            if chat_data is None:
-                return []
-
-            # Process messages (Issue #620 - uses helper)
-            cleaned_messages = await self._process_loaded_messages(
-                session_id, chat_data
-            )
-
-            # Warm up Redis cache with cleaned data
-            await self._warm_cache_safe(session_id, chat_data)
-
-            return cleaned_messages
-
-        except Exception as e:
-            logger.error("Error loading chat session %s: %s", session_id, e)
+        # Load from file (Issue #620 - uses helper).
+        # FileNotFoundError and PermissionError propagate to caller.
+        # ValueError (corrupted data) propagates to caller.
+        chat_data = await self._load_session_from_file(session_id)
+        if chat_data is None:
+            # Session file not found — not an error, just an empty result.
             return []
+
+        # Process messages (Issue #620 - uses helper)
+        cleaned_messages = await self._process_loaded_messages(session_id, chat_data)
+
+        # Warm up Redis cache with cleaned data
+        await self._warm_cache_safe(session_id, chat_data)
+
+        return cleaned_messages
 
     async def _warm_cache_safe(
         self, session_id: str, chat_data: Dict[str, Any]

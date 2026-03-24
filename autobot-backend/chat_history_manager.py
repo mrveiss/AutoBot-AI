@@ -319,26 +319,36 @@ class ChatHistoryManager:
             return []
 
     def load_session(self, session_id: str) -> List[Dict[str, Any]]:
-        """Loads a specific chat session."""
-        try:
-            chats_directory = self._get_chats_directory()
-            chat_file = f"{chats_directory}/chat_{session_id}.json"
+        """
+        Load a specific chat session.
 
-            if not os.path.exists(chat_file):
-                logging.warning(f"Chat session {session_id} not found")
-                return []
+        Raises:
+            PermissionError: If access to the session file is denied.
+            ValueError: If the session data is corrupted or cannot be decoded.
 
-            with open(chat_file, "r", encoding="utf-8") as f:
-                file_content = f.read()
+        Issue #1906: Propagate specific exceptions instead of silently returning [].
 
-            # Decrypt data if encryption is enabled
-            chat_data = self._decrypt_data(file_content)
+        Args:
+            session_id: The session identifier.
 
-            return chat_data.get("messages", [])
+        Returns:
+            List of messages, or [] if the session file does not exist.
+        """
+        chats_directory = self._get_chats_directory()
+        chat_file = f"{chats_directory}/chat_{session_id}.json"
 
-        except Exception as e:
-            logging.error(f"Error loading chat session {session_id}: {str(e)}")
+        if not os.path.exists(chat_file):
+            logging.warning("Chat session %s not found", session_id)
             return []
+
+        # PermissionError propagates to caller — access denied is a real problem.
+        with open(chat_file, "r", encoding="utf-8") as f:
+            file_content = f.read()
+
+        # ValueError from _decrypt_data propagates to caller — corrupted data
+        # should not be silently swallowed.
+        chat_data = self._decrypt_data(file_content)
+        return chat_data.get("messages", [])
 
     def _load_existing_chat_data(
         self, chat_file: str, session_id: str
