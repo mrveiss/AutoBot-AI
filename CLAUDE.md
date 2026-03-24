@@ -211,7 +211,7 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 
 **Pre-commit & Linting:**
 
-- Maximum line length: 100 characters (enforced by flake8/ruff)
+- Maximum line length: 120 characters (enforced by flake8/ruff)
 - After ANY commit attempt, verify changes were actually committed:
   ```bash
   git log -1 --stat
