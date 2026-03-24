@@ -5712,7 +5712,7 @@ class TestBatch34ExecuteWorkflow:
         assert first_logic_line != "try:", "execute_workflow still has outer try block"
 
         # Should not have outer "except Exception as e:" after main return
-        # The nested try-catch for lightweight orchestrator is OK
+        # The nested try-catch for complex workflow delegation is OK (Issue #2181)
         # Check there's no except after the main workflow return
         main_return_idx = -1
         for i, line in enumerate(lines):
@@ -5734,167 +5734,224 @@ class TestBatch34ExecuteWorkflow:
                 ), "execute_workflow still has outer except block"
 
     def test_execute_workflow_nested_try_catch_preserved(self):
-        """Verify execute_workflow preserves nested try-catch for lightweight orchestrator"""
+        """Verify execute_workflow preserves try-catch for complex workflow routing.
+
+        Issue #2181: LightweightOrchestrator removed; complex path is now a direct
+        try/except around _execute_complex_workflow with logger.error on failure.
+        """
         import inspect
 
         from api.workflow import execute_workflow
 
         source = inspect.getsource(execute_workflow)
 
-        # Should have nested try-catch for lightweight orchestrator routing
+        # Should use _try_simple_response (Issue #2181: consolidated from LightweightOrchestrator)
         assert (
-            "# TEMPORARY FIX: Use lightweight orchestrator" in source
-        ), "execute_workflow missing lightweight orchestrator comment"
-        assert (
-            "result = await lightweight_orchestrator.route_request" in source
-        ), "execute_workflow missing lightweight orchestrator routing"
+            "_try_simple_response" in source
+        ), "execute_workflow missing _try_simple_response call"
 
-        # Should have nested except with logging
+        # Should have try-catch for complex workflow delegation
         lines = source.split("\n")
         found_nested_except = False
         found_logging = False
 
         for i, line in enumerate(lines):
             if "except Exception as e:" in line:
-                # Check if this is the nested except (has logging)
                 context = "".join(lines[i : i + 5])
-                if "import logging" in context or "logger.error" in context:
+                if "logger.error" in context:
                     found_nested_except = True
                     found_logging = True
 
-        assert found_nested_except, "execute_workflow missing nested except block"
-        assert found_logging, "execute_workflow nested except missing logging"
+        assert found_nested_except, "execute_workflow missing except block"
+        assert found_logging, "execute_workflow except missing logger.error"
 
     def test_execute_workflow_preserves_httpexceptions(self):
-        """Verify execute_workflow preserves all HTTPExceptions"""
+        """Verify execute_workflow preserves required HTTPExceptions.
+
+        Issue #2181: LightweightOrchestrator removed. The 'Lightweight orchestrator
+        not available' 422 is gone; the function now raises only:
+        - 500 'Workflow execution failed' (from the complex-workflow try/except)
+        The 422 for the main orchestrator lives in _validate_orchestrator (called by
+        execute_workflow) — inspect.getsource on the endpoint does not include helpers.
+        """
         import inspect
 
-        from api.workflow import execute_workflow
+        from api.workflow import _validate_orchestrator, execute_workflow
 
         source = inspect.getsource(execute_workflow)
+        validator_source = inspect.getsource(_validate_orchestrator)
 
-        # Should have 3 HTTPExceptions
+        # execute_workflow itself raises 1 HTTPException (workflow execution failed)
         httpexception_count = source.count("raise HTTPException")
         assert (
-            httpexception_count == 3
-        ), f"execute_workflow should have 3 HTTPExceptions, found {httpexception_count}"
+            httpexception_count == 1
+        ), f"execute_workflow should have 1 HTTPException, found {httpexception_count}"
 
-        # Verify specific HTTPExceptions
-        assert (
-            "Lightweight orchestrator not available" in source
-        ), "Missing lightweight orchestrator HTTPException"
-        assert (
-            "Main orchestrator not available" in source
-        ), "Missing main orchestrator HTTPException"
         assert (
             "Workflow execution failed" in source
         ), "Missing workflow execution HTTPException"
 
+        # _validate_orchestrator raises the main-orchestrator 422
+        assert (
+            "Main orchestrator not available" in validator_source
+        ), "Missing main orchestrator HTTPException in _validate_orchestrator"
+
     def test_execute_workflow_business_logic_preserved(self):
-        """Verify execute_workflow business logic is intact"""
+        """Verify execute_workflow business logic is intact after Issue #2181 consolidation.
+
+        Issue #2181: LightweightOrchestrator (never set on app.state, always 422) removed.
+        Routing is now: validate main orchestrator -> _try_simple_response -> complex path.
+        """
         import inspect
 
-        from api.workflow import execute_workflow
+        from api.workflow import (
+            _try_simple_response,
+            _validate_orchestrator,
+            execute_workflow,
+        )
 
         source = inspect.getsource(execute_workflow)
+        validator_source = inspect.getsource(_validate_orchestrator)
+        simple_source = inspect.getsource(_try_simple_response)
 
-        # Orchestrator retrieval
+        # Validation calls the consolidated helper
         assert (
-            "lightweight_orchestrator = getattr" in source
-        ), "Missing lightweight orchestrator retrieval"
-        assert "orchestrator = getattr" in source, "Missing main orchestrator retrieval"
+            "_validate_orchestrator(request)" in source
+        ), "Missing _validate_orchestrator call"
 
-        # Validation logic
+        # Main orchestrator retrieval is in _validate_orchestrator
         assert (
-            "if lightweight_orchestrator is None:" in source
-        ), "Missing lightweight orchestrator validation"
+            "orchestrator = getattr" in validator_source
+        ), "Missing main orchestrator retrieval"
         assert (
-            "if orchestrator is None:" in source
+            "if orchestrator is None:" in validator_source
         ), "Missing main orchestrator validation"
 
-        # Routing logic
+        # Simple routing via _try_simple_response
+        assert "_try_simple_response" in source, "Missing _try_simple_response call"
         assert (
-            "result = await lightweight_orchestrator.route_request" in source
-        ), "Missing routing call"
-        assert (
-            'if result.get("bypass_orchestration"):' in source
-        ), "Missing bypass orchestration check"
+            '"type": "lightweight_response"' in simple_source
+        ), "Missing lightweight response type in _try_simple_response"
 
-        # Response types
+        # Complex path delegates to _execute_complex_workflow
         assert (
-            '"type": "lightweight_response"' in source
-        ), "Missing lightweight response type"
-        assert (
-            '"type": "complex_workflow_blocked"' in source
-        ), "Missing blocked workflow type"
-        assert (
-            '"type": "workflow_orchestration"' in source
-        ), "Missing orchestration type"
+            "_execute_complex_workflow" in source
+        ), "Missing _execute_complex_workflow call"
+        assert '"type": "workflow_orchestration"' in inspect.getsource(
+            __import__(
+                "api.workflow", fromlist=["_execute_complex_workflow"]
+            )._execute_complex_workflow
+        ), "Missing orchestration type in _execute_complex_workflow"
 
     def test_execute_workflow_background_task_execution(self):
-        """Verify execute_workflow background task logic is preserved"""
+        """Verify complex workflow background task logic is preserved.
+
+        Issue #2181: Background task execution lives in _execute_complex_workflow,
+        not execute_workflow directly. execute_workflow delegates to it.
+        """
         import inspect
 
-        from api.workflow import execute_workflow
+        from api.workflow import _execute_complex_workflow, execute_workflow
 
         source = inspect.getsource(execute_workflow)
+        complex_source = inspect.getsource(_execute_complex_workflow)
 
-        # Background task setup
-        assert "background_tasks.add_task" in source, "Missing background task addition"
+        # execute_workflow delegates to _execute_complex_workflow
         assert (
-            "execute_workflow_steps" in source
-        ), "Missing execute_workflow_steps reference"
+            "_execute_complex_workflow" in source
+        ), "Missing delegation to complex workflow"
 
-        # Workflow data storage
-        assert "active_workflows[workflow_id]" in source, "Missing workflow storage"
-        assert '"workflow_id": workflow_id' in source, "Missing workflow ID in data"
-        assert '"status": "planned"' in source, "Missing status field"
+        # Background task setup is in _execute_complex_workflow
+        assert (
+            "background_tasks.add_task" in complex_source
+        ), "Missing background task addition"
+
+        # Workflow ID is returned by _execute_complex_workflow
+        assert (
+            '"workflow_id"' in complex_source
+        ), "Missing workflow_id in complex response"
+        assert (
+            '"execution_started": True' in complex_source
+        ), "Missing execution_started field"
 
     def test_execute_workflow_metrics_tracking(self):
-        """Verify execute_workflow metrics tracking is preserved"""
-        import inspect
+        """Verify execute_workflow module-level metrics imports are preserved.
 
-        from api.workflow import execute_workflow
+        Issue #2181: Metrics are module-level imports used by other endpoints.
+        The execute_workflow function itself delegates directly to helpers.
+        """
+        import api.workflow as wf_module
 
-        source = inspect.getsource(execute_workflow)
-
-        # Metrics tracking
-        assert (
-            "workflow_metrics.start_workflow_tracking" in source
-        ), "Missing metrics tracking"
-        assert (
-            "workflow_metrics.record_resource_usage" in source
-        ), "Missing resource tracking"
-        assert (
-            "system_monitor.get_current_metrics()" in source
-        ), "Missing system monitoring"
+        # Module-level metrics objects remain importable
+        assert hasattr(
+            wf_module, "workflow_metrics"
+        ), "workflow_metrics missing from module"
+        assert hasattr(
+            wf_module, "system_monitor"
+        ), "system_monitor missing from module"
+        assert hasattr(
+            wf_module, "prometheus_metrics"
+        ), "prometheus_metrics missing from module"
 
     def test_execute_workflow_response_structure(self):
-        """Verify execute_workflow return structure"""
+        """Verify execute_workflow return structures are preserved.
+
+        Issue #2181: Simple responses come from _try_simple_response;
+        complex responses come from _execute_complex_workflow.
+        """
         import inspect
 
-        from api.workflow import execute_workflow
+        from api.workflow import _execute_complex_workflow, _try_simple_response
 
-        source = inspect.getsource(execute_workflow)
+        simple_source = inspect.getsource(_try_simple_response)
+        complex_source = inspect.getsource(_execute_complex_workflow)
 
-        # Main return structure
-        assert '"success": True' in source, "Missing success field"
-        assert '"workflow_id": workflow_id' in source, "Missing workflow_id field"
-        assert '"execution_started": True' in source, "Missing execution_started field"
-        assert '"status_endpoint"' in source, "Missing status_endpoint field"
-
-    def test_execute_workflow_unreachable_code_comment(self):
-        """Verify execute_workflow has unreachable code comment"""
-        import inspect
-
-        from api.workflow import execute_workflow
-
-        source = inspect.getsource(execute_workflow)
-
-        # Should have comment about unreachable code
+        # Simple response structure
         assert (
-            "# The following code is unreachable" in source
-        ), "Missing unreachable code comment"
+            '"success": True' in simple_source
+        ), "Missing success field in simple response"
+        assert '"type": "lightweight_response"' in simple_source, "Missing type field"
+
+        # Complex response structure
+        assert (
+            '"success": True' in complex_source
+        ), "Missing success field in complex response"
+        assert '"workflow_id"' in complex_source, "Missing workflow_id field"
+        assert (
+            '"execution_started": True' in complex_source
+        ), "Missing execution_started field"
+        assert '"status_endpoint"' in complex_source, "Missing status_endpoint field"
+
+    def test_execute_workflow_issue_2181_consolidation(self):
+        """Verify execute_workflow reflects Issue #2181 orchestrator consolidation.
+
+        LightweightOrchestrator is deleted. The endpoint now:
+        1. Calls _validate_orchestrator (only main orchestrator needed)
+        2. Calls _try_simple_response for trivial messages
+        3. Delegates to _execute_complex_workflow for everything else
+        """
+        import inspect
+
+        from api.workflow import execute_workflow
+
+        source = inspect.getsource(execute_workflow)
+
+        # Issue #2181 reference in docstring
+        assert (
+            "#2181" in source
+        ), "execute_workflow docstring missing Issue #2181 reference"
+
+        # New consolidated helpers used
+        assert "_validate_orchestrator" in source, "Missing _validate_orchestrator call"
+        assert "_try_simple_response" in source, "Missing _try_simple_response call"
+        assert (
+            "_execute_complex_workflow" in source
+        ), "Missing _execute_complex_workflow call"
+
+        # No more references to the deleted LightweightOrchestrator
+        assert (
+            "lightweight_orchestrator" not in source
+        ), "execute_workflow still references deleted LightweightOrchestrator"
 
     def test_batch_34_migration_consistency(self):
         """Verify batch 34 endpoint uses consistent decorator pattern"""

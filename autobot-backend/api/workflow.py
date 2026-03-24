@@ -8,6 +8,7 @@ Handles workflow approvals, progress tracking, and coordination
 
 import asyncio
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -234,67 +235,80 @@ AGENT_STEP_HANDLERS: Dict[str, AgentStepHandler] = {
 # =============================================================================
 
 
-def _validate_orchestrators(request: Request) -> tuple:
-    """Validate that orchestrators are available (Issue #281: extracted)."""
-    lightweight_orchestrator = getattr(
-        request.app.state, "lightweight_orchestrator", None
-    )
-    orchestrator = getattr(request.app.state, "orchestrator", None)
+def _validate_orchestrator(request: Request):
+    """Validate that the main orchestrator is available (Issue #2181: simplified).
 
-    if lightweight_orchestrator is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Lightweight orchestrator not available - "
-            "application not fully initialized",
-        )
+    Issue #2181: LightweightOrchestrator was never set on app.state, making
+    POST /workflow/execute always return 422. Consolidated to validate only
+    the main orchestrator; simple routing is handled inline by _try_simple_response.
+    """
+    orchestrator = getattr(request.app.state, "orchestrator", None)
 
     if orchestrator is None:
         raise HTTPException(
             status_code=422,
-            detail="Main orchestrator not available - "
-            "application not fully initialized",
+            detail="Main orchestrator not available - application not fully initialized",
         )
 
-    return lightweight_orchestrator, orchestrator
+    return orchestrator
+
+
+# Issue #2181: Simple conversational patterns consolidated from LightweightOrchestrator.
+# New code should use these module-level constants rather than instantiating
+# LightweightOrchestrator (which is now deleted).
+_SIMPLE_PATTERNS = [
+    re.compile(r"^(hello|hi|hey)!?$", re.IGNORECASE),
+    re.compile(r"^(thanks?|thank you)!?$", re.IGNORECASE),
+    re.compile(r"^(bye|goodbye|see you)!?$", re.IGNORECASE),
+    re.compile(r"^(ok|okay|yes|no)!?$", re.IGNORECASE),
+]
+
+_SIMPLE_RESPONSES = {
+    "hello": "Hello! How can I help you today?",
+    "hi": "Hello! How can I help you today?",
+    "hey": "Hello! How can I help you today?",
+    "thanks": "You're welcome!",
+    "thank you": "You're welcome!",
+    "bye": "Goodbye! Feel free to ask if you need anything else.",
+    "goodbye": "Goodbye! Feel free to ask if you need anything else.",
+    "see you": "Goodbye! Feel free to ask if you need anything else.",
+    "ok": "Understood!",
+    "okay": "Understood!",
+    "yes": "Understood!",
+    "no": "Understood!",
+}
+
+
+def _try_simple_response(user_message: str) -> Optional[Dict]:
+    """Return a canned response for trivial messages, or None for complex ones.
+
+    Consolidated from LightweightOrchestrator (Issue #2181). Handles greetings,
+    acknowledgements, and other short conversational messages without invoking
+    the full orchestration pipeline.
+    """
+    message_stripped = user_message.strip()
+    message_clean = message_stripped.lower().rstrip("!")
+    if any(pattern.match(message_stripped) for pattern in _SIMPLE_PATTERNS):
+        return {
+            "success": True,
+            "type": "lightweight_response",
+            "result": _SIMPLE_RESPONSES.get(message_clean, "Understood!"),
+            "routing_method": "simple_pattern_match",
+        }
+    return None
 
 
 class _ComplexWorkflowRequired(Exception):
-    """Raised by _try_lightweight_routing when full orchestration is needed.
+    """Raised when a request needs full multi-agent orchestration.
 
     Issue #1770: Signals execute_workflow to delegate to workflow_automation.
+    Issue #2181: Previously raised by _try_lightweight_routing; now raised inline
+    in execute_workflow after _try_simple_response returns None.
     """
 
     def __init__(self, session_id: str) -> None:
         super().__init__("Complex workflow requires full orchestration")
         self.session_id = session_id
-
-
-async def _try_lightweight_routing(
-    lightweight_orchestrator, user_message: str
-) -> Optional[Dict]:
-    """Try lightweight orchestrator routing (Issue #281: extracted, #1770: fixed).
-
-    Returns a response dict when the lightweight orchestrator can handle the
-    request.  Raises _ComplexWorkflowRequired for requests that need full
-    multi-agent orchestration.
-
-    Bug fix (#1770): route_request() takes (request_path, user_message); the
-    previous code passed user_message as request_path.
-    """
-    result = await lightweight_orchestrator.route_request(
-        "/api/workflow/execute", user_message
-    )
-
-    if result.get("bypass_orchestration"):
-        return {
-            "success": True,
-            "type": "lightweight_response",
-            "result": result.get("simple_response", "Response generated successfully"),
-            "routing_method": result.get("routing_reason", "lightweight_pattern_match"),
-        }
-
-    # Complex request — signal the caller to run full orchestration (#1770)
-    raise _ComplexWorkflowRequired(session_id=str(uuid.uuid4()))
 
 
 async def _execute_complex_workflow(
@@ -658,25 +672,28 @@ async def execute_workflow(
     """
     Execute a workflow with coordination of multiple agents.
 
-    Routes simple requests through the lightweight orchestrator and complex
-    requests through the workflow automation service (WorkflowAutomationManager).
+    Routes trivial messages via inline pattern matching and complex requests
+    through the workflow automation service (WorkflowAutomationManager).
 
     Issue #281: Refactored from 158 lines to use extracted helper methods.
     Issue #744: Requires admin authentication.
     Issue #1770: Re-enabled complex workflow path via workflow_automation service.
+    Issue #2181: Replaced LightweightOrchestrator (never set on app.state, always
+    caused 422) with inline _try_simple_response + _validate_orchestrator.
     """
-    # Validate orchestrators (Issue #281: uses helper)
-    lightweight_orchestrator, orchestrator = _validate_orchestrators(request)
+    # Validate main orchestrator (Issue #2181: simplified from _validate_orchestrators)
+    _validate_orchestrator(request)
 
-    # Try lightweight routing first (Issue #281: uses helper)
+    # Try simple pattern match first (Issue #2181: inlined from LightweightOrchestrator)
+    simple = _try_simple_response(workflow_request.user_message)
+    if simple:
+        return simple
+
+    # Complex workflow — delegate to the workflow_automation service (#1770)
     try:
-        return await _try_lightweight_routing(
-            lightweight_orchestrator, workflow_request.user_message
-        )
-    except _ComplexWorkflowRequired as exc:
-        # Delegate complex workflows to the workflow_automation service (#1770)
+        session_id = str(uuid.uuid4())
         return await _execute_complex_workflow(
-            workflow_request, background_tasks, exc.session_id
+            workflow_request, background_tasks, session_id
         )
     except Exception as e:
         logger.error("Workflow execution error: %s", e, exc_info=True)
