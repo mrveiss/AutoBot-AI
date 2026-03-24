@@ -44,7 +44,6 @@ from api import (
     services_router,
     settings_router,
     setup_wizard_router,
-    slm_auth_router,
     slm_users_router,
     sso_auth_router,
     sso_router,
@@ -374,7 +373,6 @@ app.include_router(npu_router, prefix="/api")
 app.include_router(infrastructure_router, prefix="/api")
 # User Management routers (Issue #576)
 app.include_router(slm_users_router, prefix="/api")
-app.include_router(slm_auth_router, prefix="/api")
 app.include_router(autobot_users_router, prefix="/api")
 app.include_router(autobot_teams_router, prefix="/api")
 # SSO Integration (Issue #576 Phase 4)
