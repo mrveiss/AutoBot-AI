@@ -1,217 +1,49 @@
 <template>
   <div class="codebase-analytics">
-    <!-- Header Controls -->
-    <div class="analytics-header">
-      <div class="header-content">
-        <h2><i class="fas fa-code"></i> {{ $t('analytics.codebase.title') }}</h2>
-        <div class="header-controls">
-          <router-link :to="{ name: 'analytics-codebase' }" class="btn-back">
-            <i class="fas fa-arrow-left"></i>
-            {{ $t('analytics.codebase.buttons.backToProjects') }}
-          </router-link>
+    <!-- Issue #1469: Header + Debug Controls (extracted) -->
+    <CodebaseAnalyticsHeader
+      :analyzing="analyzing"
+      :scan-runner-running="scanRunner.running.value"
+      :root-path="rootPath"
+      :selected-source="selectedSource"
+      :loading-api-endpoints="loadingApiEndpoints"
+      :analyzing-code-smells="analyzingCodeSmells"
+      :exporting-report="exportingReport"
+      :clearing-cache="clearingCache"
+      @index-codebase="indexCodebase"
+      @stop="handleStop"
+      @run-full-analysis="runFullAnalysis"
+      @test-declarations="getDeclarationsData"
+      @test-duplicates="getDuplicatesData"
+      @test-hardcodes="getHardcodesData"
+      @test-npu="testNpuConnection"
+      @test-data-state="testDataState"
+      @reset-state="resetState"
+      @test-all-endpoints="testAllEndpoints"
+      @get-api-coverage="getApiEndpointCoverage"
+      @run-code-smells="runCodeSmellAnalysis"
+      @get-health-score="getCodeHealthScore"
+      @export-report="exportReport()"
+      @clear-cache="clearCache"
+    />
 
-          <button @click="indexCodebase" :disabled="analyzing" class="btn-primary">
-            <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
-            {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
-          </button>
-          <button
-            v-if="analyzing || scanRunner.running.value"
-            @click="handleStop"
-            class="btn-cancel"
-          >
-            <i class="fas fa-stop-circle"></i>
-            {{ $t('analytics.codebase.actions.stop') }}
-          </button>
-          <button @click="runFullAnalysis" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
-            <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
-            {{ analyzing ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.buttons.analyzeAll') }}
-          </button>
-
-          <!-- Enhanced Debug Controls -->
-          <div class="debug-controls" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button @click="getDeclarationsData" class="btn-debug btn-debug-success">{{ $t('analytics.codebase.buttons.testDeclarations') }}</button>
-            <button @click="getDuplicatesData" class="btn-debug btn-debug-warning">{{ $t('analytics.codebase.buttons.testDuplicates') }}</button>
-            <button @click="getHardcodesData" class="btn-debug btn-debug-error">{{ $t('analytics.codebase.buttons.testHardcodes') }}</button>
-            <button @click="testNpuConnection" class="btn-debug btn-debug-purple">{{ $t('analytics.codebase.buttons.testNpu') }}</button>
-            <button @click="testDataState" class="btn-debug btn-debug-info">{{ $t('analytics.codebase.buttons.debugState') }}</button>
-            <button @click="resetState" class="btn-debug btn-debug-orange">{{ $t('analytics.codebase.buttons.resetState') }}</button>
-            <button @click="testAllEndpoints" class="btn-debug btn-debug-cyan">{{ $t('analytics.codebase.buttons.testAllApis') }}</button>
-            <!-- Issue #527: API Endpoint Checker -->
-            <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug btn-debug-indigo">
-              <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
-              {{ loadingApiEndpoints ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.apiCoverage') }}
-            </button>
-            <!-- Code Intelligence / Anti-Pattern Detection -->
-            <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-pink">
-              <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
-              {{ analyzingCodeSmells ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.codeSmells') }}
-            </button>
-            <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-violet">
-              <i class="fas fa-heartbeat"></i> {{ $t('analytics.codebase.buttons.healthScore') }}
-            </button>
-            <button @click="exportReport()" :disabled="exportingReport" class="btn-debug btn-debug-secondary">
-              <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
-              {{ exportingReport ? $t('analytics.codebase.buttons.exporting') : $t('analytics.codebase.buttons.exportReport') }}
-            </button>
-            <button @click="clearCache" :disabled="clearingCache" class="btn-debug btn-debug-brown">
-              <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
-              {{ clearingCache ? $t('analytics.codebase.buttons.clearing') : $t('analytics.codebase.buttons.clearCache') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Project Header Card (#1713) -->
-    <div v-if="selectedSource" class="project-header-card">
-      <div class="project-header-info">
-        <div class="project-header-name">
-          <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
-          {{ selectedSource.name }}
-        </div>
-        <div class="project-header-meta">
-          <span v-if="selectedSource.repo" class="project-meta-item">
-            <i class="fas fa-code-branch"></i>
-            {{ selectedSource.repo }}
-          </span>
-          <span v-if="selectedSource.branch" class="project-meta-item">
-            <i class="fas fa-tag"></i>
-            {{ selectedSource.branch }}
-          </span>
-          <span class="project-meta-item" :class="'status-' + (selectedSource.status || 'unknown')">
-            <i class="fas fa-circle" style="font-size: 0.5em; vertical-align: middle;"></i>
-            {{ selectedSource.status || 'unknown' }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Unified Operation Progress — Issues #1190, #1365, #1366 -->
-    <!-- Single status bar covering indexing and code-smell operations; shows all available detail -->
-    <div
-      v-if="analyzing || analyzingCodeSmells || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)')"
-      class="progress-container"
-      :class="{
-        'progress-container--idle': !analyzing && !analyzingCodeSmells,
-        'code-smells-progress': analyzingCodeSmells && !analyzing
-      }"
-    >
-      <div class="progress-header">
-        <div class="progress-title">
-          <i :class="
-            (analyzing || analyzingCodeSmells)
-              ? 'fas fa-spinner fa-spin'
-              : progressStatus.includes('completed') || progressStatus.includes('complete')
-                ? 'fas fa-check-circle'
-                : progressStatus.includes('failed') || progressStatus.includes('cancelled')
-                  ? 'fas fa-times-circle'
-                  : 'fas fa-info-circle'
-          "></i>
-          {{ analyzing ? $t('analytics.codebase.progress.indexingInProgress') : analyzingCodeSmells ? codeSmellsProgressTitle : $t('analytics.codebase.progress.indexingStatus') }}
-        </div>
-        <div v-if="currentJobId && analyzing" class="job-id">{{ $t('analytics.codebase.progress.job') }}: {{ currentJobId.substring(0, 8) }}...</div>
-      </div>
-
-      <!-- Phase Progress (active indexing only) -->
-      <div v-if="analyzing && jobPhases" class="phase-progress">
-        <div
-          v-for="phase in jobPhases.phase_list"
-          :key="phase.id"
-          class="phase-item"
-          :class="{
-            'phase-completed': phase.status === 'completed',
-            'phase-running': phase.status === 'running',
-            'phase-pending': phase.status === 'pending'
-          }"
-        >
-          <i :class="getPhaseIcon(phase.status)"></i>
-          <span>{{ phase.name }}</span>
-        </div>
-      </div>
-
-      <!-- Progress Bar: determinate for indexing/idle, indeterminate for code-smells-only -->
-      <div class="progress-bar">
-        <div
-          class="progress-fill"
-          :class="{ indeterminate: analyzingCodeSmells && !analyzing }"
-          :style="analyzingCodeSmells && !analyzing ? {} : { width: progressPercent + '%' }"
-        ></div>
-      </div>
-      <div class="progress-status">{{ progressStatus }}</div>
-
-      <!-- Batch Progress (active indexing only) -->
-      <div v-if="analyzing && jobBatches && jobBatches.total_batches > 0" class="batch-progress">
-        <div class="batch-header">
-          <span class="batch-label">{{ $t('analytics.codebase.progress.batchProgress') }}:</span>
-          <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
-        </div>
-        <div class="batch-bar">
-          <div
-            class="batch-fill"
-            :style="{ width: (jobBatches.completed_batches / jobBatches.total_batches * 100) + '%' }"
-          ></div>
-        </div>
-      </div>
-
-      <!-- Live Stats (active indexing only) -->
-      <div v-if="analyzing && jobStats" class="live-stats">
-        <div class="stat-item">
-          <i class="fas fa-file-code"></i>
-          <span>{{ jobStats.files_scanned }} {{ $t('analytics.codebase.progress.files') }}</span>
-        </div>
-        <div class="stat-item">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ jobStats.problems_found }} {{ $t('analytics.codebase.progress.problems') }}</span>
-        </div>
-        <div class="stat-item">
-          <i class="fas fa-code"></i>
-          <span>{{ jobStats.functions_found }} {{ $t('analytics.codebase.progress.functions') }}</span>
-        </div>
-        <div class="stat-item">
-          <i class="fas fa-cubes"></i>
-          <span>{{ jobStats.classes_found }} {{ $t('analytics.codebase.progress.classes') }}</span>
-        </div>
-        <div class="stat-item" v-if="jobStats.items_stored > 0">
-          <i class="fas fa-database"></i>
-          <span>{{ jobStats.items_stored }} {{ $t('analytics.codebase.progress.stored') }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Scan Runner Progress (#1418) -->
-    <div v-if="scanRunner.running.value || scanRunner.results.value.length > 0" class="scan-runner-progress">
-      <div class="scan-runner-header">
-        <span class="scan-runner-title">
-          <i :class="scanRunner.running.value ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle'"></i>
-          {{ $t('analytics.codebase.scanRunner.title') }}
-        </span>
-        <span class="scan-runner-count">
-          {{ scanRunner.completedCount.value }} / {{ scanRunner.totalCount.value }}
-        </span>
-      </div>
-      <div class="mini-progress">
-        <div class="mini-progress-bar" :style="{ width: scanRunner.progress.value + '%' }"></div>
-      </div>
-      <div class="scan-runner-items">
-        <div
-          v-for="result in scanRunner.results.value"
-          :key="result.id"
-          class="scan-runner-item"
-          :class="'scan-' + result.status"
-        >
-          <i :class="{
-            'fas fa-spinner fa-spin': result.status === 'running',
-            'fas fa-check': result.status === 'completed',
-            'fas fa-times': result.status === 'failed',
-            'fas fa-forward': result.status === 'skipped',
-            'fas fa-clock': result.status === 'pending',
-          }"></i>
-          <span class="scan-label">{{ result.label }}</span>
-          <span v-if="result.durationMs != null" class="scan-duration">{{ result.durationMs }}ms</span>
-          <span v-if="result.error" class="scan-error">{{ result.error }}</span>
-        </div>
-      </div>
-    </div>
+    <!-- Issue #1469: Progress tracking (extracted) -->
+    <CodebaseProgressPanel
+      :analyzing="analyzing"
+      :analyzing-code-smells="analyzingCodeSmells"
+      :progress-percent="progressPercent"
+      :progress-status="progressStatus"
+      :current-job-id="currentJobId"
+      :job-phases="jobPhases"
+      :job-batches="jobBatches"
+      :job-stats="jobStats"
+      :code-smells-progress-title="codeSmellsProgressTitle"
+      :scan-runner-running="scanRunner.running.value"
+      :scan-runner-results="scanRunner.results.value"
+      :scan-runner-completed-count="scanRunner.completedCount.value"
+      :scan-runner-total-count="scanRunner.totalCount.value"
+      :scan-runner-progress="scanRunner.progress.value"
+    />
 
     <!-- Empty state when no cached results exist (#1458) -->
     <div v-if="!analyzing && !scanRunner.running.value && !hasAnyResults" class="empty-state-container">
@@ -255,186 +87,23 @@
         </button>
       </div>
 
-      <!-- Codebase Statistics -->
-      <div class="stats-section">
-        <h3>
-          <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.stats.title') }}
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('statistics', 'md')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportMarkdown')">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('statistics', 'json')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportJson')">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="codebaseStats" class="stats-grid">
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
-          </BasePanel>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-chart-bar"
-          :message="$t('analytics.codebase.stats.noData')"
-        />
-      </div>
-
-      <!-- Analytics Charts Section -->
-      <div class="charts-section">
-        <div class="section-header">
-          <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.problems.title') }}</h3>
-          <div class="section-header-actions">
-            <button @click="loadUnifiedReport" class="refresh-btn" :disabled="unifiedReportLoading" :title="$t('analytics.codebase.problems.loadReport')">
-              <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'fas fa-layer-group'"></i>
-            </button>
-            <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading" :title="$t('analytics.codebase.actions.refreshCharts')">
-              <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Category Filter Tabs -->
-        <div class="category-tabs" v-if="availableCategories.length > 0 || chartData">
-          <button
-            @click="selectedCategory = 'all'"
-            class="category-tab"
-            :class="{ active: selectedCategory === 'all' }"
-          >
-            <i class="fas fa-th-large"></i>
-            {{ $t('analytics.codebase.problems.allIssues') }}
-            <span class="tab-count" v-if="chartData?.summary?.total_problems">
-              {{ chartData.summary.total_problems.toLocaleString() }}
-            </span>
-          </button>
-          <button
-            v-for="cat in availableCategories"
-            :key="cat.id"
-            @click="selectedCategory = cat.id"
-            class="category-tab"
-            :class="{ active: selectedCategory === cat.id }"
-          >
-            <i :class="getCategoryIcon(cat.id)"></i>
-            {{ cat.name }}
-            <span class="tab-count">{{ cat.count }}</span>
-          </button>
-        </div>
-
-        <!-- Unified Report Error -->
-        <div v-if="unifiedReportError" class="charts-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ unifiedReportError }}</span>
-          <button @click="loadUnifiedReport" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <div v-if="chartDataLoading" class="charts-loading">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>{{ $t('analytics.codebase.problems.loadingChartData') }}</span>
-        </div>
-
-        <div v-else-if="chartDataError" class="charts-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ chartDataError }}</span>
-          <button @click="loadChartData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <div v-else-if="chartData" class="charts-grid">
-          <!-- Summary Stats -->
-          <div v-if="chartData.summary" class="chart-summary">
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.total_problems?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.totalProblems') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.unique_problem_types || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.problemTypes') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.files_with_problems || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.filesAffected') }}</span>
-            </div>
-            <div class="summary-stat race-highlight">
-              <span class="summary-value">{{ chartData.summary.race_condition_count || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.raceConditions') }}</span>
-            </div>
-          </div>
-
-          <!-- Charts Row 1: Problem Types + Severity -->
-          <div class="charts-row">
-            <ProblemTypesChart
-              v-if="filteredChartData?.problem_types && filteredChartData.problem_types.length > 0"
-              :data="filteredChartData.problem_types"
-              :title="selectedCategory === 'all' ? 'Problem Types Distribution' : `${selectedCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Issues`"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-chart-pie" :message="selectedCategory === 'all' ? 'No problem type data' : `No issues in ${selectedCategory.replace(/_/g, ' ')} category`" />
-            </div>
-            <SeverityBarChart
-              v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
-              :data="chartData.severity_counts"
-              :title="$t('analytics.codebase.charts.problemsBySeverity')"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-signal" message="No severity data" />
-            </div>
-          </div>
-
-          <!-- Charts Row 2: Race Conditions + Top Files -->
-          <div class="charts-row">
-            <RaceConditionsDonut
-              v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
-              :data="chartData.race_conditions"
-              :title="$t('analytics.codebase.charts.raceConditionsByCategory')"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-exclamation-circle" message="No race condition data" />
-            </div>
-            <TopFilesChart
-              v-if="chartData.top_files && chartData.top_files.length > 0"
-              :data="chartData.top_files"
-              :title="$t('analytics.codebase.charts.topFilesWithProblems')"
-              :height="400"
-              :maxFiles="10"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-file-code" message="No file data" />
-            </div>
-          </div>
-        </div>
-
-        <EmptyState
-          v-else
-          icon="fas fa-chart-area"
-          :message="$t('analytics.codebase.problems.noChartData')"
-        >
-          <template #actions>
-            <button @click="indexCodebase" class="btn-primary" :disabled="analyzing">
-              <i class="fas fa-database"></i> {{ $t('analytics.codebase.buttons.indexCodebase') }}
-            </button>
-          </template>
-        </EmptyState>
-      </div>
+      <!-- Issue #1469: Stats + Charts section (extracted) -->
+      <CodebaseChartsSection
+        :codebase-stats="codebaseStats"
+        :chart-data="chartData"
+        :chart-data-loading="chartDataLoading"
+        :chart-data-error="chartDataError"
+        :unified-report-loading="unifiedReportLoading"
+        :unified-report-error="unifiedReportError"
+        :selected-category="selectedCategory"
+        :available-categories="availableCategories"
+        :analyzing="analyzing"
+        @export-section="(section, fmt) => exportSection(section as SectionType, fmt)"
+        @load-unified-report="loadUnifiedReport"
+        @load-chart-data="loadChartData"
+        @update:selected-category="selectedCategory = $event"
+        @index-codebase="indexCodebase"
+      />
 
       <!-- Dependency Analysis, Import Tree, Function Call Graph (#1469) -->
       <CodebaseDependenciesPanel
@@ -456,104 +125,11 @@
         @function-select="handleFunctionSelect"
       />
 
-      <!-- Problems Report - Grouped by Type and Severity -->
-      <div class="problems-section analytics-section">
-        <h3>
-          <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.codebase.problems.codeProblems') }}
-          <span v-if="problemsReport && problemsReport.length > 0" class="total-count">
-            ({{ problemsReport.length.toLocaleString() }} total)
-          </span>
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('problems', 'md')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportMarkdown')">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('problems', 'json')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportJson')">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="problemsReport && problemsReport.length > 0" class="section-content">
-          <!-- Severity Summary Cards -->
-          <div class="summary-cards">
-            <div class="summary-card total">
-              <div class="summary-value">{{ problemsReport.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.stats.total') }}</div>
-            </div>
-            <div
-              v-for="(problems, severity) in problemsBySeverity"
-              :key="severity"
-              class="summary-card"
-              :class="severity"
-            >
-              <div class="summary-value">{{ problems.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ severity.charAt(0).toUpperCase() + severity.slice(1) }}</div>
-            </div>
-          </div>
-
-          <!-- Grouped by Type (Accordion) -->
-          <div class="accordion-groups">
-            <div
-              v-for="(typeData, type) in problemsByType"
-              :key="type"
-              class="accordion-group"
-            >
-              <div
-                class="accordion-header"
-                @click="toggleProblemType(type)"
-              >
-                <div class="header-info">
-                  <i :class="expandedProblemTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">{{ formatProblemType(type) }}</span>
-                  <span class="header-count">({{ typeData.problems.length.toLocaleString() }})</span>
-                </div>
-                <div class="header-badges">
-                  <span v-if="typeData.severityCounts.critical" class="severity-badge critical">
-                    {{ typeData.severityCounts.critical }} {{ $t('analytics.codebase.severity.critical') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.high" class="severity-badge high">
-                    {{ typeData.severityCounts.high }} {{ $t('analytics.codebase.severity.high') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.medium" class="severity-badge medium">
-                    {{ typeData.severityCounts.medium }} {{ $t('analytics.codebase.severity.medium') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.low" class="severity-badge low">
-                    {{ typeData.severityCounts.low }} {{ $t('analytics.codebase.severity.low') }}
-                  </span>
-                </div>
-              </div>
-              <transition name="accordion">
-                <div v-if="expandedProblemTypes[type]" class="accordion-items">
-                  <div
-                    v-for="(problem, index) in typeData.problems.slice(0, 20)"
-                    :key="index"
-                    class="list-item"
-                    :class="getItemSeverityClass(problem.severity)"
-                  >
-                    <div class="item-header">
-                      <span class="item-severity" :class="problem.severity?.toLowerCase()">
-                        {{ problem.severity || 'unknown' }}
-                      </span>
-                    </div>
-                    <div class="item-description">{{ problem.description }}</div>
-                    <div class="item-location">📁 {{ problem.file_path }}{{ problem.line_number ? ':' + problem.line_number : '' }}</div>
-                    <div v-if="problem.suggestion" class="item-suggestion">💡 {{ problem.suggestion }}</div>
-                  </div>
-                  <div v-if="typeData.problems.length > 20" class="show-more">
-                    <span class="muted">Showing 20 of {{ typeData.problems.length.toLocaleString() }} {{ formatProblemType(type) }} issues</span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-check-circle"
-          :message="$t('analytics.codebase.problems.noProblems')"
-          variant="success"
-        />
-      </div>
+      <!-- Issue #1469: Problems Report (extracted) -->
+      <CodebaseProblemsPanel
+        :problems-report="problemsReport"
+        @export="(fmt) => exportSection('problems', fmt)"
+      />
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
@@ -749,7 +325,6 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
@@ -770,6 +345,10 @@ import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
 // Issue #1469: Extracted panel sub-components
+import CodebaseAnalyticsHeader from '@/components/analytics/panels/CodebaseAnalyticsHeader.vue'
+import CodebaseProgressPanel from '@/components/analytics/panels/CodebaseProgressPanel.vue'
+import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
+import CodebaseProblemsPanel from '@/components/analytics/panels/CodebaseProblemsPanel.vue'
 import CodebaseApiEndpointsPanel from '@/components/analytics/panels/CodebaseApiEndpointsPanel.vue'
 import CodebaseCrossLanguagePanel from '@/components/analytics/panels/CodebaseCrossLanguagePanel.vue'
 import CodebaseConfigDuplicatesPanel from '@/components/analytics/panels/CodebaseConfigDuplicatesPanel.vue'
@@ -785,13 +364,6 @@ import type {
 
 const logger = createLogger('CodebaseAnalytics')
 
-// ApexCharts components (still used in Analytics Charts section)
-import {
-  ProblemTypesChart,
-  SeverityBarChart,
-  RaceConditionsDonut,
-  TopFilesChart,
-} from '@/components/charts'
 
 // i18n
 const { t } = useI18n()
@@ -1042,38 +614,6 @@ const jobPhases = ref<JobPhasesData | null>(null)
 const jobBatches = ref<JobBatchesData | null>(null)
 const jobStats = ref<JobStatsData | null>(null)
 
-// Helper to get phase icon based on status
-const getPhaseIcon = (status: string): string => {
-  switch (status) {
-    case 'completed':
-      return 'fas fa-check-circle'
-    case 'running':
-      return 'fas fa-spinner fa-spin'
-    case 'pending':
-    default:
-      return 'fas fa-circle'
-  }
-}
-
-// Get icon for problem category
-const getCategoryIcon = (categoryId: string): string => {
-  const iconMap: Record<string, string> = {
-    race_conditions: 'fas fa-random',
-    debug_code: 'fas fa-bug',
-    complexity: 'fas fa-project-diagram',
-    code_smells: 'fas fa-exclamation-circle',
-    performance: 'fas fa-tachometer-alt',
-    security: 'fas fa-shield-alt',
-    long_functions: 'fas fa-scroll',
-    duplicate_code: 'fas fa-clone',
-    hardcoded_values: 'fas fa-lock',
-    missing_types: 'fas fa-question-circle',
-    unused_imports: 'fas fa-unlink',
-    // Default icon
-    default: 'fas fa-tag'
-  }
-  return iconMap[categoryId] || iconMap.default
-}
 
 // Analytics data interfaces
 interface Problem {
@@ -2528,24 +2068,6 @@ const availableCategories = computed(() => {
   }))
 })
 
-// Get filtered chart data based on selected category
-const filteredChartData = computed((): ChartData | null => {
-  if (!chartData.value) return null
-  if (selectedCategory.value === 'all') return chartData.value
-
-  const filtered: ChartData = { ...chartData.value }
-
-  // Filter problem types by selected category
-  if (filtered.problem_types) {
-    filtered.problem_types = filtered.problem_types.filter((pt: ChartDataItem) => {
-      const type = pt.type?.toLowerCase() || ''
-      const category = selectedCategory.value.toLowerCase()
-      return type.includes(category) || category.includes(type)
-    })
-  }
-
-  return filtered
-})
 
 // Load dependency analysis data (#1304/#1321: useTaskLoader)
 const loadDependencyData = () => _loadDependencyTask()
@@ -3944,68 +3466,6 @@ const formatProblemType = (type: string | undefined): string => {
   return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
 }
 
-// Group problems by severity for summary view
-const problemsBySeverity = computed((): Record<string, Problem[]> => {
-  if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped: Record<string, Problem[]> = {}
-  const severityOrder = ['critical', 'high', 'medium', 'low']
-
-  for (const problem of problemsReport.value) {
-    const severity = problem.severity?.toLowerCase() || 'low'
-    if (!grouped[severity]) {
-      grouped[severity] = []
-    }
-    grouped[severity].push(problem)
-  }
-
-  // Return in severity order
-  const ordered: Record<string, Problem[]> = {}
-  for (const sev of severityOrder) {
-    if (grouped[sev]) {
-      ordered[sev] = grouped[sev]
-    }
-  }
-  return ordered
-})
-
-// Problem group with severity counts
-interface ProblemGroup {
-  problems: Problem[]
-  severityCounts: { critical: number; high: number; medium: number; low: number }
-}
-
-// Group problems by type, then by severity within each type
-const problemsByType = computed((): Record<string, ProblemGroup> => {
-  if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped: Record<string, ProblemGroup> = {}
-
-  for (const problem of problemsReport.value) {
-    const type = problem.type || 'unknown'
-    if (!grouped[type]) {
-      grouped[type] = {
-        problems: [],
-        severityCounts: { critical: 0, high: 0, medium: 0, low: 0 }
-      }
-    }
-    grouped[type].problems.push(problem)
-    const sev = problem.severity?.toLowerCase() || 'low'
-    if (sev in grouped[type].severityCounts) {
-      grouped[type].severityCounts[sev as keyof typeof grouped[typeof type]['severityCounts']]++
-    }
-  }
-
-  // Sort by total count (highest first)
-  return Object.fromEntries(
-    Object.entries(grouped).sort((a, b) => b[1].problems.length - a[1].problems.length)
-  )
-})
-
-// Track which problem groups are expanded
-const expandedProblemTypes = ref<Record<string, boolean>>({})
-
-const toggleProblemType = (type: string): void => {
-  expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
-}
 
 // Filter code smells from indexed problems
 // Issue #609: Code smell types that should appear in the Code Smells section
@@ -4062,17 +3522,6 @@ const declarationsForPanel = computed(() =>
   }))
 )
 
-// Unified item severity class for consistent styling
-const getItemSeverityClass = (severity: string | undefined): string => {
-  switch (severity?.toLowerCase()) {
-    case 'critical': return 'item-critical'
-    case 'high': return 'item-high'
-    case 'medium': return 'item-medium'
-    case 'low': return 'item-low'
-    case 'info': return 'item-info'
-    default: return 'item-unknown'
-  }
-}
 
 // All variables and functions are automatically available in <script setup>
 // No export default needed in <script setup> syntax
@@ -4090,156 +3539,7 @@ const getItemSeverityClass = (severity: string | undefined): string => {
   overflow-x: hidden;
 }
 
-.analytics-header {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-5);
-  margin-bottom: var(--spacing-6);
-  box-shadow: var(--shadow-lg);
-}
-
-/* Project Header Card (#1713) */
-.project-header-card {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4) var(--spacing-5);
-  margin-bottom: var(--spacing-4);
-  border-left: 4px solid var(--accent-primary, #3b82f6);
-  box-shadow: var(--shadow-sm);
-}
-
-.project-header-name {
-  font-size: 1.15em;
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.project-header-meta {
-  display: flex;
-  gap: var(--spacing-4);
-  margin-top: var(--spacing-2);
-  flex-wrap: wrap;
-}
-
-.project-meta-item {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-}
-
-.project-meta-item.status-ready { color: var(--color-success, #22c55e); }
-.project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
-.project-meta-item.status-error { color: var(--color-error, #ef4444); }
-
-.header-content h2 {
-  margin: 0 0 16px 0;
-  color: var(--text-on-primary);
-  font-size: 1.5em;
-  font-weight: var(--font-semibold);
-}
-
-.header-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.path-input {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-  padding: 10px 16px;
-  border-radius: var(--radius-lg);
-  min-width: 300px;
-  font-family: var(--font-mono);
-}
-
-.path-input:focus {
-  outline: none;
-  border-color: var(--color-info-hover);
-  box-shadow: var(--shadow-focus);
-}
-
-.btn-primary, .btn-secondary, .btn-debug {
-  padding: 10px 20px;
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-primary {
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled, .btn-secondary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-cancel {
-  background: var(--color-error-hover);
-  color: var(--text-on-error);
-  padding: 10px 20px;
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-cancel:hover {
-  background: var(--color-error-dark);
-  transform: translateY(-1px);
-}
-
-.btn-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: var(--text-sm);
-  padding: var(--spacing-1-5) var(--spacing-3);
-  border-radius: var(--radius-md);
-  transition: color var(--duration-200), background var(--duration-200);
-}
-
-.btn-back:hover {
-  color: var(--color-info);
-  background: var(--bg-tertiary);
-}
+/* Header and button styles moved to CodebaseAnalyticsHeader.vue */
 
 .empty-state-container {
   padding: var(--spacing-8) var(--spacing-4);
@@ -4252,215 +3552,7 @@ const getItemSeverityClass = (severity: string | undefined): string => {
   font-size: var(--text-base);
 }
 
-.debug-controls {
-  width: 100%;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-debug {
-  font-size: 0.85em;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-debug:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.progress-container {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-4);
-  margin-bottom: var(--spacing-6);
-  border: 1px solid var(--border-default);
-}
-
-/* Issue #1190: Idle state — lighter styling when showing last-known status */
-.progress-container--idle {
-  opacity: 0.85;
-  border-color: var(--border-subtle, var(--border-default));
-}
-
-.progress-container--idle .progress-title {
-  color: var(--text-secondary);
-}
-
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.progress-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--chart-green);
-  font-weight: var(--font-semibold);
-}
-
-.job-id {
-  color: var(--text-tertiary);
-  font-size: 0.8em;
-  font-family: var(--font-mono);
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-default);
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--color-success);
-  transition: width 0.3s ease;
-  border-radius: var(--radius-default);
-}
-
-.progress-fill.indeterminate {
-  width: 30%;
-  animation: indeterminate 1.5s infinite ease-in-out;
-}
-
-@keyframes indeterminate {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(400%);
-  }
-}
-
-.code-smells-progress {
-  border-left: 4px solid var(--chart-pink);
-}
-
-.code-smells-progress .progress-fill {
-  background: var(--chart-purple);
-}
-
-.progress-status {
-  color: var(--text-primary);
-  font-size: 0.9em;
-  font-weight: var(--font-medium);
-}
-
-/* Phase Progress */
-.phase-progress {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-}
-
-.phase-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-default);
-  font-size: 0.85em;
-  transition: var(--transition-all);
-}
-
-.phase-item.phase-completed {
-  color: var(--chart-green);
-  background: var(--color-success-bg-hover);
-  border: 1px solid var(--color-success-border);
-}
-
-.phase-item.phase-running {
-  color: var(--chart-blue);
-  background: var(--color-info-bg-hover);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.phase-item.phase-pending {
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.phase-item i {
-  font-size: 0.9em;
-}
-
-/* Batch Progress */
-.batch-progress {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-}
-
-.batch-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.batch-label {
-  color: var(--text-secondary);
-  font-size: 0.85em;
-}
-
-.batch-count {
-  color: var(--chart-green);
-  font-weight: var(--font-semibold);
-  font-family: var(--font-mono);
-}
-
-.batch-bar {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.batch-fill {
-  height: 100%;
-  background: var(--color-success);
-  transition: width 0.3s ease;
-  border-radius: 3px;
-}
-
-/* Live Stats */
-.live-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--bg-card);
-  border-radius: 6px;
-}
-
-.live-stats .stat-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-  font-size: 0.85em;
-}
-
-.live-stats .stat-item i {
-  color: var(--chart-blue);
-  width: 16px;
-  text-align: center;
-}
+/* Debug, progress, and phase styles moved to CodebaseProgressPanel.vue */
 
 /* Enhanced Analytics Grid */
 .enhanced-analytics-grid {
@@ -5423,78 +4515,5 @@ const getItemSeverityClass = (severity: string | undefined): string => {
   color: var(--text-primary);
 }
 
-/* Scan Runner Progress (#1418) */
-.scan-runner-progress {
-  margin: var(--spacing-3) 0;
-  padding: var(--spacing-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-.scan-runner-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-2);
-}
-.scan-runner-title {
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-.scan-runner-count {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-.scan-runner-progress .mini-progress {
-  width: 100%;
-  height: 4px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-  margin-bottom: var(--spacing-2);
-}
-.scan-runner-progress .mini-progress-bar {
-  height: 100%;
-  background: var(--color-purple);
-  transition: width 0.3s ease;
-}
-.scan-runner-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-1);
-}
-.scan-runner-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-  padding: 2px var(--spacing-2);
-  font-size: var(--text-xs);
-  border-radius: var(--radius-xs);
-  background: var(--bg-tertiary);
-}
-.scan-runner-item.scan-completed { color: var(--color-success); }
-.scan-runner-item.scan-failed { color: var(--color-error); }
-.scan-runner-item.scan-running { color: var(--color-info); }
-.scan-runner-item.scan-skipped { color: var(--text-tertiary); }
-.scan-runner-item.scan-pending { color: var(--text-secondary); }
-.scan-label {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scan-duration {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-}
-.scan-error {
-  color: var(--color-error);
-  font-size: var(--text-xs);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Scan runner styles moved to CodebaseProgressPanel.vue */
 </style>
