@@ -43,13 +43,23 @@ _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
 
-def _validate_log_path(file_path) -> Path:
-    """Ensure file_path is under LOG_DIR.
+def _validate_log_path(file_path: str) -> Path:
+    """Ensure file_path is under LOG_DIR, preserving subdirectory components.
 
-    Uses shared path validator (#1721).
+    Uses shared path validator (#1721). Accepts either a relative segment or
+    an absolute path under LOG_DIR; in the latter case the LOG_DIR prefix is
+    stripped before validation so subdirectory structure is preserved (#2194).
     """
     try:
-        return validate_relative_path(str(Path(file_path).name), LOG_DIR)
+        segment = str(file_path)
+        abs_log_dir = LOG_DIR.resolve()
+        candidate = Path(segment)
+        if candidate.is_absolute():
+            try:
+                segment = str(candidate.relative_to(abs_log_dir))
+            except ValueError:
+                raise ValueError("Path is outside log directory")
+        return validate_relative_path(segment, LOG_DIR)
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
 
