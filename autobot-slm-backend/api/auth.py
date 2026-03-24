@@ -110,7 +110,7 @@ async def login(
             username=user.username,
             ip_address=client_ip,
             resource_type="session",
-            description=(f"MFA challenge issued for '{user.username}'"),
+            description=f"MFA challenge issued for '{user.username}'",
             request_method="POST",
             request_path="/api/auth/login",
             response_status=200,
