@@ -7,6 +7,8 @@ GPU Monitoring API
 Issue #2267: Expose GPU acceleration optimizer functions as API endpoints.
 Provides endpoints for GPU efficiency monitoring, benchmarking, capability
 reporting, multimodal optimization, and config updates.
+
+Issue #2315: Fix decorator order, router prefix, GPU guard, and tag case.
 """
 
 import logging
@@ -21,7 +23,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["GPU Monitoring"])
+router = APIRouter(tags=["gpu-monitoring"])
 
 
 class GPUConfigUpdateRequest(BaseModel):
@@ -41,12 +43,12 @@ def _gpu_unavailable_error() -> HTTPException:
     )
 
 
+@router.get("/efficiency")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_efficiency",
     error_code_prefix="GPU_MONITORING",
 )
-@router.get("/gpu/efficiency")
 async def get_gpu_efficiency(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -67,12 +69,12 @@ async def get_gpu_efficiency(
     return {"success": True, "efficiency": result}
 
 
+@router.get("/capabilities")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_gpu_capabilities",
     error_code_prefix="GPU_MONITORING",
 )
-@router.get("/gpu/capabilities")
 async def get_gpu_capabilities(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -80,6 +82,9 @@ async def get_gpu_capabilities(
 
     Issue #2267: Returns detected capabilities (tensor cores, mixed precision,
     compute capability, memory) and current optimization config.
+
+    Note: Intentionally does NOT check gpu_optimizer.gpu_available — returns
+    data even when no GPU is present (gpu_available=false in response).
     """
     from utils.gpu_acceleration_optimizer import get_gpu_capabilities
 
@@ -87,12 +92,12 @@ async def get_gpu_capabilities(
     return {"success": True, "capabilities": caps}
 
 
+@router.post("/benchmark")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_gpu_benchmark",
     error_code_prefix="GPU_MONITORING",
 )
-@router.post("/gpu/benchmark")
 async def run_gpu_benchmark(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -110,12 +115,12 @@ async def run_gpu_benchmark(
     return {"success": True, "benchmark": result}
 
 
+@router.post("/optimize")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_gpu_multimodal",
     error_code_prefix="GPU_MONITORING",
 )
-@router.post("/gpu/optimize")
 async def optimize_gpu_multimodal(
     admin_check: bool = Depends(check_admin_permission),
 ):
@@ -137,12 +142,12 @@ async def optimize_gpu_multimodal(
     return {"success": True, "optimization": asdict(result)}
 
 
+@router.patch("/config")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_gpu_config",
     error_code_prefix="GPU_MONITORING",
 )
-@router.patch("/gpu/config")
 async def update_gpu_config(
     body: GPUConfigUpdateRequest,
     admin_check: bool = Depends(check_admin_permission),
@@ -153,7 +158,10 @@ async def update_gpu_config(
     Unknown keys are ignored with a warning; valid keys are applied
     immediately to the running optimizer instance.
     """
-    from utils.gpu_acceleration_optimizer import update_gpu_config
+    from utils.gpu_acceleration_optimizer import gpu_optimizer, update_gpu_config
+
+    if not gpu_optimizer.gpu_available:
+        raise _gpu_unavailable_error()
 
     if not body.updates:
         raise HTTPException(

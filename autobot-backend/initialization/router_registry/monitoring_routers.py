@@ -61,11 +61,13 @@ MONITORING_ROUTER_CONFIGS = [
         "alertmanager_webhook",
     ),
     # Issue #2267: GPU acceleration optimizer monitoring endpoints
+    # Issue #2315: prefix changed from /monitoring to /monitoring/gpu to avoid
+    # collision with api.monitoring (Issue #1288 anti-pattern)
     (
         "api.gpu_monitoring",
         "router",
-        "/monitoring",
-        ["GPU Monitoring"],
+        "/monitoring/gpu",
+        ["gpu-monitoring"],
         "gpu_monitoring",
     ),
 ]
