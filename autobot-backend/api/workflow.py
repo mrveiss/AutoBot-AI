@@ -8,7 +8,6 @@ Handles workflow approvals, progress tracking, and coordination
 
 import asyncio
 import logging
-import re
 import time
 import uuid
 from datetime import datetime
@@ -22,6 +21,7 @@ from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
 from monitoring.prometheus_metrics import get_metrics_manager
+from patterns.conversation_patterns import conversation_patterns
 from pydantic import BaseModel
 from type_defs.common import Metadata
 
@@ -253,49 +253,29 @@ def _validate_orchestrator(request: Request):
     return orchestrator
 
 
-# Issue #2181: Simple conversational patterns consolidated from LightweightOrchestrator.
-# New code should use these module-level constants rather than instantiating
-# LightweightOrchestrator (which is now deleted).
-_SIMPLE_PATTERNS = [
-    re.compile(r"^(hello|hi|hey)!?$", re.IGNORECASE),
-    re.compile(r"^(thanks?|thank you)!?$", re.IGNORECASE),
-    re.compile(r"^(bye|goodbye|see you)!?$", re.IGNORECASE),
-    re.compile(r"^(ok|okay|yes|no)!?$", re.IGNORECASE),
-]
-
-_SIMPLE_RESPONSES = {
-    "hello": "Hello! How can I help you today?",
-    "hi": "Hello! How can I help you today?",
-    "hey": "Hello! How can I help you today?",
-    "thanks": "You're welcome!",
-    "thank you": "You're welcome!",
-    "bye": "Goodbye! Feel free to ask if you need anything else.",
-    "goodbye": "Goodbye! Feel free to ask if you need anything else.",
-    "see you": "Goodbye! Feel free to ask if you need anything else.",
-    "ok": "Understood!",
-    "okay": "Understood!",
-    "yes": "Understood!",
-    "no": "Understood!",
-}
+# Issue #2181/#2235: Use the centralized ConversationPatterns module for
+# simple-message detection.  This preserves ALL conversation types (greeting,
+# farewell, gratitude, status inquiry, affirmation, negation) and their
+# response templates rather than a reduced set of hardcoded regexes.
+_conversation_patterns = conversation_patterns
 
 
 def _try_simple_response(user_message: str) -> Optional[Dict]:
     """Return a canned response for trivial messages, or None for complex ones.
 
-    Consolidated from LightweightOrchestrator (Issue #2181). Handles greetings,
-    acknowledgements, and other short conversational messages without invoking
-    the full orchestration pipeline.
+    Consolidated from LightweightOrchestrator (Issue #2181).  Uses the
+    centralized ConversationPatterns module (#2235 review fix) to cover all
+    six conversation types with their canonical response templates.
     """
-    message_stripped = user_message.strip()
-    message_clean = message_stripped.lower().rstrip("!")
-    if any(pattern.match(message_stripped) for pattern in _SIMPLE_PATTERNS):
-        return {
-            "success": True,
-            "type": "lightweight_response",
-            "result": _SIMPLE_RESPONSES.get(message_clean, "Understood!"),
-            "routing_method": "simple_pattern_match",
-        }
-    return None
+    conv_type = _conversation_patterns.classify_message(user_message)
+    if conv_type is None:
+        return None
+    return {
+        "success": True,
+        "type": "lightweight_response",
+        "result": _conversation_patterns.get_response_template(conv_type),
+        "routing_method": "conversation_pattern_match",
+    }
 
 
 class _ComplexWorkflowRequired(Exception):
