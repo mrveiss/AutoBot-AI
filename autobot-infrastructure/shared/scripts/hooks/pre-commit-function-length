@@ -46,7 +46,7 @@ find_python() {
     fi
 }
 
-# Get staged Python files (excluding tests, __init__, temp directories)
+# Get staged Python files (excluding tests, __init__, temp directories, migrations)
 get_staged_files() {
     git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
         grep -E '\.py$' | \
