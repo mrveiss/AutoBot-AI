@@ -34,10 +34,6 @@ class AuthService:
     def __init__(self):
         self.algorithm = "HS256"
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash."""
-        return pwd_context.verify(plain_password, hashed_password)
-
     def hash_password(self, password: str) -> str:
         """Hash a password."""
         return pwd_context.hash(password)
