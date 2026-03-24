@@ -355,6 +355,7 @@ import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
+import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
@@ -534,7 +535,7 @@ const {
   },
 )
 
-const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
+// dashboardTask moved inside useDashboardLoaders (#1579)
 const scanRunner = useAnalyticsScanRunner()
 
 // Issue #1133: CodeSource type
@@ -594,8 +595,7 @@ const sourceIdQuery = computed((): Record<string, string> => {
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
-const realTimeEnabled = ref(false)
-const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null)
+// realTimeEnabled, refreshInterval provided by useDashboardLoaders (#1579)
 
 // Issue #208: Pattern Analysis component ref
 interface PatternAnalysisComponent {
@@ -704,34 +704,7 @@ const codeSmellsProgressTitle = computed(() => {
     : t('analytics.codebase.progress.analyzingSmells')
 })
 
-// Enhanced analytics data interfaces
-interface SystemOverviewData {
-  api_requests_per_minute: number
-  average_response_time: number
-  active_connections: number
-  system_health: string
-}
-
-interface CommunicationPatternsData {
-  websocket_connections: number
-  api_call_frequency: number
-  data_transfer_rate: number
-  unique_endpoints: number  // Issue #1602: was extracted but never displayed
-}
-
-interface CodeQualityData {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
-}
-
-interface PerformanceMetricsData {
-  efficiency_score: number
-  memory_usage: number
-  cpu_usage: number
-  load_time: number
-}
+// Dashboard overview interfaces moved to useDashboardLoaders (#1579)
 
 interface ChartDataItem {
   name: string
@@ -821,11 +794,29 @@ interface UnifiedReportData {
   timestamp: string
 }
 
-// Enhanced analytics data
-const systemOverview = ref<SystemOverviewData | null>(null)
-const communicationPatterns = ref<CommunicationPatternsData | null>(null)
-const codeQuality = ref<CodeQualityData | null>(null)
-const performanceMetrics = ref<PerformanceMetricsData | null>(null)
+// Issue #1579: Dashboard overview state + loaders from useDashboardLoaders composable.
+// Initialized after withSourceId and other dependencies are available.
+const {
+  systemOverview,
+  communicationPatterns,
+  codeQuality,
+  performanceMetrics,
+  realTimeEnabled,
+  refreshInterval,
+  loadSystemOverview,
+  loadCommunicationPatterns,
+  loadCodeQuality,
+  loadPerformanceMetrics,
+  refreshAllMetrics,
+  toggleRealTime,
+} = useDashboardLoaders({
+  withSourceId,
+  additionalRefreshCallbacks: () => [
+    getCodebaseStats(),
+    getProblemsReport(),
+    loadDeclarations(),
+  ],
+})
 
 // Chart data for visualizations
 const chartData = ref<ChartData | null>(null)
@@ -2997,202 +2988,10 @@ const runFullAnalysis = async () => {
   }
 }
 
-// Enhanced Analytics Methods (#1304: background task)
-const loadSystemOverview = async () => {
-  try {
-    const ok = await dashboardTask.start()
-    if (ok && dashboardTask.result.value) {
-      const result = dashboardTask.result.value as Record<string, unknown>
+// loadSystemOverview, loadCommunicationPatterns, loadCodeQuality, loadPerformanceMetrics,
+// refreshAllMetrics, toggleRealTime provided by useDashboardLoaders (#1579)
 
-      // Extract relevant data from the comprehensive dashboard response
-      const commPatterns = (result.communication_patterns || {}) as Record<string, unknown>
-      const perfMetrics = (result.performance_metrics || {}) as Record<string, unknown>
-      const sysHealth = (result.system_health || {}) as Record<string, unknown>
-      const realtimeMetrics = (result.realtime_metrics || {}) as Record<string, unknown>
 
-      const totalCalls = (commPatterns.total_api_calls as number) || 0
-      const avgResponseTime = (commPatterns.avg_response_time as number)
-        || (perfMetrics.avg_response_time as number) || 0
-      const activeConns = (realtimeMetrics.active_connections as Record<string, unknown>)
-      const activeConnections = (sysHealth.active_connections as number)
-        || (activeConns?.value as number) || 0
-
-      let healthStatus = 'Unknown'
-      if (sysHealth.status) {
-        healthStatus = sysHealth.status as string
-      } else if (sysHealth.cpu_percent !== undefined) {
-        healthStatus = (sysHealth.cpu_percent as number) < 80 ? 'Healthy' : 'Warning'
-      }
-
-      systemOverview.value = {
-        api_requests_per_minute: totalCalls,
-        average_response_time: Math.round(avgResponseTime * 1000),
-        active_connections: activeConnections,
-        system_health: healthStatus,
-      }
-    }
-  } catch (error: unknown) {
-    logger.error('loadSystemOverview failed:', error)
-    systemOverview.value = null
-  }
-}
-
-const loadCommunicationPatterns = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/communication/patterns`)
-
-    if (!response.ok) {
-      throw new Error(`Status ${response.status}`)
-    }
-
-    const result = await response.json()
-
-    // Extract WebSocket activity and API patterns
-    const wsActivity = result.websocket_activity || {}
-    const apiPatterns = result.api_patterns || []
-    const totalCalls = result.total_api_calls || 0
-    const uniqueEndpoints = result.unique_endpoints || 0
-
-    // Calculate WebSocket connections from activity or use total
-    const wsConnections = Object.keys(wsActivity).length || 0
-
-    // Calculate API frequency (calls per minute estimate)
-    // Use the pattern data to estimate frequency
-    const apiFrequency = apiPatterns.length > 0
-      ? Math.round(apiPatterns.reduce((sum: number, p: any) => sum + (p.frequency || 0), 0) / Math.max(apiPatterns.length, 1))
-      : totalCalls
-
-    // Estimate data transfer rate from response times and call count
-    const avgResponseTime = result.avg_response_time || 0
-    const estimatedDataRate = Math.round((totalCalls * avgResponseTime * 10) / 100) / 10 // Rough estimate in KB/s
-
-    communicationPatterns.value = {
-      websocket_connections: wsConnections,
-      api_call_frequency: apiFrequency,
-      data_transfer_rate: estimatedDataRate,
-      unique_endpoints: uniqueEndpoints  // Issue #1602: wire previously unused value
-    }
-  } catch (error: unknown) {
-    logger.error('loadCommunicationPatterns failed:', error)
-    // Set empty state on error
-    communicationPatterns.value = null
-  }
-}
-
-const loadCodeQuality = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Fetch health score from quality API
-    const healthResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-    const healthData = healthResponse.ok ? await healthResponse.json() : null
-
-    // Fetch duplicates count
-    const duplicatesResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/duplicates`))
-    const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
-
-    // Fetch technical debt summary
-    const debtResponse = await fetchWithAuth(`${backendUrl}/api/debt/summary`)
-    const debtData = debtResponse.ok ? await debtResponse.json() : null
-
-    // Issue #543: Handle no_data status from backend
-    // If all primary APIs return no_data, set codeQuality to null
-    if (healthData?.status === 'no_data' && debtData?.status === 'no_data') {
-      codeQuality.value = null
-      logger.debug('No code quality data - run indexing first')
-      return
-    }
-
-    // Calculate test coverage from testability score
-    const testCoverage = healthData?.breakdown?.testability || 0
-
-    const data = {
-      overall_score: Math.round(healthData?.overall || 0),
-      test_coverage: Math.round(testCoverage),
-      code_duplicates: duplicatesData?.total || 0,
-      technical_debt: debtData?.summary?.total_hours || 0
-    }
-    codeQuality.value = data
-  } catch (error: unknown) {
-    // Silent failure for dashboard cards
-    logger.error('loadCodeQuality failed:', error)
-  }
-}
-
-const loadPerformanceMetrics = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Fetch performance summary from performance analytics
-    const summaryResponse = await fetchWithAuth(`${backendUrl}/api/performance/summary`)
-    const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
-
-    // Fetch monitoring status for uptime
-    const monitoringResponse = await fetchWithAuth(`${backendUrl}/api/monitoring/status`)
-    const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
-
-    // Fetch quality metrics for performance breakdown
-    const qualityResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-    const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
-
-    // Issue #543: Handle no_data status from backend
-    if (summaryData?.status === 'no_data' && qualityData?.status === 'no_data') {
-      performanceMetrics.value = null
-      logger.debug('No performance metrics data - run indexing first')
-      return
-    }
-
-    // Get performance score from quality breakdown or performance analysis
-    const performanceScore = qualityData?.breakdown?.performance || 0
-    const efficiencyScore = summaryData?.average_score || performanceScore
-
-    // Get patterns analyzed count as a proxy for activity
-    const patternsEnabled = summaryData?.patterns_enabled || 0
-
-    const data = {
-      efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
-      memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0, // Patterns as memory proxy
-      cpu_usage: Math.round(100 - performanceScore), // Inverse of performance
-      load_time: monitoringData?.uptime_seconds
-        ? Math.round(monitoringData.uptime_seconds)
-        : 0
-    }
-    performanceMetrics.value = data
-  } catch (error: unknown) {
-    // Silent failure for dashboard cards
-    logger.error('loadPerformanceMetrics failed:', error)
-  }
-}
-
-const refreshAllMetrics = async () => {
-  // #1432: Only fetch cached GET endpoints on interval refresh.
-  // Background tasks (POST /analyze) are NOT re-triggered here to
-  // avoid 409 retry storms when analysis takes longer than the
-  // 30-second refresh interval.
-  await Promise.all([
-    // Enhanced analytics (top section) — all GET-only
-    loadCommunicationPatterns(),
-    loadCodeQuality(),
-    loadPerformanceMetrics(),
-
-    // Codebase analytics (bottom section) — GET-only
-    getCodebaseStats(),
-    getProblemsReport(),
-    loadDeclarations(),
-  ])
-}
-
-const toggleRealTime = () => {
-  if (realTimeEnabled.value) {
-    refreshInterval.value = setInterval(refreshAllMetrics, 30000) // 30 seconds
-  } else {
-    if (refreshInterval.value) {
-      clearInterval(refreshInterval.value)
-      refreshInterval.value = null
-    }
-  }
-}
 
 // Utility functions
 const getScoreClass = (score: number): string => {
