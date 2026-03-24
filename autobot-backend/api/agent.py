@@ -785,7 +785,12 @@ async def receive_goal(
     """
     from event_manager import event_manager
 
-    orchestrator = request.app.state.orchestrator
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Orchestrator not available - application not fully initialized",
+        )
     security_layer = request.app.state.security_layer
 
     goal = payload.goal
@@ -836,7 +841,12 @@ async def pause_agent_api(
     from event_manager import event_manager
 
     security_layer = request.app.state.security_layer
-    orchestrator = request.app.state.orchestrator
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Orchestrator not available - application not fully initialized",
+        )
     if not security_layer.check_permission(user_role, "allow_agent_control"):
         security_layer.audit_log(
             "agent_pause", user_role, "denied", {"reason": "permission_denied"}
@@ -888,7 +898,12 @@ async def resume_agent_api(
     from event_manager import event_manager
 
     security_layer = request.app.state.security_layer
-    orchestrator = request.app.state.orchestrator
+    orchestrator = getattr(request.app.state, "orchestrator", None)
+    if orchestrator is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Orchestrator not available - application not fully initialized",
+        )
     if not security_layer.check_permission(user_role, "allow_agent_control"):
         security_layer.audit_log(
             "agent_resume", user_role, "denied", {"reason": "permission_denied"}
