@@ -9,6 +9,7 @@ login, MFA challenges (Issue #576 Phase 5), and audit logging (Issue #998).
 Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 """
 
+import ipaddress
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -28,6 +29,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _normalize_ip(ip_str: str) -> str:
+    """Normalize IP, mapping ::ffff:x.x.x.x to x.x.x.x (#2239)."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+            return str(addr.ipv4_mapped)
+        return str(addr)
+    except ValueError:
+        return ip_str
+
+
 def _get_client_ip(http_request: Request) -> Optional[str]:
     """Extract the real client IP from the request.
 
@@ -37,10 +49,13 @@ def _get_client_ip(http_request: Request) -> Optional[str]:
     """
     direct_ip = http_request.client.host if http_request.client else None
     forwarded_for = http_request.headers.get("X-Forwarded-For")
-    if forwarded_for and direct_ip in settings.trusted_proxies:
-        candidate = forwarded_for.split(",")[0].strip()
-        if candidate:
-            return candidate
+    if forwarded_for and direct_ip:
+        normalized = _normalize_ip(direct_ip)
+        trusted = {_normalize_ip(p) for p in settings.trusted_proxies}
+        if normalized in trusted:
+            candidate = forwarded_for.split(",")[0].strip()
+            if candidate:
+                return candidate
     return direct_ip
 
 
