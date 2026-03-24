@@ -7,6 +7,8 @@ SLM Models Package
 Database models and Pydantic schemas for the SLM.
 """
 
+from user_management.models.user import User
+
 from .database import (
     Backup,
     BackupStatus,
@@ -16,7 +18,6 @@ from .database import (
     Node,
     NodeStatus,
     Setting,
-    User,
 )
 from .schemas import (
     BackupCreate,
