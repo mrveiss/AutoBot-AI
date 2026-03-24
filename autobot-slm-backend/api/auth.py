@@ -141,6 +141,7 @@ async def get_current_user_info(
     return {
         "username": current_user.get("sub"),
         "is_admin": current_user.get("admin", False),
+        "user_type": "slm_admin",
     }
 
 
