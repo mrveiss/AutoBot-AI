@@ -12,11 +12,15 @@ Contains GPU availability checking and capability detection.
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from .types import GPUCapabilities
 
 logger = logging.getLogger(__name__)
+
+# Module-level cache for detected GPU vendor (#1990)
+_cached_vendor: Optional[str] = None
+_vendor_detected: bool = False
 
 # NVIDIA GPU families known to have tensor cores
 _TENSOR_CORE_FAMILIES = {
@@ -99,15 +103,32 @@ def _has_tensor_cores(gpu_name: str) -> bool:
     return any(family in name_upper for family in _TENSOR_CORE_FAMILIES)
 
 
+def _detect_vendor() -> Optional[str]:
+    """Detect GPU vendor, caching the result to avoid duplicate subprocess calls.
+
+    Issue #1990: Both check_gpu_availability() and detect_gpu_capabilities()
+    need the vendor — this runs detection once and caches the result.
+    """
+    global _cached_vendor, _vendor_detected
+    if _vendor_detected:
+        return _cached_vendor
+
+    if _check_nvidia_gpu():
+        _cached_vendor = "nvidia"
+    elif _check_amd_gpu():
+        _cached_vendor = "amd"
+    elif _check_intel_gpu():
+        _cached_vendor = "intel"
+    else:
+        _cached_vendor = None
+
+    _vendor_detected = True
+    return _cached_vendor
+
+
 def check_gpu_availability() -> bool:
     """Check if any supported GPU is available."""
-    if _check_nvidia_gpu():
-        return True
-    if _check_amd_gpu():
-        return True
-    if _check_intel_gpu():
-        return True
-    return False
+    return _detect_vendor() is not None
 
 
 def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
@@ -117,13 +138,13 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
     if not gpu_available:
         return capabilities
 
-    # Try NVIDIA first (most common for ML workloads)
-    if _check_nvidia_gpu():
+    vendor = _detect_vendor()
+    if vendor == "nvidia":
         capabilities = _detect_nvidia_capabilities(capabilities)
-    elif _check_amd_gpu():
+    elif vendor == "amd":
         capabilities.vendor = "amd"
         capabilities = _detect_amd_capabilities(capabilities)
-    elif _check_intel_gpu():
+    elif vendor == "intel":
         capabilities.vendor = "intel"
         capabilities.name = "Intel GPU (detected via sysfs)"
 
