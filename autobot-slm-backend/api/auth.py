@@ -12,12 +12,18 @@ Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 import ipaddress
 import logging
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Union
 
 from api.security import create_audit_log
 from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.schemas import TokenRequest, TokenResponse, UserCreate, UserResponse
+from models.schemas import (
+    MfaChallengeResponse,
+    TokenRequest,
+    TokenResponse,
+    UserCreate,
+    UserResponse,
+)
 from services.auth import auth_service, get_current_user, get_slm_db, require_admin
 from services.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,14 +65,14 @@ def _get_client_ip(http_request: Request) -> Optional[str]:
     return direct_ip
 
 
-def _create_mfa_challenge(user: User) -> dict:
+def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
     """Create MFA challenge response with temporary token (Issue #576 Phase 5).
 
     Args:
         user: User requiring MFA verification
 
     Returns:
-        Dict with requires_mfa flag and temporary token
+        MfaChallengeResponse with temporary token
     """
     temp_token_data = {
         "sub": user.username,
@@ -79,16 +85,19 @@ def _create_mfa_challenge(user: User) -> dict:
         expires_delta=timedelta(minutes=5),
     )
     logger.info("MFA challenge issued for user: %s", user.username)
-    return {"requires_mfa": True, "temp_token": temp_token}
+    return MfaChallengeResponse(temp_token=temp_token)
 
 
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=Union[TokenResponse, MfaChallengeResponse],
+)
 async def login(
     http_request: Request,
     body: TokenRequest,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
     audit_db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> Union[TokenResponse, MfaChallengeResponse]:
     """Authenticate and get access token.
 
     Accepts username or email. Returns JWT token or MFA challenge.
