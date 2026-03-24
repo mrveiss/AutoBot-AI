@@ -215,6 +215,20 @@ class Settings(BaseSettings):
     # CORS settings
     cors_origins: list = _get_cors_origins()
 
+    # Trusted reverse-proxy IPs (Issue #2239).
+    # X-Forwarded-For is only honoured when the direct TCP connection comes
+    # from one of these addresses.  Override with SLM_TRUSTED_PROXIES
+    # (comma-separated).  Defaults cover localhost and the two nginx nodes
+    # (.19 SLM VM, .21 Frontend VM).
+    trusted_proxies: list = [
+        ip.strip()
+        for ip in os.getenv(
+            "SLM_TRUSTED_PROXIES",
+            "127.0.0.1,::1,172.16.168.19,172.16.168.21",  # noqa: ssot-proxy
+        ).split(",")
+        if ip.strip()
+    ]
+
     # External URL - remote nodes use nginx reverse proxy
     external_url: str = os.getenv(
         "SLM_EXTERNAL_URL", "https://172.16.168.19"  # noqa: ssot-fallback
