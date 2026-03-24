@@ -12,20 +12,13 @@ This module re-exports from the orchestration package for backward compatibility
 New code should import directly from orchestration.
 """
 
-import asyncio
-import json
 import logging
 import time
 import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from circuit_breaker import circuit_breaker_async
-from constants.threshold_constants import (
-    AgentThresholds,
-    CircuitBreakerDefaults,
-    RetryConfig,
-)
+from constants.threshold_constants import AgentThresholds
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
@@ -45,7 +38,6 @@ from orchestration import (
 
 # Import existing orchestrator components
 from orchestrator import Orchestrator, TaskComplexity
-from retry_mechanism import RetryStrategy, retry_async
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
 from utils.agent_selection import find_best_agent_for_task as _find_best_agent
@@ -360,14 +352,6 @@ class EnhancedOrchestrator:
             "execution_time": time.time() - start_time,
         }
 
-    @circuit_breaker_async(
-        "workflow_execution",
-        failure_threshold=CircuitBreakerDefaults.LLM_FAILURE_THRESHOLD,
-        recovery_timeout=CircuitBreakerDefaults.LLM_RECOVERY_TIMEOUT,
-    )
-    @retry_async(
-        max_attempts=RetryConfig.MIN_RETRIES, strategy=RetryStrategy.EXPONENTIAL_BACKOFF
-    )
     async def execute_enhanced_workflow(
         self,
         user_request: str,
@@ -381,6 +365,9 @@ class EnhancedOrchestrator:
 
         Issue #390: Added require_plan_approval and plan_approval_callback.
         Issue #381: Refactored to use orchestration package components.
+        Issue #2181: Removed redundant @circuit_breaker_async/@retry_async decorators.
+        Circuit breaker and retry are already applied by WorkflowExecutor in
+        orchestration/workflow_executor.py — applying them again here was redundant.
         """
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
@@ -534,32 +521,3 @@ class EnhancedOrchestrator:
         matching_docs.sort(key=lambda x: x["relevance_score"], reverse=True)
 
         return matching_docs
-
-
-if __name__ == "__main__":
-    # Example usage and testing
-    async def example_usage():
-        """Example usage of enhanced orchestrator."""
-
-        # Create enhanced orchestrator
-        enhanced_orchestrator = EnhancedOrchestrator()
-
-        # Execute an enhanced workflow
-        result = await enhanced_orchestrator.execute_enhanced_workflow(
-            user_request=(
-                "Research the latest developments in quantum computing and "
-                "create a summary document"
-            ),
-            context={"priority": "high", "deadline": "2024-01-01"},
-        )
-
-        print("Workflow Result:")  # noqa: print
-        print(json.dumps(result, indent=2, default=str))  # noqa: print
-
-        # Get orchestrator status
-        status = enhanced_orchestrator.get_orchestrator_status()
-        print("\nOrchestrator Status:")  # noqa: print
-        print(json.dumps(status, indent=2, default=str))  # noqa: print
-
-    # Run example
-    asyncio.run(example_usage())

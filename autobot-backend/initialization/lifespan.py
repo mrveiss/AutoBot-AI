@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -32,6 +31,7 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
+from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -841,6 +841,26 @@ async def _recover_index_queue():
         logger.warning("Index queue recovery failed (non-fatal): %s", e)
 
 
+async def _init_orchestrator(app: FastAPI) -> None:
+    """Initialize and store the orchestrator on app.state (#2235).
+
+    Creates a ConsolidatedOrchestrator (aliased as Orchestrator) and stores it
+    on ``app.state.orchestrator`` so that ``api/workflow.py`` and ``api/agent.py``
+    can access it.  NON-CRITICAL: endpoints that need it will return 422 if this
+    fails rather than crashing the whole application.
+    """
+    logger.info("[ 97%%] Orchestrator: Initializing...")
+    try:
+        from orchestrator import Orchestrator
+
+        orchestrator = Orchestrator()
+        app.state.orchestrator = orchestrator
+        logger.info("[ 97%%] Orchestrator: Stored on app.state")
+    except Exception as e:
+        logger.warning("Orchestrator initialization failed (non-fatal): %s", e)
+        app.state.orchestrator = None
+
+
 async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
@@ -929,6 +949,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_metrics_collection()
         await _recover_index_queue()
         await _init_process_adapter(app)
+        await _init_orchestrator(app)
         await _seed_agent_registry()
         await _wire_scheduler_executor()
 
