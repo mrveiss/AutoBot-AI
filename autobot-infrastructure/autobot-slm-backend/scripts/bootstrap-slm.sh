@@ -401,7 +401,8 @@ PORT=8000
 SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 
 # Redis (optional but recommended)
-REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
+# AUTOBOT_REDIS_HOST must be set in the deployment environment (#2224)
+REDIS_HOST=\${AUTOBOT_REDIS_HOST:?AUTOBOT_REDIS_HOST is required — set it in your environment}
 REDIS_PORT=6379
 REDIS_DB=0
 
