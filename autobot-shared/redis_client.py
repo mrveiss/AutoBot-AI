@@ -85,6 +85,16 @@ from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
+
+# NOTE: The imports below require autobot-backend on PYTHONPATH.
+# redis_management/ lives in autobot-backend/utils/ and depends on backend-only
+# modules (constants.network_constants, constants.redis_constants,
+# constants.threshold_constants, config, monitoring.prometheus_metrics).
+# Moving redis_management/ to autobot-shared would require pulling in those
+# backend modules too — the dependency chain is deep.
+# For now this coupling is accepted and documented here.
+# See issue #2220 for full analysis and discussion of moving redis_management
+# to autobot-shared as the preferred long-term fix.
 from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
 from utils.redis_management.connection_manager import RedisConnectionManager
 from utils.redis_management.statistics import (
