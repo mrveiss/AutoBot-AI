@@ -72,8 +72,9 @@ class AgentTopologyDB(Protocol):
         weight: float,
         co_success_count: Optional[int] = None,
         co_failure_count: Optional[int] = None,
+        last_updated: Optional[datetime] = None,
     ) -> None:
-        """Persist updated weight and counter fields."""
+        """Persist updated weight, counter, and timestamp fields (#2213)."""
         ...
 
     async def record_agent_task(
@@ -199,17 +200,20 @@ class AgentTopology:
         target = 1.0 if success else 0.0
         new_weight = conn.weight * _DECAY + target * _LEARNING_RATE
 
+        now = datetime.now(tz=timezone.utc)
         if success:
             await self.db.update_agent_connection(
                 conn.id,
                 weight=new_weight,
                 co_success_count=conn.co_success_count + 1,
+                last_updated=now,
             )
         else:
             await self.db.update_agent_connection(
                 conn.id,
                 weight=new_weight,
                 co_failure_count=conn.co_failure_count + 1,
+                last_updated=now,
             )
 
     async def prune_weak_connections(

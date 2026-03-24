@@ -10,7 +10,7 @@ using in-memory stubs — no database required.
 
 import dataclasses
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
@@ -93,6 +93,7 @@ async def test_record_outcome_success_reinforces():
         conn.id,
         weight=pytest.approx(expected_weight),
         co_success_count=1,
+        last_updated=ANY,
     )
 
 
@@ -111,6 +112,7 @@ async def test_record_outcome_failure_weakens():
         conn.id,
         weight=pytest.approx(expected_weight),
         co_failure_count=1,
+        last_updated=ANY,
     )
 
 
