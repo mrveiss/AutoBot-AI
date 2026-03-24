@@ -46,7 +46,7 @@ FEATURES (Consolidated from 8 implementations):
 
 MANDATORY USAGE PATTERN:
 ========================
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Synchronous client
 redis_client = get_redis_client(database="main")
@@ -493,7 +493,7 @@ class RedisDatabaseManager:
         """Initialize deprecated manager with deprecation warning."""
         logger.warning(
             "DEPRECATED: RedisDatabaseManager is deprecated. "
-            "Use get_redis_client() from backend.utils.redis_client instead."
+            "Use get_redis_client() from autobot_shared.redis_client instead."
         )
 
     def get_connection(
