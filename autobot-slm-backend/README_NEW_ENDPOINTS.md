@@ -49,11 +49,8 @@ pip install -r requirements.txt
 python migrations/add_events_certificates_updates_tables.py
 ```
 
-Or specify custom database path:
-
-```bash
-python migrations/add_events_certificates_updates_tables.py /path/to/slm.db
-```
+Note: The SLM backend uses PostgreSQL (Issue #786). SQLite-based
+migrations in this directory are legacy and no longer apply.
 
 ### 3. Verify Installation
 

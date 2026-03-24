@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-SLM Database Migrations
+SLM Database Migrations.
 
-Simple migration system for SQLite database updates.
+PostgreSQL is used for all database operations (Issue #786).
 """

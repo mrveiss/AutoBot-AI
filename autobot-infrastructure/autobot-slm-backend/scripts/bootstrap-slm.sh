@@ -397,8 +397,8 @@ backend_setup() {
 HOST=127.0.0.1
 PORT=8000
 
-# Database
-DATABASE_URL=sqlite:///${REMOTE_BACKEND}/data/slm.db
+# Database (PostgreSQL — Issue #786)
+SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 
 # Redis (optional but recommended)
 REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
