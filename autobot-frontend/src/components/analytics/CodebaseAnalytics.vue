@@ -354,6 +354,7 @@ import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
+import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
@@ -602,40 +603,9 @@ interface PatternAnalysisComponent {
 }
 const patternAnalysisRef = ref<PatternAnalysisComponent | null>(null)
 
-// Indexing job state tracking
-const currentJobId = ref<string | null>(null)
-const currentJobStatus = ref<string | null>(null)
-const jobPollingInterval = ref<ReturnType<typeof setInterval> | null>(null)
-
-// Interfaces for job tracking
-interface JobPhase {
-  id: string
-  name: string
-  status: 'pending' | 'running' | 'completed'
-}
-
-interface JobPhasesData {
-  phase_list: JobPhase[]
-}
-
-interface JobBatchesData {
-  total_batches: number
-  completed_batches: number
-}
-
-interface JobStatsData {
-  files_scanned: number
-  problems_found: number
-  functions_found: number
-  classes_found: number
-  items_stored: number
-}
-
-// Enhanced progress tracking with phases and batches
-const jobPhases = ref<JobPhasesData | null>(null)
-const jobBatches = ref<JobBatchesData | null>(null)
-const jobStats = ref<JobStatsData | null>(null)
-
+// Issue #1579: Indexing job state and logic extracted to useIndexingJob composable.
+// Initialized below after all dependent refs are declared (see "Initialize indexing composable" section).
+// Interfaces (JobPhasesData, JobBatchesData, JobStatsData) now live in useIndexingJob.ts.
 // getPhaseIcon moved to AnalyticsProgressSection (#1579)
 // getCategoryIcon moved to CodebaseChartsSection (#1579)
 
@@ -1625,189 +1595,37 @@ async function addToKnowledgeBase() {
   }
 }
 
-// Check if there's a running indexing job
-const checkCurrentIndexingJob = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
-    if (response.ok) {
-      const data = await response.json()
-      if (data.has_active_job) {
-        // Job is running - update UI and start polling
-        currentJobId.value = data.task_id
-        currentJobStatus.value = data.status
-        analyzing.value = true
-        progressStatus.value = data.progress?.step || t('analytics.codebase.status.indexingInProgress')
-        progressPercent.value = data.progress?.percent || 20
-
-        // Start polling for updates
-        startJobPolling()
-        notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'info')
-      } else if (data.task_id && data.status !== 'idle') {
-        // Job recently completed
-        progressStatus.value = t('analytics.codebase.status.lastJob', { status: data.status })
-      }
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.warn('Could not check for running job:', errorMessage)
-  }
-}
-
-// Poll for job status updates
-const startJobPolling = () => {
-  if (jobPollingInterval.value) {
-    clearInterval(jobPollingInterval.value)
-  }
-
-  jobPollingInterval.value = setInterval(async () => {
-    await pollJobStatus()
-  }, 2000) // Poll every 2 seconds
-}
-
-// Stop polling
-const stopJobPolling = () => {
-  if (jobPollingInterval.value) {
-    clearInterval(jobPollingInterval.value)
-    jobPollingInterval.value = null
-  }
-}
-
-// Poll for current job status
-// #1588: Extract Method — update UI state from active job data
-const _updateActiveJobProgress = (data: Record<string, unknown>) => {
-  analyzing.value = true
-  if (data.phases) jobPhases.value = data.phases
-  if (data.batches) jobBatches.value = data.batches
-  if (data.stats) jobStats.value = data.stats
-
-  const progress = data.progress as Record<string, unknown> | undefined
-  if (progress) {
-    progressPercent.value = (progress.percent as number) || 0
-    const operation = (progress.operation as string) || 'Processing'
-    const currentFile = (progress.current_file as string) || ''
-    const current = (progress.current as number) || 0
-    const total = (progress.total as number) || 0
-
-    const statusParts: string[] = []
-    if (currentFile && currentFile !== 'Initializing...') statusParts.push(currentFile)
-    if (total > 0) statusParts.push(`(${current}/${total})`)
-
-    progressStatus.value = statusParts.length > 0
-      ? `${operation}: ${statusParts.join(' ')}`
-      : operation
-  }
-}
-
-// #1588: Extract Method — handle completed/cancelled/failed job
-const _handleJobFinished = async (status: string, error?: string) => {
-  analyzing.value = false
-  stopJobPolling()
-  jobPhases.value = null
-  jobBatches.value = null
-  jobStats.value = null
-
-  if (status === 'completed') {
-    progressStatus.value = t('analytics.codebase.status.indexingCompleted')
-    progressPercent.value = 100
-    notify(t('analytics.codebase.notify.indexingCompleted'), 'success')
-    showKnowledgeBaseOptIn.value = true
-    await runAllAnalysisScans()
-  } else if (status === 'cancelled') {
-    progressStatus.value = t('analytics.codebase.status.indexingCancelled')
-    notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
-  } else if (status === 'failed' || error) {
-    const errMsg = error || t('analytics.codebase.errors.unknown')
-    progressStatus.value = t('analytics.codebase.status.indexingFailed', { error: errMsg })
-    notify(t('analytics.codebase.notify.indexingFailed', { error: errMsg }), 'error')
-  }
-  currentJobId.value = null
-}
-
-const pollJobStatus = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
-    if (!response.ok) return
-
-    const data = await response.json()
-    currentJobStatus.value = data.status
-
-    if (data.has_active_job) {
-      _updateActiveJobProgress(data)
-      await pollIntermediateResults()
-    } else {
-      await _handleJobFinished(data.status, data.error)
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.warn('Job polling error:', errorMessage)
-  }
-}
-
-// Poll for intermediate results during indexing
-// Note: Does NOT update progressStatus - that's handled by pollJobStatus with detailed info
-const pollIntermediateResults = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Poll for problems found so far (#1710: per-source)
-    const problemsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/problems`))
-    if (problemsResponse.ok) {
-      const problemsData = await problemsResponse.json()
-      problemsReport.value = problemsData.problems || []
-    }
-
-    // Poll for stats (#1710: per-source)
-    const statsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/stats`))
-    if (statsResponse.ok) {
-      const statsData = await statsResponse.json()
-      if (statsData.stats) {
-        codebaseStats.value = statsData.stats
-        // Note: progressStatus is now set by pollJobStatus with detailed operation info
-        // The jobStats ref already shows files_scanned, problems_found in the UI
-      }
-    }
-  } catch (error: unknown) {
-    // Silent - don't interrupt polling
-  }
-}
-
-// Cancel the running indexing job
-const cancelIndexingJob = async () => {
-  if (!currentJobId.value) {
-    notify(t('analytics.codebase.notify.noActiveJob'), 'warning')
-    return
-  }
-
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/cancel`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success) {
-        analyzing.value = false
-        stopJobPolling()
-        currentJobId.value = null
-        progressStatus.value = t('analytics.codebase.status.indexingCancelledByUser')
-        notify(t('analytics.codebase.notify.indexingJobCancelled'), 'success')
-      } else {
-        notify(data.message || t('analytics.codebase.notify.couldNotCancel'), 'warning')
-      }
-    } else {
-      notify(t('analytics.codebase.notify.cancelFailed'), 'error')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    notify(t('analytics.codebase.notify.cancelError', { error: errorMessage }), 'error')
-  }
-}
+// Issue #1579: Initialize indexing job composable
+// Note: runAllAnalysisScans is defined later but captured by closure when called.
+const {
+  currentJobId,
+  currentJobStatus,
+  jobPhases,
+  jobBatches,
+  jobStats,
+  checkCurrentIndexingJob,
+  stopJobPolling,
+  cancelIndexingJob,
+  indexCodebase,
+} = useIndexingJob({
+  rootPath,
+  analyzing,
+  progressPercent,
+  progressStatus,
+  selectedSource,
+  withSourceId,
+  notify,
+  t,
+  problemsReport,
+  codebaseStats,
+  declarationAnalysis,
+  duplicateAnalysis,
+  hardcodeAnalysis,
+  chartData,
+  showKnowledgeBaseOptIn,
+  onIndexComplete: () => runAllAnalysisScans(),
+  storageKeyPath: STORAGE_KEY_PATH,
+})
 
 const handleStop = () => {
   if (analyzing.value && currentJobId.value) {
@@ -2421,102 +2239,7 @@ onUnmounted(() => {
   stopJobPolling()
 })
 
-// Index codebase first
-// #1588: Extract Method — send index request with retry on 502/503 (#1249)
-const _sendIndexRequest = async (endpoint: string, body: string): Promise<Response> => {
-  const maxRetries = 2
-  let response: Response | null = null
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    response = await fetchWithAuth(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    })
-    if (response.status !== 502 && response.status !== 503) break
-    if (attempt < maxRetries) {
-      const delay = (attempt + 1) * 3
-      progressStatus.value = t('analytics.codebase.status.backendRetrying', { delay })
-      logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
-      await new Promise(r => setTimeout(r, delay * 1000))
-    }
-  }
-  if (!response || !response.ok) {
-    const errorText = response ? await response.text() : 'No response'
-    const status = response?.status ?? 0
-    if (status === 502 || status === 503) {
-      throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
-    }
-    throw new Error(`Status ${status}: ${errorText}`)
-  }
-  return response
-}
-
-// #1588: Extract Method — handle index API response status
-const _handleIndexResponseStatus = (data: Record<string, unknown>): boolean => {
-  if (data.status === 'syncing') {
-    progressStatus.value = t('analytics.codebase.status.syncingRepo')
-    notify(t('analytics.codebase.notify.syncStarted'), 'info')
-    startJobPolling()
-    return true // early return — polling handles the rest
-  } else if (data.status === 'already_running') {
-    currentJobId.value = data.task_id as string
-    progressStatus.value = t('analytics.codebase.status.monitoringIndexing')
-    notify(t('analytics.codebase.notify.indexingMonitoring'), 'info')
-  } else if (data.status === 'queued') {
-    progressStatus.value = t('analytics.codebase.status.queued', { position: data.position })
-    notify(t('analytics.codebase.notify.indexingQueued'), 'info')
-    startJobPolling()
-    return true // early return — polling handles the rest
-  } else {
-    currentJobId.value = data.task_id as string
-    progressStatus.value = t('analytics.codebase.status.initializingIndexing')
-    notify(t('analytics.codebase.notify.indexingStarted'), 'success')
-  }
-  return false
-}
-
-const indexCodebase = async () => {
-  if (currentJobId.value) {
-    notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'warning')
-    return
-  }
-
-  analyzing.value = true
-  progressPercent.value = 10
-  progressStatus.value = t('analytics.codebase.status.startingIndexing')
-  localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
-
-  // Clear previous analysis data
-  problemsReport.value = []
-  codebaseStats.value = null
-  declarationAnalysis.value = []
-  duplicateAnalysis.value = []
-  hardcodeAnalysis.value = []
-  chartData.value = null
-
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const requestBody = JSON.stringify(
-      selectedSource.value
-        ? { source_id: selectedSource.value.id }
-        : { root_path: rootPath.value }
-    )
-    const response = await _sendIndexRequest(`${backendUrl}/api/analytics/codebase/index`, requestBody)
-    const data = await response.json()
-
-    if (_handleIndexResponseStatus(data)) return
-
-    progressPercent.value = 5
-    await pollJobStatus()
-    startJobPolling()
-  } catch (error: unknown) {
-    logger.error('Indexing failed:', error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    progressStatus.value = t('analytics.codebase.status.indexingFailedToStart', { error: errorMessage })
-    notify(t('analytics.codebase.notify.indexingFailed', { error: errorMessage }), 'error')
-    analyzing.value = false
-  }
-}
+// _sendIndexRequest, _handleIndexResponseStatus, indexCodebase moved to useIndexingJob (#1579)
 
 
 // Get codebase statistics
