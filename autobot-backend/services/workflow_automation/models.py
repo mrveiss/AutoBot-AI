@@ -172,6 +172,8 @@ class ActiveWorkflow:
     completed_at: Optional[datetime] = None
     user_interventions: List[Metadata] = field(default_factory=list)
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
+    # Issue #2153: Owner identifier for workflow secret resolution.
+    owner_id: Optional[str] = None
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""
