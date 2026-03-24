@@ -66,11 +66,15 @@ class AgentRouter:
             task_type = agent.value if hasattr(agent, "value") else str(agent)
 
         try:
-            from agents.task_pattern_learner import TaskPatternLearner
+            from agents.task_pattern_learner import (
+                LEARNED_STRATEGY_CONFIDENCE,
+                TaskPatternLearner,
+            )
 
             learner = TaskPatternLearner()
+            task_type = learner.normalize_task_type(task_type)
             strategy = await learner.get_learned_strategy(task_type)
-            if strategy and strategy.confidence > 0.7:
+            if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE:
                 logger.info(
                     "Using learned strategy for %s (confidence=%.2f)",
                     task_type,

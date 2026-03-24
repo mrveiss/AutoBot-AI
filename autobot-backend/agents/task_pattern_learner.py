@@ -21,6 +21,12 @@ REDIS_PATTERNS_TTL = 60 * 60 * 24 * 7  # 7 days
 
 # Minimum outcomes required before learning is triggered
 MIN_OUTCOMES_TO_LEARN = 3
+
+# Confidence thresholds (#2208):
+# - 0.7: minimum for using a learned strategy (in AgentRouter._check_learned_strategy)
+#   Lower than quick_route to allow learned strategies a fair trial.
+# - 0.8: minimum for quick_route_analysis to bypass LLM routing entirely.
+LEARNED_STRATEGY_CONFIDENCE = 0.7
 # Maximum outcomes considered per analysis window
 ANALYSIS_WINDOW = 20
 
@@ -63,18 +69,28 @@ class TaskPatternLearner:
             self._llm = LLMInterface()
         return self._llm
 
+    @staticmethod
+    def normalize_task_type(task_type: str) -> str:
+        """Canonicalise task_type to AgentType.value vocabulary (#2208).
+
+        Lowercases, strips whitespace, and replaces spaces/hyphens with
+        underscores so free-form caller strings match AgentType enum values.
+        """
+        return task_type.strip().lower().replace("-", "_").replace(" ", "_")
+
     async def learn_from_outcomes(
         self, task_type: str, outcomes: List[Dict]
     ) -> Optional[LearnedStrategy]:
         """Analyze recent outcomes and extract the best strategy.
 
         Args:
-            task_type: Task category to analyze
+            task_type: Task category to analyze (normalised to AgentType vocab)
             outcomes: List of outcome dicts with score, strategy_used, rationale
 
         Returns:
             LearnedStrategy if enough data, else None
         """
+        task_type = self.normalize_task_type(task_type)
         if len(outcomes) < MIN_OUTCOMES_TO_LEARN:
             logger.debug("Not enough outcomes to learn from for %s", task_type)
             return None
@@ -193,7 +209,8 @@ class TaskPatternLearner:
             logger.warning("Failed to persist learned strategy: %s", exc)
 
     async def get_learned_strategy(self, task_type: str) -> Optional[LearnedStrategy]:
-        """Retrieve persisted learned strategy for a task type."""
+        """Retrieve persisted learned strategy for a task type (#2208)."""
+        task_type = self.normalize_task_type(task_type)
         try:
             redis = await self._get_redis()
             key = REDIS_PATTERNS_KEY.format(task_type=task_type)
