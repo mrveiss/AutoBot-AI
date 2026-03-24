@@ -147,7 +147,7 @@ def start_vnc_server() -> Dict[str, str]:
         return {
             "status": "error",
             "message": (
-                f"VNC passwd file not found at {vnc_passwd}. "
+                "VNC passwd file not found. "
                 "Run `vncpasswd` to create it before starting the VNC server."
             ),
         }

@@ -22,7 +22,8 @@ import logging
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 from services.workflow_secret_service import (
     WorkflowSecretService,
@@ -53,11 +54,10 @@ def _validate_secret_name(name: str) -> str:
 
 
 class WorkflowSecretCreateRequest(BaseModel):
-    """Request body for creating a workflow secret."""
+    """Request body for creating a workflow secret. Issue #2303: owner_id derived from auth."""
 
     name: str = Field(..., min_length=1, max_length=256)
     value: str = Field(..., min_length=1, max_length=65536)
-    owner_id: str = Field(..., min_length=1, max_length=128)
     secret_type: str = Field(default="api_key", max_length=50)
     workflow_id: Optional[str] = Field(default=None, max_length=128)
     description: Optional[str] = Field(default=None, max_length=1024)
@@ -70,10 +70,9 @@ class WorkflowSecretCreateRequest(BaseModel):
 
 
 class WorkflowSecretUpdateRequest(BaseModel):
-    """Request body for updating a workflow secret's value."""
+    """Request body for updating a workflow secret's value. Issue #2303: owner_id from auth."""
 
     value: str = Field(..., min_length=1, max_length=65536)
-    owner_id: str = Field(..., min_length=1, max_length=128)
 
 
 class WorkflowSecretMetadata(BaseModel):
@@ -119,6 +118,7 @@ def _to_metadata(row: dict) -> WorkflowSecretMetadata:
 @router.post("", status_code=201, response_model=WorkflowSecretMetadata)
 async def create_workflow_secret(
     request: WorkflowSecretCreateRequest,
+    current_user: dict = Depends(get_current_user),
 ) -> WorkflowSecretMetadata:
     """
     Store an encrypted workflow credential.
@@ -126,13 +126,14 @@ async def create_workflow_secret(
     The plaintext **value** is encrypted with Fernet before persistence and
     is never stored in plaintext. It cannot be retrieved via any API endpoint.
 
-    Issue #2153.
+    Issue #2153, #2303.
     """
+    owner_id = current_user.get("user_id", "")
     try:
         result = _svc().create_secret(
             name=request.name,
             value=request.value,
-            owner_id=request.owner_id,
+            owner_id=owner_id,
             secret_type=request.secret_type,
             workflow_id=request.workflow_id,
             description=request.description,
@@ -140,7 +141,12 @@ async def create_workflow_secret(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
-        logger.error("Failed to create workflow secret name=%s: %s", request.name, exc)
+        logger.error(
+            "Failed to create workflow secret name=%s owner=%s: %s",
+            request.name,
+            owner_id,
+            exc,
+        )
         raise HTTPException(status_code=500, detail="Failed to store secret") from exc
 
     return WorkflowSecretMetadata(
@@ -155,8 +161,8 @@ async def create_workflow_secret(
 
 @router.get("", response_model=List[WorkflowSecretMetadata])
 async def list_workflow_secrets(
-    owner_id: str = Query(..., min_length=1, max_length=128),
     workflow_id: Optional[str] = Query(default=None, max_length=128),
+    current_user: dict = Depends(get_current_user),
 ) -> List[WorkflowSecretMetadata]:
     """
     List workflow secret names and metadata.
@@ -164,8 +170,9 @@ async def list_workflow_secrets(
     Secret **values are never returned**. Use the ${secrets.NAME} syntax in
     workflow step commands to reference secrets at execution time.
 
-    Issue #2153.
+    Issue #2153, #2303.
     """
+    owner_id = current_user.get("user_id", "")
     try:
         rows = _svc().list_secrets(owner_id=owner_id, workflow_id=workflow_id)
     except Exception as exc:
@@ -179,30 +186,32 @@ async def list_workflow_secrets(
 async def update_workflow_secret(
     name: str,
     request: WorkflowSecretUpdateRequest,
+    current_user: dict = Depends(get_current_user),
 ) -> WorkflowSecretMetadata:
     """
     Replace the encrypted value of an existing workflow secret.
 
     The name in the path must match an existing secret owned by the caller.
 
-    Issue #2153.
+    Issue #2153, #2303.
     """
     try:
         _validate_secret_name(name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    owner_id = current_user.get("user_id", "")
     try:
         updated = _svc().update_secret(
             name=name,
             new_value=request.value,
-            owner_id=request.owner_id,
+            owner_id=owner_id,
         )
     except Exception as exc:
         logger.error(
             "Failed to update workflow secret name=%s owner=%s: %s",
             name,
-            request.owner_id,
+            owner_id,
             exc,
         )
         raise HTTPException(status_code=500, detail="Failed to update secret") from exc
@@ -210,9 +219,7 @@ async def update_workflow_secret(
     if not updated:
         raise HTTPException(status_code=404, detail=f"Secret '{name}' not found")
 
-    logger.info(
-        "Workflow secret updated via API: name=%s owner=%s", name, request.owner_id
-    )
+    logger.info("Workflow secret updated via API: name=%s owner=%s", name, owner_id)
     return WorkflowSecretMetadata(
         id="",
         name=name,
@@ -224,18 +231,19 @@ async def update_workflow_secret(
 @router.delete("/{name}", status_code=204)
 async def delete_workflow_secret(
     name: str,
-    owner_id: str = Query(..., min_length=1, max_length=128),
+    current_user: dict = Depends(get_current_user),
 ) -> None:
     """
     Deactivate (soft-delete) a workflow secret.
 
-    Issue #2153.
+    Issue #2153, #2303.
     """
     try:
         _validate_secret_name(name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    owner_id = current_user.get("user_id", "")
     try:
         deleted = _svc().delete_secret(name=name, owner_id=owner_id)
     except Exception as exc:

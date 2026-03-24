@@ -125,8 +125,14 @@ class WorkflowAutomationManager:
         steps: List[WorkflowStep],
         session_id: str,
         automation_mode: AutomationMode = AutomationMode.SEMI_AUTOMATIC,
+        owner_id: Optional[str] = None,
     ) -> str:
-        """Create new automated workflow"""
+        """Create new automated workflow.
+
+        Issue #2304: owner_id should be passed by callers that have authenticated
+        user context (e.g. API endpoints using Depends(get_current_user)).
+        Internal callers without user context leave owner_id=None.
+        """
         workflow_id = str(uuid.uuid4())
 
         workflow = ActiveWorkflow(
@@ -136,6 +142,7 @@ class WorkflowAutomationManager:
             session_id=session_id,
             steps=steps,
             automation_mode=automation_mode,
+            owner_id=owner_id,
         )
 
         self.active_workflows[workflow_id] = workflow
