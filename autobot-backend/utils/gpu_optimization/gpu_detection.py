@@ -52,7 +52,8 @@ def _check_nvidia_gpu() -> Optional[str]:
             text=True,
             timeout=5,
         )
-        name = result.stdout.strip()
+        lines = result.stdout.strip().splitlines()
+        name = lines[0].strip() if lines else ""
         if result.returncode == 0 and name:
             return name
         return None
@@ -132,6 +133,13 @@ def _detect_vendor() -> Optional[str]:
     return None
 
 
+def _reset_detection_state() -> None:
+    """Reset cached vendor and GPU name state (for test isolation)."""
+    global _nvidia_gpu_name
+    _nvidia_gpu_name = None
+    _detect_vendor.cache_clear()
+
+
 def check_gpu_availability() -> bool:
     """Check if any supported GPU is available."""
     return _detect_vendor() is not None
@@ -179,7 +187,10 @@ def _detect_nvidia_capabilities(
             timeout=10,
         )
         if result.returncode == 0:
-            parts = result.stdout.strip().split(", ")
+            first_line = (
+                result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
+            )
+            parts = first_line.split(", ")
             if len(parts) >= 2:
                 memory_mb = int(parts[0].strip())
                 cuda_version = parts[1].strip()
