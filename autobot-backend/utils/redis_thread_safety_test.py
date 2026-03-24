@@ -274,18 +274,17 @@ class TestIdleCleanupThreadSafety:
         manager._sync_pools["test_db"] = mock_pool
         manager._max_idle_time_seconds = 300  # 5 minutes
 
-        # Use freezegun or manual datetime mocking
-        # Mock datetime.now() to return consistent value
-        import autobot_shared.redis_client as redis_client_module
+        # Issue #2211: mock datetime on the module that actually uses it.
+        import utils.redis_management.connection_manager as cm_module
 
-        original_datetime = redis_client_module.datetime
+        original_datetime = cm_module.datetime
 
         class MockDatetime:
             @staticmethod
             def now():
                 return datetime(2025, 1, 1, 12, 0, 0)
 
-        redis_client_module.datetime = MockDatetime
+        cm_module.datetime = MockDatetime
 
         try:
             # Run cleanup
@@ -302,8 +301,7 @@ class TestIdleCleanupThreadSafety:
             assert conn_3 in mock_pool._available_connections
             assert conn_4 in mock_pool._available_connections
         finally:
-            # Restore original datetime
-            redis_client_module.datetime = original_datetime
+            cm_module.datetime = original_datetime
 
 
 class TestRaceConditionPrevention:
