@@ -19,6 +19,9 @@ from .types import GPUCapabilities
 
 logger = logging.getLogger(__name__)
 
+# Stashed GPU name from initial nvidia-smi probe (#2222)
+_nvidia_gpu_name: Optional[str] = None
+
 # NVIDIA GPU families known to have tensor cores
 _TENSOR_CORE_FAMILIES = {
     "RTX",
@@ -36,8 +39,12 @@ _TENSOR_CORE_FAMILIES = {
 }
 
 
-def _check_nvidia_gpu() -> bool:
-    """Check if an NVIDIA GPU is available via nvidia-smi."""
+def _check_nvidia_gpu() -> Optional[str]:
+    """Check for NVIDIA GPU via nvidia-smi, returning the GPU name or None.
+
+    Issue #2222: Returns the name so callers can reuse it without
+    spawning a second nvidia-smi subprocess.
+    """
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
@@ -45,11 +52,14 @@ def _check_nvidia_gpu() -> bool:
             text=True,
             timeout=5,
         )
-        return result.returncode == 0 and len(result.stdout.strip()) > 0
+        name = result.stdout.strip()
+        if result.returncode == 0 and name:
+            return name
+        return None
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+        return None
     except Exception:
-        return False
+        return None
 
 
 def _check_amd_gpu() -> bool:
@@ -106,9 +116,14 @@ def _detect_vendor() -> Optional[str]:
 
     Issue #1990: Both check_gpu_availability() and detect_gpu_capabilities()
     need the vendor — this runs detection once and caches the result.
+    Issue #2222: Stashes the NVIDIA GPU name from the initial probe so
+    _detect_nvidia_capabilities() can skip its redundant nvidia-smi call.
     Use _detect_vendor.cache_clear() to reset (e.g. in tests).
     """
-    if _check_nvidia_gpu():
+    global _nvidia_gpu_name
+    nvidia_name = _check_nvidia_gpu()
+    if nvidia_name:
+        _nvidia_gpu_name = nvidia_name
         return "nvidia"
     if _check_amd_gpu():
         return "amd"
@@ -145,13 +160,18 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
 def _detect_nvidia_capabilities(
     capabilities: GPUCapabilities,
 ) -> GPUCapabilities:
-    """Detect NVIDIA GPU capabilities via nvidia-smi + pynvml."""
+    """Detect NVIDIA GPU capabilities via nvidia-smi + pynvml.
+
+    Issue #2222: Reuses the GPU name stashed by _detect_vendor() and
+    queries only memory.total + cuda_version from nvidia-smi.
+    """
     capabilities.vendor = "nvidia"
+    gpu_name = _nvidia_gpu_name
     try:
         result = subprocess.run(
             [
                 "nvidia-smi",
-                "--query-gpu=name,memory.total,cuda_version",
+                "--query-gpu=memory.total,cuda_version",
                 "--format=csv,noheader,nounits",
             ],
             capture_output=True,
@@ -160,15 +180,14 @@ def _detect_nvidia_capabilities(
         )
         if result.returncode == 0:
             parts = result.stdout.strip().split(", ")
-            if len(parts) >= 3:
-                gpu_name = parts[0].strip()
-                memory_mb = int(parts[1].strip())
-                cuda_version = parts[2].strip()
+            if len(parts) >= 2:
+                memory_mb = int(parts[0].strip())
+                cuda_version = parts[1].strip()
 
-                capabilities.name = gpu_name
+                capabilities.name = gpu_name or "NVIDIA GPU"
                 capabilities.memory_gb = round(memory_mb / 1024, 1)
                 capabilities.cuda_version = cuda_version
-                capabilities.tensor_cores = _has_tensor_cores(gpu_name)
+                capabilities.tensor_cores = _has_tensor_cores(gpu_name or "")
                 capabilities.mixed_precision = True
     except Exception as e:
         logger.error("Error detecting NVIDIA GPU capabilities: %s", e)
