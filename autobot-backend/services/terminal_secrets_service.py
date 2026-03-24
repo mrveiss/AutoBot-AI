@@ -103,7 +103,8 @@ class TerminalSecretsService:
     ) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-        state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{session_id}_")
+        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
+        state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{safe_id}_")
         return state
 
     def _store_session_state(self, session_id: str, state: SessionKeyState) -> None:
