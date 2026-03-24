@@ -1309,7 +1309,7 @@ def _validate_admin_path(path: str) -> Path:
     except ValueError:
         raise HTTPException(
             status_code=403,
-            detail=f"Path outside allowed directories: {path}",
+            detail="Path outside allowed directories",
         )
 
 
