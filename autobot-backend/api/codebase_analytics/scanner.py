@@ -754,7 +754,28 @@ async def _store_problems_batch_to_chromadb(
         await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
         logger.debug("Batch stored %s problems to ChromaDB", len(problems))
     except Exception as e:
-        logger.debug("Failed to batch store problems: %s", e)
+        # Issue #1712: Retry once on stale collection (mirrors #1249 pattern).
+        err_msg = str(e).lower()
+        if "does not exist" in err_msg or "not found" in err_msg:
+            logger.warning("Problems collection stale, recreating (#1712): %s", e)
+            fresh = await get_code_collection_async()
+            if fresh is not None:
+                try:
+                    await fresh.upsert(
+                        ids=ids,
+                        documents=documents,
+                        metadatas=metadatas,
+                    )
+                    logger.info(
+                        "Retry stored %d problems after stale collection", len(problems)
+                    )
+                    return
+                except Exception as retry_err:
+                    logger.error("Retry also failed for problems batch: %s", retry_err)
+            else:
+                logger.error("Cannot retry — collection unavailable (#1712)")
+        else:
+            logger.error("Failed to batch store problems to ChromaDB (#1712): %s", e)
 
 
 def _aggregate_stats_for_countable(
