@@ -52,7 +52,9 @@ async def test_current_status():
             complexity = await orchestrator.classify_request_complexity(msg)
             print(f"   ✅ '{msg[:30]}...' → {complexity.value}")  # noqa: print
         except Exception as e:
-            print(f"   ❌ Classification failed for '{msg[:30]}...': {e}")  # noqa: print
+            print(
+                f"   ❌ Classification failed for '{msg[:30]}...': {e}"
+            )  # noqa: print
 
     # Test 3: Workflow Planning
     print("\n3. Workflow Planning Test:")  # noqa: print

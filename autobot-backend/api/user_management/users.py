@@ -158,7 +158,9 @@ async def search_users_for_sharing(
     config = get_deployment_config()
 
     if config.mode == DeploymentMode.SINGLE_USER:
-        logger.debug("search_users_for_sharing: single_user mode, returning unavailable")
+        logger.debug(
+            "search_users_for_sharing: single_user mode, returning unavailable"
+        )
         return UserSearchResponse(
             users=[],
             available=False,
@@ -166,7 +168,9 @@ async def search_users_for_sharing(
         )
 
     if not config.postgres_enabled:
-        logger.debug("search_users_for_sharing: postgres disabled, returning unavailable")
+        logger.debug(
+            "search_users_for_sharing: postgres disabled, returning unavailable"
+        )
         return UserSearchResponse(
             users=[],
             available=False,
@@ -204,7 +208,9 @@ async def _search_users_from_db(q: str, limit: int) -> UserSearchResponse:
                 )
                 for user in users
             ]
-            logger.debug("search_users_for_sharing: found %d results for %r", len(results), q)
+            logger.debug(
+                "search_users_for_sharing: found %d results for %r", len(results), q
+            )
             return UserSearchResponse(
                 users=results,
                 available=True,

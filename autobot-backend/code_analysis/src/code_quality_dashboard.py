@@ -15,13 +15,13 @@ from typing import Any, Dict, List, Optional
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
+from config import UnifiedConfig
 from env_analyzer import EnvironmentVariableAnalyzer
 from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from autobot_shared.redis_client import get_redis_client
-from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()

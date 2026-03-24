@@ -164,9 +164,9 @@ class DecisionEngine:
                 {"outcome": "action_completed", "probability": confidence}
             ],
             monitoring_criteria=["action_execution_status", "target_element_response"],
-            fallback_plan={"action": "request_human_takeover"}
-            if confidence < 0.6
-            else None,
+            fallback_plan=(
+                {"action": "request_human_takeover"} if confidence < 0.6 else None
+            ),
             requires_approval=requires_approval,
             timestamp=self.time_provider.current_timestamp(),
             metadata={
@@ -658,9 +658,9 @@ class DecisionEngine:
             },
             expected_outcomes=self._build_optimization_expected_outcomes(confidence),
             monitoring_criteria=["workflow_performance", "efficiency_metrics"],
-            fallback_plan={"action": "revert_optimization"}
-            if best_score < 0.6
-            else None,
+            fallback_plan=(
+                {"action": "revert_optimization"} if best_score < 0.6 else None
+            ),
             requires_approval=best_score < 0.7,
             timestamp=self.time_provider.current_timestamp(),
             metadata={

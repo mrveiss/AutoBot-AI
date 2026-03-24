@@ -24,8 +24,7 @@ def migrate(db_url: str) -> None:
 
     if not table_exists(cursor, "services"):
         logger.info("Creating services table...")
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE services (
                 id SERIAL PRIMARY KEY,
                 node_id VARCHAR(64) NOT NULL,
@@ -43,8 +42,7 @@ def migrate(db_url: str) -> None:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(node_id, service_name)
             )
-        """
-        )
+        """)
         create_index_if_not_exists(
             cursor, "idx_services_node_id", "services", "node_id"
         )

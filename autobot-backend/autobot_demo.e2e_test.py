@@ -93,7 +93,9 @@ async def demo_simple_query():
         chat_id = await create_chat_session()
         response = await send_chat_message(chat_id, "What is 2+2?")
 
-        print(f"\n✅ Response: {response.get('response', 'No response')}")  # noqa: print
+        print(
+            f"\n✅ Response: {response.get('response', 'No response')}"
+        )  # noqa: print
         print(f"Status: {response.get('status', 'unknown')}")  # noqa: print
 
     except Exception as e:

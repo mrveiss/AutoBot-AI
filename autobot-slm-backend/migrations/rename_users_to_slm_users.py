@@ -40,15 +40,13 @@ def migrate(db_url: str) -> None:
             # Check whether a table named 'users' with an INTEGER PK exists.
             # If user_management has already created a UUID-PK 'users' table we
             # must not touch it.
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT data_type
                 FROM information_schema.columns
                 WHERE table_name = 'users'
                   AND column_name = 'id'
                   AND table_schema = 'public'
-                """
-            )
+                """)
             row = cur.fetchone()
 
             if row is None:
@@ -73,12 +71,10 @@ def migrate(db_url: str) -> None:
 
             # Rename the associated sequence if it follows the default naming
             # convention (users_id_seq -> slm_users_id_seq).
-            cur.execute(
-                """
+            cur.execute("""
                 SELECT relname FROM pg_class
                 WHERE relname = 'users_id_seq' AND relkind = 'S'
-                """
-            )
+                """)
             if cur.fetchone():
                 cur.execute("ALTER SEQUENCE users_id_seq RENAME TO slm_users_id_seq")
                 logger.info("Renamed sequence 'users_id_seq' -> 'slm_users_id_seq'")

@@ -570,9 +570,7 @@ Make sure your build process sets NODE_ENV appropriately:
 
 ## Backup Location
 All modified files have been backed up to: `{}`
-""".format(
-            self.backup_dir
-        )
+""".format(self.backup_dir)
 
         report_path = (
             Path(output_file)

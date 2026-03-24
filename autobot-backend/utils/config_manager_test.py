@@ -30,8 +30,7 @@ class TestConfigManager:
         """Test loading configuration from YAML file"""
         # Create temporary config file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 llm:
   orchestrator_llm: "custom_ollama"
   openai:
@@ -39,8 +38,7 @@ llm:
 redis:
   host: "test_redis"
   port: 9999
-"""
-            )
+""")
             config_file = f.name
 
         try:

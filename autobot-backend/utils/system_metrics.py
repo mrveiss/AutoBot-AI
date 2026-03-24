@@ -543,9 +543,7 @@ class SystemMetricsCollector:
                     "status": (
                         "healthy"
                         if overall_health > 0.8
-                        else "degraded"
-                        if overall_health > 0.5
-                        else "critical"
+                        else "degraded" if overall_health > 0.5 else "critical"
                     ),
                 }
 

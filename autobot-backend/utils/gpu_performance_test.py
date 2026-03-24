@@ -17,8 +17,7 @@ sys.path.insert(0, "/home/kali/Desktop/AutoBot")
 from utils.semantic_chunker import AutoBotSemanticChunker
 
 # Sample text for performance testing
-TEST_TEXT = (
-    """
+TEST_TEXT = """
 Artificial intelligence has revolutionized countless industries and aspects of human life.
 Machine learning algorithms can now process vast amounts of data with unprecedented speed and accuracy.
 Neural networks, inspired by the human brain, have enabled computers to recognize patterns, understand language, and make complex decisions.
@@ -42,9 +41,7 @@ Responsible AI development involves transparency, accountability, and inclusive 
 Future developments in quantum computing may further accelerate AI capabilities.
 Quantum algorithms could solve certain computational problems exponentially faster than classical computers.
 The intersection of quantum computing and artificial intelligence represents an exciting frontier in technology.
-"""
-    * 3
-)  # Triple the text for more substantial processing
+""" * 3  # Triple the text for more substantial processing
 
 
 async def measure_gpu_utilization():

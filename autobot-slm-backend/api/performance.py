@@ -431,9 +431,9 @@ async def get_performance_overview(
         avg_latency_ms=sum(durations) / len(durations),
         p95_latency_ms=_calculate_percentile(durations, 95),
         p99_latency_ms=_calculate_percentile(durations, 99),
-        throughput_rpm=len(traces) / time_span_minutes
-        if time_span_minutes > 0
-        else 0.0,
+        throughput_rpm=(
+            len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0
+        ),
         error_rate_percent=(errors / len(traces)) * 100,
         total_traces=len(traces),
         active_slos=active_slos,
@@ -723,9 +723,9 @@ async def get_node_metrics(
         p95_latency_ms=_calculate_percentile(durations, 95),
         p99_latency_ms=_calculate_percentile(durations, 99),
         error_rate_percent=(errors / len(traces)) * 100,
-        throughput_rpm=len(traces) / time_span_minutes
-        if time_span_minutes > 0
-        else 0.0,
+        throughput_rpm=(
+            len(traces) / time_span_minutes if time_span_minutes > 0 else 0.0
+        ),
         total_traces=len(traces),
     )
 

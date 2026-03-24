@@ -7,6 +7,7 @@ Skill Generator (Phase 5)
 Uses the LLM to generate SKILL.md + skill.py for a detected capability gap.
 Structured output ensures valid manifests every time.
 """
+
 import logging
 import re
 from typing import Any, Dict

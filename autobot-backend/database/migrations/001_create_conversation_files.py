@@ -324,8 +324,7 @@ class ConversationFilesMigration:
 
         try:
             # Create migrations tracking table if it doesn't exist
-            cursor.execute(
-                """
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     migration_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     version TEXT NOT NULL UNIQUE,
@@ -334,8 +333,7 @@ class ConversationFilesMigration:
                     status TEXT DEFAULT 'completed',
                     execution_time_ms INTEGER
                 )
-            """
-            )
+            """)
 
             # Record this migration (INSERT OR IGNORE for idempotency - safe for concurrent initialization)
             # If version already exists, silently skip (no error) - critical for multi-VM distributed environment

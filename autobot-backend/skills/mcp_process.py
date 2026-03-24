@@ -7,6 +7,7 @@ MCP Subprocess Manager
 Manages skill.py MCP server subprocesses. Each active skill runs as
 a persistent subprocess communicating via stdin/stdout MCP protocol.
 """
+
 import asyncio
 import json
 import logging

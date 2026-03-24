@@ -368,9 +368,9 @@ class AntiPatternDetector:
                         if module_info:
                             self.modules[module_info.name] = module_info
                             for cls_info in module_info.classes:
-                                self.classes[
-                                    f"{module_info.name}.{cls_info.name}"
-                                ] = cls_info
+                                self.classes[f"{module_info.name}.{cls_info.name}"] = (
+                                    cls_info
+                                )
                                 self.all_defined_names.add(cls_info.name)
                             self.all_defined_names.update(module_info.functions)
                     except Exception as e:
@@ -661,9 +661,9 @@ class AntiPatternDetector:
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.FEATURE_ENVY,
-                            severity=Severity.MEDIUM
-                            if external_refs < 10
-                            else Severity.HIGH,
+                            severity=(
+                                Severity.MEDIUM if external_refs < 10 else Severity.HIGH
+                            ),
                             file_path=cls_info.file_path,
                             line_number=method.lineno,
                             entity_name=f"{cls_info.name}.{method.name}",
@@ -736,9 +736,11 @@ class AntiPatternDetector:
                 AntiPatternInstance(
                     pattern_type=AntiPatternType.CIRCULAR_DEPENDENCY,
                     severity=Severity.HIGH if len(cycle) > 2 else Severity.MEDIUM,
-                    file_path=self.modules[cycle[0]].file_path
-                    if cycle[0] in self.modules
-                    else "",
+                    file_path=(
+                        self.modules[cycle[0]].file_path
+                        if cycle[0] in self.modules
+                        else ""
+                    ),
                     line_number=1,
                     entity_name=cycle[0],
                     description=f"Circular dependency detected: {cycle_str}",
@@ -840,9 +842,9 @@ class AntiPatternDetector:
                     issues.append(
                         AntiPatternInstance(
                             pattern_type=AntiPatternType.LONG_PARAMETER_LIST,
-                            severity=Severity.MEDIUM
-                            if param_count < 8
-                            else Severity.HIGH,
+                            severity=(
+                                Severity.MEDIUM if param_count < 8 else Severity.HIGH
+                            ),
                             file_path=cls_info.file_path,
                             line_number=method.lineno,
                             entity_name=f"{cls_info.name}.{method.name}",
@@ -1001,9 +1003,11 @@ class AntiPatternDetector:
                     AntiPatternInstance(
                         pattern_type=AntiPatternType.DATA_CLUMP,
                         severity=Severity.MEDIUM if len(methods) > 5 else Severity.LOW,
-                        file_path=self.classes[methods[0].split(".")[0]].file_path
-                        if methods
-                        else "",
+                        file_path=(
+                            self.classes[methods[0].split(".")[0]].file_path
+                            if methods
+                            else ""
+                        ),
                         line_number=1,
                         entity_name=", ".join(params),
                         description=(
@@ -1113,7 +1117,8 @@ class AntiPatternDetector:
         ),
         (
             "dead_code",
-            "🟢 LOW: Remove Dead Code - " "Delete verified unused classes and functions",
+            "🟢 LOW: Remove Dead Code - "
+            "Delete verified unused classes and functions",
         ),
     ]
 

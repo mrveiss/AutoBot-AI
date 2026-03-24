@@ -136,7 +136,12 @@ def _analyze_patterns(results: dict) -> None:
     if results["architectural_issues"]:
         print("🚨 **Architectural Issues:**")  # noqa: print
         for issue in results["architectural_issues"]:
-            severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            severity_emoji = {
+                "critical": "🔴",
+                "high": "🟠",
+                "medium": "🟡",
+                "low": "🟢",
+            }
             emoji = severity_emoji.get(issue["severity"], "⚪")
 
             print(  # noqa: print

@@ -598,9 +598,7 @@ class SessionTakeoverTestSuite:
             status_icon = (
                 "✅"
                 if test_result["status"] == "PASSED"
-                else "❌"
-                if test_result["status"] == "FAILED"
-                else "❓"
+                else "❌" if test_result["status"] == "FAILED" else "❓"
             )
             logger.info(f"   {status_icon} {feature}")
 
@@ -681,7 +679,9 @@ async def run_demo_workflow():
     logger.info(
         "📋 Workflow includes 5 steps with confirmation points for system modifications"
     )
-    logger.info("🎯 This demonstrates the complete session takeover system capabilities")
+    logger.info(
+        "🎯 This demonstrates the complete session takeover system capabilities"
+    )
 
     # Get workflow status
     status = demo_manager.get_workflow_status(workflow_id)

@@ -179,9 +179,9 @@ class ScreenState:
     automation_opportunities: List[Dict[str, Any]]
     context_analysis: Dict[str, Any]
     confidence_score: float
-    multimodal_analysis: Optional[
-        List[Dict[str, Any]]
-    ] = None  # New field for multi-modal processing results
+    multimodal_analysis: Optional[List[Dict[str, Any]]] = (
+        None  # New field for multi-modal processing results
+    )
 
     def get_element_collection(self) -> "UIElementCollection":
         """Get UI elements as a collection with analysis methods"""

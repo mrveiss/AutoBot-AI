@@ -412,7 +412,9 @@ class AsyncBaselineTest:
 
         Tests inter-VM communication performance (main -> frontend, npu-worker, etc.)
         """
-        logger.info(f"🔗 Starting cross-VM latency test ({requests} requests per VM)...")
+        logger.info(
+            f"🔗 Starting cross-VM latency test ({requests} requests per VM)..."
+        )
 
         vm_endpoints = {
             "frontend": f"{ServiceURLs.FRONTEND_VM}/",

@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for the Skill Gap Detector (Phase 4)."""
+
 from skills.gap_detector import GapTrigger, SkillGapDetector
 
 

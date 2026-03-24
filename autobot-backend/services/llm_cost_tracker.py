@@ -931,9 +931,7 @@ class LLMCostTracker:
             "trend": (
                 "increasing"
                 if growth_rate > 5
-                else "decreasing"
-                if growth_rate < -5
-                else "stable"
+                else "decreasing" if growth_rate < -5 else "stable"
             ),
             "growth_rate_percent": round(growth_rate, 2),
             "avg_daily_cost": summary.get("avg_daily_cost", 0),

@@ -27,8 +27,7 @@ def temp_codebase():
 
         # Create sample Python file
         sample_py = backend / "sample.py"
-        sample_py.write_text(
-            '''
+        sample_py.write_text('''
 """Sample module for testing."""
 
 import logging
@@ -63,16 +62,14 @@ class UserService:
         user = {"name": name}
         self.cache[name] = user
         return user
-'''
-        )
+''')
 
         # Create sample TypeScript file
         frontend = base / "autobot-frontend" / "src"
         frontend.mkdir(parents=True)
 
         sample_ts = frontend / "composable.ts"
-        sample_ts.write_text(
-            """
+        sample_ts.write_text("""
 export interface User {
   id: number
   name: string
@@ -90,8 +87,7 @@ export function useUserStore(): {
 
   return { users, fetchUsers }
 }
-"""
-        )
+""")
 
         yield base
 

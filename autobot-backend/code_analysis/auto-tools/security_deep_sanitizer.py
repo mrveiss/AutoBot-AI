@@ -681,7 +681,12 @@ class EnhancedSecurityFixAgent:
         content = ""
         if severity_counts:
             content += "### Vulnerabilities by Severity:\n\n"
-            severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+            severity_icons = {
+                "CRITICAL": "🔴",
+                "HIGH": "🟠",
+                "MEDIUM": "🟡",
+                "LOW": "🟢",
+            }
             for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
                 if severity in severity_counts:
                     icon = severity_icons[severity]
@@ -711,7 +716,12 @@ class EnhancedSecurityFixAgent:
         ]
         if direct_vulns:
             content += "### Critical Vulnerabilities Fixed:\n\n"
-            severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+            severity_icon = {
+                "CRITICAL": "🔴",
+                "HIGH": "🟠",
+                "MEDIUM": "🟡",
+                "LOW": "🟢",
+            }
             for i, vuln in enumerate(direct_vulns, 1):
                 icon = severity_icon.get(vuln["severity"], "⚪")
                 content += f"**{i}. {vuln['type'].replace('_', ' ').title()}** {icon}\n"

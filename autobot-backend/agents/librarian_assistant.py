@@ -16,12 +16,12 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+from config import config
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import get_http_client
-from config import config
 
 logger = logging.getLogger(__name__)
 

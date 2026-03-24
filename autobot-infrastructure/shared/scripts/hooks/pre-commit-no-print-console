@@ -39,7 +39,8 @@ get_staged_python_files() {
         grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
         grep -v -E '(conftest\.py$|test_.*\.py$)' | \
         grep -v -E '(autobot-infrastructure/)' | \
-        grep -v -E '(code_analysis/)' || true  # code_analysis tools use print() for CLI output
+        grep -v -E '(code_analysis/)' | \
+        grep -v -E '(ansible/)' || true  # code_analysis: CLI output; ansible: deployed copies with doctest examples
 }
 
 # Get staged TypeScript/Vue files (production code only)

@@ -26,7 +26,11 @@ from .endpoints import (
     pattern_analysis,
 )
 from .endpoints import queue as queue_router
-from .endpoints import report, sources, stats
+from .endpoints import (
+    report,
+    sources,
+    stats,
+)
 
 # Create main router — prefix provided by analytics_routers.py registry (#1027)
 router = APIRouter(

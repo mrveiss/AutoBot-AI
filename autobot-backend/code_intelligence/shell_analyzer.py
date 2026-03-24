@@ -417,9 +417,9 @@ class ShellAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.80,
-            false_positive_reason=""
-            if confidence >= 0.80
-            else "Context may justify this pattern",
+            false_positive_reason=(
+                "" if confidence >= 0.80 else "Context may justify this pattern"
+            ),
             rule_id=rule_id,
             tags=["shell", category.value],
         )

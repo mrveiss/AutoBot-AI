@@ -78,7 +78,9 @@ class ComprehensiveMonitoringController:
 
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully."""
-        self.logger.info(f"📡 Received signal {signum}, initiating graceful shutdown...")
+        self.logger.info(
+            f"📡 Received signal {signum}, initiating graceful shutdown..."
+        )
         self.shutdown_requested = True
 
     async def initialize_all_systems(self):

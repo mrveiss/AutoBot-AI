@@ -655,9 +655,9 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=SIMILARITY_MEDIUM
-                if HAS_ANALYTICS_INFRASTRUCTURE
-                else 0.7,
+                min_similarity=(
+                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
+                ),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

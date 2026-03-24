@@ -504,7 +504,9 @@ class AccessibilityFixAgent:
             if not any(skip_dir in vue_file.parts for skip_dir in skip_dirs):
                 filtered_files.append(vue_file)
 
-        print(f"📄 Found {len(filtered_files)} Vue components to analyze")  # noqa: print
+        print(
+            f"📄 Found {len(filtered_files)} Vue components to analyze"
+        )  # noqa: print
 
         fixed_count = 0
         total_fixes = 0

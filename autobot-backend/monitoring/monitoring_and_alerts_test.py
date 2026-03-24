@@ -211,9 +211,11 @@ class MonitoringAndAlertingTester:
                         status = "PASS"
                         message = "Health endpoint accessible with valid JSON"
                         details = {
-                            "response_keys": list(data.keys())
-                            if isinstance(data, dict)
-                            else "non-dict"
+                            "response_keys": (
+                                list(data.keys())
+                                if isinstance(data, dict)
+                                else "non-dict"
+                            )
                         }
                     except json.JSONDecodeError:
                         status = "WARNING"
@@ -853,9 +855,9 @@ class MonitoringAndAlertingTester:
                     "trigger": scenario["trigger"],
                     "expected_actions": scenario["expected_actions"],
                     "incident_triggered": incident_triggered,
-                    "response_initiated": response_initiated
-                    if incident_triggered
-                    else None,
+                    "response_initiated": (
+                        response_initiated if incident_triggered else None
+                    ),
                 }
 
             except Exception as e:

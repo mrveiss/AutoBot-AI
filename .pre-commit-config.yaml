@@ -18,7 +18,7 @@ repos:
 
   # Python code formatting with Black
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 26.3.1
     hooks:
       - id: black
         args: [--line-length=88]
@@ -27,7 +27,7 @@ repos:
 
   # Python import sorting with isort
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 8.0.1
     hooks:
       - id: isort
         args: [--profile=black, --line-length=88]
@@ -36,7 +36,7 @@ repos:
   # Python linting with flake8
   # Uses .flake8 config file for consistent settings across local dev and CI
   - repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
+    rev: 7.3.0
     hooks:
       - id: flake8
         # Uses .flake8 config file in repo root via args
@@ -46,7 +46,7 @@ repos:
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
-    rev: v2.2.1
+    rev: v2.3.3
     hooks:
       - id: autoflake
         args: [
@@ -89,7 +89,7 @@ repos:
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: [-c, .bandit]

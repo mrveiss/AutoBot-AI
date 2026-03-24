@@ -752,9 +752,11 @@ class UnifiedMultiModalProcessor:
             },
             "voice": {
                 "whisper_available": self.voice_processor.whisper_model is not None,
-                "wav2vec_available": self.voice_processor.wav2vec_model is not None
-                if hasattr(self.voice_processor, "wav2vec_model")
-                else False,
+                "wav2vec_available": (
+                    self.voice_processor.wav2vec_model is not None
+                    if hasattr(self.voice_processor, "wav2vec_model")
+                    else False
+                ),
                 "enabled": self.voice_processor.enabled,
             },
         }

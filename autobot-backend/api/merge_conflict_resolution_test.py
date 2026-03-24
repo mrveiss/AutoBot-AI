@@ -26,16 +26,14 @@ client = TestClient(router)
 @pytest.fixture
 def conflict_file():
     """Create a temporary file with a merge conflict."""
-    conflict_content = textwrap.dedent(
-        """
+    conflict_content = textwrap.dedent("""
         def hello():
         <<<<<<< HEAD
             return "current"
         =======
             return "incoming"
         >>>>>>> branch
-    """
-    )
+    """)
 
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
         f.write(conflict_content)

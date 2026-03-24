@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for Skill Generator and Validator (Phase 5)."""
+
 from unittest.mock import AsyncMock
 
 import pytest

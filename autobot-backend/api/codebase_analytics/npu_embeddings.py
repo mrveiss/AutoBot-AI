@@ -417,9 +417,9 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
             result["npu_available"] = True
             result["warmup_time_ms"] = warmup_time
             result["embedding_dimensions"] = len(embeddings[0])
-            result[
-                "message"
-            ] = f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
+            result["message"] = (
+                f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
+            )
 
             # Get device info
             if client:

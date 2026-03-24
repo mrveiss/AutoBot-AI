@@ -314,9 +314,9 @@ class LLMCodeGenerator:
             "target_name": request.target_name or "",
             "new_name": request.new_name or "",
             "pattern_template": request.pattern_template or "",
-            "constraints": "\n".join(request.constraints)
-            if request.constraints
-            else "",
+            "constraints": (
+                "\n".join(request.constraints) if request.constraints else ""
+            ),
             "target_code": "",  # Could be enhanced
         }
 

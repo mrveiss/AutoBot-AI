@@ -592,9 +592,11 @@ class PerformanceDashboard:
                 "services": {
                     "healthy": healthy_services,
                     "total": total_services,
-                    "availability": (healthy_services / total_services * 100)
-                    if total_services > 0
-                    else 0,
+                    "availability": (
+                        (healthy_services / total_services * 100)
+                        if total_services > 0
+                        else 0
+                    ),
                 },
                 "alerts": len(alerts),
                 "timestamp": datetime.now().isoformat(),

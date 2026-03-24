@@ -29,8 +29,9 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from autobot_shared.redis_client import get_redis_client
     from config import UnifiedConfig
+
+    from autobot_shared.redis_client import get_redis_client
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -490,11 +491,11 @@ class OwnershipAnalyzer:
                     author_name=author_name,
                     author_email=author_data["email"],
                     lines_count=author_data["lines"],
-                    lines_percentage=round(
-                        (author_data["lines"] / total_lines) * 100, 1
-                    )
-                    if total_lines > 0
-                    else 0,
+                    lines_percentage=(
+                        round((author_data["lines"] / total_lines) * 100, 1)
+                        if total_lines > 0
+                        else 0
+                    ),
                     commits_count=0,
                     files_touched=list(author_data["files"]),
                 )
@@ -740,17 +741,21 @@ class OwnershipAnalyzer:
             "knowledge_risk_distribution": dict(risk_dist),
             "top_contributors": top_contributors,
             "ownership_concentration": round(
-                (expertise_scores[0].total_lines_authored / total_lines * 100)
-                if expertise_scores and total_lines > 0
-                else 0,
+                (
+                    (expertise_scores[0].total_lines_authored / total_lines * 100)
+                    if expertise_scores and total_lines > 0
+                    else 0
+                ),
                 1,
             ),
             "team_coverage": round(
-                len([e for e in expertise_scores if e.recency_score > 50])
-                / len(expertise_scores)
-                * 100
-                if expertise_scores
-                else 0,
+                (
+                    len([e for e in expertise_scores if e.recency_score > 50])
+                    / len(expertise_scores)
+                    * 100
+                    if expertise_scores
+                    else 0
+                ),
                 1,
             ),
         }

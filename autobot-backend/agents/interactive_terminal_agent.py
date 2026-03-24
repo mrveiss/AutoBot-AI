@@ -302,7 +302,8 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "status": "user_control",
                 "message": (
-                    "🎮 You now have control of the terminal. " "Type commands directly."
+                    "🎮 You now have control of the terminal. "
+                    "Type commands directly."
                 ),
             },
         )

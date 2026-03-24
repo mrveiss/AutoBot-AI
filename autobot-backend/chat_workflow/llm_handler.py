@@ -171,14 +171,10 @@ class LLMHandlerMixin:
             return preamble + prompt + lang_instruction
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return (
-                preamble
-                + """You are AutoBot. Execute commands using:
+            return preamble + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
-NEVER teach commands - ALWAYS execute them."""
-                + lang_instruction
-            )
+NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.
@@ -235,9 +231,9 @@ NEVER teach commands - ALWAYS execute them."""
                 session.metadata["query_intent"] = query_intent.intent.value
                 if enhanced_query and enhanced_query.enhancement_applied:
                     session.metadata["query_enhanced"] = True
-                    session.metadata[
-                        "context_entities"
-                    ] = enhanced_query.context_entities
+                    session.metadata["context_entities"] = (
+                        enhanced_query.context_entities
+                    )
             else:
                 session.metadata["used_knowledge"] = False
                 session.metadata["query_enhanced"] = False

@@ -426,9 +426,9 @@ class UnifiedKnowledgeManager:
 
         # Access machine profile from MachineAwareSystemKnowledgeManager
         if hasattr(self._system_manager, "current_machine_profile"):
-            profile: Optional[
-                MachineProfile
-            ] = self._system_manager.current_machine_profile
+            profile: Optional[MachineProfile] = (
+                self._system_manager.current_machine_profile
+            )
             if profile:
                 return profile.to_dict()
 

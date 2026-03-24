@@ -180,9 +180,7 @@ def build_phase_status_section(summary: Dict[str, Any]) -> List[str]:
         status_icon = (
             "✅"
             if phase_data["completion_percentage"] >= 95
-            else "🔄"
-            if phase_data["completion_percentage"] >= 50
-            else "⏳"
+            else "🔄" if phase_data["completion_percentage"] >= 50 else "⏳"
         )
         lines.append(
             f"- {status_icon} **{phase_name}**: "
@@ -247,9 +245,7 @@ def calculate_trends(
             trend = (
                 "increasing"
                 if last_value > first_value
-                else "decreasing"
-                if last_value < first_value
-                else "stable"
+                else "decreasing" if last_value < first_value else "stable"
             )
             trends[metric.value] = {
                 "current": last_value,

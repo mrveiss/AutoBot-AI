@@ -924,9 +924,9 @@ class SecurityPolicyManager:
                 "required_controls": controls,
                 "active_policies": len(active_policies),
                 "policy_names": [p.name for p in active_policies],
-                "coverage_percentage": len(active_policies) / len(controls) * 100
-                if controls
-                else 100,
+                "coverage_percentage": (
+                    len(active_policies) / len(controls) * 100 if controls else 100
+                ),
             }
         return coverage
 

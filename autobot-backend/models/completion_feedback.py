@@ -56,9 +56,9 @@ class CompletionFeedback(Base):
             "id": self.id,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "user_id": self.user_id,
-            "context": self.context[:100] + "..."
-            if len(self.context) > 100
-            else self.context,
+            "context": (
+                self.context[:100] + "..." if len(self.context) > 100 else self.context
+            ),
             "suggestion": self.suggestion,
             "language": self.language,
             "file_path": self.file_path,

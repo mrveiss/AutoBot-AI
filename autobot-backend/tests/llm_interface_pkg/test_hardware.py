@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for hardware detection. Issue #1950."""
+
 from unittest.mock import patch
 
 from llm_interface_pkg.hardware import HardwareDetector

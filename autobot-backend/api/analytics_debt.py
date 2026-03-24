@@ -341,9 +341,7 @@ def _process_complexity(complexity_data: Dict[str, Any]) -> List[DebtItem]:
             severity = (
                 DebtSeverity.CRITICAL
                 if complexity > 20
-                else DebtSeverity.HIGH
-                if complexity > 15
-                else DebtSeverity.MEDIUM
+                else DebtSeverity.HIGH if complexity > 15 else DebtSeverity.MEDIUM
             )
             debt_items.append(
                 DebtItem(
@@ -698,9 +696,7 @@ def _calculate_trend_change(trend_data: List[Dict[str, Any]]) -> tuple:
     direction = (
         "improving"
         if change["items"] < 0
-        else "worsening"
-        if change["items"] > 0
-        else "stable"
+        else "worsening" if change["items"] > 0 else "stable"
     )
     return change, direction
 

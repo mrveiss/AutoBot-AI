@@ -88,9 +88,9 @@ class TaskExecutionRecord:
             "priority": self.priority.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "duration_seconds": self.duration_seconds,
             "agent_type": self.agent_type,
             "inputs": self.inputs,

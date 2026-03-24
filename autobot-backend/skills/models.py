@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Skills System DB Models"""
+
 import uuid
 from datetime import datetime, timezone
 from enum import Enum

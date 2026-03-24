@@ -513,7 +513,9 @@ class AIHardwareAccelerator:
         fallback_device = self._get_fallback_device(selected_device)
 
         if fallback_device and fallback_device != selected_device:
-            logger.info("🔄 Retrying task %s on %s", task.task_id, fallback_device.value)
+            logger.info(
+                "🔄 Retrying task %s on %s", task.task_id, fallback_device.value
+            )
             fallback_result = await _try_fallback_processing(
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )

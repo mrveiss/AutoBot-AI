@@ -152,9 +152,9 @@ class NPUWorkerClient:
         """
         self.npu_endpoint = npu_endpoint or get_service_url("npu-worker")
         self._use_auth = use_auth if use_auth is not None else USE_AUTHENTICATED_CLIENT
-        self._http_client: Optional[
-            Union[HTTPClientManager, "ServiceHTTPClient"]
-        ] = None
+        self._http_client: Optional[Union[HTTPClientManager, "ServiceHTTPClient"]] = (
+            None
+        )
         self._auth_client_initialized = False
         self.available = False
         self._check_availability_task = None

@@ -460,9 +460,11 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
                                 current_code=line.strip(),
                                 confidence=confidence,
                                 potential_false_positive=confidence < 0.9,
-                                false_positive_reason=""
-                                if confidence >= 0.9
-                                else "Context may justify sync operation",
+                                false_positive_reason=(
+                                    ""
+                                    if confidence >= 0.9
+                                    else "Context may justify sync operation"
+                                ),
                                 rule_id=rule_id,
                                 tags=["blocking-io", "performance", "async"],
                             )
@@ -587,9 +589,9 @@ class TypeScriptAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.75,
-            false_positive_reason=""
-            if confidence >= 0.75
-            else "Context may make this acceptable",
+            false_positive_reason=(
+                "" if confidence >= 0.75 else "Context may make this acceptable"
+            ),
             rule_id=rule_id,
             tags=["anti-pattern", category.value],
         )

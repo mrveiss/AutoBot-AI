@@ -46,7 +46,8 @@ jobs:
       run: |
         source .venv/bin/activate
         python -m pip install --upgrade pip
-        python -m pip install black isort flake8 autoflake bandit[toml]
+        # Pin versions to match .pre-commit-config.yaml (Issue #2128)
+        python -m pip install black==26.3.1 isort==8.0.1 flake8==7.3.0 autoflake==2.3.3 'bandit[toml]==1.9.4'
 
     - name: Check code formatting with Black
       run: |
@@ -69,12 +70,8 @@ jobs:
     - name: Lint with flake8
       run: |
         source .venv/bin/activate
-        python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ \
-          --max-line-length=100 \
-          --extend-ignore=E203,W503 \
-          --exclude=node_modules,.venv,venv,__pycache__,.git,temp,logs,reports,archive \
-          --statistics \
-          --count || {
+        # Uses .flake8 config for consistency with pre-commit (Issue #2128)
+        python3 -m flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ flake8 linting issues found"
           exit 1
         }

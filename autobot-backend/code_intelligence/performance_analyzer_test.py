@@ -34,16 +34,14 @@ class TestNestedLoopDetection:
 
     def test_detect_nested_for_loops(self):
         """Test detection of nested for loops with O(n²) complexity."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_matrix(matrix):
                 result = []
                 for i in range(len(matrix)):
                     for j in range(len(matrix[i])):
                         result.append(matrix[i][j])
                 return result
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -67,15 +65,13 @@ class TestNestedLoopDetection:
 
     def test_detect_triple_nested_loops(self):
         """Test detection of triple nested loops with O(n³) complexity."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_3d(data):
                 for x in data:
                     for y in x:
                         for z in y:
                             print(z)  # noqa: print
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -100,15 +96,13 @@ class TestNestedLoopDetection:
 
     def test_nested_list_comprehension(self):
         """Test detection of nested list comprehensions."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def flatten(matrix):
                 return [item for row in matrix for item in row]
 
             def cross_product(a, b):
                 return [(x, y) for x in a for y in b]
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -132,16 +126,14 @@ class TestNPlusOneQueryDetection:
 
     def test_detect_query_in_for_loop(self):
         """Test detection of database query inside for loop."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def get_user_orders(users, db):
                 results = []
                 for user in users:
                     orders = db.execute(f"SELECT * FROM orders WHERE user_id = {user.id}")
                     results.append(orders)
                 return results
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -162,13 +154,11 @@ class TestNPlusOneQueryDetection:
 
     def test_detect_fetch_in_loop(self):
         """Test detection of fetch operations inside loop."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_items(items, cursor):
                 for item in items:
                     cursor.fetchone()
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -191,16 +181,14 @@ class TestAsyncSyncMismatch:
 
     def test_detect_time_sleep_in_async(self):
         """Test detection of time.sleep() in async function."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import time
             import asyncio
 
             async def process_async():
                 time.sleep(1)  # Should use asyncio.sleep
                 return "done"
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -219,13 +207,11 @@ class TestAsyncSyncMismatch:
 
     def test_detect_blocking_io_in_async(self):
         """Test detection of blocking I/O in async function."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             async def read_file_async(path):
                 with open(path, 'r') as f:  # Should use aiofiles
                     return f.read()
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -245,16 +231,14 @@ class TestAsyncSyncMismatch:
 
     def test_detect_sequential_awaits(self):
         """Test detection of sequential awaits that could be parallel."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             async def fetch_all_data():
                 result1 = await fetch_users()
                 result2 = await fetch_orders()
                 result3 = await fetch_products()
                 result4 = await fetch_categories()
                 return result1, result2, result3, result4
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -274,15 +258,13 @@ class TestAsyncSyncMismatch:
 
     def test_no_false_positive_async_sleep(self):
         """Test that asyncio.sleep doesn't trigger false positive."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import asyncio
 
             async def proper_async():
                 await asyncio.sleep(1)
                 return "done"
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -303,15 +285,13 @@ class TestStringConcatenation:
 
     def test_detect_string_concat_in_loop(self):
         """Test detection of string concatenation in loop."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def build_output(items):
                 result = ""
                 for item in items:
                     result += str(item) + ", "
                 return result
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -331,15 +311,13 @@ class TestStringConcatenation:
 
     def test_detect_plus_equals_string(self):
         """Test detection of += with strings in loop."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def create_html(elements):
                 html = ""
                 for element in elements:
                     html += "<div>" + element + "</div>"
                 return html
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -363,14 +341,12 @@ class TestListLookup:
 
     def test_detect_list_for_membership(self):
         """Test detection of list used for membership check."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def check_valid(value):
                 if value in ["apple", "banana", "cherry", "date"]:
                     return True
                 return False
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -394,8 +370,7 @@ class TestHTTPRequestsInLoop:
 
     def test_detect_http_in_loop(self):
         """Test detection of HTTP requests inside loop."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import requests
 
             def fetch_all_users(user_ids):
@@ -404,8 +379,7 @@ class TestHTTPRequestsInLoop:
                     response = requests.get(f"/api/users/{user_id}")
                     results.append(response.json())
                 return results
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -429,8 +403,7 @@ class TestRepeatedComputation:
 
     def test_detect_repeated_expensive_calls(self):
         """Test detection of repeated expensive computations."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_data(data):
                 hash1 = hashlib.sha256(data).hexdigest()
                 result1 = process(hash1)
@@ -442,8 +415,7 @@ class TestRepeatedComputation:
                 result3 = check(hash3)
 
                 return result1, result2, result3
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -462,27 +434,19 @@ class TestDirectoryAnalysis:
     def test_analyze_directory(self, tmp_path):
         """Test analysis of multiple files in directory."""
         # Create test file with issues
-        (tmp_path / "slow.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "slow.py").write_text(textwrap.dedent("""
             def slow_function(items):
                 for i in items:
                     for j in items:
                         print(i, j)  # noqa: print
-        """
-            )
-        )
+        """))
 
         # Create clean file
-        (tmp_path / "fast.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "fast.py").write_text(textwrap.dedent("""
             def fast_function(items):
                 for item in items:
                     print(item)  # noqa: print
-        """
-            )
-        )
+        """))
 
         analyzer = PerformanceAnalyzer(project_root=str(tmp_path))
         results = analyzer.analyze_directory()
@@ -495,16 +459,12 @@ class TestDirectoryAnalysis:
         """Test that exclude patterns are respected."""
         # Create file in excluded directory
         (tmp_path / "venv").mkdir()
-        (tmp_path / "venv" / "slow.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "venv" / "slow.py").write_text(textwrap.dedent("""
             def slow(items):
                 for i in items:
                     for j in items:
                         pass
-        """
-            )
-        )
+        """))
 
         analyzer = PerformanceAnalyzer(
             project_root=str(tmp_path), exclude_patterns=["venv"]
@@ -520,8 +480,7 @@ class TestSummaryGeneration:
 
     def test_get_summary(self):
         """Test summary generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def problematic(items, db):
                 result = ""
                 for item in items:
@@ -529,8 +488,7 @@ class TestSummaryGeneration:
                         db.execute(f"SELECT * FROM table WHERE id = {sub}")
                         result += str(sub)
                 return result
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -550,13 +508,11 @@ class TestSummaryGeneration:
 
     def test_performance_score_calculation(self):
         """Test that performance score is calculated correctly."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             async def problematic():
                 import time
                 time.sleep(1)  # CRITICAL issue
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -578,14 +534,12 @@ class TestReportGeneration:
 
     def test_json_report_format(self):
         """Test JSON report generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def slow(data):
                 for i in data:
                     for j in data:
                         pass
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -605,14 +559,12 @@ class TestReportGeneration:
 
     def test_markdown_report_format(self):
         """Test Markdown report generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def slow(data):
                 for i in data:
                     for j in data:
                         pass
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -657,16 +609,12 @@ class TestConvenienceFunction:
 
     def test_analyze_performance_function(self, tmp_path):
         """Test the convenience function."""
-        (tmp_path / "test.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "test.py").write_text(textwrap.dedent("""
             def test():
                 for i in range(10):
                     for j in range(10):
                         pass
-        """
-            )
-        )
+        """))
 
         result = analyze_performance(str(tmp_path))
 
@@ -680,14 +628,12 @@ class TestSeverityLevels:
 
     def test_critical_severity_for_blocking_async(self):
         """Blocking sync operations in async should be CRITICAL."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import time
 
             async def blocked():
                 time.sleep(5)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -704,13 +650,11 @@ class TestSeverityLevels:
 
     def test_high_severity_for_n_plus_one(self):
         """N+1 queries should be HIGH severity."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def fetch_all(items, db):
                 for item in items:
                     db.query(item.id)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -730,15 +674,13 @@ class TestSeverityLevels:
 
     def test_medium_severity_for_string_concat(self):
         """String concatenation in loop should be MEDIUM severity."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def build(items):
                 s = ""
                 for i in items:
                     s += "x"
                 return s
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -809,14 +751,12 @@ class TestToDict:
 
     def test_to_dict_serialization(self):
         """Test that issues serialize correctly."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def slow(items):
                 for i in items:
                     for j in items:
                         pass
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)

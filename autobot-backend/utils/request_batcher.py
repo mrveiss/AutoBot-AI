@@ -669,9 +669,9 @@ class IntelligentRequestBatcher:
                 # Look for request ID in response
                 if request.id in response:
                     # Extract relevant portion (simplified)
-                    individual_responses[
-                        request.id
-                    ] = f"Response for {request.id}: {response[:200]}..."
+                    individual_responses[request.id] = (
+                        f"Response for {request.id}: {response[:200]}..."
+                    )
                 else:
                     individual_responses[request.id] = response
 

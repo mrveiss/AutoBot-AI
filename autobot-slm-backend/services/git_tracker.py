@@ -336,9 +336,11 @@ async def version_check_task(
                 if result["has_update"]:
                     logger.info(
                         "Update available: local=%s, remote=%s",
-                        result["local_commit"][:12]
-                        if result["local_commit"]
-                        else "unknown",
+                        (
+                            result["local_commit"][:12]
+                            if result["local_commit"]
+                            else "unknown"
+                        ),
                         result["remote_commit"][:12],
                     )
             else:

@@ -13,8 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
 from config import UnifiedConfig
+
+from autobot_shared.redis_client import get_redis_client
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -551,9 +552,9 @@ class SecurityAnalyzer:
                         vulnerability_type="dangerous_import",
                         severity=severity,
                         description=f"Import of dangerous module: {alias.name} - {desc}",
-                        code_snippet=lines[node.lineno - 1]
-                        if node.lineno <= len(lines)
-                        else "",
+                        code_snippet=(
+                            lines[node.lineno - 1] if node.lineno <= len(lines) else ""
+                        ),
                         cwe_id=cwe,
                         fix_suggestion=f"Consider safer alternatives to {alias.name}",
                         confidence=0.6,

@@ -32,16 +32,14 @@ class TestConflictParser:
 
     def test_parse_simple_conflict(self):
         """Test parsing a simple conflict."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             def hello():
             <<<<<<< HEAD
                 return "Hello from current"
             =======
                 return "Hello from incoming"
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -59,8 +57,7 @@ class TestConflictParser:
 
     def test_parse_multiple_conflicts(self):
         """Test parsing multiple conflicts in same file."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             def func1():
             <<<<<<< HEAD
                 x = 1
@@ -74,8 +71,7 @@ class TestConflictParser:
             =======
                 y = "b"
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -90,8 +86,7 @@ class TestConflictParser:
 
     def test_parse_conflict_with_base(self):
         """Test parsing conflict with base (diff3 style)."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             def hello():
             <<<<<<< HEAD
                 return "current"
@@ -100,8 +95,7 @@ class TestConflictParser:
             =======
                 return "incoming"
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -143,8 +137,7 @@ class TestConflictSeverity:
 
     def test_trivial_severity_whitespace(self):
         """Test trivial severity for whitespace conflicts."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def hello():
                 pass
@@ -152,8 +145,7 @@ class TestConflictSeverity:
             def hello():
                 pass
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -166,15 +158,13 @@ class TestConflictSeverity:
 
     def test_simple_severity_non_overlapping(self):
         """Test simple severity for non-overlapping changes."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             x = 1
             =======
             y = 2
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -187,8 +177,7 @@ class TestConflictSeverity:
 
     def test_complex_severity_logic_changes(self):
         """Test complex severity for logic changes."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def process(data):
                 if data:
@@ -198,8 +187,7 @@ class TestConflictSeverity:
                 while data:
                     yield data
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -261,8 +249,7 @@ class TestMergeConflictResolver:
 
     def test_resolve_trivial_conflict(self):
         """Test resolution of trivial conflict."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def hello():
                 pass
@@ -270,8 +257,7 @@ class TestMergeConflictResolver:
             def hello():
                 pass
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -287,8 +273,7 @@ class TestMergeConflictResolver:
 
     def test_resolve_import_conflict(self):
         """Test resolution of import conflict."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             import os
             import sys
@@ -296,8 +281,7 @@ class TestMergeConflictResolver:
             import os
             import json
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -315,15 +299,13 @@ class TestMergeConflictResolver:
 
     def test_accept_ours_strategy(self):
         """Test accept ours resolution strategy."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             x = 1
             =======
             x = 2
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -341,15 +323,13 @@ class TestMergeConflictResolver:
 
     def test_accept_theirs_strategy(self):
         """Test accept theirs resolution strategy."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             x = 1
             =======
             x = 2
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -367,8 +347,7 @@ class TestMergeConflictResolver:
 
     def test_accept_both_strategy(self):
         """Test accept both resolution strategy."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def func1():
                 pass
@@ -376,8 +355,7 @@ class TestMergeConflictResolver:
             def func2():
                 pass
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -396,8 +374,7 @@ class TestMergeConflictResolver:
 
     def test_safe_mode_requires_review(self):
         """Test safe mode requires review for complex conflicts."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def process(data):
                 if data:
@@ -408,8 +385,7 @@ class TestMergeConflictResolver:
                 while data:
                     yield data.pop()
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)
@@ -425,8 +401,7 @@ class TestMergeConflictResolver:
 
     def test_validation_detects_errors(self):
         """Test validation detects syntax errors."""
-        conflict_content = textwrap.dedent(
-            """
+        conflict_content = textwrap.dedent("""
             <<<<<<< HEAD
             def hello():
                 return "current"
@@ -434,8 +409,7 @@ class TestMergeConflictResolver:
             def hello(
                 return "incoming"
             >>>>>>> branch
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(conflict_content)

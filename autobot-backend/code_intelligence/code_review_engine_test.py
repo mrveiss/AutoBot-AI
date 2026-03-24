@@ -913,8 +913,7 @@ class TestIntegration:
         """Test diff review integration."""
         # Create the file that would result from the diff
         file_path = tmp_path / "example.py"
-        file_path.write_text(
-            """import os
+        file_path.write_text("""import os
 
 password = "mysecret"
 
@@ -923,8 +922,7 @@ def greet(name):
 
 if x == None:
     pass
-"""
-        )
+""")
 
         engine = CodeReviewEngine(project_root=str(tmp_path))
         result = engine.review_diff(sample_diff)

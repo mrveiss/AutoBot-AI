@@ -48,7 +48,9 @@ def test_security_headers(file_path: str) -> bool:
         logger.info(
             f"   ✅ X-Content-Type-Options: {'Present' if content_type_options else 'Missing'}"
         )
-        logger.info("   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}")
+        logger.info(
+            "   ✅ X-Frame-Options: {'Present' if frame_options else 'Missing'}"
+        )
 
         return all([csp_present, xss_protection, content_type_options, frame_options])
 

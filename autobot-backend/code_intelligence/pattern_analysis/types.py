@@ -129,9 +129,9 @@ class DuplicatePattern(CodePattern):
         base.update(
             {
                 "similarity_score": self.similarity_score,
-                "canonical_code": self.canonical_code[:500]
-                if self.canonical_code
-                else "",
+                "canonical_code": (
+                    self.canonical_code[:500] if self.canonical_code else ""
+                ),
                 "code_reduction_potential": self.code_reduction_potential,
             }
         )
@@ -247,9 +247,9 @@ class PatternCluster:
             "pattern_type": self.pattern_type.value,
             "size": self.size,
             "patterns": [p.to_dict() for p in self.patterns],
-            "representative_code": self.representative_code[:500]
-            if self.representative_code
-            else "",
+            "representative_code": (
+                self.representative_code[:500] if self.representative_code else ""
+            ),
         }
 
 

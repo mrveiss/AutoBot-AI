@@ -255,9 +255,9 @@ class OverseerWebSocketHandler:
         try:
             message_text = self._format_step_message_text(result)
             step_data = result.to_dict()
-            step_data[
-                "description"
-            ] = f"Step {result.step_number}: {result.command or 'N/A'}"
+            step_data["description"] = (
+                f"Step {result.step_number}: {result.command or 'N/A'}"
+            )
 
             await self.chat_history.add_message(
                 sender="assistant",

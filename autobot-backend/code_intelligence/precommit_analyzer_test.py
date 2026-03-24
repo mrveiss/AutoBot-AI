@@ -33,14 +33,12 @@ class TestSecurityChecks:
 
     def test_detect_hardcoded_password(self):
         """Test detection of hardcoded passwords."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             DATABASE_PASSWORD = "super_secret_123"
 
             def connect():
                 return db.connect(password=DATABASE_PASSWORD)
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "config.py")
@@ -54,12 +52,10 @@ class TestSecurityChecks:
 
     def test_detect_api_key(self):
         """Test detection of exposed API keys."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             API_KEY = "sk-1234567890abcdef1234567890abcdef"
             SECRET_KEY = "abcdef1234567890abcdef1234567890"
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "config.py")
@@ -71,13 +67,11 @@ class TestSecurityChecks:
 
     def test_detect_private_key(self):
         """Test detection of private keys in code."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             PRIVATE_KEY = '''-----BEGIN RSA PRIVATE KEY-----
             MIIEpAIBAAKCAQEA0Z...
             -----END RSA PRIVATE KEY-----'''
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "keys.py")
@@ -89,14 +83,12 @@ class TestSecurityChecks:
 
     def test_detect_hardcoded_ip(self):
         """Test detection of hardcoded IP addresses."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             SERVER_IP = "192.168.1.100"
 
             def connect():
                 return socket.connect(SERVER_IP, 8080)
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "network.py")
@@ -108,11 +100,9 @@ class TestSecurityChecks:
 
     def test_detect_aws_key(self):
         """Test detection of AWS access keys."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "aws.py")
@@ -144,15 +134,13 @@ class TestDebugChecks:
 
     def test_detect_console_log(self):
         """Test detection of console.log statements."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             function processData(data) {
                 console.log("Processing:", data);
                 console.debug("Debug info");
                 return data;
             }
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "app.js")
@@ -165,14 +153,12 @@ class TestDebugChecks:
 
     def test_detect_print_statement(self):
         """Test detection of print statements in Python."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_data(items):
                 for item in items:
                     print(f"Processing: {item}")  # noqa: print
                 return items
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "process.py")
@@ -184,15 +170,13 @@ class TestDebugChecks:
 
     def test_detect_debugger_statement(self):
         """Test detection of debugger statements."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import pdb
 
             def buggy_function(x):
                 pdb.set_trace()
                 return x * 2
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "debug.py")
@@ -206,13 +190,11 @@ class TestDebugChecks:
 
     def test_detect_breakpoint(self):
         """Test detection of breakpoint() call."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def test_function(x):
                 breakpoint()
                 return x
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "test.py")
@@ -225,14 +207,12 @@ class TestDebugChecks:
 
     def test_detect_todo_comment(self):
         """Test detection of TODO/FIXME comments."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def incomplete_function():
                 # TODO: Implement this properly
                 # FIXME: This is broken
                 pass
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "wip.py")
@@ -248,15 +228,13 @@ class TestQualityChecks:
 
     def test_detect_empty_except(self):
         """Test detection of empty except blocks."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def risky_operation():
                 try:
                     do_something()
                 except:
                     pass
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "handler.py")
@@ -269,14 +247,12 @@ class TestQualityChecks:
 
     def test_detect_bare_except(self):
         """Test detection of bare except clauses."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             try:
                 result = process()
             except:
                 log_error()
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "handler.py")
@@ -289,12 +265,10 @@ class TestQualityChecks:
 
     def test_detect_hardcoded_port(self):
         """Test detection of hardcoded port numbers."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             port = 8080
             server_port = 3000
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "config.py")
@@ -339,12 +313,10 @@ class TestFastMode:
 
     def test_fast_mode_skips_expensive_checks(self):
         """Test that fast mode skips expensive checks."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def function_without_docstring():
                 return 42
-        """
-        )
+        """)
 
         # Normal mode should include DOC001
         analyzer_normal = PrecommitAnalyzer(fast_mode=False)
@@ -547,13 +519,11 @@ class TestSummary:
 
     def test_get_summary(self):
         """Test summary generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             PASSWORD = "secret123"
             print("debug")  # noqa: print
             # TODO: Fix this
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         analyzer.results = analyzer.analyze_content(code, "test.py")
@@ -595,8 +565,7 @@ class TestSnippetGeneration:
 
     def test_snippet_with_context(self):
         """Test that snippets include context lines."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def function1():
                 pass
 
@@ -604,8 +573,7 @@ class TestSnippetGeneration:
 
             def function2():
                 pass
-        """
-        )
+        """)
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "test.py")
@@ -632,16 +600,14 @@ class TestEdgeCases:
 
     def test_no_issues(self):
         """Test clean code with no issues."""
-        code = textwrap.dedent(
-            '''
+        code = textwrap.dedent('''
             """Clean module."""
             import os
 
             def get_password():
                 """Get password from environment."""
                 return os.getenv("PASSWORD")
-        '''
-        )
+        ''')
 
         analyzer = PrecommitAnalyzer()
         results = analyzer.analyze_content(code, "clean.py")

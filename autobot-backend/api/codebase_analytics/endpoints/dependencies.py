@@ -178,9 +178,7 @@ def _find_cycles_dfs(graph: Dict[str, Set[str]], max_length: int = 5) -> List[Di
                     severity = (
                         "high"
                         if len(path) <= 2
-                        else "medium"
-                        if len(path) <= 4
-                        else "low"
+                        else "medium" if len(path) <= 4 else "low"
                     )
                     cycle_path = path + [start]
                     cycles.append(

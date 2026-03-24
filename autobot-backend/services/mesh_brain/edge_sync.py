@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """PostgreSQL to Redis edge sync for Neural Mesh retrieval (#1994, #2029)."""
+
 import logging
 from typing import Protocol
 
@@ -11,8 +12,7 @@ logger = logging.getLogger(__name__)
 class MeshDB(Protocol):
     """Protocol for mesh database operations."""
 
-    async def fetch_edges(self, min_weight: float) -> list[dict]:
-        ...
+    async def fetch_edges(self, min_weight: float) -> list[dict]: ...
 
 
 class MeshEdgeSync:

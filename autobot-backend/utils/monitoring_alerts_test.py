@@ -173,7 +173,9 @@ async def test_monitoring_alerts():
             )
 
             success = await log_channel.send_alert(test_notification_alert)
-            logger.info(f"📝 Log channel test: {'✅ Success' if success else '❌ Failed'}")
+            logger.info(
+                f"📝 Log channel test: {'✅ Success' if success else '❌ Failed'}"
+            )
 
             recovery_success = await log_channel.send_recovery(test_notification_alert)
             logger.info(

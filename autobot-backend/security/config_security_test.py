@@ -156,12 +156,10 @@ args: [["echo", "exploit"]]
 
         # Create a config file with restricted permissions
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 llm:
   orchestrator_llm: "test_model"
-"""
-            )
+""")
             restricted_file = f.name
 
         try:

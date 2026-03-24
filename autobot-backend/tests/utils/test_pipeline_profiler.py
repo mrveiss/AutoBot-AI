@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Tests for pipeline profiler. Inspired by flash-moe per-layer timing."""
+
 import asyncio
 
 import pytest

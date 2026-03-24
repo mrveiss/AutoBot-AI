@@ -228,7 +228,9 @@ def test_6_backward_compatibility_enhanced():
         task_id2 = manager.log_task_execution(record2)
         assert task_id2 == "bc-002"
 
-    print("✅ PASSED: EnhancedMemoryManager backward compatibility works")  # noqa: print
+    print(
+        "✅ PASSED: EnhancedMemoryManager backward compatibility works"
+    )  # noqa: print
 
 
 async def test_7_backward_compatibility_longterm():
@@ -254,7 +256,9 @@ async def test_7_backward_compatibility_longterm():
         assert len(memories) == 1
         assert memories[0].content == "Test content"
 
-    print("✅ PASSED: LongTermMemoryManager backward compatibility works")  # noqa: print
+    print(
+        "✅ PASSED: LongTermMemoryManager backward compatibility works"
+    )  # noqa: print
 
 
 def test_8_sync_wrappers():

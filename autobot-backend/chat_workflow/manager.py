@@ -1622,9 +1622,12 @@ class ChatWorkflowManager(
                 current_segment,
                 current_message_type,
             )
-            async for should_return, should_break, yields, updated in self._iterate_chunk_results(
-                params, current_state
-            ):
+            async for (
+                should_return,
+                should_break,
+                yields,
+                updated,
+            ) in self._iterate_chunk_results(params, current_state):
                 (
                     llm_response,
                     tool_call_completed,
@@ -2587,7 +2590,9 @@ before summarizing.
                 message_type="default",
                 session_id=session_id,
             )
-            logger.debug("✅ Persisted user message immediately: session=%s", session_id)
+            logger.debug(
+                "✅ Persisted user message immediately: session=%s", session_id
+            )
         except Exception as persist_error:
             logger.error(
                 "Failed to persist user message immediately: %s", persist_error

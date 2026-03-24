@@ -31,8 +31,7 @@ def migrate(db_url: str) -> None:
             return
 
         # Create agents table
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE agents (
                 id SERIAL PRIMARY KEY,
                 agent_id VARCHAR(64) UNIQUE NOT NULL,
@@ -50,8 +49,7 @@ def migrate(db_url: str) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """
-        )
+        """)
         logger.info("Created agents table")
 
         # Create indexes
@@ -62,13 +60,11 @@ def migrate(db_url: str) -> None:
         logger.info("Created indexes")
 
         # Seed default agent
-        cursor.execute(
-            """
+        cursor.execute("""
             INSERT INTO agents (agent_id, name, description, llm_provider, llm_model, is_default)
             VALUES ('default', 'Default Agent', 'Fallback agent for unconfigured requests',
                     'ollama', 'mistral:7b-instruct', TRUE)
-        """
-        )
+        """)
         logger.info("Seeded default agent")
 
         conn.commit()

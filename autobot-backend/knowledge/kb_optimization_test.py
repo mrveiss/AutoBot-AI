@@ -111,7 +111,9 @@ async def test_knowledge_base_optimization():
 
         if results["total_chunks"] > 0:
             chunks_per_second = results["total_chunks"] / processing_time
-            print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")  # noqa: print
+            print(
+                f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec"
+            )  # noqa: print
 
         # Test search functionality
         print("\n🔍 Testing search with processed document...")  # noqa: print

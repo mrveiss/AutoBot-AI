@@ -145,7 +145,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_text_regions(
-        result_data: Optional[Dict[str, Any]]
+        result_data: Optional[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Extract text regions from processing results"""
         if not result_data:
@@ -154,7 +154,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_dominant_colors(
-        result_data: Optional[Dict[str, Any]]
+        result_data: Optional[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Extract dominant colors from processing results"""
         if not result_data:
@@ -163,7 +163,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_layout_structure(
-        result_data: Optional[Dict[str, Any]]
+        result_data: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Extract layout analysis from processing results"""
         if not result_data:
@@ -172,7 +172,7 @@ class ProcessingResultExtractor:
 
     @staticmethod
     def extract_ui_elements(
-        result_data: Optional[Dict[str, Any]]
+        result_data: Optional[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Extract detected UI elements from processing results"""
         if not result_data:

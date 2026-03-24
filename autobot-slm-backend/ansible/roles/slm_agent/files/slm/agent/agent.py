@@ -132,8 +132,7 @@ class SLMAgent:
         """Initialize SQLite buffer database."""
         Path(self.buffer_db).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.buffer_db)
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS event_buffer (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
@@ -141,8 +140,7 @@ class SLMAgent:
                 data TEXT NOT NULL,
                 synced INTEGER DEFAULT 0
             )
-        """
-        )
+        """)
         conn.commit()
         conn.close()
         logger.info("Event buffer initialized at %s", self.buffer_db)

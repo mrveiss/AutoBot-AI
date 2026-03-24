@@ -39,8 +39,7 @@ class GeneralStorage:
         """Initialize memory entries table"""
         try:
             async with self._get_connection() as conn:
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE TABLE IF NOT EXISTS memory_entries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         category TEXT NOT NULL,
@@ -50,22 +49,17 @@ class GeneralStorage:
                         reference_path TEXT,
                         embedding BLOB
                     )
-                """
-                )
+                """)
 
                 # Indexes for common queries
-                await conn.execute(
-                    """
+                await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_memory_category
                     ON memory_entries(category)
-                """
-                )
-                await conn.execute(
-                    """
+                """)
+                await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_memory_timestamp
                     ON memory_entries(timestamp)
-                """
-                )
+                """)
 
                 await conn.commit()
         except aiosqlite.Error as e:
@@ -206,13 +200,11 @@ class GeneralStorage:
                 total = (await cursor.fetchone())[0]
 
                 # Entries by category
-                cursor = await conn.execute(
-                    """
+                cursor = await conn.execute("""
                     SELECT category, COUNT(*)
                     FROM memory_entries
                     GROUP BY category
-                """
-                )
+                """)
                 by_category = {row[0]: row[1] for row in await cursor.fetchall()}
 
                 return {"total_entries": total, "by_category": by_category}

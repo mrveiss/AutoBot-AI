@@ -356,7 +356,7 @@ def with_retry(
     _handler = handler or RateLimitHandler()
 
     def decorator(
-        func: Callable[..., Coroutine[Any, Any, T]]
+        func: Callable[..., Coroutine[Any, Any, T]],
     ) -> Callable[..., Coroutine[Any, Any, T]]:
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             return await _handler.execute_with_retry(

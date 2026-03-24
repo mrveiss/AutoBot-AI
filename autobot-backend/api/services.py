@@ -262,9 +262,7 @@ async def get_services_health(admin_check: bool = Depends(check_admin_permission
             "overall_status": (
                 "healthy"
                 if services_data.error_count == 0
-                else "degraded"
-                if services_data.error_count < 2
-                else "critical"
+                else "degraded" if services_data.error_count < 2 else "critical"
             ),
             "total_services": services_data.total_count,
             "healthy_services": services_data.healthy_count,

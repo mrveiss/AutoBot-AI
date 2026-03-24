@@ -541,8 +541,7 @@ class TestCodePatternScanner:
     def test_scan_file_with_llm_calls(self):
         """Test scanning a file with LLM API calls."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 import openai
 
 def generate():
@@ -551,8 +550,7 @@ def generate():
         messages=[{"role": "user", "content": "Hello"}]
     )
     return response
-"""
-            )
+""")
             f.flush()
 
             patterns, retries = CodePatternScanner.scan_file(Path(f.name))
@@ -564,15 +562,13 @@ def generate():
     def test_scan_file_with_retry_pattern(self):
         """Test scanning a file with retry patterns."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 from tenacity import retry
 
 @retry(max_retries=3)
 def call_api():
     pass
-"""
-            )
+""")
             f.flush()
 
             patterns, retries = CodePatternScanner.scan_file(Path(f.name))
@@ -587,15 +583,13 @@ def call_api():
     def test_detect_streaming_pattern(self):
         """Test detecting streaming patterns."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 response = client.chat.completions.create(
     model="gpt-4",
     messages=messages,
     stream=True
 )
-"""
-            )
+""")
             f.flush()
 
             patterns, _ = CodePatternScanner.scan_file(Path(f.name))
@@ -878,8 +872,7 @@ class TestLLMPatternAnalyzer:
 
         # Create a test file (not matching test* pattern)
         module_file = src_dir / "llm_module.py"
-        module_file.write_text(
-            """
+        module_file.write_text("""
 import openai
 
 def call_llm():
@@ -888,8 +881,7 @@ def call_llm():
         messages=[]
     )
     return response
-"""
-        )
+""")
 
         result = analyzer.analyze(directories=[src_dir])
         # File should be analyzed (not excluded by test* pattern)
@@ -1012,8 +1004,7 @@ class TestIntegration:
 
         # Create a file with LLM patterns
         api_file = src_dir / "api.py"
-        api_file.write_text(
-            """
+        api_file.write_text("""
 import openai
 from tenacity import retry
 
@@ -1030,8 +1021,7 @@ def get_embedding(text):
         model="text-embedding-ada-002",
         input=text
     )
-"""
-        )
+""")
 
         # Run analysis
         analyzer = LLMPatternAnalyzer(project_root=tmp_path)

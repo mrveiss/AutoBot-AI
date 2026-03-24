@@ -14,6 +14,9 @@ For new code, import directly from llm_interface_pkg:
     from llm_interface_pkg import LLMInterface, LLMSettings, ProviderType
 """
 
+# Import additional dependencies that may be expected by consumers
+from config import ConfigManager
+
 # Re-export everything from the refactored package
 from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock providers; Main interface; Providers
     TORCH_AVAILABLE,
@@ -37,9 +40,6 @@ from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock prov
     local_llm,
     palm,
 )
-
-# Import additional dependencies that may be expected by consumers
-from config import ConfigManager
 
 # Create singleton config instance for backward compatibility
 config = ConfigManager()

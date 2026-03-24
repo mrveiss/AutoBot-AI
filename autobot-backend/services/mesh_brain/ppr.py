@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Personalized PageRank over the mesh graph for importance-weighted expansion (#1994, #2057)."""
+
 import logging
 from typing import Protocol
 

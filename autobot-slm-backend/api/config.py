@@ -13,10 +13,6 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import Node, NodeConfig
 from models.schemas import (
     NodeConfigBulkResponse,
@@ -25,6 +21,9 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 

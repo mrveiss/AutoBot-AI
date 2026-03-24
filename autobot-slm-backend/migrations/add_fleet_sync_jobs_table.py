@@ -24,8 +24,7 @@ def _create_fleet_sync_jobs(cursor) -> None:
         return
 
     logger.info("Creating fleet_sync_jobs table...")
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE fleet_sync_jobs (
             id SERIAL PRIMARY KEY,
             job_id VARCHAR(64) UNIQUE NOT NULL,
@@ -39,8 +38,7 @@ def _create_fleet_sync_jobs(cursor) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP
         )
-    """
-    )
+    """)
     create_index_if_not_exists(
         cursor, "idx_fleet_sync_jobs_status", "fleet_sync_jobs", "status"
     )
@@ -57,8 +55,7 @@ def _create_fleet_sync_node_states(cursor) -> None:
         return
 
     logger.info("Creating fleet_sync_node_states table...")
-    cursor.execute(
-        """
+    cursor.execute("""
         CREATE TABLE fleet_sync_node_states (
             id SERIAL PRIMARY KEY,
             job_id VARCHAR(64) NOT NULL
@@ -71,8 +68,7 @@ def _create_fleet_sync_node_states(cursor) -> None:
             started_at TIMESTAMP,
             completed_at TIMESTAMP
         )
-    """
-    )
+    """)
     create_index_if_not_exists(
         cursor,
         "idx_fleet_sync_node_states_job",

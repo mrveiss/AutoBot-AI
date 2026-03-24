@@ -381,7 +381,7 @@ def stop_schedule_executor():
 
     Should be called during application shutdown.
     """
-    global _executor_running, _executor_task
+    global _executor_running
 
     _executor_running = False
 

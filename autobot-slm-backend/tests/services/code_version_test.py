@@ -244,9 +244,9 @@ class TestHeartbeatVersionTracking:
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=f"/api/nodes/{node_id}/code-package"
-            if update_available
-            else None,
+            update_url=(
+                f"/api/nodes/{node_id}/code-package" if update_available else None
+            ),
         )
 
         assert response.update_available is True
@@ -269,9 +269,9 @@ class TestHeartbeatVersionTracking:
             status="ok",
             update_available=update_available,
             latest_version=latest_version if update_available else None,
-            update_url=None
-            if not update_available
-            else "/api/nodes/test-node/code-package",
+            update_url=(
+                None if not update_available else "/api/nodes/test-node/code-package"
+            ),
         )
 
         assert response.update_available is False

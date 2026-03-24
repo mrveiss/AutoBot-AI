@@ -347,7 +347,9 @@ class ConsoleLogCleaner:
         """Clean console.logs from entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(f"🔍 Scanning for console.log statements in: {search_root}")  # noqa: print
+        print(
+            f"🔍 Scanning for console.log statements in: {search_root}"
+        )  # noqa: print
         print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Find all files to process

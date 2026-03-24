@@ -103,7 +103,9 @@ async def main():
     success = await test_system_validation()
 
     if success:
-        logger.info("✅ System validation test PASSED - System is ready for production!")
+        logger.info(
+            "✅ System validation test PASSED - System is ready for production!"
+        )
     else:
         logger.error("❌ System validation test FAILED - Issues need to be resolved")
 

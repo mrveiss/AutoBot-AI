@@ -116,9 +116,9 @@ class TestPersistConversationDedup:
             if last_entry.get("user") == message:
                 existing_response = last_entry.get("assistant", "")
                 if second_response not in existing_response:
-                    last_entry[
-                        "assistant"
-                    ] = f"{existing_response}\n\n{second_response}"
+                    last_entry["assistant"] = (
+                        f"{existing_response}\n\n{second_response}"
+                    )
             else:
                 session.conversation_history.append(
                     {"user": message, "assistant": second_response}

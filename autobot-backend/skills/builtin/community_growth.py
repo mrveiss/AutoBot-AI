@@ -195,9 +195,9 @@ class CommunityGrowthSkill(BaseSkill):
                                 "url": f"https://reddit.com{post.permalink}",
                                 "subreddit": sub_name,
                                 "score": post.score,
-                                "body_snippet": post.selftext[:200]
-                                if post.selftext
-                                else "",
+                                "body_snippet": (
+                                    post.selftext[:200] if post.selftext else ""
+                                ),
                             }
                         )
             return results

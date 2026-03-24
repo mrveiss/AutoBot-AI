@@ -126,7 +126,6 @@ class ResourceFactory:
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
-
             from config import config as global_config_manager
 
             logger.info(

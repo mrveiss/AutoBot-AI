@@ -572,9 +572,9 @@ class EnhancedProjectStateTracker:
             summary,
             output_path,
             format,
-            report_generator=self.generate_state_report
-            if format == "markdown"
-            else None,
+            report_generator=(
+                self.generate_state_report if format == "markdown" else None
+            ),
         )
 
 

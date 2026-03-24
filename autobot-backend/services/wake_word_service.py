@@ -138,9 +138,9 @@ class WakeWordDetector:
 
         # Initialize adaptive thresholds
         for wake_word in self.config.wake_words:
-            self._adaptive_thresholds[
-                wake_word.lower()
-            ] = self.config.confidence_threshold
+            self._adaptive_thresholds[wake_word.lower()] = (
+                self.config.confidence_threshold
+            )
 
         logger.info(
             "WakeWordDetector initialized with %d wake words",
@@ -153,9 +153,9 @@ class WakeWordDetector:
         wake_word_lower = wake_word.lower().strip()
         if wake_word_lower not in {w.lower() for w in self.config.wake_words}:
             self.config.wake_words.append(wake_word_lower)
-            self._adaptive_thresholds[
-                wake_word_lower
-            ] = self.config.confidence_threshold
+            self._adaptive_thresholds[wake_word_lower] = (
+                self.config.confidence_threshold
+            )
             logger.info("Added wake word: %s", wake_word)
             return True
         return False
@@ -492,9 +492,9 @@ class WakeWordDetector:
         if "wake_words" in updates:
             for wake_word in self.config.wake_words:
                 if wake_word.lower() not in self._adaptive_thresholds:
-                    self._adaptive_thresholds[
-                        wake_word.lower()
-                    ] = self.config.confidence_threshold
+                    self._adaptive_thresholds[wake_word.lower()] = (
+                        self.config.confidence_threshold
+                    )
 
     def enable(self) -> None:
         """Enable wake word detection"""

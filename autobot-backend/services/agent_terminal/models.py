@@ -44,9 +44,9 @@ class AgentTerminalSession:
     pending_approval: Optional[Metadata] = None
     metadata: Metadata = field(default_factory=dict)
     pty_session_id: Optional[str] = None  # PTY session for terminal display
-    running_command_task: Optional[
-        asyncio.Task
-    ] = None  # Track running command for cancellation
+    running_command_task: Optional[asyncio.Task] = (
+        None  # Track running command for cancellation
+    )
 
     # === Issue #372: Feature Envy Reduction Methods ===
 

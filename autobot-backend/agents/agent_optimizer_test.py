@@ -258,8 +258,7 @@ Test content."""
             # Create larger code blocks to ensure size reduction
             large_code = "\n".join([f"    line_{j} = {j}" for j in range(20)])
             with open(test_file, "w", encoding="utf-8") as f:
-                f.write(
-                    f"""---
+                f.write(f"""---
 name: agent-{i}
 ---
 Content for agent {i}.
@@ -276,8 +275,7 @@ def example_function_{i}():
     return "result"
 ```
 
-Additional text after code block."""
-                )
+Additional text after code block.""")
 
         # Optimize all
         stats = self.optimizer.optimize_all()
@@ -450,11 +448,9 @@ End."""
         # Create malformed file (missing closing frontmatter)
         test_file = self.source_dir / "malformed.md"
         with open(test_file, "w", encoding="utf-8") as f:
-            f.write(
-                """---
+            f.write("""---
 name: malformed
-This is malformed frontmatter without closing"""
-            )
+This is malformed frontmatter without closing""")
 
         # Should handle gracefully without crashing
         result = optimizer.optimize_agent_file(test_file)

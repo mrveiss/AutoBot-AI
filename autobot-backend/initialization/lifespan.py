@@ -167,7 +167,9 @@ async def _init_conversation_file_manager(app: FastAPI) -> None:
         await conversation_file_manager.initialize()
         app.state.conversation_file_manager = conversation_file_manager
         await update_app_state("conversation_file_manager", conversation_file_manager)
-        logger.info("✅ [ 40%] Conversation Files DB: Database initialized and verified")
+        logger.info(
+            "✅ [ 40%] Conversation Files DB: Database initialized and verified"
+        )
     except Exception as conv_file_error:
         logger.error(
             f"❌ CRITICAL: Conversation files database initialization failed: {conv_file_error}"
@@ -493,7 +495,8 @@ async def _auto_index_documentation():
 
         # Fire-and-forget: run indexing in background so startup continues
         logger.info(
-            "✅ [ 85%] Doc Index: Collection empty, " "scheduling background indexing..."
+            "✅ [ 85%] Doc Index: Collection empty, "
+            "scheduling background indexing..."
         )
         asyncio.create_task(_run_background_doc_indexing())
 

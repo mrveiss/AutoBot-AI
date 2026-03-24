@@ -201,9 +201,11 @@ class StatsMixin:
         fact_drift = actual_facts - stored_facts
         vector_drift = actual_vectors - stored_vectors
         return {
-            "status": "consistent"
-            if fact_drift == 0 and vector_drift == 0
-            else "drift_detected",
+            "status": (
+                "consistent"
+                if fact_drift == 0 and vector_drift == 0
+                else "drift_detected"
+            ),
             "stored_facts": stored_facts,
             "actual_facts": actual_facts,
             "fact_drift": fact_drift,

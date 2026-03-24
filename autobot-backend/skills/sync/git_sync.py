@@ -2,6 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Git repository skill sync (Phase 3)."""
+
 import asyncio
 import logging
 import os

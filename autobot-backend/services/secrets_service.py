@@ -100,8 +100,7 @@ class SecretsService:
 
     def _create_secrets_table(self, cursor: sqlite3.Cursor):
         """Create the secrets table if it doesn't exist"""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS secrets (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -120,8 +119,7 @@ class SecretsService:
                 is_active BOOLEAN DEFAULT 1,
                 UNIQUE(name, scope, chat_id)
             )
-        """
-        )
+        """)
 
     def _create_secrets_indexes(self, cursor: sqlite3.Cursor):
         """Create indexes for the secrets table"""
@@ -133,8 +131,7 @@ class SecretsService:
 
     def _create_audit_table(self, cursor: sqlite3.Cursor):
         """Create the audit log table if it doesn't exist"""
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS secrets_audit (
                 id TEXT PRIMARY KEY,
                 secret_id TEXT NOT NULL,
@@ -144,8 +141,7 @@ class SecretsService:
                 details TEXT,
                 FOREIGN KEY (secret_id) REFERENCES secrets(id)
             )
-        """
-        )
+        """)
 
     def _encrypt_value(self, value: str) -> str:
         """Encrypt a secret value"""

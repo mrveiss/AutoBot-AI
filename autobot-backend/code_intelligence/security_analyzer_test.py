@@ -33,13 +33,11 @@ class TestSecurityAnalyzer:
 
     def test_detect_sql_injection_format(self):
         """Test detection of SQL injection via string formatting."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def get_user(cursor, user_id):
                 cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
                 return cursor.fetchone()
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -61,13 +59,11 @@ class TestSecurityAnalyzer:
 
     def test_detect_command_injection_eval(self):
         """Test detection of command injection via eval()."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def process_input(user_input):
                 result = eval(user_input)
                 return result
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -87,14 +83,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_subprocess_shell_true(self):
         """Test detection of subprocess with shell=True."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import subprocess
 
             def run_command(cmd):
                 return subprocess.run(cmd, shell=True)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -114,14 +108,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_hardcoded_password(self):
         """Test detection of hardcoded password."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             DATABASE_PASSWORD = "super_secret_password123"
 
             def connect():
                 return db.connect(password=DATABASE_PASSWORD)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -145,14 +137,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_hardcoded_api_key(self):
         """Test detection of hardcoded API key."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             API_KEY = "sk-1234567890abcdef1234567890abcdef"
 
             def call_api():
                 return requests.get(url, headers={"Authorization": API_KEY})
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -171,14 +161,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_weak_hash_md5(self):
         """Test detection of weak MD5 hash usage."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import hashlib
 
             def hash_password(password):
                 return hashlib.md5(password.encode()).hexdigest()
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -198,14 +186,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_insecure_random(self):
         """Test detection of insecure random usage."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import random
 
             def generate_token():
                 return random.randint(0, 1000000)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -225,14 +211,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_pickle_usage(self):
         """Test detection of insecure pickle usage."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import pickle
 
             def load_data(data):
                 return pickle.loads(data)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -252,14 +236,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_yaml_unsafe_load(self):
         """Test detection of unsafe yaml.load usage."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import yaml
 
             def load_config(data):
                 return yaml.load(data)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -279,14 +261,12 @@ class TestSecurityAnalyzer:
 
     def test_detect_debug_mode_enabled(self):
         """Test detection of debug mode enabled."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             DEBUG = True
 
             app = Flask(__name__)
             app.run(debug=DEBUG)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -305,8 +285,7 @@ class TestSecurityAnalyzer:
 
     def test_no_false_positives_for_env_vars(self):
         """Test that environment variable usage doesn't trigger false positives."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import os
 
             API_KEY = os.getenv("API_KEY")
@@ -314,8 +293,7 @@ class TestSecurityAnalyzer:
 
             def connect():
                 return db.connect(password=PASSWORD)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -339,8 +317,7 @@ class TestSecurityAnalyzer:
 
     def test_no_false_positives_for_safe_yaml(self):
         """Test that safe yaml usage doesn't trigger warnings."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import yaml
 
             def load_config(data):
@@ -348,8 +325,7 @@ class TestSecurityAnalyzer:
 
             def load_with_loader(data):
                 return yaml.load(data, Loader=yaml.SafeLoader)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -369,27 +345,19 @@ class TestSecurityAnalyzer:
     def test_analyze_directory(self, tmp_path):
         """Test directory-wide security analysis."""
         # Create test files
-        (tmp_path / "safe.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "safe.py").write_text(textwrap.dedent("""
             import os
 
             def get_config():
                 return os.getenv("CONFIG")
-        """
-            )
-        )
+        """))
 
-        (tmp_path / "vulnerable.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "vulnerable.py").write_text(textwrap.dedent("""
             import pickle
 
             def load(data):
                 return pickle.loads(data)
-        """
-            )
-        )
+        """))
 
         analyzer = SecurityAnalyzer(project_root=str(tmp_path))
         results = analyzer.analyze_directory()
@@ -400,8 +368,7 @@ class TestSecurityAnalyzer:
 
     def test_get_summary(self):
         """Test summary generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             import pickle
             import hashlib
 
@@ -410,8 +377,7 @@ class TestSecurityAnalyzer:
             def process(data):
                 obj = pickle.loads(data)
                 return hashlib.md5(PASSWORD.encode()).hexdigest()
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -430,12 +396,10 @@ class TestSecurityAnalyzer:
 
     def test_owasp_mapping(self):
         """Test OWASP Top 10 mapping for findings."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def execute_query(cursor, user_input):
                 cursor.execute(f"SELECT * FROM users WHERE name = '{user_input}'")
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -468,12 +432,10 @@ class TestSecuritySeverity:
 
     def test_critical_severity_for_injection(self):
         """Injection vulnerabilities should be CRITICAL."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             def dangerous(user_input):
                 eval(user_input)
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -493,11 +455,9 @@ class TestSecuritySeverity:
 
     def test_high_severity_for_secrets(self):
         """Hardcoded secrets should be HIGH severity."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             SECRET_KEY = "my_super_secret_key_12345678"
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -521,14 +481,10 @@ class TestSecurityConvenienceFunction:
 
     def test_analyze_security_function(self, tmp_path):
         """Test the convenience function."""
-        (tmp_path / "test.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "test.py").write_text(textwrap.dedent("""
             def test():
                 eval("1+1")
-        """
-            )
-        )
+        """))
 
         result = analyze_security(str(tmp_path))
 
@@ -542,11 +498,9 @@ class TestSecurityReport:
 
     def test_json_report_format(self):
         """Test JSON report generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             PASSWORD = "test123"
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)
@@ -564,11 +518,9 @@ class TestSecurityReport:
 
     def test_markdown_report_format(self):
         """Test Markdown report generation."""
-        code = textwrap.dedent(
-            """
+        code = textwrap.dedent("""
             PASSWORD = "test123"
-        """
-        )
+        """)
 
         with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
             f.write(code)

@@ -446,9 +446,9 @@ class UnifiedMultiModalProcessor:
             modality_type=input_data.modality_type,
             intent=input_data.intent,
             success=success,
-            confidence=combined_result.get("confidence", 0.5)
-            if combined_result
-            else 0.0,
+            confidence=(
+                combined_result.get("confidence", 0.5) if combined_result else 0.0
+            ),
             result_data=combined_result,
             processing_time=processing_time,
             error_message=error_message,

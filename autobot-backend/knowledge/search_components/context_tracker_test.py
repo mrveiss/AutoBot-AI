@@ -1,4 +1,5 @@
 """Tests for ContextTracker (#2005)."""
+
 from knowledge.search_components.context_tracker import ContextTracker
 
 

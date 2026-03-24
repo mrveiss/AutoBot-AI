@@ -37,9 +37,9 @@ _CLASS_DEF_RE = re.compile(r"class\s+(\w+)")
 _ASYNC_FUNC_RE = re.compile(r"async\s+def\s+(\w+)")
 
 # Issue #336: Keyword heuristics dispatch table for intent classification
-KEYWORD_INTENT_FALLBACKS: Dict[
-    Tuple[str, ...], "QueryIntent"
-] = {}  # Populated after enum defined
+KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = (
+    {}
+)  # Populated after enum defined
 
 router = APIRouter(prefix="/nl-search", tags=["natural-language-search", "code-search"])
 
