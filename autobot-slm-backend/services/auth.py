@@ -34,10 +34,6 @@ class AuthService:
     def __init__(self):
         self.algorithm = "HS256"
 
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash."""
-        return pwd_context.verify(plain_password, hashed_password)
-
     def hash_password(self, password: str) -> str:
         """Hash a password."""
         return pwd_context.hash(password)
@@ -66,25 +62,6 @@ class AuthService:
         except InvalidTokenError as e:
             logger.warning("JWT decode error: %s", e)
             return None
-
-    async def authenticate_user(
-        self, db: AsyncSession, username: str, password: str
-    ) -> Optional[User]:
-        """Authenticate a user by username and password."""
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-
-        if not user:
-            return None
-        if not user.is_active:
-            return None
-        if not self.verify_password(password, user.password_hash):
-            return None
-
-        user.last_login_at = datetime.utcnow()
-        await db.commit()
-
-        return user
 
     async def create_user(
         self, db: AsyncSession, user_data: UserCreate
