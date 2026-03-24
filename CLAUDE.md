@@ -222,6 +222,14 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 - Bulk operations: commit in batches of 10–15 files max
 - **NEVER** use `git commit --no-verify`
 
+**Bulk File Changes:**
+
+- When fixing issues across many files, apply changes in batches of **10–20 files at a time**
+- After each batch: run `pre-commit run --files <changed-files>`, fix any failures, then commit
+- Before applying a bulk fix across 50+ files: test on **2–3 representative files first**, verify with pre-commit, then proceed to the full batch
+- Never apply bulk regex/script fixes across 100+ files without a small-sample validation step
+- If a bulk fix script produces syntax errors in any file: stop, fix the script, re-test on the sample, then re-run
+
 **Pre-commit Stash Risk (Issue #1503):**
 
 pre-commit uses `git stash push --include-untracked` before running hooks and `git stash pop` after. When untracked files from other in-progress branches exist in the working directory, the stash pop can promote them into the staging area — causing them to be accidentally included in unrelated commits.
@@ -234,9 +242,12 @@ pre-commit uses `git stash push --include-untracked` before running hooks and `g
 **Post-commit verification:**
 
 ```bash
+git show --stat HEAD        # Verify commit contents match expectations
 git log --oneline -1        # Verify commit message and branch
 git diff --staged           # Ensure nothing unexpectedly left staged
 ```
+
+Pre-commit hooks modify files during the stash/unstash cycle. Always use `git show --stat HEAD` to confirm the commit contains exactly what you intended — not more, not less.
 
 **Deployment Verification Checklist — after deploying to ANY remote server:**
 
@@ -425,6 +436,20 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 
 The `--unset-upstream` prevents accidental fast-forward merges into `Dev_new_gui` that bypass PRs — all changes must go through a PR.
 
+**Worktree Path Enforcement:**
+When working inside a worktree, ALL file operations must target that worktree's absolute path — never the main repo root.
+- Before any file write inside an agent: confirm `pwd` is the correct worktree directory
+- Pass the absolute worktree path explicitly to sub-agents: `"You are working ONLY in /home/kali/Desktop/AutoBot/.worktrees/issue-XXXX. cd there first. Never write files outside this path."`
+- After agents complete: verify changed files are in the worktree, not the main repo, with `git -C .worktrees/issue-XXXX diff --name-only`
+
+**No Nested Worktrees (Issue #2096):**
+NEVER create a worktree inside another worktree. All worktrees must be flat under `.worktrees/`:
+
+- ✅ `.worktrees/issue-2058` (flat — correct)
+- ❌ `.worktrees/issue-2055/.worktrees/issue-2058` (nested — FORBIDDEN)
+- Before creating a worktree, verify `pwd` is the main repo root, not inside an existing worktree
+- If you discover a nested worktree: relocate with `git worktree move <nested-path> .worktrees/issue-XXXX`
+
 **If subagent fails:** Switch to direct implementation immediately. Do NOT retry.
 
 **Subagent success pattern:** Pre-flight → test one agent → dispatch parallel → monitor → fallback to sequential if needed.
@@ -486,6 +511,35 @@ Form a hypothesis before running commands:
 ### Error Handling
 
 Auto-retry on transient errors (API 500, tool interruptions) up to 2 times before asking the user. Log: "Retrying (attempt 2/2)..."
+
+### Self-Improvement Loop
+
+After ANY correction from the user, update `tasks/lessons.md` with the pattern:
+
+1. **Capture:** Record the mistake and the correction in `tasks/lessons.md`
+2. **Write a rule:** Phrase it as a preventable pattern (e.g., "Always check X before doing Y")
+3. **Review:** At session start, scan `tasks/lessons.md` for lessons relevant to the current task
+4. **Iterate:** If the same mistake recurs, strengthen the rule — add examples, make it more specific
+
+Format for `tasks/lessons.md`:
+```markdown
+## Lesson: <short title>
+- **Date:** YYYY-MM-DD
+- **Trigger:** What went wrong
+- **Rule:** What to do differently
+- **Context:** Why this matters
+```
+
+### Elegance Gate
+
+For non-trivial changes (new features, refactors, architectural modifications):
+
+1. **Pause** before committing and ask: "Is there a more elegant way?"
+2. If the implementation feels hacky: rewrite with the elegant solution now — don't defer
+3. **Skip this gate** for simple, obvious fixes — don't over-engineer
+4. Challenge your own work before presenting it: "Would a staff engineer approve this?"
+
+This gate does NOT override Simplicity First — elegance means the *simplest correct solution*, not the most abstract one.
 
 ---
 
