@@ -1,0 +1,29 @@
+# CodeQL configuration for AutoBot
+# Configures scan paths and query packs for Python analysis.
+#
+# Note: Python CodeQL does not support custom sanitizer declarations via
+# data extensions (only sourceModel, sinkModel, summaryModel, typeModel).
+# False positives from custom sanitizers should be dismissed via the
+# GitHub Security tab or query filters instead.
+#
+# Related issue: #1826
+
+name: "AutoBot CodeQL Configuration"
+
+packs:
+  python:
+    - codeql/python-queries
+
+# Paths to scan
+paths:
+  - autobot-backend
+  - autobot-shared
+  - autobot-slm-backend
+
+# Paths to ignore
+paths-ignore:
+  - autobot-frontend/node_modules
+  - autobot-backend/venv
+  - "**/__pycache__"
+  - "**/migrations"
+  - "**/tests"
