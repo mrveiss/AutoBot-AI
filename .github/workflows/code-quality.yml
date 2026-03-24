@@ -82,6 +82,8 @@ jobs:
         python3 -m autoflake --check --recursive \
           --remove-all-unused-imports \
           --remove-unused-variables \
+          --expand-star-imports \
+          --ignore-init-module-imports \
           autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
           echo "⚠️ Unused imports/variables detected"
           exit 1
