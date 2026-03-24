@@ -14,6 +14,7 @@
 # - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
 # - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
 # - Lines with "# noqa: print" or "// noqa: console" comments
+# - ansible/ (deployed copies with doctest examples)
 #
 # Issue: #1082 - Pre-commit hooks not blocking print/console violations
 #
