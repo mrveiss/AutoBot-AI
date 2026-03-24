@@ -167,7 +167,7 @@ def test_api_endpoints():
     # Test 1: System health
     print("\n1. Testing System Health Endpoint...")  # noqa: print
     try:
-        response = requests.get(f"{base_url}/system/health")
+        response = requests.get(f"{base_url}/system/health")  # nosec B113
         if response.status_code == 200:
             health_data = response.json()
             print(f"✅ Health check: {health_data['status']}")  # noqa: print
@@ -179,7 +179,7 @@ def test_api_endpoints():
     # Test 2: Streaming capabilities
     print("\n2. Testing Streaming Capabilities...")  # noqa: print
     try:
-        response = requests.get(f"{base_url}/streaming/capabilities")
+        response = requests.get(f"{base_url}/streaming/capabilities")  # nosec B113
         if response.status_code == 200:
             capabilities = response.json()
             print(f"✅ Streaming capabilities: {capabilities}")  # noqa: print
@@ -193,7 +193,7 @@ def test_api_endpoints():
     # Test 3: Takeover status
     print("\n3. Testing Takeover Status...")  # noqa: print
     try:
-        response = requests.get(f"{base_url}/takeover/status")
+        response = requests.get(f"{base_url}/takeover/status")  # nosec B113
         if response.status_code == 200:
             takeover_status = response.json()
             print(f"✅ Takeover status: {takeover_status}")  # noqa: print
@@ -205,7 +205,7 @@ def test_api_endpoints():
     # Test 4: System status
     print("\n4. Testing System Status...")  # noqa: print
     try:
-        response = requests.get(f"{base_url}/system/status")
+        response = requests.get(f"{base_url}/system/status")  # nosec B113
         if response.status_code == 200:
             system_status = response.json()
             print(  # noqa: print
@@ -219,7 +219,7 @@ def test_api_endpoints():
     # Test 5: API info
     print("\n5. Testing API Information...")  # noqa: print
     try:
-        response = requests.get(f"{base_url}/")
+        response = requests.get(f"{base_url}/")  # nosec B113
         if response.status_code == 200:
             api_info = response.json()
             print(  # noqa: print

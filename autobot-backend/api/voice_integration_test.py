@@ -78,7 +78,7 @@ class TestTTSWorkerSynthesize:
         resp = requests.post(
             f"{TTS_WORKER_URL}/tts/synthesize",
             data={"text": "Hello from AutoBot."},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "audio/wav"
@@ -89,7 +89,7 @@ class TestTTSWorkerSynthesize:
         resp = requests.post(
             f"{TTS_WORKER_URL}/tts/synthesize",
             data={"text": "Latency test."},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         elapsed = time.monotonic() - start
         assert resp.status_code == 200
@@ -101,7 +101,7 @@ class TestTTSWorkerSynthesize:
         resp = requests.post(
             f"{TTS_WORKER_URL}/tts/synthesize",
             data={"text": "Testing audio content."},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         assert resp.status_code == 200
         assert len(resp.content) > 1000  # real WAV is more than a few bytes
@@ -114,7 +114,7 @@ class TestTTSWorkerCloneVoice:
             f"{TTS_WORKER_URL}/tts/clone-voice",
             data={"text": "Voice clone test."},
             files={"reference_audio": ("ref.wav", silent_wav, "audio/wav")},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         # 200 if model supports cloning, 500 if reference is too short (acceptable)
         assert resp.status_code in (200, 500)
@@ -132,7 +132,7 @@ class TestBackendVoiceSynthesize:
         resp = requests.post(
             f"{BACKEND_URL}/api/voice/synthesize",
             data={"text": "AutoBot speaking.", "user_role": "user"},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         assert resp.status_code == 200
         assert "audio" in resp.headers.get("content-type", "")
@@ -146,7 +146,7 @@ class TestBackendVoiceSynthesize:
         resp = requests.post(
             f"{BACKEND_URL}/api/voice/synthesize",
             data={"text": "Full pipeline latency test.", "user_role": "user"},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         elapsed = time.monotonic() - start
         assert resp.status_code == 200
@@ -160,7 +160,7 @@ class TestBackendVoiceSynthesize:
             f"{BACKEND_URL}/api/voice/clone-voice",
             data={"text": "Clone proxy test.", "user_role": "user"},
             files={"reference_audio": ("ref.wav", silent_wav, "audio/wav")},
-            timeout=LATENCY_BUDGET_SEC * 2,
+            timeout=LATENCY_BUDGET_SEC * 2,  # nosec B113
         )
         assert resp.status_code in (200, 500)
         if resp.status_code == 200:
