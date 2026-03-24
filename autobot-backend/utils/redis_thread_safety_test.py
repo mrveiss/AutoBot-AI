@@ -13,7 +13,8 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from utils.redis_client import RedisConnectionManager
+
+from autobot_shared.redis_client import RedisConnectionManager
 
 
 class TestPoolStatisticsThreadSafety:
@@ -275,7 +276,7 @@ class TestIdleCleanupThreadSafety:
 
         # Use freezegun or manual datetime mocking
         # Mock datetime.now() to return consistent value
-        import utils.redis_client as redis_client_module
+        import autobot_shared.redis_client as redis_client_module
 
         original_datetime = redis_client_module.datetime
 

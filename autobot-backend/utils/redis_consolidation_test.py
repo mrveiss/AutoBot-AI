@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-from utils.redis_client import (
+from autobot_shared.redis_client import (
     ConnectionState,
     ManagerStats,
     PoolStatistics,
@@ -255,7 +255,7 @@ class TestFeatureIntegration:
 
 def test_module_imports():
     """Test all expected exports are available"""
-    from utils import redis_client
+    from autobot_shared import redis_client
 
     # Check all main exports
     assert hasattr(redis_client, "get_redis_client")

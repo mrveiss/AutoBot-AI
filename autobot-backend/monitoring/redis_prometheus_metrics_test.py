@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 from monitoring.prometheus_metrics import get_metrics_manager
-from utils.redis_client import RedisConnectionManager
+
+from autobot_shared.redis_client import RedisConnectionManager
 
 
 @pytest.fixture

@@ -10,7 +10,8 @@ import time
 
 import redis
 from config import config as global_config_manager
-from utils.redis_client import get_redis_client
+
+from autobot_shared.redis_client import get_redis_client
 
 
 def test_worker_capabilities():
