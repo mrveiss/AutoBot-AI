@@ -35,6 +35,13 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class MfaChallengeResponse(BaseModel):
+    """MFA challenge response when user has MFA enabled (#2240)."""
+
+    requires_mfa: bool = True
+    temp_token: str
+
+
 class UserCreate(BaseModel):
     """User creation request."""
 
