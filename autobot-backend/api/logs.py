@@ -43,13 +43,14 @@ _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
 
-def _validate_log_path(file_path) -> Path:
-    """Ensure file_path is under LOG_DIR.
+def _validate_log_path(filename: str) -> Path:
+    """Ensure filename resolves under LOG_DIR.
 
-    Uses shared path validator (#1721).
+    Accepts a user-supplied filename or relative sub-path and validates it
+    stays within LOG_DIR.  Uses shared path validator (#1721, #2194).
     """
     try:
-        return validate_relative_path(str(Path(file_path).name), LOG_DIR)
+        return validate_relative_path(str(filename), LOG_DIR)
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -539,7 +540,7 @@ async def read_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = _validate_log_path(LOG_DIR / filename)
+        file_path = _validate_log_path(filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
@@ -843,7 +844,7 @@ async def stream_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = _validate_log_path(LOG_DIR / filename)
+        file_path = _validate_log_path(filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
@@ -881,7 +882,7 @@ async def tail_log(websocket: WebSocket, filename: str):
 
     try:
         try:
-            file_path = _validate_log_path(LOG_DIR / filename)
+            file_path = _validate_log_path(filename)
         except HTTPException:
             await websocket.send_json({"error": "Access denied"})
             await websocket.close()
@@ -978,7 +979,7 @@ async def search_logs(
         files_to_search = []
 
         if filename:
-            file_path = _validate_log_path(LOG_DIR / filename)
+            file_path = _validate_log_path(filename)
             file_exists = await run_in_log_executor(file_path.exists)
             if file_exists:
                 files_to_search.append(file_path)
@@ -1028,7 +1029,7 @@ async def clear_log(
     Issue #744: Requires admin authentication.
     """
     try:
-        file_path = _validate_log_path(LOG_DIR / filename)
+        file_path = _validate_log_path(filename)
         file_exists = await run_in_log_executor(file_path.exists)
         is_file = await run_in_log_executor(file_path.is_file) if file_exists else False
         if not file_exists or not is_file:
