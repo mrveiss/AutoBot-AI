@@ -3,9 +3,15 @@
 # Author: mrveiss
 """
 SLM Authentication API Routes
+
+Canonical login endpoint for all SLM clients. Supports username or email
+login, MFA challenges (Issue #576 Phase 5), and audit logging (Issue #998).
+Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 """
 
 import logging
+from datetime import timedelta
+from typing import Optional
 
 from api.security import create_audit_log
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -14,29 +20,74 @@ from services.auth import auth_service, get_current_user, get_slm_db, require_ad
 from services.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+from user_management.models.user import User
+from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/login", response_model=TokenResponse)
+def _get_client_ip(http_request: Request) -> Optional[str]:
+    """Extract client IP, respecting X-Forwarded-For for load-balanced deployments."""
+    forwarded_for = http_request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return http_request.client.host if http_request.client else None
+
+
+def _create_mfa_challenge(user: User) -> dict:
+    """Create MFA challenge response with temporary token (Issue #576 Phase 5).
+
+    Args:
+        user: User requiring MFA verification
+
+    Returns:
+        Dict with requires_mfa flag and temporary token
+    """
+    temp_token_data = {
+        "sub": user.username,
+        "mfa_pending": True,
+        "user_id": str(user.id),
+        "admin": user.is_platform_admin,
+    }
+    temp_token = auth_service.create_access_token(
+        data=temp_token_data,
+        expires_delta=timedelta(minutes=5),
+    )
+    logger.info("MFA challenge issued for user: %s", user.username)
+    return {"requires_mfa": True, "temp_token": temp_token}
+
+
+@router.post("/login")
 async def login(
     http_request: Request,
     body: TokenRequest,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
     audit_db: Annotated[AsyncSession, Depends(get_db)],
-) -> TokenResponse:
-    """Authenticate and get access token. Records audit log entry (Issue #998)."""
-    client_ip = http_request.client.host if http_request.client else None
-    user = await auth_service.authenticate_user(db, body.username, body.password)
+) -> dict:
+    """Authenticate and get access token.
+
+    Accepts username or email. Returns JWT token or MFA challenge.
+    Records audit log entry (Issue #998). Consolidated in Issue #1922.
+    """
+    client_ip = _get_client_ip(http_request)
+    context = TenantContext(is_platform_admin=True)
+    user_service = UserService(db, context)
+
+    user = await user_service.authenticate(
+        username_or_email=body.username,
+        password=body.password,
+    )
 
     if not user:
         await create_audit_log(
             audit_db,
-            category="auth",
-            action="login",
+            category="authentication",
+            action="login_failed",
             username=body.username,
             ip_address=client_ip,
+            resource_type="session",
+            description=f"Failed login attempt for '{body.username}'",
             request_method="POST",
             request_path="/api/auth/login",
             response_status=401,
@@ -50,14 +101,19 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.mfa_enabled:
+        return _create_mfa_challenge(user)
+
     logger.info("User logged in: %s", user.username)
     await create_audit_log(
         audit_db,
-        category="auth",
-        action="login",
+        category="authentication",
+        action="login_success",
         user_id=str(user.id),
         username=user.username,
         ip_address=client_ip,
+        resource_type="session",
+        description=f"User '{user.username}' logged in successfully",
         request_method="POST",
         request_path="/api/auth/login",
         response_status=200,
