@@ -293,104 +293,11 @@
         @function-select="handleFunctionSelect"
       />
 
-      <!-- Problems Report - Grouped by Type and Severity -->
-      <div class="problems-section analytics-section">
-        <h3>
-          <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.codebase.problems.codeProblems') }}
-          <span v-if="problemsReport && problemsReport.length > 0" class="total-count">
-            ({{ problemsReport.length.toLocaleString() }} total)
-          </span>
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('problems', 'md')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportMarkdown')">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('problems', 'json')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportJson')">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="problemsReport && problemsReport.length > 0" class="section-content">
-          <!-- Severity Summary Cards -->
-          <div class="summary-cards">
-            <div class="summary-card total">
-              <div class="summary-value">{{ problemsReport.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.stats.total') }}</div>
-            </div>
-            <div
-              v-for="(problems, severity) in problemsBySeverity"
-              :key="severity"
-              class="summary-card"
-              :class="severity"
-            >
-              <div class="summary-value">{{ problems.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ severity.charAt(0).toUpperCase() + severity.slice(1) }}</div>
-            </div>
-          </div>
-
-          <!-- Grouped by Type (Accordion) -->
-          <div class="accordion-groups">
-            <div
-              v-for="(typeData, type) in problemsByType"
-              :key="type"
-              class="accordion-group"
-            >
-              <div
-                class="accordion-header"
-                @click="toggleProblemType(type)"
-              >
-                <div class="header-info">
-                  <i :class="expandedProblemTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">{{ formatProblemType(type) }}</span>
-                  <span class="header-count">({{ typeData.problems.length.toLocaleString() }})</span>
-                </div>
-                <div class="header-badges">
-                  <span v-if="typeData.severityCounts.critical" class="severity-badge critical">
-                    {{ typeData.severityCounts.critical }} {{ $t('analytics.codebase.severity.critical') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.high" class="severity-badge high">
-                    {{ typeData.severityCounts.high }} {{ $t('analytics.codebase.severity.high') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.medium" class="severity-badge medium">
-                    {{ typeData.severityCounts.medium }} {{ $t('analytics.codebase.severity.medium') }}
-                  </span>
-                  <span v-if="typeData.severityCounts.low" class="severity-badge low">
-                    {{ typeData.severityCounts.low }} {{ $t('analytics.codebase.severity.low') }}
-                  </span>
-                </div>
-              </div>
-              <transition name="accordion">
-                <div v-if="expandedProblemTypes[type]" class="accordion-items">
-                  <div
-                    v-for="(problem, index) in typeData.problems.slice(0, 20)"
-                    :key="index"
-                    class="list-item"
-                    :class="getItemSeverityClass(problem.severity)"
-                  >
-                    <div class="item-header">
-                      <span class="item-severity" :class="problem.severity?.toLowerCase()">
-                        {{ problem.severity || 'unknown' }}
-                      </span>
-                    </div>
-                    <div class="item-description">{{ problem.description }}</div>
-                    <div class="item-location">📁 {{ problem.file_path }}{{ problem.line_number ? ':' + problem.line_number : '' }}</div>
-                    <div v-if="problem.suggestion" class="item-suggestion">💡 {{ problem.suggestion }}</div>
-                  </div>
-                  <div v-if="typeData.problems.length > 20" class="show-more">
-                    <span class="muted">Showing 20 of {{ typeData.problems.length.toLocaleString() }} {{ formatProblemType(type) }} issues</span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-check-circle"
-          :message="$t('analytics.codebase.problems.noProblems')"
-          variant="success"
-        />
-      </div>
+      <!-- Issue #1579: Problems Report extracted to ProblemsReportSection -->
+      <ProblemsReportSection
+        :problems="problemsReport"
+        @export="(fmt) => exportSection('problems', fmt)"
+      />
 
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
       <CodeSmellsSection
@@ -605,6 +512,7 @@ import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
+import ProblemsReportSection from '@/components/analytics/ProblemsReportSection.vue'
 // Issue #1469: Extracted panel sub-components
 import CodebaseApiEndpointsPanel from '@/components/analytics/panels/CodebaseApiEndpointsPanel.vue'
 import CodebaseCrossLanguagePanel from '@/components/analytics/panels/CodebaseCrossLanguagePanel.vue'
@@ -3736,72 +3644,8 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
-const formatProblemType = (type: string | undefined): string => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
-}
-
-// Group problems by severity for summary view
-const problemsBySeverity = computed((): Record<string, Problem[]> => {
-  if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped: Record<string, Problem[]> = {}
-  const severityOrder = ['critical', 'high', 'medium', 'low']
-
-  for (const problem of problemsReport.value) {
-    const severity = problem.severity?.toLowerCase() || 'low'
-    if (!grouped[severity]) {
-      grouped[severity] = []
-    }
-    grouped[severity].push(problem)
-  }
-
-  // Return in severity order
-  const ordered: Record<string, Problem[]> = {}
-  for (const sev of severityOrder) {
-    if (grouped[sev]) {
-      ordered[sev] = grouped[sev]
-    }
-  }
-  return ordered
-})
-
-// Problem group with severity counts
-interface ProblemGroup {
-  problems: Problem[]
-  severityCounts: { critical: number; high: number; medium: number; low: number }
-}
-
-// Group problems by type, then by severity within each type
-const problemsByType = computed((): Record<string, ProblemGroup> => {
-  if (!problemsReport.value || problemsReport.value.length === 0) return {}
-  const grouped: Record<string, ProblemGroup> = {}
-
-  for (const problem of problemsReport.value) {
-    const type = problem.type || 'unknown'
-    if (!grouped[type]) {
-      grouped[type] = {
-        problems: [],
-        severityCounts: { critical: 0, high: 0, medium: 0, low: 0 }
-      }
-    }
-    grouped[type].problems.push(problem)
-    const sev = problem.severity?.toLowerCase() || 'low'
-    if (sev in grouped[type].severityCounts) {
-      grouped[type].severityCounts[sev as keyof typeof grouped[typeof type]['severityCounts']]++
-    }
-  }
-
-  // Sort by total count (highest first)
-  return Object.fromEntries(
-    Object.entries(grouped).sort((a, b) => b[1].problems.length - a[1].problems.length)
-  )
-})
-
-// Track which problem groups are expanded
-const expandedProblemTypes = ref<Record<string, boolean>>({})
-
-const toggleProblemType = (type: string): void => {
-  expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
-}
+// formatProblemType, problemsBySeverity, problemsByType, expandedProblemTypes,
+// toggleProblemType moved to ProblemsReportSection (#1579)
 
 // Filter code smells from indexed problems
 // Issue #609: Code smell types that should appear in the Code Smells section
@@ -3858,17 +3702,7 @@ const declarationsForPanel = computed(() =>
   }))
 )
 
-// Unified item severity class for consistent styling
-const getItemSeverityClass = (severity: string | undefined): string => {
-  switch (severity?.toLowerCase()) {
-    case 'critical': return 'item-critical'
-    case 'high': return 'item-high'
-    case 'medium': return 'item-medium'
-    case 'low': return 'item-low'
-    case 'info': return 'item-info'
-    default: return 'item-unknown'
-  }
-}
+// getItemSeverityClass moved to ProblemsReportSection (#1579)
 
 // All variables and functions are automatically available in <script setup>
 // No export default needed in <script setup> syntax
