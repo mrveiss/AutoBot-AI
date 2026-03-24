@@ -1,66 +1,31 @@
 <template>
   <div class="codebase-analytics">
-    <!-- Header Controls -->
-    <div class="analytics-header">
-      <div class="header-content">
-        <h2><i class="fas fa-code"></i> {{ $t('analytics.codebase.title') }}</h2>
-        <div class="header-controls">
-          <router-link :to="{ name: 'analytics-codebase' }" class="btn-back">
-            <i class="fas fa-arrow-left"></i>
-            {{ $t('analytics.codebase.buttons.backToProjects') }}
-          </router-link>
-
-          <button @click="indexCodebase" :disabled="analyzing" class="btn-primary">
-            <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
-            {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
-          </button>
-          <button
-            v-if="analyzing || scanRunner.running.value"
-            @click="handleStop"
-            class="btn-cancel"
-          >
-            <i class="fas fa-stop-circle"></i>
-            {{ $t('analytics.codebase.actions.stop') }}
-          </button>
-          <button @click="runFullAnalysis" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
-            <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
-            {{ analyzing ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.buttons.analyzeAll') }}
-          </button>
-
-          <!-- Enhanced Debug Controls -->
-          <div class="debug-controls" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button @click="getDeclarationsData" class="btn-debug btn-debug-success">{{ $t('analytics.codebase.buttons.testDeclarations') }}</button>
-            <button @click="getDuplicatesData" class="btn-debug btn-debug-warning">{{ $t('analytics.codebase.buttons.testDuplicates') }}</button>
-            <button @click="getHardcodesData" class="btn-debug btn-debug-error">{{ $t('analytics.codebase.buttons.testHardcodes') }}</button>
-            <button @click="testNpuConnection" class="btn-debug btn-debug-purple">{{ $t('analytics.codebase.buttons.testNpu') }}</button>
-            <button @click="testDataState" class="btn-debug btn-debug-info">{{ $t('analytics.codebase.buttons.debugState') }}</button>
-            <button @click="resetState" class="btn-debug btn-debug-orange">{{ $t('analytics.codebase.buttons.resetState') }}</button>
-            <button @click="testAllEndpoints" class="btn-debug btn-debug-cyan">{{ $t('analytics.codebase.buttons.testAllApis') }}</button>
-            <!-- Issue #527: API Endpoint Checker -->
-            <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug btn-debug-indigo">
-              <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
-              {{ loadingApiEndpoints ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.apiCoverage') }}
-            </button>
-            <!-- Code Intelligence / Anti-Pattern Detection -->
-            <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-pink">
-              <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
-              {{ analyzingCodeSmells ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.codeSmells') }}
-            </button>
-            <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-violet">
-              <i class="fas fa-heartbeat"></i> {{ $t('analytics.codebase.buttons.healthScore') }}
-            </button>
-            <button @click="exportReport()" :disabled="exportingReport" class="btn-debug btn-debug-secondary">
-              <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
-              {{ exportingReport ? $t('analytics.codebase.buttons.exporting') : $t('analytics.codebase.buttons.exportReport') }}
-            </button>
-            <button @click="clearCache" :disabled="clearingCache" class="btn-debug btn-debug-brown">
-              <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
-              {{ clearingCache ? $t('analytics.codebase.buttons.clearing') : $t('analytics.codebase.buttons.clearCache') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Issue #1579: Header controls extracted to AnalyticsHeaderControls -->
+    <AnalyticsHeaderControls
+      :analyzing="analyzing"
+      :root-path="rootPath"
+      :selected-source="selectedSource"
+      :scan-runner-running="scanRunner.running.value"
+      :loading-api-endpoints="loadingApiEndpoints"
+      :analyzing-code-smells="analyzingCodeSmells"
+      :exporting-report="exportingReport"
+      :clearing-cache="clearingCache"
+      @index-codebase="indexCodebase"
+      @run-full-analysis="runFullAnalysis"
+      @stop="handleStop"
+      @test-declarations="getDeclarationsData"
+      @test-duplicates="getDuplicatesData"
+      @test-hardcodes="getHardcodesData"
+      @test-npu="testNpuConnection"
+      @test-data-state="testDataState"
+      @reset-state="resetState"
+      @test-all-endpoints="testAllEndpoints"
+      @api-coverage="getApiEndpointCoverage"
+      @code-smells="runCodeSmellAnalysis"
+      @health-score="getCodeHealthScore"
+      @export-report="exportReport()"
+      @clear-cache="clearCache"
+    />
 
     <!-- Project Header Card (#1713) -->
     <div v-if="selectedSource" class="project-header-card">
@@ -402,6 +367,7 @@ import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
 import ProblemsReportSection from '@/components/analytics/ProblemsReportSection.vue'
 import AnalyticsProgressSection from '@/components/analytics/AnalyticsProgressSection.vue'
+import AnalyticsHeaderControls from '@/components/analytics/AnalyticsHeaderControls.vue'
 // Issue #1469: Extracted panel sub-components
 import CodebaseApiEndpointsPanel from '@/components/analytics/panels/CodebaseApiEndpointsPanel.vue'
 import CodebaseCrossLanguagePanel from '@/components/analytics/panels/CodebaseCrossLanguagePanel.vue'
@@ -3597,13 +3563,7 @@ const declarationsForPanel = computed(() =>
   overflow-x: hidden;
 }
 
-.analytics-header {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-5);
-  margin-bottom: var(--spacing-6);
-  box-shadow: var(--shadow-lg);
-}
+/* analytics-header CSS moved to AnalyticsHeaderControls (#1579) */
 
 /* Project Header Card (#1713) */
 .project-header-card {
@@ -3643,35 +3603,7 @@ const declarationsForPanel = computed(() =>
 .project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
 .project-meta-item.status-error { color: var(--color-error, #ef4444); }
 
-.header-content h2 {
-  margin: 0 0 16px 0;
-  color: var(--text-on-primary);
-  font-size: 1.5em;
-  font-weight: var(--font-semibold);
-}
-
-.header-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.path-input {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-  padding: 10px 16px;
-  border-radius: var(--radius-lg);
-  min-width: 300px;
-  font-family: var(--font-mono);
-}
-
-.path-input:focus {
-  outline: none;
-  border-color: var(--color-info-hover);
-  box-shadow: var(--shadow-focus);
-}
+/* header-content, header-controls, path-input CSS moved to AnalyticsHeaderControls (#1579) */
 
 .btn-primary, .btn-secondary, .btn-debug {
   padding: 10px 20px;
@@ -3712,41 +3644,7 @@ const declarationsForPanel = computed(() =>
   transform: none;
 }
 
-.btn-cancel {
-  background: var(--color-error-hover);
-  color: var(--text-on-error);
-  padding: 10px 20px;
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-cancel:hover {
-  background: var(--color-error-dark);
-  transform: translateY(-1px);
-}
-
-.btn-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: var(--text-sm);
-  padding: var(--spacing-1-5) var(--spacing-3);
-  border-radius: var(--radius-md);
-  transition: color var(--duration-200), background var(--duration-200);
-}
-
-.btn-back:hover {
-  color: var(--color-info);
-  background: var(--bg-tertiary);
-}
+/* btn-cancel, btn-back CSS moved to AnalyticsHeaderControls (#1579) */
 
 .empty-state-container {
   padding: var(--spacing-8) var(--spacing-4);
@@ -3759,22 +3657,7 @@ const declarationsForPanel = computed(() =>
   font-size: var(--text-base);
 }
 
-.debug-controls {
-  width: 100%;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-debug {
-  font-size: 0.85em;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-debug:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
+/* debug-controls, btn-debug CSS moved to AnalyticsHeaderControls (#1579) */
 
 /* Progress container + scan runner CSS moved to AnalyticsProgressSection (#1579) */
 
