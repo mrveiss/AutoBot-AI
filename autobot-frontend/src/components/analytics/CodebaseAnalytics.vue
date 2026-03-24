@@ -1,18 +1,18 @@
 <template>
   <div class="codebase-analytics">
-    <!-- Issue #1469: Header + Debug Controls (extracted) -->
-    <CodebaseAnalyticsHeader
+    <!-- Issue #1579: Header controls extracted to AnalyticsHeaderControls -->
+    <AnalyticsHeaderControls
       :analyzing="analyzing"
-      :scan-runner-running="scanRunner.running.value"
       :root-path="rootPath"
       :selected-source="selectedSource"
+      :scan-runner-running="scanRunner.running.value"
       :loading-api-endpoints="loadingApiEndpoints"
       :analyzing-code-smells="analyzingCodeSmells"
       :exporting-report="exportingReport"
       :clearing-cache="clearingCache"
       @index-codebase="indexCodebase"
-      @stop="handleStop"
       @run-full-analysis="runFullAnalysis"
+      @stop="handleStop"
       @test-declarations="getDeclarationsData"
       @test-duplicates="getDuplicatesData"
       @test-hardcodes="getHardcodesData"
@@ -20,29 +20,50 @@
       @test-data-state="testDataState"
       @reset-state="resetState"
       @test-all-endpoints="testAllEndpoints"
-      @get-api-coverage="getApiEndpointCoverage"
-      @run-code-smells="runCodeSmellAnalysis"
-      @get-health-score="getCodeHealthScore"
+      @api-coverage="getApiEndpointCoverage"
+      @code-smells="runCodeSmellAnalysis"
+      @health-score="getCodeHealthScore"
       @export-report="exportReport()"
       @clear-cache="clearCache"
     />
 
-    <!-- Issue #1469: Progress tracking (extracted) -->
-    <CodebaseProgressPanel
+    <!-- Project Header Card (#1713) -->
+    <div v-if="selectedSource" class="project-header-card">
+      <div class="project-header-info">
+        <div class="project-header-name">
+          <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+          {{ selectedSource.name }}
+        </div>
+        <div class="project-header-meta">
+          <span v-if="selectedSource.repo" class="project-meta-item">
+            <i class="fas fa-code-branch"></i>
+            {{ selectedSource.repo }}
+          </span>
+          <span v-if="selectedSource.branch" class="project-meta-item">
+            <i class="fas fa-tag"></i>
+            {{ selectedSource.branch }}
+          </span>
+          <span class="project-meta-item" :class="'status-' + (selectedSource.status || 'unknown')">
+            <i class="fas fa-circle" style="font-size: 0.5em; vertical-align: middle;"></i>
+            {{ selectedSource.status || 'unknown' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Issue #1579: Progress indicators extracted to AnalyticsProgressSection -->
+    <AnalyticsProgressSection
       :analyzing="analyzing"
       :analyzing-code-smells="analyzingCodeSmells"
-      :progress-percent="progressPercent"
       :progress-status="progressStatus"
+      :progress-percent="progressPercent"
       :current-job-id="currentJobId"
       :job-phases="jobPhases"
       :job-batches="jobBatches"
       :job-stats="jobStats"
+      :scan-runner="scanRunner"
       :code-smells-progress-title="codeSmellsProgressTitle"
-      :scan-runner-running="scanRunner.running.value"
-      :scan-runner-results="scanRunner.results.value"
-      :scan-runner-completed-count="scanRunner.completedCount.value"
-      :scan-runner-total-count="scanRunner.totalCount.value"
-      :scan-runner-progress="scanRunner.progress.value"
+      @stop="handleStop"
     />
 
     <!-- Empty state when no cached results exist (#1458) -->
@@ -87,7 +108,7 @@
         </button>
       </div>
 
-      <!-- Issue #1469: Stats + Charts section (extracted) -->
+      <!-- Issue #1579: Stats + Charts section extracted to CodebaseChartsSection -->
       <CodebaseChartsSection
         :codebase-stats="codebaseStats"
         :chart-data="chartData"
@@ -98,7 +119,7 @@
         :selected-category="selectedCategory"
         :available-categories="availableCategories"
         :analyzing="analyzing"
-        @export-section="(section, fmt) => exportSection(section as SectionType, fmt)"
+        @export-section="exportSection"
         @load-unified-report="loadUnifiedReport"
         @load-chart-data="loadChartData"
         @update:selected-category="selectedCategory = $event"
@@ -125,9 +146,9 @@
         @function-select="handleFunctionSelect"
       />
 
-      <!-- Issue #1469: Problems Report (extracted) -->
-      <CodebaseProblemsPanel
-        :problems-report="problemsReport"
+      <!-- Issue #1579: Problems Report extracted to ProblemsReportSection -->
+      <ProblemsReportSection
+        :problems="problemsReport"
         @export="(fmt) => exportSection('problems', fmt)"
       />
 
@@ -333,6 +354,8 @@ import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
+import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
+import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
@@ -344,11 +367,10 @@ import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
+import ProblemsReportSection from '@/components/analytics/ProblemsReportSection.vue'
+import AnalyticsProgressSection from '@/components/analytics/AnalyticsProgressSection.vue'
+import AnalyticsHeaderControls from '@/components/analytics/AnalyticsHeaderControls.vue'
 // Issue #1469: Extracted panel sub-components
-import CodebaseAnalyticsHeader from '@/components/analytics/panels/CodebaseAnalyticsHeader.vue'
-import CodebaseProgressPanel from '@/components/analytics/panels/CodebaseProgressPanel.vue'
-import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
-import CodebaseProblemsPanel from '@/components/analytics/panels/CodebaseProblemsPanel.vue'
 import CodebaseApiEndpointsPanel from '@/components/analytics/panels/CodebaseApiEndpointsPanel.vue'
 import CodebaseCrossLanguagePanel from '@/components/analytics/panels/CodebaseCrossLanguagePanel.vue'
 import CodebaseConfigDuplicatesPanel from '@/components/analytics/panels/CodebaseConfigDuplicatesPanel.vue'
@@ -356,6 +378,7 @@ import CodebaseBugPredictionPanel from '@/components/analytics/panels/CodebaseBu
 import CodebaseIntelligenceScoresPanel from '@/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue'
 import CodebaseEnvironmentPanel from '@/components/analytics/panels/CodebaseEnvironmentPanel.vue'
 import CodebaseOwnershipPanel from '@/components/analytics/panels/CodebaseOwnershipPanel.vue'
+import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
 import type {
   SecurityFinding,
   PerformanceFinding,
@@ -364,6 +387,7 @@ import type {
 
 const logger = createLogger('CodebaseAnalytics')
 
+// ApexCharts components moved to CodebaseChartsSection (#1579)
 
 // i18n
 const { t } = useI18n()
@@ -511,7 +535,7 @@ const {
   },
 )
 
-const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
+// dashboardTask moved inside useDashboardLoaders (#1579)
 const scanRunner = useAnalyticsScanRunner()
 
 // Issue #1133: CodeSource type
@@ -571,8 +595,7 @@ const sourceIdQuery = computed((): Record<string, string> => {
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
-const realTimeEnabled = ref(false)
-const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null)
+// realTimeEnabled, refreshInterval provided by useDashboardLoaders (#1579)
 
 // Issue #208: Pattern Analysis component ref
 interface PatternAnalysisComponent {
@@ -580,40 +603,11 @@ interface PatternAnalysisComponent {
 }
 const patternAnalysisRef = ref<PatternAnalysisComponent | null>(null)
 
-// Indexing job state tracking
-const currentJobId = ref<string | null>(null)
-const currentJobStatus = ref<string | null>(null)
-const jobPollingInterval = ref<ReturnType<typeof setInterval> | null>(null)
-
-// Interfaces for job tracking
-interface JobPhase {
-  id: string
-  name: string
-  status: 'pending' | 'running' | 'completed'
-}
-
-interface JobPhasesData {
-  phase_list: JobPhase[]
-}
-
-interface JobBatchesData {
-  total_batches: number
-  completed_batches: number
-}
-
-interface JobStatsData {
-  files_scanned: number
-  problems_found: number
-  functions_found: number
-  classes_found: number
-  items_stored: number
-}
-
-// Enhanced progress tracking with phases and batches
-const jobPhases = ref<JobPhasesData | null>(null)
-const jobBatches = ref<JobBatchesData | null>(null)
-const jobStats = ref<JobStatsData | null>(null)
-
+// Issue #1579: Indexing job state and logic extracted to useIndexingJob composable.
+// Initialized below after all dependent refs are declared (see "Initialize indexing composable" section).
+// Interfaces (JobPhasesData, JobBatchesData, JobStatsData) now live in useIndexingJob.ts.
+// getPhaseIcon moved to AnalyticsProgressSection (#1579)
+// getCategoryIcon moved to CodebaseChartsSection (#1579)
 
 // Analytics data interfaces
 interface Problem {
@@ -710,34 +704,7 @@ const codeSmellsProgressTitle = computed(() => {
     : t('analytics.codebase.progress.analyzingSmells')
 })
 
-// Enhanced analytics data interfaces
-interface SystemOverviewData {
-  api_requests_per_minute: number
-  average_response_time: number
-  active_connections: number
-  system_health: string
-}
-
-interface CommunicationPatternsData {
-  websocket_connections: number
-  api_call_frequency: number
-  data_transfer_rate: number
-  unique_endpoints: number  // Issue #1602: was extracted but never displayed
-}
-
-interface CodeQualityData {
-  overall_score: number
-  test_coverage: number
-  code_duplicates: number
-  technical_debt: number
-}
-
-interface PerformanceMetricsData {
-  efficiency_score: number
-  memory_usage: number
-  cpu_usage: number
-  load_time: number
-}
+// Dashboard overview interfaces moved to useDashboardLoaders (#1579)
 
 interface ChartDataItem {
   name: string
@@ -827,11 +794,29 @@ interface UnifiedReportData {
   timestamp: string
 }
 
-// Enhanced analytics data
-const systemOverview = ref<SystemOverviewData | null>(null)
-const communicationPatterns = ref<CommunicationPatternsData | null>(null)
-const codeQuality = ref<CodeQualityData | null>(null)
-const performanceMetrics = ref<PerformanceMetricsData | null>(null)
+// Issue #1579: Dashboard overview state + loaders from useDashboardLoaders composable.
+// Initialized after withSourceId and other dependencies are available.
+const {
+  systemOverview,
+  communicationPatterns,
+  codeQuality,
+  performanceMetrics,
+  realTimeEnabled,
+  refreshInterval,
+  loadSystemOverview,
+  loadCommunicationPatterns,
+  loadCodeQuality,
+  loadPerformanceMetrics,
+  refreshAllMetrics,
+  toggleRealTime,
+} = useDashboardLoaders({
+  withSourceId,
+  additionalRefreshCallbacks: () => [
+    getCodebaseStats(),
+    getProblemsReport(),
+    loadDeclarations(),
+  ],
+})
 
 // Chart data for visualizations
 const chartData = ref<ChartData | null>(null)
@@ -1601,189 +1586,37 @@ async function addToKnowledgeBase() {
   }
 }
 
-// Check if there's a running indexing job
-const checkCurrentIndexingJob = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
-    if (response.ok) {
-      const data = await response.json()
-      if (data.has_active_job) {
-        // Job is running - update UI and start polling
-        currentJobId.value = data.task_id
-        currentJobStatus.value = data.status
-        analyzing.value = true
-        progressStatus.value = data.progress?.step || t('analytics.codebase.status.indexingInProgress')
-        progressPercent.value = data.progress?.percent || 20
-
-        // Start polling for updates
-        startJobPolling()
-        notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'info')
-      } else if (data.task_id && data.status !== 'idle') {
-        // Job recently completed
-        progressStatus.value = t('analytics.codebase.status.lastJob', { status: data.status })
-      }
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.warn('Could not check for running job:', errorMessage)
-  }
-}
-
-// Poll for job status updates
-const startJobPolling = () => {
-  if (jobPollingInterval.value) {
-    clearInterval(jobPollingInterval.value)
-  }
-
-  jobPollingInterval.value = setInterval(async () => {
-    await pollJobStatus()
-  }, 2000) // Poll every 2 seconds
-}
-
-// Stop polling
-const stopJobPolling = () => {
-  if (jobPollingInterval.value) {
-    clearInterval(jobPollingInterval.value)
-    jobPollingInterval.value = null
-  }
-}
-
-// Poll for current job status
-// #1588: Extract Method — update UI state from active job data
-const _updateActiveJobProgress = (data: Record<string, unknown>) => {
-  analyzing.value = true
-  if (data.phases) jobPhases.value = data.phases
-  if (data.batches) jobBatches.value = data.batches
-  if (data.stats) jobStats.value = data.stats
-
-  const progress = data.progress as Record<string, unknown> | undefined
-  if (progress) {
-    progressPercent.value = (progress.percent as number) || 0
-    const operation = (progress.operation as string) || 'Processing'
-    const currentFile = (progress.current_file as string) || ''
-    const current = (progress.current as number) || 0
-    const total = (progress.total as number) || 0
-
-    const statusParts: string[] = []
-    if (currentFile && currentFile !== 'Initializing...') statusParts.push(currentFile)
-    if (total > 0) statusParts.push(`(${current}/${total})`)
-
-    progressStatus.value = statusParts.length > 0
-      ? `${operation}: ${statusParts.join(' ')}`
-      : operation
-  }
-}
-
-// #1588: Extract Method — handle completed/cancelled/failed job
-const _handleJobFinished = async (status: string, error?: string) => {
-  analyzing.value = false
-  stopJobPolling()
-  jobPhases.value = null
-  jobBatches.value = null
-  jobStats.value = null
-
-  if (status === 'completed') {
-    progressStatus.value = t('analytics.codebase.status.indexingCompleted')
-    progressPercent.value = 100
-    notify(t('analytics.codebase.notify.indexingCompleted'), 'success')
-    showKnowledgeBaseOptIn.value = true
-    await runAllAnalysisScans()
-  } else if (status === 'cancelled') {
-    progressStatus.value = t('analytics.codebase.status.indexingCancelled')
-    notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
-  } else if (status === 'failed' || error) {
-    const errMsg = error || t('analytics.codebase.errors.unknown')
-    progressStatus.value = t('analytics.codebase.status.indexingFailed', { error: errMsg })
-    notify(t('analytics.codebase.notify.indexingFailed', { error: errMsg }), 'error')
-  }
-  currentJobId.value = null
-}
-
-const pollJobStatus = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
-    if (!response.ok) return
-
-    const data = await response.json()
-    currentJobStatus.value = data.status
-
-    if (data.has_active_job) {
-      _updateActiveJobProgress(data)
-      await pollIntermediateResults()
-    } else {
-      await _handleJobFinished(data.status, data.error)
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.warn('Job polling error:', errorMessage)
-  }
-}
-
-// Poll for intermediate results during indexing
-// Note: Does NOT update progressStatus - that's handled by pollJobStatus with detailed info
-const pollIntermediateResults = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Poll for problems found so far (#1710: per-source)
-    const problemsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/problems`))
-    if (problemsResponse.ok) {
-      const problemsData = await problemsResponse.json()
-      problemsReport.value = problemsData.problems || []
-    }
-
-    // Poll for stats (#1710: per-source)
-    const statsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/stats`))
-    if (statsResponse.ok) {
-      const statsData = await statsResponse.json()
-      if (statsData.stats) {
-        codebaseStats.value = statsData.stats
-        // Note: progressStatus is now set by pollJobStatus with detailed operation info
-        // The jobStats ref already shows files_scanned, problems_found in the UI
-      }
-    }
-  } catch (error: unknown) {
-    // Silent - don't interrupt polling
-  }
-}
-
-// Cancel the running indexing job
-const cancelIndexingJob = async () => {
-  if (!currentJobId.value) {
-    notify(t('analytics.codebase.notify.noActiveJob'), 'warning')
-    return
-  }
-
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/cancel`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success) {
-        analyzing.value = false
-        stopJobPolling()
-        currentJobId.value = null
-        progressStatus.value = t('analytics.codebase.status.indexingCancelledByUser')
-        notify(t('analytics.codebase.notify.indexingJobCancelled'), 'success')
-      } else {
-        notify(data.message || t('analytics.codebase.notify.couldNotCancel'), 'warning')
-      }
-    } else {
-      notify(t('analytics.codebase.notify.cancelFailed'), 'error')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    notify(t('analytics.codebase.notify.cancelError', { error: errorMessage }), 'error')
-  }
-}
+// Issue #1579: Initialize indexing job composable
+// Note: runAllAnalysisScans is defined later but captured by closure when called.
+const {
+  currentJobId,
+  currentJobStatus,
+  jobPhases,
+  jobBatches,
+  jobStats,
+  checkCurrentIndexingJob,
+  stopJobPolling,
+  cancelIndexingJob,
+  indexCodebase,
+} = useIndexingJob({
+  rootPath,
+  analyzing,
+  progressPercent,
+  progressStatus,
+  selectedSource,
+  withSourceId,
+  notify,
+  t,
+  problemsReport,
+  codebaseStats,
+  declarationAnalysis,
+  duplicateAnalysis,
+  hardcodeAnalysis,
+  chartData,
+  showKnowledgeBaseOptIn,
+  onIndexComplete: () => runAllAnalysisScans(),
+  storageKeyPath: STORAGE_KEY_PATH,
+})
 
 const handleStop = () => {
   if (analyzing.value && currentJobId.value) {
@@ -2068,6 +1901,7 @@ const availableCategories = computed(() => {
   }))
 })
 
+// filteredChartData moved to CodebaseChartsSection (#1579)
 
 // Load dependency analysis data (#1304/#1321: useTaskLoader)
 const loadDependencyData = () => _loadDependencyTask()
@@ -2396,102 +2230,7 @@ onUnmounted(() => {
   stopJobPolling()
 })
 
-// Index codebase first
-// #1588: Extract Method — send index request with retry on 502/503 (#1249)
-const _sendIndexRequest = async (endpoint: string, body: string): Promise<Response> => {
-  const maxRetries = 2
-  let response: Response | null = null
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    response = await fetchWithAuth(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    })
-    if (response.status !== 502 && response.status !== 503) break
-    if (attempt < maxRetries) {
-      const delay = (attempt + 1) * 3
-      progressStatus.value = t('analytics.codebase.status.backendRetrying', { delay })
-      logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
-      await new Promise(r => setTimeout(r, delay * 1000))
-    }
-  }
-  if (!response || !response.ok) {
-    const errorText = response ? await response.text() : 'No response'
-    const status = response?.status ?? 0
-    if (status === 502 || status === 503) {
-      throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
-    }
-    throw new Error(`Status ${status}: ${errorText}`)
-  }
-  return response
-}
-
-// #1588: Extract Method — handle index API response status
-const _handleIndexResponseStatus = (data: Record<string, unknown>): boolean => {
-  if (data.status === 'syncing') {
-    progressStatus.value = t('analytics.codebase.status.syncingRepo')
-    notify(t('analytics.codebase.notify.syncStarted'), 'info')
-    startJobPolling()
-    return true // early return — polling handles the rest
-  } else if (data.status === 'already_running') {
-    currentJobId.value = data.task_id as string
-    progressStatus.value = t('analytics.codebase.status.monitoringIndexing')
-    notify(t('analytics.codebase.notify.indexingMonitoring'), 'info')
-  } else if (data.status === 'queued') {
-    progressStatus.value = t('analytics.codebase.status.queued', { position: data.position })
-    notify(t('analytics.codebase.notify.indexingQueued'), 'info')
-    startJobPolling()
-    return true // early return — polling handles the rest
-  } else {
-    currentJobId.value = data.task_id as string
-    progressStatus.value = t('analytics.codebase.status.initializingIndexing')
-    notify(t('analytics.codebase.notify.indexingStarted'), 'success')
-  }
-  return false
-}
-
-const indexCodebase = async () => {
-  if (currentJobId.value) {
-    notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'warning')
-    return
-  }
-
-  analyzing.value = true
-  progressPercent.value = 10
-  progressStatus.value = t('analytics.codebase.status.startingIndexing')
-  localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
-
-  // Clear previous analysis data
-  problemsReport.value = []
-  codebaseStats.value = null
-  declarationAnalysis.value = []
-  duplicateAnalysis.value = []
-  hardcodeAnalysis.value = []
-  chartData.value = null
-
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const requestBody = JSON.stringify(
-      selectedSource.value
-        ? { source_id: selectedSource.value.id }
-        : { root_path: rootPath.value }
-    )
-    const response = await _sendIndexRequest(`${backendUrl}/api/analytics/codebase/index`, requestBody)
-    const data = await response.json()
-
-    if (_handleIndexResponseStatus(data)) return
-
-    progressPercent.value = 5
-    await pollJobStatus()
-    startJobPolling()
-  } catch (error: unknown) {
-    logger.error('Indexing failed:', error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    progressStatus.value = t('analytics.codebase.status.indexingFailedToStart', { error: errorMessage })
-    notify(t('analytics.codebase.notify.indexingFailed', { error: errorMessage }), 'error')
-    analyzing.value = false
-  }
-}
+// _sendIndexRequest, _handleIndexResponseStatus, indexCodebase moved to useIndexingJob (#1579)
 
 
 // Get codebase statistics
@@ -3249,202 +2988,10 @@ const runFullAnalysis = async () => {
   }
 }
 
-// Enhanced Analytics Methods (#1304: background task)
-const loadSystemOverview = async () => {
-  try {
-    const ok = await dashboardTask.start()
-    if (ok && dashboardTask.result.value) {
-      const result = dashboardTask.result.value as Record<string, unknown>
+// loadSystemOverview, loadCommunicationPatterns, loadCodeQuality, loadPerformanceMetrics,
+// refreshAllMetrics, toggleRealTime provided by useDashboardLoaders (#1579)
 
-      // Extract relevant data from the comprehensive dashboard response
-      const commPatterns = (result.communication_patterns || {}) as Record<string, unknown>
-      const perfMetrics = (result.performance_metrics || {}) as Record<string, unknown>
-      const sysHealth = (result.system_health || {}) as Record<string, unknown>
-      const realtimeMetrics = (result.realtime_metrics || {}) as Record<string, unknown>
 
-      const totalCalls = (commPatterns.total_api_calls as number) || 0
-      const avgResponseTime = (commPatterns.avg_response_time as number)
-        || (perfMetrics.avg_response_time as number) || 0
-      const activeConns = (realtimeMetrics.active_connections as Record<string, unknown>)
-      const activeConnections = (sysHealth.active_connections as number)
-        || (activeConns?.value as number) || 0
-
-      let healthStatus = 'Unknown'
-      if (sysHealth.status) {
-        healthStatus = sysHealth.status as string
-      } else if (sysHealth.cpu_percent !== undefined) {
-        healthStatus = (sysHealth.cpu_percent as number) < 80 ? 'Healthy' : 'Warning'
-      }
-
-      systemOverview.value = {
-        api_requests_per_minute: totalCalls,
-        average_response_time: Math.round(avgResponseTime * 1000),
-        active_connections: activeConnections,
-        system_health: healthStatus,
-      }
-    }
-  } catch (error: unknown) {
-    logger.error('loadSystemOverview failed:', error)
-    systemOverview.value = null
-  }
-}
-
-const loadCommunicationPatterns = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/communication/patterns`)
-
-    if (!response.ok) {
-      throw new Error(`Status ${response.status}`)
-    }
-
-    const result = await response.json()
-
-    // Extract WebSocket activity and API patterns
-    const wsActivity = result.websocket_activity || {}
-    const apiPatterns = result.api_patterns || []
-    const totalCalls = result.total_api_calls || 0
-    const uniqueEndpoints = result.unique_endpoints || 0
-
-    // Calculate WebSocket connections from activity or use total
-    const wsConnections = Object.keys(wsActivity).length || 0
-
-    // Calculate API frequency (calls per minute estimate)
-    // Use the pattern data to estimate frequency
-    const apiFrequency = apiPatterns.length > 0
-      ? Math.round(apiPatterns.reduce((sum: number, p: any) => sum + (p.frequency || 0), 0) / Math.max(apiPatterns.length, 1))
-      : totalCalls
-
-    // Estimate data transfer rate from response times and call count
-    const avgResponseTime = result.avg_response_time || 0
-    const estimatedDataRate = Math.round((totalCalls * avgResponseTime * 10) / 100) / 10 // Rough estimate in KB/s
-
-    communicationPatterns.value = {
-      websocket_connections: wsConnections,
-      api_call_frequency: apiFrequency,
-      data_transfer_rate: estimatedDataRate,
-      unique_endpoints: uniqueEndpoints  // Issue #1602: wire previously unused value
-    }
-  } catch (error: unknown) {
-    logger.error('loadCommunicationPatterns failed:', error)
-    // Set empty state on error
-    communicationPatterns.value = null
-  }
-}
-
-const loadCodeQuality = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Fetch health score from quality API
-    const healthResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-    const healthData = healthResponse.ok ? await healthResponse.json() : null
-
-    // Fetch duplicates count
-    const duplicatesResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/duplicates`))
-    const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
-
-    // Fetch technical debt summary
-    const debtResponse = await fetchWithAuth(`${backendUrl}/api/debt/summary`)
-    const debtData = debtResponse.ok ? await debtResponse.json() : null
-
-    // Issue #543: Handle no_data status from backend
-    // If all primary APIs return no_data, set codeQuality to null
-    if (healthData?.status === 'no_data' && debtData?.status === 'no_data') {
-      codeQuality.value = null
-      logger.debug('No code quality data - run indexing first')
-      return
-    }
-
-    // Calculate test coverage from testability score
-    const testCoverage = healthData?.breakdown?.testability || 0
-
-    const data = {
-      overall_score: Math.round(healthData?.overall || 0),
-      test_coverage: Math.round(testCoverage),
-      code_duplicates: duplicatesData?.total || 0,
-      technical_debt: debtData?.summary?.total_hours || 0
-    }
-    codeQuality.value = data
-  } catch (error: unknown) {
-    // Silent failure for dashboard cards
-    logger.error('loadCodeQuality failed:', error)
-  }
-}
-
-const loadPerformanceMetrics = async () => {
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-
-    // Fetch performance summary from performance analytics
-    const summaryResponse = await fetchWithAuth(`${backendUrl}/api/performance/summary`)
-    const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
-
-    // Fetch monitoring status for uptime
-    const monitoringResponse = await fetchWithAuth(`${backendUrl}/api/monitoring/status`)
-    const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
-
-    // Fetch quality metrics for performance breakdown
-    const qualityResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
-    const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
-
-    // Issue #543: Handle no_data status from backend
-    if (summaryData?.status === 'no_data' && qualityData?.status === 'no_data') {
-      performanceMetrics.value = null
-      logger.debug('No performance metrics data - run indexing first')
-      return
-    }
-
-    // Get performance score from quality breakdown or performance analysis
-    const performanceScore = qualityData?.breakdown?.performance || 0
-    const efficiencyScore = summaryData?.average_score || performanceScore
-
-    // Get patterns analyzed count as a proxy for activity
-    const patternsEnabled = summaryData?.patterns_enabled || 0
-
-    const data = {
-      efficiency_score: Math.round(efficiencyScore) || Math.round(performanceScore),
-      memory_usage: patternsEnabled > 0 ? patternsEnabled * 15 : 0, // Patterns as memory proxy
-      cpu_usage: Math.round(100 - performanceScore), // Inverse of performance
-      load_time: monitoringData?.uptime_seconds
-        ? Math.round(monitoringData.uptime_seconds)
-        : 0
-    }
-    performanceMetrics.value = data
-  } catch (error: unknown) {
-    // Silent failure for dashboard cards
-    logger.error('loadPerformanceMetrics failed:', error)
-  }
-}
-
-const refreshAllMetrics = async () => {
-  // #1432: Only fetch cached GET endpoints on interval refresh.
-  // Background tasks (POST /analyze) are NOT re-triggered here to
-  // avoid 409 retry storms when analysis takes longer than the
-  // 30-second refresh interval.
-  await Promise.all([
-    // Enhanced analytics (top section) — all GET-only
-    loadCommunicationPatterns(),
-    loadCodeQuality(),
-    loadPerformanceMetrics(),
-
-    // Codebase analytics (bottom section) — GET-only
-    getCodebaseStats(),
-    getProblemsReport(),
-    loadDeclarations(),
-  ])
-}
-
-const toggleRealTime = () => {
-  if (realTimeEnabled.value) {
-    refreshInterval.value = setInterval(refreshAllMetrics, 30000) // 30 seconds
-  } else {
-    if (refreshInterval.value) {
-      clearInterval(refreshInterval.value)
-      refreshInterval.value = null
-    }
-  }
-}
 
 // Utility functions
 const getScoreClass = (score: number): string => {
@@ -3462,10 +3009,8 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
-const formatProblemType = (type: string | undefined): string => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
-}
-
+// formatProblemType, problemsBySeverity, problemsByType, expandedProblemTypes,
+// toggleProblemType moved to ProblemsReportSection (#1579)
 
 // Filter code smells from indexed problems
 // Issue #609: Code smell types that should appear in the Code Smells section
@@ -3522,6 +3067,7 @@ const declarationsForPanel = computed(() =>
   }))
 )
 
+// getItemSeverityClass moved to ProblemsReportSection (#1579)
 
 // All variables and functions are automatically available in <script setup>
 // No export default needed in <script setup> syntax
@@ -3539,7 +3085,88 @@ const declarationsForPanel = computed(() =>
   overflow-x: hidden;
 }
 
-/* Header and button styles moved to CodebaseAnalyticsHeader.vue */
+/* analytics-header CSS moved to AnalyticsHeaderControls (#1579) */
+
+/* Project Header Card (#1713) */
+.project-header-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-4);
+  border-left: 4px solid var(--accent-primary, #3b82f6);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-header-name {
+  font-size: 1.15em;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.project-header-meta {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.project-meta-item {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.project-meta-item.status-ready { color: var(--color-success, #22c55e); }
+.project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
+.project-meta-item.status-error { color: var(--color-error, #ef4444); }
+
+/* header-content, header-controls, path-input CSS moved to AnalyticsHeaderControls (#1579) */
+
+.btn-primary, .btn-secondary, .btn-debug {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition: var(--transition-all);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: var(--chart-green);
+  color: var(--text-on-success);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-success-dark);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled, .btn-secondary:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* btn-cancel, btn-back CSS moved to AnalyticsHeaderControls (#1579) */
 
 .empty-state-container {
   padding: var(--spacing-8) var(--spacing-4);
@@ -3552,7 +3179,9 @@ const declarationsForPanel = computed(() =>
   font-size: var(--text-base);
 }
 
-/* Debug, progress, and phase styles moved to CodebaseProgressPanel.vue */
+/* debug-controls, btn-debug CSS moved to AnalyticsHeaderControls (#1579) */
+
+/* Progress container + scan runner CSS moved to AnalyticsProgressSection (#1579) */
 
 /* Enhanced Analytics Grid */
 .enhanced-analytics-grid {
@@ -4515,5 +4144,5 @@ const declarationsForPanel = computed(() =>
   color: var(--text-primary);
 }
 
-/* Scan runner styles moved to CodebaseProgressPanel.vue */
+/* Scan Runner Progress CSS moved to AnalyticsProgressSection (#1579) */
 </style>
