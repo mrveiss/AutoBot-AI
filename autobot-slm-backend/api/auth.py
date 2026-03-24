@@ -102,6 +102,21 @@ async def login(
         )
 
     if user.mfa_enabled:
+        await create_audit_log(
+            audit_db,
+            category="authentication",
+            action="mfa_challenge_issued",
+            user_id=str(user.id),
+            username=user.username,
+            ip_address=client_ip,
+            resource_type="session",
+            description=(f"MFA challenge issued for '{user.username}'"),
+            request_method="POST",
+            request_path="/api/auth/login",
+            response_status=200,
+            success=True,
+        )
+        await audit_db.commit()
         return _create_mfa_challenge(user)
 
     logger.info("User logged in: %s", user.username)
