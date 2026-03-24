@@ -60,6 +60,14 @@ MONITORING_ROUTER_CONFIGS = [
         ["webhooks", "alertmanager"],
         "alertmanager_webhook",
     ),
+    # Issue #2267: GPU acceleration optimizer monitoring endpoints
+    (
+        "api.gpu_monitoring",
+        "router",
+        "/monitoring",
+        ["GPU Monitoring"],
+        "gpu_monitoring",
+    ),
 ]
 
 
