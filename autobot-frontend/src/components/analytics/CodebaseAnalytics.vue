@@ -255,186 +255,23 @@
         </button>
       </div>
 
-      <!-- Codebase Statistics -->
-      <div class="stats-section">
-        <h3>
-          <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.stats.title') }}
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('statistics', 'md')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportMarkdown')">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('statistics', 'json')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportJson')">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="codebaseStats" class="stats-grid">
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
-          </BasePanel>
-          <BasePanel variant="elevated" size="small">
-            <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
-            <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
-          </BasePanel>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-chart-bar"
-          :message="$t('analytics.codebase.stats.noData')"
-        />
-      </div>
-
-      <!-- Analytics Charts Section -->
-      <div class="charts-section">
-        <div class="section-header">
-          <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.problems.title') }}</h3>
-          <div class="section-header-actions">
-            <button @click="loadUnifiedReport" class="refresh-btn" :disabled="unifiedReportLoading" :title="$t('analytics.codebase.problems.loadReport')">
-              <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'fas fa-layer-group'"></i>
-            </button>
-            <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading" :title="$t('analytics.codebase.actions.refreshCharts')">
-              <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Category Filter Tabs -->
-        <div class="category-tabs" v-if="availableCategories.length > 0 || chartData">
-          <button
-            @click="selectedCategory = 'all'"
-            class="category-tab"
-            :class="{ active: selectedCategory === 'all' }"
-          >
-            <i class="fas fa-th-large"></i>
-            {{ $t('analytics.codebase.problems.allIssues') }}
-            <span class="tab-count" v-if="chartData?.summary?.total_problems">
-              {{ chartData.summary.total_problems.toLocaleString() }}
-            </span>
-          </button>
-          <button
-            v-for="cat in availableCategories"
-            :key="cat.id"
-            @click="selectedCategory = cat.id"
-            class="category-tab"
-            :class="{ active: selectedCategory === cat.id }"
-          >
-            <i :class="getCategoryIcon(cat.id)"></i>
-            {{ cat.name }}
-            <span class="tab-count">{{ cat.count }}</span>
-          </button>
-        </div>
-
-        <!-- Unified Report Error -->
-        <div v-if="unifiedReportError" class="charts-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ unifiedReportError }}</span>
-          <button @click="loadUnifiedReport" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <div v-if="chartDataLoading" class="charts-loading">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>{{ $t('analytics.codebase.problems.loadingChartData') }}</span>
-        </div>
-
-        <div v-else-if="chartDataError" class="charts-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ chartDataError }}</span>
-          <button @click="loadChartData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <div v-else-if="chartData" class="charts-grid">
-          <!-- Summary Stats -->
-          <div v-if="chartData.summary" class="chart-summary">
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.total_problems?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.totalProblems') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.unique_problem_types || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.problemTypes') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ chartData.summary.files_with_problems || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.filesAffected') }}</span>
-            </div>
-            <div class="summary-stat race-highlight">
-              <span class="summary-value">{{ chartData.summary.race_condition_count || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.problems.raceConditions') }}</span>
-            </div>
-          </div>
-
-          <!-- Charts Row 1: Problem Types + Severity -->
-          <div class="charts-row">
-            <ProblemTypesChart
-              v-if="filteredChartData?.problem_types && filteredChartData.problem_types.length > 0"
-              :data="filteredChartData.problem_types"
-              :title="selectedCategory === 'all' ? 'Problem Types Distribution' : `${selectedCategory.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} Issues`"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-chart-pie" :message="selectedCategory === 'all' ? 'No problem type data' : `No issues in ${selectedCategory.replace(/_/g, ' ')} category`" />
-            </div>
-            <SeverityBarChart
-              v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
-              :data="chartData.severity_counts"
-              :title="$t('analytics.codebase.charts.problemsBySeverity')"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-signal" message="No severity data" />
-            </div>
-          </div>
-
-          <!-- Charts Row 2: Race Conditions + Top Files -->
-          <div class="charts-row">
-            <RaceConditionsDonut
-              v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
-              :data="chartData.race_conditions"
-              :title="$t('analytics.codebase.charts.raceConditionsByCategory')"
-              :height="320"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-exclamation-circle" message="No race condition data" />
-            </div>
-            <TopFilesChart
-              v-if="chartData.top_files && chartData.top_files.length > 0"
-              :data="chartData.top_files"
-              :title="$t('analytics.codebase.charts.topFilesWithProblems')"
-              :height="400"
-              :maxFiles="10"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-file-code" message="No file data" />
-            </div>
-          </div>
-        </div>
-
-        <EmptyState
-          v-else
-          icon="fas fa-chart-area"
-          :message="$t('analytics.codebase.problems.noChartData')"
-        >
-          <template #actions>
-            <button @click="indexCodebase" class="btn-primary" :disabled="analyzing">
-              <i class="fas fa-database"></i> {{ $t('analytics.codebase.buttons.indexCodebase') }}
-            </button>
-          </template>
-        </EmptyState>
-      </div>
+      <!-- Issue #1579: Stats + Charts section extracted to CodebaseChartsSection -->
+      <CodebaseChartsSection
+        :codebase-stats="codebaseStats"
+        :chart-data="chartData"
+        :chart-data-loading="chartDataLoading"
+        :chart-data-error="chartDataError"
+        :unified-report-loading="unifiedReportLoading"
+        :unified-report-error="unifiedReportError"
+        :selected-category="selectedCategory"
+        :available-categories="availableCategories"
+        :analyzing="analyzing"
+        @export-section="exportSection"
+        @load-unified-report="loadUnifiedReport"
+        @load-chart-data="loadChartData"
+        @update:selected-category="selectedCategory = $event"
+        @index-codebase="indexCodebase"
+      />
 
       <!-- Dependency Analysis, Import Tree, Function Call Graph (#1469) -->
       <CodebaseDependenciesPanel
@@ -749,7 +586,6 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
@@ -777,6 +613,7 @@ import CodebaseBugPredictionPanel from '@/components/analytics/panels/CodebaseBu
 import CodebaseIntelligenceScoresPanel from '@/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue'
 import CodebaseEnvironmentPanel from '@/components/analytics/panels/CodebaseEnvironmentPanel.vue'
 import CodebaseOwnershipPanel from '@/components/analytics/panels/CodebaseOwnershipPanel.vue'
+import CodebaseChartsSection from '@/components/analytics/panels/CodebaseChartsSection.vue'
 import type {
   SecurityFinding,
   PerformanceFinding,
@@ -785,13 +622,7 @@ import type {
 
 const logger = createLogger('CodebaseAnalytics')
 
-// ApexCharts components (still used in Analytics Charts section)
-import {
-  ProblemTypesChart,
-  SeverityBarChart,
-  RaceConditionsDonut,
-  TopFilesChart,
-} from '@/components/charts'
+// ApexCharts components moved to CodebaseChartsSection (#1579)
 
 // i18n
 const { t } = useI18n()
@@ -1055,25 +886,7 @@ const getPhaseIcon = (status: string): string => {
   }
 }
 
-// Get icon for problem category
-const getCategoryIcon = (categoryId: string): string => {
-  const iconMap: Record<string, string> = {
-    race_conditions: 'fas fa-random',
-    debug_code: 'fas fa-bug',
-    complexity: 'fas fa-project-diagram',
-    code_smells: 'fas fa-exclamation-circle',
-    performance: 'fas fa-tachometer-alt',
-    security: 'fas fa-shield-alt',
-    long_functions: 'fas fa-scroll',
-    duplicate_code: 'fas fa-clone',
-    hardcoded_values: 'fas fa-lock',
-    missing_types: 'fas fa-question-circle',
-    unused_imports: 'fas fa-unlink',
-    // Default icon
-    default: 'fas fa-tag'
-  }
-  return iconMap[categoryId] || iconMap.default
-}
+// getCategoryIcon moved to CodebaseChartsSection (#1579)
 
 // Analytics data interfaces
 interface Problem {
@@ -2528,24 +2341,7 @@ const availableCategories = computed(() => {
   }))
 })
 
-// Get filtered chart data based on selected category
-const filteredChartData = computed((): ChartData | null => {
-  if (!chartData.value) return null
-  if (selectedCategory.value === 'all') return chartData.value
-
-  const filtered: ChartData = { ...chartData.value }
-
-  // Filter problem types by selected category
-  if (filtered.problem_types) {
-    filtered.problem_types = filtered.problem_types.filter((pt: ChartDataItem) => {
-      const type = pt.type?.toLowerCase() || ''
-      const category = selectedCategory.value.toLowerCase()
-      return type.includes(category) || category.includes(type)
-    })
-  }
-
-  return filtered
-})
+// filteredChartData moved to CodebaseChartsSection (#1579)
 
 // Load dependency analysis data (#1304/#1321: useTaskLoader)
 const loadDependencyData = () => _loadDependencyTask()
