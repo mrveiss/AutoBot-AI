@@ -293,34 +293,6 @@ async def test_line_count_reduction():
     if consolidated_path.exists():
         consolidated_lines = len(consolidated_path.read_text().splitlines())
         print(f"Consolidated file: {consolidated_lines} lines")  # noqa: print
-
-        # Compare with original files
-        original_files = [
-            "src/llm_interface_original.py.backup",
-            "src/archive/consolidated_interfaces/async_llm_interface.py",
-            "src/archive/consolidated_interfaces/llm_interface_fixed.py",
-            "src/archive/consolidated_interfaces/llm_interface_extended.py",
-            "src/archive/consolidated_interfaces/llm_interface_unified.py",
-        ]
-
-        total_original_lines = 0
-        for file_path in original_files:
-            if Path(file_path).exists():
-                lines = len(Path(file_path).read_text().splitlines())
-                total_original_lines += lines
-                print(f"{file_path}: {lines} lines")  # noqa: print
-
-        reduction = total_original_lines - consolidated_lines
-        reduction_percent = (reduction / total_original_lines) * 100
-
-        print(f"\nTotal original: {total_original_lines} lines")  # noqa: print
-        print(f"Consolidated: {consolidated_lines} lines")  # noqa: print
-        print(f"Reduction: {reduction} lines ({reduction_percent:.1f}%)")  # noqa: print
-
-        if reduction > 0:
-            print("✅ Successful code consolidation!")  # noqa: print
-        else:
-            print("⚠️  No code reduction achieved")  # noqa: print
     else:
         print("❌ Consolidated file not found")  # noqa: print
 
