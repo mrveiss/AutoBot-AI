@@ -143,6 +143,24 @@ class TestTaskPatternLearner:
         assert "code_gen" in types
         assert "analysis" in types
 
+    @pytest.mark.parametrize(
+        "raw, expected",
+        [
+            ("Code-Gen", "code_gen"),
+            ("  DATA ANALYSIS ", "data_analysis"),
+            ("code_gen", "code_gen"),
+        ],
+    )
+    def test_normalize_task_type(self, learner, raw, expected):
+        assert learner.normalize_task_type(raw) == expected
+
+    @pytest.mark.asyncio
+    async def test_clear_strategy_normalizes_task_type(self, learner):
+        mock_redis = AsyncMock()
+        learner._redis = mock_redis
+        await learner.clear_strategy("Code-Gen")
+        mock_redis.delete.assert_awaited_once_with("task:patterns:code_gen")
+
     def test_build_synthesis_prompt_includes_task_type(self, learner, sample_outcomes):
         best = sample_outcomes[2]
         prompt = learner._build_synthesis_prompt("code_gen", sample_outcomes, best)
