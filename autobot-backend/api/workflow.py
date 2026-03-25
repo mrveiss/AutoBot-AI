@@ -278,19 +278,6 @@ def _try_simple_response(user_message: str) -> Optional[Dict]:
     }
 
 
-class _ComplexWorkflowRequired(Exception):
-    """Raised when a request needs full multi-agent orchestration.
-
-    Issue #1770: Signals execute_workflow to delegate to workflow_automation.
-    Issue #2181: Previously raised by _try_lightweight_routing; now raised inline
-    in execute_workflow after _try_simple_response returns None.
-    """
-
-    def __init__(self, session_id: str) -> None:
-        super().__init__("Complex workflow requires full orchestration")
-        self.session_id = session_id
-
-
 async def _execute_complex_workflow(
     workflow_request: "WorkflowExecutionRequest",
     background_tasks: BackgroundTasks,
