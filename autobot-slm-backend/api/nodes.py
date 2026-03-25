@@ -268,14 +268,24 @@ def _generate_node_id(node_data: NodeCreate) -> str:
     """
     if node_data.node_id:
         return node_data.node_id
-    # Generate deterministic ID from stable identifier (#1936).
+    # Generate deterministic ID from stable identifier (#1936, #2175).
     # Prefer ansible_name (machine-stable), then ip_address,
-    # then hostname (display name — least stable).
-    stable_id = (
-        getattr(node_data, "ansible_name", None)
-        or getattr(node_data, "ip_address", None)
-        or node_data.hostname
-    )
+    # then hostname (display name -- least stable).
+    ansible_name = getattr(node_data, "ansible_name", None)
+    if ansible_name:
+        stable_id = ansible_name
+    elif getattr(node_data, "ip_address", None):
+        stable_id = node_data.ip_address
+        logger.warning(
+            "Node has no ansible_name; using ip_address for node_id: %s",
+            stable_id,
+        )
+    else:
+        stable_id = node_data.hostname
+        logger.warning(
+            "Node has no ansible_name or ip_address; using hostname for node_id: %s",
+            stable_id,
+        )
     return hashlib.sha256(stable_id.encode()).hexdigest()[:8]
 
 
