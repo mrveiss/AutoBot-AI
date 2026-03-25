@@ -1343,7 +1343,26 @@ class ToolHandlerMixin:
             return
 
         if tool_name != "execute_command":
-            logger.debug("[_process_tool_calls] Skipping unknown tool: %s", tool_name)
+            # Issue #2305: Return a tool error so the agent can self-correct instead of
+            # silently dropping the call and causing an infinite hallucination loop.
+            known_tools = sorted(
+                {"respond", "delegate", "execute_command"} | _BROWSER_TOOL_NAMES
+            )
+            error_msg = (
+                f'Error: Tool "{tool_name}" not found. '
+                f"Available tools: {', '.join(known_tools)}"
+            )
+            logger.warning(
+                "[Issue #2305] Unknown tool call reported to agent: %s", tool_name
+            )
+            execution_results.append(
+                {"tool": tool_name, "status": "error", "error": error_msg}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"message_type": "unknown_tool", "tool_name": tool_name},
+            )
             return
 
         async for msg in self._process_single_command(
