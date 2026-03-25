@@ -36,6 +36,7 @@ import time
 from typing import Any, Callable, Optional
 
 from fastapi import Request
+from middleware.proxy_utils import get_client_ip
 from services.audit_logger import AuditResult, get_audit_logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -263,18 +264,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
         return request.headers.get("X-Session-ID") or request.headers.get("X-Session")
 
     def _get_client_ip(self, request: Request) -> Optional[str]:
-        """Extract client IP from request"""
-        # Check for proxy headers first
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            # Get first IP (client)
-            return forwarded.split(",")[0].strip()
+        """Extract client IP from request.
 
-        # Get from client directly
-        if request.client:
-            return request.client.host
-
-        return None
+        Delegates to get_client_ip() which only trusts X-Forwarded-For
+        when the direct TCP peer is a known reverse proxy (Issue #2252).
+        """
+        return get_client_ip(request)
 
     async def _log_audit(
         self,
@@ -639,13 +634,12 @@ def _extract_session(request: Request) -> Optional[str]:
 
 
 def _extract_ip(request: Request) -> Optional[str]:
-    """Extract client IP from request"""
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return request.client.host
-    return None
+    """Extract client IP from request.
+
+    Only trusts X-Forwarded-For when TCP peer is a known reverse proxy
+    (Issue #2252).  Delegates to the shared get_client_ip() helper.
+    """
+    return get_client_ip(request)
 
 
 async def _log_audit_async(

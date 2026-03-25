@@ -33,6 +33,7 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from middleware.proxy_utils import get_client_ip
 from pydantic import BaseModel, Field, field_validator
 from type_defs.common import Metadata
 
@@ -628,12 +629,12 @@ secrets_manager = SecretsManager()
 
 
 def get_client_id(request: Request) -> str:
-    """Extract client identifier for rate limiting"""
-    # Use forwarded header if behind proxy, otherwise client host
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract client identifier for rate limiting.
+
+    Only trusts X-Forwarded-For when the direct TCP peer is a known
+    reverse proxy (Issue #2252).  Delegates to get_client_ip().
+    """
+    return get_client_ip(request) or "unknown"
 
 
 def check_rate_limit(request: Request) -> None:
