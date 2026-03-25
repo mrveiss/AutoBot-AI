@@ -40,6 +40,16 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
+    - name: "[PRE-FLIGHT] Verify required host groups exist"
+      fail:
+        msg: >-
+          Required groups 'slm_server' and 'infrastructure' not found.
+          Use: ansible-playbook -i inventory/slm-nodes.yml playbooks/update-all-nodes.yml
+          Or run against production.yml which now includes these group aliases.
+      when: >-
+        (groups['slm_server'] | default([]) | length == 0) or
+        (groups['infrastructure'] | default([]) | length == 0)
+
     - name: "[PRE-FLIGHT] Sync code from GitHub"
       git:
         repo: "{{ github_repo }}"
