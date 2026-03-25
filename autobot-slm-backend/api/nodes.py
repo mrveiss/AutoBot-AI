@@ -66,6 +66,7 @@ from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -449,7 +450,16 @@ async def create_node(
         extra_data=extra_data if extra_data else None,
     )
     db.add(node)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        if "ansible_name" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"ansible_name '{node_data.ansible_name}' is already in use",
+            )
+        raise
 
     await _create_registration_event(db, node_id, node, node_data, initial_status)
 
@@ -502,7 +512,16 @@ async def update_node(
                 value = value.value
             setattr(node, field, value)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        if "ansible_name" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"ansible_name '{node_data.ansible_name}' is already in use",
+            )
+        raise
     await db.refresh(node)
 
     logger.info("Node updated: %s", node_id)
@@ -1520,6 +1539,33 @@ async def _apply_heartbeat_reports(
         node.listening_ports = [p.model_dump() for p in heartbeat.listening_ports]
 
 
+async def _auto_populate_ansible_name(
+    db: AsyncSession, node: Node, node_id: str, heartbeat: "HeartbeatRequest"
+) -> None:
+    """Auto-set ansible_name from OS hostname if unique (#1986, #2011)."""
+    if node.ansible_name or not heartbeat.extra_data:
+        return
+    os_hostname = heartbeat.extra_data.get("hostname")
+    if not os_hostname or not os_hostname.strip():
+        return
+    candidate = os_hostname.strip()
+    existing = await db.execute(
+        select(Node.node_id).where(
+            Node.ansible_name == candidate,
+            Node.node_id != node_id,
+        )
+    )
+    if existing.scalar_one_or_none() is None:
+        node.ansible_name = candidate
+        logger.info("Auto-set ansible_name='%s' for node %s", candidate, node_id)
+    else:
+        logger.warning(
+            "Skipped auto-set ansible_name='%s' for %s -- in use",
+            candidate,
+            node_id,
+        )
+
+
 @router.post("/{node_id}/heartbeat", response_model=HeartbeatResponse)
 async def node_heartbeat(
     node_id: str,
@@ -1547,16 +1593,7 @@ async def node_heartbeat(
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
 
-        # Auto-populate ansible_name from agent's OS hostname (#1986)
-        if not node.ansible_name and heartbeat.extra_data:
-            os_hostname = heartbeat.extra_data.get("hostname")
-            if os_hostname and os_hostname.strip():
-                node.ansible_name = os_hostname.strip()
-                logger.info(
-                    "Auto-set ansible_name='%s' for node %s",
-                    node.ansible_name,
-                    node_id,
-                )
+        await _auto_populate_ansible_name(db, node, node_id, heartbeat)
 
         latest_version = await _update_heartbeat_code_status(
             db, node, heartbeat.extra_data
