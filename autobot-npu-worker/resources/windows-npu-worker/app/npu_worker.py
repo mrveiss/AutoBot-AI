@@ -21,6 +21,8 @@ import sys
 import time
 import uuid
 
+logger = logging.getLogger(__name__)
+
 # Issue #640: Force UTF-8 encoding on Windows to prevent charmap codec errors
 # OpenVINO/PyTorch/HuggingFace output Unicode characters (✅, etc.) during conversion
 if sys.platform == "win32":
@@ -1107,7 +1109,16 @@ class WindowsNPUWorker:
         self.setup_routes()
 
     def setup_routes(self):
-        """Setup FastAPI routes"""
+        """Register all API routes. Issue #2346: decomposed from monolithic method."""
+        self._register_lifecycle_events()
+        self._register_health_routes()
+        self._register_pairing_routes()
+        self._register_device_routes()
+        self._register_inference_routes()
+        self._register_model_routes()
+
+    def _register_lifecycle_events(self):
+        """Register FastAPI startup and shutdown event handlers."""
 
         @self.app.on_event("startup")
         async def startup():
@@ -1116,6 +1127,9 @@ class WindowsNPUWorker:
         @self.app.on_event("shutdown")
         async def shutdown():
             await self.cleanup()
+
+    def _register_health_routes(self):
+        """Register /health and /stats routes."""
 
         @self.app.get("/health")
         async def health_check():
@@ -1137,126 +1151,155 @@ class WindowsNPUWorker:
                 "paired": self.pairing_status.get("paired", False),
             }
 
+        @self.app.get("/stats")
+        async def get_detailed_stats():
+            """Get detailed worker statistics"""
+            stats = await self.task_stats.get_all()
+            cache_size = await self.embedding_cache.size()
+            cache_hits = await self.task_stats.get("cache_hits")
+
+            return {
+                "worker_id": self.worker_id,
+                "platform": "windows",
+                "uptime_seconds": time.time() - self.start_time,
+                "npu_status": await self.get_npu_status(),
+                "task_stats": stats,
+                "loaded_models": {
+                    name: {
+                        "size_mb": info.get("size_mb", 0),
+                        "load_time": info.get("load_time", "unknown"),
+                        "last_used": info.get("last_used", "never"),
+                        "optimized_for_npu": info.get("optimized_for_npu", False),
+                        "precision": info.get("precision", "unknown"),
+                    }
+                    for name, info in self.loaded_models.items()
+                },
+                "cache_stats": {
+                    "embedding_cache_size": cache_size,
+                    "cache_hits": cache_hits,
+                    "cache_hit_rate": await self._calculate_cache_hit_rate(),
+                },
+            }
+
+    def _register_pairing_routes(self):
+        """Register /pair, /pairing-status, and /unpair routes (Issue #641)."""
+
         @self.app.post("/pair", response_model=PairResponse)
         async def pair_with_main_host(request: PairRequest):
-            """
-            Issue #641: Endpoint for main host to pair with this worker.
-
-            Main host calls this endpoint to:
-            1. Assign a permanent worker ID
-            2. Send configuration
-            3. Establish the pairing relationship
-
-            This is the ONLY way a worker gets its ID - workers do NOT self-register.
-            """
-            try:
-                # Check if already paired with a different ID
-                if self.worker_id and self.worker_id != request.worker_id:
-                    # Worker is already paired - check if it's the same main host
-                    if self.pairing_status.get("main_host") != request.main_host:
-                        return PairResponse(
-                            success=False,
-                            worker_id=self.worker_id,
-                            message=(
-                                f"Worker already paired with different host: "
-                                f"{self.pairing_status.get('main_host')}"
-                            ),
-                        )
-
-                # Save the worker ID from main host
-                if save_worker_id(request.worker_id):
-                    self.worker_id = request.worker_id
-
-                    # Save pairing status
-                    save_pairing_status(request.main_host, request.worker_id)
-                    self.pairing_status = get_pairing_status()
-
-                    # Apply any config from main host
-                    if request.config:
-                        self._apply_main_host_config(request.config)
-
-                    logger.info(
-                        f"Successfully paired with main host {request.main_host}"
-                    )
-
-                    # Get device info to return
-                    device_info = None
-                    if self._model_manager:
-                        try:
-                            device_info = self._model_manager.get_device_info()
-                        except Exception:
-                            logger.debug(
-                                "Suppressed exception in try block", exc_info=True
-                            )
-
-                    return PairResponse(
-                        success=True,
-                        worker_id=self.worker_id,
-                        message=f"Successfully paired with main host {request.main_host}",
-                        device_info=device_info,
-                    )
-                else:
-                    return PairResponse(
-                        success=False,
-                        worker_id=request.worker_id,
-                        message="Failed to save worker ID",
-                    )
-
-            except Exception as e:
-                logger.error(f"Pairing failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+            """Issue #641: Assign worker ID and establish pairing with main host."""
+            return await self._handle_pair(request)
 
         @self.app.get("/pairing-status")
         async def get_pairing_status_endpoint():
-            """
-            Issue #641: Get current pairing status.
-
-            Returns whether this worker is paired with a main host.
-            """
-            return {
-                "paired": self.pairing_status.get("paired", False),
-                "worker_id": self.worker_id,
-                "main_host": self.pairing_status.get("main_host"),
-                "paired_at": self.pairing_status.get("paired_at"),
-                "npu_available": self.npu_available,
-                "platform": "windows",
-            }
+            """Issue #641: Get current pairing status."""
+            return self._handle_pairing_status()
 
         @self.app.post("/unpair")
         async def unpair_from_main_host():
-            """
-            Issue #641: Unpair from main host.
+            """Issue #641: Unpair from main host, allowing re-pairing."""
+            return self._handle_unpair()
 
-            Removes the worker ID and pairing status, allowing re-pairing.
-            """
-            try:
-                # Remove worker ID file
-                if WORKER_ID_FILE.exists():
-                    WORKER_ID_FILE.unlink()
+    async def _handle_pair(self, request: PairRequest) -> PairResponse:
+        """
+        Handle POST /pair — main host assigns a permanent worker ID.
 
-                # Remove pairing status file
-                if PAIRING_STATUS_FILE.exists():
-                    PAIRING_STATUS_FILE.unlink()
+        Issue #641: This is the ONLY way a worker gets its ID.
+        Workers do NOT self-register; main host controls registration via /pair.
 
-                # Reset in-memory state
-                old_id = self.worker_id
-                self.worker_id = None
-                self.pairing_status = {
-                    "paired": False,
-                    "main_host": None,
-                    "paired_at": None,
-                }
+        Args:
+            request: PairRequest containing worker_id, main_host, and optional config.
 
-                logger.info(f"Unpaired worker (was: {old_id})")
+        Returns:
+            PairResponse indicating success or failure.
+        """
+        try:
+            # Reject if already paired with a different host
+            if self.worker_id and self.worker_id != request.worker_id:
+                if self.pairing_status.get("main_host") != request.main_host:
+                    return PairResponse(
+                        success=False,
+                        worker_id=self.worker_id,
+                        message=(
+                            f"Worker already paired with different host: "
+                            f"{self.pairing_status.get('main_host')}"
+                        ),
+                    )
 
-                return {
-                    "success": True,
-                    "message": f"Worker unpaired (was: {old_id})",
-                }
+            if not save_worker_id(request.worker_id):
+                return PairResponse(
+                    success=False,
+                    worker_id=request.worker_id,
+                    message="Failed to save worker ID",
+                )
 
-            except Exception as e:
-                logger.error(f"Unpair failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+            self.worker_id = request.worker_id
+            save_pairing_status(request.main_host, request.worker_id)
+            self.pairing_status = get_pairing_status()
+
+            if request.config:
+                self._apply_main_host_config(request.config)
+
+            logger.info(f"Successfully paired with main host {request.main_host}")
+
+            device_info = None
+            if self._model_manager:
+                try:
+                    device_info = self._model_manager.get_device_info()
+                except Exception:
+                    logger.debug("Suppressed exception in try block", exc_info=True)
+
+            return PairResponse(
+                success=True,
+                worker_id=self.worker_id,
+                message=f"Successfully paired with main host {request.main_host}",
+                device_info=device_info,
+            )
+
+        except Exception as e:
+            logger.error(f"Pairing failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def _handle_pairing_status(self) -> Dict[str, Any]:
+        """Return current pairing status for GET /pairing-status (Issue #641)."""
+        return {
+            "paired": self.pairing_status.get("paired", False),
+            "worker_id": self.worker_id,
+            "main_host": self.pairing_status.get("main_host"),
+            "paired_at": self.pairing_status.get("paired_at"),
+            "npu_available": self.npu_available,
+            "platform": "windows",
+        }
+
+    def _handle_unpair(self) -> Dict[str, Any]:
+        """
+        Remove worker ID and pairing status for POST /unpair (Issue #641).
+
+        Returns:
+            Dict with success flag and message.
+        """
+        try:
+            if WORKER_ID_FILE.exists():
+                WORKER_ID_FILE.unlink()
+            if PAIRING_STATUS_FILE.exists():
+                PAIRING_STATUS_FILE.unlink()
+
+            old_id = self.worker_id
+            self.worker_id = None
+            self.pairing_status = {
+                "paired": False,
+                "main_host": None,
+                "paired_at": None,
+            }
+
+            logger.info(f"Unpaired worker (was: {old_id})")
+            return {"success": True, "message": f"Worker unpaired (was: {old_id})"}
+
+        except Exception as e:
+            logger.error(f"Unpair failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def _register_device_routes(self):
+        """Register /device-info route (Issue #640)."""
 
         @self.app.get("/device-info")
         async def device_info():
@@ -1311,57 +1354,13 @@ class WindowsNPUWorker:
 
             return info
 
-        @self.app.get("/stats")
-        async def get_detailed_stats():
-            """Get detailed worker statistics"""
-            stats = await self.task_stats.get_all()
-            cache_size = await self.embedding_cache.size()
-            cache_hits = await self.task_stats.get("cache_hits")
-
-            return {
-                "worker_id": self.worker_id,
-                "platform": "windows",
-                "uptime_seconds": time.time() - self.start_time,
-                "npu_status": await self.get_npu_status(),
-                "task_stats": stats,
-                "loaded_models": {
-                    name: {
-                        "size_mb": info.get("size_mb", 0),
-                        "load_time": info.get("load_time", "unknown"),
-                        "last_used": info.get("last_used", "never"),
-                        "optimized_for_npu": info.get("optimized_for_npu", False),
-                        "precision": info.get("precision", "unknown"),
-                    }
-                    for name, info in self.loaded_models.items()
-                },
-                "cache_stats": {
-                    "embedding_cache_size": cache_size,
-                    "cache_hits": cache_hits,
-                    "cache_hit_rate": await self._calculate_cache_hit_rate(),
-                },
-            }
+    def _register_inference_routes(self):
+        """Register /inference, /embedding/generate, and /search/semantic routes."""
 
         @self.app.post("/inference", response_model=NPUTaskResponse)
         async def process_inference(request: NPUTaskRequest):
             """Process inference request"""
-            task_id = str(uuid.uuid4())
-
-            try:
-                start_time = time.time()
-                result = await self.process_task(task_id, request.dict())
-                processing_time = (time.time() - start_time) * 1000
-
-                return NPUTaskResponse(
-                    task_id=task_id,
-                    status="completed",
-                    result=result,
-                    processing_time_ms=processing_time,
-                    npu_utilization_percent=await self.get_npu_utilization(),
-                )
-
-            except Exception as e:
-                logger.error(f"Inference failed for task {task_id}: {e}")
-                return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
+            return await self._handle_inference(request)
 
         @self.app.post("/embedding/generate")
         async def generate_embeddings(
@@ -1371,33 +1370,9 @@ class WindowsNPUWorker:
             optimization_level: str = "balanced",
         ):
             """Generate embeddings with NPU acceleration"""
-            try:
-                start_time = time.time()
-                embeddings = await self.generate_npu_embeddings(
-                    texts, model_name, use_cache, optimization_level
-                )
-                processing_time = (time.time() - start_time) * 1000
-
-                # Issue #640: Show real inference status
-                model_info = self.loaded_models.get(model_name, {})
-                device = model_info.get(
-                    "device", "NPU" if self.npu_available else "CPU"
-                )
-                real_inference = model_info.get("real_inference", False)
-
-                return {
-                    "embeddings": embeddings,
-                    "model_used": model_name,
-                    "processing_time_ms": processing_time,
-                    "texts_processed": len(texts),
-                    "device": device,
-                    "real_inference": real_inference,
-                    "cache_utilized": use_cache,
-                }
-
-            except Exception as e:
-                logger.error(f"Embedding generation failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+            return await self._handle_embedding_generate(
+                texts, model_name, use_cache, optimization_level
+            )
 
         @self.app.post("/search/semantic")
         async def semantic_search(
@@ -1408,29 +1383,111 @@ class WindowsNPUWorker:
             similarity_threshold: float = 0.7,
         ):
             """Perform semantic search"""
-            try:
-                start_time = time.time()
-                results = await self.perform_semantic_search(
-                    query_text,
-                    document_embeddings,
-                    document_metadata,
-                    top_k,
-                    similarity_threshold,
-                )
-                processing_time = (time.time() - start_time) * 1000
+            return await self._handle_semantic_search(
+                query_text,
+                document_embeddings,
+                document_metadata,
+                top_k,
+                similarity_threshold,
+            )
 
-                return {
-                    "search_results": results,
-                    "query": query_text,
-                    "documents_searched": len(document_embeddings),
-                    "results_returned": len(results),
-                    "processing_time_ms": processing_time,
-                    "device": "NPU" if self.npu_available else "CPU",
-                }
+    async def _handle_inference(self, request: NPUTaskRequest) -> NPUTaskResponse:
+        """
+        Handle POST /inference — run a model inference task.
 
-            except Exception as e:
-                logger.error(f"Semantic search failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+        Args:
+            request: NPUTaskRequest with task_type, model_name, and input_data.
+
+        Returns:
+            NPUTaskResponse with result or error.
+        """
+        task_id = str(uuid.uuid4())
+        try:
+            start_time = time.time()
+            result = await self.process_task(task_id, request.dict())
+            processing_time = (time.time() - start_time) * 1000
+
+            return NPUTaskResponse(
+                task_id=task_id,
+                status="completed",
+                result=result,
+                processing_time_ms=processing_time,
+                npu_utilization_percent=await self.get_npu_utilization(),
+            )
+        except Exception as e:
+            logger.error(f"Inference failed for task {task_id}: {e}")
+            return NPUTaskResponse(task_id=task_id, status="failed", error=str(e))
+
+    async def _handle_embedding_generate(
+        self,
+        texts: List[str],
+        model_name: str,
+        use_cache: bool,
+        optimization_level: str,
+    ) -> Dict[str, Any]:
+        """
+        Handle POST /embedding/generate — generate embeddings with NPU acceleration.
+
+        Issue #640: Returns real inference status alongside embeddings.
+        """
+        try:
+            start_time = time.time()
+            embeddings = await self.generate_npu_embeddings(
+                texts, model_name, use_cache, optimization_level
+            )
+            processing_time = (time.time() - start_time) * 1000
+
+            model_info = self.loaded_models.get(model_name, {})
+            device = model_info.get("device", "NPU" if self.npu_available else "CPU")
+            real_inference = model_info.get("real_inference", False)
+
+            return {
+                "embeddings": embeddings,
+                "model_used": model_name,
+                "processing_time_ms": processing_time,
+                "texts_processed": len(texts),
+                "device": device,
+                "real_inference": real_inference,
+                "cache_utilized": use_cache,
+            }
+        except Exception as e:
+            logger.error(f"Embedding generation failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def _handle_semantic_search(
+        self,
+        query_text: str,
+        document_embeddings: List[List[float]],
+        document_metadata: List[Dict[str, Any]],
+        top_k: int,
+        similarity_threshold: float,
+    ) -> Dict[str, Any]:
+        """Handle POST /search/semantic — perform semantic similarity search."""
+        try:
+            start_time = time.time()
+            results = await self.perform_semantic_search(
+                query_text,
+                document_embeddings,
+                document_metadata,
+                top_k,
+                similarity_threshold,
+            )
+            processing_time = (time.time() - start_time) * 1000
+
+            return {
+                "search_results": results,
+                "query": query_text,
+                "documents_searched": len(document_embeddings),
+                "results_returned": len(results),
+                "processing_time_ms": processing_time,
+                "device": "NPU" if self.npu_available else "CPU",
+            }
+        except Exception as e:
+            logger.error(f"Semantic search failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    def _register_model_routes(self):
+        """Register /model/optimize and /performance/benchmark routes."""
 
         @self.app.post("/model/optimize")
         async def optimize_model(model_name: str, optimization_level: str = "balanced"):
@@ -1524,8 +1581,7 @@ class WindowsNPUWorker:
         Issue #640: Pass existing worker_id to prevent duplicate registrations.
         """
         try:
-            from utils.config_bootstrap import (fetch_bootstrap_config,
-                                                get_worker_id)
+            from utils.config_bootstrap import fetch_bootstrap_config, get_worker_id
 
             backend_config = config.get("backend", {})
             service_config = config.get("service", {})
@@ -1621,6 +1677,54 @@ class WindowsNPUWorker:
             logger.warning(f"Redis initialization failed: {e}")
             self.redis_client = None
 
+    def _detect_npu_provider(self, available_providers: list) -> None:
+        """
+        Detect NPU/GPU availability from ONNX Runtime providers and set npu_available.
+
+        Issue #2346: Extracted from initialize_npu to keep that method within 65 lines.
+        Checks OpenVINO EP (preferred for Intel NPU), DirectML, and CUDA in priority order.
+
+        Args:
+            available_providers: List of available ONNX Runtime execution provider names.
+        """
+        if "OpenVINOExecutionProvider" in available_providers:
+            try:
+                from openvino import Core
+
+                core = Core()
+                available_devices = core.available_devices
+                logger.info(f"OpenVINO available devices: {available_devices}")
+
+                if "NPU" in available_devices:
+                    self.npu_available = True
+                    logger.info(
+                        "Intel NPU detected via OpenVINO - NPU acceleration enabled!"
+                    )
+                elif "GPU" in available_devices:
+                    self.npu_available = True
+                    logger.info(
+                        "Intel GPU detected via OpenVINO - GPU acceleration enabled"
+                    )
+                else:
+                    self.npu_available = False
+                    logger.warning("OpenVINO EP available but no NPU/GPU detected")
+            except ImportError:
+                self.npu_available = True
+                logger.info("OpenVINO EP available - will try NPU/GPU acceleration")
+        elif "DmlExecutionProvider" in available_providers:
+            self.npu_available = True
+            logger.info(
+                "DirectML available (GPU only, Intel NPU not exposed via DirectML)"
+            )
+        elif "CUDAExecutionProvider" in available_providers:
+            self.npu_available = True
+            logger.info(
+                "CUDA execution provider available - NVIDIA GPU acceleration enabled"
+            )
+        else:
+            self.npu_available = False
+            logger.warning("No GPU/NPU acceleration available - using CPU only")
+
     async def initialize_npu(self):
         """
         Initialize NPU/GPU acceleration with ONNX Runtime OpenVINO EP.
@@ -1639,53 +1743,12 @@ class WindowsNPUWorker:
                 self.npu_available = False
                 return
 
-            # Initialize ONNX Runtime and check available providers
             import onnxruntime as ort
 
             available_providers = ort.get_available_providers()
             logger.info(f"Available ONNX Runtime providers: {available_providers}")
 
-            # Check for OpenVINO EP (preferred for Intel NPU)
-            if "OpenVINOExecutionProvider" in available_providers:
-                # Try to detect NPU via OpenVINO
-                try:
-                    from openvino import Core
-
-                    core = Core()
-                    available_devices = core.available_devices
-                    logger.info(f"OpenVINO available devices: {available_devices}")
-
-                    if "NPU" in available_devices:
-                        self.npu_available = True
-                        logger.info(
-                            "Intel NPU detected via OpenVINO - NPU acceleration enabled!"
-                        )
-                    elif "GPU" in available_devices:
-                        self.npu_available = True
-                        logger.info(
-                            "Intel GPU detected via OpenVINO - GPU acceleration enabled"
-                        )
-                    else:
-                        self.npu_available = False
-                        logger.warning("OpenVINO EP available but no NPU/GPU detected")
-                except ImportError:
-                    # OpenVINO package not installed, but EP might still work
-                    self.npu_available = True
-                    logger.info("OpenVINO EP available - will try NPU/GPU acceleration")
-            elif "DmlExecutionProvider" in available_providers:
-                # Fallback to DirectML (GPU only, no NPU)
-                self.npu_available = True
-                logger.info(
-                    "DirectML available (GPU only, Intel NPU not exposed via DirectML)"
-                )
-            elif "CUDAExecutionProvider" in available_providers:
-                self.npu_available = True
-                logger.info(
-                    "CUDA execution provider available - NVIDIA GPU acceleration enabled"
-                )
-            else:
-                self.npu_available = False
-                logger.warning("No GPU/NPU acceleration available - using CPU only")
+            self._detect_npu_provider(available_providers)
 
             # Initialize model manager for real inference (Issue #640)
             if self._use_real_inference:
@@ -1694,7 +1757,6 @@ class WindowsNPUWorker:
                     device_info = self._model_manager.get_device_info()
                     logger.info(f"Model manager initialized: {device_info}")
 
-                    # Update npu_available based on actual device
                     if device_info.get("is_gpu") or device_info.get("is_npu"):
                         self.npu_available = True
 
@@ -2136,9 +2198,11 @@ class WindowsNPUWorker:
         try:
             # Import network info utilities
             sys.path.insert(0, str(Path(__file__).parent.parent))
-            from gui.utils.network_info import (format_connection_info_box,
-                                                get_network_interfaces,
-                                                get_platform_info)
+            from gui.utils.network_info import (
+                format_connection_info_box,
+                get_network_interfaces,
+                get_platform_info,
+            )
 
             port = config.get("service", {}).get("port", 8082)
             interfaces = get_network_interfaces()
