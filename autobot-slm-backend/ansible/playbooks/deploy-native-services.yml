@@ -707,7 +707,7 @@
           [Service]
           Type=forking
           User=autobot-service
-          ExecStart=/usr/bin/x11vnc -display :99 -nopw -listen localhost -xkb -ncache 10 -ncache_cr -rfbport 5900 -bg
+          ExecStart=/usr/bin/x11vnc -display :99 -rfbauth /home/autobot/.vnc/x11vnc.passwd -listen localhost -xkb -ncache 10 -ncache_cr -rfbport 5900 -bg
 
           [Install]
           WantedBy=multi-user.target
