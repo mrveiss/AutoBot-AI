@@ -479,7 +479,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret (ID: %s)", secret_id[:8])
+        logger.info("Updated secret (ID: %s...)", secret_id[:8])
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -505,7 +505,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret (ID: %s)", secret_id[:8])
+        logger.info("Deleted secret (ID: %s...)", secret_id[:8])
         return True
 
     def transfer_secrets(
@@ -892,14 +892,14 @@ async def get_secret(
                         scope="session" if secret.get("scope") == "chat" else "user",
                         session_id=chat_id,
                         metadata={
-                            "secret_id": secret_id,
+                            "secret_id": secret_id[:8] + "...",
                             "accessed_via": "api",
                             "original_scope": secret.get("scope"),
                         },
                     )
                     logger.debug(
-                        "[Issue #608] Created secret entity for %s in session %s",
-                        secret_id,
+                        "[Issue #608] Created secret entity for %s... in session %s",
+                        secret_id[:8],
                         chat_id,
                     )
                 except Exception as graph_err:

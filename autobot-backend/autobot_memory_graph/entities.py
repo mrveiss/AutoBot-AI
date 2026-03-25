@@ -176,7 +176,7 @@ class EntityOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to create entity: %s", e)
-            raise RuntimeError(f"Entity creation failed: {str(e)}")
+            raise RuntimeError("Entity creation failed") from e
 
     async def get_entity(
         self: AutoBotMemoryGraphCore,
