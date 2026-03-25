@@ -715,11 +715,16 @@ const { exportReport, exportSection } = useCodebaseExport({
 // #2258: Bridge code-intel scans into the data-fetcher scan orchestrator.
 // loadCachedAnalyticsData uses lighter cached loaders; runAllAnalysisScans
 // uses full re-fetch triggers after indexing completes.
+// #2390: Include all code-intel scans so every panel populates on page visit
 const codeIntelExtraScans = () => [
   { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
   { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
   { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadCachedBugPrediction() },
   { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadCachedSecurityScore() },
+  { id: 'performance', label: t('analytics.codebase.scans.performance'), run: () => loadPerformanceScore() },
+  { id: 'redis', label: t('analytics.codebase.scans.redis'), run: () => loadRedisHealth() },
+  { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
+  { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
   { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
 ]
 
@@ -868,6 +873,11 @@ onMounted(async () => {
 
   await checkCurrentIndexingJob()
   loadCachedAnalyticsData(codeIntelExtraScans())
+  // #2390: Auto-load overview dashboard cards on page visit
+  loadSystemOverview()
+  loadCommunicationPatterns()
+  loadCodeQuality()
+  loadPerformanceMetrics()
   loadSources()
 })
 
