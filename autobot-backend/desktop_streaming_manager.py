@@ -449,7 +449,10 @@ class VNCServerManager:
                 websockify_cmd,
                 "--web",
                 "/usr/share/novnc",
-                str(novnc_port),
+                "--cert=/etc/autobot/certs/server-cert.pem",
+                "--key=/etc/autobot/certs/server-key.pem",
+                "--ssl-only",
+                f"localhost:{novnc_port}",
                 f"localhost:{vnc_port}",
             ]
 

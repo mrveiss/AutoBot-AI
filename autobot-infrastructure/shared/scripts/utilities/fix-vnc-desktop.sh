@@ -74,7 +74,11 @@ Type=simple
 User=kali
 Group=kali
 WorkingDirectory=/usr/share/novnc
-ExecStart=/usr/bin/websockify --web /usr/share/novnc 6080 localhost:5901
+ExecStart=/usr/bin/websockify --web /usr/share/novnc \
+    --cert=/etc/autobot/certs/server-cert.pem \
+    --key=/etc/autobot/certs/server-key.pem \
+    --ssl-only \
+    localhost:6080 localhost:5901
 Restart=always
 RestartSec=5
 

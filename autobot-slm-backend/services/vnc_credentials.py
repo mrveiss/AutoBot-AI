@@ -207,7 +207,7 @@ class VNCCredentialService:
             return None
 
         # Build websocket URL
-        websocket_url = f"ws://{node.ip_address}:{credential.port}/websockify"
+        websocket_url = f"wss://{node.ip_address}:{credential.port}/websockify"
 
         # Generate connection token if requested
         connection_token = None
@@ -297,7 +297,7 @@ class VNCCredentialService:
                     vnc_type=credential.vnc_type or "desktop",
                     name=credential.name,
                     port=port,
-                    websocket_url=f"ws://{node.ip_address}:{port}/websockify",
+                    websocket_url=f"wss://{node.ip_address}:{port}/websockify",
                     is_active=credential.is_active,
                 )
             )
@@ -312,7 +312,7 @@ class VNCCredentialService:
         """Convert credential to response schema."""
         websocket_url = None
         if node and credential.port:
-            websocket_url = f"ws://{node.ip_address}:{credential.port}/websockify"
+            websocket_url = f"wss://{node.ip_address}:{credential.port}/websockify"
 
         return VNCCredentialResponse(
             id=credential.id,

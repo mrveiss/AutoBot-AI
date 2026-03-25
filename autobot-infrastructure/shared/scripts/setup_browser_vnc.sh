@@ -63,7 +63,10 @@ echo "  VNC server started on :1 (port 5901, password-protected)"
 echo "[5/7] Starting websockify for noVNC..."
 run_on_browser_vm "nohup /usr/bin/websockify \
     --web /usr/share/novnc \
-    0.0.0.0:6080 \
+    --cert=/etc/autobot/certs/server-cert.pem \
+    --key=/etc/autobot/certs/server-key.pem \
+    --ssl-only \
+    localhost:6080 \
     localhost:5901 \
     > /tmp/websockify.log 2>&1 &"
 sleep 2
