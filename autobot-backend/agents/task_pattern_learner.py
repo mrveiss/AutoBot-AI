@@ -222,7 +222,8 @@ class TaskPatternLearner:
         return None
 
     async def clear_strategy(self, task_type: str) -> None:
-        """Clear the learned strategy for a task type."""
+        """Clear the learned strategy for a task type (#2325)."""
+        task_type = self.normalize_task_type(task_type)
         try:
             redis = await self._get_redis()
             key = REDIS_PATTERNS_KEY.format(task_type=task_type)
