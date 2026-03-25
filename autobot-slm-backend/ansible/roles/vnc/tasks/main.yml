@@ -10,6 +10,7 @@
       - tigervnc-standalone-server
       - tigervnc-common
       - tigervnc-tools
+      - x11vnc
       - websockify
       - novnc
       - xfce4
@@ -71,6 +72,48 @@
   become: true
   when: vnc_password_result.stdout | length > 0
   notify: restart vnc-server
+
+# --- x11vnc password file for desktop_streaming_manager (#1969) ---
+- name: Create x11vnc password file from VNC password
+  ansible.builtin.shell: |
+    set -e
+    x11vnc -storepasswd '{{ vnc_password_result.stdout }}' \
+      /home/{{ vnc_user }}/.vnc/x11vnc.passwd
+    chmod 0600 /home/{{ vnc_user }}/.vnc/x11vnc.passwd
+    chown {{ vnc_user }}:{{ vnc_group }} /home/{{ vnc_user }}/.vnc/x11vnc.passwd
+  args:
+    creates: "/home/{{ vnc_user }}/.vnc/x11vnc.passwd"
+  become: true
+  when: vnc_password_result.stdout | length > 0
+
+# --- TLS cert verification for websockify (#1962) ---
+- name: Ensure TLS cert directory exists
+  ansible.builtin.file:
+    path: /etc/autobot/certs
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Check TLS certificates exist for websockify
+  ansible.builtin.stat:
+    path: "/etc/autobot/certs/{{ item }}"
+  register: tls_cert_check
+  loop:
+    - server-cert.pem
+    - server-key.pem
+  become: true
+
+- name: Generate self-signed TLS cert if missing (#1962)
+  ansible.builtin.shell: |
+    set -e
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout /etc/autobot/certs/server-key.pem \
+      -out /etc/autobot/certs/server-cert.pem \
+      -days 3650 -subj '/CN={{ inventory_hostname }}.autobot.internal'
+    chmod 0644 /etc/autobot/certs/server-cert.pem
+    chmod 0600 /etc/autobot/certs/server-key.pem
+  become: true
+  when: tls_cert_check.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
 
 - name: Deploy VNC xstartup script
   ansible.builtin.template:
