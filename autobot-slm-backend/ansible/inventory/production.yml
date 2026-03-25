@@ -273,3 +273,18 @@ compute_services:
   vars:
     performance_monitoring: true
     resource_alerts: true
+
+# Groups required by update-all-nodes.yml (#2294)
+# These alias the role-based groups to match the SLM node naming convention.
+slm_server:
+  children:
+    slm:
+
+infrastructure:
+  children:
+    slm:
+    backend:
+    frontend:
+    npu:
+    aiml:
+    browser:
