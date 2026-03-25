@@ -3227,7 +3227,15 @@
       "stepLabel": "Step",
       "conditionLabel": "Condition",
       "parallelLabel": "Parallel",
-      "clearConfirm": "Clear all nodes?"
+      "clearConfirm": "Clear all nodes?",
+      "vision": "Vision",
+      "addVisionNode": "Add vision automation node",
+      "visionCapture": "Screen Capture",
+      "visionFindElement": "Find Element",
+      "visionClick": "Click Element",
+      "visionTypeText": "Type Text",
+      "visionOcr": "OCR Extract",
+      "visionWait": "Wait for Element"
     },
     "editStep": {
       "title": "Edit Step {step}",
