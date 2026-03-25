@@ -79,12 +79,7 @@
  * Issue #1579: Extracted from CodebaseAnalytics.vue
  */
 
-interface CodeSource {
-  id: string
-  name: string
-  source_type: 'github' | 'local'
-  [key: string]: unknown
-}
+import type { CodeSource } from '@/types/analytics'
 
 defineProps<{
   analyzing: boolean
