@@ -14,7 +14,7 @@ backend:
       # When set, models in gpu_models are routed here instead of the default endpoint.
       # gpu_endpoint: http://172.16.168.20:11434
       # gpu_models:
-      #   - "mistral:7b-instruct"
+      #   - "qwen3.5:9b"
       #   - "deepseek-r1:14b"
       #   - "codellama:13b"
 

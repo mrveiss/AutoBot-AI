@@ -104,7 +104,7 @@ class ModelConfigMixin:
         routing is not configured or the model is not in gpu_models.
 
         Args:
-            model_name: Ollama model name (e.g. 'mistral:7b-instruct')
+            model_name: Ollama model name (e.g. 'qwen3.5:9b')
 
         Returns:
             Ollama base URL (no /api/generate suffix)

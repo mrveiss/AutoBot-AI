@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-from config import ConfigManager
 from constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
+from config import ConfigManager
 
 # Issue #1403: Adapter registry
 from .adapters.registry import get_adapter_registry
@@ -395,7 +395,7 @@ class LLMInterface:
         Issue #748: Initialize tiered model routing for resource optimization.
 
         Routes simple requests to lightweight models (gemma2:2b) and
-        complex requests to capable models (mistral:7b-instruct).
+        complex requests to capable models (qwen3.5:9b).
         """
         try:
             tier_config = TierConfig.from_config()

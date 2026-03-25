@@ -41,7 +41,7 @@ backend_cors_origins: "*"
 # LLM Configuration (Issue #858)
 backend_llm_provider: "ollama"  # Default LLM provider for all agents
 backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
-backend_llm_model: "mistral:7b-instruct"  # Default LLM model
+backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
 # Service Authentication
 service_auth_service_id: "main-backend"

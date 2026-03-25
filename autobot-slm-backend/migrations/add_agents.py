@@ -63,7 +63,7 @@ def migrate(db_url: str) -> None:
         cursor.execute("""
             INSERT INTO agents (agent_id, name, description, llm_provider, llm_model, is_default)
             VALUES ('default', 'Default Agent', 'Fallback agent for unconfigured requests',
-                    'ollama', 'mistral:7b-instruct', TRUE)
+                    'ollama', 'qwen3.5:9b', TRUE)
         """)
         logger.info("Seeded default agent")
 

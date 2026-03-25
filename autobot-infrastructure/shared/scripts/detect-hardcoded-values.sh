@@ -88,7 +88,7 @@ declare -A SSOT_PORTS=(
 )
 
 declare -A SSOT_MODELS=(
-    ["mistral:7b-instruct"]="config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)"
+    ["qwen3.5:9b"]="config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)"
     ["nomic-embed-text:latest"]="config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)"
 )
 

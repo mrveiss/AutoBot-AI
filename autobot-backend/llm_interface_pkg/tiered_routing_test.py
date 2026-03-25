@@ -19,6 +19,8 @@ from llm_interface_pkg.tiered_routing import (
     TierModels,
 )
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 
 class TestTierConfig:
     """Tests for TierConfig dataclass."""

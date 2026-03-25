@@ -17,7 +17,7 @@ llm_has_gpu: "auto"
 
 # Models requiring GPU for reasonable performance (>= 7B parameters)
 llm_gpu_models:
-  - mistral:7b-instruct      # Default LLM for all agents
+  - qwen3.5:9b      # Default LLM for all agents
   - deepseek-r1:14b           # Multi-provider fallback
   - codellama:13b             # Code generation
 

@@ -175,7 +175,7 @@ def main():
     logger.info("  from constants.model_constants import ModelConstants")
     logger.info("  model = ModelConstants.DEFAULT_OLLAMA_MODEL")
     logger.info("\nEnvironment variable:")
-    logger.info("  AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct")
+    logger.info("  AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b")
 
 
 if __name__ == "__main__":

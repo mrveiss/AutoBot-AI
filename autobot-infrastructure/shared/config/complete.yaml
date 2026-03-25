@@ -626,7 +626,7 @@ llm:
     complexity_threshold: 3.0        # Score threshold (0-10): < threshold uses simple tier
     models:
       simple: "gemma2:2b"            # Model for simple requests (score < 3)
-      complex: "mistral:7b-instruct" # Model for complex requests (score >= 3)
+      complex: "qwen3.5:9b" # Model for complex requests (score >= 3)
     fallback_to_complex: true        # Fallback to complex tier if simple fails
     logging:
       log_scores: true               # Log complexity scores for debugging

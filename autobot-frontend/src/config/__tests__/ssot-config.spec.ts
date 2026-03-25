@@ -77,13 +77,13 @@ describe('SSOT Config Types', () => {
   describe('LLMConfig interface', () => {
     it('should have all required LLM properties', () => {
       const llmConfig = {
-        defaultModel: 'mistral:7b-instruct',
+        defaultModel: 'qwen3.5:9b',
         embeddingModel: 'nomic-embed-text:latest',
         provider: 'ollama',
         timeout: 30000,
       };
 
-      expect(llmConfig.defaultModel).toBe('mistral:7b-instruct');
+      expect(llmConfig.defaultModel).toBe('qwen3.5:9b');
       expect(llmConfig.embeddingModel).toBe('nomic-embed-text:latest');
       expect(llmConfig.provider).toBe('ollama');
       expect(llmConfig.timeout).toBe(30000);

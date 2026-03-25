@@ -56,7 +56,7 @@ function resetSettings() {
             use_phi2: false,
             api_endpoint: ServiceURLs.BACKEND_LOCAL,
             ollama_endpoint: ServiceURLs.OLLAMA_LOCAL,
-            ollama_model: 'mistral:7b-instruct',
+            ollama_model: 'qwen3.5:9b',
             streaming: false
         },
         ui: {

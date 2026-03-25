@@ -14,6 +14,8 @@ from typing import Dict
 
 from config.registry import ConfigRegistry
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 
 @dataclass
 class TierModels:

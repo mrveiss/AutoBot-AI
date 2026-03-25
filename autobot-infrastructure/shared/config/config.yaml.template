@@ -112,7 +112,7 @@ llm:
     - tinyllama:latest
     - llama2:latest
     - llama3.2:3b
-    - mistral:7b-instruct
+    - qwen3.5:9b
     - nomic-embed-text:latest
   classification_model: gemma2:2b
   vllm:

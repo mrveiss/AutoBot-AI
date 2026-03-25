@@ -25,7 +25,7 @@
     backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
     backend_llm_provider: "ollama"
     backend_llm_endpoint: "http://127.0.0.1:11434"
-    backend_llm_model: "mistral:7b-instruct"
+    backend_llm_model: "qwen3.5:9b"
     service_auth_service_id: "main-backend"
     service_auth_keys_dir: "/etc/autobot/service-keys"
     service_auth_enforcement_mode: false  # Disabled for testing
