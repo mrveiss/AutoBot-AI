@@ -543,6 +543,8 @@ class VNCServerManager:
             f":{display_num}",
             "-rfbport",
             str(vnc_port),
+            "-rfbauth",
+            "/home/autobot/.vnc/x11vnc.passwd",
             "-shared",
             "-forever",
             "-noxdamage",
