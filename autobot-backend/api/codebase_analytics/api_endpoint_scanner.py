@@ -647,7 +647,7 @@ class FrontendAPICallScanner:
 
     def __init__(self, project_root: Optional[Path] = None):
         self.project_root = project_root or get_project_root()
-        self.frontend_path = self.project_root / "autobot-vue" / "src"
+        self.frontend_path = self.project_root / "autobot-frontend" / "src"
 
     def scan_all_calls(self) -> List[FrontendAPICallItem]:
         """

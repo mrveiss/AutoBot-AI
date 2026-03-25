@@ -497,7 +497,7 @@ if __name__ == "__main__":
         project_root = os.environ.get(
             "AUTOBOT_BASE_DIR", "/opt/autobot"
         )  # noqa: ssot-path
-        target_dir = "autobot-vue/src"
+        target_dir = "autobot-frontend/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print
         print("=" * 50)  # noqa: print

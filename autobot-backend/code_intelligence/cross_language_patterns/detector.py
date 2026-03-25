@@ -339,7 +339,7 @@ class CrossLanguagePatternDetector:
 
         backend_dir = self.project_root / "backend"
         src_dir = self.project_root / "src"
-        frontend_dir = self.project_root / "autobot-vue" / "src"
+        frontend_dir = self.project_root / "autobot-frontend" / "src"
 
         # Collect Python files
         for search_dir in [backend_dir, src_dir]:

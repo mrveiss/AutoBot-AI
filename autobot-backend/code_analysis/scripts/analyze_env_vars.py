@@ -76,8 +76,8 @@ async def analyze_environment_variables():
         patterns=[
             "src/**/*.py",
             "backend/**/*.py",
-            "autobot-vue/src/**/*.js",
-            "autobot-vue/src/**/*.vue",
+            "autobot-frontend/src/**/*.js",
+            "autobot-frontend/src/**/*.vue",
         ],
     )
     _print_analysis_summary(results)

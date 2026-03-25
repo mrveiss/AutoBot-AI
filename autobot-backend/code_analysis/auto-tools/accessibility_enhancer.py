@@ -22,7 +22,7 @@ from typing import List, Optional, Tuple
 # Override with AUTOBOT_VUE_ROOT env var. Issue #1183.
 _DEFAULT_VUE_ROOT = os.getenv(
     "AUTOBOT_VUE_ROOT",
-    str(Path(__file__).resolve().parent.parent.parent / "autobot-vue"),
+    str(Path(__file__).resolve().parent.parent.parent / "autobot-frontend"),
 )
 
 # Static WCAG/implementation section for the markdown report. Issue #1183.
@@ -71,7 +71,7 @@ All modified files have been backed up to: `.accessibility-fix-backups/`
 
 To restore original files:
 ```bash
-cp .accessibility-fix-backups/ComponentName.vue.YYYYMMDD_HHMMSS.backup autobot-vue/src/components/ComponentName.vue
+cp .accessibility-fix-backups/ComponentName.vue.YYYYMMDD_HHMMSS.backup autobot-frontend/src/components/ComponentName.vue
 python3 code-analysis-suite/auto-tools/restore_accessibility_backups.py
 ```
 

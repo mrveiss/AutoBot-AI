@@ -885,7 +885,7 @@ async def main():
 
     results = await analyzer.analyze_ownership(
         root_path=".",
-        patterns=["src/**/*.py", "backend/**/*.py", "autobot-vue/src/**/*.vue"],
+        patterns=["src/**/*.py", "backend/**/*.py", "autobot-frontend/src/**/*.vue"],
     )
 
     print("\n=== Code Ownership Analysis Results ===")  # noqa: print
