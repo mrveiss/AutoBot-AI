@@ -28,7 +28,7 @@ import type {
 const logger = createLogger('useCodeIntelScores')
 
 export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
-  const { rootPath } = deps
+  const { rootPath, withSourceId } = deps
 
   // --- Security score (useTaskLoader) ---
 
@@ -169,7 +169,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
       const response = await fetchWithAuth(
-        `${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`,
+        withSourceId(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`),
         {
           method: 'GET',
           headers: {
