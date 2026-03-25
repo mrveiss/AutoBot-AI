@@ -74,9 +74,9 @@ EOF
 # Ensure password file exists
 mkdir -p /home/kali/.vnc
 if [ ! -f /home/kali/.vnc/passwd ]; then
-    VNC_PASSWORD="${VNC_PASSWORD:-$(openssl rand -base64 12)}"
-    x11vnc -storepasswd "$VNC_PASSWORD" /home/kali/.vnc/passwd
-    echo "Generated VNC password: $VNC_PASSWORD"
+    VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    x11vnc -storepasswd "$VNC_PASS" /home/kali/.vnc/passwd
+    echo "Generated VNC password: $VNC_PASS"
 fi
 chown -R kali:kali /home/kali/.vnc
 

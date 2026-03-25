@@ -35,9 +35,9 @@ chmod +x /home/kali/.vnc/xstartup
 chown kali:kali /home/kali/.vnc/xstartup
 
 # Create VNC password (random, displayed once)
-VNC_PASSWORD="${VNC_PASSWORD:-$(openssl rand -base64 12)}"
-echo "$VNC_PASSWORD" | vncpasswd -f > /home/kali/.vnc/passwd
-echo "Generated VNC password: $VNC_PASSWORD"
+VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
+echo "$VNC_PASS" | vncpasswd -f > /home/kali/.vnc/passwd
+echo "Generated VNC password: $VNC_PASS"
 chmod 600 /home/kali/.vnc/passwd
 chown kali:kali /home/kali/.vnc/passwd
 
