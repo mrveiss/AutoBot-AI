@@ -11,7 +11,7 @@ import logging
 from typing import List, Optional
 
 from autobot_types import TaskComplexity
-from enhanced_orchestrator import EnhancedOrchestrator
+from enhanced_orchestrator import EnhancedOrchestrator, get_orchestrator
 from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
@@ -40,7 +40,7 @@ class StepGenerator:
 
     def __init__(self, enhanced_orchestrator: EnhancedOrchestrator = None):
         """Initialize step generator with optional enhanced orchestrator."""
-        self.enhanced_orchestrator = enhanced_orchestrator or EnhancedOrchestrator()
+        self.enhanced_orchestrator = enhanced_orchestrator or get_orchestrator()
 
     async def generate_smart_steps(
         self,

@@ -53,9 +53,29 @@ __all__ = [
     "DocumentationType",
     "EnhancedOrchestrator",
     "WorkflowDocumentation",
+    "get_orchestrator",
 ]
 
 logger = logging.getLogger(__name__)
+
+# Issue #2207: Module-level singleton — all callers share one instance
+_instance: Optional["EnhancedOrchestrator"] = None
+_instance_lock = __import__("threading").Lock()
+
+
+def get_orchestrator() -> "EnhancedOrchestrator":
+    """Return the shared EnhancedOrchestrator singleton.
+
+    Issue #2207: Ensures agent registry, knowledge base, and LLM interface
+    state is shared across all consumers (workflow automation, scheduler, etc.).
+    """
+    global _instance
+    if _instance is None:
+        with _instance_lock:
+            if _instance is None:
+                logger.info("Creating shared EnhancedOrchestrator singleton")
+                _instance = EnhancedOrchestrator()
+    return _instance
 
 
 class EnhancedOrchestrator:

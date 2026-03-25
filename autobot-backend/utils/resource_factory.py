@@ -78,38 +78,15 @@ class ResourceFactory:
 
     @staticmethod
     async def get_enhanced_orchestrator(request: Request = None):
-        """Get or create EnhancedOrchestrator instance with app.state caching"""
-        try:
-            # Try app.state first
-            if request is not None:
-                orch = getattr(request.app.state, "enhanced_orchestrator", None)
-                if orch is not None:
-                    logger.debug(
-                        "Using pre-initialized EnhancedOrchestrator from app.state"
-                    )
-                    return orch
+        """Get the shared EnhancedOrchestrator singleton.
 
-            # Fallback to module-level import and creation
-            from enhanced_orchestrator import EnhancedOrchestrator
+        Issue #2207: Delegates to module-level singleton in enhanced_orchestrator.
+        The request parameter is kept for backward compatibility but no longer
+        used for app.state caching — the singleton handles its own lifecycle.
+        """
+        from enhanced_orchestrator import get_orchestrator
 
-            logger.info(
-                "Creating new EnhancedOrchestrator instance (expensive operation)"
-            )
-
-            orch = EnhancedOrchestrator()
-
-            # Cache in app state if available
-            if request is not None:
-                request.app.state.enhanced_orchestrator = orch
-                logger.info(
-                    "Cached EnhancedOrchestrator in app.state for future requests"
-                )
-
-            return orch
-
-        except Exception as e:
-            logger.error("Failed to create EnhancedOrchestrator: %s", e)
-            raise
+        return get_orchestrator()
 
     @staticmethod
     async def get_chat_history_manager(request: Request = None):
