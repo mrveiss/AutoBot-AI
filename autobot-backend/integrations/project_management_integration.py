@@ -80,13 +80,13 @@ class JiraIntegration(BaseIntegration):
                     status=IntegrationStatus.ERROR,
                     message=f"HTTP {result.get('status_code')}",
                 )
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Jira connection test failed")
             self._status = IntegrationStatus.ERROR
             return IntegrationHealth(
                 provider="jira",
                 status=IntegrationStatus.ERROR,
-                message=str(exc),
+                message="Connection test failed",
             )
 
     def get_available_actions(self) -> List[IntegrationAction]:
@@ -153,9 +153,9 @@ class JiraIntegration(BaseIntegration):
 
         try:
             return await handler(params)
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Jira action %s failed", action)
-            return {"error": str(exc)}
+            return {"error": "Action failed"}
 
     async def _list_projects(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all accessible projects."""
@@ -328,13 +328,13 @@ class TrelloIntegration(BaseIntegration):
                     status=IntegrationStatus.ERROR,
                     message=f"HTTP {result.get('status_code')}",
                 )
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Trello connection test failed")
             self._status = IntegrationStatus.ERROR
             return IntegrationHealth(
                 provider="trello",
                 status=IntegrationStatus.ERROR,
-                message=str(exc),
+                message="Connection test failed",
             )
 
     def get_available_actions(self) -> List[IntegrationAction]:
@@ -394,9 +394,9 @@ class TrelloIntegration(BaseIntegration):
 
         try:
             return await handler(params)
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Trello action %s failed", action)
-            return {"error": str(exc)}
+            return {"error": "Action failed"}
 
     async def _list_boards(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all accessible boards."""
@@ -549,13 +549,13 @@ class AsanaIntegration(BaseIntegration):
                     status=IntegrationStatus.ERROR,
                     message=f"HTTP {result.get('status_code')}",
                 )
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Asana connection test failed")
             self._status = IntegrationStatus.ERROR
             return IntegrationHealth(
                 provider="asana",
                 status=IntegrationStatus.ERROR,
-                message=str(exc),
+                message="Connection test failed",
             )
 
     def get_available_actions(self) -> List[IntegrationAction]:
@@ -621,9 +621,9 @@ class AsanaIntegration(BaseIntegration):
 
         try:
             return await handler(params)
-        except Exception as exc:
+        except Exception:
             self.logger.exception("Asana action %s failed", action)
-            return {"error": str(exc)}
+            return {"error": "Action failed"}
 
     async def _list_workspaces(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all accessible workspaces."""
