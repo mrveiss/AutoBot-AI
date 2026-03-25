@@ -255,35 +255,6 @@ class WorkflowExecutor:
             execution_context["agents_involved"].update(iso_ctx["agents_involved"])
             execution_context["interactions"].extend(iso_ctx["interactions"])
 
-    async def _check_step_dependencies(
-        self,
-        step: Dict[str, Any],
-        completed_results: Dict[str, Any],
-    ) -> bool:
-        """
-        Check if step dependencies are satisfied.
-
-        Args:
-            step: The step to check
-            completed_results: Results of completed steps
-
-        Returns:
-            True if all dependencies are satisfied
-        """
-        dependencies = step.get("dependencies", [])
-
-        if not dependencies:
-            return True  # No dependencies
-
-        for dep_id in dependencies:
-            if dep_id not in completed_results:
-                return False
-
-            if not completed_results[dep_id].get("success", False):
-                return False
-
-        return True
-
     def _create_agent_interaction(
         self,
         step: Dict[str, Any],
