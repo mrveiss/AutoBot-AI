@@ -220,7 +220,7 @@ class ProjectStateManager:
                 "web_interface",
                 "Vue.js frontend application",
                 "file_exists",
-                "autobot-vue/src/App.vue",
+                "autobot-frontend/src/App.vue",
             ),
         ]
 
@@ -311,7 +311,7 @@ class ProjectStateManager:
                 "session_takeover",
                 "Human-in-the-loop control",
                 "file_exists",
-                "autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
+                "autobot-frontend/src/components/AdvancedStepConfirmationModal.vue",
             ),
             PhaseCapability(
                 "chat_knowledge",
@@ -340,7 +340,7 @@ class ProjectStateManager:
                 "visual_indicators",
                 "Phase status in Web UI",
                 "file_exists",
-                "autobot-vue/src/components/PhaseStatusIndicator.vue",
+                "autobot-frontend/src/components/PhaseStatusIndicator.vue",
             ),
             PhaseCapability(
                 "automated_progression",

@@ -582,7 +582,7 @@ class CodebaseIndexingService:
         """
         return {
             "backend": ["backend/", "src/", "api/", "services/", "models/", "utils/"],
-            "frontend": ["autobot-vue/", "frontend/", "static/", "public/"],
+            "frontend": ["autobot-frontend/", "frontend/", "static/", "public/"],
             "docs": ["docs/", "documentation/", "README", "CHANGELOG", ".md"],
             "config": ["config/", "settings/", ".env", ".yaml", ".yml", ".json"],
             "scripts": ["scripts/", "bin/", ".sh", ".bash"],

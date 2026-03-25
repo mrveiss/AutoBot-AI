@@ -32,7 +32,7 @@ class VueSpecificFixAgent:
         self.project_root = Path(
             project_root or os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         )
-        self.vue_dir = self.project_root / "autobot-vue" / "src"
+        self.vue_dir = self.project_root / "autobot-frontend" / "src"
         self.fixes_applied = []
         self.errors = []
 

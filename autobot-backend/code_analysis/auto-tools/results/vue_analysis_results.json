@@ -10,7 +10,7 @@
   },
   "files": [
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/App.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/App.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -25,7 +25,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/ChatInterface.vue",
       "vfor_index_keys": [
         {
           "line": 125,
@@ -57,7 +57,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/PhaseStatusIndicator.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/PhaseStatusIndicator.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -93,7 +93,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/SettingsPanel.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/SettingsPanel.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -108,7 +108,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgePersistenceDialog.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/KnowledgePersistenceDialog.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -137,7 +137,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TerminalSidebar.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/TerminalSidebar.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -173,14 +173,14 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowNotifications.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/WorkflowNotifications.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/SystemMonitor.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/SystemMonitor.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -223,28 +223,28 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/VoiceInterface.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/VoiceInterface.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/ElevationDialog.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/ElevationDialog.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowApproval.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/WorkflowApproval.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/HistoryView.vue",
       "vfor_index_keys": [
         {
           "line": 11,
@@ -260,7 +260,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/AdvancedStepConfirmationModal.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/AdvancedStepConfirmationModal.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -296,14 +296,14 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TheWelcome.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/TheWelcome.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/KnowledgeManager.vue",
       "vfor_index_keys": [
         {
           "line": 32,
@@ -327,7 +327,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowProgressWidget.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/WorkflowProgressWidget.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -370,7 +370,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/FileBrowser.vue",
       "vfor_index_keys": [
         {
           "line": 70,
@@ -386,14 +386,14 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WelcomeItem.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/WelcomeItem.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/TerminalWindow.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/TerminalWindow.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -422,7 +422,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/base/BaseButton.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/base/BaseButton.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -437,7 +437,7 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/base/BasePanel.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/base/BasePanel.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [
@@ -459,49 +459,49 @@
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconSupport.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/icons/IconSupport.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconEcosystem.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/icons/IconEcosystem.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconCommunity.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/icons/IconCommunity.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconDocumentation.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/icons/IconDocumentation.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/components/icons/IconTooling.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/components/icons/IconTooling.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/views/AboutView.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/views/AboutView.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
       "accessibility_issues": []
     },
     {
-      "file": "/home/kali/Desktop/AutoBot/autobot-vue/src/views/HomeView.vue",
+      "file": "/home/kali/Desktop/AutoBot/autobot-frontend/src/views/HomeView.vue",
       "vfor_index_keys": [],
       "missing_event_cleanup": [],
       "performance_issues": [],
