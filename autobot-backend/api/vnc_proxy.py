@@ -251,7 +251,7 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
         return
 
     endpoint = VNC_ENDPOINTS[vnc_type]
-    ws_url = endpoint.replace("http://", "ws://") + "/websockify"
+    ws_url = endpoint.replace("http://", "wss://") + "/websockify"
 
     await websocket.accept()
     logger.info("VNC WebSocket proxy connected: %s → %s", vnc_type, ws_url)

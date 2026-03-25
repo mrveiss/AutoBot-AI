@@ -181,9 +181,9 @@ def start_vnc_server() -> Dict[str, str]:
                 "message": f"VNC server failed to start: {result.stderr}",
             }
 
-        # Start websockify for noVNC access
+        # Start websockify for noVNC access (TLS-only, bound to localhost — proxied by nginx)
         websockify_bind = (
-            f"{NetworkConstants.BIND_ALL_INTERFACES}:{NetworkConstants.VNC_PORT}"
+            f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
         )
         vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
         subprocess.Popen(  # nosec B607
@@ -191,6 +191,9 @@ def start_vnc_server() -> Dict[str, str]:
                 "/usr/bin/websockify",
                 "--web",
                 "/usr/share/novnc",
+                "--cert=/etc/autobot/certs/server-cert.pem",
+                "--key=/etc/autobot/certs/server-key.pem",
+                "--ssl-only",
                 websockify_bind,
                 vnc_target,
             ],
