@@ -487,17 +487,13 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: false
     }
   },
-  // Issue #897: LLM Configuration Panel
+  // Issue #897: LLM Configuration Panel — moved to SLM admin settings (#2371)
+  // Redirect for backwards compatibility
   {
     path: '/llm-config',
     name: 'llm-config',
-    component: () => import('@/views/settings/LLMConfigView.vue'),
-    meta: {
-      title: 'LLM Configuration',
-      icon: 'fas fa-brain',
-      description: 'Configure and monitor LLM providers',
-      requiresAuth: true
-    }
+    redirect: '/',
+    meta: { title: 'LLM Configuration' }
   },
   // Issue #1794: Agent Registry — browse backend + Claude agents
   {

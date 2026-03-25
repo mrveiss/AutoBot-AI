@@ -40,6 +40,8 @@ const tabs = [
   { id: 'personality', name: 'Personality', path: '/settings/admin/personality', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { id: 'secrets', name: 'Secrets', path: '/settings/admin/secrets', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'log-forwarding', name: 'Log Forwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
+  // Issue #2371: LLM config moved from main frontend to SLM admin
+  { id: 'llm', name: 'LLM', path: '/settings/admin/llm', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
   // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 

@@ -24,6 +24,7 @@ from .events import router as events_router
 from .external_agents import router as external_agents_router
 from .health import router as health_router
 from .infrastructure import router as infrastructure_router
+from .llm_config import router as llm_config_router
 from .maintenance import router as maintenance_router
 from .mfa import router as mfa_router
 from .monitoring import router as monitoring_router
@@ -57,6 +58,7 @@ __all__ = [
     "events_router",
     "external_agents_router",
     "health_router",
+    "llm_config_router",
     "stateful_router",
     "updates_router",
     "websocket_router",

@@ -1,0 +1,51 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# update-llm-config.yml - Triggered by POST /api/settings/admin/llm/apply
+# Pushes LLM/Ollama configuration to fleet nodes using the llm role.
+#
+# Extra vars (injected by SLM backend, Issue #2371):
+#   llm_host               - Ollama listen address
+#   llm_port               - Ollama listen port
+#   llm_gpu_models_csv     - Comma-separated GPU model list
+#   llm_cpu_models_csv     - Comma-separated CPU model list
+#   llm_max_loaded_models  - Models kept hot in RAM
+#   llm_num_parallel       - Concurrent requests per model
+#   llm_keep_alive         - Model idle timeout
+#   llm_flash_attention    - Enable flash attention
+#   llm_kv_cache_type      - KV cache quantization type
+#   llm_pull_models        - Whether to pull models
+
+- name: "Update LLM Config Across Fleet Nodes"
+  hosts: slm_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    # Convert CSV strings back to lists for the llm role
+    llm_gpu_models: "{{ (llm_gpu_models_csv | default('')).split(',') | select | list }}"
+    llm_cpu_models: "{{ (llm_cpu_models_csv | default('')).split(',') | select | list }}"
+
+  pre_tasks:
+    - name: "LLM Config | Display configuration"
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ llm_host | default('0.0.0.0') }}:{{ llm_port | default(11434) }}"
+          - "GPU models: {{ llm_gpu_models | join(', ') }}"
+          - "CPU models: {{ llm_cpu_models | join(', ') }}"
+          - "Max loaded: {{ llm_max_loaded_models | default(5) }}"
+          - "Parallel: {{ llm_num_parallel | default(4) }}"
+          - "Pull models: {{ llm_pull_models | default(false) }}"
+      tags: ['llm']
+
+  roles:
+    - role: llm
+      tags: ['llm']
+
+  post_tasks:
+    - name: "LLM Config | Report completion"
+      ansible.builtin.debug:
+        msg: "LLM config applied on {{ inventory_hostname }}"
+      tags: ['llm']
