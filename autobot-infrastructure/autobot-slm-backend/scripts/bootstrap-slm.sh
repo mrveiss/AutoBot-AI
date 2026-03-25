@@ -397,12 +397,12 @@ backend_setup() {
 HOST=127.0.0.1
 PORT=8000
 
-# Database (PostgreSQL — Issue #786)
+# Database (PostgreSQL -- Issue #786)
 SLM_DATABASE_URL=postgresql+asyncpg://slm_app@127.0.0.1:5432/slm
 
 # Redis (optional but recommended)
 # AUTOBOT_REDIS_HOST must be set in the deployment environment (#2224)
-REDIS_HOST=\${AUTOBOT_REDIS_HOST:?AUTOBOT_REDIS_HOST is required — set it in your environment}
+REDIS_HOST=${AUTOBOT_REDIS_HOST:?AUTOBOT_REDIS_HOST is required -- set it in your environment}
 REDIS_PORT=6379
 REDIS_DB=0
 
