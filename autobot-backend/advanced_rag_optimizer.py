@@ -458,8 +458,10 @@ class AdvancedRAGOptimizer:
         logger.debug("Hybrid combination produced %s results", len(combined_results))
         return combined_results
 
-    def _diversify_results(self, results: List[SearchResult]) -> List[SearchResult]:
-        """Remove redundant results to improve diversity."""
+    def _diversify_results(
+        self, results: List[SearchResult], max_results: int = 10
+    ) -> List[SearchResult]:
+        """Remove redundant results to improve diversity (#2200)."""
         if len(results) <= 1:
             return results
 
@@ -488,7 +490,7 @@ class AdvancedRAGOptimizer:
                 diversified.append(candidate)
 
                 # Limit diversified results
-                if len(diversified) >= 10:
+                if len(diversified) >= max_results:
                     break
 
         logger.debug("Diversification: %s → %s results", len(results), len(diversified))
@@ -614,7 +616,7 @@ class AdvancedRAGOptimizer:
 
             # Step 3: Result diversification and reranking
             final_results = await self._diversify_and_rerank(
-                query, hybrid_results, enable_reranking, metrics
+                query, hybrid_results, enable_reranking, metrics, max_results
             )
 
             # Step 4: Apply context optimization and limit results
@@ -668,6 +670,7 @@ class AdvancedRAGOptimizer:
         results: List[SearchResult],
         enable_reranking: bool,
         metrics: RAGMetrics,
+        max_results: int = 10,
     ) -> List[SearchResult]:
         """Diversify and optionally rerank results (Issue #665: extracted helper)."""
         # #2103: Skip crude word-overlap diversity when reranking is enabled
@@ -676,7 +679,7 @@ class AdvancedRAGOptimizer:
         if enable_reranking:
             diversified_results = results
         else:
-            diversified_results = self._diversify_results(results)
+            diversified_results = self._diversify_results(results, max_results)
 
         if enable_reranking and len(diversified_results) > 1:
             rerank_start = time.time()
