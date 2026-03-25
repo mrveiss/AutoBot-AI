@@ -12,7 +12,29 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for internal modules (Issue #326)
-INTERNAL_MODULE_PREFIXES = {"src", "backend", "autobot"}
+INTERNAL_MODULE_PREFIXES = {
+    "a2a",
+    "agents",
+    "api",
+    "autobot",
+    "autobot_shared",
+    "backend",
+    "cache",
+    "chat_workflow",
+    "config",
+    "constants",
+    "database",
+    "extensions",
+    "initialization",
+    "knowledge",
+    "models",
+    "orchestration",
+    "routers",
+    "security",
+    "services",
+    "src",
+    "utils",
+}
 
 # In-memory storage fallback
 _in_memory_storage = {}
