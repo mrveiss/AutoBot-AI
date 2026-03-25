@@ -11,7 +11,19 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 
+# Skip if a git operation is in progress (race condition with in-progress commits)
+if [ -f "$(git rev-parse --git-dir 2>/dev/null)/index.lock" ]; then
+  exit 0
+fi
+
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+
+# Skip if we're inside a worktree (worktrees are actively used for parallel work)
+GIT_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null)"
+ACTUAL_GIT_DIR="$(git rev-parse --git-dir 2>/dev/null)"
+if [ "$GIT_COMMON_DIR" != "$ACTUAL_GIT_DIR" ]; then
+  exit 0
+fi
 
 # Whitelisted commit prefixes that don't need issue refs
 WHITELIST="^(docs|chore|style|ci|merge|Merge)"
@@ -32,6 +44,12 @@ UNCOMMITTED=$(git status --porcelain 2>/dev/null \
 
 # 3. If nothing found, clean exit
 if [ -z "$ORPHAN_COMMITS" ] && [ -z "$UNCOMMITTED" ]; then
+  exit 0
+fi
+
+# 3b. Skip if this branch already has a merged PR (stale false positive)
+MERGED_PR=$(gh pr list --head "$BRANCH" --state merged --json number --jq '.[0].number // empty' 2>/dev/null || true)
+if [ -n "$MERGED_PR" ]; then
   exit 0
 fi
 
