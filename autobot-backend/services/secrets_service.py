@@ -171,7 +171,10 @@ class SecretsService:
         return secret
 
     def _row_to_secret_list_item(self, row: tuple) -> Dict:
-        """Convert a database row to a secret list item (without encrypted value)"""
+        """Convert a database row to a secret list item (without encrypted value).
+
+        Row order must match _build_list_secrets_query SELECT columns.
+        """
         return {
             "id": row[0],
             "name": row[1],
@@ -183,6 +186,7 @@ class SecretsService:
             "updated_at": row[7],
             "expires_at": row[8],
             "access_count": row[9],
+            "created_by": row[10],
         }
 
     def _is_secret_expired(self, expires_at: Optional[str]) -> bool:
@@ -372,7 +376,7 @@ class SecretsService:
         """Build query and params for list_secrets."""
         query = """
             SELECT id, name, description, secret_type, scope, chat_id,
-                   created_at, updated_at, expires_at, access_count
+                   created_at, updated_at, expires_at, access_count, created_by
             FROM secrets
             WHERE is_active = 1
         """

@@ -14,7 +14,7 @@ Issue #2153 — Secret management for workflow credentials.
 import logging
 import re
 import threading
-from typing import Dict, List, Optional
+from typing import Dict, FrozenSet, List, Optional
 
 from services.secrets_service import SecretsService, get_secrets_service
 
@@ -121,6 +121,9 @@ class WorkflowSecretService:
         """
         Return secret metadata for the given owner (never includes values).
 
+        Only secrets whose ``created_by`` column matches *owner_id* are
+        returned — preventing cross-owner exposure.  (Issue #2321)
+
         Args:
             owner_id: Filter to secrets created by this user.
             workflow_id: If provided, only return secrets for that workflow.
@@ -128,16 +131,16 @@ class WorkflowSecretService:
         Returns:
             List of metadata dicts (name, id, secret_type, scope, created_at, …).
 
-        Issue #2153.
+        Issue #2153, #2321.
         """
         rows = self._svc.list_secrets(
             scope=WORKFLOW_SCOPE,
             chat_id=self._build_chat_id(workflow_id),
         )
-        # Filter by owner via created_by stored in metadata (SecretsService
-        # does not expose created_by in list results so we use it as a hint;
-        # access control is enforced at the API layer).
-        return rows
+        # Filter by owner_id using the created_by field that SecretsService
+        # returns in list results.  This is the authoritative ownership check
+        # at this layer — not a hint. (Issue #2321)
+        return [r for r in rows if r.get("created_by") == owner_id]
 
     def get_secret_value(self, name: str, owner_id: str) -> Optional[str]:
         """
@@ -233,14 +236,14 @@ class WorkflowSecretService:
         """Return all unique secret names referenced in text. Issue #2153."""
         return list(dict.fromkeys(_SECRET_REF_RE.findall(text)))
 
-    def resolve_secrets(self, text: str, owner_id: str) -> str:
+    def resolve_secrets(self, text: str, owner_id: str) -> tuple[str, FrozenSet[str]]:
         """
         Replace every ${secrets.NAME} token in *text* with its plaintext value.
 
         Tokens that reference an unknown or expired secret are left unchanged
         so that downstream execution fails visibly rather than silently.
 
-        SECURITY: the returned string contains live credential values — it must
+        SECURITY: the resolved string contains live credential values — it must
         NEVER be logged or stored.
 
         Args:
@@ -248,15 +251,18 @@ class WorkflowSecretService:
             owner_id: User on whose behalf resolution is performed.
 
         Returns:
-            Resolved string with credential values substituted in.
+            Tuple of (resolved_text, resolved_names) where resolved_names is
+            the frozenset of secret names that were successfully substituted.
+            Pass resolved_names to redact_secrets() to avoid a full-table scan.
 
-        Issue #2153.
+        Issue #2153, #2321.
         """
         names = self._collect_referenced_names(text)
         if not names:
-            return text
+            return text, frozenset()
 
         resolved = text
+        resolved_names = set()
         for name in names:
             value = self.get_secret_value(name, owner_id)
             if value is None:
@@ -268,32 +274,57 @@ class WorkflowSecretService:
                 )
                 continue
             resolved = resolved.replace(f"${{secrets.{name}}}", value)
+            resolved_names.add(name)
 
-        return resolved
+        return resolved, frozenset(resolved_names)
 
-    def redact_secrets(self, text: str, owner_id: str) -> str:
+    def redact_secrets(
+        self,
+        text: str,
+        owner_id: str,
+        resolved_names: Optional[FrozenSet[str]] = None,
+    ) -> str:
         """
         Replace resolved secret values in *text* with ***.
 
         Use this to sanitise command output or log lines that may contain
         credentials that were injected via resolve_secrets().
 
+        Only secrets that belong to *owner_id* are ever decrypted and compared.
+        When *resolved_names* is supplied (the set of names that were actually
+        substituted by resolve_secrets()), only those secrets are checked —
+        avoiding an O(n) full-table scan and cross-owner secret exposure.
+        If *resolved_names* is empty or None and the text contains no
+        ${secrets.NAME} tokens, the scan is skipped entirely.
+
         Args:
             text: Text that may contain live secret values.
-            owner_id: User context — used to look up the same secrets.
+            owner_id: User context — only secrets owned by this user are loaded.
+            resolved_names: Names resolved by resolve_secrets() for this step.
+                Passing this avoids loading all owner secrets on every call.
 
         Returns:
             Text with all known secret values replaced by ***.
 
-        Issue #2153.
+        Issue #2153, #2321.
         """
-        names = self._collect_referenced_names(text)
-        # Even if text no longer has tokens, scan for the actual values.
-        # We also scan without tokens by fetching all workflow secrets.
-        all_names = names or [row["name"] for row in self.list_secrets(owner_id)]
+        # Determine which names to scan.
+        if resolved_names is not None:
+            # Caller provided the exact set — use it; skip any full-table load.
+            names_to_check: List[str] = list(resolved_names)
+        else:
+            # Fall back: look for any tokens still present in the text, then
+            # load only this owner's secrets as a backstop.  The list_secrets
+            # call is now owner-scoped (Issue #2321).
+            names_to_check = self._collect_referenced_names(text)
+            if not names_to_check:
+                names_to_check = [row["name"] for row in self.list_secrets(owner_id)]
+
+        if not names_to_check:
+            return text
 
         redacted = text
-        for name in all_names:
+        for name in names_to_check:
             value = self.get_secret_value(name, owner_id)
             if value and value in redacted:
                 redacted = redacted.replace(value, REDACTED)
