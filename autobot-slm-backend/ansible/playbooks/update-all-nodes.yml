@@ -320,10 +320,17 @@
           username: "admin"
           password: "{{ slm_admin_password | default('admin') }}"
         validate_certs: false
-        status_code: 200
+        status_code: [200, 401, 403]
       register: slm_login_play1
       delegate_to: localhost
       no_log: true
+      failed_when: false
+      tags: [always]
+
+    - name: "[PLAY 1] SLM | Warn if login failed"
+      debug:
+        msg: "WARNING: SLM login failed (status {{ slm_login_play1.status }}) -- sync-tracking skipped (#2295)"
+      when: slm_login_play1.status != 200
       tags: [always]
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
@@ -331,7 +338,7 @@
         url: "https://{{ ansible_host }}/api/code-sync/nodes/00-SLM-Manager/mark-synced"
         method: POST
         headers:
-          Authorization: "Bearer {{ slm_login_play1.json.access_token }}"
+          Authorization: "Bearer {{ slm_login_play1.json.access_token | default('') }}"
           Content-Type: "application/json"
         body: "{}"
         body_format: json
@@ -339,6 +346,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      when: slm_login_play1.status == 200
       tags: [always]
 
     - name: "[PLAY 1] SLM Update Complete"
@@ -369,16 +377,24 @@
           username: "admin"
           password: "{{ slm_admin_password | default('admin') }}"
         validate_certs: false
-        status_code: 200
+        status_code: [200, 401, 403]
       register: slm_login
       delegate_to: localhost
       run_once: true
       no_log: true
+      failed_when: false
+      tags: [always]
+
+    - name: "[PLAY 2] Warn if SLM login failed"
+      debug:
+        msg: "WARNING: SLM login failed (status {{ slm_login.status }}) -- sync-tracking skipped (#2295)"
+      when: slm_login.status != 200
+      run_once: true
       tags: [always]
 
     - name: "[PLAY 2] Set SLM auth token"
       set_fact:
-        slm_token: "{{ slm_login.json.access_token }}"
+        slm_token: "{{ slm_login.json.access_token | default('') }}"
       delegate_to: localhost
       run_once: true
       tags: [always]
@@ -718,6 +734,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      when: slm_token | default('') | length > 0
       tags: [always]
 
     - name: "[PLAY 2] Node Update Complete"
