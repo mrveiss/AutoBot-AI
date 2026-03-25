@@ -237,15 +237,20 @@ sync_to_vm() {
             --exclude=dist/
             --exclude=.env
         )
+        # Use sudo rsync on remote to handle root-owned files (#2296).
+        # The autobot user has passwordless sudo on all fleet nodes.
+        local RSYNC_PATH="--rsync-path=sudo rsync"
         if [ -d "$local_path" ]; then
             log_info "Syncing directory (rsync with --delete): $local_path -> $vm_name:$remote_path"
             rsync -avz --delete --progress \
                 "${RSYNC_EXCLUDES[@]}" \
+                "$RSYNC_PATH" \
                 -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
                 "$local_path/" "$REMOTE_USER@$vm_ip:$remote_path/"
         else
             log_info "Syncing file (rsync): $local_path -> $vm_name:$remote_path"
             rsync -avz --progress \
+                "$RSYNC_PATH" \
                 -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
                 "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
         fi
