@@ -447,7 +447,7 @@ async def _get_status_for_config(cfg: ConnectorConfig) -> Dict[str, Any]:
         return {
             "connector_id": cfg.connector_id,
             "is_healthy": False,
-            "error": str(exc),
+            "error": "Status check failed",
         }
 
 

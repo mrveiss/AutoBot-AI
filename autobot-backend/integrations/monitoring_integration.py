@@ -85,14 +85,14 @@ class DatadogIntegration(BaseIntegration):
             logger.error("Datadog connection failed: %s", e)
             return IntegrationHealth(
                 status=IntegrationStatus.ERROR,
-                message=f"Connection failed: {str(e)}",
+                message="Connection failed",
                 details={"exception": type(e).__name__},
             )
         except Exception as e:
             logger.exception("Unexpected error testing Datadog connection")
             return IntegrationHealth(
                 status=IntegrationStatus.ERROR,
-                message=f"Unexpected error: {str(e)}",
+                message="Connection test failed",
                 details={"exception": type(e).__name__},
             )
 
@@ -315,14 +315,14 @@ class NewRelicIntegration(BaseIntegration):
             logger.error("New Relic connection failed: %s", e)
             return IntegrationHealth(
                 status=IntegrationStatus.ERROR,
-                message=f"Connection failed: {str(e)}",
+                message="Connection failed",
                 details={"exception": type(e).__name__},
             )
         except Exception as e:
             logger.exception("Unexpected error testing New Relic connection")
             return IntegrationHealth(
                 status=IntegrationStatus.ERROR,
-                message=f"Unexpected error: {str(e)}",
+                message="Connection test failed",
                 details={"exception": type(e).__name__},
             )
 
