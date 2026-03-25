@@ -275,6 +275,23 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #900: Browser Automation Dashboard — moved under /automation (#2367)
+  {
+    path: '/automation/browser-automation',
+    name: 'browser-automation',
+    component: () => import('@/views/BrowserAutomationView.vue'),
+    meta: {
+      title: 'Browser Automation',
+      icon: 'fas fa-globe',
+      description: 'Control browser workers and automate web tasks',
+      requiresAuth: true
+    }
+  },
+  // Redirect old path (#2367)
+  {
+    path: '/browser-automation',
+    redirect: '/automation/browser-automation'
+  },
   {
     path: '/analytics',
     name: 'analytics',
@@ -515,18 +532,6 @@ const routes: RouteRecordRaw[] = [
       title: 'Code Intelligence',
       icon: 'fas fa-code',
       description: 'Code analysis, quality monitoring, and suggestions',
-      requiresAuth: true
-    }
-  },
-  // Issue #900: Browser Automation Dashboard
-  {
-    path: '/browser-automation',
-    name: 'browser-automation',
-    component: () => import('@/views/BrowserAutomationView.vue'),
-    meta: {
-      title: 'Browser Automation',
-      icon: 'fas fa-globe',
-      description: 'Control browser workers and automate web tasks',
       requiresAuth: true
     }
   },
