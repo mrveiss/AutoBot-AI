@@ -38,6 +38,9 @@ class EdgeLearner:
     instead of re-processing the entire stream from the start. Fix: #2102.
     """
 
+    # Redis hash key for persisting stream cursors across restarts (#2210).
+    CURSOR_HASH_KEY = "rag:cursors:edge_learner"
+
     def __init__(
         self,
         db: MeshDB,
@@ -53,7 +56,32 @@ class EdgeLearner:
         self.initial_weight = initial_weight
         # Per-stream cursor: stream_key -> last processed Redis entry ID.
         # Prevents duplicate processing when the scheduler loops every second.
+        # Loaded from Redis on first access (#2210).
         self._cursors: dict[str, str] = {}
+        self._cursors_loaded = False
+
+    async def _load_cursors(self) -> None:
+        """Load persisted cursors from Redis hash on first call (#2210)."""
+        if self._cursors_loaded:
+            return
+        try:
+            stored = await self.redis.hgetall(self.CURSOR_HASH_KEY)
+            if stored:
+                self._cursors.update(stored)
+                logger.info(
+                    "EdgeLearner: loaded %d persisted cursors from Redis",
+                    len(stored),
+                )
+        except Exception:
+            logger.warning("EdgeLearner: failed to load cursors, starting from 0-0")
+        self._cursors_loaded = True
+
+    async def _save_cursor(self, stream_key: str, cursor: str) -> None:
+        """Persist a single cursor to Redis hash (#2210)."""
+        try:
+            await self.redis.hset(self.CURSOR_HASH_KEY, stream_key, cursor)
+        except Exception:
+            logger.warning("EdgeLearner: failed to persist cursor for %s", stream_key)
 
     async def on_retrieval(self, event: dict) -> None:
         """Process a single retrieval feedback event.
@@ -132,12 +160,11 @@ class EdgeLearner:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
         stream_key = f"rag:feedback:{date_key}"
+        # Load persisted cursors from Redis on first call (#2210).
+        await self._load_cursors()
         # Resume from exclusive lower bound. "0-0" reads from the start.
         # After processing entry "T-S", we store "T-(S+1)" so the next
         # xrange call excludes the already-processed entry.
-        # Note: _cursors are ephemeral (lost on process restart), which
-        # causes full re-consumption. Acceptable for now; file a follow-up
-        # for Redis-based cursor persistence before Phase 3 production.
         resume_id = self._cursors.get(stream_key, "0-0")
         processed = 0
 
@@ -157,6 +184,7 @@ class EdgeLearner:
         # Persist cursor only when we actually advanced past an entry.
         if processed > 0:
             self._cursors[stream_key] = resume_id
+            await self._save_cursor(stream_key, resume_id)
 
         if processed:
             logger.info(
