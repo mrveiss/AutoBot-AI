@@ -10,6 +10,7 @@ Contains routing decision logic, quick route analysis, and LLM-based routing.
 
 import json
 import logging
+import time
 from typing import Any, Dict, Optional
 
 from constants.threshold_constants import LLMDefaults
@@ -50,6 +51,10 @@ class AgentRouter:
         """
         self.agent_capabilities = agent_capabilities
         self.llm_interface = llm_interface
+        # Issue #2209: in-memory TTL cache for learned strategies.
+        # Avoids Redis GET + TaskPatternLearner instantiation per routing call.
+        self._strategy_cache: Dict[str, tuple] = {}  # task_type -> (strategy, expires)
+        self._strategy_cache_ttl = 60  # seconds
 
     async def _check_learned_strategy(
         self, request: str, context: Optional[Dict[str, Any]] = None
@@ -73,26 +78,43 @@ class AgentRouter:
 
             learner = TaskPatternLearner()
             task_type = learner.normalize_task_type(task_type)
+
+            # Issue #2209: check in-memory cache before hitting Redis.
+            now = time.monotonic()
+            cached = self._strategy_cache.get(task_type)
+            if cached is not None:
+                strategy, expires = cached
+                if now < expires:
+                    if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE:
+                        return self._build_learned_result(strategy, task_type)
+                    return None
+
             strategy = await learner.get_learned_strategy(task_type)
+            self._strategy_cache[task_type] = (strategy, now + self._strategy_cache_ttl)
+
             if strategy and strategy.confidence > LEARNED_STRATEGY_CONFIDENCE:
-                logger.info(
-                    "Using learned strategy for %s (confidence=%.2f)",
-                    task_type,
-                    strategy.confidence,
-                )
-                return {
-                    "strategy": "single_agent",
-                    "primary_agent": self._resolve_agent_type(strategy.best_approach),
-                    "confidence": strategy.confidence,
-                    "reasoning": (
-                        f"Learned strategy: {strategy.best_approach} "
-                        f"(samples={strategy.sample_size})"
-                    ),
-                    "source": "learned",
-                }
+                return self._build_learned_result(strategy, task_type)
         except Exception as exc:
             logger.debug("Learned strategy lookup failed: %s", exc)
         return None
+
+    def _build_learned_result(self, strategy, task_type: str) -> Dict[str, Any]:
+        """Build routing result dict from a LearnedStrategy (#2209)."""
+        logger.info(
+            "Using learned strategy for %s (confidence=%.2f)",
+            task_type,
+            strategy.confidence,
+        )
+        return {
+            "strategy": "single_agent",
+            "primary_agent": self._resolve_agent_type(strategy.best_approach),
+            "confidence": strategy.confidence,
+            "reasoning": (
+                f"Learned strategy: {strategy.best_approach} "
+                f"(samples={strategy.sample_size})"
+            ),
+            "source": "learned",
+        }
 
     def _resolve_agent_type(self, approach: str) -> AgentType:
         """Map a learned approach string to an AgentType enum (#2105)."""
