@@ -236,7 +236,7 @@ class Settings(BaseSettings):
 
     model_config = ConfigDict(
         env_prefix="SLM_",
-        env_file=".env",
+        env_file=(".env", "/etc/autobot/db-credentials.env"),
         extra="ignore",
     )
 
