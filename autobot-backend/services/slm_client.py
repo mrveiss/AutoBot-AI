@@ -33,6 +33,8 @@ import aiohttp
 import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 logger = logging.getLogger(__name__)
 
 # SLM server URL from environment (no hardcoded fallback per SSOT requirements)
@@ -47,7 +49,7 @@ ULTIMATE_FALLBACK_CONFIG = {
     "llm_endpoint": os.getenv(
         "OLLAMA_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")
     ),
-    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b-instruct"),
+    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", DEFAULT_LLM_MODEL),
     "llm_timeout": int(os.getenv("AUTOBOT_LLM_TIMEOUT", "30")),
     "llm_temperature": float(os.getenv("AUTOBOT_LLM_TEMPERATURE", "0.7")),
     "llm_max_tokens": None,

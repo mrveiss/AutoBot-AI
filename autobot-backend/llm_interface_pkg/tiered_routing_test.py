@@ -1,3 +1,5 @@
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -27,7 +29,7 @@ class TestTierConfig:
         assert config.enabled is True
         assert config.complexity_threshold == 3.0
         assert config.models.simple == "gemma2:2b"
-        assert config.models.complex == "mistral:7b-instruct"
+        assert config.models.complex == DEFAULT_LLM_MODEL
         assert config.fallback_to_complex is True
 
     def test_custom_config(self):
@@ -237,7 +239,7 @@ class TestTieredModelRouter:
 
         model, result = router.route(messages)
 
-        assert model == "mistral:7b-instruct"
+        assert model == DEFAULT_LLM_MODEL
         assert result.tier == "complex"
 
     def test_disabled_routing(self):
@@ -249,7 +251,7 @@ class TestTieredModelRouter:
         model, result = router.route(messages)
 
         # Should return complex model when disabled
-        assert model == "mistral:7b-instruct"
+        assert model == DEFAULT_LLM_MODEL
         assert "disabled" in result.reasoning.lower()
 
     def test_metrics_tracking(self, router):
@@ -265,7 +267,7 @@ class TestTieredModelRouter:
     def test_get_model_for_tier(self, router):
         """Test getting model for specific tier."""
         assert router.get_model_for_tier("simple") == "gemma2:2b"
-        assert router.get_model_for_tier("complex") == "mistral:7b-instruct"
+        assert router.get_model_for_tier("complex") == DEFAULT_LLM_MODEL
 
         with pytest.raises(ValueError):
             router.get_model_for_tier("unknown")

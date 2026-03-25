@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
+
 Agent Seed Migration Script (Issue #760 Phase 3)
 
 Seeds the SLM agents table with DEFAULT_AGENT_CONFIGS from the backend.
@@ -17,6 +18,8 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 # Add parent directories to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -61,7 +64,7 @@ async def seed_agents():
                 continue
 
             # Determine model from config
-            default_model = config.get("default_model", "mistral:7b-instruct")
+            default_model = config.get("default_model", DEFAULT_LLM_MODEL)
 
             # Create agent
             agent = Agent(

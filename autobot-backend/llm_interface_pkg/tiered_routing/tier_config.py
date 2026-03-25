@@ -1,3 +1,5 @@
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -18,7 +20,7 @@ class TierModels:
     """Model definitions for each tier."""
 
     simple: str = "gemma2:2b"
-    complex: str = "mistral:7b-instruct"
+    complex: str = DEFAULT_LLM_MODEL
 
 
 @dataclass
@@ -71,7 +73,7 @@ class TierConfig:
             complexity_threshold=float(tier_config.get("complexity_threshold", 3.0)),
             models=TierModels(
                 simple=models_config.get("simple", "gemma2:2b"),
-                complex=models_config.get("complex", "mistral:7b-instruct"),
+                complex=models_config.get("complex", DEFAULT_LLM_MODEL),
             ),
             fallback_to_complex=tier_config.get("fallback_to_complex", True),
             logging=TierLogging(
