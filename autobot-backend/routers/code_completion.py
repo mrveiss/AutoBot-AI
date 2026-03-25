@@ -173,7 +173,7 @@ async def extract_patterns(request: ExtractionRequest):
 
     except Exception as e:
         logger.error(f"Pattern extraction failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns", response_model=PatternListResponse)
@@ -413,7 +413,7 @@ async def analyze_context(request: ContextAnalysisRequest):
 
     except Exception as e:
         logger.error(f"Context analysis failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/context/{context_id}")
@@ -438,4 +438,4 @@ async def get_context(context_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get context: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -125,7 +125,7 @@ async def sync_repo(
         ) as exc:  # intentionally broad: can be network, git, or filesystem error
             logger.error("Sync failed for repo '%s': %s", repo.name, exc)
             raise HTTPException(
-                status_code=502, detail=f"Sync failed for repo '{repo.name}': {exc}"
+                status_code=502, detail="Upstream service unavailable"
             ) from exc
         repo.skill_count = len(packages)
         await session.commit()

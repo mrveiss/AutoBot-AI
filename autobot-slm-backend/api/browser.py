@@ -41,7 +41,7 @@ async def browser_status() -> dict:
         raise HTTPException(status_code=503, detail="Browser worker unavailable")
     except Exception as exc:
         logger.error("Browser status error: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Upstream service unavailable")
 
 
 @router.post("/navigate")
@@ -63,7 +63,7 @@ async def browser_navigate(body: NavigateRequest) -> dict:
         raise HTTPException(status_code=503, detail="Browser worker unavailable")
     except Exception as exc:
         logger.error("Browser navigate error: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Upstream service unavailable")
 
 
 @router.post("/screenshot")
@@ -81,4 +81,4 @@ async def browser_screenshot() -> dict:
         raise HTTPException(status_code=503, detail="Browser worker unavailable")
     except Exception as exc:
         logger.error("Browser screenshot error: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail="Upstream service unavailable")

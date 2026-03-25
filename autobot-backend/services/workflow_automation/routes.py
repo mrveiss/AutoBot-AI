@@ -98,7 +98,7 @@ async def create_workflow(
 
     except Exception as e:
         logger.error("Failed to create workflow: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -124,7 +124,7 @@ async def start_workflow(
 
     except Exception as e:
         logger.error("Failed to start workflow: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -155,7 +155,7 @@ async def control_workflow(
 
     except Exception as e:
         logger.error("Failed to control workflow: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -178,7 +178,7 @@ async def get_workflow_status(
 
     except Exception as e:
         logger.error("Failed to get workflow status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -202,7 +202,7 @@ async def get_active_workflows(
 
     except Exception as e:
         logger.error("Failed to get active workflows: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -224,7 +224,7 @@ async def get_completed_workflows(
         }
     except Exception as e:
         logger.error("Failed to get completed workflows: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -293,7 +293,7 @@ async def create_workflow_from_chat(
 
     except Exception as e:
         logger.error("Failed to create workflow from chat: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =========================================================================
@@ -341,7 +341,7 @@ async def present_plan(
 
     except Exception as e:
         logger.error("Failed to present plan: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _validate_approval_request(workflow_id: str) -> None:
@@ -424,7 +424,7 @@ async def approve_plan(
         raise
     except Exception as e:
         logger.error("Failed to process plan approval: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -461,7 +461,7 @@ async def get_pending_approval(
 
     except Exception as e:
         logger.error("Failed to get pending approval: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =========================================================================
@@ -490,7 +490,7 @@ async def get_workflow_state(
         raise
     except Exception as e:
         logger.error("Failed to get workflow state: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # WebSocket endpoint for real-time workflow communication

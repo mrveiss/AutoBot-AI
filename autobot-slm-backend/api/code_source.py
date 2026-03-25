@@ -634,13 +634,13 @@ async def _extract_package_to_cache(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
         ) from exc
     except OSError as exc:
         logger.error("Failed to extract package for %s: %s", role_name, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to extract package: {exc}",
+            detail="Internal server error",
         ) from exc
 
 

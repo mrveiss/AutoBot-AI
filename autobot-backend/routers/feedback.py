@@ -149,7 +149,7 @@ async def record_feedback(request: FeedbackRequest):
 
     except Exception as e:
         logger.error(f"Failed to record feedback: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/metrics", response_model=MetricsResponse)
@@ -180,7 +180,7 @@ async def get_acceptance_metrics(
 
     except Exception as e:
         logger.error(f"Failed to get metrics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recent")
@@ -213,7 +213,7 @@ async def get_recent_feedback(
 
     except Exception as e:
         logger.error(f"Failed to get recent feedback: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/retrain", response_model=RetrainResponse)
@@ -306,4 +306,4 @@ async def get_feedback_statistics():
 
     except Exception as e:
         logger.error(f"Failed to get statistics: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

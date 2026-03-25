@@ -215,7 +215,7 @@ async def promote_draft(
         ) as exc:  # intentionally broad: promoter can fail due to FS/git/IO errors
             logger.error("Skill promotion failed for '%s': %s", skill.name, exc)
             raise HTTPException(
-                status_code=500, detail=f"Promotion failed: {exc}"
+                status_code=500, detail="Internal server error"
             ) from exc
         skill.state = SkillState.BUILTIN
         skill.promoted_at = datetime.now(timezone.utc)

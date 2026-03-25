@@ -93,7 +93,7 @@ async def generate_intelligent_workflow(
         raise
     except Exception as e:
         logger.error("Failed to generate intelligent workflow: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
@@ -129,7 +129,7 @@ async def get_workflow_intelligence(
         raise
     except Exception as e:
         logger.error("Failed to get workflow intelligence: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
@@ -163,7 +163,7 @@ async def get_advanced_analytics(
 
     except Exception as e:
         logger.error("Failed to get analytics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
@@ -186,7 +186,7 @@ async def get_workflow_templates(
 
     except Exception as e:
         logger.error("Failed to get workflow templates: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
@@ -231,4 +231,4 @@ async def execute_workflow_template(
         raise
     except Exception as e:
         logger.error("Failed to execute template %s: %s", template_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
