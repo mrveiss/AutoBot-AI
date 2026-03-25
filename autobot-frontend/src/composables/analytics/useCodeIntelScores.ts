@@ -169,7 +169,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
       const url = withSourceId(
-        `${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`,
+        withSourceId(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`),
       )
       const response = await fetchWithAuth(
         url,
