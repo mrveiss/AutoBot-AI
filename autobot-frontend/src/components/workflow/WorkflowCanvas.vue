@@ -11,6 +11,21 @@
           <span class="badge-experimental">beta</span>
         </button>
         <div class="toolbar-divider"></div>
+        <div class="dropdown-container">
+          <button class="tool-btn" @click="showVisionDropdown = !showVisionDropdown" :title="$t('workflow.canvas.addVisionNode')">
+            <i class="fas fa-eye"></i> {{ $t('workflow.canvas.vision') }}
+            <i class="fas fa-caret-down"></i>
+          </button>
+          <div v-if="showVisionDropdown" class="dropdown-menu" @mouseleave="showVisionDropdown = false">
+            <button @click="addVisionNode('vision-capture')"><i class="fas fa-camera"></i> {{ $t('workflow.canvas.visionCapture') }}</button>
+            <button @click="addVisionNode('vision-find-element')"><i class="fas fa-search"></i> {{ $t('workflow.canvas.visionFindElement') }}</button>
+            <button @click="addVisionNode('vision-click')"><i class="fas fa-mouse-pointer"></i> {{ $t('workflow.canvas.visionClick') }}</button>
+            <button @click="addVisionNode('vision-type-text')"><i class="fas fa-keyboard"></i> {{ $t('workflow.canvas.visionTypeText') }}</button>
+            <button @click="addVisionNode('vision-ocr')"><i class="fas fa-font"></i> {{ $t('workflow.canvas.visionOcr') }}</button>
+            <button @click="addVisionNode('vision-wait')"><i class="fas fa-clock"></i> {{ $t('workflow.canvas.visionWait') }}</button>
+          </div>
+        </div>
+        <div class="toolbar-divider"></div>
         <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')">
           <i class="fas fa-trash-alt"></i>
         </button>
@@ -69,6 +84,41 @@
             <template v-else-if="node.type === 'condition'">
               <input v-model="(node.data as any).condition" :placeholder="$t('workflow.canvas.conditionPlaceholder')" @click.stop />
             </template>
+            <template v-else-if="node.type.startsWith('vision-')">
+              <div class="node-row">
+                <label class="target-label">Target:</label>
+                <select v-model="(node.data as any).target" @click.stop>
+                  <option value="vnc">VNC</option>
+                  <option value="web">Web</option>
+                </select>
+              </div>
+              <template v-if="node.type === 'vision-capture'">
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_ocr" @click.stop /> OCR</label>
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).include_elements" @click.stop /> Elements</label>
+              </template>
+              <template v-else-if="node.type === 'vision-find-element'">
+                <input v-model="(node.data as any).element_type" placeholder="Element type (button, input...)" @click.stop />
+                <input v-model="(node.data as any).text_match" placeholder="Text to match" @click.stop />
+              </template>
+              <template v-else-if="node.type === 'vision-click'">
+                <select v-model="(node.data as any).click_type" @click.stop>
+                  <option value="single">Single Click</option>
+                  <option value="double">Double Click</option>
+                  <option value="right">Right Click</option>
+                </select>
+              </template>
+              <template v-else-if="node.type === 'vision-type-text'">
+                <input v-model="(node.data as any).text" placeholder="Text to type" @click.stop />
+                <label class="checkbox"><input type="checkbox" v-model="(node.data as any).clear_first" @click.stop /> Clear first</label>
+              </template>
+              <template v-else-if="node.type === 'vision-ocr'">
+                <span class="hint">Extracts all text from screen</span>
+              </template>
+              <template v-else-if="node.type === 'vision-wait'">
+                <input v-model="(node.data as any).element_criteria" placeholder="Element to wait for" @click.stop />
+                <input v-model.number="(node.data as any).timeout_ms" type="number" placeholder="Timeout (ms)" @click.stop />
+              </template>
+            </template>
           </div>
           <div class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>
           <div class="port port-out" @mousedown.stop="startConnect(node.id, 'out', $event)"></div>
@@ -116,11 +166,29 @@ const emit = defineEmits<{
   (e: 'save-workflow', name: string, desc: string): void;
 }>();
 
-const nodeIcons: Record<string, string> = { step: 'fas fa-terminal', condition: 'fas fa-code-branch', parallel: 'fas fa-columns' };
+const showVisionDropdown = ref(false);
+
+const nodeIcons: Record<string, string> = {
+  step: 'fas fa-terminal',
+  condition: 'fas fa-code-branch',
+  parallel: 'fas fa-columns',
+  'vision-capture': 'fas fa-camera',
+  'vision-find-element': 'fas fa-search',
+  'vision-click': 'fas fa-mouse-pointer',
+  'vision-type-text': 'fas fa-keyboard',
+  'vision-ocr': 'fas fa-font',
+  'vision-wait': 'fas fa-clock',
+};
 const nodeLabels = computed(() => ({
   step: t('workflow.canvas.stepLabel'),
   condition: t('workflow.canvas.conditionLabel'),
   parallel: t('workflow.canvas.parallelLabel'),
+  'vision-capture': t('workflow.canvas.visionCapture'),
+  'vision-find-element': t('workflow.canvas.visionFindElement'),
+  'vision-click': t('workflow.canvas.visionClick'),
+  'vision-type-text': t('workflow.canvas.visionTypeText'),
+  'vision-ocr': t('workflow.canvas.visionOcr'),
+  'vision-wait': t('workflow.canvas.visionWait'),
 }));
 
 const canvasRef = ref<HTMLElement | null>(null);
@@ -183,6 +251,27 @@ function addConditionNode() {
   };
   emit('node-added', node);
   emit('node-selected', node.id);
+}
+
+function addVisionNode(type: WorkflowNode['type']) {
+  const defaultData: Record<string, Record<string, unknown>> = {
+    'vision-capture': { target: 'vnc', include_ocr: true, include_elements: true, include_layout: true },
+    'vision-find-element': { target: 'vnc', element_type: '', text_match: '', confidence_threshold: 0.7 },
+    'vision-click': { target: 'vnc', element_ref: '', click_type: 'single' },
+    'vision-type-text': { target: 'vnc', element_ref: '', text: '', clear_first: false },
+    'vision-ocr': { target: 'vnc', region: null },
+    'vision-wait': { target: 'vnc', element_criteria: '', timeout_ms: 10000, poll_interval_ms: 500 },
+  };
+  const node: WorkflowNode = {
+    id: genId(),
+    type,
+    position: { x: 100 + props.nodes.length * 40, y: 100 + props.nodes.length * 30 },
+    data: defaultData[type] || {},
+    connections: [],
+  };
+  emit('node-added', node);
+  emit('node-selected', node.id);
+  showVisionDropdown.value = false;
 }
 
 function deleteNode(id: string) {
@@ -284,6 +373,14 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
+.workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+
+.dropdown-container { position: relative; display: inline-block; }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 6px; padding: 4px 0; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.dropdown-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; color: var(--text-primary, #e2e8f0); cursor: pointer; font-size: 0.85rem; }
+.dropdown-menu button:hover { background: var(--bg-tertiary, #334155); }
+.target-label { font-size: 0.75rem; color: var(--text-secondary, #94a3b8); }
+.hint { font-size: 0.75rem; color: var(--text-secondary, #94a3b8); font-style: italic; }
 
 .node-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text-on-primary); border-radius: 8px 8px 0 0; font-size: 13px; font-weight: 600; }
 .node-header span { flex: 1; }

@@ -229,7 +229,7 @@ export interface WorkflowPlan {
 /** Workflow node for canvas */
 export interface WorkflowNode {
   id: string;
-  type: 'step' | 'condition' | 'parallel' | 'loop';
+  type: 'step' | 'condition' | 'parallel' | 'loop' | 'vision-capture' | 'vision-find-element' | 'vision-click' | 'vision-type-text' | 'vision-ocr' | 'vision-wait';
   position: { x: number; y: number };
   data: WorkflowStep | Record<string, unknown>;
   connections: string[];
