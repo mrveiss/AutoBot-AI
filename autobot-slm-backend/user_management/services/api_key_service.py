@@ -15,6 +15,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
+from config import settings
 from sqlalchemy import select
 from user_management.models.api_key import APIKey
 from user_management.services.base_service import BaseService
@@ -144,13 +145,13 @@ class APIKeyService(BaseService):
 
     @staticmethod
     def _hash_key(key: str) -> str:
-        """Hash an API key using HMAC-SHA256 (#1721, #2083).
+        """Hash an API key using HMAC-SHA256 (#1721, #2083, #2160).
 
-        Uses a fixed application-level key so that hashes remain
-        deterministic for lookup while being stronger than bare SHA-256.
+        The signing key is read from SLM_HMAC_API_KEY_SECRET (default:
+        "autobot-api-key-v1" for backward compatibility with existing hashes).
         """
         return hmac.new(
-            key=b"autobot-api-key-v1",
+            key=settings.hmac_api_key_secret.encode("utf-8"),
             msg=key.encode("utf-8"),
             digestmod=hashlib.sha256,
         ).hexdigest()

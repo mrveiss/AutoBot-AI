@@ -103,6 +103,13 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
+    # HMAC signing key for API key hashing (#2160).
+    # Default preserves backward compatibility with existing hashed keys.
+    # Override in production via SLM_HMAC_API_KEY_SECRET env var.
+    hmac_api_key_secret: str = os.getenv(
+        "SLM_HMAC_API_KEY_SECRET", "autobot-api-key-v1"
+    )
+
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
 
