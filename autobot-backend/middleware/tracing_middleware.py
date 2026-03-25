@@ -21,6 +21,7 @@ import re
 import time
 from typing import Callable, Optional
 
+from middleware.proxy_utils import get_client_ip
 from opentelemetry.trace import SpanKind, Status, StatusCode
 from services.tracing_service import get_tracing_service
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -176,7 +177,11 @@ class TracingMiddleware(BaseHTTPMiddleware):
 
     def _get_client_ip(self, request: Request) -> Optional[str]:
         """
-        Extract client IP from request headers.
+        Extract client IP from request.
+
+        Only trusts X-Forwarded-For when the direct TCP peer is a known
+        reverse proxy (Issue #2252).  Delegates to the shared
+        get_client_ip() helper from middleware.proxy_utils.
 
         Args:
             request: The request object
@@ -184,22 +189,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         Returns:
             Client IP address or None
         """
-        # Check forwarded headers first (for proxy scenarios)
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            # Take the first IP in the chain
-            return forwarded.split(",")[0].strip()
-
-        # Check real IP header
-        real_ip = request.headers.get("x-real-ip")
-        if real_ip:
-            return real_ip
-
-        # Fall back to direct client connection
-        if request.client:
-            return request.client.host
-
-        return None
+        return get_client_ip(request)
 
     def _build_span_attributes(self, request: Request, path: str) -> dict:
         """
