@@ -359,7 +359,8 @@ async def test_connector_connection(connector_id: str):
     instance = _load_or_create_instance(cfg)
     try:
         healthy = await instance.test_connection()
-    except Exception:
+    except Exception as exc:
+        logger.error("Connector %s connection test failed: %s", connector_id, exc)
         raise HTTPException(status_code=500, detail="Internal server error")
     return {"connector_id": connector_id, "healthy": healthy}
 

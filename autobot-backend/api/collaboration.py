@@ -240,7 +240,7 @@ async def invite_user(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
+            detail="Invalid request",
         )
     except HTTPException:
         raise
@@ -304,7 +304,7 @@ async def remove_collaborator(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
+            detail="Invalid request",
         )
     except HTTPException:
         raise
@@ -367,7 +367,7 @@ async def get_participants(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
+            detail="Invalid request",
         )
     except HTTPException:
         raise
@@ -421,7 +421,7 @@ async def share_secret_with_session(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Internal server error",
+            detail="Invalid request",
         )
     except HTTPException:
         raise
