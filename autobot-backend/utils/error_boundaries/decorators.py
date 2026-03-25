@@ -15,6 +15,7 @@ import time
 from typing import Callable
 
 from constants.threshold_constants import RetryConfig
+from fastapi import HTTPException
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
@@ -278,14 +279,9 @@ def _raise_or_return_error(error_response: APIErrorResponse):
         error_response.trace_id,
         error_response.code,
     )
-    try:
-        from fastapi import HTTPException
-
-        raise HTTPException(
-            status_code=error_response.status_code, detail=error_response.to_dict()
-        )
-    except ImportError:
-        return error_response.to_dict()
+    raise HTTPException(
+        status_code=error_response.status_code, detail=error_response.to_dict()
+    )
 
 
 def with_error_handling(
@@ -325,6 +321,8 @@ def with_error_handling(
                 """Async wrapper that catches exceptions and converts to API errors."""
                 try:
                     return await func(*args, **kwargs)
+                except HTTPException:
+                    raise  # Preserve intentional HTTP status codes
                 except Exception as e:
                     error_response = _create_api_error_response(
                         e, category, func_operation, error_code_prefix
@@ -339,6 +337,8 @@ def with_error_handling(
                 """Sync wrapper that catches exceptions and converts to API errors."""
                 try:
                     return func(*args, **kwargs)
+                except HTTPException:
+                    raise  # Preserve intentional HTTP status codes
                 except Exception as e:
                     error_response = _create_api_error_response(
                         e, category, func_operation, error_code_prefix
