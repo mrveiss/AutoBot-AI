@@ -11,7 +11,6 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -33,8 +32,8 @@ _TASK_REDIS_TTL = 86400  # 24 hours
 # Redis key for persistent index queue (#1717: survive restarts)
 _QUEUE_REDIS_KEY = "codebase:index_queue"
 
-# In-memory index queue (populated at runtime by the scanner module)
-_index_queue: deque = deque()
+# Note: The in-memory _index_queue lives in scanner.py (the orchestrator),
+# which is the single source of truth for runtime queue state.
 
 
 def _compute_file_hash(file_path: Path) -> str:
@@ -226,11 +225,12 @@ async def _load_queue_from_redis() -> List[Dict]:
         return []
 
 
-async def recover_index_queue(tasks_lock: asyncio.Lock) -> int:
+async def recover_index_queue(tasks_lock: asyncio.Lock, index_queue) -> int:
     """Restore in-memory queue from Redis on startup (#1717).
 
     Args:
-        tasks_lock: The asyncio lock protecting _index_queue
+        tasks_lock: The asyncio lock protecting index_queue
+        index_queue: The deque to populate with recovered entries
 
     Returns the number of recovered entries.
     """
@@ -242,9 +242,9 @@ async def recover_index_queue(tasks_lock: asyncio.Lock) -> int:
             if not any(
                 e.get("source_id") == entry.get("source_id")
                 and e.get("root_path") == entry.get("root_path")
-                for e in _index_queue
+                for e in index_queue
             ):
-                _index_queue.append(entry)
+                index_queue.append(entry)
     logger.info("Recovered %d queued indexing jobs from Redis (#1717)", len(entries))
     return len(entries)
 

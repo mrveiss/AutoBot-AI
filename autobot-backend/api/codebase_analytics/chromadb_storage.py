@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 from utils.file_categorization import FILE_CATEGORY_CODE
 
+from .progress_tracker import FILE_HASH_REDIS_PREFIX
 from .storage import (
     get_code_collection_async,
     get_redis_connection,
@@ -74,8 +75,7 @@ INCREMENTAL_INDEXING_ENABLED = (
     os.getenv("CODEBASE_INDEX_INCREMENTAL", "false").lower() == "true"
 )
 
-# Redis key prefix for file hashes (used for incremental indexing)
-FILE_HASH_REDIS_PREFIX = "codebase:file_hash:"
+# Redis key prefix for file hashes — imported from progress_tracker (SSOT)
 
 
 # =============================================================================
@@ -894,8 +894,13 @@ async def _store_single_batch(
     update_stats(items_stored=end_idx)
 
     logger.info(
-        f"[Task {task_id}] Stored batch {batch_num}/{total_batches}: "
-        f"{items_in_batch} items ({end_idx}/{total_items})"
+        "[Task %s] Stored batch %d/%d: %d items (%d/%d)",
+        task_id,
+        batch_num,
+        total_batches,
+        items_in_batch,
+        end_idx,
+        total_items,
     )
     return items_in_batch
 

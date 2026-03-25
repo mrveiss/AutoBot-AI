@@ -23,17 +23,8 @@ from constants.path_constants import PATH
 from fastapi import HTTPException
 from type_defs.common import Metadata
 from utils.file_categorization import (
-    ALL_CODE_EXTENSIONS,
-    CONFIG_EXTENSIONS,
-    CSS_EXTENSIONS,
-    DOC_EXTENSIONS,
     FILE_CATEGORY_CODE,
-    HTML_EXTENSIONS,
-    JS_EXTENSIONS,
-    PYTHON_EXTENSIONS,
     SKIP_DIRS,
-    TS_EXTENSIONS,
-    VUE_EXTENSIONS,
 )
 from utils.file_categorization import get_file_category as _get_file_category
 
@@ -57,6 +48,7 @@ from .chromadb_storage import (
 from .file_analyzer import _determine_analyzer_type  # noqa: F401
 from .file_analyzer import _enrich_items_with_metadata  # noqa: F401
 from .file_analyzer import (
+    _FILE_TYPE_MAP,
     PARALLEL_FILE_CONCURRENCY,
     PARALLEL_MODE_ENABLED,
 )
@@ -155,18 +147,7 @@ except ValueError:
     PARALLEL_FILE_PROCESSING = 50
 
 
-# Issue #398: File type mapping for cleaner dispatch in _get_file_analysis
-_FILE_TYPE_MAP = [
-    (PYTHON_EXTENSIONS, "python_files", "python"),
-    (JS_EXTENSIONS, "javascript_files", "js"),
-    (TS_EXTENSIONS, "typescript_files", "js"),
-    (VUE_EXTENSIONS, "vue_files", "js"),
-    (CSS_EXTENSIONS, "css_files", "js"),
-    (HTML_EXTENSIONS, "html_files", "js"),
-    (CONFIG_EXTENSIONS, "config_files", None),
-    (DOC_EXTENSIONS, "doc_files", "doc"),
-    (ALL_CODE_EXTENSIONS, "other_code_files", "js"),
-]
+# Issue #398: File type mapping imported from file_analyzer.py (single source of truth)
 
 
 async def _get_file_analysis(
@@ -222,12 +203,8 @@ _current_indexing_task_id: Optional[str] = None
 # Each item: {"source_id": str, "root_path": str, "queued_at": str, "requested_by": str}
 _index_queue: deque = deque()
 
-# Redis key prefix for task state (#1179: cross-worker visibility)
-_TASK_REDIS_PREFIX = "indexing_task:"
-_TASK_REDIS_TTL = 86400  # 24 hours
-
-# Redis key for persistent index queue (#1717: survive restarts)
-_QUEUE_REDIS_KEY = "codebase:index_queue"
+# Note: Redis constants (_TASK_REDIS_PREFIX, _TASK_REDIS_TTL, _QUEUE_REDIS_KEY)
+# are defined in progress_tracker.py as the single source of truth.
 
 
 # =============================================================================
@@ -303,21 +280,9 @@ async def recover_index_queue() -> int:
 
     Returns the number of recovered entries.
     """
-    from .progress_tracker import _load_queue_from_redis
+    from .progress_tracker import recover_index_queue as _pt_recover
 
-    entries = await _load_queue_from_redis()
-    if not entries:
-        return 0
-    async with _tasks_lock:
-        for entry in entries:
-            if not any(
-                e.get("source_id") == entry.get("source_id")
-                and e.get("root_path") == entry.get("root_path")
-                for e in _index_queue
-            ):
-                _index_queue.append(entry)
-    logger.info("Recovered %d queued indexing jobs from Redis (#1717)", len(entries))
-    return len(entries)
+    return await _pt_recover(_tasks_lock, _index_queue)
 
 
 # =============================================================================
@@ -693,71 +658,8 @@ async def scan_codebase(
 
 
 # =============================================================================
-# Task state management (bound to module-level indexing_tasks)
+# Progress updater factory
 # =============================================================================
-
-
-def _update_task_phase(task_id: str, phase_id: str, status: str) -> None:
-    """
-    Update phase status and track completion in task state.
-
-    Issue #398: Extracted from do_indexing_with_progress inline helper.
-    """
-    from .progress_tracker import _update_task_phase as _pt_update_phase
-
-    _pt_update_phase(task_id, phase_id, status, indexing_tasks)
-
-
-def _update_task_batch_info(
-    task_id: str, current_batch: int, total_batches: int, items_in_batch: int = 0
-) -> None:
-    """
-    Update batch progress tracking for indexing task.
-
-    Issue #398: Extracted from do_indexing_with_progress inline helper.
-    """
-    from .progress_tracker import _update_task_batch_info as _pt_update_batch
-
-    _pt_update_batch(
-        task_id, current_batch, total_batches, indexing_tasks, items_in_batch
-    )
-
-
-def _update_task_stats(task_id: str, **kwargs) -> None:
-    """
-    Update task statistics with provided key-value pairs.
-
-    Issue #398: Extracted from do_indexing_with_progress inline helper.
-    """
-    from .progress_tracker import _update_task_stats as _pt_update_stats
-
-    _pt_update_stats(task_id, indexing_tasks, **kwargs)
-
-
-def _mark_task_completed(
-    task_id: str, analysis_results: Dict, hardcodes_stored: int, storage_type: str
-) -> None:
-    """
-    Mark indexing task as completed with results.
-
-    Issue #398: Extracted from do_indexing_with_progress.
-    """
-    from .progress_tracker import _mark_task_completed as _pt_mark_completed
-
-    _pt_mark_completed(
-        task_id, analysis_results, hardcodes_stored, storage_type, indexing_tasks
-    )
-
-
-def _mark_task_failed(task_id: str, error: Exception) -> None:
-    """
-    Mark indexing task as failed with error.
-
-    Issue #398: Extracted from do_indexing_with_progress.
-    """
-    from .progress_tracker import _mark_task_failed as _pt_mark_failed
-
-    _pt_mark_failed(task_id, error, indexing_tasks)
 
 
 def _create_progress_updater(task_id: str, update_phase, update_batch_info):
@@ -1054,13 +956,13 @@ async def do_indexing_with_progress(
 
         # Create task-specific helper closures
         def update_phase(phase_id, status):
-            _update_task_phase(task_id, phase_id, status)
+            _update_task_phase_bound(task_id, phase_id, status)
 
         def update_batch_info(c, t, i=0):
-            _update_task_batch_info(task_id, c, t, i)
+            _update_task_batch_info_bound(task_id, c, t, i)
 
         def update_stats(**kwargs):
-            _update_task_stats(task_id, **kwargs)
+            _update_task_stats_bound(task_id, **kwargs)
 
         update_progress = _create_progress_updater(
             task_id, update_phase, update_batch_info
@@ -1081,7 +983,9 @@ async def do_indexing_with_progress(
         # Issue #1712: Post-indexing verification — log expected vs actual
         await _verify_chromadb_storage(task_id, analysis_results)
 
-        _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
+        _mark_task_completed_bound(
+            task_id, analysis_results, hardcodes_stored, "chromadb"
+        )
         update_phase("finalize", "completed")
         # #1179: Persist final completed state to Redis
         await _save_task_to_redis_bound(task_id)
@@ -1089,6 +993,6 @@ async def do_indexing_with_progress(
 
     except Exception as e:
         logger.error("[Task %s] Indexing failed: %s", task_id, e, exc_info=True)
-        _mark_task_failed(task_id, e)
+        _mark_task_failed_bound(task_id, e)
         # #1179: Persist failed state to Redis
         await _save_task_to_redis_bound(task_id)
