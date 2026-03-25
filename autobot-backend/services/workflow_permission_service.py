@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 from models.workflow_audit import WorkflowAuditLog
 from models.workflow_permission import WorkflowPermission
 from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -129,23 +128,20 @@ class WorkflowPermissionService:
         if role not in ROLE_HIERARCHY:
             raise ValueError(f"Invalid workflow role '{role}'")
 
-        stmt = (
-            pg_insert(WorkflowPermission)
-            .values(
+        perm = await self._fetch_permission(user_id, workflow_id)
+        if perm is None:
+            perm = WorkflowPermission(
                 workflow_id=workflow_id,
                 user_id=user_id,
                 role=role,
                 granted_by=granted_by,
             )
-            .on_conflict_do_update(
-                constraint="uq_workflow_permission",
-                set_={"role": role, "granted_by": granted_by},
-            )
-            .returning(WorkflowPermission)
-        )
-        result = await self.session.execute(stmt)
+            self.session.add(perm)
+        else:
+            perm.role = role
+            perm.granted_by = granted_by
         await self.session.commit()
-        perm = result.scalar_one()
+        await self.session.refresh(perm)
         logger.info(
             "Workflow permission granted: workflow=%s user=%s role=%s by=%s",
             workflow_id,
