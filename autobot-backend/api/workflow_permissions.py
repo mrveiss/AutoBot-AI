@@ -24,8 +24,8 @@ from services.workflow_permission_service import (
     ROLE_HIERARCHY,
     WorkflowPermissionService,
 )
+from services.workflow_rbac import require_workflow_permission
 from sqlalchemy.ext.asyncio import AsyncSession
-from workflow_rbac import require_workflow_permission
 
 logger = logging.getLogger(__name__)
 

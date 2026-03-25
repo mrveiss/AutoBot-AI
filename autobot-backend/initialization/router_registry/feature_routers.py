@@ -126,6 +126,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Permission system v2 (Claude Code-style)
     ("api.permissions", "", ["permissions"], "permissions"),
+    # Issue #2323: Workflow RBAC — moved from core_routers for graceful degradation
+    ("api.workflow_permissions", "", ["workflow-permissions"], "workflow_permissions"),
     # Personality profiles (Issue #964)
     ("api.personality", "/personality", ["personality"], "personality"),
     # Self-improving tasks — adaptive task refinement and outcome learning (Issue #930)
