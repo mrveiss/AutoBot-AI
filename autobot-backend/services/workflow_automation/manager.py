@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from enhanced_orchestrator import EnhancedOrchestrator
+from enhanced_orchestrator import get_orchestrator
 from orchestrator import Orchestrator
 from type_defs.common import Metadata
 
@@ -51,7 +51,7 @@ class WorkflowAutomationManager:
 
         # Orchestrators for chat request processing
         self.orchestrator = Orchestrator()
-        self.enhanced_orchestrator = EnhancedOrchestrator()
+        self.enhanced_orchestrator = get_orchestrator()
 
     @property
     def terminal_sessions(self) -> Dict:

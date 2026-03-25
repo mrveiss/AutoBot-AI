@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List
 
-from enhanced_orchestrator import EnhancedOrchestrator
+from enhanced_orchestrator import get_orchestrator
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from services.workflow_automation import (
@@ -39,7 +39,7 @@ class AdvancedWorkflowOrchestrator:
         """Initialize orchestrator with core and specialized components."""
         # Core components
         self.base_manager = WorkflowAutomationManager()
-        self.enhanced_orchestrator = EnhancedOrchestrator()
+        self.enhanced_orchestrator = get_orchestrator()
         self.llm_interface = LLMInterface()
         self.knowledge_base = KnowledgeBase()
 
