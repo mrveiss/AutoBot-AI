@@ -143,7 +143,9 @@ class NodeCreate(BaseModel):
     """Node registration request."""
 
     hostname: str
-    ansible_name: Optional[str] = None  # Ansible inventory name (#1814)
+    ansible_name: Optional[str] = Field(
+        None, min_length=1
+    )  # Ansible inventory name (#1814, #2011)
     ip_address: str
     node_id: Optional[str] = (
         None  # Custom node_id; if not provided, derived from hostname
@@ -161,7 +163,9 @@ class NodeUpdate(BaseModel):
     """Node update request."""
 
     hostname: Optional[str] = None
-    ansible_name: Optional[str] = None  # Ansible inventory name (#1814)
+    ansible_name: Optional[str] = Field(
+        None, min_length=1
+    )  # Ansible inventory name (#1814, #2011)
     ip_address: Optional[str] = None
     status: Optional[NodeStatus] = None
     roles: Optional[List[str]] = None

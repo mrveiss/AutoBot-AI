@@ -56,6 +56,8 @@ MIGRATIONS = [
     "consolidate_slm_users_to_uuid",
     # Issue #1814: add ansible_name column for proper Ansible targeting
     "add_node_ansible_name",
+    # Issue #2011: add unique constraint on ansible_name
+    "add_ansible_name_unique_constraint",
 ]
 
 
