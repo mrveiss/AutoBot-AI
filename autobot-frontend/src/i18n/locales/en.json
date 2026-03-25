@@ -3062,6 +3062,13 @@
       "history": "History",
       "guiAutomation": "GUI Automation",
       "guiAutomationAriaLabel": "GUI automation from screen capture",
+      "vision": "VISION",
+      "screenAnalysis": "Screen Analysis",
+      "screenAnalysisAriaLabel": "Screen Analysis - capture and analyze screen content",
+      "videoProcessing": "Video Processing",
+      "videoProcessingAriaLabel": "Video Processing - process and analyze video frames",
+      "mediaGallery": "Media Gallery",
+      "mediaGalleryAriaLabel": "Media Gallery - browse captured media",
       "orchestration": "Orchestration",
       "visualizer": "Visualizer",
       "agents": "Agents",
@@ -3118,7 +3125,13 @@
       "sectionDescHistory": "View past workflow executions and results",
       "sectionDescOrchestration": "Visualize multi-agent orchestration chains",
       "sectionDescAgents": "View agent capabilities and performance metrics",
-      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture"
+      "sectionDescGuiAutomation": "Detect and execute GUI automation opportunities from screen capture",
+      "sectionTitleScreenAnalysis": "Screen Analysis",
+      "sectionTitleVideoProcessing": "Video Processing",
+      "sectionTitleMediaGallery": "Media Gallery",
+      "sectionDescScreenAnalysis": "Capture and analyze screen content",
+      "sectionDescVideoProcessing": "Process and analyze video frames",
+      "sectionDescMediaGallery": "Browse captured media and analysis results"
     },
     "modal": {
       "executeStep": "Execute This Step",

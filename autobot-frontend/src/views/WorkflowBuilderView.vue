@@ -122,6 +122,58 @@
           <span>{{ $t('workflow.views.guiAutomation') }}</span>
         </button>
 
+        <div class="category-divider category-divider--with-status">
+          <span>{{ $t('workflow.views.vision') }}</span>
+          <span class="health-indicator" :class="visionHealthStatus">
+            {{ visionHealthStatus }}
+          </span>
+        </div>
+
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'screen-analysis' }"
+          @click="activeSection = 'screen-analysis'"
+          role="button"
+          :aria-label="$t('workflow.views.screenAnalysisAriaLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span>{{ $t('workflow.views.screenAnalysis') }}</span>
+        </button>
+
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'video-processing' }"
+          @click="activeSection = 'video-processing'"
+          role="button"
+          :aria-label="$t('workflow.views.videoProcessingAriaLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          <span>{{ $t('workflow.views.videoProcessing') }}</span>
+        </button>
+
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'media-gallery' }"
+          @click="activeSection = 'media-gallery'"
+          role="button"
+          :aria-label="$t('workflow.views.mediaGalleryAriaLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span>{{ $t('workflow.views.mediaGallery') }}</span>
+        </button>
+
         <div class="category-divider">
           <span>{{ $t('workflow.views.orchestration') }}</span>
         </div>
@@ -457,6 +509,21 @@
           />
         </section>
 
+        <!-- Screen Analysis Section (#2373) -->
+        <section v-if="activeSection === 'screen-analysis'" class="section-screen-analysis">
+          <ScreenCaptureViewer />
+        </section>
+
+        <!-- Video Processing Section (#2373) -->
+        <section v-if="activeSection === 'video-processing'" class="section-video-processing">
+          <VideoProcessor />
+        </section>
+
+        <!-- Media Gallery Section (#2373) -->
+        <section v-if="activeSection === 'media-gallery'" class="section-media-gallery">
+          <MediaGallery />
+        </section>
+
         <!-- Agents Section -->
         <section v-if="activeSection === 'agents'" class="section-agents">
           <div class="agents-container">
@@ -538,6 +605,9 @@ import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue';
+import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
+import VideoProcessor from '@/components/vision/VideoProcessor.vue';
+import MediaGallery from '@/components/vision/MediaGallery.vue';
 import {
   visionMultimodalApiClient,
   type AutomationOpportunity,
@@ -555,9 +625,12 @@ type SectionType =
   | 'natural-language'
   | 'runner'
   | 'history'
+  | 'gui-automation'
+  | 'screen-analysis'
+  | 'video-processing'
+  | 'media-gallery'
   | 'orchestration'
-  | 'agents'
-  | 'gui-automation';
+  | 'agents';
 
 // Composable
 const {
@@ -618,6 +691,22 @@ const sessionId = ref(`session_${Date.now()}`);
 // GUI Automation state (#1242)
 const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
 const guiAutomationLoading = ref(false);
+
+// Vision service health (#2373)
+const visionHealthStatus = ref<'healthy' | 'degraded' | 'offline'>('offline');
+
+async function checkVisionHealth(): Promise<void> {
+  try {
+    const res = await visionMultimodalApiClient.getVisionHealth();
+    if (res.success && res.data) {
+      visionHealthStatus.value = res.data.status === 'healthy' ? 'healthy' : 'degraded';
+    } else {
+      visionHealthStatus.value = 'offline';
+    }
+  } catch {
+    visionHealthStatus.value = 'offline';
+  }
+}
 
 async function loadGuiAutomationOpportunities(): Promise<void> {
   guiAutomationLoading.value = true;
@@ -681,6 +770,9 @@ const sectionTitle = computed(() => {
     orchestration: t('workflow.views.sectionTitleOrchestration'),
     agents: t('workflow.views.sectionTitleAgents'),
     'gui-automation': t('workflow.views.sectionTitleGuiAutomation'),
+    'screen-analysis': t('workflow.views.sectionTitleScreenAnalysis'),
+    'video-processing': t('workflow.views.sectionTitleVideoProcessing'),
+    'media-gallery': t('workflow.views.sectionTitleMediaGallery'),
   };
   return titles[activeSection.value] || t('workflow.views.title');
 });
@@ -696,6 +788,9 @@ const sectionDescription = computed(() => {
     orchestration: t('workflow.views.sectionDescOrchestration'),
     agents: t('workflow.views.sectionDescAgents'),
     'gui-automation': t('workflow.views.sectionDescGuiAutomation'),
+    'screen-analysis': t('workflow.views.sectionDescScreenAnalysis'),
+    'video-processing': t('workflow.views.sectionDescVideoProcessing'),
+    'media-gallery': t('workflow.views.sectionDescMediaGallery'),
   };
   return descriptions[activeSection.value] || '';
 });
@@ -719,6 +814,7 @@ async function refreshAll(): Promise<void> {
     loadActiveWorkflows(),
     loadCompletedWorkflows(),
     loadExampleWorkflows(),
+    checkVisionHealth(),
   ]);
 }
 
@@ -1027,6 +1123,35 @@ watch(hasActiveWorkflows, (hasActive) => {
   letter-spacing: 0.8px;
   color: var(--text-tertiary);
   font-family: var(--font-sans);
+}
+
+.category-divider--with-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.health-indicator {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.health-indicator.healthy {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.health-indicator.degraded {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.health-indicator.offline {
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.1);
 }
 
 .category-item {
