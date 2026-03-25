@@ -3,6 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
+
 Registry Defaults - Hardcoded Fallback Values
 ==============================================
 
@@ -13,6 +14,8 @@ Issue: #751 - Consolidate Common Utilities
 """
 
 from typing import Optional
+
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 # VM IP addresses (6-VM distributed architecture + SLM admin)
 REGISTRY_DEFAULTS = {
@@ -57,7 +60,7 @@ REGISTRY_DEFAULTS = {
     "port.prometheus": "9090",
     "port.grafana": "3000",
     # LLM defaults
-    "llm.default_model": "mistral:7b-instruct",
+    "llm.default_model": DEFAULT_LLM_MODEL,
     "llm.embedding_model": "nomic-embed-text:latest",
     # Timeouts
     "timeout.http": "30",

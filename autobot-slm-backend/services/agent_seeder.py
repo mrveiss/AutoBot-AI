@@ -1,3 +1,5 @@
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -25,8 +27,8 @@ _DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
 # Mirrors TIER_*_MODEL defaults from autobot-backend/api/agent_config.py
 _TIER1 = "llama3.2:1b"
 _TIER2 = "llama3.2:3b"
-_TIER3 = "mistral:7b-instruct"
-_TIER4 = "mistral:7b-instruct"
+_TIER3 = DEFAULT_LLM_MODEL
+_TIER4 = DEFAULT_LLM_MODEL
 
 # Gemma model for classification agents (SSOT: agents.yaml llm.models.classification)
 _GEMMA_MODEL = "gemma2:2b"

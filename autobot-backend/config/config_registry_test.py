@@ -8,6 +8,8 @@ import os
 import time
 from unittest.mock import MagicMock, patch
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 
 class TestConfigRegistryBasic:
     """Basic ConfigRegistry functionality tests."""
@@ -406,7 +408,7 @@ class TestConfigRegistryDefaults:
 
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
-                assert ConfigRegistry.get("llm.default_model") == "mistral:7b-instruct"
+                assert ConfigRegistry.get("llm.default_model") == DEFAULT_LLM_MODEL
                 assert (
                     ConfigRegistry.get("llm.embedding_model")
                     == "nomic-embed-text:latest"

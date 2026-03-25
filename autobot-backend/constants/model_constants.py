@@ -28,7 +28,7 @@ Usage:
 
     # Preferred: Use ConfigRegistry directly for live values
     from config.registry import ConfigRegistry
-    model_name = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+    model_name = ConfigRegistry.get("llm.default_model", DEFAULT_LLM_MODEL)
 """
 
 import os
@@ -36,13 +36,15 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
 # =============================================================================
 # These are the ultimate fallbacks if SSOT/.env is not configured.
 # Change these values to change the default for the entire system.
 
-FALLBACK_MODEL = "mistral:7b-instruct"  # Default LLM model
+FALLBACK_MODEL = DEFAULT_LLM_MODEL  # Default LLM model
 FALLBACK_OPENAI_MODEL = "gpt-4"
 FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
 FALLBACK_GOOGLE_MODEL = "gemini-pro"
@@ -60,7 +62,7 @@ class ModelConstants:
     hold static defaults; use ConfigRegistry directly for live Redis-backed
     values:
         from config.registry import ConfigRegistry
-        model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+        model = ConfigRegistry.get("llm.default_model", DEFAULT_LLM_MODEL)
 
     Usage remains unchanged for backward compatibility:
         from constants.model_constants import ModelConstants
@@ -206,7 +208,7 @@ def get_default_model(provider: Optional[str] = None) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from config.registry import ConfigRegistry
-        model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
+        model = ConfigRegistry.get("llm.default_model", DEFAULT_LLM_MODEL)
 
     Issue #380: Added @lru_cache since models don't change at runtime.
 

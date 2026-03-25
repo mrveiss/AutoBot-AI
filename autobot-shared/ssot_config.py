@@ -63,7 +63,7 @@ PROJECT_ROOT = _find_project_root()
 
 # Default model constants - single source of truth for fallback values
 # These are used when .env doesn't specify a value
-DEFAULT_LLM_MODEL = "mistral:7b-instruct"
+DEFAULT_LLM_MODEL = "qwen3.5:9b"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
 
