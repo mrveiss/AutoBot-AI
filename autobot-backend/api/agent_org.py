@@ -119,8 +119,10 @@ async def get_chain_of_command(
     svc = AgentOrgService(session)
     try:
         chain = await svc.get_chain_of_command(agent_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request failed"
+        )
     return ChainOfCommandResponse(chain=[AgentSummary(**item) for item in chain])
 
 
@@ -299,8 +301,10 @@ async def delegate_task(
             task_description=body.task_description,
             context=body.context,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
+        )
     return _delegation_to_response(delegation)
 
 
@@ -319,8 +323,10 @@ async def escalate_delegation(
     svc = DelegationService(session)
     try:
         delegation = await svc.escalate_task(delegation_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
+        )
     return _delegation_to_response(delegation)
 
 
@@ -338,8 +344,10 @@ async def update_delegation_status(
     svc = DelegationService(session)
     try:
         delegation = await svc.update_status(delegation_id, body.status, body.result)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request failed"
+        )
     return _delegation_to_response(delegation)
 
 

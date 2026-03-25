@@ -115,10 +115,10 @@ async def test_connection(request: ConnectionTestRequest):
         }
     except ValueError as exc:
         logger.warning("Invalid provider in test_connection: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Request failed")
     except Exception as exc:
         logger.error("Error testing connection: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{provider}/resources")
@@ -154,10 +154,10 @@ async def list_resources(
         return result
     except ValueError as exc:
         logger.warning("Invalid provider in list_resources: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Request failed")
     except Exception as exc:
         logger.error("Error listing resources: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{provider}/storage")
@@ -192,10 +192,10 @@ async def list_storage(
         return result
     except ValueError as exc:
         logger.warning("Invalid provider in list_storage: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Request failed")
     except Exception as exc:
         logger.error("Error listing storage: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{provider}/account")
@@ -230,10 +230,10 @@ async def get_account_info(
         return result
     except ValueError as exc:
         logger.warning("Invalid provider in get_account_info: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail="Request failed")
     except Exception as exc:
         logger.error("Error getting account info: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _create_integration(

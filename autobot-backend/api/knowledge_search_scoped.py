@@ -181,7 +181,7 @@ async def scoped_search(
 
     except Exception as e:
         logger.error("Error in scoped search: %s", e)
-        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _synthesize_rag_response(
@@ -282,7 +282,7 @@ async def scoped_rag_search(
 
     except Exception as e:
         logger.error("Error in scoped RAG search: %s", e)
-        raise HTTPException(status_code=500, detail=f"RAG search failed: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/accessible-scopes")
@@ -334,4 +334,4 @@ async def get_accessible_scopes(
 
     except Exception as e:
         logger.error("Error getting accessible scopes: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get scopes: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

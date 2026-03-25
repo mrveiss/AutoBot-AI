@@ -135,7 +135,7 @@ class ChatAPI:
             return {"status": "success"}
         except Exception as e:
             logger.error(f"Error saving chat data for {chat_id}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error saving chat: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def reset_chat(self, chat_id: str) -> Dict[str, str]:
         """Reset a chat to initial state"""
@@ -155,9 +155,7 @@ class ChatAPI:
             return {"status": "success"}
         except Exception as e:
             logger.error(f"Error resetting chat {chat_id}: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Error resetting chat: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def delete_chat(self, chat_id: str) -> Dict[str, str]:
         """Delete a chat and cleanup associated files"""
@@ -175,9 +173,7 @@ class ChatAPI:
             return {"status": "success"}
         except Exception as e:
             logger.error(f"Error deleting chat {chat_id}: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Error deleting chat: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def _cleanup_chat_message_files(self, chat_id: str):
         """Clean up message files associated with a chat"""
@@ -253,9 +249,7 @@ class ChatAPI:
             }
         except Exception as e:
             logger.error(f"Error cleaning up message files: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Error cleaning up message files: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def cleanup_all_chat_data(self) -> Dict[str, Any]:
         """Clean up all chat data and message files"""
@@ -293,6 +287,4 @@ class ChatAPI:
             }
         except Exception as e:
             logger.error(f"Error in comprehensive cleanup: {str(e)}")
-            raise HTTPException(
-                status_code=500, detail=f"Error in comprehensive cleanup: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Internal server error")

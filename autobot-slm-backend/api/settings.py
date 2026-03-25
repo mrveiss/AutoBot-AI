@@ -170,7 +170,7 @@ async def sync_time(
         logger.error("Time sync failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Time sync failed: {exc}",
+            detail="Internal server error",
         ) from exc
 
 

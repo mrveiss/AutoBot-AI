@@ -83,7 +83,7 @@ async def test_connection(request: TestConnectionRequest) -> IntegrationHealth:
         logger.exception("Failed to test %s connection", provider)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Connection test failed: {str(exc)}",
+            detail="Internal server error",
         ) from exc
 
 
@@ -159,13 +159,13 @@ async def list_channels(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
         ) from exc
     except Exception as exc:
         logger.exception("Failed to list channels for %s", provider)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list channels: {str(exc)}",
+            detail="Internal server error",
         ) from exc
 
 
@@ -190,13 +190,13 @@ async def send_message(
         return result
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
         ) from exc
     except Exception as exc:
         logger.exception("Failed to send message via %s", provider)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send message: {str(exc)}",
+            detail="Internal server error",
         ) from exc
 
 
@@ -229,13 +229,13 @@ async def get_channel_history(
         return result
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Request failed"
         ) from exc
     except Exception as exc:
         logger.exception("Failed to get history for %s", channel_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get history: {str(exc)}",
+            detail="Internal server error",
         ) from exc
 
 
@@ -273,7 +273,7 @@ async def send_webhook_message(
         logger.exception("Failed to send webhook message")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send webhook: {str(exc)}",
+            detail="Internal server error",
         ) from exc
 
 

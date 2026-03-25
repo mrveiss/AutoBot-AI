@@ -133,9 +133,9 @@ async def rollback_to_revision(
     username = current_user.get("username", "unknown")
     try:
         new_revision = await svc.rollback_to_revision(revision_id, username)
-    except ValueError as exc:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
+            detail="Request failed",
         )
     return _to_response(new_revision)

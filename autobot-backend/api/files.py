@@ -556,7 +556,7 @@ async def _write_upload_file(
             await f.write(content)
     except OSError as e:
         logger.error("Failed to write uploaded file %s: %s", target_file, e)
-        raise HTTPException(status_code=500, detail=f"Failed to write file: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _log_upload_audit(
@@ -832,7 +832,7 @@ async def view_file(request: Request, path: str):
                 content = await f.read()
         except OSError as e:
             logger.error("Failed to read file %s: %s", target_file, e)
-            raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
         except UnicodeDecodeError as e:
             # File is binary, don't include content
             logger.debug("File is binary, skipping content read: %s", e)
@@ -996,7 +996,7 @@ async def _read_text_content(target_file: Path) -> tuple:
         return content, "text"
     except OSError as e:
         logger.error("Failed to read file %s: %s", target_file, e)
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     except UnicodeDecodeError:
         return None, "binary"
 

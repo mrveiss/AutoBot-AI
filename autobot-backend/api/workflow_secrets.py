@@ -139,7 +139,7 @@ async def create_workflow_secret(
             description=request.description,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail="Request failed") from exc
     except Exception as exc:
         logger.error(
             "Failed to create workflow secret name=%s owner=%s: %s",
@@ -198,7 +198,7 @@ async def update_workflow_secret(
     try:
         _validate_secret_name(name)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="Request failed") from exc
 
     owner_id = current_user.get("user_id", "")
     try:
@@ -241,7 +241,7 @@ async def delete_workflow_secret(
     try:
         _validate_secret_name(name)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="Request failed") from exc
 
     owner_id = current_user.get("user_id", "")
     try:

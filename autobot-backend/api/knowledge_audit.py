@@ -101,7 +101,7 @@ async def get_user_activity_log(
 
     except Exception as e:
         logger.error("Error retrieving user activity: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve activity: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/fact/{fact_id}/access-log")
@@ -157,9 +157,7 @@ async def get_fact_access_log(
         raise
     except Exception as e:
         logger.error("Error retrieving fact access log: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve access log: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/organization/audit-log")
@@ -213,9 +211,7 @@ async def get_organization_audit_log(
 
     except Exception as e:
         logger.error("Error retrieving organization audit log: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve audit log: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -257,9 +253,7 @@ async def get_permission_changes(
 
     except Exception as e:
         logger.error("Error retrieving permission changes: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve permission changes: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -324,7 +318,7 @@ async def generate_compliance_report(
 
     except Exception as e:
         logger.error("Error generating compliance report: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to generate report: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/compliance-summary")
@@ -377,4 +371,4 @@ async def get_compliance_summary(
 
     except Exception as e:
         logger.error("Error generating compliance summary: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to generate summary: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

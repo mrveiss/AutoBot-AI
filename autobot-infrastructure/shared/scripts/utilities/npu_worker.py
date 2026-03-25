@@ -168,7 +168,7 @@ class NPUWorker:
                 await self.load_model(model_name)
                 return {"status": "success", "model": model_name, "loaded": True}
             except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Internal server error")
 
         @self.app.get("/models")
         async def list_models():

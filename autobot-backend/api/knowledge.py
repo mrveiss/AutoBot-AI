@@ -828,8 +828,8 @@ async def add_url_to_knowledge(
 
     try:
         validated_url = validate_url(request.url, allow_private=False)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Request failed")
 
     logger.info("Fetching content from URL: %s", validated_url)
 

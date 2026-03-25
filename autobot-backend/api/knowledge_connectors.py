@@ -270,7 +270,7 @@ async def list_connectors():
         return {"connectors": results, "total": len(results)}
     except Exception as exc:
         logger.error("list_connectors failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/knowledge_base/connectors", status_code=201)
@@ -359,8 +359,8 @@ async def test_connector_connection(connector_id: str):
     instance = _load_or_create_instance(cfg)
     try:
         healthy = await instance.test_connection()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
     return {"connector_id": connector_id, "healthy": healthy}
 
 

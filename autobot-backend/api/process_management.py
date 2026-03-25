@@ -131,8 +131,8 @@ async def signal_process(
     svc = _get_service()
     try:
         delivered = await svc.signal_process(process_id, body.signal)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Request failed")
     if not delivered:
         raise HTTPException(
             status_code=409,
