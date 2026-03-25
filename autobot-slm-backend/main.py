@@ -30,6 +30,7 @@ from api import (
     fleet_services_router,
     health_router,
     infrastructure_router,
+    llm_config_router,
     maintenance_router,
     mfa_router,
     monitoring_router,
@@ -383,6 +384,8 @@ app.include_router(mfa_router, prefix="/api")
 app.include_router(api_keys_router, prefix="/api")
 # Setup Wizard (Issue #1294)
 app.include_router(setup_wizard_router, prefix="/api")
+# LLM Configuration (Issue #2371)
+app.include_router(llm_config_router, prefix="/api")
 
 
 @app.get("/")

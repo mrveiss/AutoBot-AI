@@ -235,6 +235,13 @@ const router = createRouter({
           component: () => import('@/views/settings/admin/ConfigDefaultsSettings.vue'),
           meta: { title: 'Config Defaults', parent: 'settings', admin: true }
         },
+        {
+          // Issue #2371: LLM configuration moved from main frontend to SLM admin
+          path: 'admin/llm',
+          name: 'settings-admin-llm',
+          component: () => import('@/views/settings/admin/LLMSettings.vue'),
+          meta: { title: 'LLM Configuration', parent: 'settings', admin: true }
+        },
       ]
     },
     {
