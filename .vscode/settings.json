@@ -1,4 +1,14 @@
 {
     "IDX.aI.enableInlineCompletion": true,
-    "IDX.aI.enableCodebaseIndexing": true
+    "IDX.aI.enableCodebaseIndexing": true,
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    },
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/__pycache__/**": true,
+        "**/dist/**": true,
+        "**/.worktrees/**": true
+    }
 }
