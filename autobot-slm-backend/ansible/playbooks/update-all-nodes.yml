@@ -233,6 +233,21 @@
       tags: [slm]
 
     # --- SLM custom migrations (#1630) ---
+    - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
+      slurp:
+        src: /etc/autobot/db-credentials.env
+      register: db_creds_file
+      become: true
+      failed_when: false
+      tags: [slm, slm-backend, migrate]
+
+    - name: "[PLAY 1] SLM | Parse DATABASE_URL from credentials (#2293)"
+      set_fact:
+        slm_db_url: "{{ (db_creds_file.content | b64decode | regex_search('DATABASE_URL=(.+)', '\\1'))[0] | default('') }}"
+      when: db_creds_file is succeeded
+      failed_when: false
+      tags: [slm, slm-backend, migrate]
+
     - name: "[PLAY 1] SLM | Run database migrations (#1630)"
       command:
         cmd: >-
@@ -243,6 +258,7 @@
       become_user: autobot
       environment:
         PYTHONPATH: /opt/autobot/autobot-slm-backend
+        DATABASE_URL: "{{ slm_db_url | default('') }}"
       register: slm_migration_result
       failed_when: false
       tags: [slm, slm-backend, migrate]

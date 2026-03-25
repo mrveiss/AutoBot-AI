@@ -60,10 +60,28 @@ MIGRATIONS = [
 
 
 def get_db_url() -> str:
-    """Get PostgreSQL database URL from environment or config (#786)."""
+    """Get PostgreSQL database URL from environment or config (#786, #2293)."""
+    import os
+
+    # 1. Check environment variable first (set by systemd EnvironmentFile
+    #    or Ansible environment: block)
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        return env_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # 2. Try loading from credentials env file directly (#2293)
+    creds_file = "/etc/autobot/db-credentials.env"
+    if os.path.isfile(creds_file):
+        with open(creds_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("DATABASE_URL="):
+                    url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    return url.replace("postgresql+asyncpg://", "postgresql://")
+
+    # 3. Fall back to config module
     from config import settings
 
-    # Convert async URL to sync URL for psycopg2
     url = settings.database_url
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
