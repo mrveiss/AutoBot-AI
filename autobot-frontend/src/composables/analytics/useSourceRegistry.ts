@@ -19,23 +19,9 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useSourceRegistry')
 
-// Issue #1133: CodeSource type
-export interface CodeSource {
-  id: string
-  name: string
-  source_type: 'github' | 'local'
-  repo: string | null
-  branch: string
-  credential_id: string | null
-  clone_path: string | null
-  last_synced: string | null
-  status: 'configured' | 'syncing' | 'ready' | 'error'
-  error_message: string | null
-  owner_id: string | null
-  access: 'private' | 'shared' | 'public'
-  shared_with: string[]
-  created_at: string
-}
+// Issue #1133 / #2238: CodeSource type extracted to shared types
+import type { CodeSource } from '@/types/analytics'
+export type { CodeSource }
 
 export interface UseSourceRegistryDeps {
   t: (key: string, params?: Record<string, unknown>) => string

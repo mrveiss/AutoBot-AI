@@ -181,22 +181,7 @@ const { t } = useI18n()
 
 // ---- Types ----------------------------------------------------------------
 
-interface CodeSource {
-  id: string
-  name: string
-  source_type: 'github' | 'local'
-  repo: string | null
-  branch: string
-  credential_id: string | null
-  clone_path: string | null
-  last_synced: string | null
-  status: 'configured' | 'syncing' | 'ready' | 'error'
-  error_message: string | null
-  owner_id: string | null
-  access: 'private' | 'shared' | 'public'
-  shared_with: string[]
-  created_at: string
-}
+import type { CodeSource } from '@/types/analytics'
 
 interface RunningTask {
   task_id: string

@@ -188,18 +188,7 @@ const { t } = useI18n()
 
 // ---- Types ----------------------------------------------------------------
 
-interface CodeSource {
-  id: string
-  name: string
-  source_type: 'github' | 'local'
-  repo: string | null
-  branch: string
-  clone_path: string | null
-  last_synced: string | null
-  status: 'configured' | 'syncing' | 'ready' | 'error'
-  error_message: string | null
-  access: 'private' | 'shared' | 'public'
-}
+import type { CodeSource } from '@/types/analytics'
 
 interface SourceSummary {
   last_indexed: string | null
