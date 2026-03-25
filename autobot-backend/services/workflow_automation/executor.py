@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -40,33 +40,55 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_command_secrets(command: str, owner_id: str) -> str:
+def _resolve_command_secrets(command: str, owner_id: str) -> tuple[str, FrozenSet[str]]:
     """
     Replace ${secrets.NAME} tokens in *command* with their plaintext values.
 
-    Returns the original string unchanged if no tokens are present or if the
-    WorkflowSecretService is unavailable.
+    Returns the original string unchanged (with an empty resolved-names set)
+    if no tokens are present or if the WorkflowSecretService is unavailable.
 
-    SECURITY: the returned string must NEVER be logged. (Issue #2153)
+    SECURITY: the resolved string must NEVER be logged. (Issue #2153)
+
+    Returns:
+        Tuple of (resolved_command, resolved_names).  Pass resolved_names to
+        _redact_result_secrets so only injected secrets are scanned. (#2321)
     """
     try:
         return get_workflow_secret_service().resolve_secrets(command, owner_id)
     except Exception as exc:  # pragma: no cover
         logger.error("Secret resolution failed for workflow command: %s", exc)
-        return command
+        return command, frozenset()
 
 
-def _redact_result_secrets(result: Metadata, owner_id: str) -> Metadata:
+def _redact_result_secrets(
+    result: Metadata,
+    owner_id: str,
+    resolved_names: FrozenSet[str],
+) -> Metadata:
     """
     Replace known secret values in execution result strings with ***.
 
-    Operates on the 'stdout' and 'stderr' fields only. (Issue #2153)
+    Operates on the 'stdout' and 'stderr' fields only.
+
+    Args:
+        result: Step execution result dict.
+        owner_id: Workflow owner — only their secrets are loaded.
+        resolved_names: Names resolved by _resolve_command_secrets for this
+            step.  Passed directly to redact_secrets() to avoid an O(n) full
+            owner-secrets scan on every step completion. (Issue #2321)
+
+    Issue #2153, #2321.
     """
+    if not resolved_names:
+        # Nothing was injected; nothing to redact.
+        return result
     try:
         svc = get_workflow_secret_service()
         for field in ("stdout", "stderr"):
             if isinstance(result.get(field), str):
-                result[field] = svc.redact_secrets(result[field], owner_id)
+                result[field] = svc.redact_secrets(
+                    result[field], owner_id, resolved_names=resolved_names
+                )
     except Exception as exc:  # pragma: no cover
         logger.error("Secret redaction failed for workflow result: %s", exc)
     return result
@@ -385,13 +407,17 @@ class WorkflowExecutor:
 
         try:
             # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
+            # Issue #2321: Capture resolved_names so redaction only scans
+            # injected secrets — not all secrets for all users.
             owner_id = workflow.owner_id or workflow.session_id
-            resolved_command = _resolve_command_secrets(current_step.command, owner_id)
+            resolved_command, resolved_names = _resolve_command_secrets(
+                current_step.command, owner_id
+            )
 
             result = await self._execute_command(workflow.session_id, resolved_command)
 
             # Issue #2153: Redact any secret values that may appear in output.
-            result = _redact_result_secrets(result, owner_id)
+            result = _redact_result_secrets(result, owner_id, resolved_names)
 
             current_step.status = WorkflowStepStatus.COMPLETED
             current_step.execution_result = result
