@@ -30,7 +30,9 @@ async def assert_no_running_sync(db) -> None:
     Must be called while holding ``fleet_sync_lock`` to prevent TOCTOU races.
     """
     running_result = await db.execute(
-        select(FleetSyncJobModel).where(FleetSyncJobModel.status == "running")
+        select(FleetSyncJobModel)
+        .where(FleetSyncJobModel.status == "running")
+        .with_for_update()  # Row-level lock to prevent TOCTOU race (#1937)
     )
     if running_result.scalar_one_or_none():
         raise HTTPException(
