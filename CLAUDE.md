@@ -359,6 +359,24 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - When a fix applies to a component on multiple nodes: check all nodes, fix all of them
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
 
+### Deployment Architecture
+
+**All fleet deployments go through the SLM Manager (.19) via Ansible playbooks.** There is no other deployment method.
+
+- **Code flow:** GitHub repo → SLM Manager (.19) pulls latest → Ansible playbooks deploy to fleet nodes
+- **Primary playbook:** `autobot-slm-backend/ansible/playbooks/update-all-nodes.yml` — git-archive-based fleet update
+- **Node enrollment:** `autobot-slm-backend/ansible/playbooks/enroll-node.yml` — new node setup
+- **NPU worker role:** `autobot-slm-backend/ansible/roles/npu-worker/` — NPU-specific deployment
+- **Manual sync:** `autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh` — for dev/debug only (uses sudo rsync)
+- **Ownership:** All deployed files must be owned by `autobot:autobot` — playbooks enforce this with `chown` tasks
+
+**When implementing deployment-related changes:**
+
+- Modify Ansible playbooks/roles in the repo — they get picked up on next SLM pull
+- Never SSH into nodes to make manual changes that aren't captured in Ansible
+- Test playbook changes with `--check` (dry run) before applying
+- Use tags for selective deployment (e.g., `--tags npu` to update only NPU worker)
+
 ### Git Workflow
 
 **Pre-commit Self-Healing:**
