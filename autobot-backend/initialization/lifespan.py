@@ -360,6 +360,17 @@ async def _init_knowledge_base(app: FastAPI):
         app.state.knowledge_base = knowledge_base
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
+
+        # Issue #2309: Wire KB into the already-initialized chat workflow manager.
+        # Phase 1 initializes the manager before the KB is ready, leaving
+        # knowledge_service=None. Re-wire here once the KB succeeds.
+        mgr = getattr(app.state, "chat_workflow_manager", None)
+        if (
+            mgr is not None
+            and knowledge_base is not None
+            and mgr.knowledge_service is None
+        ):
+            await mgr.set_knowledge_base(knowledge_base)
     except Exception as kb_error:
         logger.warning("Knowledge base initialization failed: %s", kb_error)
         app.state.knowledge_base = None

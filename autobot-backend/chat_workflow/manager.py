@@ -140,6 +140,26 @@ class ChatWorkflowManager(
             )
             self.knowledge_service = None
 
+    async def set_knowledge_base(self, kb) -> None:
+        """Wire an already-initialized KnowledgeBase into the knowledge service.
+
+        Issue #2309: Called by lifespan Phase 2 after the knowledge base is ready
+        so that RAG is available even when the KB was not ready during Phase 1.
+        """
+        if kb is None:
+            logger.warning("set_knowledge_base called with None -- RAG stays disabled")
+            return
+        try:
+            from services.chat_knowledge_service import ChatKnowledgeService
+            from services.rag_service import RAGService
+
+            rag_service = RAGService(kb)
+            await rag_service.initialize()
+            self.knowledge_service = ChatKnowledgeService(rag_service)
+            logger.info("Knowledge service wired from app-level knowledge base (#2309)")
+        except Exception as exc:
+            logger.warning("Failed to wire knowledge service from app KB: %s", exc)
+
     @error_boundary(component="chat_workflow_manager", function="initialize")
     async def initialize(self) -> bool:
         """Initialize the workflow manager with default workflow and async Redis."""
