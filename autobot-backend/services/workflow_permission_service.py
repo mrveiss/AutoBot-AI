@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from models.workflow_audit import WorkflowAuditLog
 from models.workflow_permission import WorkflowPermission
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -137,6 +138,15 @@ class WorkflowPermissionService:
                 granted_by=granted_by,
             )
             self.session.add(perm)
+            try:
+                await self.session.flush()
+            except IntegrityError:
+                await self.session.rollback()
+                perm = await self._fetch_permission(user_id, workflow_id)
+                if perm is None:
+                    raise
+                perm.role = role
+                perm.granted_by = granted_by
         else:
             perm.role = role
             perm.granted_by = granted_by
