@@ -329,9 +329,7 @@ async def get_knowledge_by_scope(
 
     except Exception as e:
         logger.error("Error retrieving scoped knowledge: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve knowledge: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/facts/organization/{organization_id}")
@@ -380,9 +378,7 @@ async def get_organization_knowledge(
 
     except Exception as e:
         logger.error("Error retrieving organization knowledge: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve organization knowledge: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/facts/group/{group_id}")
@@ -430,9 +426,7 @@ async def get_group_knowledge(
 
     except Exception as e:
         logger.error("Error retrieving group knowledge: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve group knowledge: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -502,7 +496,7 @@ async def share_knowledge(
         raise
     except Exception as e:
         logger.error("Error sharing knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to share knowledge: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/facts/{fact_id}/share/{entity_id}")
@@ -561,7 +555,7 @@ async def unshare_knowledge(
         raise
     except Exception as e:
         logger.error("Error unsharing knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to unshare knowledge: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/facts/{fact_id}/permissions")
@@ -624,9 +618,7 @@ async def update_knowledge_permissions(
         raise
     except Exception as e:
         logger.error("Error updating knowledge permissions: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update permissions: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/facts/{fact_id}/access")
@@ -673,6 +665,4 @@ async def get_knowledge_access_info(
         raise
     except Exception as e:
         logger.error("Error getting knowledge access info: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get access information: {e}"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")

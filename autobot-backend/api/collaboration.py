@@ -237,10 +237,10 @@ async def invite_user(
             permission=invite.permission.value,
         )
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid UUID: {e}",
+            detail="Internal server error",
         )
     except HTTPException:
         raise
@@ -301,10 +301,10 @@ async def remove_collaborator(
             removed_user_id=remove.user_id,
         )
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid UUID: {e}",
+            detail="Internal server error",
         )
     except HTTPException:
         raise
@@ -364,10 +364,10 @@ async def get_participants(
             total_count=len(participants),
         )
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid UUID: {e}",
+            detail="Internal server error",
         )
     except HTTPException:
         raise
@@ -418,10 +418,10 @@ async def share_secret_with_session(
             "shared_with_count": len(recipient_ids) - 1,
         }
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid UUID: {e}",
+            detail="Internal server error",
         )
     except HTTPException:
         raise

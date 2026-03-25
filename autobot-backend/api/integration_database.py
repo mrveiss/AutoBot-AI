@@ -191,7 +191,7 @@ async def test_database_connection(request: DatabaseConnectionRequest):
 
     except Exception as exc:
         logger.error("Database connection test failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/providers")
@@ -268,10 +268,10 @@ async def execute_database_query(provider: str, request: QueryRequest):
 
     except ValueError as exc:
         logger.warning("Query validation failed: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Request failed") from exc
     except Exception as exc:
         logger.error("Query execution failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/mongodb/query-collection")
@@ -314,7 +314,7 @@ async def query_mongodb_collection(request: MongoQueryRequest):
 
     except Exception as exc:
         logger.error("MongoDB query failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{provider}/databases")
@@ -350,7 +350,7 @@ async def list_databases(provider: str, request: DatabaseListRequest):
 
     except Exception as exc:
         logger.error("Failed to list databases: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{provider}/tables")
@@ -398,4 +398,4 @@ async def list_tables(provider: str, request: DatabaseListRequest):
 
     except Exception as exc:
         logger.error("Failed to list tables: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

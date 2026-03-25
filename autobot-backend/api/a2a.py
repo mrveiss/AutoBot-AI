@@ -172,7 +172,9 @@ async def get_signed_agent_card(request: Request) -> Dict[str, Any]:
     try:
         signed = SecurityCardSigner.sign(card.to_dict())
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable"
+        ) from exc
     return signed
 
 

@@ -115,7 +115,7 @@ async def get_organization_policy(
 
     except Exception as e:
         logger.error("Error retrieving organization policy: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve policy: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/policy")
@@ -163,7 +163,7 @@ async def update_organization_policy(
 
     except Exception as e:
         logger.error("Error updating organization policy: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to update policy: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -299,7 +299,7 @@ async def get_organization_knowledge_stats(
 
     except Exception as e:
         logger.error("Error retrieving organization stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
@@ -402,4 +402,4 @@ async def cleanup_organization_knowledge(
 
     except Exception as e:
         logger.error("Error cleaning up organization knowledge: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to cleanup knowledge: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

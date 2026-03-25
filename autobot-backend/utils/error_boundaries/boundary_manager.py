@@ -250,8 +250,7 @@ class ErrorBoundaryManager:
         # No recovery possible, re-raise with context
         logger.error("No recovery possible for error: %s", error_report.error_id)
         raise ErrorBoundaryException(
-            f"Unrecoverable error in {context.component}."
-            f"{context.function}: {str(error)}",
+            f"Unrecoverable error in {context.component}." f"{context.function}",
             severity=error_report.severity,
             category=error_report.category,
             context=context,

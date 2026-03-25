@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 # Import initialization modules
@@ -30,6 +31,27 @@ from autobot_shared.tracing import init_tracing, instrument_fastapi
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)
+
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    """
+    Register global exception handlers to prevent stack trace leakage.
+
+    Issue #1733: CodeQL py/stack-trace-exposure — catch unhandled exceptions
+    and return generic error responses instead of leaking internal details.
+    """
+
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(
+        request: Request, exc: Exception
+    ) -> JSONResponse:
+        logger.exception(
+            "Unhandled exception on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
 
 
 def _register_routers(app: FastAPI) -> None:
@@ -120,6 +142,9 @@ class AppFactory:
         # Issue #697: Initialize OpenTelemetry tracing before middleware
         init_tracing(service_name="autobot-backend")
         instrument_fastapi(app)
+
+        # Issue #1733: Global exception handler — prevent stack traces in responses
+        _register_exception_handlers(app)
 
         configure_middleware(app, allow_origins=allow_origins)
         register_root_endpoints(app)
