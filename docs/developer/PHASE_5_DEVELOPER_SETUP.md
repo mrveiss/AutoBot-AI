@@ -2,8 +2,8 @@
 **Complete Developer Onboarding for Distributed Multi-Modal AI System**
 
 Generated: `2025-09-10`  
-Setup Time: **~25 minutes** (fully automated)  
-Difficulty: **Intermediate** (automated scripts handle complexity)
+Setup Time: **~25 minutes** (bare-metal) or **~10 minutes** (Docker)  
+Difficulty: **Intermediate** (installer and Docker Compose handle complexity)
 
 ## Quick Start (TL;DR)
 
@@ -14,20 +14,22 @@ For developers who just want to get started immediately:
 git clone https://github.com/your-org/AutoBot.git
 cd AutoBot
 
-# 2. Run automated setup (handles everything)
-bash setup.sh --full
+# 2a. Bare-metal install (recommended for production fleet)
+sudo ./install.sh
+# Then complete configuration via the Setup Wizard at https://<server-ip>
 
-# 3. Start development environment
-scripts/start-services.sh start
+# 2b. Docker install (recommended for development)
+docker compose up -d --build
+# Optional profiles: --profile ollama, --profile monitoring
 
-# 4. Access development interface
+# 3. Access development interface
 # SLM Orchestration: https://172.16.168.19/orchestration
 # User Frontend: https://172.16.168.21
 # Backend API: https://172.16.168.20:8443/docs
 # VNC Desktop: http://127.0.0.1:6080
 ```
 
-**That's it!** Services are managed via SLM orchestration, CLI wrapper (scripts/start-services.sh), or systemctl. See [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
+**That's it!** Services are managed via SLM orchestration, CLI wrapper (scripts/start-services.sh), systemctl, or `docker compose`. See [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
 
 ## Prerequisites
 
@@ -121,92 +123,120 @@ cd AutoBot
 
 # Verify you're in the right location
 ls -la
-# You should see: setup.sh, scripts/, docs/, etc.
+# You should see: install.sh, docker-compose.yml, scripts/, docs/, etc.
 ```
 
-### Step 2: Choose Setup Mode
+### Step 2: Choose Deployment Path
 
-The `setup.sh` script supports three modes:
+AutoBot supports three deployment methods:
+
+#### Path A: Bare-Metal Install (recommended for production fleet)
 
 ```bash
-# Full setup (recommended for first time)
-bash setup.sh --full
-# - Sets up all 6 VMs
-# - Installs all dependencies
-# - Downloads AI models (3-5GB)
-# - Configures networking
-# - Generates SSH keys
-# - Sets up development environment
+sudo ./install.sh
+# - Installs system packages and Python 3.12 venv
+# - Configures systemd services (autobot-backend, autobot-celery, etc.)
+# - Sets up networking for the 172.16.168.0/24 fleet
+# - Generates SSH keys for inter-VM communication
+# - Launches the Setup Wizard at https://<server-ip>
+#   (complete remaining configuration — AI models, API keys — via the wizard)
+```
 
-# Minimal setup (for quick testing)
-bash setup.sh --minimal  
-# - Core services only
-# - Minimal dependencies
-# - No model downloads
-# - Basic configuration
+#### Path B: Docker (recommended for development)
 
-# Distributed setup (for production)  
-bash setup.sh --distributed
-# - Production-ready configuration
-# - Security hardening
-# - Monitoring setup
-# - Backup configuration
+```bash
+# Start core services
+docker compose up -d --build
+
+# Include Ollama for local LLM inference
+docker compose --profile ollama up -d --build
+
+# Include Prometheus + Grafana monitoring
+docker compose --profile monitoring up -d --build
+
+# Combine profiles as needed
+docker compose --profile ollama --profile monitoring up -d --build
+```
+
+#### Path C: Fleet Deployment via Ansible (from SLM Manager .19)
+
+```bash
+# On the SLM Manager (172.16.168.19)
+cd autobot-slm-backend/ansible
+
+# Deploy or update the full fleet
+ansible-playbook playbooks/update-all-nodes.yml
+
+# Enroll a new node
+ansible-playbook playbooks/enroll-node.yml -e "target_host=172.16.168.XX"
+
+# Deploy NPU worker only
+ansible-playbook playbooks/update-all-nodes.yml --tags npu
 ```
 
 ### Step 3: What Happens During Setup
 
-The setup script performs these operations automatically:
+#### Bare-Metal (`install.sh`) Phases
 
-```bash
-echo "=== AutoBot Phase 5 Setup Process ==="
+The installer performs these operations automatically:
 
-# 1. Environment Validation (2 min)
-echo "Phase 1: Validating system requirements..."
-- Check WSL2 version and features
-- Verify hardware capabilities (CPU, RAM, GPU)
-- Test internet connectivity
-- Check available disk space
+```
+Phase 1 — Environment Validation (~2 min)
+  - Check OS version, WSL2 features, and hardware (CPU, RAM, GPU)
+  - Verify internet connectivity and available disk space
 
-# 2. Dependency Installation (5 min)
-echo "Phase 2: Installing core dependencies..."
-- Python 3.10+ with virtual environments
-- Node.js LTS with npm/yarn
-- Docker with Docker Compose V2
-- Redis tools and client libraries
-- SSH server and key generation
+Phase 2 — Dependency Installation (~5 min)
+  - Python 3.12 (deadsnakes PPA) with virtual environment
+  - Node.js LTS with npm
+  - Docker with Docker Compose V2
+  - Redis tools and client libraries
+  - SSH server and key generation
 
-# 3. VM Infrastructure Setup (8 min)
-echo "Phase 3: Configuring distributed infrastructure..."
-- Create VM network configuration (172.16.168.0/24)
-- Generate SSH keys for inter-VM communication
-- Configure firewall rules for security
-- Set up VM-to-VM networking
-- Install VM-specific dependencies
+Phase 3 — Fleet Infrastructure Setup (~8 min)
+  - Configure VM network (172.16.168.0/24)
+  - Generate SSH keys for inter-VM communication
+  - Set up firewall rules and VM-to-VM networking
+  - Install VM-specific dependencies
 
-# 4. Service Configuration (5 min)  
-echo "Phase 4: Configuring services..."
-- Redis Stack with 11 databases
-- Nginx reverse proxy setup
-- VNC desktop configuration
-- OpenVINO NPU driver setup (if available)
-- GPU passthrough configuration
+Phase 4 — Service Configuration (~5 min)
+  - Redis Stack with 11 databases
+  - Nginx reverse proxy
+  - VNC desktop configuration
+  - OpenVINO NPU driver setup (if hardware detected)
+  - GPU passthrough configuration
 
-# 5. AI Model Setup (3-5 min)
-echo "Phase 5: Downloading AI models..."
-- Ollama model downloads (tinyllama, phi)
-- Sentence transformer embeddings
-- NPU-optimized models (if supported)
-- Model cache initialization
+Phase 5 — Setup Wizard
+  - Launches web-based wizard at https://<server-ip>
+  - Configure AI model downloads (Ollama models, embeddings)
+  - Set API keys and provider preferences
+  - Run validation checks
 
-# 6. Validation & Testing (2 min)
-echo "Phase 6: Validating installation..."
-- Test all VM connectivity
-- Verify service health checks
-- Run basic functionality tests
-- Generate setup report
+Total bare-metal setup time: ~25 minutes
+```
 
-echo "Setup completed successfully!"
-echo "Total setup time: ~25 minutes"
+#### Docker Phases
+
+Docker Compose brings up all services from the project `docker-compose.yml`:
+
+```
+- Builds backend, frontend, and worker containers
+- Starts Redis, Nginx, and supporting services
+- Optional: Ollama container (--profile ollama)
+- Optional: Prometheus + Grafana (--profile monitoring)
+- Health checks run automatically via Docker health probes
+
+Total Docker setup time: ~10 minutes (depending on build cache)
+```
+
+#### Ansible Fleet Deployment
+
+Ansible playbooks from the SLM Manager (.19) handle fleet-wide updates:
+
+```
+- Pulls latest code from GitHub via git-archive
+- Distributes to all fleet nodes with correct ownership (autobot:autobot)
+- Restarts systemd services on each node
+- Runs health checks across the fleet
 ```
 
 ### Step 4: Post-Setup Verification
@@ -463,10 +493,10 @@ vms:
 
 ### Common Setup Problems
 
-**Problem: Setup script fails with "Permission denied"**
+**Problem: Installer fails with "Permission denied"**
 ```bash
-# Solution: Fix permissions
-chmod +x setup.sh scripts/start-services.sh
+# Solution: Run install.sh with sudo and fix Docker group
+sudo ./install.sh
 sudo usermod -aG docker $USER
 # Logout/login or restart WSL2
 ```
