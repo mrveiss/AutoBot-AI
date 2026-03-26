@@ -1,0 +1,74 @@
+# Sync main → Dev_new_gui after direct pushes to main
+#
+# When main receives commits that Dev_new_gui doesn't have (e.g.,
+# hotfixes, release merges, Dependabot PRs that landed on main before
+# retargeting), this workflow opens a PR to bring Dev_new_gui up to date.
+#
+# The PR is created for human review — it is never auto-merged.
+#
+# See: https://github.com/mrveiss/AutoBot-AI/issues/2445
+
+name: Sync main → Dev_new_gui
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if main is ahead of Dev_new_gui
+        id: check
+        run: |
+          git fetch origin Dev_new_gui
+          AHEAD=$(git rev-list --count origin/Dev_new_gui..origin/main)
+          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
+          echo "main is $AHEAD commit(s) ahead of Dev_new_gui"
+
+      - name: Create sync PR
+        if: steps.check.outputs.ahead != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a sync PR already exists
+          EXISTING=$(gh pr list \
+            --base Dev_new_gui \
+            --head main \
+            --state open \
+            --json number \
+            --jq 'length')
+
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "Sync PR already exists — skipping creation."
+            exit 0
+          fi
+
+          AHEAD=${{ steps.check.outputs.ahead }}
+
+          gh pr create \
+            --base Dev_new_gui \
+            --head main \
+            --title "chore(sync): merge main → Dev_new_gui ($AHEAD commit(s))" \
+            --body "$(cat <<'EOF'
+          ## Automated sync: main → Dev_new_gui
+
+          Main branch has commits not yet in `Dev_new_gui`. This PR brings
+          the development branch up to date.
+
+          **Review carefully** — if there are merge conflicts, resolve them
+          locally before merging.
+
+          > Created automatically by the `sync-main-to-dev` workflow.
+          > See issue #2445 for context.
+          EOF
+          )"
