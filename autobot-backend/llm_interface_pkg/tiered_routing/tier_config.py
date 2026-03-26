@@ -1,5 +1,3 @@
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
