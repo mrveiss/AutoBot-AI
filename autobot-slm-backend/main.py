@@ -79,54 +79,19 @@ logger = logging.getLogger(__name__)
 def _check_tablename_collisions() -> None:
     """Detect shared tablenames across both SQLAlchemy Base MetaData objects (#1878).
 
-    The SLM backend uses two independent ``DeclarativeBase`` subclasses that each
-    target a **different** PostgreSQL database:
-
-    * ``models.database.Base`` — SLM admin models (nodes, deployments, …)
-      → connects to the main SLM database (``settings.database_url``)
-    * ``user_management.models.base.Base`` — User management models (users, roles, …)
-      → connects to the ``slm_users`` database (``SLM_USERS_DATABASE_URL``)
-
-    Because each Base has its own ``MetaData`` object, SQLAlchemy cannot enforce
-    cross-Base uniqueness.  A developer who accidentally assigns the same
-    ``__tablename__`` to models from both bases will get no compile-time error; the
-    table will simply be created in the wrong database and FK references will silently
-    break, exactly as happened with the ``users`` / ``slm_users`` incident (#1854).
-
-    This function logs a WARNING for every overlapping tablename so that such
-    regressions are surfaced immediately at startup rather than discovered later via
-    mysterious query failures.
-
-    Note: This does NOT raise because several names (e.g. ``roles``, ``audit_logs``)
-    are intentionally shared between the two databases for independent domain purposes.
-    The warning is the signal; renaming is the developer's responsibility.
+    Delegates to :func:`autobot_shared.tablename_validator.check_tablename_collisions`
+    after resolving the two application-specific ``MetaData`` objects.  The heavy
+    detection + logging logic lives in autobot-shared so it can be tested in
+    isolation without importing this module's full dependency tree (#2413).
     """
     # Import after path is set up so this function is safe to call early in lifespan.
     import user_management.models  # noqa: F401 — registers all UM models with UMBase
     from models.database import Base as SLMBase
     from user_management.models.base import Base as UMBase
 
-    slm_tables: set[str] = set(SLMBase.metadata.tables.keys())
-    um_tables: set[str] = set(UMBase.metadata.tables.keys())
-    collisions: set[str] = slm_tables & um_tables
+    from autobot_shared.tablename_validator import check_tablename_collisions
 
-    if collisions:
-        sorted_names = sorted(collisions)
-        logger.warning(
-            "Tablename overlap detected between SLM Base and UserManagement Base — "
-            "%d shared name(s): %s. "
-            "These names refer to tables in different databases, but sharing names "
-            "increases the risk of future model misplacement. "
-            "See GitHub issue #1878.",
-            len(sorted_names),
-            sorted_names,
-        )
-    else:
-        logger.info(
-            "Tablename collision check passed — %d SLM tables, %d UM tables, 0 shared names",
-            len(slm_tables),
-            len(um_tables),
-        )
+    check_tablename_collisions(SLMBase.metadata, UMBase.metadata)
 
 
 async def _init_user_management_tables() -> None:
