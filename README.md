@@ -68,6 +68,41 @@ sudo ./install.sh --unattended # Unattended (CI/automation)
 
 Installs system packages, deploys the SLM backend via Ansible, configures nginx, and starts all services. Takes 10-20 minutes. See [INSTALL.md](INSTALL.md) for details.
 
+### Docker (Single Node)
+
+Run the entire stack on one machine with Docker Compose:
+
+```bash
+# Core services (backend, SLM, frontend, Redis, PostgreSQL, ChromaDB)
+docker compose up -d --build
+
+# Include local Ollama LLM
+docker compose --profile ollama up -d --build
+
+# Include Prometheus + Grafana monitoring
+docker compose --profile monitoring up -d --build
+```
+
+Once running:
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| SLM Admin | http://localhost/slm |
+| Backend API | http://localhost/api |
+| RedisInsight | http://localhost:8001 |
+| Ollama | http://localhost:11434 (if `--profile ollama`) |
+| Grafana | http://localhost:3000 (if `--profile monitoring`) |
+
+**Dev mode** with hot reload:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose up -d
+```
+
+See [INSTALL.md](INSTALL.md) for more Docker options.
+
 ### 3. Follow the Setup Wizard
 
 Open `https://<server-ip>` in your browser, log in with the credentials printed at install completion, and follow the Setup Wizard to add and configure fleet nodes.

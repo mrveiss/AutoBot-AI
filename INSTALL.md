@@ -70,6 +70,62 @@ All output is logged to `/var/log/autobot/install-<timestamp>.log`.
 
 ---
 
+## Docker Deployment
+
+For single-node or development setups, Docker Compose runs the full stack without
+the installer or Ansible:
+
+```bash
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+docker compose up -d --build
+```
+
+This starts the core services: backend, SLM, frontend, Redis, PostgreSQL, and
+ChromaDB.
+
+### Profiles
+
+Optional services are activated with `--profile`:
+
+```bash
+# Add a local Ollama LLM server
+docker compose --profile ollama up -d --build
+
+# Add Prometheus + Grafana monitoring
+docker compose --profile monitoring up -d --build
+```
+
+### Exposed Services
+
+| Service | URL |
+|---------|-----|
+| Frontend (user UI) | http://localhost |
+| SLM Admin | http://localhost/slm |
+| Backend API | http://localhost/api |
+| RedisInsight | http://localhost:8001 |
+| Ollama | http://localhost:11434 (profile: `ollama`) |
+| Grafana | http://localhost:3000 (profile: `monitoring`) |
+
+### Dev Mode (Hot Reload)
+
+Copy the override template to enable live-reload for frontend and backend code:
+
+```bash
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose up -d
+```
+
+Edit source files on the host and changes are reflected inside the containers
+automatically.
+
+### Environment
+
+Docker Compose reads `.env.docker` by default. Copy `.env.example` to
+`.env.docker` and adjust values as needed before starting.
+
+---
+
 ## Setup Wizard
 
 After the installer finishes, open the SLM web UI in your browser:
