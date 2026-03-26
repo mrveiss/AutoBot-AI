@@ -167,7 +167,7 @@ async def get_config(node_id: str, key: str) -> Optional[str]:
 |-----|---------------|-------------|
 | `llm.provider` | `ollama`, `openai`, `anthropic` | Provider type |
 | `llm.endpoint` | `http://127.0.0.1:11434` | API base URL |
-| `llm.model` | `mistral:7b-instruct`, `gpt-4` | Default model |
+| `llm.model` | `qwen3.5:9b`, `gpt-4` | Default model |
 | `llm.api_key` | `sk-...` | API key (encrypted at rest) |
 | `llm.timeout` | `30` | Request timeout seconds |
 

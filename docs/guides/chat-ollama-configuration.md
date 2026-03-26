@@ -178,7 +178,7 @@ backend:
       # When set, models in gpu_models are routed here instead of the default.
       # gpu_endpoint: http://172.16.168.20:11434
       # gpu_models:
-      #   - "mistral:7b-instruct"
+      #   - "qwen3.5:9b"
       #   - "deepseek-r1:14b"
       #   - "codellama:13b"
 
@@ -404,7 +404,7 @@ Model selection follows its own priority chain, defined in
 ```
 [1] config.yaml: backend.llm.local.providers.ollama.selected_model
 [2] Environment: AUTOBOT_DEFAULT_LLM_MODEL
-[3] ModelConstants.DEFAULT_OLLAMA_MODEL (from ConfigRegistry -> "mistral:7b-instruct")
+[3] ModelConstants.DEFAULT_OLLAMA_MODEL (from ConfigRegistry -> "qwen3.5:9b")
 ```
 
 ### Source Code Reference
@@ -527,7 +527,7 @@ The system-wide model defaults are defined in `constants/model_constants.py`:
 ```python
 from constants.model_constants import ModelConstants
 
-ModelConstants.DEFAULT_OLLAMA_MODEL     # "mistral:7b-instruct" (from ConfigRegistry)
+ModelConstants.DEFAULT_OLLAMA_MODEL     # "qwen3.5:9b" (from ConfigRegistry)
 ModelConstants.DEFAULT_OPENAI_MODEL     # "gpt-4"
 ModelConstants.DEFAULT_ANTHROPIC_MODEL  # "claude-3-5-sonnet-20241022"
 ModelConstants.EMBEDDING_MODEL          # "nomic-embed-text:latest"
@@ -825,7 +825,7 @@ Ollama listens on `http://127.0.0.1:11434` by default.
 
 ```bash
 # Pull the default model
-ollama pull mistral:7b-instruct
+ollama pull qwen3.5:9b
 
 # Or pull a different model
 ollama pull llama3.2
@@ -842,7 +842,7 @@ curl -s http://127.0.0.1:11434/api/tags | python3 -m json.tool
 
 # Test generation
 curl -s http://127.0.0.1:11434/api/generate \
-  -d '{"model": "mistral:7b-instruct", "prompt": "Hello", "stream": false}' \
+  -d '{"model": "qwen3.5:9b", "prompt": "Hello", "stream": false}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin).get('response','')[:200])"
 ```
 
@@ -852,7 +852,7 @@ Option A -- Environment variables (quick, non-persistent):
 
 ```bash
 export AUTOBOT_OLLAMA_HOST=127.0.0.1
-export AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+export AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 Option B -- config.yaml (persistent, recommended):
@@ -863,7 +863,7 @@ backend:
   llm:
     ollama:
       endpoint: http://127.0.0.1:11434
-      selected_model: "mistral:7b-instruct"
+      selected_model: "qwen3.5:9b"
 
 infrastructure:
   hosts:
@@ -1017,7 +1017,7 @@ backend:
       endpoint: http://127.0.0.1:11434           # CPU endpoint (default)
       gpu_endpoint: http://172.16.168.20:11434    # GPU-accelerated endpoint
       gpu_models:
-        - "mistral:7b-instruct"
+        - "qwen3.5:9b"
         - "deepseek-r1:14b"
         - "codellama:13b"
 ```
@@ -1059,7 +1059,7 @@ Expected output:
 
 ```
 [ChatWorkflowManager] Making Ollama request to: http://172.16.168.20:11434/api/generate
-[ChatWorkflowManager] Using model: mistral:7b-instruct
+[ChatWorkflowManager] Using model: qwen3.5:9b
 ```
 
 ---
@@ -1125,7 +1125,7 @@ ULTIMATE_FALLBACK_CONFIG = {
         "OLLAMA_URL",
         os.getenv("OLLAMA_HOST", "http://localhost:11434"),
     ),
-    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "mistral:7b-instruct"),
+    "llm_model": os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", "qwen3.5:9b"),
     "llm_timeout": 30,
     "llm_temperature": 0.7,
 }
@@ -1299,7 +1299,7 @@ async def main() -> None:
     # Step 1: Verify Ollama
     models = await check_ollama()
     if not models:
-        logger.error("No models found. Pull one with: ollama pull mistral:7b-instruct")
+        logger.error("No models found. Pull one with: ollama pull qwen3.5:9b")
         sys.exit(1)
 
     model_name = models[0]  # Use the first available model
@@ -1332,14 +1332,14 @@ curl -fsSL https://ollama.ai/install.sh | sh
 sudo systemctl enable --now ollama
 
 # 3. Pull a model
-ollama pull mistral:7b-instruct
+ollama pull qwen3.5:9b
 
 # 4. Verify
 curl -s http://127.0.0.1:11434/api/tags | python3 -m json.tool
 
 # 5. Set environment (or edit config.yaml)
 export AUTOBOT_OLLAMA_HOST=127.0.0.1
-export AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+export AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 
 # 6. Restart backend
 sudo systemctl restart autobot-backend
@@ -1399,7 +1399,7 @@ journalctl -u autobot-backend --since "1 minute ago" | grep "Using model"
 **Fixes:**
 
 - Pull the model: `ollama pull <model_name>`
-- Verify the model name matches exactly (including tag): `mistral:7b-instruct` vs `mistral:latest`
+- Verify the model name matches exactly (including tag): `qwen3.5:9b` vs `mistral:latest`
 - Update config to use an installed model
 
 ### Slow Responses
@@ -1419,7 +1419,7 @@ free -h      # Check available memory
 
 **Fixes:**
 
-- Use a smaller model (e.g., `mistral:7b-instruct` instead of `llama3.2:70b`)
+- Use a smaller model (e.g., `qwen3.5:9b` instead of `llama3.2:70b`)
 - Enable GPU acceleration if available (Ollama auto-detects CUDA GPUs)
 - Configure GPU routing in `config.yaml` (see [GPU Model Routing](#8-gpu-model-routing))
 - Increase system RAM or GPU VRAM
@@ -1512,7 +1512,7 @@ ls -la autobot-backend/data/conversation_transcripts/ | head -5
 |---------|----------------|---------------------|---------|
 | Ollama endpoint | `backend.llm.ollama.endpoint` | `AUTOBOT_OLLAMA_ENDPOINT` | `http://127.0.0.1:11434` |
 | Ollama host | `infrastructure.hosts.ollama` | `AUTOBOT_OLLAMA_HOST` | `127.0.0.1` |
-| Selected model | `backend.llm.ollama.selected_model` | `AUTOBOT_DEFAULT_LLM_MODEL` | `mistral:7b-instruct` |
+| Selected model | `backend.llm.ollama.selected_model` | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` |
 | GPU endpoint | `backend.llm.ollama.gpu_endpoint` | -- | (none) |
 | GPU models | `backend.llm.ollama.gpu_models` | -- | `[]` |
 | LLM provider | `backend.llm.active_provider` | `AUTOBOT_LLM_PROVIDER` | `ollama` |

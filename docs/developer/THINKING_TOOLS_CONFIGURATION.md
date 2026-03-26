@@ -205,7 +205,7 @@ def query(self, ...):
 **Ensure Mistral is Default Model** (Required for Tool Calling):
 ```bash
 # In .env file:
-AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 **Why Mistral?**
@@ -217,7 +217,7 @@ AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
 **Verify**:
 ```bash
 grep "AUTOBOT_DEFAULT_LLM_MODEL" .env
-# Should output: AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+# Should output: AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 ---
@@ -324,7 +324,7 @@ Here's the implementation plan...
 2. **Verify model is Mistral**:
    ```bash
    grep "AUTOBOT_DEFAULT_LLM_MODEL" .env
-   # Should be: mistral:7b-instruct
+   # Should be: qwen3.5:9b
    ```
 
 3. **Check system prompt loaded**:

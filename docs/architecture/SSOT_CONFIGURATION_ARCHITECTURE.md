@@ -205,7 +205,7 @@ AUTOBOT_MAIN_MACHINE_IP=172.16.168.20
 AUTOBOT_FRONTEND_VM_IP=172.16.168.21
 AUTOBOT_REDIS_VM_IP=172.16.168.23
 AUTOBOT_BACKEND_PORT=8001
-AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 
 Layer 2: Frozen Code Defaults (Emergency Fallback)
 --------------------------------------------------
@@ -314,7 +314,7 @@ AUTOBOT_PORT_GRAFANA=3000
 # -----------------------------------------------------------------------------
 # LLM CONFIGURATION
 # -----------------------------------------------------------------------------
-AUTOBOT_LLM_DEFAULT_MODEL=mistral:7b-instruct
+AUTOBOT_LLM_DEFAULT_MODEL=qwen3.5:9b
 AUTOBOT_LLM_EMBEDDING_MODEL=nomic-embed-text:latest
 AUTOBOT_LLM_CLASSIFICATION_MODEL=gemma2:2b
 AUTOBOT_LLM_PROVIDER=ollama
@@ -411,7 +411,7 @@ class PortConfig(BaseSettings):
 
 class LLMConfig(BaseSettings):
     """LLM configuration"""
-    default_model: str = Field(alias="AUTOBOT_LLM_DEFAULT_MODEL", default="mistral:7b-instruct")
+    default_model: str = Field(alias="AUTOBOT_LLM_DEFAULT_MODEL", default="qwen3.5:9b")
     embedding_model: str = Field(alias="AUTOBOT_LLM_EMBEDDING_MODEL", default="nomic-embed-text:latest")
     provider: str = Field(alias="AUTOBOT_LLM_PROVIDER", default="ollama")
     timeout: int = Field(alias="AUTOBOT_LLM_TIMEOUT", default=120)
@@ -589,7 +589,7 @@ export function getConfig(): AutoBotConfig {
   };
 
   const llm: LLMConfig = {
-    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'mistral:7b-instruct'),
+    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),
     embeddingModel: getEnv('VITE_LLM_EMBEDDING_MODEL', 'nomic-embed-text:latest'),
     provider: getEnv('VITE_LLM_PROVIDER', 'ollama'),
     timeout: getEnvNumber('VITE_LLM_TIMEOUT', 120),

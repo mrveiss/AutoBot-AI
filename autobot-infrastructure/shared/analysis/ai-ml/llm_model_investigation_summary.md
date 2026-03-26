@@ -53,7 +53,7 @@ SPECIALIZED MISSING:
 ❌ codellama:7b-instruct         - Code analysis optimization
 ❌ phi3:3.8b                     - Fast inference model
 ❌ qwen2.5:7b                    - Enhanced reasoning
-❌ mistral:7b-instruct           - Alternative reasoning
+❌ qwen3.5:9b                    - Default reasoning model
 ```
 
 ---

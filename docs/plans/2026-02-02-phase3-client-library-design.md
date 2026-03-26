@@ -168,8 +168,8 @@ export async function discoverService(
 |------------|---------------|--------------|
 | TIER_1 | llama3.2:1b | ollama |
 | TIER_2 | llama3.2:3b | ollama |
-| TIER_3 | mistral:7b-instruct | ollama |
-| TIER_4 | mistral:7b-instruct | ollama |
+| TIER_3 | qwen3.5:9b | ollama |
+| TIER_4 | qwen3.5:9b | ollama |
 
 ---
 
