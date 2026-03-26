@@ -263,8 +263,16 @@ class RedisConnectionManager:
         self._cleanup_task: Optional[asyncio.Task] = None
 
     def _load_redis_config(self) -> Dict[str, Any]:
-        """Load Redis configuration from unified config."""
-        redis_config = _get_config_manager().get_redis_config()
+        """Load Redis configuration from unified config (#2477)."""
+        cm = _get_config_manager()
+        if cm is None:
+            return {
+                "host": NetworkConstants.REDIS_VM_IP,
+                "port": NetworkConstants.REDIS_PORT,
+                "password": None,
+                "enabled": True,
+            }
+        redis_config = cm.get_redis_config()
 
         return {
             "host": redis_config.get("host", NetworkConstants.REDIS_VM_IP),
@@ -274,8 +282,11 @@ class RedisConnectionManager:
         }
 
     def _load_pool_config(self) -> PoolConfig:
-        """Load pool configuration from unified config."""
-        redis_config = _get_config_manager().get_redis_config()
+        """Load pool configuration from unified config (#2477)."""
+        cm = _get_config_manager()
+        if cm is None:
+            return PoolConfig()
+        redis_config = cm.get_redis_config()
 
         return PoolConfig(
             max_connections=redis_config.get("max_connections", 100),
