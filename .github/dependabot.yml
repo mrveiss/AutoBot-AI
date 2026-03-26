@@ -4,6 +4,7 @@ version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/autobot-backend"
+    target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -21,6 +22,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-shared"
+    target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -31,6 +33,7 @@ updates:
 
   - package-ecosystem: "pip"
     directory: "/autobot-slm-backend"
+    target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -41,6 +44,7 @@ updates:
 
   - package-ecosystem: "npm"
     directory: "/autobot-frontend"
+    target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -56,6 +60,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"
       day: "monday"
