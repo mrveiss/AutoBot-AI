@@ -726,6 +726,7 @@ const codeIntelExtraScans = () => [
   { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
   { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
   { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
+  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: () => runCodeIntelligenceAnalysis() },
 ]
 
 const codeIntelFullScans = () => [
@@ -738,6 +739,7 @@ const codeIntelFullScans = () => [
   { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
   { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
   { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
+  { id: 'codeIntelligence', label: t('analytics.codebase.scans.codeIntelligence'), run: () => runCodeIntelligenceAnalysis() },
 ]
 
 // Issue #208: Pattern Analysis component ref

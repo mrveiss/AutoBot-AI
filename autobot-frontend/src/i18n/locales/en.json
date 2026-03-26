@@ -635,7 +635,8 @@
         "ownership": "Code Ownership",
         "crossLanguage": "Cross-Language",
         "indexing": "Codebase Indexing",
-        "patterns": "Pattern Analysis"
+        "patterns": "Pattern Analysis",
+        "codeIntelligence": "Code Intelligence"
       },
       "pathPlaceholder": "/path/to/analyze",
       "available": "Available",
