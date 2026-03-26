@@ -635,7 +635,8 @@
         "ownership": "Koda īpašumtiesības",
         "crossLanguage": "Pārrobežu valoda",
         "indexing": "Koda bāzes indeksācija",
-        "patterns": "Modeļa analīze"
+        "patterns": "Modeļa analīze",
+        "codeIntelligence": "Koda intelekts"
       },
       "pathPlaceholder": "/path/to/analyze",
       "available": "Pieejams",

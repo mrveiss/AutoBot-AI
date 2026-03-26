@@ -635,7 +635,8 @@
         "ownership": "Code-Eigentum",
         "crossLanguage": "Sprachübergreifend",
         "indexing": "Codebasis-Indizierung",
-        "patterns": "Musteranalyse"
+        "patterns": "Musteranalyse",
+        "codeIntelligence": "Code-Intelligenz"
       },
       "pathPlaceholder": "/pfad/zum/analysieren",
       "available": "Verfügbar",

@@ -635,7 +635,8 @@
         "ownership": "Propiedad del código",
         "crossLanguage": "Idioma cruzado",
         "indexing": "Indexación de base de código",
-        "patterns": "Análisis de patrones"
+        "patterns": "Análisis de patrones",
+        "codeIntelligence": "Inteligencia de código"
       },
       "pathPlaceholder": "/ruta/para/analizar",
       "available": "Disponible",

@@ -635,7 +635,8 @@
         "ownership": "Propriété du code",
         "crossLanguage": "Multilingue",
         "indexing": "Indexation de la base de code",
-        "patterns": "Analyse de modèle"
+        "patterns": "Analyse de modèle",
+        "codeIntelligence": "Intelligence de code"
       },
       "pathPlaceholder": "/chemin/vers/analyse",
       "available": "Disponible",

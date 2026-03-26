@@ -635,7 +635,8 @@
         "ownership": "Własność kodu",
         "crossLanguage": "Międzyjęzykowy",
         "indexing": "Indeksowanie bazy kodu",
-        "patterns": "Analiza wzorców"
+        "patterns": "Analiza wzorców",
+        "codeIntelligence": "Analiza inteligencji kodu"
       },
       "pathPlaceholder": "/path/to/analyze",
       "available": "Dostępny",
