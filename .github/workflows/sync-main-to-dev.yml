@@ -1,17 +1,20 @@
-# Sync Dev_new_gui → main after pushes to Dev_new_gui
+# Sync Dev_new_gui → main (manual release trigger only)
 #
-# Dev_new_gui is the working branch. When it receives new commits
-# (merged PRs, direct pushes), this workflow fast-forwards main
-# to match. If fast-forward fails (main has diverged), it opens
-# a PR instead for manual resolution.
+# Dev_new_gui is the working branch. This workflow pushes it to main
+# when explicitly triggered for a release. It never runs automatically
+# to prevent untested code from landing on main.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/2445
 
 name: Sync Dev_new_gui → main
 
 on:
-  push:
-    branches: [Dev_new_gui]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "release" to confirm pushing Dev_new_gui to main'
+        required: true
+        type: string
 
 jobs:
   sync:
@@ -21,6 +24,12 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Validate confirmation
+        if: inputs.confirm != 'release'
+        run: |
+          echo "::error::You must type 'release' to confirm. Got: '${{ inputs.confirm }}'"
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -31,51 +40,21 @@ jobs:
         run: |
           git fetch origin main
           AHEAD=$(git rev-list --count origin/main..origin/Dev_new_gui)
+          BEHIND=$(git rev-list --count origin/Dev_new_gui..origin/main)
           echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
-          echo "Dev_new_gui is $AHEAD commit(s) ahead of main"
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "Dev_new_gui is $AHEAD ahead, $BEHIND behind main"
 
-      - name: Fast-forward main to Dev_new_gui
+      - name: Sync main to Dev_new_gui
         if: steps.check.outputs.ahead != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Try fast-forward push
-          if git push origin origin/Dev_new_gui:main 2>&1; then
-            echo "main fast-forwarded to Dev_new_gui successfully."
-            exit 0
+          if [ "${{ steps.check.outputs.behind }}" != "0" ]; then
+            echo "::error::main has ${{ steps.check.outputs.behind }} commit(s) not in Dev_new_gui. Resolve divergence manually first."
+            exit 1
           fi
 
-          echo "Fast-forward failed — main has diverged. Creating PR."
-
-          # Check if a sync PR already exists
-          EXISTING=$(gh pr list \
-            --base main \
-            --head Dev_new_gui \
-            --state open \
-            --json number \
-            --jq 'length')
-
-          if [ "$EXISTING" -gt 0 ]; then
-            echo "Sync PR already exists — skipping creation."
-            exit 0
-          fi
-
-          AHEAD=${{ steps.check.outputs.ahead }}
-
-          gh pr create \
-            --base main \
-            --head Dev_new_gui \
-            --title "chore(sync): merge Dev_new_gui → main ($AHEAD commit(s))" \
-            --body "$(cat <<'EOF'
-          ## Automated sync: Dev_new_gui → main
-
-          Dev_new_gui has commits not yet in main. Fast-forward failed
-          (main may have diverged), so this PR is created for manual merge.
-
-          **Review carefully** — if there are merge conflicts, resolve them
-          locally before merging.
-
-          > Created automatically by the sync-main-to-dev workflow.
-          > See issue #2445 for context.
-          EOF
-          )"
+          # Safe fast-forward push (no --force)
+          git push origin origin/Dev_new_gui:main
+          echo "main fast-forwarded to Dev_new_gui successfully."
