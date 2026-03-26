@@ -92,20 +92,20 @@ import redis.asyncio as async_redis
 # constants.threshold_constants, config, monitoring.prometheus_metrics).
 # Moving redis_management/ to autobot-shared would require pulling in those
 # backend modules too — the dependency chain is deep.
-# For now this coupling is accepted and documented here.
-# See issue #2220 for full analysis and discussion of moving redis_management
-# to autobot-shared as the preferred long-term fix.
-from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
-from utils.redis_management.connection_manager import RedisConnectionManager
-from utils.redis_management.statistics import (
+# redis_management now lives in autobot-shared (Issue #2313).
+from autobot_shared.redis_management.config import (
+    PoolConfig,
+    RedisConfig,
+    RedisConfigLoader,
+)
+from autobot_shared.redis_management.connection_manager import RedisConnectionManager
+from autobot_shared.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-
-# Import all types, data models, and classes from the package (Issue #381 refactoring)
-from utils.redis_management.types import (
+from autobot_shared.redis_management.types import (
     DATABASE_MAPPING,
     ConnectionState,
     RedisDatabase,

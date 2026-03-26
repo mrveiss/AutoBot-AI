@@ -15,6 +15,7 @@ Features:
 - Async and sync support
 
 Extracted from redis_client.py as part of Issue #381 refactoring.
+Moved from autobot-backend/utils/ to autobot-shared/ (Issue #2313).
 """
 
 import asyncio
@@ -29,23 +30,65 @@ from typing import Any, Dict, List, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
-from config import config as config_manager
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import RetryConfig, TimingConstants
-from monitoring.prometheus_metrics import get_metrics_manager
 from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
 from redis.backoff import ExponentialBackoff
 from redis.connection import ConnectionPool, SSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
-from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
-from utils.redis_management.statistics import (
+
+from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.redis_management.config import (
+    PoolConfig,
+    RedisConfig,
+    RedisConfigLoader,
+)
+from autobot_shared.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from utils.redis_management.types import DATABASE_MAPPING, ConnectionState
+from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState
+
+# ---------------------------------------------------------------------------
+# Lazy imports for backend-specific modules (#2313).
+# These are optional — available when running under autobot-backend, absent
+# in other contexts (SLM backend, standalone scripts).
+# ---------------------------------------------------------------------------
+_config_manager = None
+_metrics_manager_getter = None
+
+# Retry/timing defaults (previously from constants.threshold_constants)
+_DEFAULT_RETRIES = 3
+_BACKOFF_BASE = 2.0
+_STANDARD_DELAY = 1.0
+
+
+def _get_config_manager():
+    """Lazy-load the backend config manager."""
+    global _config_manager
+    if _config_manager is None:
+        try:
+            from config import config as cm
+
+            _config_manager = cm
+        except ImportError:
+            pass
+    return _config_manager
+
+
+def _get_metrics_manager():
+    """Lazy-load the Prometheus metrics manager."""
+    global _metrics_manager_getter
+    if _metrics_manager_getter is None:
+        try:
+            from monitoring.prometheus_metrics import get_metrics_manager as gmm
+
+            _metrics_manager_getter = gmm
+        except ImportError:
+            _metrics_manager_getter = lambda: None  # noqa: E731
+    return _metrics_manager_getter()
+
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +264,7 @@ class RedisConnectionManager:
 
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config."""
-        redis_config = config_manager.get_redis_config()
+        redis_config = _get_config_manager().get_redis_config()
 
         return {
             "host": redis_config.get("host", NetworkConstants.REDIS_VM_IP),
@@ -232,14 +275,14 @@ class RedisConnectionManager:
 
     def _load_pool_config(self) -> PoolConfig:
         """Load pool configuration from unified config."""
-        redis_config = config_manager.get_redis_config()
+        redis_config = _get_config_manager().get_redis_config()
 
         return PoolConfig(
             max_connections=redis_config.get("max_connections", 100),
             socket_timeout=redis_config.get("socket_timeout", 5.0),
             socket_connect_timeout=redis_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=redis_config.get("retry_on_timeout", True),
-            max_retries=redis_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
+            max_retries=redis_config.get("max_retries", _DEFAULT_RETRIES),
             health_check_interval=redis_config.get("health_check_interval", 30.0),
             circuit_breaker_threshold=redis_config.get("circuit_breaker_threshold", 5),
             circuit_breaker_timeout=redis_config.get("circuit_breaker_timeout", 60),
@@ -272,7 +315,7 @@ class RedisConnectionManager:
             socket_timeout=timeout_config.get("socket_timeout", 5.0),
             socket_connect_timeout=timeout_config.get("socket_connect_timeout", 5.0),
             retry_on_timeout=timeout_config.get("retry_on_timeout", True),
-            max_retries=timeout_config.get("max_retries", RetryConfig.DEFAULT_RETRIES),
+            max_retries=timeout_config.get("max_retries", _DEFAULT_RETRIES),
             socket_keepalive_options=(
                 self._tcp_keepalive_options
                 if hasattr(self, "_tcp_keepalive_options")
@@ -318,7 +361,7 @@ class RedisConnectionManager:
                         f"Redis '{database_name}' loading dataset, waiting... "
                         f"({int((datetime.now() - start_time).total_seconds())}s elapsed)"
                     )
-                    await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+                    await asyncio.sleep(_STANDARD_DELAY)
                 else:
                     raise
             except Exception as e:
@@ -521,7 +564,7 @@ class RedisConnectionManager:
 
         # Record to Prometheus metrics
         try:
-            metrics = get_metrics_manager()
+            metrics = _get_metrics_manager()
             metrics.record_request(
                 database=database_name, operation="general", success=success
             )
@@ -588,7 +631,7 @@ class RedisConnectionManager:
 
             # Record circuit breaker event to Prometheus
             try:
-                prom_metrics = get_metrics_manager()
+                prom_metrics = _get_metrics_manager()
                 prom_metrics.record_circuit_breaker_event(
                     database=database_name,
                     event="opened",

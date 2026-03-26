@@ -2,63 +2,40 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Redis Management Package
+Redis Management — backward-compatibility shim (Issue #2313).
 
-This package contains the Redis connection management system for AutoBot.
-It was split from the monolithic redis_client.py as part of Issue #381.
+The canonical implementation has moved to autobot_shared.redis_management.
+All existing imports of ``from utils.redis_management import ...``
+continue to work unchanged via this re-export.
 
-Package Structure:
-- types.py: Enums (RedisDatabase, ConnectionState) and database mapping
-- config.py: RedisConfig, RedisConfigLoader, PoolConfig
-- statistics.py: RedisStats, PoolStatistics, ManagerStats, ConnectionMetrics
-- connection_manager.py: RedisConnectionManager class
-
-Usage:
-    from utils.redis_management import (
-        # Enums
-        RedisDatabase, ConnectionState,
-        # Configuration
-        RedisConfig, RedisConfigLoader, PoolConfig,
-        # Statistics
-        RedisStats, PoolStatistics, ManagerStats, ConnectionMetrics,
-        # Manager
-        RedisConnectionManager,
-        # Constants
-        DATABASE_MAPPING,
-    )
-
-For backward compatibility, the original redis_client.py module
-still exports all classes and functions directly.
+Preferred import:
+    from autobot_shared.redis_management import RedisConnectionManager
 """
 
-# Configuration classes
-from .config import PoolConfig, RedisConfig, RedisConfigLoader
+from autobot_shared.redis_management import (  # noqa: F401
+    DATABASE_MAPPING,
+    ConnectionMetrics,
+    ConnectionState,
+    ManagerStats,
+    PoolConfig,
+    PoolStatistics,
+    RedisConfig,
+    RedisConfigLoader,
+    RedisConnectionManager,
+    RedisDatabase,
+    RedisStats,
+)
 
-# Connection manager
-from .connection_manager import RedisConnectionManager
-
-# Statistics dataclasses
-from .statistics import ConnectionMetrics, ManagerStats, PoolStatistics, RedisStats
-
-# Types and constants
-from .types import DATABASE_MAPPING, ConnectionState, RedisDatabase
-
-# Re-export for convenience
 __all__ = [
-    # Enums
     "RedisDatabase",
     "ConnectionState",
-    # Constants
     "DATABASE_MAPPING",
-    # Configuration
     "RedisConfig",
     "RedisConfigLoader",
     "PoolConfig",
-    # Statistics
     "RedisStats",
     "PoolStatistics",
     "ManagerStats",
     "ConnectionMetrics",
-    # Manager
     "RedisConnectionManager",
 ]
