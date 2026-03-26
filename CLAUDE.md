@@ -208,6 +208,8 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 4. Code reviewed
 5. Closing summary added to issue
 6. Issue status = closed
+7. Worktree removed (if one was created): `git worktree remove .worktrees/issue-XXXX`
+8. Feature branch deleted (local + remote): `git branch -d <branch> && git push origin --delete <branch>`
 
 **Pre-commit & Linting:**
 
@@ -393,6 +395,37 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - Always target `Dev_new_gui` for PRs and merges unless explicitly told otherwise
 - After completing work: delete remote feature branches and prune stale branches
 
+**Worktree & Branch Cleanup (MANDATORY after issue closure):**
+
+When an issue is closed (PR merged or work completed), clean up immediately — do not leave for later:
+
+```bash
+# 1. Remove the worktree (if one exists)
+git worktree remove .worktrees/issue-XXXX
+
+# 2. Delete local branch
+git branch -d <branch-name>
+
+# 3. Delete remote branch (if pushed)
+git push origin --delete <branch-name>
+```
+
+**Bulk cleanup — run `scripts/cleanup-worktrees.sh` or manually:**
+
+```bash
+# Automated: handles worktrees, local+remote branches, and orphaned branches
+scripts/cleanup-worktrees.sh --dry-run   # preview
+scripts/cleanup-worktrees.sh             # execute
+
+# Manual: prune merged branches
+git branch --merged Dev_new_gui | grep -v "Dev_new_gui\|main" | xargs -r git branch -d
+git fetch --prune
+```
+
+- **Worktrees for CLOSED issues:** remove immediately with `git worktree remove`
+- **Worktrees for OPEN issues with uncommitted work:** ask user before removing
+- **Never force-delete (`-D`) without asking** — the branch may have unmerged work
+
 **Pre-Flight Checks (before ANY code changes):**
 1. Verify current branch: `git branch --show-current`
 2. Check for uncommitted work: `git status`
@@ -409,11 +442,11 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 
 **End-of-session ritual:**
 1. Close any issues? → Verify with `gh issue view <number> --json state -q '.state'` → only move to Recent Completed after confirming CLOSED on GitHub
-2. Any gotcha resolved? → Delete it
-3. Recent Completed >30? → Archive oldest batch (verify each issue is CLOSED before archiving)
-4. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
-5. Never use range notation (`#1534-#1545`) in archive refs — enumerate individual issue numbers
-6. Stale worktrees? → Run `scripts/cleanup-worktrees.sh --dry-run` and review, then `scripts/cleanup-worktrees.sh` to remove closed-issue worktrees
+2. **Clean up worktrees & branches** → `scripts/cleanup-worktrees.sh --dry-run` then `scripts/cleanup-worktrees.sh` to remove closed-issue worktrees, local+remote branches, and orphaned branches
+3. Any gotcha resolved? → Delete it
+4. Recent Completed >30? → Archive oldest batch (verify each issue is CLOSED before archiving)
+5. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
+6. Never use range notation (`#1534-#1545`) in archive refs — enumerate individual issue numbers
 
 ### Multi-Agent Safety
 
