@@ -58,26 +58,31 @@ async def get_llm_config(
         raise HTTPException(status_code=500, detail="Error getting LLM config")
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_llm_config",
-    error_code_prefix="LLM",
-)
 @router.post("/config")
 async def update_llm_config(
     config_data: dict,
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Update LLM configuration.
+    """LLM configuration writes are managed by the SLM server.
 
-    Issue #744: Requires admin authentication.
+    Issue #2400: Deprecated — use SLM settings to modify LLM config.
+    POST /api/llm/config is no longer accepted on the main backend to prevent
+    config drift between the SLM authority and fleet nodes.
     """
-    try:
-        result = ConfigService.update_llm_config(config_data)
-        return result
-    except Exception:
-        logger.error("Error updating LLM config: %s", "Internal server error")
-        raise HTTPException(status_code=500, detail="Error updating LLM config")
+    logger.warning(
+        "Rejected POST /api/llm/config — write endpoint deprecated (#2400). "
+        "Caller should use SLM settings interface."
+    )
+    return JSONResponse(
+        status_code=410,
+        content={
+            "detail": (
+                "LLM configuration is managed by the SLM server. "
+                "Use the SLM settings interface at /api/slm/config to modify LLM settings."
+            ),
+            "redirect": "/api/slm/config",
+        },
+    )
 
 
 @with_error_handling(
@@ -213,45 +218,26 @@ async def update_llm_provider(
     provider_data: dict,
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Update LLM provider configuration using unified config system.
+    """LLM provider configuration writes are managed by the SLM server.
 
-    Issue #744: Requires admin authentication.
-    Issue #620: Refactored to extract _update_local_provider, _update_cloud_provider,
-    and _build_llm_update_response helpers.
+    Issue #2400: Deprecated — use SLM settings to modify LLM provider.
+    POST /api/llm/provider is no longer accepted on the main backend to prevent
+    config drift between the SLM authority and fleet nodes.
     """
-    try:
-        logger.info("UNIFIED CONFIG: Received LLM provider update: %s", provider_data)
-
-        # Handle streaming setting
-        if "streaming" in provider_data:
-            logger.info(
-                f"UNIFIED CONFIG: Updating streaming setting to: {provider_data['streaming']}"
-            )
-            config.set("backend.streaming", provider_data["streaming"])
-
-        # Handle local provider updates (Issue #620: uses helper)
-        if provider_data.get("provider_type") == "local" and provider_data.get(
-            "local_model"
-        ):
-            await _update_local_provider(provider_data.get("local_model"))
-
-        # Handle cloud provider updates (Issue #620: uses helper)
-        elif provider_data.get("provider_type") == "cloud":
-            if provider_data.get("cloud_provider") and provider_data.get("cloud_model"):
-                _update_cloud_provider(
-                    provider_data.get("cloud_provider"),
-                    provider_data.get("cloud_model"),
-                )
-
-        # Save all changes (wrapped for async - Issue #362)
-        await asyncio.to_thread(config.save_settings)
-        await asyncio.to_thread(config.save_config_to_yaml)
-
-        return _build_llm_update_response()
-
-    except Exception as e:
-        logger.error("Error updating LLM provider: %s", str(e))
-        raise HTTPException(status_code=500, detail="Error updating LLM provider")
+    logger.warning(
+        "Rejected POST /api/llm/provider — write endpoint deprecated (#2400). "
+        "Caller should use SLM settings interface."
+    )
+    return JSONResponse(
+        status_code=410,
+        content={
+            "detail": (
+                "LLM configuration is managed by the SLM server. "
+                "Use the SLM settings interface at /api/slm/config to modify LLM settings."
+            ),
+            "redirect": "/api/slm/config",
+        },
+    )
 
 
 @with_error_handling(
@@ -328,46 +314,31 @@ async def _apply_embedding_config(
     await asyncio.to_thread(config.save_config_to_yaml)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_embedding_model",
-    error_code_prefix="LLM",
-)
 @router.post("/embedding")
 async def update_embedding_model(
     embedding_data: dict,
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Update embedding model configuration. Issue #744: Requires admin authentication."""
-    try:
-        logger.info(
-            "UNIFIED CONFIG: Received embedding model update: %s", embedding_data
-        )
-        provider = embedding_data.get("provider", "ollama")
-        model = embedding_data.get("model")
-        if not model:
-            raise HTTPException(status_code=400, detail="Model name is required")
-        logger.info(
-            "UNIFIED CONFIG: Updating embedding model to: %s/%s", provider, model
-        )
-        await _apply_embedding_config(provider, model, embedding_data)
-        current_config = config.get("llm", {})
-        embedding_config = current_config.get("unified", {}).get("embedding", {})
-        return {
-            "status": "success",
-            "message": f"Embedding model updated to {provider}/{model}",
-            "current_config": {
-                "provider": embedding_config.get("provider", provider),
-                "selected_model": (
-                    embedding_config.get("providers", {})
-                    .get(provider, {})
-                    .get("selected_model", model)
-                ),
-            },
-        }
-    except Exception as e:
-        logger.error("Error updating embedding model: %s", str(e))
-        raise HTTPException(status_code=500, detail="Error updating embedding model")
+    """Embedding model configuration writes are managed by the SLM server.
+
+    Issue #2400: Deprecated — use SLM settings to modify embedding model config.
+    POST /api/llm/embedding is no longer accepted on the main backend to prevent
+    config drift between the SLM authority and fleet nodes.
+    """
+    logger.warning(
+        "Rejected POST /api/llm/embedding — write endpoint deprecated (#2400). "
+        "Caller should use SLM settings interface."
+    )
+    return JSONResponse(
+        status_code=410,
+        content={
+            "detail": (
+                "LLM configuration is managed by the SLM server. "
+                "Use the SLM settings interface at /api/slm/config to modify LLM settings."
+            ),
+            "redirect": "/api/slm/config",
+        },
+    )
 
 
 def _build_local_provider_status(local_config: dict, ollama_url: str) -> dict:
