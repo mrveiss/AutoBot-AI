@@ -1,0 +1,55 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Post-commit hook:
+#   1. Auto-heal stash-pop conflict markers in working tree (Issue #2416)
+#   2. Chain to doc-sync post-commit hook (Issue #250)
+#
+# When pre-commit's stash push/pop cycle conflicts with PostToolUse
+# formatting changes (Black + isort), the working tree can end up with
+# merge conflict markers even though the committed content is correct.
+# This hook detects and restores those files from HEAD.
+
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+# ---------------------------------------------------------------------------
+# 1. Auto-heal stash-pop conflict markers (Issue #2416)
+# ---------------------------------------------------------------------------
+# Check tracked files with unstaged changes for conflict markers.
+# git diff --name-only lists files that differ between index and working tree.
+changed_files="$(git diff --name-only 2>/dev/null)"
+if [ -n "$changed_files" ]; then
+    conflicted=""
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        if grep -q '^<<<<<<< ' "$f" 2>/dev/null; then
+            conflicted="${conflicted}${f}"$'\n'
+        fi
+    done <<< "$changed_files"
+
+    if [ -n "$conflicted" ]; then
+        echo ""
+        echo "Post-commit heal: restoring files with stash-pop conflict markers (#2416):"
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "  -> $f"
+            git checkout HEAD -- "$f"
+        done <<< "$conflicted"
+        echo "Working tree restored from committed versions."
+        echo ""
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Chain to doc-sync post-commit hook (Issue #250)
+# ---------------------------------------------------------------------------
+DOC_SYNC="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks/post-commit-doc-sync"
+if [ -x "$DOC_SYNC" ]; then
+    "$DOC_SYNC"
+elif [ -f "$DOC_SYNC" ]; then
+    bash "$DOC_SYNC"
+fi
+
+exit 0
