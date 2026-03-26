@@ -197,7 +197,7 @@ CREATE INDEX idx_agents_is_default ON agents(is_default);
 
 -- Seed default agent
 INSERT INTO agents (agent_id, name, llm_provider, llm_model, is_default)
-VALUES ('default', 'Default Agent', 'ollama', 'mistral:7b-instruct', TRUE);
+VALUES ('default', 'Default Agent', 'ollama', 'qwen3.5:9b', TRUE);
 ```
 
 ## 9. Phase 2 Scope

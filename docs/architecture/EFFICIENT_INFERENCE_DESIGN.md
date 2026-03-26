@@ -43,7 +43,7 @@ This document describes a **latency-focused** inference optimization architectur
 AutoBot's LLM infrastructure:
 - **Ollama** (primary) - Local inference at `127.0.0.1:11434`
 - **vLLM** - High-performance inference with prefix caching
-- **Default model:** `mistral:7b-instruct`
+- **Default model:** `qwen3.5:9b`
 - **Current latency:** ~500ms first token
 
 ### Problem with AirLLM Approach
@@ -547,17 +547,17 @@ QUANTIZED_MODEL_REGISTRY = {
 Ollama models already support quantization via GGUF format:
 
 ```bash
-# Current: mistral:7b-instruct (FP16, ~14GB)
+# Current: qwen3.5:9b (FP16, ~14GB)
 # Optimized options:
-ollama pull mistral:7b-instruct-q4_K_M   # 4-bit, ~4GB, slight quality loss
-ollama pull mistral:7b-instruct-q8_0     # 8-bit, ~8GB, minimal quality loss
+ollama pull qwen3.5:9b-q4_K_M   # 4-bit, ~4GB, slight quality loss
+ollama pull qwen3.5:9b-q8_0     # 8-bit, ~8GB, minimal quality loss
 ```
 
 **Update `.env` for quantized Ollama models:**
 
 ```bash
 # Use quantized model for better performance
-AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct-q8_0
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b-q8_0
 ```
 
 ---

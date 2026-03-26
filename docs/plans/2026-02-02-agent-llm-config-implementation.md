@@ -239,7 +239,7 @@ def run_migration(db_path: str = "slm.db") -> bool:
         cursor.execute("""
             INSERT INTO agents (agent_id, name, description, llm_provider, llm_model, is_default)
             VALUES ('default', 'Default Agent', 'Fallback agent for unconfigured requests',
-                    'ollama', 'mistral:7b-instruct', TRUE)
+                    'ollama', 'qwen3.5:9b', TRUE)
         """)
         logger.info("Seeded default agent")
 
@@ -678,7 +678,7 @@ Expected: Migration complete, default agent seeded
 **Step 2: Verify table exists**
 
 Run: `cd slm-server && sqlite3 slm.db "SELECT agent_id, name, llm_provider, llm_model, is_default FROM agents;"`
-Expected: `default|Default Agent|ollama|mistral:7b-instruct|1`
+Expected: `default|Default Agent|ollama|qwen3.5:9b|1`
 
 **Step 3: Test API endpoint (manual or curl)**
 
@@ -937,7 +937,7 @@ class SLMClient:
         return {
             "llm_provider": "ollama",
             "llm_endpoint": "http://127.0.0.1:11434",
-            "llm_model": "mistral:7b-instruct",
+            "llm_model": "qwen3.5:9b",
             "llm_timeout": 30,
             "llm_temperature": 0.7,
             "llm_max_tokens": None,

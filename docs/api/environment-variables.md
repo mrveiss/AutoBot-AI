@@ -17,7 +17,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_DEFAULT_LLM_MODEL` | `mistral:7b-instruct` | **Primary** - Default LLM model for all tasks |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | **Primary** - Default LLM model for all tasks |
 | `AUTOBOT_OLLAMA_HOST` | `172.16.168.24` | Ollama server host (AI Stack VM) |
 | `AUTOBOT_OLLAMA_PORT` | `11434` | Ollama server port |
 | `AUTOBOT_OLLAMA_ENDPOINT` | `http://${HOST}:${PORT}/api/generate` | Ollama API endpoint |
@@ -119,8 +119,8 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 
 ### Setting Default LLM Model
 ```bash
-export AUTOBOT_DEFAULT_LLM_MODEL="mistral:7b-instruct"
-export AUTOBOT_ORCHESTRATOR_LLM="mistral:7b-instruct"
+export AUTOBOT_DEFAULT_LLM_MODEL="qwen3.5:9b"
+export AUTOBOT_ORCHESTRATOR_LLM="qwen3.5:9b"
 ```
 
 ### Using Different Backend Port

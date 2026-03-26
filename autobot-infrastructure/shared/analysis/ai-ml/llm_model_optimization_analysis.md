@@ -120,7 +120,7 @@ ollama pull codellama:7b-instruct              # For code-specific tasks
 
 # Optional advanced models
 ollama pull qwen2.5:7b                          # For general reasoning
-ollama pull mistral:7b-instruct                # Alternative reasoning model
+ollama pull qwen3.5:9b                         # Default reasoning model
 ```
 
 ### 2. Update Configuration Files

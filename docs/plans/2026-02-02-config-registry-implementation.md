@@ -566,7 +566,7 @@ REGISTRY_DEFAULTS = {
     "browser.host": "172.16.168.25",
     "browser.port": "3000",
     # LLM defaults
-    "llm.default_model": "mistral:7b-instruct",
+    "llm.default_model": "qwen3.5:9b",
     "llm.embedding_model": "nomic-embed-text:latest",
     # Timeouts
     "timeout.http": "30",

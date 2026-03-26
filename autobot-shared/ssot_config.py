@@ -228,7 +228,7 @@ class LLMConfig(BaseSettings):
         """Route Ollama requests to GPU or CPU endpoint by model (#1070).
 
         Args:
-            model_name: Ollama model name (e.g. 'mistral:7b-instruct')
+            model_name: Ollama model name (e.g. 'qwen3.5:9b')
 
         Returns:
             Ollama base URL (no /api suffix)
@@ -316,7 +316,7 @@ class LLMConfig(BaseSettings):
             agent_id: Agent identifier (e.g., 'orchestrator', 'research', 'code_analysis')
 
         Returns:
-            Model name (e.g., 'gpt-4', 'claude-3-opus', 'mistral:7b-instruct')
+            Model name (e.g., 'gpt-4', 'claude-3-opus', 'qwen3.5:9b')
 
         Example:
             # In .env:
@@ -898,7 +898,7 @@ class AutoBotConfig(BaseSettings):
         config = get_config()
         backend = config.backend_url  # http://172.16.168.20:8001
         redis = config.redis_url  # redis://172.16.168.23:6379
-        model = config.llm.default_model  # mistral:7b-instruct
+        model = config.llm.default_model  # qwen3.5:9b
     """
 
     model_config = SettingsConfigDict(
@@ -1223,7 +1223,7 @@ def get_agent_llm_config_explicit(agent_id: str) -> dict:
     Each agent MUST have its own provider, endpoint, and model via environment variables:
     - AUTOBOT_{AGENT_ID}_PROVIDER (e.g., AUTOBOT_ORCHESTRATOR_PROVIDER=ollama)
     - AUTOBOT_{AGENT_ID}_ENDPOINT (e.g., AUTOBOT_ORCHESTRATOR_ENDPOINT=http://127.0.0.1:11434)
-    - AUTOBOT_{AGENT_ID}_MODEL (e.g., AUTOBOT_ORCHESTRATOR_MODEL=mistral:7b-instruct)
+    - AUTOBOT_{AGENT_ID}_MODEL (e.g., AUTOBOT_ORCHESTRATOR_MODEL=qwen3.5:9b)
 
     Raises AgentConfigurationError if any setting is missing.
 
@@ -1306,7 +1306,7 @@ def get_agent_model_explicit(agent_id: str) -> str:
         raise AgentConfigurationError(
             f"Agent '{agent_id}' requires explicit LLM model configuration. "
             f"Set {env_key} in .env file. "
-            f"Example: {env_key}=mistral:7b-instruct"
+            f"Example: {env_key}=qwen3.5:9b"
         )
     return model
 

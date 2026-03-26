@@ -375,7 +375,7 @@ These conflicts drive the default fleet layout:
 | **External deps** | — |
 | **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | — (binary install from ollama.ai) |
-| **GPU models** | mistral:7b-instruct, deepseek-r1:14b, codellama:13b |
+| **GPU models** | qwen3.5:9b, deepseek-r1:14b, codellama:13b |
 | **Concurrency** | max_loaded=5, num_parallel=4, keep_alive=10m |
 | **Special hardware** | NVIDIA GPU required. Auto-detected via nvidia-smi. |
 | **Degraded without** | Large model inference — system falls back to CPU models or cloud providers |

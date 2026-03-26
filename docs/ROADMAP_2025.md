@@ -90,7 +90,7 @@ This section documents key architectural decisions where the original plan was r
 
 **Current Implementation** (Temporary):
 
-- **Mistral 7B Instruct** (`mistral:7b-instruct`) - Used for ALL task types:
+- **Qwen 3.5 9B** (`qwen3.5:9b`) - Used for ALL task types:
   - Default LLM, Embedding, Classification, Reasoning
   - RAG, Coding, Orchestrator, Agent tasks
   - Research, Analysis, Planning
@@ -112,10 +112,10 @@ This section documents key architectural decisions where the original plan was r
 **Current Configuration** (from `.env`):
 
 ```bash
-AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
-AUTOBOT_EMBEDDING_MODEL=mistral:7b-instruct
-AUTOBOT_CLASSIFICATION_MODEL=mistral:7b-instruct  # TODO: Use 1B model
-AUTOBOT_REASONING_MODEL=mistral:7b-instruct
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
+AUTOBOT_EMBEDDING_MODEL=qwen3.5:9b
+AUTOBOT_CLASSIFICATION_MODEL=qwen3.5:9b  # TODO: Use 1B model
+AUTOBOT_REASONING_MODEL=qwen3.5:9b
 # Future: tiered model distribution for specialized agents
 ```
 

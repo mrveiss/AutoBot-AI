@@ -423,7 +423,7 @@ async def seed_agents():
                 continue
 
             # Determine model from config
-            default_model = config.get("default_model", "mistral:7b-instruct")
+            default_model = config.get("default_model", "qwen3.5:9b")
 
             # Create agent
             agent = Agent(

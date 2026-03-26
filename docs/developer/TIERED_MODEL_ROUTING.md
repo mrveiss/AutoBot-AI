@@ -24,7 +24,7 @@ Tiered Model Routing automatically selects the most appropriate LLM model based 
 
 **Default Models:**
 - Simple Tier: `gemma2:2b` (fast, low resource)
-- Complex Tier: `mistral:7b-instruct` (capable, comprehensive)
+- Complex Tier: `qwen3.5:9b` (capable, comprehensive)
 
 ### Complexity Scoring
 
@@ -105,7 +105,7 @@ AUTOBOT_COMPLEXITY_THRESHOLD=3.0
 
 # Model assignments
 AUTOBOT_MODEL_TIER_SIMPLE=gemma2:2b
-AUTOBOT_MODEL_TIER_COMPLEX=mistral:7b-instruct
+AUTOBOT_MODEL_TIER_COMPLEX=qwen3.5:9b
 
 # Fallback behavior (default: true)
 # If simple tier fails, automatically retry with complex tier
@@ -131,7 +131,7 @@ enabled = tier_config.get("enabled", True)
 
 # Get models
 simple_model = tier_config.get("models", {}).get("simple", "gemma2:2b")
-complex_model = tier_config.get("models", {}).get("complex", "mistral:7b-instruct")
+complex_model = tier_config.get("models", {}).get("complex", "qwen3.5:9b")
 
 # Get threshold
 threshold = tier_config.get("complexity_threshold", 3.0)
@@ -208,7 +208,7 @@ Get current tiered routing configuration.
   "complexity_threshold": 3.0,
   "models": {
     "simple": "gemma2:2b",
-    "complex": "mistral:7b-instruct"
+    "complex": "qwen3.5:9b"
   },
   "fallback_to_complex": true,
   "logging": {
@@ -321,10 +321,10 @@ curl -X POST http://localhost:8001/api/llm/tiered-routing/config \
 When `log_routing_decisions` is enabled, routing decisions are logged:
 
 ```
-INFO - Tiered routing: mistral:7b-instruct -> gemma2:2b
+INFO - Tiered routing: qwen3.5:9b -> gemma2:2b
        (score=1.8, tier=simple, reason=Low complexity request with minimal indicators)
 
-INFO - Tiered routing: selected mistral:7b-instruct
+INFO - Tiered routing: selected qwen3.5:9b
        (score=5.4, tier=complex)
 
 WARNING - Tiered routing fallback triggered: simple -> complex tier

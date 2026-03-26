@@ -114,7 +114,7 @@ Examples:
 #### LLM Spans
 ```python
 "llm.provider": "ollama",
-"llm.model": "mistral:7b-instruct",
+"llm.model": "qwen3.5:9b",
 "llm.streaming": True,
 "llm.temperature": 0.7,
 "llm.prompt_messages": 3,

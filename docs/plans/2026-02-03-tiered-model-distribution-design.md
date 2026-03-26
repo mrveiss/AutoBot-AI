@@ -12,7 +12,7 @@ Implement tiered model distribution to achieve 50-75% reduction in resource usag
 ## Goals
 
 - Route simple requests (complexity < 3) to lightweight model (`gemma2:2b`)
-- Route complex requests (complexity >= 3) to capable model (`mistral:7b-instruct`)
+- Route complex requests (complexity >= 3) to capable model (`qwen3.5:9b`)
 - Achieve 50%+ reduction in compute resources for simple tasks
 - Maintain response quality through intelligent routing
 
@@ -81,7 +81,7 @@ tiered_routing:
   complexity_threshold: 3
   models:
     simple: "gemma2:2b"
-    complex: "mistral:7b-instruct"
+    complex: "qwen3.5:9b"
   fallback_to_complex: true
   logging:
     log_scores: true
@@ -113,7 +113,7 @@ tiered_routing:
 ## Success Criteria
 
 - [ ] Simple requests (< 3 complexity) handled by `gemma2:2b`
-- [ ] Complex requests (>= 3 complexity) handled by `mistral:7b-instruct`
+- [ ] Complex requests (>= 3 complexity) handled by `qwen3.5:9b`
 - [ ] 50%+ reduction in compute resources for simple tasks
 - [ ] No degradation in response quality (validated by sampling)
 - [ ] Metrics visible in system dashboard

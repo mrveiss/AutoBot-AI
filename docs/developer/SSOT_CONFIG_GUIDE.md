@@ -415,7 +415,7 @@ All infrastructure configuration (IPs, ports, hosts) is in `.env`:
 AUTOBOT_BACKEND_HOST=172.16.168.20
 AUTOBOT_REDIS_HOST=172.16.168.23
 AUTOBOT_OLLAMA_HOST=127.0.0.1
-AUTOBOT_DEFAULT_LLM_MODEL=mistral:7b-instruct
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 ### What Goes Where?
