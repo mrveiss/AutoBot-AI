@@ -232,14 +232,13 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 - Never apply bulk regex/script fixes across 100+ files without a small-sample validation step
 - If a bulk fix script produces syntax errors in any file: stop, fix the script, re-test on the sample, then re-run
 
-**Pre-commit Stash Risk (Issue #1503):**
+**Pre-commit Stash Bypass (Issue #2512, #1503):**
 
-pre-commit uses `git stash push --include-untracked` before running hooks and `git stash pop` after. When untracked files from other in-progress branches exist in the working directory, the stash pop can promote them into the staging area — causing them to be accidentally included in unrelated commits.
+The pre-commit wrapper (`scripts/hooks/pre-commit-branch-guard-wrapper`) runs `pre-commit run --files <staged>` instead of calling the framework hook directly. This makes pre-commit skip its internal stash push/pop cycle, eliminating the root cause of branch switching (#1670), file contamination (#1503), and content loss (#2512).
 
-- **Mitigation**: use `git worktree add .worktrees/feat-XXXX -b feat/XXXX` for ALL parallel branch work — each worktree has its own isolated working directory
-- **Detection**: the `warn-untracked-files` pre-commit hook fires at `prepare-commit-msg` stage and warns when untracked source files coexist with a commit
-- **Before committing**: if the warning fires, run `git diff --cached --name-only` and verify every staged file belongs on the current branch
-- **To unstage accidentally included files**: `git restore --staged <file>`
+- **If stash issues recur**: verify `grep "pre-commit run --files" .git/hooks/pre-commit` — if missing, run `git checkout Dev_new_gui` to trigger post-checkout re-installation
+- **Manual git stash is safe** again — pre-commit no longer interferes with the stash stack
+- **Worktrees** remain the recommended approach for parallel branch work
 
 **Post-commit verification:**
 
