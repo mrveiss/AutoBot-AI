@@ -179,7 +179,7 @@ def my_function():
 
         assert ctx.resolve_name("json") == "json"
         assert ctx.resolve_name("Path") == "pathlib.Path"
-        assert ctx.resolve_name("hf") == "src.utils.helper.helper_func"
+        assert ctx.resolve_name("hf") == "utils.helper.helper_func"
 
 
 class TestResolveCalleeId:
