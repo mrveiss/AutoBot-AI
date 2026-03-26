@@ -413,6 +413,7 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 3. Recent Completed >30? → Archive oldest batch (verify each issue is CLOSED before archiving)
 4. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
 5. Never use range notation (`#1534-#1545`) in archive refs — enumerate individual issue numbers
+6. Stale worktrees? → Run `scripts/cleanup-worktrees.sh --dry-run` and review, then `scripts/cleanup-worktrees.sh` to remove closed-issue worktrees
 
 ### Multi-Agent Safety
 
