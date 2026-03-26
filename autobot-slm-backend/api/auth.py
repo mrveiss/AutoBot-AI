@@ -9,10 +9,9 @@ login, MFA challenges (Issue #576 Phase 5), and audit logging (Issue #998).
 Consolidated from legacy auth.py and slm_auth.py in Issue #1922.
 """
 
-import ipaddress
 import logging
 from datetime import timedelta
-from typing import Optional, Union
+from typing import Union
 
 from api.security import create_audit_log
 from config import settings
@@ -31,38 +30,10 @@ from typing_extensions import Annotated
 from user_management.models.user import User
 from user_management.services import TenantContext, UserService
 
+from autobot_shared.proxy_utils import get_client_ip
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def _normalize_ip(ip_str: str) -> str:
-    """Normalize IP, mapping ::ffff:x.x.x.x to x.x.x.x (#2239)."""
-    try:
-        addr = ipaddress.ip_address(ip_str)
-        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
-            return str(addr.ipv4_mapped)
-        return str(addr)
-    except ValueError:
-        return ip_str
-
-
-def _get_client_ip(http_request: Request) -> Optional[str]:
-    """Extract the real client IP from the request.
-
-    X-Forwarded-For is only trusted when the direct TCP peer is a known
-    reverse proxy (Issue #2239).  An attacker connecting directly cannot
-    spoof their IP via that header.
-    """
-    direct_ip = http_request.client.host if http_request.client else None
-    forwarded_for = http_request.headers.get("X-Forwarded-For")
-    if forwarded_for and direct_ip:
-        normalized = _normalize_ip(direct_ip)
-        trusted = {_normalize_ip(p) for p in settings.trusted_proxies}
-        if normalized in trusted:
-            candidate = forwarded_for.split(",")[0].strip()
-            if candidate:
-                return candidate
-    return direct_ip
 
 
 def _create_mfa_challenge(user: User) -> MfaChallengeResponse:
@@ -103,7 +74,7 @@ async def login(
     Accepts username or email. Returns JWT token or MFA challenge.
     Records audit log entry (Issue #998). Consolidated in Issue #1922.
     """
-    client_ip = _get_client_ip(http_request)
+    client_ip = get_client_ip(http_request, trusted_proxies=settings.trusted_proxies)
     context = TenantContext(is_platform_admin=True)
     user_service = UserService(db, context)
 
