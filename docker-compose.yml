@@ -194,7 +194,8 @@ services:
       autobot-chromadb:
         condition: service_healthy
     networks:
-      - autobot
+      - autobot-data
+      - autobot-app
 
   autobot-slm:
     build:
