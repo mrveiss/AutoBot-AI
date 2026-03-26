@@ -1,44 +1,18 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit test for SLM tablename collision check (#2226).
+"""Unit test for SLM tablename collision check (#2226, #2413).
 
-Tests the collision detection logic extracted from _check_tablename_collisions().
-Because main.py has heavy transitive imports (FastAPI routers, DB models, etc.),
-we test the collision logic in isolation rather than importing main directly.
+Tests :func:`autobot_shared.tablename_validator.check_tablename_collisions` directly.
+The logic was extracted from ``main._check_tablename_collisions`` into autobot-shared
+(#2413) so tests can import and exercise the real function without pulling in the
+full SLM application stack (FastAPI routers, SQLAlchemy models, all services, etc.).
 """
 
 import logging
 from unittest.mock import MagicMock
 
-
-def _check_tablename_collisions_logic(slm_metadata, um_metadata, logger_):
-    """Extracted collision detection logic matching main._check_tablename_collisions.
-
-    This mirrors the function from main.py lines 78-128 so it can be tested
-    without importing the full SLM application stack.
-    """
-    slm_tables: set[str] = set(slm_metadata.tables.keys())
-    um_tables: set[str] = set(um_metadata.tables.keys())
-    collisions: set[str] = slm_tables & um_tables
-
-    if collisions:
-        sorted_names = sorted(collisions)
-        logger_.warning(
-            "Tablename overlap detected between SLM Base and UserManagement Base — "
-            "%d shared name(s): %s. "
-            "These names refer to tables in different databases, but sharing names "
-            "increases the risk of future model misplacement. "
-            "See GitHub issue #1878.",
-            len(sorted_names),
-            sorted_names,
-        )
-    else:
-        logger_.info(
-            "Tablename collision check passed — %d SLM tables, %d UM tables, 0 shared names",
-            len(slm_tables),
-            len(um_tables),
-        )
+from autobot_shared.tablename_validator import check_tablename_collisions
 
 
 class TestCheckTablenameCollisions:
@@ -50,9 +24,7 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={"users": None, "roles": None})
 
         with caplog.at_level(logging.WARNING):
-            _check_tablename_collisions_logic(
-                slm_meta, um_meta, logging.getLogger("main")
-            )
+            check_tablename_collisions(slm_meta, um_meta)
 
         assert any(
             "overlap" in r.message.lower() for r in caplog.records
@@ -64,9 +36,7 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={"users": None, "roles": None})
 
         with caplog.at_level(logging.INFO):
-            _check_tablename_collisions_logic(
-                slm_meta, um_meta, logging.getLogger("main")
-            )
+            check_tablename_collisions(slm_meta, um_meta)
 
         assert any(
             "0 shared" in r.message for r in caplog.records
@@ -78,7 +48,7 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={"shared_table": None})
 
         # Should not raise
-        _check_tablename_collisions_logic(slm_meta, um_meta, logging.getLogger("main"))
+        check_tablename_collisions(slm_meta, um_meta)
 
     def test_collision_includes_table_names(self, caplog):
         """Warning message includes the names of colliding tables."""
@@ -86,9 +56,7 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={"audit_logs": None, "users": None})
 
         with caplog.at_level(logging.WARNING):
-            _check_tablename_collisions_logic(
-                slm_meta, um_meta, logging.getLogger("main")
-            )
+            check_tablename_collisions(slm_meta, um_meta)
 
         assert any("audit_logs" in r.message for r in caplog.records)
 
@@ -98,9 +66,7 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={"roles": None, "audit_logs": None, "users": None})
 
         with caplog.at_level(logging.WARNING):
-            _check_tablename_collisions_logic(
-                slm_meta, um_meta, logging.getLogger("main")
-            )
+            check_tablename_collisions(slm_meta, um_meta)
 
         warning_msgs = [
             r.message for r in caplog.records if r.levelno >= logging.WARNING
@@ -115,8 +81,6 @@ class TestCheckTablenameCollisions:
         um_meta = MagicMock(tables={})
 
         with caplog.at_level(logging.INFO):
-            _check_tablename_collisions_logic(
-                slm_meta, um_meta, logging.getLogger("main")
-            )
+            check_tablename_collisions(slm_meta, um_meta)
 
         assert any("0 shared" in r.message for r in caplog.records)
