@@ -5,7 +5,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
-# ---- Build stage ----
+# ---- Build main frontend ----
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
@@ -27,6 +27,25 @@ ARG VITE_HTTP_PROTOCOL=
 RUN npm run build
 
 
+# ---- Build SLM frontend ----
+FROM node:20-bookworm-slim AS slm-builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY autobot-slm-frontend/package.json autobot-slm-frontend/package-lock.json ./
+# Copy shared module (referenced by @shared alias)
+COPY autobot-shared/ /autobot-shared/
+RUN npm ci
+
+# Copy source and build with /slm/ base path
+COPY autobot-slm-frontend/ ./
+
+# Set API URL prefix so fetch('/slm/api/...') hits the SLM backend via nginx
+ENV VITE_API_URL=/slm
+RUN npx vite build --base /slm/
+
+
 # ---- Production stage ----
 FROM ubuntu:22.04 AS production
 
@@ -37,8 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built frontend
+# Copy built main frontend
 COPY --from=builder /app/dist/ /usr/share/nginx/html/
+
+# Copy built SLM frontend under /slm/
+COPY --from=slm-builder /app/dist/ /usr/share/nginx/html/slm/
 
 # Copy nginx config
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf

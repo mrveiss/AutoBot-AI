@@ -215,6 +215,7 @@ services:
       - SLM_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
       - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/slm_users
       - SLM_POSTGRES_HOST=autobot-postgres
+      - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:-admin}
     depends_on:
       autobot-redis:
         condition: service_healthy
