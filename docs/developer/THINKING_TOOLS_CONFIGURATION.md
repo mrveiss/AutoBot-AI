@@ -318,7 +318,7 @@ Here's the implementation plan...
 **Solutions**:
 1. **Restart backend** to reload prompt:
    ```bash
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
    ```
 
 2. **Verify model is Mistral**:

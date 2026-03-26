@@ -93,16 +93,16 @@ curl -s http://localhost:8001/api/mcp/tools | jq '.total_tools'
 ### Step 3: Graceful Backend Restart
 
 ```bash
-# Option 1: Use run_autobot.sh (recommended)
-bash run_autobot.sh --restart --dev
+# Option 1: systemd (recommended)
+sudo systemctl restart autobot-backend
 
-# Option 2: Use --verify-mcp flag for automatic verification
-bash run_autobot.sh --restart --dev --verify-mcp
+# Option 2: CLI wrapper
+scripts/start-services.sh restart
 
 # Option 3: Manual restart
 pkill -f "uvicorn backend.app:app"
 sleep 2
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 ```
 
 ### Step 4: Verify New Bridge Registration
@@ -214,7 +214,7 @@ git reset --hard HEAD~1
 ### Step 3: Restart Backend
 
 ```bash
-bash run_autobot.sh --restart --dev
+sudo systemctl restart autobot-backend
 ```
 
 ### Step 4: Verify Rollback
@@ -253,7 +253,7 @@ curl -s http://localhost:8001/api/health | jq '.status'
 
 3. **Backend Not Restarted**
    ```bash
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
    ```
 
 ### Issue: 404 on Bridge Endpoint

@@ -1252,7 +1252,7 @@ cat config/config.yaml | grep -A 10 "security_config:"
 # Edit config/config.yaml and set enable_auth: true
 
 # Step 1.3: Restart backend to load new config
-./run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 **Phase 2: Backend Updates** (30 minutes)
@@ -1376,7 +1376,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-f
 
 # Step 3: Disable auth temporarily (emergency only)
 # Edit config/config.yaml and set enable_auth: false
-./run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Step 4: Verify system operational
 curl https://172.16.168.20:8443/api/health

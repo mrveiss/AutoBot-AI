@@ -636,7 +636,7 @@ asyncio.run(main())
 ls -lh logs/audit/
 
 # Restart backend if needed
-./run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 ---

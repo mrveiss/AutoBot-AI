@@ -11,7 +11,7 @@ Resolution Time: **~5 minutes average** (with this guide)
 
 ```bash
 # 1. Overall system health check
-bash run_autobot.sh --status
+sudo systemctl status autobot-backend --no-pager
 
 # 2. Check all service connectivity  
 python3 scripts/health_check_comprehensive.py
@@ -85,7 +85,7 @@ docker restart autobot-redis
 tail -f logs/autobot.log | grep -i redis
 
 # Solution: Use fast backend startup
-# Edit run_autobot.sh to use fast_app_factory_fix.py (should be default)
+# Ensure systemd service uses fast_app_factory_fix.py (should be default)
 ```
 
 **Quick Fix**:
@@ -105,7 +105,7 @@ netstat -tulpn | grep :8001
 sudo kill -9 $(lsof -t -i:8001)
 
 # Restart AutoBot
-bash run_autobot.sh --dev --build
+sudo systemctl restart autobot-backend
 ```
 
 #### C. Out of Memory
@@ -686,7 +686,7 @@ echo
 
 # 1. Service Status
 echo "=== Service Status ==="
-bash run_autobot.sh --status
+sudo systemctl status autobot-backend --no-pager
 
 # 2. Resource Usage
 echo "=== Resource Usage ==="
@@ -807,17 +807,17 @@ echo "Weekly maintenance completed"
 
 4. **Restart from Clean State**:
    ```bash
-   # Full restart with rebuild
-   bash run_autobot.sh --dev --rebuild
+   # Full restart
+   sudo systemctl restart autobot-backend
 
-   # If that fails, try minimal startup
-   bash run_autobot.sh --minimal --build
+   # If that fails, try manual foreground startup for debugging
+   cd backend && python -m uvicorn app_factory:create_app --host 0.0.0.0 --port 8443
    ```
 
 5. **Verify Recovery**:
    ```bash
    # Check all services
-   bash run_autobot.sh --status
+   sudo systemctl status autobot-backend --no-pager
 
    # Test basic functionality
    curl http://127.0.0.1:8001/api/health

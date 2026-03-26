@@ -144,53 +144,19 @@
           - Mode: Development (hot reload enabled)
           - Environment: /opt/autobot/config/frontend-dev.env
 
-# Update run_autobot.sh to support development mode
-- name: Update AutoBot startup script for development mode
+# NOTE: run_autobot.sh is deprecated (Issue #863).
+# Development mode frontend is managed via systemd service autobot-frontend-dev.
+# No startup script modifications needed -- use systemctl directly.
+- name: Verify development services are running
   hosts: backend
   become: yes
 
   tasks:
-    - name: Backup current run_autobot.sh
-      copy:
-        src: /home/kali/Desktop/AutoBot/run_autobot.sh
-        dest: /home/kali/Desktop/AutoBot/run_autobot.sh.backup
-        remote_src: yes
-
-    - name: Update run_autobot.sh to support --dev mode for distributed architecture
-      blockinfile:
-        path: /home/kali/Desktop/AutoBot/run_autobot.sh
-        marker: "# {mark} DEVELOPMENT MODE FRONTEND MANAGEMENT"
-        block: |
-          start_frontend_dev() {
-              FRONTEND_IP=$(ansible-inventory -i ansible/inventory/production.yml --host autobot-frontend 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('ansible_host',''))" 2>/dev/null)
-              FRONTEND_IP=${FRONTEND_IP:-{{ frontend_host }}}
-              echo "Starting Frontend Development Server on VM ${FRONTEND_IP}..."
-
-              # Start development frontend service via Ansible
-              ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=restarted enabled=yes" -b
-
-              # Wait for frontend to be ready
-              echo "Waiting for frontend development server to start..."
-              sleep 10
-
-              # Test frontend availability
-              if curl -s -o /dev/null -w "%{http_code}" http://${FRONTEND_IP}:{{ frontend_port }} | grep -q "200"; then
-                  echo "Frontend development server ready at http://${FRONTEND_IP}:{{ frontend_port }}"
-              else
-                  echo "Frontend development server may not be fully ready yet"
-                  echo "   Check status with: ansible frontend -i ansible/inventory/production.yml -m shell -a 'systemctl status autobot-frontend-dev'"
-              fi
-          }
-
-          # Add frontend dev start to main dev mode function
-          if [[ "$*" == *"--dev"* ]]; then
-              start_frontend_dev
-          fi
-
-    - name: Make run_autobot.sh executable
-      file:
-        path: /home/kali/Desktop/AutoBot/run_autobot.sh
-        mode: '0755'
+    - name: Ensure autobot-backend service is running
+      systemd:
+        name: autobot-backend
+        state: started
+        enabled: yes
 
 # Display final status
 - name: Development Setup Complete
@@ -211,10 +177,10 @@
 
           Backend:
           - URL: http://{{ backend_host }}:{{ backend_port }}
-          - Service: Runs via run_autobot.sh --dev
+          - Service: autobot-backend (systemd)
 
           Usage:
-          - Start all: bash run_autobot.sh --dev
+          - Start all: sudo systemctl start autobot-backend
           - Frontend only: ansible frontend -i ansible/inventory/production.yml -m systemd -a "name=autobot-frontend-dev state=started"
           - Check status: ansible frontend -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-frontend-dev"
 

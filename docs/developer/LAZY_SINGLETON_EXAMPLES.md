@@ -191,7 +191,7 @@ from src.utils.lazy_singleton import lazy_init_singleton
 
 1. **Start the application**
    ```bash
-   bash run_autobot.sh --dev
+   scripts/start-services.sh start
    ```
 
 2. **Test chat endpoint**
@@ -260,7 +260,7 @@ def get_llm_service(request):
 
 ### Step 3: Restart Application
 ```bash
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 ### Step 4: Verify Fix

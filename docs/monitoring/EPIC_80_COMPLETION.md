@@ -258,7 +258,7 @@ ssh autobot@172.16.168.19 'sudo journalctl -u grafana-server -f'
 
 ### Startup Procedure Integration
 
-**File**: `run_autobot.sh`
+**Note**: `run_autobot.sh` is deprecated (Issue #863). Services are managed via systemd.
 
 - Monitoring services **NOT** in startup script (by design)
 - They run 24/7 as systemd services

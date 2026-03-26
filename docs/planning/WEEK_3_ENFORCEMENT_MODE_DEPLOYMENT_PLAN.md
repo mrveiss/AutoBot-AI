@@ -385,7 +385,7 @@ curl http://172.16.168.25:3000/health  # Browser
 echo "SERVICE_AUTH_ENFORCEMENT_MODE=true" >> .env
 
 # Restart backend
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 **Step 2**: Monitor for 30 minutes
@@ -416,7 +416,7 @@ env SERVICE_ID=npu-worker SERVICE_KEY_FILE=/etc/autobot/service-keys/npu-worker.
 sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false/' .env
 
 # Restart backend
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # System returns to logging mode
 ```

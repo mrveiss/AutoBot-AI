@@ -195,7 +195,7 @@ git checkout src/knowledge_base_v2.py
 # No action needed
 
 # 3. Restart backend
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 ---

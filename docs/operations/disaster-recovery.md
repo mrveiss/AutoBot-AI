@@ -49,7 +49,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
    # Start fresh
    cd /home/kali/Desktop/AutoBot
-   bash run_autobot.sh --dev
+   sudo systemctl start autobot-backend
    ```
 
 3. **Verify recovery**
@@ -93,7 +93,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 4. **Or use startup script from main machine**
    ```bash
-   bash run_autobot.sh --dev
+   sudo systemctl start autobot-backend
    ```
 
 **Estimated Recovery Time**: 5-15 minutes
@@ -267,12 +267,12 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 3. **Start AutoBot**
    ```bash
    cd /home/kali/Desktop/AutoBot
-   bash run_autobot.sh --dev
+   sudo systemctl start autobot-backend
    ```
 
 4. **Verify all services**
    ```bash
-   bash run_autobot.sh --status
+   sudo systemctl status autobot-backend --no-pager
    ```
 
 **Estimated Recovery Time**: 15-30 minutes

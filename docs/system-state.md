@@ -1482,7 +1482,7 @@ Desktop access is **enabled by default** on all modes:
 ### **Development Workflow:**
 1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-frontend/`
 2. **Sync to Frontend VM**: Use `./sync-frontend.sh` or `./scripts/utilities/sync-to-vm.sh frontend`
-3. **Frontend VM Runs**: Either dev or production mode via `run_autobot.sh`
+3. **Frontend VM Runs**: Either dev or production mode via systemd services
 
 ### **Sync Scripts:**
 - `./sync-frontend.sh` - Frontend-specific sync to VM
@@ -1511,7 +1511,7 @@ Desktop access is **enabled by default** on all modes:
 ### Key Files
 
 - `install.sh`: Standardized installation script (launches Setup Wizard)
-- `run_autobot.sh`: Main startup script (replaces all other run methods)
+- ~~`run_autobot.sh`~~: Deprecated (Issue #863). Use `systemctl start autobot-backend` or `scripts/start-services.sh`
 - `backend/fast_app_factory_fix.py`: Fast backend with Redis timeout fix
 - `compose.yml`: Distributed VM configuration
 - `.env`: Main environment configuration for distributed infrastructure

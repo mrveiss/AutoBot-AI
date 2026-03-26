@@ -399,7 +399,7 @@ processors=8
 
 **Increase Uvicorn workers**:
 ```bash
-# In run_autobot.sh
+# In systemd service or Ansible template
 uvicorn backend.main:app --host 0.0.0.0 --port 8001 --workers 8
 ```
 

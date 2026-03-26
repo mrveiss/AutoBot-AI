@@ -125,7 +125,7 @@ self.vector_store = RedisVectorStore(
 pkill -f "python.*backend.*app"
 
 # Restart AutoBot
-bash run_autobot.sh --dev --no-build
+scripts/start-services.sh start
 ```
 
 ### 2. Verify Vector Store Initialization

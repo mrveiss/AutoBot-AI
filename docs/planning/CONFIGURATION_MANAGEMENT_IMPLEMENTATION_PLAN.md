@@ -1184,7 +1184,7 @@ VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
    export AUTOBOT_CONFIG_AUTO_RELOAD=true
 
    # Restart backend
-   ./run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
    ```
 
 ---

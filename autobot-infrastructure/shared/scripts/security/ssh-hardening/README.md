@@ -112,7 +112,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 - 50+ shell scripts in `scripts/` directory
 - Python modules with subprocess SSH calls
 - Ansible configuration files
-- Main system scripts (run_autobot.sh, etc.)
+- Main system scripts (now managed via systemd; `run_autobot.sh` deprecated)
 
 **Output**:
 - Backup directory: `backups/ssh-remediation-<timestamp>/`
@@ -225,7 +225,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 9. **Full System Test**:
    ```bash
    # Start AutoBot with new SSH security
-   bash run_autobot.sh --dev
+   sudo systemctl start autobot-backend
    ```
 
 ### Phase 4: MITM Detection Verification (Optional)

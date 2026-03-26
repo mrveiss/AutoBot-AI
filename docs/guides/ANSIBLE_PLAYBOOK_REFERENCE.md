@@ -187,19 +187,19 @@ ansible all -i ansible/inventory/production.yml -m shell -a "ps aux --sort=-%cpu
 ansible all -i ansible/inventory/production.yml -m ufw -a "rule=allow port=<port> proto=tcp" -b
 ```
 
-## Integration with run_autobot.sh
+## Integration with Service Management
 
-The main startup script integrates with Ansible:
+Service startup is managed via systemd and Ansible (replaces deprecated `run_autobot.sh`):
 
 ```bash
-# Development mode with Ansible-managed frontend
-bash run_autobot.sh --dev
+# Start backend service
+sudo systemctl start autobot-backend
 
-# Production deployment
-bash run_autobot.sh --prod
+# Production deployment via Ansible
+ansible-playbook playbooks/update-all-nodes.yml
 
-# Health check via Ansible
-bash run_autobot.sh --health-check
+# Health check
+curl -sk https://172.16.168.20:8443/api/health | jq
 ```
 
 ## Best Practices

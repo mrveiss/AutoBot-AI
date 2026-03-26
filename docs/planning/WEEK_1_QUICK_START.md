@@ -239,7 +239,7 @@ After implementation, run these to verify success:
 ```bash
 # 1. Test fresh database initialization
 rm -f /home/kali/Desktop/AutoBot/data/conversation_files.db
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 # Check logs for "Database initialized with schema version 1.0.0"
 
 # 2. Verify all tables created

@@ -284,7 +284,7 @@ entity_extractor = GraphEntityExtractor(
 
 ```bash
 # 1. Restart backend
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # 2. Verify endpoints available
 curl https://172.16.168.20:8443/api/entities/extract/health
