@@ -26,7 +26,7 @@ typing_extensions>=4.0.0  # For Python 3.8 compatibility
 # Authentication
 PyJWT[crypto]>=2.8.0
 passlib[bcrypt]>=1.7.4
-bcrypt>=4.0.0,<5.0.0  # bcrypt 5.0.0 incompatible with passlib
+bcrypt>=4.0.0,<5.0.0  # passlib 1.7.4 (unmaintained) does not support bcrypt 5.x API — verified 2026-03-26 (#2471)
 python-multipart>=0.0.22          # SECURITY UPDATE - arbitrary file write fix
 
 # Async utilities

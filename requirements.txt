@@ -6,7 +6,7 @@ tenacity>=8.5.0
 # Async SSH for PKI certificate distribution (Issue #166)
 asyncssh>=2.22.0
 
-# TensorFlow 2.19.1 supports protobuf <6.0.0dev (verified from PyPI metadata)
+# TensorFlow 2.19.1 requires protobuf<6.0.0dev per PyPI metadata — verified 2026-03-26 (#2471)
 # Bumped to 5.29.6+ for JSON recursion depth bypass fix
 protobuf>=5.29.6,<6.0.0
 
