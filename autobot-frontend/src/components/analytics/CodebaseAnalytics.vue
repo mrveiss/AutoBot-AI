@@ -363,7 +363,7 @@ import appConfig from '@/config/AppConfig.js'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
-import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
+import { useCodebaseExport } from '@/composables/analytics/useCodebaseExport'
 import { useIndexingJob } from '@/composables/analytics/useIndexingJob'
 import { useDashboardLoaders } from '@/composables/analytics/useDashboardLoaders'
 import { useSourceRegistry } from '@/composables/analytics/useSourceRegistry'
@@ -414,7 +414,6 @@ const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' 
 // =============================================
 const {
   rootPath,
-  sources,
   selectedSource,
   showSourceManager,
   showAddSourceModal,
@@ -428,7 +427,6 @@ const {
   withSourceId,
   loadSources,
   handleSelectSource,
-  handleClearSource,
   handleSourceSaved,
   handleShareSaved,
   handleEditSource,
@@ -452,7 +450,6 @@ const {
   chartData,
   chartDataLoading,
   chartDataError,
-  unifiedReport,
   unifiedReportLoading,
   unifiedReportError,
   selectedCategory,
@@ -479,8 +476,6 @@ const {
   handleFileNavigate,
   handleFunctionSelect,
   loadDeclarations,
-  loadDuplicates,
-  loadHardcodes,
   loadDependencyData,
   loadImportTreeData,
   getCodebaseStats,
@@ -488,9 +483,6 @@ const {
   getDeclarationsData,
   getDuplicatesData,
   getHardcodesData,
-  loadCachedDuplicates,
-  loadCachedDependencies,
-  loadCachedImportTree,
   loadCachedAnalyticsData,
   runAllAnalysisScans,
 } = useAnalyticsDataFetchers({
@@ -578,7 +570,6 @@ const {
   crossLanguageError,
   getCrossLanguageAnalysis,
   runCrossLanguageAnalysis,
-  clearCache: clearCacheImpl,
 } = useCodeIntelAnalysis({
   rootPath,
   sourceIdParam,
@@ -658,14 +649,6 @@ const {
   testAllEndpoints,
   testDataState,
   resetState,
-  getSeverityClass,
-  truncateValue,
-  getRiskClass,
-  formatFactorName,
-  getGradeClass,
-  formatTimestamp,
-  getScoreClass,
-  getPriorityClass,
 } = useAnalyticsDebug({
   rootPath,
   analyzing,
