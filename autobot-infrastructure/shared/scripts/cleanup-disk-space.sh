@@ -712,7 +712,7 @@ else
 fi
 
 # Safety check: verify we're in AutoBot directory
-if [[ ! -f "CLAUDE.md" ]] || [[ ! -f "setup.sh" ]]; then
+if [[ ! -f "CLAUDE.md" ]] || [[ ! -f "install.sh" ]]; then
     format_message "ERROR" "Not in AutoBot root directory!"
     echo "Expected: /home/kali/Desktop/AutoBot/"
     echo "Current: $(pwd)"
