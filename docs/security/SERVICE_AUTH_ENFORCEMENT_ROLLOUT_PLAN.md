@@ -822,7 +822,7 @@ curl http://172.16.168.22:8081/health
 
    # Restart backend (fast restart)
    echo "Restarting backend..."
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
 
    # Verify rollback
    sleep 5
@@ -859,7 +859,7 @@ curl http://172.16.168.22:8081/health
 
    ```bash
    # Fast restart (< 1 minute)
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
 
    # Monitor startup
    tail -f logs/backend.log
@@ -1058,7 +1058,7 @@ bash scripts/rollback-enforcement.sh
 
 # Method 2: Manual
 sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false/' .env
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Verify rollback
 curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
@@ -1188,7 +1188,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
        # Restart backend to apply
        echo "Restarting backend..."
-       bash run_autobot.sh --restart > /dev/null 2>&1
+       sudo systemctl restart autobot-backend > /dev/null 2>&1
 
        # Verify backend healthy
        sleep 5
@@ -1470,7 +1470,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
 3. **Restart backend with final configuration**
 
    ```bash
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
 
    # Verify configuration
    curl -s https://172.16.168.20:8443/api/health | jq
@@ -1831,7 +1831,7 @@ cp logs/backend.log logs/backend.log.backup.$(date +%Y%m%d_%H%M%S)
 sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false/' .env
 
 # Step 3: Standard restart
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Step 4: Comprehensive verification
 sleep 10

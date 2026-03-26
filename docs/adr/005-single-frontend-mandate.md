@@ -80,7 +80,7 @@ This is an absolute mandate with zero exceptions:
 
 - `sync-frontend.sh` - Quick sync script for frontend changes
 - `scripts/utilities/sync-to-vm.sh` - General purpose VM sync utility
-- `run_autobot.sh` - Orchestrates frontend startup on VM1
+- Systemd services on VM1 manage frontend startup (replaces deprecated `run_autobot.sh`)
 
 ### Forbidden Commands
 
@@ -113,7 +113,7 @@ firefox http://172.16.168.21:5173
 
 ### Enforcement
 
-The `run_autobot.sh` script enforces this by:
+The systemd service configuration enforces this by:
 1. Never starting Vite on main machine
 2. SSH to VM1 to start/restart frontend
 3. Health checking VM1's frontend server

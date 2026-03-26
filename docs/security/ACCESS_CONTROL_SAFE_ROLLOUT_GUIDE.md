@@ -121,7 +121,7 @@ The fix is in code but requires backend restart to take effect:
 
 ```bash
 # Method 1: Full restart
-bash run_autobot.sh --dev --restart
+sudo systemctl restart autobot-backend
 
 # Method 2: Backend-only restart
 pkill -f "uvicorn.*backend"
@@ -274,7 +274,7 @@ git log --oneline -5
 git revert <commit_hash>
 
 # Restart backend
-bash run_autobot.sh --dev --restart
+sudo systemctl restart autobot-backend
 ```
 
 ---

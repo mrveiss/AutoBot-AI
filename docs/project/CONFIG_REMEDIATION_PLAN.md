@@ -2372,7 +2372,7 @@ backend:
 3. **Execute Rollback**
    ```bash
    # Stop affected services
-   bash run_autobot.sh --stop
+   scripts/start-services.sh stop
 
    # Revert code changes
    git revert <commit-hash>
@@ -2383,7 +2383,7 @@ backend:
    cp config/complete.yaml.backup config/complete.yaml
 
    # Restart services
-   bash run_autobot.sh --dev
+   scripts/start-services.sh start
    ```
 
 4. **Verify Recovery**

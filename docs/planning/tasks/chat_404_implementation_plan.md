@@ -65,7 +65,7 @@
 
 #### 1.1 Safe Backend Restart
 ```bash
-bash /home/kali/Desktop/AutoBot/run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 **Validation:**
@@ -268,7 +268,7 @@ curl -X POST http://localhost:8001/api/chat/completions \
 ### Risk 1: Service Disruption During Restart
 - **Severity**: LOW
 - **Probability**: LOW
-- **Mitigation**: Use `run_autobot.sh --restart` (designed for <1 min downtime)
+- **Mitigation**: Use `systemctl restart autobot-backend` (designed for <1 min downtime)
 - **Mitigation**: Health check validation before declaring success
 - **Rollback**: Previous process can be restarted if issues occur
 
@@ -399,7 +399,7 @@ If implementation fails at any stage:
    pkill -f "python.*app_factory"
 
    # Restart with previous code (if needed, revert commits)
-   bash run_autobot.sh --restart
+   sudo systemctl restart autobot-backend
    ```
 
 2. **Issue Investigation**:

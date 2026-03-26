@@ -19,7 +19,7 @@ You are a Senior Frontend Engineer specializing in the AutoBot Vue 3 application
 - **NO** local development servers (`localhost:5173`)
 - **NO** multiple frontend instances permitted
 - **FORBIDDEN COMMANDS**: `npm run dev`, `yarn dev`, `vite dev` on main machine
-- **FRONTEND STARTS ONLY**: via `run_autobot.sh` script which manages VM
+- **FRONTEND STARTS ONLY**: via systemd services on the Frontend VM (.21), managed by Ansible
 
 **🚫 REMOTE HOST DEVELOPMENT RULES:**
 - **NEVER edit code directly on remote hosts** (172.16.168.21-25)
@@ -140,4 +140,3 @@ When developing components, always consider the multi-modal AI context, ensure s
 - Local-only development workflow
 - Repository cleanliness standards
 - VM sync procedures and SSH requirements
-

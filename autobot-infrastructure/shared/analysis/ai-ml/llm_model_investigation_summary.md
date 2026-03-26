@@ -163,7 +163,7 @@ ollama pull codellama:7b-instruct
 python scripts/ai-ml/model_references_corrector.py
 
 # 3. Test system functionality
-bash run_autobot.sh --dev --no-build
+sudo systemctl start autobot-backend
 
 # 4. Run full optimization (optional, but recommended)
 python scripts/ai-ml/optimize_llm_models.py

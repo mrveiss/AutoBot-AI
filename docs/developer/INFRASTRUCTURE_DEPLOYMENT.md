@@ -825,7 +825,7 @@ md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 - [ ] All changes committed to git (local version control)
 - [ ] Services bind to `0.0.0.0` (not localhost)
 - [ ] Using `NetworkConstants` for IPs/ports (not hardcoded)
-- [ ] Tested locally first (`bash run_autobot.sh --dev`)
+- [ ] Tested locally first (`scripts/start-services.sh start` or `systemctl start autobot-backend`)
 - [ ] Synced to VMs (`./infrastructure/shared/scripts/sync-to-vm.sh`)
 - [ ] Health checks pass on all services
 

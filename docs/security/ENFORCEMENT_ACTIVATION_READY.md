@@ -179,7 +179,7 @@ curl -X POST https://172.16.168.20:8443/api/npu/heartbeat
 export SERVICE_AUTH_ENFORCEMENT_MODE=false
 
 # Restart backend
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Verify rollback
 curl https://172.16.168.20:8443/api/health
@@ -303,7 +303,7 @@ cd /home/kali/Desktop/AutoBot
 export SERVICE_AUTH_ENFORCEMENT_MODE=true
 
 # Restart backend with enforcement enabled
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Monitor activation
 tail -f logs/backend.log | grep -E "(Service auth|ENFORCEMENT|BLOCKED)"

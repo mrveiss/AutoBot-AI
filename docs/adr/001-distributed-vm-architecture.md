@@ -83,7 +83,7 @@ We adopt a distributed 6-VM architecture where each VM serves a specific purpose
 
 ### Key Files
 
-- `run_autobot.sh` - Main startup script orchestrating all VMs
+- `scripts/start-services.sh` - CLI service wrapper (replaces deprecated `run_autobot.sh`)
 - `scripts/utilities/sync-to-vm.sh` - File synchronization utility
 - `~/.ssh/autobot_key` - SSH key for VM authentication
 

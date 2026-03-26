@@ -730,7 +730,7 @@ curl -s "http://${AUTOBOT_VM_MAIN_IP}:${AUTOBOT_PORT_BACKEND}/api/health"
 
 | Script | Current Status | Required Changes |
 | ------ | -------------- | ---------------- |
-| `run_autobot.sh` | Partial SSOT | Source .env, remove hardcoded IPs |
+| ~~`run_autobot.sh`~~ | Deprecated (#863) | Replaced by systemd + `scripts/start-services.sh` |
 | `setup.sh` | Hardcoded | Source .env for all network config |
 | `scripts/utilities/sync-to-vm.sh` | Hardcoded IPs | Use AUTOBOT_VM_* variables |
 | `scripts/utilities/sync-frontend.sh` | Hardcoded | Use AUTOBOT_VM_FRONTEND_IP |

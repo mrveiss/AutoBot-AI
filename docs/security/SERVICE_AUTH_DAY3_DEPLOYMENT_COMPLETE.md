@@ -359,7 +359,7 @@ done
 
 **Quick Rollback (< 2 minutes)**:
 1. Remove SERVICE_ID and SERVICE_KEY_FILE from .env
-2. Restart backend: `bash run_autobot.sh --restart`
+2. Restart backend: `sudo systemctl restart autobot-backend`
 3. Middleware automatically disabled without config
 
 **Full Rollback (< 5 minutes)**:

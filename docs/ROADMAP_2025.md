@@ -530,7 +530,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
-| Single-command startup | ✓ | `bash run_autobot.sh` | ✅ |
+| Single-command startup | ✓ | `systemctl start autobot-backend` | ✅ |
 | Systemd service | ✓ | Optional config | ✅ |
 | Crontab auto-start | ✓ | Optional | ✅ |
 | Graceful shutdown | ✓ | Resource cleanup | ✅ |

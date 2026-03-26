@@ -213,7 +213,7 @@ Assuming proportional token processing time:
 
 ### Startup Integration (Optional)
 
-Add to `run_autobot.sh`:
+Add to your service startup (e.g., systemd `ExecStartPre` or `scripts/start-services.sh`):
 ```bash
 # Auto-optimize agents on startup
 if [ -x "./scripts/utilities/agent-optimize.sh" ]; then

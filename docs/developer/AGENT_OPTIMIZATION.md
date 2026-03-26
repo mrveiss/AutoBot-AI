@@ -231,9 +231,9 @@ Add to GitHub Actions workflow:
     git add .claude/agents-optimized/
 ```
 
-### Startup Script Integration
+### Startup Integration
 
-Add to `run_autobot.sh`:
+Add to your service startup (e.g., systemd `ExecStartPre` or `scripts/start-services.sh`):
 
 ```bash
 # Optimize agents on startup

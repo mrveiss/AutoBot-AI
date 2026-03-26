@@ -23,7 +23,7 @@ Phase 2 implementation is complete and tested, but requires backend restart to a
 git status
 
 # 2. Restart backend to load new routers
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # 3. Wait for backend initialization (Phase 1 + Phase 2 services)
 # Expected log messages:
@@ -106,13 +106,13 @@ If deployment issues occur:
 
 ```bash
 # 1. Stop backend
-bash run_autobot.sh --stop
+sudo systemctl stop autobot-backend
 
 # 2. Revert changes
 git revert HEAD  # Or specific commit
 
 # 3. Restart backend
-bash run_autobot.sh --dev
+sudo systemctl start autobot-backend
 
 # 4. Verify core services still working
 curl https://172.16.168.20:8443/api/health

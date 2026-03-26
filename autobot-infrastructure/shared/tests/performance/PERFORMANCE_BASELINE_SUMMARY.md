@@ -116,7 +116,7 @@ Established comprehensive performance baseline and validation framework for Auto
 cd /home/kali/Desktop/AutoBot
 
 # Ensure backend is running
-bash run_autobot.sh --dev
+sudo systemctl start autobot-backend
 
 # Execute baseline tests
 python tests/performance/test_async_baseline.py

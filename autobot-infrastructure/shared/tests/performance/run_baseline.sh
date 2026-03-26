@@ -41,7 +41,7 @@ if ! curl -s -f "${BACKEND_URL}/api/health" > /dev/null 2>&1; then
     echo ""
     echo "Please start AutoBot first:"
     echo "  cd ${PROJECT_ROOT}"
-    echo "  bash run_autobot.sh --dev"
+    echo "  systemctl start autobot-backend  # or: scripts/start-services.sh start"
     echo ""
     exit 1
 fi

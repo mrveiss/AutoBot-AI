@@ -150,7 +150,7 @@ curl http://172.16.168.24:8080/api/tags
 
 | File | Purpose |
 |------|---------|
-| `run_autobot.sh` | Main startup script |
+| `scripts/start-services.sh` | CLI service wrapper (replaces deprecated `run_autobot.sh`) |
 | `.env` | Environment variables |
 | `backend/core/config.py` | Backend configuration |
 | `autobot-frontend/vite.config.ts` | Frontend configuration |

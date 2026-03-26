@@ -132,10 +132,10 @@
 - **Risk:** Low - Single line change, no logic modification
 - **Dependencies:** Phase 2 complete (Ansible aligned first)
 
-#### Task 3.2: Add Ownership Verification Function to run_autobot.sh
+#### Task 3.2: Add Ownership Verification to Service Startup
 - **Agent:** senior-backend-engineer
 - **Time:** 15 minutes
-- **File:** `/home/kali/Desktop/AutoBot/run_autobot.sh`
+- **Note:** `run_autobot.sh` is deprecated (Issue #863). Add to Ansible role or systemd `ExecStartPre`.
 - **Changes:**
   ```bash
   # Add new function after line 200 (in verification section)
@@ -181,7 +181,7 @@
 - **Agent:** testing-engineer
 - **Time:** 15 minutes
 - **Test Scenarios:**
-  1. Fresh startup verification (`run_autobot.sh --dev`)
+  1. Fresh startup verification (`systemctl start autobot-backend`)
   2. Ownership auto-correction test (manually break, verify fix)
   3. Service restart validation (ownership persists)
   4. Ansible playbook deployment test (full infrastructure-as-code)
@@ -196,11 +196,11 @@
 - **Test Commands:**
   ```bash
   # Test 1: Fresh startup
-  bash run_autobot.sh --dev --no-browser
+  sudo systemctl start autobot-backend
 
   # Test 2: Ownership auto-correction
   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R redis:redis /var/lib/redis-stack"
-  bash run_autobot.sh --restart
+  sudo systemctl restart autobot-backend
 
   # Test 3: Service restart
   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
@@ -257,7 +257,7 @@
 - **Commands:**
   ```bash
   git checkout HEAD -- scripts/vm-management/start-redis.sh
-  git checkout HEAD -- run_autobot.sh
+  # run_autobot.sh is deprecated — rollback Ansible roles instead
   ```
 
 #### Complete Rollback (nuclear option)
@@ -266,7 +266,7 @@
 - **Commands:**
   ```bash
   git revert <commit-hash> --no-edit
-  bash run_autobot.sh --restart
+  sudo systemctl restart autobot-backend
   ```
 
 ---

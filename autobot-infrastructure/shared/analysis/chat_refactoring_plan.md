@@ -57,7 +57,7 @@ ROUTER_MAPPINGS = [
 #### Step 1.3: Test Immediate Resolution
 ```bash
 # Restart backend and verify single router active
-bash run_autobot.sh --dev --no-build
+sudo systemctl restart autobot-backend
 
 # Test key endpoints:
 curl http://localhost:8001/api/health
@@ -390,7 +390,7 @@ cp backend/fast_app_factory_fix.py.backup backend/fast_app_factory_fix.py
 cp autobot-vue/src/services/api.ts.backup autobot-vue/src/services/api.ts
 cp autobot-vue/src/utils/ApiClient.ts.backup autobot-vue/src/utils/ApiClient.ts
 # Restart services
-bash run_autobot.sh --dev --rebuild
+sudo systemctl restart autobot-backend
 ```
 
 ## Success Metrics

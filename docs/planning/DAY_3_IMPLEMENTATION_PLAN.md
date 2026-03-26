@@ -279,7 +279,7 @@ ansible-playbook -i ansible/inventory/production.yml \
 # 3. Frontend, NPU, Browser, AI (in parallel)
 
 # Restart backend
-ssh autobot@172.16.168.20 "cd /home/autobot && bash run_autobot.sh --restart"
+ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
 
 # Wait 30 seconds for backend to be ready
 sleep 30

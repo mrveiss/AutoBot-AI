@@ -145,7 +145,7 @@ curl http://172.16.168.19:3000/api/datasources
 
 **Fix**: Restart backend
 ```bash
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 ### Grafana Not Loading

@@ -178,7 +178,7 @@ comparison_report_YYYYMMDD.json      # Before/after analysis
 ### Prerequisites
 ```bash
 # Ensure AutoBot backend is running
-bash run_autobot.sh --dev
+sudo systemctl start autobot-backend
 
 # Install test dependencies (should already be installed)
 pip install aiohttp redis[asyncio] aiofiles

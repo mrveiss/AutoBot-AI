@@ -163,7 +163,7 @@ Before diving into specific guides, run these diagnostic commands:
 
 ```bash
 # 1. Overall system health
-bash run_autobot.sh --status
+sudo systemctl status autobot-backend --no-pager
 
 # 2. Service connectivity
 python3 scripts/health_check_comprehensive.py

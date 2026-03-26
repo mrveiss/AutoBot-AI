@@ -113,7 +113,7 @@ SERVICE_AUTH_ENFORCEMENT_MODE=true
 cd /home/kali/Desktop/AutoBot
 
 # Restart backend with enforcement enabled
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 ```
 
 **Expected Output**:
@@ -272,7 +272,7 @@ export SERVICE_AUTH_ENFORCEMENT_MODE=false
 
 # Restart backend
 cd /home/kali/Desktop/AutoBot
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Verify rollback
 tail -50 logs/backend.log | grep "Service Authentication"

@@ -95,7 +95,7 @@ def __init__(self, ...):
 rm data/conversation_files.db
 
 # Start AutoBot
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 
 # Verify tables exist
 sqlite3 data/conversation_files.db "SELECT name FROM sqlite_master WHERE type='table';"

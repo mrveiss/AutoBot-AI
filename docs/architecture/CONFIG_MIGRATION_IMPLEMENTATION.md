@@ -18,7 +18,7 @@ python scripts/validate_timeout_config.py
 # 3. Implement changes (see below)
 
 # 4. Verify no regression
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 curl http://172.16.168.21:5173  # Frontend accessible?
 ```
 
@@ -409,7 +409,7 @@ curl http://localhost:8001/api/health
 curl http://172.16.168.21:5173
 
 # 5. Full system test
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 # Open browser to http://172.16.168.21:5173
 # Test model selection in GUI
 ```
@@ -452,7 +452,7 @@ If issues arise:
 # Quick rollback
 git stash
 git checkout main
-bash run_autobot.sh --restart
+sudo systemctl restart autobot-backend
 
 # Or revert compatibility shim
 git checkout HEAD -- src/unified_config.py

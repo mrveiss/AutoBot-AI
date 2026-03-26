@@ -5,7 +5,7 @@
 ```
 scripts/
 ├── analysis/         # Test scripts and analysis tools (moved from root)
-├── archive/          # Obsolete startup scripts (replaced by run_autobot.sh)
+├── archive/          # Obsolete startup scripts (deprecated, see SERVICE_MANAGEMENT.md)
 ├── cache/            # Cache management utilities
 ├── native-vm/        # Native VM deployment scripts
 ├── network/          # Network configuration and testing
@@ -22,13 +22,14 @@ scripts/
 
 ## Main Scripts (Root Directory)
 
-### Essential Scripts (ONLY 2 FILES)
-- **`run_autobot.sh`** - Unified startup script (combines all previous run scripts)
+### Essential Scripts
 - **`setup.sh`** - Unified setup script (handles all setup tasks)
+- **`scripts/start-services.sh`** - CLI service wrapper (start/stop/restart)
 
 ## Script Categories
 
-### Archive (Obsolete - Use run_autobot.sh instead)
+### Archive (Obsolete - Do not use)
+- `run_autobot.sh` - Deprecated (Issue #863), moved to `legacy/`
 - `run_agent.sh` - Old Docker-based startup
 - `run_agent_unified.sh` - Old unified startup
 - `run_agent_native.sh` - Old native VM startup
@@ -67,16 +68,16 @@ scripts/
 
 ## Usage Examples
 
-### Using the Unified Script (Recommended)
+### Starting Services (Recommended)
 ```bash
-# Standard native VM startup
-./run_autobot.sh
+# Production (systemd)
+sudo systemctl start autobot-backend
 
-# Development mode
-./run_autobot.sh --dev
+# CLI wrapper
+scripts/start-services.sh start
 
-# With specific options
-./run_autobot.sh --dev --no-browser --rebuild
+# Docker
+docker compose up -d
 ```
 
 ### Setup Commands
@@ -119,10 +120,12 @@ scripts/
 
 ## Migration Notes
 
-All old startup scripts have been consolidated into `run_autobot.sh`.
-If you were using:
-- `run_agent.sh --dev` → Now use `run_autobot.sh --dev`
-- `run_agent_native.sh` → Now use `run_autobot.sh` (native is default)
-- `run-docker-desktop.sh` → Now use `run_autobot.sh --docker`
+All old startup scripts (including `run_autobot.sh`) have been deprecated.
+Use the current methods:
+- **Production:** `systemctl start autobot-backend`
+- **CLI wrapper:** `scripts/start-services.sh start`
+- **Docker:** `docker compose up -d`
+
+See [`docs/developer/SERVICE_MANAGEMENT.md`](../../docs/developer/SERVICE_MANAGEMENT.md) for full details.
 
 The old scripts are preserved in `scripts/archive/` for reference but should not be used.

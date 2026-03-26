@@ -2356,7 +2356,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 - All code changes developed locally first
 - Sync to remote VMs via sync scripts or Ansible
 - Never edit code directly on remote VMs
-- Use `run_autobot.sh` for local backend startup
+- Use `systemctl start autobot-backend` or `scripts/start-services.sh start` for backend startup
 - Frontend runs on VM1 only (single frontend server)
 
 **Testing Strategy:**
@@ -2409,7 +2409,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 **Development:**
 ```bash
 # Backend development
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 
 # Frontend development (runs on VM1)
 ./scripts/utilities/sync-frontend.sh

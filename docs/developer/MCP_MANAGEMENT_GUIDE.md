@@ -428,7 +428,7 @@ MCP_BRIDGES = [
 pkill -f "uvicorn backend.app_factory"
 
 # Start backend
-bash run_autobot.sh --dev
+sudo systemctl restart autobot-backend
 ```
 
 ### Step 5: Verify in UI
@@ -450,7 +450,7 @@ bash run_autobot.sh --dev
 
 1. **Backend not restarted**
    - Solution: Restart backend to load new router
-   - Command: `bash run_autobot.sh --dev`
+   - Command: `sudo systemctl restart autobot-backend`
 
 2. **Router not registered**
    - Solution: Check `app_factory.py` includes your router in `core_routers`
