@@ -275,7 +275,7 @@ class TestIdleCleanupThreadSafety:
         manager._max_idle_time_seconds = 300  # 5 minutes
 
         # Issue #2211: mock datetime on the module that actually uses it.
-        import utils.redis_management.connection_manager as cm_module
+        import autobot_shared.redis_management.connection_manager as cm_module
 
         original_datetime = cm_module.datetime
 
