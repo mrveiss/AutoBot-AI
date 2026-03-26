@@ -31,7 +31,7 @@ async def _add_documentation_to_kb_block_5():
         "README.md",
         "CLAUDE.md",
         "docs/**/*.md",
-        "prompts/**/*.md",
+        "autobot-backend/resources/prompts/**/*.md",
         "*.md",  # Any markdown files in root
     ]
 
@@ -77,7 +77,7 @@ async def _add_documentation_to_kb_block_1():
             ("docs/developer", "developer-docs"),
             ("docs/user_guide", "user-guide"),
             ("docs/reports", "reports"),
-            ("prompts", "prompts"),
+            ("autobot-backend/resources/prompts", "prompts"),
         ]
         # Check exact matches first
         if rel_path == "README.md":

@@ -83,7 +83,7 @@ def detect_exit_intent(message: str) -> bool:
 - ✅ Ignores exit words in questions (e.g., "how do I exit vim?")
 
 #### Layer 2: Enhanced System Prompt
-**File**: `prompts/chat/system_prompt.md`
+**File**: `autobot-backend/resources/prompts/chat/system_prompt.md`
 
 **Key Sections**:
 ```markdown
@@ -192,7 +192,7 @@ TestSystemPromptLoading::test_conversation_continuation_rules_in_prompt PASSED
    - Added fallback prompt for safety
 
 ### Created Files
-1. **`prompts/chat/system_prompt.md`**
+1. **`autobot-backend/resources/prompts/chat/system_prompt.md`**
    - Comprehensive AutoBot system prompt
    - Explicit conversation continuation rules
    - Examples of correct behavior
@@ -235,7 +235,7 @@ python -m pytest tests/test_conversation_handling_fix.py::TestRegressionPreventi
 
 ### Production Deployment Steps
 1. Sync `src/chat_workflow_manager.py` to AI Stack VM (172.16.168.24)
-2. Sync `prompts/chat/` directory to AI Stack VM
+2. Sync `autobot-backend/resources/prompts/chat/` directory to AI Stack VM
 3. Sync `tests/` directory for validation
 4. Run test suite on production
 5. Monitor logs for exit intent detection
@@ -245,7 +245,7 @@ python -m pytest tests/test_conversation_handling_fix.py::TestRegressionPreventi
 Watch for these log messages:
 ```
 [ChatWorkflowManager] User explicitly requested to exit conversation: {session_id}
-[ChatWorkflowManager] Loaded system prompt from prompts/chat/system_prompt.md
+[ChatWorkflowManager] Loaded system prompt from autobot-backend/resources/prompts/chat/system_prompt.md
 Exit intent detected: {phrase}
 ```
 
@@ -289,7 +289,7 @@ Exit intent detected: {phrase}
 - **Memory MCP Entity**: "Conversation Termination Bug 2025-10-03"
 - **Solution Entity**: "Conversation Handling Fix 2025-10-03"
 - **Test File**: `tests/test_conversation_handling_fix.py`
-- **System Prompt**: `prompts/chat/system_prompt.md`
+- **System Prompt**: `autobot-backend/resources/prompts/chat/system_prompt.md`
 
 ## Conclusion
 

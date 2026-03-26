@@ -18,7 +18,7 @@ class PathConstants:
     PROJECT_ROOT: Path = Path(__file__).parent.parent.parent
 
     # Prompt templates (#793)
-    PROMPTS_DIR: Path = PROJECT_ROOT / "prompts"
+    PROMPTS_DIR: Path = Path(__file__).parent.parent / "resources" / "prompts"
 
     # Core directories (updated for #781 reorganization)
     CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
