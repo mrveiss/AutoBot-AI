@@ -11,8 +11,8 @@ Roles: owner, editor, viewer, runner.
 import uuid
 
 from sqlalchemy import Column, DateTime, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base
 
 
@@ -27,7 +27,7 @@ class WorkflowPermission(Base):
     __tablename__ = "workflow_permissions"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
