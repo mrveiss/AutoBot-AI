@@ -3,9 +3,13 @@
 # Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
 # Usage:
-#   docker compose up -d                    # Start all core services
-#   docker compose --profile monitoring up -d  # Include Prometheus + Grafana
-#   docker compose --profile ollama up -d      # Include local Ollama LLM
+#   docker compose --env-file docker/.env.docker up -d          # Start all core services
+#   docker compose --env-file docker/.env.docker --profile monitoring up -d
+#   docker compose --env-file docker/.env.docker --profile ollama up -d
+#
+# NOTE: --env-file docker/.env.docker is required when the root .env contains
+# fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
+# that are invalid in a Docker context. See #2458.
 #
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
