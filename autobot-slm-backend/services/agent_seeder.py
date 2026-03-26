@@ -1,5 +1,3 @@
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -18,6 +16,8 @@ import logging
 from models.database import Agent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 logger = logging.getLogger(__name__)
 
