@@ -80,30 +80,21 @@ if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Auto-install pre-commit branch guard wrapper (Issue #1689)
+# 4. Auto-install pre-commit stash-free wrapper (Issue #2512, #1689, #2519)
 # ---------------------------------------------------------------------------
-# The pre-commit framework's stash/pop can silently switch branches.
-# This wraps .git/hooks/pre-commit to detect the switch AFTER the
-# framework returns but BEFORE git proceeds — catching cases where
-# git would abort before prepare-commit-msg even runs.
+# Replaces pre-commit's default hook with a wrapper that calls
+# `pre-commit run --files` (bypassing the stash cycle). Also retains
+# a branch guard as a safety net.
 #
 # Layout:
-#   .git/hooks/pre-commit                   → branch guard wrapper
-#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook
+#   .git/hooks/pre-commit                   → stash-free wrapper
+#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook (backup)
 WRAPPER_SRC="$GIT_ROOT/scripts/hooks/pre-commit-branch-guard-wrapper"
 if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
     PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
     FRAMEWORK_HOOK="$HOOKS_DIR/pre-commit.pre-commit-framework"
 
-    # Only wrap if the current pre-commit hook is NOT already the wrapper
-    if [ -f "$PRECOMMIT_HOOK" ] && ! grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
-        mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
-        cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
-        chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
-    fi
-
-    # If wrapper exists but framework hook is missing (fresh clone),
-    # install pre-commit first, then wrap it
+    # Install wrapper if no hook exists yet (fresh clone)
     if [ ! -f "$PRECOMMIT_HOOK" ] && [ ! -f "$FRAMEWORK_HOOK" ]; then
         if command -v pre-commit > /dev/null 2>&1; then
             pre-commit install > /dev/null 2>&1 || true
@@ -112,6 +103,20 @@ if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
                 cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
                 chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
             fi
+        fi
+    # Wrap if current hook is the raw pre-commit framework (no wrapper)
+    elif [ -f "$PRECOMMIT_HOOK" ] && ! grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+        cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+        chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+    # Update stale wrapper if source template has changed (#2519)
+    elif [ -f "$PRECOMMIT_HOOK" ] && grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        # Strip flock block before comparing (flock is injected separately)
+        _installed=$(sed '/^# --- AUTOBOT_FLOCK/,/^# --- END AUTOBOT_FLOCK/d' "$PRECOMMIT_HOOK")
+        _source=$(cat "$WRAPPER_SRC")
+        if [ "$_installed" != "$_source" ]; then
+            cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+            chmod +x "$PRECOMMIT_HOOK"
         fi
     fi
 fi
