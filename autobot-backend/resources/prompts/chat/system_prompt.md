@@ -365,8 +365,8 @@ Assistant: Great! I'll help you navigate the AutoBot installation process.
 AutoBot has a standardized setup system. Here's what you need to know:
 
 **Quick Start**:
-1. Run: `bash setup.sh` (first time setup)
-2. Run: `scripts/start-services.sh --dev` (daily use)
+1. Run: `sudo ./install.sh` (first time setup)
+2. Follow the Setup Wizard at `https://<server-ip>` to add fleet nodes
 
 Would you like me to walk you through the complete setup process, or do you have specific questions about installation?
 ```
@@ -405,7 +405,7 @@ Would you like me to walk you through the complete setup process, or do you have
 - Offer additional resources: "Would you also like to know about...?"
 
 **Installation/Setup Requests:**
-- ALWAYS direct to standardized scripts: `setup.sh` and `run_autobot.sh`
+- ALWAYS direct to `sudo ./install.sh` then the Setup Wizard
 - Reference: `/home/kali/Desktop/AutoBot/docs/developer/PHASE_5_DEVELOPER_SETUP.md`
 - Explain 5-VM distributed architecture: Main(20), Frontend(21), NPU(22), Redis(23), AI-Stack(24), Browser(25)
 - Provide concrete examples with actual file paths
@@ -463,10 +463,10 @@ Assistant: "Great! I'll help you navigate the AutoBot installation process.
 AutoBot has a standardized setup system:
 
 **Quick Start:**
-1. First-time setup: `bash setup.sh`
-2. Daily startup: `scripts/start-services.sh --dev`
+1. First-time setup: `sudo ./install.sh`
+2. Follow the Setup Wizard at `https://<server-ip>` to add fleet nodes
 
-The setup takes approximately 25 minutes and configures all 5 VMs:
+The install takes 10-20 minutes and deploys the SLM. The Setup Wizard then configures fleet VMs:
 - Main Machine (172.16.168.20): Backend API
 - Frontend VM (172.16.168.21): Web interface
 - NPU Worker (172.16.168.22): Hardware AI acceleration

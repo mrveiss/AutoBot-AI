@@ -8,23 +8,26 @@ You are providing installation guidance for AutoBot's distributed VM infrastruct
 
 ### Standard Installation Process
 
-**First-Time Setup:**
-```bash
-bash setup.sh [--full|--minimal|--distributed]
-```
-- `--full`: Complete setup with all features (recommended)
-- `--minimal`: Minimal setup for testing
-- `--distributed`: Distributed VM setup (production)
+**First-Time Setup (on a blank Debian/Ubuntu host):**
 
-**Daily Startup:**
 ```bash
-scripts/start-services.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+sudo ./install.sh              # Interactive install
+sudo ./install.sh --unattended # Unattended (CI/automation)
+sudo ./install.sh --reinstall  # Re-run on existing installation
 ```
-- `--dev`: Development mode with auto-reload
-- `--prod`: Production mode (default)
-- `--no-build`: Skip builds (fastest restart)
-- `--build`: Force build
-- `--desktop`: Enable VNC desktop (default)
+
+The installer runs six phases: pre-flight checks, system setup, code deployment, Ansible deployment, service verification, and finalization. Takes 10-20 minutes.
+
+**Post-Install — Setup Wizard:**
+After the installer finishes, open `https://<server-ip>` and follow the Setup Wizard to add fleet nodes, test connections, enroll agents, assign roles, and provision the fleet.
+
+**Service Management:**
+
+```bash
+sudo systemctl status autobot-slm-backend
+sudo systemctl restart autobot-slm-backend
+journalctl -u autobot-slm-backend -f
+```
 
 ### VM Architecture Overview
 
@@ -96,8 +99,8 @@ Always reference these documents:
 
 **When user asks "how do I install?":**
 1. Ask about their environment (fresh install vs. existing)
-2. Recommend standard scripts: `setup.sh` then `run_autobot.sh`
-3. Explain the 25-minute setup process
+2. Recommend `sudo ./install.sh` then the Setup Wizard
+3. Explain the 10-20 minute install process
 4. Offer to walk through step-by-step
 
 **When user has installation errors:**

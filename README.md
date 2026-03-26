@@ -59,26 +59,18 @@ git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 ```
 
-### 2. Run initial setup
+### 2. Run the installer
 
 ```bash
-bash setup.sh
+sudo ./install.sh              # Interactive install
+sudo ./install.sh --unattended # Unattended (CI/automation)
 ```
 
-Installs dependencies, configures environment variables, initializes Redis databases, and prepares all containers.
+Installs system packages, deploys the SLM backend via Ansible, configures nginx, and starts all services. Takes 10-20 minutes. See [INSTALL.md](INSTALL.md) for details.
 
-### 3. Start AutoBot
+### 3. Follow the Setup Wizard
 
-```bash
-# Development mode — auto-reload, debug logging
-bash run_autobot.sh --dev
-
-# Production mode
-bash run_autobot.sh --prod
-
-# Skip container rebuild if images already exist
-bash run_autobot.sh --dev --no-build
-```
+Open `https://<server-ip>` in your browser, log in with the credentials printed at install completion, and follow the Setup Wizard to add and configure fleet nodes.
 
 ### 4. Open the interface
 
