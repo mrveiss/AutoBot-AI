@@ -218,6 +218,15 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
+- name: "SLM | Create autobot_shared symlink for Python import"
+  ansible.builtin.file:
+    src: "{{ slm_shared_dir }}"
+    dest: "{{ slm_base_dir }}/autobot_shared"
+    state: link
+    owner: "{{ slm_user }}"
+    group: "{{ slm_group }}"
+  tags: ['slm', 'backend']
+
 - name: "SLM | Install autobot-shared in venv (editable)"
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
