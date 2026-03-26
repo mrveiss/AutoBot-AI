@@ -203,6 +203,20 @@ repos:
         stages: [pre-commit]
         description: "Copies tracked post-checkout hook into .git/hooks/ so it runs on checkout and worktree creation"
 
+  # Bootstrap: install post-commit hook from tracked source (Issue #2416)
+  # Mirrors the install-post-checkout pattern above. The post-commit hook
+  # auto-heals working tree files corrupted by pre-commit's stash/pop cycle.
+  - repo: local
+    hooks:
+      - id: install-post-commit
+        name: Install post-commit hook (Issue #2416)
+        entry: bash -c 'SRC="scripts/hooks/post-commit"; DST="$(git rev-parse --git-common-dir)/hooks/post-commit"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-commit hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-commit hook into .git/hooks/ so it heals stash-pop conflicts"
+
 # Configuration for specific file types
 default_language_version:
   python: python3
