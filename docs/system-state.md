@@ -1078,8 +1078,10 @@ docs/
 
 ### Setup (Required First Time)
 ```bash
-bash setup.sh [--full|--minimal|--distributed]
+sudo ./install.sh
 ```
+
+See [INSTALL.md](../INSTALL.md) for full installation options and the Setup Wizard.
 
 ### Startup (Daily Use)
 ```bash
@@ -1100,7 +1102,7 @@ sudo systemctl start autobot-celery
 **❌ OBSOLETE METHODS (DO NOT USE):**
 - ~~`run_autobot.sh`~~ → Deprecated (Issue #863), moved to `legacy/`
 - ~~`run_agent_unified.sh`~~ → Use service management methods
-- ~~`setup_agent.sh`~~ → Use `setup.sh`
+- ~~`setup_agent.sh`~~ → Use `install.sh` (see [INSTALL.md](../INSTALL.md))
 - ~~Any other run scripts~~ → ALL archived in `scripts/archive/`
 
 ---
@@ -1117,7 +1119,7 @@ sudo systemctl start autobot-celery
 
 **Files Updated**:
 - `autobot-backend/utils/semantic_chunker.py` - Added env vars at module level
-- `setup.sh` - Added to standardized setup script
+- `install.sh` - Added to standardized installation script
 - `.env` and `.env.localhost` - Added to environment files
 - Backend systemd service - Loads environment variables
 
@@ -1341,31 +1343,23 @@ User Response
 
 ### Initial Setup (Required)
 
-**IMPORTANT**: Always use the standardized setup script for fresh installations:
+**IMPORTANT**: Always use the standardized installer for fresh installations:
 
 ```bash
-bash setup.sh
+sudo ./install.sh
 ```
 
-**Setup Options:**
-```bash
-bash setup.sh [OPTIONS]
+The installer launches the **Setup Wizard**, which guides you through configuration.
+See [INSTALL.md](../INSTALL.md) for full options and detailed instructions.
 
-OPTIONS:
-  --full             Complete setup including all dependencies
-  --minimal          Minimal setup for development
-  --distributed      Setup for distributed VM infrastructure
-  --help             Show setup help and options
-```
-
-**What setup.sh does:**
-- ✅ Installs all required dependencies
-- ✅ Configures distributed VM infrastructure
-- ✅ Sets up environment variables for all VMs
-- ✅ Initializes Redis databases
-- ✅ Configures Ollama LLM service
-- ✅ Sets up VNC desktop access
-- ✅ Validates all service connections
+**What install.sh does:**
+- Installs all required dependencies
+- Configures distributed VM infrastructure
+- Sets up environment variables for all VMs
+- Initializes Redis databases
+- Configures Ollama LLM service
+- Sets up VNC desktop access
+- Validates all service connections
 
 **After setup, use one of the service management methods to start the system.**
 
@@ -1516,7 +1510,7 @@ Desktop access is **enabled by default** on all modes:
 
 ### Key Files
 
-- `setup.sh`: Standardized setup and installation script
+- `install.sh`: Standardized installation script (launches Setup Wizard)
 - `run_autobot.sh`: Main startup script (replaces all other run methods)
 - `backend/fast_app_factory_fix.py`: Fast backend with Redis timeout fix
 - `compose.yml`: Distributed VM configuration
@@ -1765,7 +1759,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/components/ /home/autobot/autobot-frontend/src/components/
 
 # Sync to ALL VMs
-./scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
+./scripts/utilities/sync-to-vm.sh all scripts/install.sh /home/autobot/scripts/
 
 # Test connections to all VMs
 ./scripts/utilities/sync-to-vm.sh all /tmp/test /tmp/test --test-connection
