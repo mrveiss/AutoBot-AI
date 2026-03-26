@@ -1,18 +1,17 @@
-# Sync main → Dev_new_gui after direct pushes to main
+# Sync Dev_new_gui → main after pushes to Dev_new_gui
 #
-# When main receives commits that Dev_new_gui doesn't have (e.g.,
-# hotfixes, release merges, Dependabot PRs that landed on main before
-# retargeting), this workflow opens a PR to bring Dev_new_gui up to date.
-#
-# The PR is created for human review — it is never auto-merged.
+# Dev_new_gui is the working branch. When it receives new commits
+# (merged PRs, direct pushes), this workflow fast-forwards main
+# to match. If fast-forward fails (main has diverged), it opens
+# a PR instead for manual resolution.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/2445
 
-name: Sync main → Dev_new_gui
+name: Sync Dev_new_gui → main
 
 on:
   push:
-    branches: [main]
+    branches: [Dev_new_gui]
 
 jobs:
   sync:
@@ -27,23 +26,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if main is ahead of Dev_new_gui
+      - name: Check if Dev_new_gui is ahead of main
         id: check
         run: |
-          git fetch origin Dev_new_gui
-          AHEAD=$(git rev-list --count origin/Dev_new_gui..origin/main)
+          git fetch origin main
+          AHEAD=$(git rev-list --count origin/main..origin/Dev_new_gui)
           echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
-          echo "main is $AHEAD commit(s) ahead of Dev_new_gui"
+          echo "Dev_new_gui is $AHEAD commit(s) ahead of main"
 
-      - name: Create sync PR
+      - name: Fast-forward main to Dev_new_gui
         if: steps.check.outputs.ahead != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Try fast-forward push
+          if git push origin origin/Dev_new_gui:main 2>&1; then
+            echo "main fast-forwarded to Dev_new_gui successfully."
+            exit 0
+          fi
+
+          echo "Fast-forward failed — main has diverged. Creating PR."
+
           # Check if a sync PR already exists
           EXISTING=$(gh pr list \
-            --base Dev_new_gui \
-            --head main \
+            --base main \
+            --head Dev_new_gui \
             --state open \
             --json number \
             --jq 'length')
@@ -56,19 +63,19 @@ jobs:
           AHEAD=${{ steps.check.outputs.ahead }}
 
           gh pr create \
-            --base Dev_new_gui \
-            --head main \
-            --title "chore(sync): merge main → Dev_new_gui ($AHEAD commit(s))" \
+            --base main \
+            --head Dev_new_gui \
+            --title "chore(sync): merge Dev_new_gui → main ($AHEAD commit(s))" \
             --body "$(cat <<'EOF'
-          ## Automated sync: main → Dev_new_gui
+          ## Automated sync: Dev_new_gui → main
 
-          Main branch has commits not yet in `Dev_new_gui`. This PR brings
-          the development branch up to date.
+          Dev_new_gui has commits not yet in main. Fast-forward failed
+          (main may have diverged), so this PR is created for manual merge.
 
           **Review carefully** — if there are merge conflicts, resolve them
           locally before merging.
 
-          > Created automatically by the `sync-main-to-dev` workflow.
+          > Created automatically by the sync-main-to-dev workflow.
           > See issue #2445 for context.
           EOF
           )"
