@@ -132,7 +132,7 @@ This guide explains how to ensure these tools are ALWAYS used for complex reason
 
 ### Step 1: System Prompt Configuration
 
-**File**: `prompts/chat/system_prompt.md`
+**File**: `autobot-backend/resources/prompts/chat/system_prompt.md`
 
 The system prompt has been updated to include mandatory thinking tool usage instructions. Section added:
 
@@ -473,7 +473,7 @@ def _ensure_thinking_tools(self, available_tools):
 ## References
 
 ### Documentation Files:
-- System Prompt: `prompts/chat/system_prompt.md`
+- System Prompt: `autobot-backend/resources/prompts/chat/system_prompt.md`
 - Sequential Thinking API: `autobot-backend/api/sequential_thinking_mcp.py`
 - Structured Thinking API: `autobot-backend/api/structured_thinking_mcp.py`
 - LLM Interface: `src/llm_interface.py`
@@ -484,7 +484,7 @@ def _ensure_thinking_tools(self, available_tools):
 
 ### Configuration:
 - Environment: `.env` (AUTOBOT_DEFAULT_LLM_MODEL)
-- Prompts: `prompts/chat/system_prompt.md`
+- Prompts: `autobot-backend/resources/prompts/chat/system_prompt.md`
 - Backend: `backend/main.py` (router registration)
 
 ---
@@ -494,7 +494,7 @@ def _ensure_thinking_tools(self, available_tools):
 For issues or questions about thinking tools configuration:
 
 1. Check this guide first
-2. Review system prompt: `prompts/chat/system_prompt.md`
+2. Review system prompt: `autobot-backend/resources/prompts/chat/system_prompt.md`
 3. Check backend logs: `logs/backend.log`
 4. Test MCP endpoints with curl
 5. Verify model is Mistral 7B or better
