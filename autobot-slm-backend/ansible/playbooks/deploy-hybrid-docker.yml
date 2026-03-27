@@ -366,7 +366,7 @@
         state: present
       become_user: autobot
 
-    - name: Pull required Ollama models (6-tier mapping, #2553)
+    - name: Pull required Ollama models (3-tier mapping, #2553)
       shell: |
         docker exec autobot-ollama ollama pull {{ item }}
       loop:

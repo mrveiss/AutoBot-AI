@@ -1,39 +1,35 @@
 # AI Agents Configuration (#2553)
-# Contains all AI agent and LLM-related settings
-# Model assignments use 6-tier mapping — change in ssot_config.py to change everywhere
+# 3-tier model mapping: routing, classification, quality/tools
+# All tool-using agents use qwen3.5:9b for reliable function calling.
 
 llm:
-  # Default model for most operations (quality tier)
   default_model: qwen3.5:9b
 
-  # Model assignments by agent type (6-tier mapping)
   models:
-    # Routing tier — fast orchestration
+    # Routing tier — orchestrator only
     orchestrator: llama3.2:1b
-    # Classification tier — purpose-built
-    classification: gemma2:2b
-    # Quality tier — user-facing
+    # Classification tier
+    classification: gemma3:4b
+    gemma_classification: gemma3:4b
+    # Quality/tools tier — all tool-using agents
     chat: qwen3.5:9b
-    # Light processing tier — structured tasks
-    kb_librarian: phi3:mini
-    knowledge_extraction: phi3:mini
-    knowledge_retrieval: phi3:mini
-    json_formatter: phi3:mini
-    npu_code_search: phi3:mini
-    # Instruction following tier — RAG, extraction
-    rag: mistral:7b-instruct
+    kb_librarian: qwen3.5:9b
+    knowledge_extraction: qwen3.5:9b
+    knowledge_retrieval: qwen3.5:9b
+    json_formatter: qwen3.5:9b
+    npu_code_search: qwen3.5:9b
+    rag: qwen3.5:9b
     research: qwen3.5:9b
-    graph_entity_extractor: mistral:7b-instruct
-    man_page_knowledge_integrator: mistral:7b-instruct
-    librarian_assistant: mistral:7b-instruct
-    step_executor: mistral:7b-instruct
-    network_discovery: mistral:7b-instruct
-    # System/uncensored tier — command execution
-    system_commands: dolphin-llama3:8b
-    enhanced_system_commands: dolphin-llama3:8b
-    interactive_terminal: dolphin-llama3:8b
-    security_scanner: dolphin-llama3:8b
-    llm_failsafe: dolphin-llama3:8b
+    graph_entity_extractor: qwen3.5:9b
+    man_page_knowledge_integrator: qwen3.5:9b
+    librarian_assistant: qwen3.5:9b
+    step_executor: qwen3.5:9b
+    network_discovery: qwen3.5:9b
+    system_commands: qwen3.5:9b
+    enhanced_system_commands: qwen3.5:9b
+    interactive_terminal: qwen3.5:9b
+    security_scanner: qwen3.5:9b
+    llm_failsafe: qwen3.5:9b
 
 agents:
   chat:
@@ -45,7 +41,7 @@ agents:
     enabled: true
     fallback_enabled: true
     timeout_seconds: 10
-    preferred_model: gemma2:2b
+    preferred_model: gemma3:4b
     use_gemma: true
 
   interactive_terminal:

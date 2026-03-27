@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL
+from autobot_shared.ssot_config import QUALITY_MODEL
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path
@@ -1325,7 +1325,7 @@ class EnvironmentAnalyzer:
     async def llm_filter_hardcoded(
         self,
         hardcoded_values: List[HardcodedValue],
-        model: str = LIGHT_PROCESSING_MODEL,
+        model: str = QUALITY_MODEL,
         batch_size: int = 100,
         priority_filter: Optional[str] = None,
     ) -> List[HardcodedValue]:
@@ -1590,7 +1590,7 @@ class EnvironmentAnalyzer:
         self,
         root_path: str = ".",
         patterns: List[str] = None,
-        llm_model: str = LIGHT_PROCESSING_MODEL,
+        llm_model: str = QUALITY_MODEL,
         filter_priority: Optional[str] = "high",
     ) -> Dict[str, Any]:
         """Analyze codebase with LLM filtering. Issue #633."""

@@ -90,11 +90,8 @@ yaml.safe_dump = _filtered_yaml_safe_dump
 logger = logging.getLogger(__name__)
 
 
-from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
 from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
 from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
-from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 
 class ConfigManager:
@@ -194,19 +191,19 @@ class ConfigManager:
         "default": _SSOT_QUALITY,
         # Specialized Agents - optimized per 6-tier mapping
         "chat": _SSOT_QUALITY,
-        "system_commands": _SSOT_SYSTEM,
-        "rag": _SSOT_INSTRUCTION,
-        "knowledge_retrieval": _SSOT_LIGHT,
+        "system_commands": _SSOT_QUALITY,
+        "rag": _SSOT_QUALITY,
+        "knowledge_retrieval": _SSOT_QUALITY,
         "research": _SSOT_QUALITY,
         # Legacy compatibility
-        "search": _SSOT_LIGHT,
+        "search": _SSOT_QUALITY,
         "code": _SSOT_QUALITY,
         "analysis": _SSOT_QUALITY,
         "planning": _SSOT_QUALITY,
         # Fallback models
         "orchestrator_fallback": _SSOT_ROUTING,
         "chat_fallback": _SSOT_QUALITY,
-        "fallback": _SSOT_SYSTEM,
+        "fallback": _SSOT_QUALITY,
     }
 
     def __init__(self, config_dir: str = "config"):

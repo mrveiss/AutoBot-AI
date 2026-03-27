@@ -20,7 +20,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL
+from autobot_shared.ssot_config import QUALITY_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -379,9 +379,7 @@ async def get_environment_analysis(
     use_llm_filter: bool = Query(
         False, description="Issue #633: Use LLM to filter false positives"
     ),
-    llm_model: str = Query(
-        LIGHT_PROCESSING_MODEL, description="Ollama model for LLM filtering"
-    ),
+    llm_model: str = Query(QUALITY_MODEL, description="Ollama model for LLM filtering"),
     filter_priority: str = Query(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",

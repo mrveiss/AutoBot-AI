@@ -40,7 +40,6 @@ from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATI
 from autobot_shared.ssot_config import (
     DEFAULT_LLM_MODEL,
 )
-from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 
@@ -89,7 +88,7 @@ class ModelConstants:
     EMBEDDING_MODEL: str = "nomic-embed-text:latest"
     CLASSIFICATION_MODEL: str = SSOT_CLASSIFICATION_MODEL
     REASONING_MODEL: str = SSOT_QUALITY_MODEL
-    RAG_MODEL: str = SSOT_INSTRUCTION_MODEL
+    RAG_MODEL: str = SSOT_QUALITY_MODEL
     CODING_MODEL: str = SSOT_QUALITY_MODEL
     ORCHESTRATOR_MODEL: str = SSOT_ROUTING_MODEL
 
