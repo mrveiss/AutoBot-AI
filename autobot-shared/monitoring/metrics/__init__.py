@@ -33,6 +33,9 @@ from .claude_api import ClaudeAPIMetricsRecorder
 from .frontend import FrontendMetricsRecorder
 from .github import GitHubMetricsRecorder
 
+# Issue #1956: Inference profiler metrics recorder
+from .inference_profiler import InferenceProfilerMetricsRecorder
+
 # Issue #470: New domain-specific recorders
 from .knowledge_base import KnowledgeBaseMetricsRecorder
 from .llm_provider import LLMProviderMetricsRecorder
@@ -60,4 +63,6 @@ __all__ = [
     "RedisMetricsRecorder",
     # Issue #476: Frontend RUM recorder
     "FrontendMetricsRecorder",
+    # Issue #1956: Inference profiler recorder
+    "InferenceProfilerMetricsRecorder",
 ]

@@ -33,6 +33,7 @@ from .metrics import (
     ClaudeAPIMetricsRecorder,
     FrontendMetricsRecorder,
     GitHubMetricsRecorder,
+    InferenceProfilerMetricsRecorder,
     KnowledgeBaseMetricsRecorder,
     LLMProviderMetricsRecorder,
     PerformanceMetricsRecorder,
@@ -106,6 +107,8 @@ class PrometheusMetricsManager:
         self._redis = RedisMetricsRecorder(self.registry)
         # Issue #476: Initialize frontend RUM metrics recorder
         self._frontend = FrontendMetricsRecorder(self.registry)
+        # Issue #1956: Initialize inference profiler metrics recorder
+        self._inference_profiler = InferenceProfilerMetricsRecorder(self.registry)
 
     # =========================================================================
     # Core Infrastructure Metrics Initialization
@@ -781,6 +784,36 @@ class PrometheusMetricsManager:
     def record_frontend_critical_issue(self, issue_type: str) -> None:
         """Record a critical issue from frontend."""
         self._frontend.record_critical_issue(issue_type)
+
+    # =========================================================================
+    # Inference Profiler Metrics (Issue #1956: Delegates to InferenceProfilerMetricsRecorder)
+    # =========================================================================
+
+    def record_inference_stage_duration(
+        self, model_name: str, stage: str, duration_seconds: float
+    ) -> None:
+        """Record an inference stage duration measurement."""
+        self._inference_profiler.record_stage_duration(
+            model_name, stage, duration_seconds
+        )
+
+    def record_inference_vram_peak(self, model_name: str, peak_bytes: int) -> None:
+        """Record peak VRAM usage during inference."""
+        self._inference_profiler.update_vram_peak(model_name, peak_bytes)
+
+    def record_inference_vram_allocated(
+        self, model_name: str, allocated_bytes: int
+    ) -> None:
+        """Record current VRAM allocation during inference."""
+        self._inference_profiler.update_vram_allocated(model_name, allocated_bytes)
+
+    def record_inference_session_complete(
+        self, model_name: str, total_duration_seconds: float
+    ) -> None:
+        """Record a completed inference profiling session."""
+        self._inference_profiler.record_session_complete(
+            model_name, total_duration_seconds
+        )
 
     # =========================================================================
     # Metrics Export
