@@ -55,7 +55,8 @@ export function useApiClient(): ApiClientType {
 }
 
 // Type declarations for global properties
-declare module '@vue/runtime-core' {
+// Vue 3.5+ requires augmenting 'vue' instead of '@vue/runtime-core'
+declare module 'vue' {
   interface ComponentCustomProperties {
     $api: ApiClientType
     $getApiClient: () => ApiClientType
