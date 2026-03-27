@@ -18,6 +18,7 @@ Issue #2098: Active token budget optimization with context compaction.
 import hashlib
 import json
 import logging
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
@@ -126,39 +127,49 @@ class ContextFingerprinter:
 
 
 class L1Cache:
-    """In-memory LRU cache for hot compacted context (L1)."""
+    """In-memory LRU cache for hot compacted context (L1).
+
+    All public methods are thread-safe. A single lock guards all mutations
+    and reads on the underlying OrderedDict so concurrent FastAPI request
+    handlers (including those running in thread-pool executors) cannot
+    corrupt the LRU ordering or the entry hit-count fields. Issue #2577.
+    """
 
     def __init__(self, max_entries: int = 100, ttl_seconds: int = 300):
         self._cache: OrderedDict[str, CompactionEntry] = OrderedDict()
         self._max_entries = max_entries
         self._ttl_seconds = ttl_seconds
+        self._lock = threading.Lock()
 
     def get(self, fingerprint: str) -> Optional[CompactionEntry]:
-        """Retrieve a compaction entry if present and not expired."""
-        entry = self._cache.get(fingerprint)
-        if entry is None:
-            return None
-        if time.time() - entry.created_at > self._ttl_seconds:
-            del self._cache[fingerprint]
-            return None
-        self._cache.move_to_end(fingerprint)
-        entry.hit_count += 1
-        entry.last_accessed = time.time()
-        return entry
+        """Retrieve a compaction entry if present and not expired. Thread-safe."""
+        with self._lock:
+            entry = self._cache.get(fingerprint)
+            if entry is None:
+                return None
+            if time.time() - entry.created_at > self._ttl_seconds:
+                del self._cache[fingerprint]
+                return None
+            self._cache.move_to_end(fingerprint)
+            entry.hit_count += 1
+            entry.last_accessed = time.time()
+            return entry
 
     def put(self, fingerprint: str, entry: CompactionEntry) -> None:
-        """Store a compaction entry, evicting oldest if at capacity."""
-        if fingerprint in self._cache:
-            self._cache.move_to_end(fingerprint)
+        """Store a compaction entry, evicting oldest if at capacity. Thread-safe."""
+        with self._lock:
+            if fingerprint in self._cache:
+                self._cache.move_to_end(fingerprint)
+                self._cache[fingerprint] = entry
+                return
+            if len(self._cache) >= self._max_entries:
+                self._cache.popitem(last=False)
             self._cache[fingerprint] = entry
-            return
-        if len(self._cache) >= self._max_entries:
-            self._cache.popitem(last=False)
-        self._cache[fingerprint] = entry
 
     @property
     def size(self) -> int:
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)
 
 
 class L2Cache:
@@ -219,26 +230,36 @@ class FrequencyTracker:
 
     Evicts least-seen entries when max_entries is reached to prevent
     unbounded memory growth in long-running processes. Issue #2098.
+
+    All public methods are thread-safe. A single lock guards all reads
+    and writes on _counts so concurrent requests cannot corrupt the
+    frequency map or trigger a double-eviction. Issue #2577.
     """
 
     def __init__(self, threshold: int = 3, max_entries: int = 1000):
         self._counts: Dict[str, int] = {}
         self._threshold = threshold
         self._max_entries = max_entries
+        self._lock = threading.Lock()
 
     def record(self, fingerprint: str) -> int:
-        """Record a fingerprint occurrence, return new count."""
-        self._counts[fingerprint] = self._counts.get(fingerprint, 0) + 1
-        if len(self._counts) > self._max_entries:
-            self._evict_least_seen()
-        return self._counts.get(fingerprint, 0)
+        """Record a fingerprint occurrence, return new count. Thread-safe."""
+        with self._lock:
+            self._counts[fingerprint] = self._counts.get(fingerprint, 0) + 1
+            if len(self._counts) > self._max_entries:
+                self._evict_least_seen()
+            return self._counts.get(fingerprint, 0)
 
     def is_eligible(self, fingerprint: str) -> bool:
-        """Check if a fingerprint has been seen enough for compaction."""
-        return self._counts.get(fingerprint, 0) >= self._threshold
+        """Check if a fingerprint has been seen enough for compaction. Thread-safe."""
+        with self._lock:
+            return self._counts.get(fingerprint, 0) >= self._threshold
 
     def _evict_least_seen(self) -> None:
-        """Remove the bottom 10% of entries by count to reclaim space."""
+        """Remove the bottom 10% of entries by count to reclaim space.
+
+        Must be called with self._lock already held. Issue #2577.
+        """
         target = int(self._max_entries * 0.9)
         sorted_fps = sorted(self._counts, key=lambda k: self._counts[k])
         for fp in sorted_fps[: len(sorted_fps) - target]:
@@ -252,6 +273,12 @@ class TokenOptimizer:
     Intercepts LLM request messages, identifies recurring context blocks,
     and substitutes compact versions from a two-tier cache. Tracks savings
     for analytics.
+
+    All public methods are thread-safe. A dedicated lock guards the shared
+    aggregate counters (_total_tokens_saved, _total_requests) so concurrent
+    FastAPI handlers cannot produce lost updates. L1Cache and FrequencyTracker
+    each carry their own locks for their respective state. L2Cache (Redis)
+    relies on redis-py's built-in connection-pool thread safety. Issue #2577.
 
     Usage:
         optimizer = TokenOptimizer()
@@ -276,6 +303,7 @@ class TokenOptimizer:
         self._compressor = self._init_compressor()
         self._total_tokens_saved: int = 0
         self._total_requests: int = 0
+        self._lock = threading.Lock()
 
     @staticmethod
     def _init_compressor() -> Optional["PromptCompressor"]:
@@ -290,21 +318,23 @@ class TokenOptimizer:
 
     @property
     def stats(self) -> Dict[str, Any]:
-        """Return aggregate optimization statistics."""
-        return {
-            "total_requests": self._total_requests,
-            "total_tokens_saved": self._total_tokens_saved,
-            "l1_cache_size": self._l1.size,
-            "enabled": self._config.enabled,
-        }
+        """Return a consistent snapshot of aggregate optimization statistics. Thread-safe."""
+        with self._lock:
+            return {
+                "total_requests": self._total_requests,
+                "total_tokens_saved": self._total_tokens_saved,
+                "l1_cache_size": self._l1.size,
+                "enabled": self._config.enabled,
+            }
 
     def optimize(
         self,
         messages: List[Dict[str, str]],
         request_id: str = "",
     ) -> Tuple[List[Dict[str, str]], TokenSavingsRecord]:
-        """Optimize messages by substituting compacted context blocks."""
-        self._total_requests += 1
+        """Optimize messages by substituting compacted context blocks. Thread-safe."""
+        with self._lock:
+            self._total_requests += 1
         if not self._config.enabled:
             return messages, self._empty_record(messages, request_id)
 
@@ -364,9 +394,10 @@ class TokenOptimizer:
         blocks_compacted: int,
         request_id: str,
     ) -> TokenSavingsRecord:
-        """Build a TokenSavingsRecord from optimization results."""
+        """Build a TokenSavingsRecord from optimization results. Thread-safe."""
         est_tokens_saved = total_saved // 4
-        self._total_tokens_saved += est_tokens_saved
+        with self._lock:
+            self._total_tokens_saved += est_tokens_saved
 
         if blocks_compacted > 0:
             logger.info(
