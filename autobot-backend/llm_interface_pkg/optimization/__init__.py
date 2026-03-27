@@ -26,6 +26,7 @@ from .integration import (
     OptimizedLLMMiddleware,
     get_optimization_middleware,
 )
+from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
 from .router import (
@@ -77,4 +78,7 @@ __all__ = [
     "TokenOptimizerConfig",
     "TokenSavingsRecord",
     "get_token_optimizer",
+    # Profiler (Issue #1956)
+    "LayeredProfiler",
+    "INFERENCE_STAGES",
 ]
