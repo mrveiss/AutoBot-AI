@@ -13,6 +13,15 @@ Issue #717: Efficient Inference Design implementation.
 
 from .cloud_batcher import BatchResult, CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
+from .flash_attention import (
+    AttentionBackend,
+    AttentionOutput,
+    FlashAttentionConfig,
+    FlashAttentionV2,
+    GrowingKVCache,
+    create_flash_attention,
+    detect_backend,
+)
 from .inference_utils import (
     InferenceConfig,
     InferenceMode,
@@ -47,6 +56,14 @@ __all__ = [
     "OptimizationCategory",
     "OptimizationConfig",
     "get_optimization_router",
+    # Flash Attention
+    "FlashAttentionV2",
+    "FlashAttentionConfig",
+    "AttentionBackend",
+    "AttentionOutput",
+    "GrowingKVCache",
+    "create_flash_attention",
+    "detect_backend",
     # Cloud Batcher
     "CloudRequestBatcher",
     "BatchResult",
