@@ -402,6 +402,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["bi-reports"],
         "bi_reports",
     ),
+    # Issue #2597: AutoResearch experiment runner (Milestone 1 of #1440)
+    (
+        "services.autoresearch.routes",
+        "/autoresearch",
+        ["autoresearch"],
+        "autoresearch",
+    ),
 ]
 
 
