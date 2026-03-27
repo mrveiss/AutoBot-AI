@@ -471,7 +471,7 @@ def _tool_redis_hybrid_search() -> MCPTool:
                 },
                 "database": {"type": "string", "default": "vectors"},
             },
-            "required": ["query_vector", "filter_expression"],
+            "required": ["filter_expression"],
         },
     )
 
