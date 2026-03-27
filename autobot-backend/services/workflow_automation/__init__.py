@@ -21,6 +21,12 @@ Module Structure:
 Total: ~1,280 lines (slight increase for proper separation)
 """
 
+from .concurrent_limiter import (
+    ConcurrencyLimitError,
+    ConcurrentWorkflowLimiter,
+    OverflowPolicy,
+    get_concurrent_limiter,
+)
 from .controller import WorkflowController
 from .executor import WorkflowExecutor
 from .manager import WorkflowAutomationManager
@@ -35,6 +41,12 @@ from .models import (
     WorkflowStepStatus,
 )
 from .routes import get_workflow_manager, router
+from .safety_limits import (
+    CostTracker,
+    StepTimeoutEnforcer,
+    StepTimeoutError,
+    WorkflowLimits,
+)
 from .step_evaluator import WorkflowStepEvaluator
 from .templates import WorkflowTemplateManager
 
@@ -58,4 +70,14 @@ __all__ = [
     "WorkflowController",
     "WorkflowStepEvaluator",
     "WorkflowTemplateManager",
+    # Issue #2159: Safety limits
+    "WorkflowLimits",
+    "CostTracker",
+    "StepTimeoutEnforcer",
+    "StepTimeoutError",
+    # Issue #2159: Concurrent limiter
+    "ConcurrentWorkflowLimiter",
+    "ConcurrencyLimitError",
+    "OverflowPolicy",
+    "get_concurrent_limiter",
 ]

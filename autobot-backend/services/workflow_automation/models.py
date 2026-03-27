@@ -136,6 +136,8 @@ class WorkflowStep:
     execution_result: Optional[Metadata] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Issue #2159: Per-step timeout override (seconds). None uses WorkflowLimits default.
+    timeout_seconds: Optional[int] = None
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -224,6 +226,8 @@ class WorkflowStepRequest(BaseModel):
     requires_confirmation: bool = True
     risk_level: str = "low"
     dependencies: List[str] = []
+    # Issue #2159: Per-step timeout in seconds. None means use system default.
+    timeout_seconds: Optional[int] = None
 
 
 class AutomatedWorkflowRequest(BaseModel):

@@ -26,6 +26,12 @@ from .models import (
     WorkflowStep,
     WorkflowStepStatus,
 )
+from .safety_limits import (
+    CostTracker,
+    StepTimeoutEnforcer,
+    StepTimeoutError,
+    WorkflowLimits,
+)
 from .state_machine import WorkflowPhase, WorkflowStateMachine
 from .step_evaluator import WorkflowStepEvaluator
 
@@ -109,13 +115,30 @@ class WorkflowExecutor:
         self.on_workflow_finished: Optional[Callable[[str], None]] = None
         # Issue #1380: State machine for explicit routing
         self.state_machine = WorkflowStateMachine()
+        # Issue #2159: Safety limits infrastructure
+        self.limits = WorkflowLimits()
+        self.cost_tracker = CostTracker()
+        self._timeout_enforcer = StepTimeoutEnforcer()
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> bool:
         """Start executing automated workflow"""
+        # Issue #2159: Enforce max_steps limit before starting
+        if len(workflow.steps) > self.limits.max_steps:
+            logger.error(
+                "Workflow %s has %d steps, exceeding limit of %d",
+                workflow.workflow_id,
+                len(workflow.steps),
+                self.limits.max_steps,
+            )
+            return False
+
         workflow.started_at = datetime.now()
         workflow.prometheus_start_time = time.time()
+
+        # Issue #2159: Begin cost tracking for this execution
+        self.cost_tracker.start(workflow.workflow_id)
 
         # Issue #1380: Create state machine entry
         sm_state = await self.state_machine.create(
@@ -405,6 +428,16 @@ class WorkflowExecutor:
 
         current_step.status = WorkflowStepStatus.EXECUTING
 
+        # Issue #2159: Enforce token/output budget before executing next step
+        if not self.cost_tracker.check_token_budget(workflow.workflow_id, self.limits):
+            await self._handle_step_execution_failure(
+                workflow,
+                current_step,
+                step_id,
+                RuntimeError("Token budget exhausted for this workflow execution"),
+            )
+            return
+
         try:
             # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
             # Issue #2321: Capture resolved_names so redaction only scans
@@ -414,10 +447,33 @@ class WorkflowExecutor:
                 current_step.command, owner_id
             )
 
-            result = await self._execute_command(workflow.session_id, resolved_command)
+            # Issue #2159: Wrap execution in per-step timeout enforcer
+            result = await self._timeout_enforcer.run_with_timeout(
+                coro=self._execute_command(workflow.session_id, resolved_command),
+                step_id=step_id,
+                timeout_seconds=current_step.timeout_seconds,
+                limits=self.limits,
+            )
 
             # Issue #2153: Redact any secret values that may appear in output.
             result = _redact_result_secrets(result, owner_id, resolved_names)
+
+            # Issue #2159: Record output size for budget tracking
+            output_size = len(str(result.get("stdout", "")).encode("utf-8"))
+            self.cost_tracker.record_output_bytes(workflow.workflow_id, output_size)
+
+            if not self.cost_tracker.check_output_budget(
+                workflow.workflow_id, self.limits
+            ):
+                await self._handle_step_execution_failure(
+                    workflow,
+                    current_step,
+                    step_id,
+                    RuntimeError(
+                        "Output size budget exhausted for this workflow execution"
+                    ),
+                )
+                return
 
             current_step.status = WorkflowStepStatus.COMPLETED
             current_step.execution_result = result
@@ -432,6 +488,10 @@ class WorkflowExecutor:
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             await self.process_next_step(workflow, workflows)
 
+        except StepTimeoutError as e:
+            await self._handle_step_execution_failure(
+                workflow, current_step, step_id, e
+            )
         except Exception as e:
             await self._handle_step_execution_failure(
                 workflow, current_step, step_id, e
@@ -543,6 +603,9 @@ class WorkflowExecutor:
         await self._sm_transition(workflow, WorkflowPhase.COMPLETE.value)
 
         self._record_workflow_completion_metrics(workflow, workflows)
+
+        # Issue #2159: Finalise cost tracking and log cost summary
+        self.cost_tracker.finish(workflow.workflow_id)
 
         await self.messenger.send_message(
             workflow.session_id, self._build_completion_message(workflow)
