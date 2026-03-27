@@ -172,7 +172,7 @@ class SecretsManager:
         audit_event = {
             "timestamp": datetime.now().isoformat(),
             "action": action,
-            "secret_id": secret_id[:8] + "..." if secret_id else "",
+            "secret_id": secret_id or "",  # Full ID preserved for audit traceability
             "scope": scope,
             "chat_id": chat_id,
             "details": details,

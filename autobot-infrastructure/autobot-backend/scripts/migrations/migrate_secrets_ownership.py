@@ -181,7 +181,7 @@ class SecretsMigrator:
             metadata = session.get("metadata", {})
             return metadata.get("owner") or metadata.get("user_id")
         except Exception as e:
-            logger.debug(f"Could not get session owner for {session_id}: {e}")
+            logger.debug("Could not get session owner for %s: %s", session_id, e)
             return None
 
     async def migrate_secret(self, secret_id: str) -> bool:

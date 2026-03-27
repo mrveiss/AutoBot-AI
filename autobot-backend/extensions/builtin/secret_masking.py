@@ -164,7 +164,7 @@ class SecretMaskingExtension(Extension):
             return False
 
     # CodeQL: false positive — this method intentionally handles secrets to mask them
-    def mask_secret(self, secret: str) -> str:  # noqa: S107
+    def mask_secret(self, secret: str) -> str:
         """
         Mask a secret string.
 
