@@ -1712,6 +1712,7 @@ class ChatWorkflowManager(
 Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. \
 You MUST use ONLY the following tool names:
 - execute_command: Run shell commands
+- web_search: Search the web for information
 - navigate: Browse to a URL
 - click: Click an element on a web page
 - fill: Fill a form field on a web page
