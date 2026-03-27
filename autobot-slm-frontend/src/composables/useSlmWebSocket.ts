@@ -19,8 +19,11 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('SlmWebSocket')
 
 // Use WebSocket URL from SSOT config
+// Issue #2489: Prefix with apiBaseUrl when it's a relative path (Docker: /slm)
+// but skip when it's a full URL (fleet: http://172.16.168.19:8000)
 const config = getConfig()
-const WS_URL = `${config.wsBaseUrl}/api/ws/events`
+const apiPrefix = config.apiBaseUrl.startsWith('/') ? config.apiBaseUrl : ''
+const WS_URL = `${config.wsBaseUrl}${apiPrefix}/api/ws/events`
 
 // --- Module-level singleton state ---
 const socket = ref<WebSocket | null>(null)
