@@ -8,12 +8,14 @@ Handles terminal tool initialization, command execution, tool call parsing,
 and approval workflows.
 """
 
+from __future__ import annotations
+
 import asyncio
 import html
 import json
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
 from utils.errors import RepairableException
@@ -184,8 +186,8 @@ def _match_repairable_error(
 
 
 def _create_execution_result(
-    command: str, host: str, result: Dict[str, Any], approved: bool = False
-) -> Dict[str, Any]:
+    command: str, host: str, result: dict[str, Any], approved: bool = False
+) -> dict[str, Any]:
     """Create standardized execution result record (Issue #315: extracted).
 
     Args:
@@ -210,10 +212,10 @@ def _create_execution_result(
 
 async def _try_mcp_dispatch(
     tool_name: str,
-    tool_call: Dict[str, Any],
-    execution_results: List[Dict[str, Any]],
+    tool_call: dict[str, Any],
+    execution_results: list[dict[str, Any]],
     role: str = "user",
-) -> Optional[WorkflowMessage]:
+) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
 
     Args:
@@ -294,7 +296,7 @@ class ToolHandlerMixin:
 
     def _parse_tool_calls(
         self, text: str, is_first_iteration: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Parse tool calls from LLM response using XML-style markers.
 
@@ -357,7 +359,7 @@ class ToolHandlerMixin:
 
     def _extract_tool_calls_from_text(
         self, text: str
-    ) -> tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Extract tool calls using regex pattern. Issue #650, #620."""
         tool_calls = []
         match_count = 0
@@ -393,7 +395,7 @@ class ToolHandlerMixin:
 
     def _log_parsing_result(
         self,
-        tool_calls: List,
+        tool_calls: list,
         match_count: int,
         has_tool_call: bool,
         is_first_iteration: bool,
@@ -418,7 +420,7 @@ class ToolHandlerMixin:
 
     async def _execute_terminal_command(
         self, session_id: str, command: str, host: str = "main", description: str = ""
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
 
@@ -493,7 +495,7 @@ class ToolHandlerMixin:
     def _check_command_mismatch(
         self,
         command: str,
-        last_command: Dict[str, Any],
+        last_command: dict[str, Any],
         elapsed_time: float,
         max_wait_time: float,
     ) -> tuple | None:
@@ -513,8 +515,8 @@ class ToolHandlerMixin:
         return None, None, False
 
     def _build_approval_status_msg(
-        self, last_command: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, last_command: dict[str, Any]
+    ) -> dict[str, Any]:
         """Build approval status message from command history. Issue #620."""
         approval_status = "approved" if last_command.get("approved_by") else "denied"
         comment = last_command.get("approval_comment") or last_command.get(
@@ -524,7 +526,7 @@ class ToolHandlerMixin:
 
     def _check_approval_completion(
         self,
-        session_info: Dict[str, Any],
+        session_info: dict[str, Any],
         command: str,
         elapsed_time: float,
         max_wait_time: float,
@@ -560,7 +562,7 @@ class ToolHandlerMixin:
         self,
         session_id: str,
         command: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
     ) -> WorkflowMessage:
@@ -580,7 +582,7 @@ class ToolHandlerMixin:
         )
 
     def _build_waiting_message(
-        self, command: str, result: Dict[str, Any]
+        self, command: str, result: dict[str, Any]
     ) -> WorkflowMessage:
         """Build the waiting for approval WorkflowMessage."""
         return WorkflowMessage(
@@ -594,7 +596,7 @@ class ToolHandlerMixin:
         )
 
     def _log_polling_status(
-        self, poll_count: int, session_info: Dict[str, Any] | None, elapsed_time: float
+        self, poll_count: int, session_info: dict[str, Any] | None, elapsed_time: float
     ) -> None:
         """Log periodic polling status updates. Issue #620."""
         if poll_count % 20 != 0:
@@ -651,7 +653,7 @@ class ToolHandlerMixin:
         self,
         session_id: str,
         command: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
     ):
@@ -701,7 +703,7 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        approval_result: Dict[str, Any],
+        approval_result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
         session_id: str = "",
@@ -756,7 +758,7 @@ class ToolHandlerMixin:
         yield (exec_result, additional_text)
 
     def _handle_approval_failure(
-        self, command: str, approval_result: Dict[str, Any] | None
+        self, command: str, approval_result: dict[str, Any] | None
     ) -> tuple[WorkflowMessage, str]:
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
@@ -790,7 +792,7 @@ class ToolHandlerMixin:
         session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
         ollama_endpoint: str,
@@ -832,7 +834,7 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
         session_id: str = "",
@@ -874,14 +876,14 @@ class ToolHandlerMixin:
         yield (exec_result, f"\n\n{interpretation}")
 
     async def _collect_workflow_results(
-        self, workflow_gen, execution_results: List, additional_response_parts: List
+        self, workflow_gen, execution_results: list, additional_response_parts: list
     ):
         """Collect results from workflow generator (Issue #315: extracted).
 
         Args:
             workflow_gen: Async generator from workflow handler
-            execution_results: List to append exec results to
-            additional_response_parts: List to append text parts to
+            execution_results: list to append exec results to
+            additional_response_parts: list to append text parts to
 
         Yields:
             WorkflowMessage items from the generator
@@ -902,12 +904,12 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         description: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Handle command requiring approval workflow. Issue #620."""
         if not terminal_session_id:
@@ -938,11 +940,11 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
         session_id: str = "",
     ):
         """Handle successful direct command execution. Issue #620."""
@@ -955,7 +957,7 @@ class ToolHandlerMixin:
             yield msg
 
     def _extract_command_params(
-        self, tool_call: Dict[str, Any]
+        self, tool_call: dict[str, Any]
     ) -> tuple[str, str, str]:
         """Extract command parameters from tool call dict. Issue #620."""
         command = tool_call["params"].get("command")
@@ -970,12 +972,12 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         description: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Dispatch command handling based on execution status. Issue #620."""
         if status == "pending_approval":
@@ -1012,13 +1014,13 @@ class ToolHandlerMixin:
 
     async def _process_single_command(
         self,
-        tool_call: Dict[str, Any],
+        tool_call: dict[str, Any],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Process a single execute_command tool call. Issue #620.
 
@@ -1052,8 +1054,8 @@ class ToolHandlerMixin:
     async def _handle_command_error(
         self,
         command: str,
-        result: Dict[str, Any],
-        additional_response_parts: List,
+        result: dict[str, Any],
+        additional_response_parts: list,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -1062,7 +1064,7 @@ class ToolHandlerMixin:
         Args:
             command: The command that failed
             result: Execution result dict with error/stderr
-            additional_response_parts: List to append context to
+            additional_response_parts: list to append context to
 
         Yields:
             WorkflowMessage with error details
@@ -1136,7 +1138,7 @@ class ToolHandlerMixin:
         )
 
     def _handle_respond_tool(
-        self, tool_call: Dict[str, Any]
+        self, tool_call: dict[str, Any]
     ) -> tuple[WorkflowMessage, bool, str]:
         """
         Handle the 'respond' tool for explicit task completion.
@@ -1170,7 +1172,7 @@ class ToolHandlerMixin:
         return message, break_loop_requested, respond_content
 
     def _handle_delegate_tool(
-        self, tool_call: Dict[str, Any], execution_results: List[Dict[str, Any]]
+        self, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]
     ) -> WorkflowMessage:
         """
         Handle the 'delegate' tool for subordinate agent delegation.
@@ -1212,7 +1214,7 @@ class ToolHandlerMixin:
         )
 
     def _validate_browser_params(
-        self, tool_name: str, params: Dict[str, Any]
+        self, tool_name: str, params: dict[str, Any]
     ) -> str | None:
         """Validate browser tool params. Returns error message or None. #1368."""
         from api.browser_mcp import is_script_safe, is_url_allowed
@@ -1225,8 +1227,8 @@ class ToolHandlerMixin:
 
     async def _handle_browser_tool(
         self,
-        tool_call: Dict[str, Any],
-        execution_results: List[Dict[str, Any]],
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
@@ -1295,8 +1297,8 @@ class ToolHandlerMixin:
     def _format_browser_result(
         self,
         tool_name: str,
-        params: Dict[str, Any],
-        result: Dict[str, Any],
+        params: dict[str, Any],
+        result: dict[str, Any],
     ) -> str:
         """Format browser tool result as text for LLM context. Issue #1368.
 
@@ -1354,8 +1356,8 @@ class ToolHandlerMixin:
 
     async def _handle_web_search_tool(
         self,
-        tool_call: Dict[str, Any],
-        execution_results: List[Dict[str, Any]],
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
     ):
         """Execute a web search via browser VM. Issue #2306.
 
@@ -1483,7 +1485,7 @@ class ToolHandlerMixin:
         return f"No search results found for: {query}"
 
     def _build_execution_summary(
-        self, execution_results: List[Dict[str, Any]]
+        self, execution_results: list[dict[str, Any]]
     ) -> WorkflowMessage:
         """Build execution summary message from results. Issue #620."""
         return WorkflowMessage(
@@ -1501,8 +1503,8 @@ class ToolHandlerMixin:
     def _build_unknown_tool_error(
         self,
         tool_name: str,
-        ctx: Optional["LLMIterationContext"],
-        execution_results: List[Dict[str, Any]],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
         """Build error message for an unknown tool call (#2305, #2310)."""
         known_tools = sorted(
@@ -1529,14 +1531,14 @@ class ToolHandlerMixin:
 
     async def _dispatch_tool_call(
         self,
-        tool_call: Dict[str, Any],
+        tool_call: dict[str, Any],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List[Dict[str, Any]],
-        additional_response_parts: List[str],
-        ctx: Optional["LLMIterationContext"] = None,
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+        ctx: "LLMIterationContext" | None = None,
         role: str = "user",
     ):
         """Dispatch a single tool call to appropriate handler. Issue #620.
@@ -1610,12 +1612,12 @@ class ToolHandlerMixin:
 
     async def _process_tool_calls(
         self,
-        tool_calls: List[Dict[str, Any]],
+        tool_calls: list[dict[str, Any]],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        ctx: Optional["LLMIterationContext"] = None,
+        ctx: "LLMIterationContext" | None = None,
     ):
         """Process all tool calls from LLM response.
 
