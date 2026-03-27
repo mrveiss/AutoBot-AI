@@ -6,6 +6,7 @@
 All external dependencies (LLM, mesh retriever) are replaced with
 AsyncMock / MagicMock so the tests run without a model server or database.
 """
+
 import json
 from unittest.mock import AsyncMock, MagicMock
 
@@ -48,9 +49,11 @@ def _make_decomposer(
 
     retriever = AsyncMock()
     retriever.retrieve = AsyncMock(
-        return_value=retrieval_result
-        if retrieval_result is not None
-        else _make_retrieval_result()
+        return_value=(
+            retrieval_result
+            if retrieval_result is not None
+            else _make_retrieval_result()
+        )
     )
 
     return QueryDecomposer(llm=llm, mesh_retriever=retriever)

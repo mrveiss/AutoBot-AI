@@ -46,16 +46,14 @@ class DiscovererDB(Protocol):
         min_co_access: int,
         origin: str,
         limit: int,
-    ) -> list[dict]:
-        ...
+    ) -> list[dict]: ...
 
     async def update_edge(
         self,
         edge_id: str,
         edge_type: str | None = None,
         origin: str | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def log_evolution(
         self,
@@ -64,8 +62,7 @@ class DiscovererDB(Protocol):
         old_value: dict | None,
         new_value: dict | None,
         actor: str,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 # ---------------------------------------------------------------------------

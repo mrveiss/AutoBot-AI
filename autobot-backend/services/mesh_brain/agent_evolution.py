@@ -31,11 +31,9 @@ class AgentSpecializationDB(Protocol):
 
     async def get_agent_specializations(
         self, agent_id: str, min_tasks: int, days: int
-    ) -> list[dict]:
-        ...
+    ) -> list[dict]: ...
 
-    async def get_all_agent_ids(self) -> list[str]:
-        ...
+    async def get_all_agent_ids(self) -> list[str]: ...
 
 
 class AgentRegistry(Protocol):
@@ -46,8 +44,7 @@ class AgentRegistry(Protocol):
         agent_id: str,
         top_types: list[str],
         rates: dict[str, float],
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class AgentEvolutionTracker:
