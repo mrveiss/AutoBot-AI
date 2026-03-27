@@ -528,7 +528,11 @@ class ToolRegistry:
         }
 
     def get_available_tools(self) -> List[str]:
-        """Get list of available tool names."""
+        """Get list of available tool names.
+
+        Issue #2594: Includes browser tools (Issue #1368) and web_search (Issue #2306)
+        to match the chat workflow's ToolHandlerMixin dispatch capabilities.
+        """
         return [
             "execute_system_command",
             "query_system_information",
@@ -537,6 +541,7 @@ class ToolRegistry:
             "get_process_info",
             "terminate_process",
             "web_fetch",
+            "web_search",
             "search_knowledge_base",
             "add_file_to_knowledge_base",
             "store_fact",
@@ -546,4 +551,15 @@ class ToolRegistry:
             "bring_window_to_front",
             "ask_user_for_manual",
             "respond_conversationally",
+            # Issue #1368: Browser tools routed to browser VM
+            "navigate",
+            "click",
+            "fill",
+            "select",
+            "hover",
+            "screenshot",
+            "evaluate",
+            "get_text",
+            "get_attribute",
+            "wait_for_selector",
         ]

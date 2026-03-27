@@ -1345,6 +1345,136 @@ class ToolHandlerMixin:
 
         return json.dumps(result, default=str)[:1000]
 
+    async def _handle_web_search_tool(
+        self,
+        tool_call: Dict[str, Any],
+        execution_results: List[Dict[str, Any]],
+    ):
+        """Execute a web search via browser VM. Issue #2306.
+
+        Abstracts the multi-step browser flow (navigate → fill → click → get_text)
+        into a single tool call so small models don't need to orchestrate it.
+
+        Yields:
+            WorkflowMessage for search execution stages
+        """
+        params = tool_call.get("params", {})
+        query = params.get("query", "").strip()
+        description = tool_call.get("description", f"Web search: {query}")
+
+        if not query:
+            error_msg = 'Error: web_search requires a "query" parameter'
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": error_msg}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": "web_search", "error": True},
+            )
+            return
+
+        logger.info("[Issue #2306] Web search: query=%s", query)
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Searching the web: {description}",
+            metadata={"tool": "web_search", "query": query},
+        )
+
+        try:
+            results = await self._execute_web_search(query)
+            execution_results.append(
+                {"tool": "web_search", "status": "success", "output": results}
+            )
+            yield WorkflowMessage(
+                type="command_output",
+                content=results,
+                metadata={
+                    "tool": "web_search",
+                    "query": query,
+                    "status": "success",
+                },
+            )
+        except Exception as e:
+            error_msg = f"Web search failed: {e}"
+            logger.error("[Issue #2306] %s", error_msg)
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": str(e)}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": "web_search", "error": True},
+            )
+
+    async def _execute_web_search(self, query: str) -> str:
+        """Run a web search and return formatted results. Issue #2306.
+
+        Tries the existing Playwright search service first (structured results),
+        then falls back to browser VM DuckDuckGo navigation.
+        """
+        # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
+        try:
+            result = await self._web_search_via_playwright(query)
+            if result:
+                return result
+        except Exception as e:
+            logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
+
+        # Fallback: browser VM with DuckDuckGo HTML
+        return await self._web_search_via_browser_vm(query)
+
+    async def _web_search_via_playwright(self, query: str) -> str:
+        """Search via Playwright service. Returns formatted text or empty string. Issue #2306."""
+        from services.playwright_service import search_web_embedded
+
+        result = await search_web_embedded(query, max_results=5)
+        if not result.get("success", False):
+            return ""
+
+        entries = result.get("results", [])
+        if not entries:
+            return ""
+
+        lines = [f'Web search results for "{query}":\n']
+        for i, entry in enumerate(entries[:5], 1):
+            title = entry.get("title", "No title")
+            url = entry.get("url", "")
+            snippet = entry.get("snippet", entry.get("description", ""))
+            lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
+        return "\n".join(lines)
+
+    async def _web_search_via_browser_vm(self, query: str) -> str:
+        """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
+        from urllib.parse import (  # stdlib — lazy to match surrounding pattern
+            quote_plus,
+        )
+
+        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+
+        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        if not nav_result.get("success", True):
+            raise RuntimeError(
+                f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}"
+            )
+
+        # Try results div first, then fall back to body
+        for selector in ("div.results", "body"):
+            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            inner = text_result.get("result", text_result)
+            raw_text = inner.get("text", "")
+            if raw_text:
+                max_len = 3000
+                truncated = raw_text[:max_len]
+                if len(raw_text) > max_len:
+                    truncated += "\n\n... [results truncated]"
+                return f'Web search results for "{query}":\n\n{truncated}'
+
+        return f"No search results found for: {query}"
+
     def _build_execution_summary(
         self, execution_results: List[Dict[str, Any]]
     ) -> WorkflowMessage:
@@ -1405,6 +1535,14 @@ class ToolHandlerMixin:
                 yield msg
             return
 
+        # Issue #2306: web_search convenience tool wraps browser multi-step flow
+        if tool_name == "web_search":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_web_search_tool(tool_call, execution_results):
+                yield msg
+            return
+
         if tool_name != "execute_command":
             # Issue #2513: Check MCP registry before reporting unknown tool.
             mcp_result = await _try_mcp_dispatch(
@@ -1418,7 +1556,8 @@ class ToolHandlerMixin:
             # silently dropping the call and causing an infinite hallucination loop.
             # Issue #2310: Track consecutive invalid calls; reminder injected at prompt-build time.
             known_tools = sorted(
-                {"respond", "delegate", "execute_command"} | _BROWSER_TOOL_NAMES
+                {"respond", "delegate", "execute_command", "web_search"}
+                | _BROWSER_TOOL_NAMES
             )
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls += 1
