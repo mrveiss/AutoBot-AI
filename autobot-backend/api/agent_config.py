@@ -29,28 +29,18 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-# 6-tier model mapping (#2553) — all defaults from SSOT constants.
-# Override via env vars for custom deployments; defaults match available ollama models.
+# 3-tier model mapping (#2553) — all defaults from SSOT constants.
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as _SSOT_CLASSIFICATION
-from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
-from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
 from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
 from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
-from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
-# Routing tier — fast orchestration/routing, minimal quality needed
+# Routing tier — orchestrator only, no tool use
 ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
-# Classification tier — purpose-built for classification
+# Classification tier — intent detection
 CLASSIFICATION_TIER_MODEL = os.getenv(
     "AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION
 )
-# Light processing tier — structured extraction, formatting, retrieval
-QUALITY_TIER_MODEL = os.getenv("AUTOBOT_LIGHT_MODEL", _SSOT_LIGHT)
-# Instruction following tier — RAG, extraction, step execution
-QUALITY_TIER_MODEL = os.getenv("AUTOBOT_INSTRUCTION_MODEL", _SSOT_INSTRUCTION)
-# System/uncensored tier — system commands, security scanning, terminal
-QUALITY_TIER_MODEL = os.getenv("AUTOBOT_SYSTEM_MODEL", _SSOT_SYSTEM)
-# Quality tier — chat, research, code, reasoning (user-facing)
+# Quality/tools tier — all tool-using agents
 QUALITY_TIER_MODEL = os.getenv(
     "AUTOBOT_DEFAULT_LLM_MODEL",
     os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", _SSOT_QUALITY),

@@ -17,6 +17,11 @@ export default mergeConfig(
     test: {
       // Test environment setup
       environment: 'jsdom',
+      environmentOptions: {
+        jsdom: {
+          url: 'http://localhost:3000',
+        },
+      },
       globals: true,
       setupFiles: ['src/test/vitest-setup.ts'],
 

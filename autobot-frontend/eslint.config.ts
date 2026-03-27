@@ -36,6 +36,15 @@ export default defineConfigWithVueTs(
       'cypress/support/**/*.{js,ts,jsx,tsx}'
     ],
   },
+  {
+    name: 'app/rule-overrides',
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'vue/block-lang': 'off',
+    },
+  },
   ...pluginOxlint.configs['flat/recommended'],
   skipFormatting,
 )
