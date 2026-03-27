@@ -1211,7 +1211,8 @@
       "noResultsDescription": "Paste code above and click Analyze to get AI-powered insights",
       "suggestions": "Suggestions",
       "issuesFound": "Issues Found",
-      "analysisHistory": "Analysis History"
+      "analysisHistory": "Analysis History",
+      "noPreviousScan": "No previous scan available"
     },
     "evolution": {
       "title": "Code Evolution",
