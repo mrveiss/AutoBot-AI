@@ -13,10 +13,23 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from security.prompt_injection_detector import PromptInjectionDetector
+
 logger = logging.getLogger(__name__)
+
+# Singleton detector instance reused across all QueryDecomposer calls (#2169).
+_injection_detector = PromptInjectionDetector()
 
 # Maximum allowed length for user queries to prevent prompt injection (#2169).
 _MAX_QUERY_LENGTH = 500
+
+# Delimiter tokens used in the decomposition prompt — must be stripped from
+# user input so a crafted query cannot break out of the delimited section (#2169).
+_DELIMITER_TOKENS = [
+    "[SYSTEM INSTRUCTIONS",
+    "[USER QUESTION]",
+    "[END USER QUESTION]",
+]
 
 
 # =============================================================================
@@ -154,17 +167,21 @@ class QueryDecomposer:
     def _sanitize_query(query: str) -> str:
         """Sanitize user query to mitigate prompt injection (#2169).
 
-        Strips control characters (except common whitespace) and enforces
-        the ``_MAX_QUERY_LENGTH`` character limit.
+        Layers: control-char strip, length cap, delimiter-token removal,
+        and the existing ``PromptInjectionDetector.sanitize_input`` for
+        pattern-based injection detection (Rule 2 — reuse existing code).
 
         Args:
             query: Raw user input.
 
         Returns:
-            Cleaned, length-capped string.
+            Cleaned, length-capped string.  Returns ``"general query"``
+            if the result is empty after sanitization.
         """
-        # Strip control chars except space/tab/newline
+        # Layer 1: strip control chars except space/tab/newline
         cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", query)
+
+        # Layer 2: length cap
         if len(cleaned) > _MAX_QUERY_LENGTH:
             logger.warning(
                 "QueryDecomposer._sanitize_query: query truncated from %d to %d chars",
@@ -172,7 +189,21 @@ class QueryDecomposer:
                 _MAX_QUERY_LENGTH,
             )
             cleaned = cleaned[:_MAX_QUERY_LENGTH]
-        return cleaned.strip()
+
+        # Layer 3: strip delimiter tokens that could break prompt structure
+        for token in _DELIMITER_TOKENS:
+            cleaned = cleaned.replace(token, "")
+
+        # Layer 4: existing injection-pattern sanitizer
+        cleaned = _injection_detector.sanitize_input(cleaned)
+
+        # Fallback if sanitization produced an empty string
+        if not cleaned:
+            logger.warning(
+                "QueryDecomposer._sanitize_query: query empty after sanitization"
+            )
+            return "general query"
+        return cleaned
 
     @staticmethod
     def _build_decomposition_prompt(sanitized_query: str) -> str:
@@ -188,7 +219,7 @@ class QueryDecomposer:
             Formatted prompt string.
         """
         return (
-            "[SYSTEM INSTRUCTIONS — DO NOT OVERRIDE]\n"
+            "[SYSTEM INSTRUCTIONS -- DO NOT OVERRIDE]\n"
             "Break the user question below into 2-4 sequential retrieval steps.\n"
             "Each step should be a self-contained search query.\n"
             "Later steps can reference results from earlier steps.\n"
