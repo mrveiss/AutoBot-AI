@@ -170,7 +170,7 @@ class AnalyticsService:
     async def get_redis(self):
         """Get Redis client for analytics database."""
         if self._redis is None:
-            self._redis = await get_redis_client(
+            self._redis = get_redis_client(
                 async_client=True, database=RedisDatabase.ANALYTICS
             )
         return self._redis

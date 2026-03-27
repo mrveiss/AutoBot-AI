@@ -169,7 +169,7 @@ class AdvancedCacheManager:
             if self._redis_client_initialized:
                 return  # Another coroutine initialized while we waited
             try:
-                self.redis_client = await get_redis_client(async_client=True)
+                self.redis_client = get_redis_client(async_client=True)
                 self._redis_client_initialized = True
                 logger.debug("Async Redis client initialized successfully")
             except Exception as e:

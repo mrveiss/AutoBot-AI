@@ -257,7 +257,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = await get_redis_client(
+        redis_client = get_redis_client(
             async_client=True, database="metrics"
         )  # METRICS_DB
 
@@ -361,7 +361,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = await get_redis_client(
+        redis_client = get_redis_client(
             async_client=True, database="metrics"
         )  # METRICS_DB
 
@@ -432,7 +432,7 @@ class AsyncBaselineTest:
             try:
                 if vm_name == "redis":
                     # Special handling for Redis (not HTTP) using canonical pattern
-                    redis_client = await get_redis_client(
+                    redis_client = get_redis_client(
                         async_client=True, database="main"  # MAIN_DB (default DB 0)
                     )
                     try:

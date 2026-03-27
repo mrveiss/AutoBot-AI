@@ -201,7 +201,7 @@ class AIHardwareAccelerator:
 
         # Initialize Redis client
         try:
-            self.redis_client = await get_redis_client("main")
+            self.redis_client = get_redis_client("main")
             if self.redis_client:
                 logger.info("✅ Connected to Redis for task coordination")
         except Exception as e:

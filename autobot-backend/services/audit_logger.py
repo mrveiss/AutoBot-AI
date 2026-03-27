@@ -256,7 +256,7 @@ class AuditLogger:
         """Get Redis audit database (DB 10)"""
         try:
             # Use canonical Redis client pattern with 'audit' database
-            return await get_redis_client(async_client=True, database="audit")
+            return get_redis_client(async_client=True, database="audit")
         except Exception as e:
             logger.error("Failed to get audit database: %s", e)
             self._redis_failures += 1

@@ -177,7 +177,7 @@ class AnalyticsController:
                 if isinstance(database, RedisDatabase)
                 else database
             )
-            return await get_redis_client(async_client=True, database=db_name)
+            return get_redis_client(async_client=True, database=db_name)
         except Exception as e:
             logger.error("Failed to get Redis connection for %s: %s", database, e)
             return None

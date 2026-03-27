@@ -313,7 +313,7 @@ class SecurityWorkflowManager:
     async def _get_redis(self) -> Any:
         """Get Redis client for workflow database."""
         if self._redis_client is None:
-            self._redis_client = await get_redis_client(
+            self._redis_client = get_redis_client(
                 async_client=True, database="workflows"
             )
         return self._redis_client

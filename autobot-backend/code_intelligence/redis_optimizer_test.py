@@ -202,7 +202,7 @@ class TestRedisOptimizer:
             from utils.redis_client import get_redis_client
 
             async def good_pipeline_usage():
-                redis = await get_redis_client(async_client=True)
+                redis = get_redis_client(async_client=True)
                 async with redis.pipeline() as pipe:
                     pipe.set("key1", "value1")
                     pipe.set("key2", "value2")
@@ -232,7 +232,7 @@ class TestRedisOptimizer:
             from utils.redis_client import get_redis_client
 
             async def good_code():
-                redis = await get_redis_client(async_client=True)
+                redis = get_redis_client(async_client=True)
                 return await redis.get("key")
         """))
 

@@ -342,7 +342,7 @@ class PatternLearningEngine:
             try:
                 from autobot_shared.redis_client import get_redis_client
 
-                self.redis_client = await get_redis_client(
+                self.redis_client = get_redis_client(
                     async_client=True, database="analytics"
                 )
                 # Issue #379: Parallelize independent Redis loading operations

@@ -54,7 +54,7 @@ async def get_redis_connection_async():
     """
     from autobot_shared.redis_client import get_redis_client
 
-    redis_client = await get_redis_client(database="analytics", async_client=True)
+    redis_client = get_redis_client(database="analytics", async_client=True)
     if redis_client is None:
         logger.warning("Async Redis client initialization returned None")
         return None

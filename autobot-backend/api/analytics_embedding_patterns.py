@@ -215,7 +215,7 @@ class EmbeddingPatternAnalyzer:
         if self._redis is None:
             async with self._lock:
                 if self._redis is None:
-                    self._redis = await get_redis_client(
+                    self._redis = get_redis_client(
                         async_client=True, database=RedisDatabase.ANALYTICS
                     )
         return self._redis
