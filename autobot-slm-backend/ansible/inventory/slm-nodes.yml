@@ -136,3 +136,33 @@ all:
         ai_stack:
         slm_server:
         llm_nodes:
+
+    # Cross-inventory aliases (#2515)
+    # Ensure group names from production.yml resolve in slm-nodes.yml.
+    database:
+      children:
+        redis:
+
+    aiml:
+      children:
+        ai_stack:
+
+    npu:
+      children:
+        npu_worker:
+
+    npu_workers:
+      children:
+        npu_worker:
+
+    backend:
+      children:
+        main:
+
+    browser:
+      children:
+        browser_worker:
+
+    slm:
+      children:
+        slm_server:

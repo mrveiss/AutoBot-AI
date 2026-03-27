@@ -288,3 +288,33 @@ infrastructure:
     npu:
     aiml:
     browser:
+
+# Cross-inventory aliases (#2515)
+# Ensure group names from hosts.yml and slm-nodes.yml resolve in production.yml.
+redis:
+  children:
+    database:
+
+npu_workers:
+  children:
+    npu:
+
+npu_worker:
+  children:
+    npu:
+
+ai_stack:
+  children:
+    aiml:
+
+# slm_nodes group used by SLM-specific playbooks (deploy-slm-agent, cleanup-nodes, etc.)
+# Maps all nodes managed by the SLM system.
+slm_nodes:
+  children:
+    slm:
+    backend:
+    frontend:
+    npu:
+    database:
+    aiml:
+    browser:
