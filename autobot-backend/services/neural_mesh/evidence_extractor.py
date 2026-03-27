@@ -7,6 +7,7 @@ Instead of including whole chunks (~400 tokens each), EvidenceExtractor
 uses the cross-encoder to score individual sentences and returns only the
 most relevant ones (~50 tokens each), reducing context window consumption.
 """
+
 import logging
 import math
 import re

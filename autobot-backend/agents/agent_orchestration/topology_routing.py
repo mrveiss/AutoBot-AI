@@ -31,8 +31,7 @@ class AgentTopology(Protocol):
         agent_id: str,
         task_type: str | None,
         limit: int,
-    ) -> list[AgentConnection]:
-        ...
+    ) -> list[AgentConnection]: ...
 
 
 class TopologyAwareRouter:
