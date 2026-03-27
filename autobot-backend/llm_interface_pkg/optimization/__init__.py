@@ -13,6 +13,14 @@ Issue #717: Efficient Inference Design implementation.
 
 from .cloud_batcher import BatchResult, CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
+from .inference_utils import (
+    InferenceConfig,
+    InferenceMode,
+    LastLogitOptimizer,
+    LogitSliceResult,
+    MemoryStats,
+    slice_hidden_for_generation,
+)
 from .integration import (
     OptimizationMetrics,
     OptimizedLLMMiddleware,
@@ -47,6 +55,13 @@ __all__ = [
     "PromptCompressor",
     "CompressionResult",
     "CompressionConfig",
+    # Inference Utilities (Issue #1968)
+    "LastLogitOptimizer",
+    "InferenceConfig",
+    "InferenceMode",
+    "LogitSliceResult",
+    "MemoryStats",
+    "slice_hidden_for_generation",
     # Integration
     "OptimizedLLMMiddleware",
     "OptimizationMetrics",
