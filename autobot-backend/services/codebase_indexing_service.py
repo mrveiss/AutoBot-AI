@@ -40,18 +40,21 @@ EXCLUDED_CHUNK_METADATA_KEYS = {"content"}
 _CODE_DEF_PREFIXES = ("def ", "class ", "async def ")
 
 # Issue #380: Pre-compiled regex patterns for Vue and code chunking
-# #1721: Hardened against bad-tag-filter bypass using [^<] negated class
+# #1721: Hardened against bad-tag-filter bypass
+# #1733: ReDoS fix - replaced nested quantifier ([^<]*(?:...[^<]*)*)  with [\s\S]*?
 _VUE_TEMPLATE_RE = re.compile(
-    r"<template[^>]*>([^<]*(?:<(?!/template>)[^<]*)*)</template>",
-    re.DOTALL | re.IGNORECASE,
+    r"<template[^>]*>([\s\S]*?)</template>",
+    re.IGNORECASE,
 )
+# #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
 _VUE_SCRIPT_RE = re.compile(
-    r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
-    re.DOTALL | re.IGNORECASE,
+    r"<script[^>]*>([\s\S]*?)</script>",
+    re.IGNORECASE,
 )
+# #1733: ReDoS fix - replaced nested quantifier with [\s\S]*?
 _VUE_STYLE_RE = re.compile(
-    r"<style[^>]*>([^<]*(?:<(?!/style>)[^<]*)*)</style>",
-    re.DOTALL | re.IGNORECASE,
+    r"<style[^>]*>([\s\S]*?)</style>",
+    re.IGNORECASE,
 )
 _JS_FUNCTION_RE = re.compile(r"^\s*(function|const|let|var|export|async)")
 _MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)")

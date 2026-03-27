@@ -257,6 +257,8 @@ class SSOService(BaseService):
         self, provider: SSOProvider, username: str, password: str
     ) -> Any:
         """Create LDAP connection."""
+        from autobot_shared.security.input_sanitizer import sanitize_ldap_dn
+
         if Server is None:
             raise SSOServiceError("ldap3 library not installed")
         server_uri = provider.config.get("server_uri")
@@ -265,7 +267,8 @@ class SSOService(BaseService):
         user_dn_template = provider.config.get(
             "user_dn_template", "uid={},ou=users,dc=example,dc=com"
         )
-        user_dn = user_dn_template.format(username)
+        safe_username = sanitize_ldap_dn(username)
+        user_dn = user_dn_template.format(safe_username)
         return Connection(server, user_dn, password)
 
     def _search_ldap_user(

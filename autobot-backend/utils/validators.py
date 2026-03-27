@@ -62,7 +62,11 @@ from urllib.parse import urlparse
 from utils.path_validation import contains_path_traversal
 
 # Issue #380: Pre-compiled regex patterns for validation
-_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+# Issue #1733: ReDoS fix - removed '.' from domain character class to prevent
+# ambiguous backtracking between [a-zA-Z0-9.-]+ and \.[a-zA-Z]{2,}
+_EMAIL_RE = re.compile(
+    r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$"
+)
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 # ============================================================================

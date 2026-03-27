@@ -37,6 +37,12 @@ from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
+# Allowlist pattern for git ref arguments passed to subprocess (Issue #1733).
+# Allows: HEAD, HEAD~N, commit hashes, branch names, --cached, --staged, .. and ... ranges.
+_VALID_GIT_DIFF_ARG_RE = re.compile(
+    r"^(?:--[a-zA-Z][-a-zA-Z0-9]*|[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?)$"
+)
+
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False
 SemanticAnalysisMixin = None
@@ -878,7 +884,12 @@ class CodeReviewEngine(_BaseClass):
     def _get_git_diff(self, args: str) -> str:
         """Get git diff output."""
         try:
-            cmd = ["git", "diff"] + args.split()
+            split_args = args.split()
+            for arg in split_args:
+                if not _VALID_GIT_DIFF_ARG_RE.match(arg):
+                    logger.warning("Rejected invalid git diff argument: %s", arg)
+                    return ""
+            cmd = ["git", "diff"] + split_args
             result = subprocess.run(
                 cmd,
                 capture_output=True,

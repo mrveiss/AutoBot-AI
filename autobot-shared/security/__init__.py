@@ -10,6 +10,7 @@ used across all backend services to resolve CodeQL alerts.
 
 from autobot_shared.security.input_sanitizer import (
     escape_regex,
+    sanitize_ldap_dn,
     sanitize_ldap_filter,
     sanitize_shell_arg,
     validate_url,
@@ -22,6 +23,7 @@ __all__ = [
     "validate_relative_path",
     "safe_error_response",
     "sanitize_shell_arg",
+    "sanitize_ldap_dn",
     "sanitize_ldap_filter",
     "escape_regex",
     "validate_url",

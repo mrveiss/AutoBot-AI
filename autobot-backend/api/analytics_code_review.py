@@ -24,6 +24,12 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Allowlist pattern for git commit range arguments (Issue #1733).
+# Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.
+_VALID_GIT_REF_RE = re.compile(
+    r"^[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?$"
+)
+
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
@@ -411,6 +417,9 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
     try:
         cmd = ["git", "diff"]
         if commit_range:
+            if not _VALID_GIT_REF_RE.match(commit_range):
+                logger.warning("Rejected invalid git commit range: %s", commit_range)
+                return ""
             cmd.append(commit_range)
         else:
             cmd.append("HEAD~1..HEAD")
