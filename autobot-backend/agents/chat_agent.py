@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional
 from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 from prompt_manager import get_language_instruction, resolve_language
-from services.mcp_dispatch import get_mcp_dispatcher
 
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -119,25 +118,6 @@ class ChatAgent(StandardizedAgent):
             "agent_type": "chat",
             "model_used": self.model_name,
         }
-
-    async def _get_mcp_tools_prompt(self) -> str:
-        """Build an MCP tools section for the system prompt (#2596).
-
-        Fetches available (non-admin) tool definitions from the dispatcher and
-        formats them as a Markdown list for LLM injection.  Returns an empty
-        string when no tools are registered so the prompt stays clean.
-        """
-        dispatcher = get_mcp_dispatcher()
-        await dispatcher._ensure_cache_fresh()
-        tools = dispatcher.get_tool_definitions(role="user")
-        if not tools:
-            return ""
-        tool_lines = [f"- **{t['name']}**: {t['description']}" for t in tools]
-        return (
-            "\n\n## Available MCP Tools\n"
-            "You can call these tools by name when the user's request requires them:\n"
-            + "\n".join(tool_lines)
-        )
 
     async def process_chat_message(
         self,
