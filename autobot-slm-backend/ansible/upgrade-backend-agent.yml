@@ -50,7 +50,7 @@
               "redis-server", "redis", "autobot-npu-worker",
               "playwright-server", "browser-automation",
               "prometheus", "grafana-server", "node_exporter",
-              "ollama", "autobot-ai-stack", "run_autobot",
+              "ollama", "autobot-ai-stack",
           ]
 
 

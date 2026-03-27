@@ -144,9 +144,6 @@
           - Mode: Development (hot reload enabled)
           - Environment: /opt/autobot/config/frontend-dev.env
 
-# NOTE: run_autobot.sh is deprecated (Issue #863).
-# Development mode frontend is managed via systemd service autobot-frontend-dev.
-# No startup script modifications needed -- use systemctl directly.
 - name: Verify development services are running
   hosts: backend
   become: yes
