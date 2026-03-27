@@ -167,8 +167,10 @@ class TestStalenessRedis:
     @pytest.mark.asyncio
     async def test_store_staleness_scores(self):
         """store_staleness_scores writes all scores via pipeline."""
+        from unittest.mock import MagicMock
+
         redis = AsyncMock()
-        pipe = AsyncMock()
+        pipe = MagicMock()
         redis.pipeline = lambda: pipe
         pipe.execute = AsyncMock(return_value=[])
 
