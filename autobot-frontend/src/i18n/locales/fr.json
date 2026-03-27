@@ -1212,7 +1212,8 @@
       "noResultsDescription": "Lance une analyse pour voir les résultats",
       "suggestions": "Suggestions",
       "issuesFound": "Problèmes trouvés",
-      "analysisHistory": "Historique d'analyse"
+      "analysisHistory": "Historique d'analyse",
+      "noPreviousScan": "No previous scan available"
     },
     "evolution": {
       "title": "Évolution du code",
