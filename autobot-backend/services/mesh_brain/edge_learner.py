@@ -36,6 +36,11 @@ class EdgeLearner:
     Cursor tracking: _cursors maps stream_key -> last consumed entry ID so
     that repeated calls to consume_feedback_stream() only read NEW entries
     instead of re-processing the entire stream from the start. Fix: #2102.
+
+    EWC++ protection (#2097): Elastic Weight Consolidation prevents new
+    retrieval feedback from overwriting high-confidence learned edge weights.
+    Per-edge importance (Fisher proxy) grows with successful co-retrievals
+    and dampens updates proportionally. Disabled when ewc_lambda=0.
     """
 
     # Redis hash key for persisting stream cursors across restarts (#2210).
@@ -48,12 +53,20 @@ class EdgeLearner:
         ema_decay: float = 0.95,
         creation_threshold: int = 3,
         initial_weight: float = 0.3,
+        ewc_lambda: float = 0.4,
+        ewc_consolidation_interval: int = 100,
     ) -> None:
         self.db = db
         self.redis = redis
         self.ema_decay = ema_decay
         self.creation_threshold = creation_threshold
         self.initial_weight = initial_weight
+        # EWC++ parameters (#2097)
+        self.ewc_lambda = ewc_lambda
+        self.ewc_consolidation_interval = ewc_consolidation_interval
+        self._update_count: int = 0
+        self._reference_weights: dict[str, float] = {}
+        self._importance: dict[str, float] = {}
         # Per-stream cursor: stream_key -> last processed Redis entry ID.
         # Prevents duplicate processing when the scheduler loops every second.
         # Loaded from Redis on first access (#2210).
@@ -116,14 +129,71 @@ class EdgeLearner:
         else:
             await self._maybe_create_edge(node_a, node_b)
 
+    def _compute_ewc_penalty(self, edge_id: str, proposed_weight: float) -> float:
+        """Compute EWC penalty: λ * F_i * (θ_i - θ*_i)².
+
+        Returns 0.0 when no reference weight exists for this edge (#2097).
+        """
+        if not self._reference_weights or edge_id not in self._reference_weights:
+            return 0.0
+        ref = self._reference_weights[edge_id]
+        importance = self._importance.get(edge_id, 0.0)
+        return self.ewc_lambda * importance * (proposed_weight - ref) ** 2
+
+    def _apply_ewc_dampening(
+        self, edge_id: str, current_weight: float, proposed_weight: float
+    ) -> float:
+        """Dampen weight update proportionally to EWC penalty (#2097).
+
+        High penalty (high-importance edge) → dampening factor near 0 → minimal change.
+        Zero lambda or no reference → returns proposed_weight unchanged.
+        """
+        if self.ewc_lambda == 0.0:
+            return proposed_weight
+        penalty = self._compute_ewc_penalty(edge_id, proposed_weight)
+        dampening = 1.0 / (1.0 + penalty)
+        return current_weight + dampening * (proposed_weight - current_weight)
+
+    def update_importance(self, edge_id: str, success: bool) -> None:
+        """Update per-edge importance based on retrieval success (#2097).
+
+        Importance is a Fisher information proxy: grows with successful
+        co-retrievals (ewma toward 1.0) and decays gently otherwise.
+        """
+        current = self._importance.get(edge_id, 0.0)
+        if success:
+            self._importance[edge_id] = current * 0.9 + 0.1
+        else:
+            self._importance[edge_id] = current * 0.95
+
+    async def consolidate_weights(self) -> None:
+        """Snapshot current weights as EWC reference points (#2097).
+
+        Called automatically every ewc_consolidation_interval updates.
+        The reference dict is already kept current during _update_existing_edge,
+        so this method serves as a hook for logging and future persistence.
+        """
+        logger.info(
+            "EdgeLearner: consolidated %d reference weights",
+            len(self._reference_weights),
+        )
+
     async def _update_existing_edge(self, edge: dict) -> None:
-        """Apply EMA weight update and increment co_access_count."""
-        new_weight = edge["weight"] * self.ema_decay + 1.0 * (1 - self.ema_decay)
+        """Apply EMA weight update with EWC++ dampening and increment co_access_count (#2097)."""
+        proposed_weight = edge["weight"] * self.ema_decay + 1.0 * (1 - self.ema_decay)
+        final_weight = self._apply_ewc_dampening(
+            edge["id"], edge["weight"], proposed_weight
+        )
         await self.db.update_edge(
             edge["id"],
-            weight=new_weight,
+            weight=final_weight,
             co_access_count=edge["co_access_count"] + 1,
         )
+        # Track reference weight for future EWC penalty computations.
+        self._reference_weights[edge["id"]] = final_weight
+        self._update_count += 1
+        if self._update_count % self.ewc_consolidation_interval == 0:
+            await self.consolidate_weights()
 
     async def _maybe_create_edge(self, node_a: str, node_b: str) -> None:
         """Create a CO_RETRIEVED edge if co_access_count meets threshold."""

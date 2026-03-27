@@ -64,6 +64,10 @@ class RAGConfig:
     mesh_pruner: bool = False
     mesh_node_promoter: bool = False
 
+    # EWC++ catastrophic forgetting prevention for EdgeLearner (Issue #2097)
+    ewc_lambda: float = 0.4
+    ewc_consolidation_interval: int = 100
+
     # Issue #556: Category-based filtering for chat RAG
     # Default categories to search when no specific categories are specified
     # Available categories: system_knowledge, user_knowledge, autobot_knowledge
@@ -180,6 +184,9 @@ class RAGConfig:
             "mesh_edge_discoverer": self.mesh_edge_discoverer,
             "mesh_pruner": self.mesh_pruner,
             "mesh_node_promoter": self.mesh_node_promoter,
+            # EWC++ catastrophic forgetting prevention (Issue #2097)
+            "ewc_lambda": self.ewc_lambda,
+            "ewc_consolidation_interval": self.ewc_consolidation_interval,
         }
 
 
