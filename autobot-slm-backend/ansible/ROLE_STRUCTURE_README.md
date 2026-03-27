@@ -382,7 +382,7 @@ ansible-playbook playbooks/deploy_role.yml -e 'role_name=frontend' --list-tasks
 The Ansible role structure integrates with AutoBot's deployment workflows:
 
 1. **setup.sh**: Installs Ansible and dependencies
-2. **systemd services**: Manage backend/frontend lifecycle (replaces deprecated `run_autobot.sh`)
+2. **systemd services**: Manage backend/frontend lifecycle
 3. **sync-to-vm.sh**: Syncs code after role deployment
 4. **Service Registry**: Feeds dynamic inventory
 
