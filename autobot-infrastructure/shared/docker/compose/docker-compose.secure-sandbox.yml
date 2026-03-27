@@ -105,6 +105,12 @@ services:
       - no-new-privileges:true
       - apparmor:docker-default
 
+    # Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
     # Resource limits
     deploy:
       resources:
@@ -114,6 +120,11 @@ services:
 
     # Read-only root filesystem
     read_only: true
+
+    # Temporary filesystems
+    tmpfs:
+      - /tmp:size=50M,mode=1777
+      - /var/run:size=10M,mode=755
 
     # Volumes
     volumes:
