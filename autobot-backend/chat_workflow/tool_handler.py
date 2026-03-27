@@ -13,10 +13,13 @@ import html
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
 from utils.errors import RepairableException
+
+if TYPE_CHECKING:
+    from .models import LLMIterationContext
 
 logger = logging.getLogger(__name__)
 
@@ -1317,8 +1320,12 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: List[Dict[str, Any]],
         additional_response_parts: List[str],
+        ctx: Optional["LLMIterationContext"] = None,
     ):
         """Dispatch a single tool call to appropriate handler. Issue #620.
+
+        Issue #2310: Accepts optional ctx to track consecutive invalid tool calls
+        and inject available-tools reminder after 2 consecutive failures.
 
         Yields:
             WorkflowMessage for tool execution stages
@@ -1327,17 +1334,23 @@ class ToolHandlerMixin:
         tool_name = tool_call["name"]
 
         if tool_name == "respond":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             msg, break_loop, respond_content = self._handle_respond_tool(tool_call)
             yield msg
             yield (break_loop, respond_content)
             return
 
         if tool_name == "delegate":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             yield self._handle_delegate_tool(tool_call, execution_results)
             return
 
         # Issue #1368: Route browser tools to browser VM
         if tool_name in _BROWSER_TOOL_NAMES:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             async for msg in self._handle_browser_tool(tool_call, execution_results):
                 yield msg
             return
@@ -1345,15 +1358,21 @@ class ToolHandlerMixin:
         if tool_name != "execute_command":
             # Issue #2305: Return a tool error so the agent can self-correct instead of
             # silently dropping the call and causing an infinite hallucination loop.
+            # Issue #2310: Track consecutive invalid calls; reminder injected at prompt-build time.
             known_tools = sorted(
                 {"respond", "delegate", "execute_command"} | _BROWSER_TOOL_NAMES
             )
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls += 1
+            consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
             error_msg = (
                 f'Error: Tool "{tool_name}" not found. '
                 f"Available tools: {', '.join(known_tools)}"
             )
             logger.warning(
-                "[Issue #2305] Unknown tool call reported to agent: %s", tool_name
+                "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
+                tool_name,
+                consecutive,
             )
             execution_results.append(
                 {"tool": tool_name, "status": "error", "error": error_msg}
@@ -1365,6 +1384,8 @@ class ToolHandlerMixin:
             )
             return
 
+        if ctx is not None:
+            ctx.consecutive_invalid_tool_calls = 0
         async for msg in self._process_single_command(
             tool_call,
             session_id,
@@ -1383,12 +1404,14 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
+        ctx: Optional["LLMIterationContext"] = None,
     ):
         """Process all tool calls from LLM response.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
         Issue #620: Refactored using Extract Method pattern.
+        Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
             WorkflowMessage for each stage of execution
@@ -1409,6 +1432,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                ctx=ctx,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result
