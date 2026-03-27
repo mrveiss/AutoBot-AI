@@ -273,19 +273,21 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-project-diagram',
       description: 'Visual workflow builder and automation (Issue #585)',
       requiresAuth: true
-    }
-  },
-  // Issue #900: Browser Automation Dashboard — moved under /automation (#2367)
-  {
-    path: '/automation/browser-automation',
-    name: 'browser-automation',
-    component: () => import('@/views/BrowserAutomationView.vue'),
-    meta: {
-      title: 'Browser Automation',
-      icon: 'fas fa-globe',
-      description: 'Control browser workers and automate web tasks',
-      requiresAuth: true
-    }
+    },
+    // Child routes render inside WorkflowBuilderView's <router-view /> (#2368)
+    children: [
+      {
+        path: 'browser-automation',
+        name: 'browser-automation',
+        component: () => import('@/views/BrowserAutomationView.vue'),
+        meta: {
+          title: 'Browser Automation',
+          icon: 'fas fa-globe',
+          description: 'Control browser workers and automate web tasks',
+          requiresAuth: true
+        }
+      }
+    ]
   },
   // Redirect old path (#2367)
   {
