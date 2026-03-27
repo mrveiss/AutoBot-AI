@@ -191,9 +191,6 @@ class LayeredProfiler:
         if not self._enabled:
             yield _NOOP
             return
-        self._yield_timed_stage(name)
-        # The actual timed block is in _yield_timed_stage for the Extract Method pattern,
-        # but contextmanager requires yield here. We inline the timing.
         acc = self._get_or_create_stage(name)
         self._vram.sample()
         start = time.perf_counter_ns()
@@ -210,9 +207,6 @@ class LayeredProfiler:
             self._stages[name] = _StageAccumulator()
             self._stage_order.append(name)
         return self._stages[name]
-
-    def _yield_timed_stage(self, name: str) -> None:
-        """Placeholder for Extract Method — timing logic is in stage() context manager."""
 
     def start(self) -> None:
         """Mark the start of the overall profiling session."""
@@ -338,7 +332,8 @@ class LayeredProfiler:
         report = self.summary()
         report["timestamp"] = time.time()
         history_dir = _get_history_dir()
-        filename = f"{self._model_name}_{int(time.time())}.json"
+        safe_name = self._model_name.replace("/", "_").replace("..", "_")
+        filename = f"{safe_name}_{int(time.time())}.json"
         filepath = history_dir / filename
         filepath.write_text(json.dumps(report, indent=2), encoding="utf-8")
         logger.debug("Profiling history saved to %s", filepath)
