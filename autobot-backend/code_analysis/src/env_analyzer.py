@@ -6,6 +6,8 @@ Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
 """
 
+from __future__ import annotations
+
 import ast
 import asyncio
 import json
@@ -15,7 +17,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from autobot_shared.ssot_config import QUALITY_MODEL
 
@@ -29,8 +31,9 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from autobot_shared.redis_client import get_redis_client
     from config import UnifiedConfig
+
+    from autobot_shared.redis_client import get_redis_client
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -299,7 +302,7 @@ class HardcodedValue:
 
     file_path: str
     line_number: int
-    variable_name: Optional[str]
+    variable_name: str | None
     value: str
     value_type: str  # path, url, port, key, etc.
     context: str  # surrounding code context
@@ -316,7 +319,7 @@ class ConfigRecommendation:
     default_value: str
     description: str
     category: str  # database, api, security, paths, etc.
-    affected_files: List[str]
+    affected_files: list[str]
     priority: str  # high, medium, low
 
 
@@ -386,8 +389,8 @@ class EnvironmentAnalyzer:
         logger.info("Environment Analyzer initialized")
 
     async def analyze_codebase(
-        self, root_path: str = ".", patterns: List[str] = None
-    ) -> Dict[str, Any]:
+        self, root_path: str = ".", patterns: list[str] = None
+    ) -> dict[str, Any]:
         """Analyze entire codebase for hardcoded values"""
 
         start_time = time.time()
@@ -450,8 +453,8 @@ class EnvironmentAnalyzer:
         return results
 
     async def _scan_for_hardcoded_values(
-        self, root_path: str, patterns: List[str]
-    ) -> List[HardcodedValue]:
+        self, root_path: str, patterns: list[str]
+    ) -> list[HardcodedValue]:
         """Scan files for hardcoded values (Issue #340 - refactored)"""
         hardcoded_values = []
         root = Path(root_path)
@@ -463,7 +466,7 @@ class EnvironmentAnalyzer:
         return hardcoded_values
 
     async def _process_file_for_values(
-        self, file_path: Path, hardcoded_values: List[HardcodedValue]
+        self, file_path: Path, hardcoded_values: list[HardcodedValue]
     ) -> None:
         """Process a single file for hardcoded values (Issue #340 - extracted)"""
         if not file_path.is_file() or self._should_skip_file(file_path):
@@ -503,7 +506,7 @@ class EnvironmentAnalyzer:
 
     async def _scan_file_for_hardcoded_values(
         self, file_path: str
-    ) -> List[HardcodedValue]:
+    ) -> list[HardcodedValue]:
         """Scan a single file for hardcoded values"""
 
         hardcoded_values = []
@@ -534,8 +537,8 @@ class EnvironmentAnalyzer:
         return hardcoded_values
 
     async def _scan_ast_for_hardcoded_values(
-        self, file_path: str, tree: ast.AST, lines: List[str]
-    ) -> List[HardcodedValue]:
+        self, file_path: str, tree: ast.AST, lines: list[str]
+    ) -> list[HardcodedValue]:
         """Issue #632: Scan AST for hardcoded values (docstring + line-level filtering)"""
         hardcoded_values = []
 
@@ -634,8 +637,8 @@ class EnvironmentAnalyzer:
         return False
 
     def _extract_hardcoded_from_node(
-        self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> Optional[HardcodedValue]:
+        self, node: ast.AST, file_path: str, lines: list[str]
+    ) -> HardcodedValue | None:
         """Extract hardcoded value from AST node (Issue #340 - extracted)"""
         # String literals
         if isinstance(node, ast.Str):
@@ -649,8 +652,8 @@ class EnvironmentAnalyzer:
         return None
 
     def _extract_from_str_node(
-        self, node: ast.Str, file_path: str, lines: List[str]
-    ) -> Optional[HardcodedValue]:
+        self, node: ast.Str, file_path: str, lines: list[str]
+    ) -> HardcodedValue | None:
         """Extract from string literal node (Issue #340 - extracted)"""
         value = node.s
         if not self._is_potentially_configurable(value):
@@ -658,8 +661,8 @@ class EnvironmentAnalyzer:
         return self._create_hardcoded_value(file_path, node.lineno, None, value, lines)
 
     def _extract_from_num_node(
-        self, node: ast.Num, file_path: str, lines: List[str]
-    ) -> Optional[HardcodedValue]:
+        self, node: ast.Num, file_path: str, lines: list[str]
+    ) -> HardcodedValue | None:
         """Extract from numeric node (Issue #340 - extracted, Issue #630 - context filtering)"""
         value = str(node.n)
         if not self._is_numeric_config_candidate(value):
@@ -695,8 +698,8 @@ class EnvironmentAnalyzer:
         return False
 
     def _extract_from_assign_node(
-        self, node: ast.Assign, file_path: str, lines: List[str]
-    ) -> Optional[HardcodedValue]:
+        self, node: ast.Assign, file_path: str, lines: list[str]
+    ) -> HardcodedValue | None:
         """Extract from assignment node (Issue #340 - extracted)"""
         for target in node.targets:
             hv = self._try_extract_named_value(
@@ -712,8 +715,8 @@ class EnvironmentAnalyzer:
         value_node: ast.AST,
         file_path: str,
         lineno: int,
-        lines: List[str],
-    ) -> Optional[HardcodedValue]:
+        lines: list[str],
+    ) -> HardcodedValue | None:
         """Try to extract a named hardcoded value (Issue #340 - extracted)"""
         if not isinstance(target, ast.Name):
             return None
@@ -732,7 +735,7 @@ class EnvironmentAnalyzer:
         return self._create_hardcoded_value(file_path, lineno, var_name, value, lines)
 
     @staticmethod
-    def _extract_match_value(match: "re.Match") -> Optional[str]:
+    def _extract_match_value(match: "re.Match") -> str | None:
         """Return the first non-None captured group, or the full match.
 
         Issue #1183: Extracted from _regex_scan_file() to reduce function length.
@@ -744,8 +747,8 @@ class EnvironmentAnalyzer:
         return match.group(0)
 
     async def _regex_scan_file(
-        self, file_path: str, content: str, lines: List[str]
-    ) -> List[HardcodedValue]:
+        self, file_path: str, content: str, lines: list[str]
+    ) -> list[HardcodedValue]:
         """Issue #632: Scan file using regex with smart filtering (aligned with shell script).
 
         Applies:
@@ -808,10 +811,10 @@ class EnvironmentAnalyzer:
         self,
         file_path: str,
         line_num: int,
-        var_name: Optional[str],
+        var_name: str | None,
         value: str,
-        lines: List[str],
-        category: Optional[str] = None,
+        lines: list[str],
+        category: str | None = None,
     ) -> HardcodedValue:
         """Create a HardcodedValue object with analysis"""
 
@@ -1008,8 +1011,8 @@ class EnvironmentAnalyzer:
             return False
 
     def _classify_value(
-        self, value: str, category: Optional[str], context: str
-    ) -> Tuple[str, str]:
+        self, value: str, category: str | None, context: str
+    ) -> tuple[str, str]:
         """Issue #632: Classify value and severity (aligned with shell script priorities)"""
 
         # Guard against None values
@@ -1041,7 +1044,7 @@ class EnvironmentAnalyzer:
         # MEDIUM severity: URLs and hostnames (not example domains)
         return self._classify_non_numeric_value(value, category, _WEB_PROTOCOL_PREFIXES)
 
-    def _classify_numeric_value(self, num: int) -> Tuple[str, str]:
+    def _classify_numeric_value(self, num: int) -> tuple[str, str]:
         """Classify numeric values by severity.
 
         Helper for _classify_value (#632).
@@ -1070,8 +1073,8 @@ class EnvironmentAnalyzer:
         return "numeric", "low"
 
     def _classify_non_numeric_value(
-        self, value: str, category: Optional[str], web_prefixes: tuple
-    ) -> Tuple[str, str]:
+        self, value: str, category: str | None, web_prefixes: tuple
+    ) -> tuple[str, str]:
         """Classify non-numeric string values by severity.
 
         Helper for _classify_value (#632).
@@ -1094,7 +1097,7 @@ class EnvironmentAnalyzer:
         return category or "string", "low"
 
     def _suggest_env_var_name(
-        self, var_name: Optional[str], value: str, value_type: str, file_path: str
+        self, var_name: str | None, value: str, value_type: str, file_path: str
     ) -> str:
         """Suggest an environment variable name"""
 
@@ -1132,8 +1135,8 @@ class EnvironmentAnalyzer:
         )
 
     async def _categorize_values(
-        self, hardcoded_values: List[HardcodedValue]
-    ) -> Dict[str, List[HardcodedValue]]:
+        self, hardcoded_values: list[HardcodedValue]
+    ) -> dict[str, list[HardcodedValue]]:
         """Categorize hardcoded values by type"""
 
         categories = {}
@@ -1145,8 +1148,8 @@ class EnvironmentAnalyzer:
         return categories
 
     async def _generate_recommendations(
-        self, categorized: Dict[str, List[HardcodedValue]]
-    ) -> List[ConfigRecommendation]:
+        self, categorized: dict[str, list[HardcodedValue]]
+    ) -> list[ConfigRecommendation]:
         """Generate configuration recommendations"""
 
         recommendations = []
@@ -1203,9 +1206,9 @@ class EnvironmentAnalyzer:
 
     def _calculate_env_metrics(
         self,
-        hardcoded_values: List[HardcodedValue],
-        recommendations: List[ConfigRecommendation],
-    ) -> Dict[str, Any]:
+        hardcoded_values: list[HardcodedValue],
+        recommendations: list[ConfigRecommendation],
+    ) -> dict[str, Any]:
         """Calculate environment analysis metrics"""
 
         severity_counts = {
@@ -1230,7 +1233,7 @@ class EnvironmentAnalyzer:
             "configuration_complexity": len(category_counts),
         }
 
-    def _serialize_hardcoded_value(self, value: HardcodedValue) -> Dict[str, Any]:
+    def _serialize_hardcoded_value(self, value: HardcodedValue) -> dict[str, Any]:
         """Serialize hardcoded value for output with SSOT mapping (Issue #642)"""
         result = {
             "file": value.file_path,
@@ -1269,7 +1272,7 @@ class EnvironmentAnalyzer:
 
         return result
 
-    def _serialize_recommendation(self, rec: ConfigRecommendation) -> Dict[str, Any]:
+    def _serialize_recommendation(self, rec: ConfigRecommendation) -> dict[str, Any]:
         """Serialize configuration recommendation for output"""
         return {
             "env_var_name": rec.env_var_name,
@@ -1280,7 +1283,7 @@ class EnvironmentAnalyzer:
             "priority": rec.priority,
         }
 
-    async def _cache_results(self, results: Dict[str, Any]):
+    async def _cache_results(self, results: dict[str, Any]):
         """Cache analysis results in Redis"""
         if self.redis_client:
             try:
@@ -1307,7 +1310,7 @@ class EnvironmentAnalyzer:
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
 
-    async def get_cached_results(self) -> Optional[Dict[str, Any]]:
+    async def get_cached_results(self) -> dict[str, Any] | None:
         """Get cached analysis results"""
         if self.redis_client:
             try:
@@ -1324,11 +1327,11 @@ class EnvironmentAnalyzer:
 
     async def llm_filter_hardcoded(
         self,
-        hardcoded_values: List[HardcodedValue],
+        hardcoded_values: list[HardcodedValue],
         model: str = QUALITY_MODEL,
         batch_size: int = 100,
-        priority_filter: Optional[str] = None,
-    ) -> List[HardcodedValue]:
+        priority_filter: str | None = None,
+    ) -> list[HardcodedValue]:
         """Use LLM to filter false positives. Issue #633."""
         import os
 
@@ -1357,9 +1360,9 @@ class EnvironmentAnalyzer:
 
     def _select_llm_candidates(
         self,
-        hardcoded_values: List[HardcodedValue],
-        priority_filter: Optional[str],
-    ) -> List[HardcodedValue]:
+        hardcoded_values: list[HardcodedValue],
+        priority_filter: str | None,
+    ) -> list[HardcodedValue]:
         """Select candidates for LLM filtering.
 
         Helper for llm_filter_hardcoded (#633).
@@ -1395,11 +1398,11 @@ class EnvironmentAnalyzer:
 
     async def _process_llm_batches(
         self,
-        candidates: List[HardcodedValue],
+        candidates: list[HardcodedValue],
         ollama_url: str,
         model: str,
         batch_size: int,
-    ) -> List[HardcodedValue]:
+    ) -> list[HardcodedValue]:
         """Process candidates through LLM in batches.
 
         Helper for llm_filter_hardcoded (#633).
@@ -1441,7 +1444,7 @@ class EnvironmentAnalyzer:
             f"({pct:.1f}% reduction)"
         )
 
-    def _build_llm_filter_prompt(self, batch: List[HardcodedValue]) -> str:
+    def _build_llm_filter_prompt(self, batch: list[HardcodedValue]) -> str:
         """
         Build LLM prompt for filtering a batch of hardcoded value candidates.
 
@@ -1503,8 +1506,8 @@ class EnvironmentAnalyzer:
         url: str,
         model: str,
         prompt: str,
-        session: Optional[Any] = None,
-    ) -> List[int]:
+        session: Any | None = None,
+    ) -> list[int]:
         """
         Call Ollama API for filtering and parse response.
 
@@ -1552,7 +1555,7 @@ class EnvironmentAnalyzer:
             if should_close:
                 await session.close()
 
-    def _parse_llm_filter_response(self, response_text: str) -> List[int]:
+    def _parse_llm_filter_response(self, response_text: str) -> list[int]:
         """
         Parse LLM response to extract line numbers of true issues.
 
@@ -1589,10 +1592,10 @@ class EnvironmentAnalyzer:
     async def analyze_codebase_with_llm_filter(
         self,
         root_path: str = ".",
-        patterns: List[str] = None,
+        patterns: list[str] = None,
         llm_model: str = QUALITY_MODEL,
-        filter_priority: Optional[str] = "high",
-    ) -> Dict[str, Any]:
+        filter_priority: str | None = "high",
+    ) -> dict[str, Any]:
         """Analyze codebase with LLM filtering. Issue #633."""
         results = await self.analyze_codebase(root_path, patterns)
         original_count = results.get("total_hardcoded_values", 0)
@@ -1618,8 +1621,8 @@ class EnvironmentAnalyzer:
         return results
 
     def _deserialize_hardcoded_details(
-        self, details: List[Dict[str, Any]]
-    ) -> List[HardcodedValue]:
+        self, details: list[dict[str, Any]]
+    ) -> list[HardcodedValue]:
         """Reconstruct HardcodedValue objects from serialized data.
 
         Helper for analyze_codebase_with_llm_filter (#633).
@@ -1641,11 +1644,11 @@ class EnvironmentAnalyzer:
 
     def _apply_filtered_results(
         self,
-        results: Dict[str, Any],
-        filtered_values: List[HardcodedValue],
+        results: dict[str, Any],
+        filtered_values: list[HardcodedValue],
         original_count: int,
         llm_model: str,
-        filter_priority: Optional[str],
+        filter_priority: str | None,
     ) -> None:
         """Update results dict with LLM-filtered data.
 
@@ -1675,8 +1678,8 @@ class EnvironmentAnalyzer:
         model: str,
         original: int,
         filtered: int,
-        priority: Optional[str],
-    ) -> Dict[str, Any]:
+        priority: str | None,
+    ) -> dict[str, Any]:
         """Build LLM filtering metadata dict.
 
         Helper for analyze_codebase_with_llm_filter (#633).

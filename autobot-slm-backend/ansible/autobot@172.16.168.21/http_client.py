@@ -6,10 +6,12 @@ Singleton HTTP Client Manager
 Provides efficient aiohttp client session management to prevent resource exhaustion
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
@@ -24,8 +26,8 @@ class HTTPClientManager:
     Prevents creating new ClientSession for each request which causes resource exhaustion.
     """
 
-    _instance: Optional["HTTPClientManager"] = None
-    _session: Optional[ClientSession] = None
+    _instance: "HTTPClientManager" | None = None
+    _session: ClientSession | None = None
     _lock = asyncio.Lock()
 
     def __new__(cls):
@@ -288,7 +290,7 @@ class HTTPClientManager:
         """Convenience method for POST requests."""
         return await self.request("POST", url, **kwargs)
 
-    async def get_json(self, url: str, **kwargs) -> Dict[str, Any]:
+    async def get_json(self, url: str, **kwargs) -> dict[str, Any]:
         """
         Make a GET request and return JSON response.
 
@@ -304,8 +306,8 @@ class HTTPClientManager:
             return await response.json()
 
     async def post_json(
-        self, url: str, json_data: Dict[str, Any], **kwargs
-    ) -> Dict[str, Any]:
+        self, url: str, json_data: dict[str, Any], **kwargs
+    ) -> dict[str, Any]:
         """
         Make a POST request with JSON data and return JSON response.
 
@@ -336,7 +338,7 @@ class HTTPClientManager:
             self._connector = None
             self._closed = True
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get client usage statistics."""
         utilization = (
             self._active_requests / self._current_pool_size
@@ -374,7 +376,7 @@ class HTTPClientManager:
 # Global singleton instance (thread-safe)
 import threading
 
-_http_client: Optional[HTTPClientManager] = None
+_http_client: HTTPClientManager | None = None
 _http_client_lock = threading.Lock()
 
 

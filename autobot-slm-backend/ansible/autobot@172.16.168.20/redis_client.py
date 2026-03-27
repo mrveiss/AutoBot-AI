@@ -77,11 +77,14 @@ All classes are now in the redis_management/ package. This module provides
 backward compatibility by re-exporting all classes.
 """
 
+from __future__ import annotations
+
 import logging
+from collections.abc import AsyncGenerator
 
 # Thread safety support for concurrent access patterns
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, Optional, Union
+from typing import Any, Union
 
 import redis
 import redis.asyncio as async_redis
@@ -154,7 +157,7 @@ __all__ = [
 # Lazy initialization prevents Redis connection errors during module imports
 # on dev machines where Redis VM (172.16.168.23) is unreachable.
 
-_connection_manager: Optional[RedisConnectionManager] = None
+_connection_manager: RedisConnectionManager | None = None
 
 
 def _get_connection_manager() -> RedisConnectionManager:
@@ -253,27 +256,27 @@ def get_redis_client(
 # =============================================================================
 
 
-def get_knowledge_base_redis(**kwargs) -> Optional[redis.Redis]:
+def get_knowledge_base_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for knowledge base data."""
     return get_redis_client(database="knowledge", **kwargs)
 
 
-def get_prompts_redis(**kwargs) -> Optional[redis.Redis]:
+def get_prompts_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for prompt templates."""
     return get_redis_client(database="prompts", **kwargs)
 
 
-def get_agents_redis(**kwargs) -> Optional[redis.Redis]:
+def get_agents_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for agent communication."""
     return get_redis_client(database="agents", **kwargs)
 
 
-def get_metrics_redis(**kwargs) -> Optional[redis.Redis]:
+def get_metrics_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for performance metrics."""
     return get_redis_client(database="metrics", **kwargs)
 
 
-def get_main_redis(**kwargs) -> Optional[redis.Redis]:
+def get_main_redis(**kwargs) -> redis.Redis | None:
     """Get Redis client for main application data."""
     return get_redis_client(database="main", **kwargs)
 
@@ -283,17 +286,17 @@ def get_main_redis(**kwargs) -> Optional[redis.Redis]:
 # =============================================================================
 
 
-def get_redis_health() -> Dict[str, Any]:
+def get_redis_health() -> dict[str, Any]:
     """Get Redis health status."""
     return _get_connection_manager().get_health_status()
 
 
-def get_redis_metrics(database: Optional[str] = None) -> Dict[str, Any]:
+def get_redis_metrics(database: str | None = None) -> dict[str, Any]:
     """Get Redis connection metrics."""
     return _get_connection_manager().get_metrics(database)
 
 
-def get_connection_info(database: str = "main") -> Dict[str, Any]:
+def get_connection_info(database: str = "main") -> dict[str, Any]:
     """
     Get detailed connection status and info for a specific database.
 
@@ -391,7 +394,7 @@ async def close_all_redis_connections():
 # =============================================================================
 
 
-async def redis_get(key: str, database: str = "main") -> Optional[Any]:
+async def redis_get(key: str, database: str = "main") -> Any | None:
     """
     Async Redis GET operation with consolidated backend.
 
@@ -414,7 +417,7 @@ async def redis_get(key: str, database: str = "main") -> Optional[Any]:
 
 
 async def redis_set(
-    key: str, value: Any, expire: Optional[int] = None, database: str = "main"
+    key: str, value: Any, expire: int | None = None, database: str = "main"
 ) -> bool:
     """
     Async Redis SET operation with optional expiration.
@@ -520,9 +523,7 @@ class RedisDatabaseManager:
             "Use get_redis_client() from backend.utils.redis_client instead."
         )
 
-    def get_connection(
-        self, database: Union[RedisDatabase, str]
-    ) -> Optional[redis.Redis]:
+    def get_connection(self, database: Union[RedisDatabase, str]) -> redis.Redis | None:
         """Get synchronous Redis connection (DEPRECATED)."""
         db_name = (
             database.name.lower() if isinstance(database, RedisDatabase) else database
@@ -531,7 +532,7 @@ class RedisDatabaseManager:
 
     async def get_async_connection(
         self, database: Union[RedisDatabase, str]
-    ) -> Optional[async_redis.Redis]:
+    ) -> async_redis.Redis | None:
         """Get asynchronous Redis connection (DEPRECATED)."""
         db_name = (
             database.name.lower() if isinstance(database, RedisDatabase) else database
@@ -541,7 +542,7 @@ class RedisDatabaseManager:
 
 # Global instance for backward compatibility (lazy-loaded)
 # Issue #665: Use lazy initialization to avoid deprecation warning at import time
-_redis_db_manager_instance: Optional[RedisDatabaseManager] = None
+_redis_db_manager_instance: RedisDatabaseManager | None = None
 
 
 def _get_redis_db_manager() -> RedisDatabaseManager:
