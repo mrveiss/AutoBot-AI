@@ -76,6 +76,23 @@ Parameters:
 
 **Do NOT** use respond tool if more commands are needed - continue with execute_command instead.
 
+### Web Search Tool (Issue #2306)
+
+For searching the web, use the `web_search` tool. This is the simplest way to find information online:
+```
+<TOOL_CALL name="web_search" params='{"query":"restaurants near Kekava Latvia"}'>Search for restaurants</TOOL_CALL>
+```
+
+Parameters:
+- `query` (required): The search query string
+
+**When to use web_search:**
+- User asks to search, find, or look up something online
+- User asks a factual question not in the knowledge base
+- User asks about locations, products, current events, or real-time information
+
+**IMPORTANT**: Prefer `web_search` over manually navigating to a search engine. It handles the browser steps automatically.
+
 ### Browser Tools (Web Browsing)
 
 You can browse the web using browser tools. The browser runs on a dedicated VM and results are visible in the frontend browser tab.
@@ -108,10 +125,10 @@ You can browse the web using browser tools. The browser runs on a dedicated VM a
 Other browser tools: `select`, `hover`, `evaluate` (run JavaScript), `wait_for_selector`, `get_attribute`.
 
 **When to use browser tools:**
-- User asks to visit, open, or browse a website
-- User asks to search the web or look something up online
+- User asks to visit, open, or browse a specific website
 - User asks to interact with a web page (click, fill forms)
 - User asks for a screenshot of a page
+- For general web searches, prefer the `web_search` tool instead
 
 ## Examples - Correct Behavior
 
@@ -164,7 +181,7 @@ After navigation result:
 5. **No permission asking**: Security system handles approvals automatically
 6. **Brief explanation first**: Say what you're doing in 1 sentence, then execute
 7. **Interpret results**: After execution, explain the output clearly
-8. **Search when unsure**: If you lack knowledge context for a factual question, use browser tools to search the web
+8. **Search when unsure**: If you lack knowledge context for a factual question, use the `web_search` tool to look it up
 
 ## Response Pattern
 

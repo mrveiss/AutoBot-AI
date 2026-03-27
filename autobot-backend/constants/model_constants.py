@@ -36,15 +36,20 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
+from autobot_shared.ssot_config import (
+    DEFAULT_LLM_MODEL,
+)
+from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
+from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
 
 # =============================================================================
-# FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
+# FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE (#2553)
 # =============================================================================
-# These are the ultimate fallbacks if SSOT/.env is not configured.
-# Change these values to change the default for the entire system.
+# All values derive from ssot_config.py constants — never hardcode model names.
+# Change models in autobot_shared/ssot_config.py to change the entire system.
 
-FALLBACK_MODEL = DEFAULT_LLM_MODEL  # Default LLM model
+FALLBACK_MODEL = DEFAULT_LLM_MODEL
 FALLBACK_OPENAI_MODEL = "gpt-4"
 FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
 FALLBACK_GOOGLE_MODEL = "gemini-pro"
@@ -79,13 +84,13 @@ class ModelConstants:
     DEFAULT_ANTHROPIC_MODEL: str = FALLBACK_ANTHROPIC_MODEL
     DEFAULT_GOOGLE_MODEL: str = FALLBACK_GOOGLE_MODEL
 
-    # Additional model types
+    # Role-specific models — all from SSOT constants (#2553)
     EMBEDDING_MODEL: str = "nomic-embed-text:latest"
-    CLASSIFICATION_MODEL: str = FALLBACK_MODEL
-    REASONING_MODEL: str = FALLBACK_MODEL
-    RAG_MODEL: str = FALLBACK_MODEL
-    CODING_MODEL: str = FALLBACK_MODEL
-    ORCHESTRATOR_MODEL: str = FALLBACK_MODEL
+    CLASSIFICATION_MODEL: str = SSOT_CLASSIFICATION_MODEL
+    REASONING_MODEL: str = SSOT_QUALITY_MODEL
+    RAG_MODEL: str = SSOT_QUALITY_MODEL
+    CODING_MODEL: str = SSOT_QUALITY_MODEL
+    ORCHESTRATOR_MODEL: str = SSOT_ROUTING_MODEL
 
     # =========================================================================
     # MODEL PROVIDERS

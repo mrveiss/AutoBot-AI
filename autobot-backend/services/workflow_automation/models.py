@@ -10,7 +10,7 @@ Enums, dataclasses, and Pydantic models for workflow automation.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from type_defs.common import Metadata
@@ -138,6 +138,10 @@ class WorkflowStep:
     completed_at: Optional[datetime] = None
     # Issue #2159: Per-step timeout override (seconds). None uses WorkflowLimits default.
     timeout_seconds: Optional[int] = None
+    # Issue #2397: Step type — "command_execution" (default) or a vision node type.
+    step_type: str = "command_execution"
+    # Issue #2397: Step-level configuration dict for vision and future step types.
+    step_config: Optional[Metadata] = None
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -176,6 +180,8 @@ class ActiveWorkflow:
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
     # Issue #2153: Owner identifier for workflow secret resolution.
     owner_id: Optional[str] = None
+    # Issue #2601: Store step execution results keyed by step_id for reference passing.
+    step_results: Dict[str, Metadata] = field(default_factory=dict)
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""

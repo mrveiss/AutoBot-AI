@@ -125,5 +125,10 @@
   },
   "_meta": {
     "dir": "rtl"
+  },
+  "analytics": {
+    "codeIntelligence": {
+      "noPreviousScan": "No previous scan available"
+    }
   }
 }

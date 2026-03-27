@@ -9,9 +9,10 @@ Handles workflow step execution, dependency checking, and command execution.
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -34,6 +35,7 @@ from .safety_limits import (
 )
 from .state_machine import WorkflowPhase, WorkflowStateMachine
 from .step_evaluator import WorkflowStepEvaluator
+from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
 if TYPE_CHECKING:
     from .messaging import WorkflowMessenger
@@ -98,6 +100,58 @@ def _redact_result_secrets(
     except Exception as exc:  # pragma: no cover
         logger.error("Secret redaction failed for workflow result: %s", exc)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Issue #2601 — Step reference resolution for vision step chaining
+# ---------------------------------------------------------------------------
+
+_REF_PATTERN = re.compile(r"\$\{steps\.(\w+)\.(.+?)\}")
+_ARRAY_PART = re.compile(r"^(\w+)\[(\d+)\]$")
+
+
+def _navigate_path(data: Any, path: str) -> Any:
+    """Navigate a dot-separated path with optional array indexing into *data*.
+
+    Example path: ``result.elements[0].coordinates``
+    Returns ``None`` for missing keys or out-of-range indices. (#2601)
+    """
+    current = data
+    for part in path.split("."):
+        if current is None:
+            return None
+        array_match = _ARRAY_PART.match(part)
+        if array_match:
+            key, index = array_match.group(1), int(array_match.group(2))
+            if isinstance(current, dict):
+                current = current.get(key)
+            if isinstance(current, (list, tuple)) and index < len(current):
+                current = current[index]
+            else:
+                return None
+        elif isinstance(current, dict):
+            current = current.get(part)
+        else:
+            return None
+    return current
+
+
+def _resolve_step_references(config: dict, step_results: dict) -> dict:
+    """Resolve ``${steps.<step_id>.<path>}`` references in step config values.
+
+    Only string values are scanned.  Non-matching strings and non-string values
+    are returned unchanged.  Unknown step IDs resolve to ``None``. (#2601)
+    """
+    resolved: dict = {}
+    for key, value in config.items():
+        if isinstance(value, str):
+            match = _REF_PATTERN.search(value)
+            if match:
+                step_id, path = match.group(1), match.group(2)
+                resolved[key] = _navigate_path(step_results.get(step_id), path)
+                continue
+        resolved[key] = value
+    return resolved
 
 
 class WorkflowExecutor:
@@ -309,15 +363,18 @@ class WorkflowExecutor:
 
         return True
 
-    def _record_step_metric(self, status: str) -> None:
+    def _record_step_metric(
+        self, status: str, step_type: str = "command_execution"
+    ) -> None:
         """
         Record Prometheus workflow step metric.
 
         Args:
             status: The step status ('completed' or 'failed'). Issue #620.
+            step_type: The workflow step type (e.g. 'command_execution', 'vision-capture').
+                Issue #2397: Vision steps pass their own type for granular metrics.
         """
         workflow_type = "automated_workflow"
-        step_type = "command_execution"
         self.prometheus_metrics.record_workflow_step(
             workflow_type=workflow_type, step_type=step_type, status=status
         )
@@ -391,7 +448,7 @@ class WorkflowExecutor:
         current_step.status = WorkflowStepStatus.FAILED
         current_step.execution_result = {"error": str(error)}
 
-        self._record_step_metric("failed")
+        self._record_step_metric("failed", current_step.step_type)
 
         # Issue #1380: Record failure in state machine
         await self._sm_transition(
@@ -447,46 +504,37 @@ class WorkflowExecutor:
                 current_step.command, owner_id
             )
 
-            # Issue #2159: Wrap execution in per-step timeout enforcer
-            result = await self._timeout_enforcer.run_with_timeout(
-                coro=self._execute_command(workflow.session_id, resolved_command),
-                step_id=step_id,
-                timeout_seconds=current_step.timeout_seconds,
-                limits=self.limits,
-            )
+            # Issue #2397: Route vision node types to the vision step handler.
+            # Issue #2601: Resolve ${steps.<id>.<path>} references before executing.
+            # All other step types fall through to the standard command executor.
+            if current_step.step_type in VISION_STEP_TYPES:
+                resolved_config = _resolve_step_references(
+                    current_step.step_config or {}, workflow.step_results
+                )
+                result = await self._timeout_enforcer.run_with_timeout(
+                    coro=execute_vision_step(
+                        current_step.step_type,
+                        resolved_config,
+                    ),
+                    step_id=step_id,
+                    timeout_seconds=current_step.timeout_seconds,
+                    limits=self.limits,
+                )
+            else:
+                # Issue #2159: Wrap execution in per-step timeout enforcer
+                result = await self._timeout_enforcer.run_with_timeout(
+                    coro=self._execute_command(workflow.session_id, resolved_command),
+                    step_id=step_id,
+                    timeout_seconds=current_step.timeout_seconds,
+                    limits=self.limits,
+                )
 
             # Issue #2153: Redact any secret values that may appear in output.
             result = _redact_result_secrets(result, owner_id, resolved_names)
 
-            # Issue #2159: Record output size for budget tracking
-            output_size = len(str(result.get("stdout", "")).encode("utf-8"))
-            self.cost_tracker.record_output_bytes(workflow.workflow_id, output_size)
-
-            if not self.cost_tracker.check_output_budget(
-                workflow.workflow_id, self.limits
-            ):
-                await self._handle_step_execution_failure(
-                    workflow,
-                    current_step,
-                    step_id,
-                    RuntimeError(
-                        "Output size budget exhausted for this workflow execution"
-                    ),
-                )
-                return
-
-            current_step.status = WorkflowStepStatus.COMPLETED
-            current_step.execution_result = result
-            current_step.completed_at = datetime.now()
-
-            self._record_step_metric("completed")
-
-            # Issue #1380: Record step completion in state machine
-            await self._sm_record_step(workflow, step_id)
-
-            workflow.current_step_index += 1
-            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
-            await self.process_next_step(workflow, workflows)
+            await self._finalize_step_result(
+                workflow, current_step, step_id, result, workflows
+            )
 
         except StepTimeoutError as e:
             await self._handle_step_execution_failure(
@@ -496,6 +544,46 @@ class WorkflowExecutor:
             await self._handle_step_execution_failure(
                 workflow, current_step, step_id, e
             )
+
+    async def _finalize_step_result(
+        self,
+        workflow: ActiveWorkflow,
+        current_step,
+        step_id: str,
+        result: Metadata,
+        workflows: Dict[str, ActiveWorkflow],
+    ) -> None:
+        """Record execution result, check budgets, and advance to next step (#2397 extract)."""
+        # Issue #2159: Record output size for budget tracking
+        output_size = len(str(result.get("stdout", "")).encode("utf-8"))
+        self.cost_tracker.record_output_bytes(workflow.workflow_id, output_size)
+
+        if not self.cost_tracker.check_output_budget(workflow.workflow_id, self.limits):
+            await self._handle_step_execution_failure(
+                workflow,
+                current_step,
+                step_id,
+                RuntimeError(
+                    "Output size budget exhausted for this workflow execution"
+                ),
+            )
+            return
+
+        current_step.status = WorkflowStepStatus.COMPLETED
+        current_step.execution_result = result
+        current_step.completed_at = datetime.now()
+
+        # Issue #2601: Store result so later vision steps can reference it.
+        workflow.step_results[step_id] = result
+
+        self._record_step_metric("completed", current_step.step_type)
+
+        # Issue #1380: Record step completion in state machine
+        await self._sm_record_step(workflow, step_id)
+
+        workflow.current_step_index += 1
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
+        await self.process_next_step(workflow, workflows)
 
     async def skip_step(
         self,

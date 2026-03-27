@@ -17,21 +17,21 @@ from models.database import Agent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import (
+    CLASSIFICATION_MODEL,
+    QUALITY_MODEL,
+    ROUTING_MODEL,
+)
 
 logger = logging.getLogger(__name__)
 
 # Default Ollama endpoint used for all seeded agents
 _DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
 
-# Mirrors TIER_*_MODEL defaults from autobot-backend/api/agent_config.py
-_TIER1 = "llama3.2:1b"
-_TIER2 = "llama3.2:3b"
-_TIER3 = DEFAULT_LLM_MODEL
-_TIER4 = DEFAULT_LLM_MODEL
-
-# Gemma model for classification agents (SSOT: agents.yaml llm.models.classification)
-_GEMMA_MODEL = "gemma2:2b"
+# 3-tier model mapping from SSOT constants (#2553)
+_ROUTING = ROUTING_MODEL
+_CLASSIFICATION = CLASSIFICATION_MODEL
+_QUALITY = QUALITY_MODEL
 
 # All 29 AutoBot agents — mirrors DEFAULT_AGENT_CONFIGS exactly.
 # model/provider/endpoint can be overridden via /agent-config in the SLM UI.
@@ -45,7 +45,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Invoked automatically by AsyncChatWorkflow on every user message. "
             "Uses pattern matching and LLM-based routing (AgentRouter) to select agents."
         ),
-        "llm_model": _TIER1,
+        "llm_model": _ROUTING,
         "is_default": True,
         "is_active": True,
     },
@@ -56,7 +56,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Handles conversational interactions, greetings, and simple Q&A. "
             "Invoked by AgentRouter when greeting patterns detected."
         ),
-        "llm_model": _TIER1,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -67,7 +67,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Classifies incoming requests by type and complexity. "
             "Invoked by Orchestrator to determine routing strategy."
         ),
-        "llm_model": _GEMMA_MODEL,
+        "llm_model": _CLASSIFICATION,
         "is_default": False,
         "is_active": True,
     },
@@ -79,7 +79,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Manages knowledge base operations including document ingestion, search, "
             "and retrieval. Invoked by AsyncChatWorkflow when knowledge patterns detected."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -90,7 +90,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs Retrieval-Augmented Generation by combining vector search with "
             "LLM synthesis. Uses ChromaDB for vector operations."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -101,7 +101,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Conducts web research using browser automation. Invoked by AgentRouter "
             "when research patterns detected."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -112,7 +112,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Extracts structured entities and relationships from unstructured text. "
             "Invoked by kb_librarian during document ingestion."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -123,7 +123,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Fast semantic search using vector embeddings. Invoked by AgentRouter "
             "for knowledge queries."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -134,7 +134,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs static code analysis, code review, and bug detection. "
             "Uses AST parsing and pattern matching."
         ),
-        "llm_model": _TIER2,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -146,7 +146,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Executes system commands with full terminal streaming and security validation. "
             "Invoked via SYSTEM_COMMAND_PATTERNS."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -157,7 +157,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Advanced system command generation with security-focused validation. "
             "Used when higher security assurance needed."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -168,7 +168,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs defensive security scans including port scanning, service detection, "
             "SSL analysis, and DNS enumeration."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -179,7 +179,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Discovers network assets and creates topology maps. Supports network scanning, "
             "host discovery, ARP scanning, and traceroute."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -190,7 +190,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Manages full PTY terminal sessions with sudo handling and user takeover "
             "capability. Used for persistent shell sessions."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -201,7 +201,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs web research and integrates findings into knowledge base. "
             "Uses AdvancedWebResearcher for Playwright-based scraping."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -212,7 +212,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Tier 2 web research with Playwright browser automation, anti-detection "
             "measures, and CAPTCHA handling via human-in-loop."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -223,7 +223,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Accelerates development by finding code duplicates, patterns, and "
             "optimization opportunities."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -234,7 +234,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Parses, validates, and formats JSON responses from other LLMs. "
             "Provides robust JSON handling with fallback mechanisms."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -245,7 +245,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Automatically extracts entities and relationships from conversations "
             "to populate AutoBot Memory Graph."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -256,7 +256,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Decomposes user queries into sequential executable tasks. "
             "Orchestrates step-by-step execution via StepExecutorAgent workers."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -267,7 +267,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Executes individual tasks/steps from OverseerAgent plans. "
             "Handles command validation and PTY terminal execution with streaming output."
         ),
-        "llm_model": _TIER3,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -279,7 +279,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "High-performance semantic code search using NPU acceleration (OpenVINO) "
             "with Redis indexing."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -290,7 +290,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs web research using Playwright and manages knowledge. "
             "Stores quality content in knowledge base for future reference."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -301,7 +301,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs web research using containerized Playwright service. "
             "Provides isolated execution environment for secure document processing."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -312,7 +312,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Manages immutable system knowledge templates and runtime copies. "
             "Handles intelligent change detection and backup creation."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -323,7 +323,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Extends SystemKnowledgeManager with machine-specific adaptation. "
             "Detects OS type, distro, available tools, and hardware capabilities."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -334,7 +334,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Scrapes, parses, and integrates Linux man pages into machine-aware "
             "knowledge system."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -345,7 +345,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Multi-tier failsafe system ensuring LLM communication even when primary "
             "systems fail. Implements PRIMARY → SECONDARY → BASIC → EMERGENCY fallback."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -356,7 +356,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Ultra-fast classification using Google's Gemma models. "
             "Used by Orchestrator for advanced intent detection and multi-label tagging."
         ),
-        "llm_model": _GEMMA_MODEL,
+        "llm_model": _CLASSIFICATION,
         "is_default": False,
         "is_active": True,
     },
@@ -367,7 +367,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Base agent class providing automatic action routing, standardized error "
             "handling, and consistent response formatting. Parent class for 24+ agents."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },
@@ -378,7 +378,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Unified interface for web research integrating multiple research agents. "
             "Provides circuit breakers and rate limiting."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _QUALITY,
         "is_default": False,
         "is_active": True,
     },

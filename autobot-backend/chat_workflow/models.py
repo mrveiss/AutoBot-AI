@@ -338,6 +338,8 @@ class LLMIterationContext:
 
     Issue #375: Groups related parameters passed through multiple methods
     in the LLM continuation loop to reduce long parameter lists.
+    Issue #2310: Added consecutive_invalid_tool_calls counter for auto-inject
+    available-tools reminder after repeated invalid tool calls.
     """
 
     ollama_endpoint: str
@@ -352,6 +354,7 @@ class LLMIterationContext:
     initial_prompt: Optional[str] = None
     message: Optional[str] = None
     agent_context: Optional[AgentContext] = None  # Issue #657: Agent hierarchy
+    consecutive_invalid_tool_calls: int = 0  # Issue #2310: Track invalid tool calls
 
 
 @dataclass

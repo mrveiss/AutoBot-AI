@@ -33,7 +33,7 @@ export function detectBrowserLocale(): string {
   return 'en'
 }
 
-const i18n = createI18n<[MessageSchema], 'en'>({
+const i18n = createI18n<[MessageSchema], string>({
   legacy: false,
   locale: localStorage.getItem('autobot-language') || detectBrowserLocale(),
   fallbackLocale: 'en',

@@ -366,9 +366,17 @@
         state: present
       become_user: autobot
 
-    - name: Pull Ollama model
+    - name: Pull required Ollama models (3-tier mapping, #2553)
       shell: |
-        docker exec autobot-ollama ollama pull llama3.2:1b
+        docker exec autobot-ollama ollama pull {{ item }}
+      loop:
+        - "llama3.2:1b"           # Routing tier
+        - "gemma2:2b"             # Classification tier
+        - "phi3:mini"             # Light processing tier
+        - "mistral:7b-instruct"   # Instruction tier
+        - "dolphin-llama3:8b"     # System/uncensored tier
+        - "qwen3.5:9b"            # Quality tier
+        - "nomic-embed-text"      # Embeddings
       register: ollama_pull
       ignore_errors: yes
 

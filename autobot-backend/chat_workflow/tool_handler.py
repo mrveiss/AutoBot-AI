@@ -13,10 +13,13 @@ import html
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from async_chat_workflow import WorkflowMessage
 from utils.errors import RepairableException
+
+if TYPE_CHECKING:
+    from .models import LLMIterationContext
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +206,56 @@ def _create_execution_result(
         "status": "success",
         "approved": approved,
     }
+
+
+async def _try_mcp_dispatch(
+    tool_name: str,
+    tool_call: Dict[str, Any],
+    execution_results: List[Dict[str, Any]],
+) -> Optional[WorkflowMessage]:
+    """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Returns a WorkflowMessage on success, or None if the tool is not found
+    in the registry (so the caller can fall through to the unknown-tool error).
+    """
+    from services.mcp_dispatch import get_mcp_dispatcher
+
+    dispatcher = get_mcp_dispatcher()
+    # Lazy-load cache on first call; if cache is already loaded and tool is
+    # absent, skip a network round-trip.
+    if not dispatcher._cache_loaded:
+        await dispatcher.refresh_tool_cache()
+
+    tool = dispatcher.find_tool(tool_name)
+    if tool is None:
+        return None
+
+    arguments = tool_call.get("arguments", {})
+    mcp_result = await dispatcher.dispatch(tool_name, arguments)
+    bridge = mcp_result.get("bridge", "unknown")
+    success = mcp_result.get("success", False)
+    result_text = str(mcp_result.get("result", ""))
+
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": bridge,
+            "result": result_text,
+            "status": "success" if success else "error",
+        }
+    )
+    msg_type = "tool_result" if success else "error"
+    logger.info(
+        "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
+        tool_name,
+        bridge,
+        success,
+    )
+    return WorkflowMessage(
+        type=msg_type,
+        content=f"[{bridge}] {result_text}",
+        metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
+    )
 
 
 class ToolHandlerMixin:
@@ -1292,6 +1345,136 @@ class ToolHandlerMixin:
 
         return json.dumps(result, default=str)[:1000]
 
+    async def _handle_web_search_tool(
+        self,
+        tool_call: Dict[str, Any],
+        execution_results: List[Dict[str, Any]],
+    ):
+        """Execute a web search via browser VM. Issue #2306.
+
+        Abstracts the multi-step browser flow (navigate → fill → click → get_text)
+        into a single tool call so small models don't need to orchestrate it.
+
+        Yields:
+            WorkflowMessage for search execution stages
+        """
+        params = tool_call.get("params", {})
+        query = params.get("query", "").strip()
+        description = tool_call.get("description", f"Web search: {query}")
+
+        if not query:
+            error_msg = 'Error: web_search requires a "query" parameter'
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": error_msg}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": "web_search", "error": True},
+            )
+            return
+
+        logger.info("[Issue #2306] Web search: query=%s", query)
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Searching the web: {description}",
+            metadata={"tool": "web_search", "query": query},
+        )
+
+        try:
+            results = await self._execute_web_search(query)
+            execution_results.append(
+                {"tool": "web_search", "status": "success", "output": results}
+            )
+            yield WorkflowMessage(
+                type="command_output",
+                content=results,
+                metadata={
+                    "tool": "web_search",
+                    "query": query,
+                    "status": "success",
+                },
+            )
+        except Exception as e:
+            error_msg = f"Web search failed: {e}"
+            logger.error("[Issue #2306] %s", error_msg)
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": str(e)}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": "web_search", "error": True},
+            )
+
+    async def _execute_web_search(self, query: str) -> str:
+        """Run a web search and return formatted results. Issue #2306.
+
+        Tries the existing Playwright search service first (structured results),
+        then falls back to browser VM DuckDuckGo navigation.
+        """
+        # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
+        try:
+            result = await self._web_search_via_playwright(query)
+            if result:
+                return result
+        except Exception as e:
+            logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
+
+        # Fallback: browser VM with DuckDuckGo HTML
+        return await self._web_search_via_browser_vm(query)
+
+    async def _web_search_via_playwright(self, query: str) -> str:
+        """Search via Playwright service. Returns formatted text or empty string. Issue #2306."""
+        from services.playwright_service import search_web_embedded
+
+        result = await search_web_embedded(query, max_results=5)
+        if not result.get("success", False):
+            return ""
+
+        entries = result.get("results", [])
+        if not entries:
+            return ""
+
+        lines = [f'Web search results for "{query}":\n']
+        for i, entry in enumerate(entries[:5], 1):
+            title = entry.get("title", "No title")
+            url = entry.get("url", "")
+            snippet = entry.get("snippet", entry.get("description", ""))
+            lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
+        return "\n".join(lines)
+
+    async def _web_search_via_browser_vm(self, query: str) -> str:
+        """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
+        from urllib.parse import (  # stdlib — lazy to match surrounding pattern
+            quote_plus,
+        )
+
+        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+
+        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        if not nav_result.get("success", True):
+            raise RuntimeError(
+                f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}"
+            )
+
+        # Try results div first, then fall back to body
+        for selector in ("div.results", "body"):
+            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            inner = text_result.get("result", text_result)
+            raw_text = inner.get("text", "")
+            if raw_text:
+                max_len = 3000
+                truncated = raw_text[:max_len]
+                if len(raw_text) > max_len:
+                    truncated += "\n\n... [results truncated]"
+                return f'Web search results for "{query}":\n\n{truncated}'
+
+        return f"No search results found for: {query}"
+
     def _build_execution_summary(
         self, execution_results: List[Dict[str, Any]]
     ) -> WorkflowMessage:
@@ -1317,8 +1500,12 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: List[Dict[str, Any]],
         additional_response_parts: List[str],
+        ctx: Optional["LLMIterationContext"] = None,
     ):
         """Dispatch a single tool call to appropriate handler. Issue #620.
+
+        Issue #2310: Accepts optional ctx to track consecutive invalid tool calls
+        and inject available-tools reminder after 2 consecutive failures.
 
         Yields:
             WorkflowMessage for tool execution stages
@@ -1327,33 +1514,62 @@ class ToolHandlerMixin:
         tool_name = tool_call["name"]
 
         if tool_name == "respond":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             msg, break_loop, respond_content = self._handle_respond_tool(tool_call)
             yield msg
             yield (break_loop, respond_content)
             return
 
         if tool_name == "delegate":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             yield self._handle_delegate_tool(tool_call, execution_results)
             return
 
         # Issue #1368: Route browser tools to browser VM
         if tool_name in _BROWSER_TOOL_NAMES:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             async for msg in self._handle_browser_tool(tool_call, execution_results):
                 yield msg
             return
 
+        # Issue #2306: web_search convenience tool wraps browser multi-step flow
+        if tool_name == "web_search":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_web_search_tool(tool_call, execution_results):
+                yield msg
+            return
+
         if tool_name != "execute_command":
+            # Issue #2513: Check MCP registry before reporting unknown tool.
+            mcp_result = await _try_mcp_dispatch(
+                tool_name, tool_call, execution_results
+            )
+            if mcp_result is not None:
+                yield mcp_result
+                return
+
             # Issue #2305: Return a tool error so the agent can self-correct instead of
             # silently dropping the call and causing an infinite hallucination loop.
+            # Issue #2310: Track consecutive invalid calls; reminder injected at prompt-build time.
             known_tools = sorted(
-                {"respond", "delegate", "execute_command"} | _BROWSER_TOOL_NAMES
+                {"respond", "delegate", "execute_command", "web_search"}
+                | _BROWSER_TOOL_NAMES
             )
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls += 1
+            consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
             error_msg = (
                 f'Error: Tool "{tool_name}" not found. '
                 f"Available tools: {', '.join(known_tools)}"
             )
             logger.warning(
-                "[Issue #2305] Unknown tool call reported to agent: %s", tool_name
+                "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
+                tool_name,
+                consecutive,
             )
             execution_results.append(
                 {"tool": tool_name, "status": "error", "error": error_msg}
@@ -1365,6 +1581,8 @@ class ToolHandlerMixin:
             )
             return
 
+        if ctx is not None:
+            ctx.consecutive_invalid_tool_calls = 0
         async for msg in self._process_single_command(
             tool_call,
             session_id,
@@ -1383,12 +1601,14 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
+        ctx: Optional["LLMIterationContext"] = None,
     ):
         """Process all tool calls from LLM response.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
         Issue #620: Refactored using Extract Method pattern.
+        Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
             WorkflowMessage for each stage of execution
@@ -1409,6 +1629,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                ctx=ctx,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result

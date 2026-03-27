@@ -6,6 +6,7 @@
 All external dependencies are replaced with AsyncMock so the tests run
 without a database, Redis, or model server.
 """
+
 from unittest.mock import AsyncMock
 
 import pytest

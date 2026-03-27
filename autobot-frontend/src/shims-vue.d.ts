@@ -5,12 +5,11 @@ declare module '*.vue' {
 }
 
 // Vue Router + vue-i18n type declarations
-declare module '@vue/runtime-core' {
-  import type { RouteLocationNormalizedLoaded, Router } from 'vue-router';
-
+// Vue 3.5+ requires augmenting 'vue' instead of '@vue/runtime-core'
+declare module 'vue' {
   interface ComponentCustomProperties {
-    $route: RouteLocationNormalizedLoaded;
-    $router: Router;
+    $route: import('vue-router').RouteLocationNormalizedLoaded;
+    $router: import('vue-router').Router;
     $t: (key: string, ...args: unknown[]) => string;
   }
 }

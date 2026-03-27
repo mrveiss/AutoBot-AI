@@ -3,13 +3,18 @@
 # Author: mrveiss
 """Tests for TokenOptimizer — Issue #2098."""
 
+import json
+from unittest.mock import MagicMock, patch
+
 from .token_optimizer import (
     CompactionEntry,
     ContextFingerprinter,
     FrequencyTracker,
     L1Cache,
+    L2Cache,
     TokenOptimizer,
     TokenOptimizerConfig,
+    get_token_optimizer,
 )
 
 
@@ -141,3 +146,189 @@ class TestTokenOptimizer:
             opt.optimize(msgs, f"req{i}")
         _, record = opt.optimize(msgs, "final")
         assert record.blocks_compacted >= 1
+
+
+class TestL2CacheWithMockedRedis:
+    """Tests for L2Cache with mocked Redis client."""
+
+    def _make_entry(self, fingerprint: str = "abc123") -> CompactionEntry:
+        """Create a test CompactionEntry."""
+        return CompactionEntry(
+            fingerprint=fingerprint,
+            original_length=500,
+            compacted_text="compacted content",
+            compacted_length=17,
+            hit_count=0,
+            created_at=1000.0,
+            last_accessed=1000.0,
+        )
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", True)
+    @patch("llm_interface_pkg.optimization.token_optimizer.get_redis_client")
+    def test_put_and_get_round_trip(self, mock_get_redis):
+        """L2Cache put/get should round-trip a CompactionEntry via Redis."""
+        store = {}
+        mock_redis = MagicMock()
+        mock_redis.get.side_effect = lambda key: store.get(key)
+        mock_redis.setex.side_effect = lambda key, ttl, data: store.__setitem__(
+            key, data
+        )
+        mock_get_redis.return_value = mock_redis
+
+        cache = L2Cache(ttl_seconds=3600, key_prefix="test:")
+        entry = self._make_entry()
+        cache.put("abc123", entry)
+        result = cache.get("abc123")
+
+        assert result is not None
+        assert result.fingerprint == "abc123"
+        assert result.compacted_text == "compacted content"
+        assert result.original_length == 500
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", True)
+    @patch("llm_interface_pkg.optimization.token_optimizer.get_redis_client")
+    def test_get_missing_key_returns_none(self, mock_get_redis):
+        """L2Cache.get for a missing key should return None."""
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = None
+        mock_get_redis.return_value = mock_redis
+
+        cache = L2Cache(ttl_seconds=3600, key_prefix="test:")
+        result = cache.get("nonexistent")
+        assert result is None
+
+
+class TestL2CacheGracefulDegradation:
+    """Tests for L2Cache when Redis is unavailable."""
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", True)
+    @patch(
+        "llm_interface_pkg.optimization.token_optimizer.get_redis_client",
+        side_effect=Exception("Connection refused"),
+    )
+    def test_get_returns_none_when_redis_fails(self, mock_get_redis):
+        """L2Cache.get should return None when Redis connection fails."""
+        cache = L2Cache()
+        result = cache.get("any_key")
+        assert result is None
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", True)
+    @patch(
+        "llm_interface_pkg.optimization.token_optimizer.get_redis_client",
+        side_effect=Exception("Connection refused"),
+    )
+    def test_put_does_not_raise_when_redis_fails(self, mock_get_redis):
+        """L2Cache.put should not raise when Redis connection fails."""
+        cache = L2Cache()
+        entry = CompactionEntry(
+            fingerprint="abc",
+            original_length=100,
+            compacted_text="short",
+            compacted_length=5,
+        )
+        # Should not raise
+        cache.put("abc", entry)
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", False)
+    def test_get_returns_none_when_redis_unavailable(self):
+        """L2Cache.get should return None when redis module not importable."""
+        cache = L2Cache()
+        result = cache.get("any_key")
+        assert result is None
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", False)
+    def test_put_noop_when_redis_unavailable(self):
+        """L2Cache.put should silently no-op when redis not importable."""
+        cache = L2Cache()
+        entry = CompactionEntry(
+            fingerprint="abc",
+            original_length=100,
+            compacted_text="short",
+            compacted_length=5,
+        )
+        cache.put("abc", entry)  # should not raise
+
+
+class TestL1ToL2Fallback:
+    """Tests for L1 miss -> L2 hit fallback in TokenOptimizer._lookup."""
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", True)
+    @patch("llm_interface_pkg.optimization.token_optimizer.get_redis_client")
+    def test_l2_hit_promotes_to_l1(self, mock_get_redis):
+        """When L1 misses but L2 hits, entry should be promoted to L1."""
+        entry = CompactionEntry(
+            fingerprint="fp_test",
+            original_length=500,
+            compacted_text="compact",
+            compacted_length=7,
+            hit_count=0,
+            created_at=1000.0,
+            last_accessed=1000.0,
+        )
+        serialized = json.dumps(
+            {
+                "fingerprint": entry.fingerprint,
+                "original_length": entry.original_length,
+                "compacted_text": entry.compacted_text,
+                "compacted_length": entry.compacted_length,
+                "hit_count": entry.hit_count,
+                "created_at": entry.created_at,
+                "last_accessed": entry.last_accessed,
+            }
+        )
+
+        mock_redis = MagicMock()
+        mock_redis.get.return_value = serialized
+        mock_get_redis.return_value = mock_redis
+
+        opt = TokenOptimizer(TokenOptimizerConfig(enabled=True))
+        # L1 is empty, L2 has the entry
+        result = opt._lookup("fp_test")
+        assert result is not None
+        assert result.compacted_text == "compact"
+
+        # Verify it was promoted to L1
+        l1_result = opt._l1.get("fp_test")
+        assert l1_result is not None
+        assert l1_result.compacted_text == "compact"
+
+    @patch("llm_interface_pkg.optimization.token_optimizer.REDIS_AVAILABLE", False)
+    def test_returns_none_when_both_caches_miss(self):
+        """_lookup returns None when both L1 and L2 miss."""
+        opt = TokenOptimizer(TokenOptimizerConfig(enabled=True))
+        result = opt._lookup("nonexistent_fp")
+        assert result is None
+
+
+class TestGetTokenOptimizerSingleton:
+    """Tests for the get_token_optimizer module-level singleton."""
+
+    @patch("llm_interface_pkg.optimization.token_optimizer._optimizer", None)
+    def test_returns_token_optimizer_instance(self):
+        """get_token_optimizer should return a TokenOptimizer."""
+        result = get_token_optimizer()
+        assert isinstance(result, TokenOptimizer)
+
+    @patch("llm_interface_pkg.optimization.token_optimizer._optimizer", None)
+    def test_returns_same_instance_on_repeated_calls(self):
+        """get_token_optimizer should return the same singleton instance."""
+        first = get_token_optimizer()
+        second = get_token_optimizer()
+        assert first is second
+
+    @patch("llm_interface_pkg.optimization.token_optimizer._optimizer", None)
+    def test_accepts_custom_config(self):
+        """get_token_optimizer should accept a custom config on first call."""
+        config = TokenOptimizerConfig(enabled=False, min_repeat_threshold=5)
+        result = get_token_optimizer(config)
+        assert result.enabled is False
+
+    @patch("llm_interface_pkg.optimization.token_optimizer._optimizer", None)
+    def test_ignores_config_on_subsequent_calls(self):
+        """Once created, get_token_optimizer ignores new config args."""
+        config1 = TokenOptimizerConfig(enabled=True)
+        first = get_token_optimizer(config1)
+        config2 = TokenOptimizerConfig(enabled=False)
+        second = get_token_optimizer(config2)
+        assert first is second
+        assert second.enabled is True

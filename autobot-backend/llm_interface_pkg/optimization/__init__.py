@@ -13,6 +13,15 @@ Issue #717: Efficient Inference Design implementation.
 
 from .cloud_batcher import BatchResult, CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
+from .flash_attention import (
+    AttentionBackend,
+    AttentionOutput,
+    FlashAttentionConfig,
+    FlashAttentionV2,
+    GrowingKVCache,
+    create_flash_attention,
+    detect_backend,
+)
 from .inference_utils import (
     InferenceConfig,
     InferenceMode,
@@ -26,6 +35,7 @@ from .integration import (
     OptimizedLLMMiddleware,
     get_optimization_middleware,
 )
+from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
 from .router import (
@@ -47,6 +57,14 @@ __all__ = [
     "OptimizationCategory",
     "OptimizationConfig",
     "get_optimization_router",
+    # Flash Attention
+    "FlashAttentionV2",
+    "FlashAttentionConfig",
+    "AttentionBackend",
+    "AttentionOutput",
+    "GrowingKVCache",
+    "create_flash_attention",
+    "detect_backend",
     # Cloud Batcher
     "CloudRequestBatcher",
     "BatchResult",
@@ -77,4 +95,7 @@ __all__ = [
     "TokenOptimizerConfig",
     "TokenSavingsRecord",
     "get_token_optimizer",
+    # Profiler (Issue #1956)
+    "LayeredProfiler",
+    "INFERENCE_STAGES",
 ]

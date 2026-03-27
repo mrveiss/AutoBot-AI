@@ -1689,14 +1689,48 @@ class ChatWorkflowManager(
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
     def _get_continuation_instructions(
-        self, original_message: str, steps_completed: int
+        self,
+        original_message: str,
+        steps_completed: int,
+        consecutive_invalid_tool_calls: int = 0,
     ) -> str:
         """Get the critical instructions for continuation prompts.
 
         Issue #651: Enhanced instructions to prevent premature task completion.
+        Issue #2310: Injects available-tools reminder after 2+ consecutive invalid tool calls.
         """
-        return f"""**CRITICAL MULTI-STEP TASK INSTRUCTIONS - READ CAREFULLY:**
+        # Issue #2310: Build optional tools reminder block when LLM has repeatedly
+        # hallucinated non-existent tool names.
+        tools_reminder = ""
+        if consecutive_invalid_tool_calls >= 2:
+            logger.warning(
+                "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
+                consecutive_invalid_tool_calls,
+            )
+            tools_reminder = f"""
+**[SYSTEM] TOOL NAME CORRECTION REQUIRED:**
+Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. \
+You MUST use ONLY the following tool names:
+- execute_command: Run shell commands
+- web_search: Search the web for information
+- navigate: Browse to a URL
+- click: Click an element on a web page
+- fill: Fill a form field on a web page
+- select: Select an option on a web page
+- hover: Hover over an element
+- screenshot: Capture the current page
+- evaluate: Evaluate JavaScript on a web page
+- get_text: Get text from an element
+- get_attribute: Get an attribute from an element
+- wait_for_selector: Wait for an element to appear
+- delegate: Delegate a subtask to a subordinate agent
+- respond: Signal task completion with a final message
+Do NOT invent new tool names. Use ONLY the names listed above.
 
+"""
+
+        return f"""**CRITICAL MULTI-STEP TASK INSTRUCTIONS - READ CAREFULLY:**
+{tools_reminder}
 You are in the middle of a multi-step task. {steps_completed} step(s) have been completed.
 
 **ORIGINAL USER REQUEST (analyze this to determine if more steps needed):**
@@ -1728,10 +1762,12 @@ before summarizing.
         original_message: str,
         execution_history: List[Dict[str, Any]],
         system_prompt: str,
+        consecutive_invalid_tool_calls: int = 0,
     ) -> str:
         """Build continuation prompt with execution results for multi-step tasks.
 
         Issue #651: Enhanced prompt structure for better multi-step task handling.
+        Issue #2310: Passes consecutive_invalid_tool_calls to inject tools reminder.
         """
         history_parts = [
             self._format_execution_step(i, result)
@@ -1740,7 +1776,7 @@ before summarizing.
         history_text = "\n\n".join(history_parts)
         steps_completed = len(execution_history)
         instructions = self._get_continuation_instructions(
-            original_message, steps_completed
+            original_message, steps_completed, consecutive_invalid_tool_calls
         )
 
         return f"""{system_prompt}
@@ -1995,11 +2031,13 @@ before summarizing.
         selected_model: str,
         execution_history: List[Dict[str, Any]],
         workflow_messages: List[WorkflowMessage],
+        ctx: Optional[LLMIterationContext] = None,
     ):
         """Issue #665: Refactored - Process tool calls and collect results.
 
         Issue #651: Fixed logic that incorrectly broke continuation loop.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
+        Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
             WorkflowMessage items, then (results, has_pending_approval, should_break, break_loop_requested)
@@ -2009,7 +2047,12 @@ before summarizing.
         break_loop_requested = False
 
         async for tool_msg in self._process_tool_calls(
-            tool_calls, session_id, terminal_session_id, ollama_endpoint, selected_model
+            tool_calls,
+            session_id,
+            terminal_session_id,
+            ollama_endpoint,
+            selected_model,
+            ctx=ctx,
         ):
             is_tuple, loop_requested = self._handle_break_loop_tuple(tool_msg)
             if is_tuple:
@@ -2176,6 +2219,7 @@ before summarizing.
             ctx.selected_model,
             ctx.execution_history,
             ctx.workflow_messages,
+            ctx=ctx,
         ):
             if isinstance(item, tuple):
                 (
@@ -2429,7 +2473,10 @@ before summarizing.
         Build continuation prompt and log debug info.
         """
         current_prompt = self._build_continuation_prompt(
-            ctx.message, execution_history, ctx.system_prompt
+            ctx.message,
+            execution_history,
+            ctx.system_prompt,
+            ctx.consecutive_invalid_tool_calls,
         )
         logger.info(
             "[Issue #651] Built continuation prompt: %d chars, %d executed steps",

@@ -11,11 +11,14 @@ Handles Seq authentication and creates basic analytics setup for AutoBot.
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 def create_seq_api_key(
@@ -31,15 +34,15 @@ def create_seq_api_key(
     password = password or os.getenv("SEQ_PASSWORD")
 
     if not password:
-        print("⚠️  No SEQ_PASSWORD environment variable found")
+        logger.warning("No SEQ_PASSWORD environment variable found")
         password = input("Please enter Seq admin password: ").strip()
         if not password:
-            print("❌ Password is required")
+            logger.error("Password is required")
             return None
 
-    print("🔐 Setting up Seq API authentication...")
-    print(f"   URL: {seq_url}")
-    print(f"   Username: {username}")
+    logger.info("Setting up Seq API authentication...")
+    logger.info("   URL: %s", seq_url)
+    logger.info("   Username: %s", username)
 
     session = requests.Session()
 
@@ -50,7 +53,7 @@ def create_seq_api_key(
 
         response = session.post(f"{seq_url}/api/users/login", json=login_data)
         if response.status_code == 200:
-            print("✅ Logged into Seq successfully")
+            logger.info("Logged into Seq successfully")
 
             # Now try to create an API key
             api_key_data = {
@@ -67,21 +70,19 @@ def create_seq_api_key(
                 token = api_key_info.get("Token")
                 # Show only last 4 chars for confirmation
                 suffix = token[-4:] if token else "????"
-                print(  # noqa: T201
-                    f"Created API key: ****{suffix}"
-                )
+                logger.info("Created API key: ****%s", suffix)
                 return token
             else:
-                print(f"⚠️  Could not create API key: {response.status_code}")
-                print(f"   Response: {response.text}")
+                logger.warning("Could not create API key: %s", response.status_code)
+                logger.warning("   Response: %s", response.text)
                 return None
         else:
-            print(f"❌ Login failed: {response.status_code}")
-            print(f"   Response: {response.text}")
+            logger.error("Login failed: %s", response.status_code)
+            logger.error("   Response: %s", response.text)
             return None
 
     except Exception as e:
-        print(f"❌ Authentication error: {e}")
+        logger.error("Authentication error: %s", e)
         return None
 
 
@@ -110,7 +111,7 @@ def _prompt_new_password() -> str:
     new_password = input("Enter new admin password: ").strip()
     confirm_password = input("Confirm new password: ").strip()
     if new_password != confirm_password:
-        print("❌ Passwords do not match")
+        logger.error("Passwords do not match")
         return ""
     return new_password
 
@@ -129,14 +130,14 @@ def _run_seqcli_password_reset(seq_container: str, new_password: str) -> bool:
         "-p", new_password,
         "-s", "http://localhost",
     ]
-    print("🔐 Resetting admin password...")
+    logger.info("Resetting admin password...")
     result = subprocess.run(reset_command, capture_output=True, text=True)
     if result.returncode == 0:
-        print("✅ Password reset successfully")
+        logger.info("Password reset successfully")
         os.environ["SEQ_PASSWORD"] = new_password
-        print("💡 Password set in environment variable SEQ_PASSWORD")
+        logger.info("Password set in environment variable SEQ_PASSWORD")
         return True
-    print(f"❌ Password reset failed: {result.stderr}")
+    logger.error("Password reset failed: %s", result.stderr)
     return False
 
 
@@ -145,29 +146,29 @@ def reset_seq_admin_password(seq_url=None, new_password=None):
     import subprocess
 
     seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
-    print("🔄 Attempting to reset Seq admin password...")
+    logger.info("Attempting to reset Seq admin password...")
 
     try:
         seq_container = _find_seq_container()
         if not seq_container:
-            print("❌ No Seq container found")
+            logger.error("No Seq container found")
             return False
-        print(f"📦 Found Seq container: {seq_container}")
+        logger.info("Found Seq container: %s", seq_container)
 
         if not new_password:
             new_password = _prompt_new_password()
 
         if not new_password:
-            print("❌ Password cannot be empty")
+            logger.error("Password cannot be empty")
             return False
 
         return _run_seqcli_password_reset(seq_container, new_password)
 
     except subprocess.CalledProcessError as e:
-        print(f"❌ Docker command failed: {e}")
+        logger.error("Docker command failed: %s", e)
         return False
     except Exception as e:
-        print(f"❌ Error resetting password: {e}")
+        logger.error("Error resetting password: %s", e)
         return False
 
 
@@ -176,7 +177,7 @@ def setup_basic_seq_queries(seq_url=None, api_key=None):
 
     seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
-    print("📊 Setting up basic AutoBot queries in Seq...")
+    logger.info("Setting up basic AutoBot queries in Seq...")
 
     headers = {"Content-Type": "application/json"}
 
@@ -202,19 +203,19 @@ def setup_basic_seq_queries(seq_url=None, api_key=None):
         },
     ]
 
-    print("📋 Queries available for manual creation in Seq:")
+    logger.info("Queries available for manual creation in Seq:")
     for i, query in enumerate(basic_queries, 1):
-        print(f"\n{i}. {query['name']}")
-        print(f"   Description: {query['description']}")
-        print(f"   Query: {query['query']}")
+        logger.info("%d. %s", i, query["name"])
+        logger.info("   Description: %s", query["description"])
+        logger.info("   Query: %s", query["query"])
 
     # Save queries to file for manual import
     queries_file = Path(__file__).parent.parent / "config" / "seq-basic-queries.json"
-    with open(queries_file, "w") as f:
+    with open(queries_file, "w", encoding="utf-8") as f:
         json.dump(basic_queries, f, indent=2)
 
-    print(f"\n💾 Queries saved to: {queries_file}")
-    print(f"📝 You can manually create these queries in Seq at: {seq_url}")
+    logger.info("Queries saved to: %s", queries_file)
+    logger.info("You can manually create these queries in Seq at: %s", seq_url)
 
 
 def verify_seq_logs(seq_url=None):
@@ -222,7 +223,7 @@ def verify_seq_logs(seq_url=None):
 
     seq_url = seq_url or os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
-    print("🔍 Verifying AutoBot logs in Seq...")
+    logger.info("Verifying AutoBot logs in Seq...")
 
     try:
         # Query for AutoBot logs
@@ -234,26 +235,27 @@ def verify_seq_logs(seq_url=None):
         if response.status_code == 200:
             events = response.json()
             event_count = len(events.get("Events", []))
-            print(f"✅ Found {event_count} AutoBot log events in Seq")
+            logger.info("Found %d AutoBot log events in Seq", event_count)
 
             if event_count > 0:
-                print("📝 Recent AutoBot log entries:")
+                logger.info("Recent AutoBot log entries:")
                 for event in events.get("Events", [])[:5]:
                     timestamp = event.get("@t", "unknown")
                     level = event.get("@l", "Info")
                     message = event.get("@mt", "No message")
                     source = event.get("Source", "Unknown")
-                    print(
-                        f"   [{timestamp[:19]}] {level}: {message[:80]}... (from {source})"
+                    logger.info(
+                        "   [%s] %s: %s... (from %s)",
+                        timestamp[:19], level, message[:80], source,
                     )
 
             return event_count > 0
         else:
-            print(f"⚠️  Could not query Seq events: {response.status_code}")
+            logger.warning("Could not query Seq events: %s", response.status_code)
             return False
 
     except Exception as e:
-        print(f"❌ Error verifying Seq logs: {e}")
+        logger.error("Error verifying Seq logs: %s", e)
         return False
 
 
@@ -261,16 +263,16 @@ def main():
     """Entry point for Seq authentication and API key configuration."""
     seq_url = os.getenv("AUTOBOT_LOG_VIEWER_URL", "http://localhost:5341")
 
-    print("🚀 AutoBot Seq Analytics Configuration")
-    print(f"   Seq URL: {seq_url}")
+    logger.info("AutoBot Seq Analytics Configuration")
+    logger.info("   Seq URL: %s", seq_url)
 
     # Try to create API key
     api_key = create_seq_api_key(seq_url)
 
     # If authentication failed, offer to reset password
     if not api_key:
-        print("\n❌ Authentication failed!")
-        print("This often happens after Docker container restart.")
+        logger.error("Authentication failed!")
+        logger.info("This often happens after Docker container restart.")
 
         reset_choice = (
             input("\nWould you like to reset the Seq admin password? (y/N): ")
@@ -280,13 +282,13 @@ def main():
 
         if reset_choice in ["y", "yes"]:
             if reset_seq_admin_password(seq_url):
-                print("\n🔄 Retrying authentication with new password...")
+                logger.info("Retrying authentication with new password...")
                 api_key = create_seq_api_key(seq_url)
             else:
-                print("❌ Password reset failed")
+                logger.error("Password reset failed")
         else:
-            print("💡 You can manually reset the password later by running:")
-            print("   python scripts/seq_auth_setup.py --reset-password")
+            logger.info("You can manually reset the password later by running:")
+            logger.info("   python scripts/seq_auth_setup.py --reset-password")
 
     # Setup basic queries
     setup_basic_seq_queries(seq_url, api_key)
@@ -294,21 +296,21 @@ def main():
     # Verify logs are present
     has_logs = verify_seq_logs(seq_url)
 
-    print("\n🎉 Seq configuration complete!")
-    print(f"   🔐 API Key created: {'Yes' if api_key else 'No'}")
-    print(f"   📊 Logs present: {'Yes' if has_logs else 'No'}")
-    print("\n🌐 Next steps:")
-    print(f"   1. Access Seq at: {seq_url}")
-    print("   2. Login with admin and the password you set")
-    print("   3. Manually create the queries shown above")
-    print("   4. Create dashboards using those queries")
-    print("   5. Set up alerts for critical errors")
+    logger.info("Seq configuration complete!")
+    logger.info("   API Key created: %s", "Yes" if api_key else "No")
+    logger.info("   Logs present: %s", "Yes" if has_logs else "No")
+    logger.info("Next steps:")
+    logger.info("   1. Access Seq at: %s", seq_url)
+    logger.info("   2. Login with admin and the password you set")
+    logger.info("   3. Manually create the queries shown above")
+    logger.info("   4. Create dashboards using those queries")
+    logger.info("   5. Set up alerts for critical errors")
 
     # Save current password to environment if successful
     if api_key and os.getenv("SEQ_PASSWORD"):
-        print("\nTo avoid prompts in the future, set:")  # noqa: T201
-        print("   export SEQ_PASSWORD='<your-password>'")  # noqa: T201
-        print("   or add it to your .env file")  # noqa: T201
+        logger.info("To avoid prompts in the future, set:")
+        logger.info("   export SEQ_PASSWORD='<your-password>'")
+        logger.info("   or add it to your .env file")
 
 
 if __name__ == "__main__":
@@ -337,13 +339,15 @@ Environment Variables:
 
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
     if args.reset_password:
         # Just reset password
         if reset_seq_admin_password(args.seq_url):
-            print("✅ Password reset completed successfully")
+            logger.info("Password reset completed successfully")
             sys.exit(0)
         else:
-            print("❌ Password reset failed")
+            logger.error("Password reset failed")
             sys.exit(1)
     else:
         # Run full setup
