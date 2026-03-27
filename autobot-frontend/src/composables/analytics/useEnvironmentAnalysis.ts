@@ -12,6 +12,7 @@
 import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   UseCodeIntelAnalysisDeps,
@@ -30,7 +31,7 @@ export function useEnvironmentAnalysis(
   const loadingEnvAnalysis = ref(false)
   const envAnalysisError = ref('')
   const useAiFiltering = ref(false)
-  const aiFilteringModel = ref('llama3.2:1b')
+  const aiFilteringModel = ref(getConfig().llm.defaultModel)
   const aiFilteringPriority = ref('high')
   const llmFilteringResult = ref<{
     enabled: boolean
