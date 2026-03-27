@@ -22,8 +22,9 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -51,7 +52,7 @@ class AgentRuntimeState(Base, TimestampMixin):
 
     __tablename__ = "agent_runtime_state"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
     heartbeat_enabled = Column(Boolean, nullable=False, default=False)
     heartbeat_interval_seconds = Column(Integer, nullable=False, default=300)
@@ -83,10 +84,10 @@ class HeartbeatRun(Base, TimestampMixin):
 
     __tablename__ = "heartbeat_runs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, index=True)
     runtime_state_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("agent_runtime_state.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -124,9 +125,9 @@ class HeartbeatRunEvent(Base):
 
     __tablename__ = "heartbeat_run_events"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     run_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("heartbeat_runs.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -147,10 +148,10 @@ class AgentWakeupRequest(Base, TimestampMixin):
 
     __tablename__ = "agent_wakeup_requests"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, index=True)
     runtime_state_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("agent_runtime_state.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -159,7 +160,7 @@ class AgentWakeupRequest(Base, TimestampMixin):
     context = Column(JSONB, nullable=True)
     reason = Column(String(255), nullable=True)
     consumed_at = Column(DateTime, nullable=True)
-    consumed_by_run_id = Column(UUID(as_uuid=True), nullable=True)
+    consumed_by_run_id = Column(Uuid(as_uuid=True), nullable=True)
 
     runtime_state = relationship("AgentRuntimeState", back_populates="wakeup_requests")
 
