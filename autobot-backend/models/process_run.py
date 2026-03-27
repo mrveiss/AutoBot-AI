@@ -13,8 +13,9 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -34,7 +35,7 @@ class ProcessRun(Base, TimestampMixin):
 
     __tablename__ = "process_runs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, index=True)
     task_id = Column(String(255), nullable=True, index=True)
     command = Column(Text, nullable=False)
@@ -73,11 +74,11 @@ class TaskDecomposition(Base, TimestampMixin):
 
     __tablename__ = "task_decompositions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     parent_task_id = Column(String(255), nullable=False, index=True)
     subtask_order = Column(Integer, nullable=False)
     process_run_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("process_runs.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -106,7 +107,7 @@ class AgentSession(Base, TimestampMixin):
 
     __tablename__ = "agent_sessions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, index=True)
     task_id = Column(String(255), nullable=False, index=True)
     session_state = Column(JSONB, nullable=True)

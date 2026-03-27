@@ -14,8 +14,9 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -50,7 +51,7 @@ class SessionCollaboration(Base, TimestampMixin):
     )
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
