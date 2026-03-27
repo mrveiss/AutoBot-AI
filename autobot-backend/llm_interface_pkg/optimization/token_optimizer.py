@@ -8,6 +8,10 @@ Fingerprints frequently-used context blocks (system prompts, KB summaries,
 agent instructions) and caches compact representations. Reduces tokens sent
 per API call by an estimated 20-30% for repeated context.
 
+Compaction is delegated to PromptCompressor (from this package) for rule-based
+compression. This module adds the caching, fingerprinting, and frequency
+tracking layers on top.
+
 Issue #2098: Active token budget optimization with context compaction.
 """
 
@@ -16,19 +20,26 @@ import json
 import logging
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 # Redis import — graceful fallback if unavailable
 try:
-    from autobot_shared.redis_client import RedisDatabase, get_redis_client
+    from autobot_shared.redis_client import get_redis_client
 
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    RedisDatabase = None
+
+# Reuse existing PromptCompressor for actual compaction (Rule 2). Issue #2098.
+try:
+    from .prompt_compressor import CompressionConfig, PromptCompressor
+
+    _COMPRESSOR_AVAILABLE = True
+except ImportError:
+    _COMPRESSOR_AVAILABLE = False
 
 
 @dataclass
@@ -38,11 +49,13 @@ class TokenOptimizerConfig:
     enabled: bool = True
     min_repeat_threshold: int = 3
     min_block_length: int = 200
+    min_preamble_length: int = 500
     l1_max_entries: int = 100
     l1_ttl_seconds: int = 300
     l2_ttl_seconds: int = 86400
     compaction_ratio: float = 0.6
     redis_key_prefix: str = "autobot:token_opt:"
+    max_tracked_fingerprints: int = 1000
 
 
 @dataclass
@@ -60,7 +73,11 @@ class CompactionEntry:
 
 @dataclass
 class TokenSavingsRecord:
-    """Record of token savings for analytics."""
+    """Record of estimated token savings for analytics.
+
+    Token counts are character-based estimates (chars // 4), not exact
+    tokenizer counts. Suitable for analytics and cost tracking, not billing.
+    """
 
     request_id: str
     original_tokens: int
@@ -80,19 +97,21 @@ class ContextFingerprinter:
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
-    def extract_blocks(messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        """Extract compactable context blocks from a message list.
-
-        Returns list of dicts with 'index', 'role', 'content', 'fingerprint'.
-        System messages and long assistant/user preambles are candidates.
-        """
+    def extract_blocks(
+        messages: List[Dict[str, str]],
+        min_block_length: int = 200,
+        min_preamble_length: int = 500,
+    ) -> List[Dict[str, Any]]:
+        """Extract compactable context blocks from a message list."""
         blocks = []
         for i, msg in enumerate(messages):
             content = msg.get("content", "")
-            if not content or len(content) < 200:
+            if not content or len(content) < min_block_length:
                 continue
             if msg.get("role") == "system" or (
-                msg.get("role") == "user" and i == 0 and len(content) > 500
+                msg.get("role") == "user"
+                and i == 0
+                and len(content) > min_preamble_length
             ):
                 fp = ContextFingerprinter.fingerprint(content)
                 blocks.append(
@@ -189,37 +208,41 @@ class L2Cache:
         if redis is None:
             return
         try:
-            data = json.dumps(
-                {
-                    "fingerprint": entry.fingerprint,
-                    "original_length": entry.original_length,
-                    "compacted_text": entry.compacted_text,
-                    "compacted_length": entry.compacted_length,
-                    "hit_count": entry.hit_count,
-                    "created_at": entry.created_at,
-                    "last_accessed": entry.last_accessed,
-                }
-            )
+            data = json.dumps(asdict(entry))
             redis.setex(f"{self._key_prefix}{fingerprint}", self._ttl_seconds, data)
         except Exception:
             logger.debug("L2 cache write error for %s", fingerprint)
 
 
 class FrequencyTracker:
-    """Track how often each context fingerprint is seen."""
+    """Track how often each context fingerprint is seen.
 
-    def __init__(self, threshold: int = 3):
+    Evicts least-seen entries when max_entries is reached to prevent
+    unbounded memory growth in long-running processes. Issue #2098.
+    """
+
+    def __init__(self, threshold: int = 3, max_entries: int = 1000):
         self._counts: Dict[str, int] = {}
         self._threshold = threshold
+        self._max_entries = max_entries
 
     def record(self, fingerprint: str) -> int:
         """Record a fingerprint occurrence, return new count."""
         self._counts[fingerprint] = self._counts.get(fingerprint, 0) + 1
-        return self._counts[fingerprint]
+        if len(self._counts) > self._max_entries:
+            self._evict_least_seen()
+        return self._counts.get(fingerprint, 0)
 
     def is_eligible(self, fingerprint: str) -> bool:
         """Check if a fingerprint has been seen enough for compaction."""
         return self._counts.get(fingerprint, 0) >= self._threshold
+
+    def _evict_least_seen(self) -> None:
+        """Remove the bottom 10% of entries by count to reclaim space."""
+        target = int(self._max_entries * 0.9)
+        sorted_fps = sorted(self._counts, key=lambda k: self._counts[k])
+        for fp in sorted_fps[: len(sorted_fps) - target]:
+            del self._counts[fp]
 
 
 class TokenOptimizer:
@@ -246,9 +269,20 @@ class TokenOptimizer:
             ttl_seconds=self._config.l2_ttl_seconds,
             key_prefix=self._config.redis_key_prefix,
         )
-        self._frequency = FrequencyTracker(threshold=self._config.min_repeat_threshold)
+        self._frequency = FrequencyTracker(
+            threshold=self._config.min_repeat_threshold,
+            max_entries=self._config.max_tracked_fingerprints,
+        )
+        self._compressor = self._init_compressor()
         self._total_tokens_saved: int = 0
         self._total_requests: int = 0
+
+    @staticmethod
+    def _init_compressor() -> Optional["PromptCompressor"]:
+        """Initialize PromptCompressor if available. Issue #2098."""
+        if not _COMPRESSOR_AVAILABLE:
+            return None
+        return PromptCompressor(CompressionConfig(enabled=True, target_ratio=0.6))
 
     @property
     def enabled(self) -> bool:
@@ -268,24 +302,31 @@ class TokenOptimizer:
         self,
         messages: List[Dict[str, str]],
         request_id: str = "",
-    ) -> tuple:
-        """Optimize messages by substituting compacted context blocks.
-
-        Args:
-            messages: LLM request messages list.
-            request_id: Optional request ID for tracking.
-
-        Returns:
-            Tuple of (optimized_messages, TokenSavingsRecord).
-        """
+    ) -> Tuple[List[Dict[str, str]], TokenSavingsRecord]:
+        """Optimize messages by substituting compacted context blocks."""
         self._total_requests += 1
         if not self._config.enabled:
             return messages, self._empty_record(messages, request_id)
 
-        blocks = self._fingerprinter.extract_blocks(messages)
+        blocks = self._fingerprinter.extract_blocks(
+            messages, self._config.min_block_length, self._config.min_preamble_length
+        )
         if not blocks:
             return messages, self._empty_record(messages, request_id)
 
+        optimized, total_saved, blocks_compacted = self._process_blocks(
+            messages, blocks
+        )
+        return optimized, self._build_record(
+            messages, optimized, total_saved, blocks_compacted, request_id
+        )
+
+    def _process_blocks(
+        self,
+        messages: List[Dict[str, str]],
+        blocks: List[Dict[str, Any]],
+    ) -> Tuple[list, int, int]:
+        """Apply compaction to eligible blocks. Issue #2098."""
         optimized = list(messages)
         total_saved = 0
         blocks_compacted = 0
@@ -293,38 +334,39 @@ class TokenOptimizer:
         for block in blocks:
             fp = block["fingerprint"]
             self._frequency.record(fp)
-            entry = self._lookup(fp)
-            if entry is not None:
+            compacted_text = self._get_or_create_compaction(fp, block["content"])
+            if compacted_text is not None:
                 optimized[block["index"]] = {
                     **optimized[block["index"]],
-                    "content": entry.compacted_text,
+                    "content": compacted_text,
                 }
-                saved = len(block["content"]) - entry.compacted_length
-                total_saved += max(saved, 0)
-                blocks_compacted += 1
-            elif self._frequency.is_eligible(fp):
-                compacted = self._compact(block["content"])
-                self._store(fp, block["content"], compacted)
-                optimized[block["index"]] = {
-                    **optimized[block["index"]],
-                    "content": compacted,
-                }
-                saved = len(block["content"]) - len(compacted)
-                total_saved += max(saved, 0)
+                total_saved += max(len(block["content"]) - len(compacted_text), 0)
                 blocks_compacted += 1
 
+        return optimized, total_saved, blocks_compacted
+
+    def _get_or_create_compaction(self, fp: str, content: str) -> Optional[str]:
+        """Look up cached compaction or create one if eligible."""
+        entry = self._lookup(fp)
+        if entry is not None:
+            return entry.compacted_text
+        if self._frequency.is_eligible(fp):
+            compacted = self._compact(content)
+            self._store(fp, content, compacted)
+            return compacted
+        return None
+
+    def _build_record(
+        self,
+        original: List[Dict[str, str]],
+        optimized: List[Dict[str, str]],
+        total_saved: int,
+        blocks_compacted: int,
+        request_id: str,
+    ) -> TokenSavingsRecord:
+        """Build a TokenSavingsRecord from optimization results."""
         est_tokens_saved = total_saved // 4
         self._total_tokens_saved += est_tokens_saved
-        original_est = sum(len(m.get("content", "")) for m in messages) // 4
-        optimized_est = sum(len(m.get("content", "")) for m in optimized) // 4
-
-        record = TokenSavingsRecord(
-            request_id=request_id,
-            original_tokens=original_est,
-            optimized_tokens=optimized_est,
-            tokens_saved=est_tokens_saved,
-            blocks_compacted=blocks_compacted,
-        )
 
         if blocks_compacted > 0:
             logger.info(
@@ -333,7 +375,13 @@ class TokenOptimizer:
                 blocks_compacted,
             )
 
-        return optimized, record
+        return TokenSavingsRecord(
+            request_id=request_id,
+            original_tokens=sum(len(m.get("content", "")) for m in original) // 4,
+            optimized_tokens=sum(len(m.get("content", "")) for m in optimized) // 4,
+            tokens_saved=est_tokens_saved,
+            blocks_compacted=blocks_compacted,
+        )
 
     def _lookup(self, fingerprint: str) -> Optional[CompactionEntry]:
         """Look up a compaction entry in L1, then L2."""
@@ -358,24 +406,22 @@ class TokenOptimizer:
         self._l2.put(fingerprint, entry)
 
     def _compact(self, text: str) -> str:
-        """Compact a context block using rule-based compression.
+        """Compact a context block, delegating to PromptCompressor if available.
 
-        Strips redundancy, whitespace, and filler while preserving meaning.
-        For production use, a small LLM call could generate better summaries.
+        Falls back to simple line-based compression if PromptCompressor
+        is not importable. Truncates at line boundaries to avoid mid-sentence cuts.
         """
-        lines = text.split("\n")
-        compacted_lines = []
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("#") and len(stripped) < 5:
-                continue
-            compacted_lines.append(stripped)
-        result = "\n".join(compacted_lines)
+        if self._compressor is not None:
+            result = self._compressor.compress(text)
+            return result.compressed_text
+
+        # Fallback: simple line-based compression
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        result = "\n".join(lines)
         target_len = int(len(text) * self._config.compaction_ratio)
         if len(result) > target_len:
-            result = result[:target_len]
+            cut = result[:target_len].rfind("\n")
+            result = result[: cut if cut > 0 else target_len]
         return result
 
     def _empty_record(
