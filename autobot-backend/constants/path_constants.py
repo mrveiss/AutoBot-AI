@@ -17,9 +17,6 @@ class PathConstants:
     # Project root - dynamically determined
     PROJECT_ROOT: Path = Path(__file__).parent.parent.parent
 
-    # Prompt templates (#793)
-    PROMPTS_DIR: Path = Path(__file__).parent.parent / "resources" / "prompts"
-
     # Core directories (updated for #781 reorganization)
     CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
     # Static assets bundled with the backend (Issue #912: error catalog fallback)
