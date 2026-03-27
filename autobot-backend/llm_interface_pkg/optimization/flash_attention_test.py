@@ -16,6 +16,7 @@ from llm_interface_pkg.optimization.flash_attention import (
     FlashAttentionConfig,
     FlashAttentionV2,
     GrowingKVCache,
+    KVCacheState,
     _rotate_half_apply,
     create_flash_attention,
     detect_backend,
@@ -231,6 +232,182 @@ class TestRotateHalfApply:
         sin = torch.zeros_like(x)
         result = _rotate_half_apply(x, cos, sin)
         assert torch.allclose(result, x, atol=1e-6)
+
+
+class TestEmptySequence:
+    """Tests for empty (seq_len=0) sequence handling."""
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_empty_sequence_returns_empty_output(self, mock_backend):
+        """Forward with seq_len=0 should return an empty output tensor."""
+        attn = FlashAttentionV2()
+        q = torch.randn(1, 0, 4, 32)
+        kv = torch.randn(1, 0, 2, 4, 32)
+        result = attn.forward(q, kv)
+        assert result.output.shape == (1, 0, 4, 32)
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_empty_sequence_with_mask(self, mock_backend):
+        """Forward with seq_len=0 and an empty mask should not crash."""
+        attn = FlashAttentionV2()
+        q = torch.randn(2, 0, 4, 32)
+        kv = torch.randn(2, 0, 2, 4, 32)
+        mask = torch.ones(2, 0, dtype=torch.bool)
+        result = attn.forward(q, kv, key_padding_mask=mask)
+        assert result.output.shape == (2, 0, 4, 32)
+
+
+class TestAllFalsePaddingMask:
+    """Tests for entirely-masked batches (all padding)."""
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_all_false_mask_does_not_crash(self, mock_backend):
+        """All-False mask (entire batch is padding) should not raise."""
+        attn = FlashAttentionV2()
+        q = torch.randn(1, 4, 2, 16)
+        kv = torch.randn(1, 4, 2, 2, 16)
+        mask = torch.zeros(1, 4, dtype=torch.bool)  # all padding
+        result = attn.forward(q, kv, key_padding_mask=mask)
+        assert result.output.shape == (1, 4, 2, 16)
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_all_false_mask_produces_nan_or_zero(self, mock_backend):
+        """With all tokens masked, softmax(-inf) yields NaN; output should not be finite."""
+        config = FlashAttentionConfig(causal=False)
+        attn = FlashAttentionV2(config)
+        q = torch.randn(1, 4, 2, 16)
+        kv = torch.randn(1, 4, 2, 2, 16)
+        mask = torch.zeros(1, 4, dtype=torch.bool)
+        result = attn.forward(q, kv, key_padding_mask=mask)
+        # When every key is masked, softmax over all -inf produces NaN
+        assert not torch.isfinite(result.output).all() or torch.all(result.output == 0)
+
+
+class TestSingleTokenSequence:
+    """Tests for single-token (seq_len=1) boundary conditions."""
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_single_token_causal(self, mock_backend):
+        """Single token with causal=True should produce finite output."""
+        config = FlashAttentionConfig(causal=True)
+        attn = FlashAttentionV2(config)
+        q = torch.randn(1, 1, 4, 32)
+        kv = torch.randn(1, 1, 2, 4, 32)
+        result = attn.forward(q, kv)
+        assert result.output.shape == (1, 1, 4, 32)
+        assert torch.isfinite(result.output).all()
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_single_token_non_causal(self, mock_backend):
+        """Single token with causal=False should produce finite output."""
+        config = FlashAttentionConfig(causal=False)
+        attn = FlashAttentionV2(config)
+        q = torch.randn(1, 1, 4, 32)
+        kv = torch.randn(1, 1, 2, 4, 32)
+        result = attn.forward(q, kv)
+        assert result.output.shape == (1, 1, 4, 32)
+        assert torch.isfinite(result.output).all()
+
+    @patch(
+        "llm_interface_pkg.optimization.flash_attention.detect_backend",
+        return_value=AttentionBackend.VANILLA,
+    )
+    def test_single_token_with_padding_mask(self, mock_backend):
+        """Single token marked valid in padding mask should be finite."""
+        config = FlashAttentionConfig(causal=True)
+        attn = FlashAttentionV2(config)
+        q = torch.randn(1, 1, 4, 32)
+        kv = torch.randn(1, 1, 2, 4, 32)
+        mask = torch.ones(1, 1, dtype=torch.bool)
+        result = attn.forward(q, kv, key_padding_mask=mask)
+        assert torch.isfinite(result.output).all()
+
+
+class TestBuildSdpaMask:
+    """Direct tests for _build_sdpa_mask mask construction."""
+
+    def _make_attn(self, causal: bool = True) -> FlashAttentionV2:
+        """Create a FlashAttentionV2 with specified causal setting."""
+        with patch(
+            "llm_interface_pkg.optimization.flash_attention.detect_backend",
+            return_value=AttentionBackend.VANILLA,
+        ):
+            return FlashAttentionV2(FlashAttentionConfig(causal=causal))
+
+    def test_returns_none_when_no_mask_no_causal(self):
+        """No mask and causal=False should return None."""
+        attn = self._make_attn(causal=False)
+        result = attn._build_sdpa_mask(None, 4, torch.device("cpu"))
+        assert result is None
+
+    def test_padding_only_mask_shape(self):
+        """Padding mask alone should produce [batch, 1, 1, seq_len] shape."""
+        attn = self._make_attn(causal=False)
+        pad_mask = torch.tensor([[True, True, False, False]])
+        result = attn._build_sdpa_mask(pad_mask, 4, torch.device("cpu"))
+        assert result.shape == (1, 1, 1, 4)
+        assert result[0, 0, 0, 0].item() is True
+        assert result[0, 0, 0, 3].item() is False
+
+    def test_causal_plus_padding_mask_shape(self):
+        """Combined causal + padding mask should be [batch, 1, seq, seq]."""
+        attn = self._make_attn(causal=True)
+        pad_mask = torch.ones(1, 4, dtype=torch.bool)
+        result = attn._build_sdpa_mask(pad_mask, 4, torch.device("cpu"))
+        assert result.shape == (1, 1, 4, 4)
+        # Causal: position 0 should not attend to position 1
+        assert result[0, 0, 0, 1].item() is False
+        # Causal: position 3 should attend to position 0
+        assert result[0, 0, 3, 0].item() is True
+
+    def test_causal_mask_without_padding_returns_none(self):
+        """Causal=True but no padding mask returns None (SDPA uses is_causal flag)."""
+        attn = self._make_attn(causal=True)
+        result = attn._build_sdpa_mask(None, 4, torch.device("cpu"))
+        assert result is None
+
+
+class TestKVCacheStateDataclass:
+    """Tests for the KVCacheState dataclass export and behavior."""
+
+    def test_kvcachestate_default_values(self):
+        """KVCacheState should have correct defaults."""
+        state = KVCacheState()
+        assert state.cache is None
+        assert state.seq_offset == 0
+        assert state.chunk_size == 256
+
+    def test_kvcachestate_custom_values(self):
+        """KVCacheState should accept custom values."""
+        cache_tensor = torch.zeros(1, 8, 2, 4, 32)
+        state = KVCacheState(cache=cache_tensor, seq_offset=5, chunk_size=128)
+        assert state.cache is cache_tensor
+        assert state.seq_offset == 5
+        assert state.chunk_size == 128
+
+    def test_kvcachestate_in_module_all(self):
+        """KVCacheState should be importable from the module."""
+        from llm_interface_pkg.optimization.flash_attention import __all__
+
+        assert "KVCacheState" in __all__
 
 
 class TestGQAExpansion:
