@@ -84,7 +84,7 @@ export function useBackoffPoller(options: BackoffPollerOptions): BackoffPollerRe
 
     // Circuit breaker open — schedule a slow retry probe
     if (isCircuitOpen.value) {
-      logger.debug('Circuit open — slow probe in', circuitBreakerResetMs, 'ms')
+      logger.debug(`Circuit open — slow probe in ${circuitBreakerResetMs} ms`)
       _scheduleNext(circuitBreakerResetMs)
       return
     }

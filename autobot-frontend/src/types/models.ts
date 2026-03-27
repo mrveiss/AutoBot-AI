@@ -94,7 +94,8 @@ export interface AutoBotSettings {
 // Re-exported here for backward compatibility.
 // ============================================================================
 
-export type { ChatMessage, MessageSender, ChatMessageDisplayType } from '@/types/api'
+import type { ChatMessage, MessageSender, ChatMessageDisplayType } from '@/types/api'
+export type { ChatMessage, MessageSender, ChatMessageDisplayType }
 
 export interface ChatSession {
   id: string
