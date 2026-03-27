@@ -2198,9 +2198,9 @@ async def assert_screen_changed(
 # Check from the main machine
 pgrep -f "Xtigervnc :1"
 
-# Start manually if needed
-vncserver :1 -localhost no -SecurityTypes None -rfbport 5901 \
-    --I-KNOW-THIS-IS-INSECURE -geometry 1920x1080 -depth 24
+# Start manually if needed (always use VncAuth or TLSVnc — NEVER use -SecurityTypes None)
+vncserver :1 -localhost no -SecurityTypes VncAuth,TLSVnc -rfbport 5901 \
+    -geometry 1920x1080 -depth 24
 
 # Start websockify
 websockify --web /usr/share/novnc 0.0.0.0:6080 localhost:5901

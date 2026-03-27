@@ -310,14 +310,16 @@ ssh autobot@172.16.168.25 'systemctl status browser-playwright --no-pager | grep
 
 ⚠️ **IMPORTANT**: This setup is for internal network use only
 
-- VNC server runs without password (SecurityTypes None)
+- VNC server uses VncAuth/TLSVnc authentication (password required)
+- Password auto-generated to `/etc/autobot/vnc-secrets.env` during provisioning
 - Only accessible from AutoBot internal network (172.16.168.x)
 - Do NOT expose VNC ports (5901, 6080) to public internet
 - Consider VPN/SSH tunnel for remote access
+- NEVER use `-SecurityTypes None` — always require authentication
 
 ## Future Improvements
 
-- [ ] Add VNC password protection
+- [x] Add VNC password protection (completed in #1939)
 - [ ] Implement session recording
 - [ ] Add multiple browser profiles
 - [ ] Browser tab isolation per chat session

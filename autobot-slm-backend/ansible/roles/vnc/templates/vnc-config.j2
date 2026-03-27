@@ -13,4 +13,4 @@ SecurityTypes={{ vnc_security_type }}
 localhost=no
 
 # Performance settings
-AlwaysShared=1
+AlwaysShared={{ vnc_always_shared | default(0) }}
