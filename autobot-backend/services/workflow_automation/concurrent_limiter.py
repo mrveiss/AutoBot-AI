@@ -14,7 +14,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Deque, Dict, Optional
+from typing import Awaitable, Callable, Deque, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +82,15 @@ class ConcurrentWorkflowLimiter:
         self,
         max_concurrent: int = 3,
         overflow_policy: OverflowPolicy = OverflowPolicy.REJECT,
+        cancel_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> None:
         if max_concurrent < 1:
             raise ValueError("max_concurrent must be >= 1")
         self._max_concurrent = max_concurrent
         self._overflow_policy = overflow_policy
+        self._cancel_callback: Optional[Callable[[str], Awaitable[None]]] = (
+            cancel_callback
+        )
         self._running: Dict[str, float] = {}  # workflow_id → start timestamp
         self._queue: Deque[_QueuedEntry] = deque()
 
@@ -164,6 +168,22 @@ class ConcurrentWorkflowLimiter:
             "running_workflow_ids": list(self._running.keys()),
         }
 
+    def register_cancel_callback(
+        self, callback: Callable[[str], Awaitable[None]]
+    ) -> None:
+        """
+        Register the async callback invoked when DROP_OLDEST evicts a workflow.
+
+        Issue #2573: Allows late binding of the cancellation handler so the
+        limiter can be constructed before the manager is available.
+
+        Args:
+            callback: ``async def callback(workflow_id: str) -> None`` — must
+                stop the given workflow and eventually call ``release()``.
+        """
+        self._cancel_callback = callback
+        logger.debug("ConcurrentWorkflowLimiter: cancel callback registered")
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -203,15 +223,60 @@ class ConcurrentWorkflowLimiter:
         self._running[workflow_id] = time.time()
 
     async def _drop_oldest_and_acquire(self, workflow_id: str) -> None:
-        """Cancel the oldest running workflow and claim its slot.
+        """Cancel the oldest running workflow then claim its slot.
 
-        Requires a cancellation callback to actually stop the evicted workflow.
-        Until that callback mechanism exists, this policy is not safe to use.
+        Issue #2573: Requires a cancellation callback registered via
+        ``register_cancel_callback`` or the *cancel_callback* constructor
+        parameter.  The callback is responsible for stopping the evicted
+        workflow; ``release()`` will be called by the normal workflow teardown
+        path, freeing the slot.
+
+        Raises:
+            ConcurrencyLimitError: If no cancel callback has been registered.
         """
-        raise NotImplementedError(
-            "DROP_OLDEST policy requires a cancellation callback to stop the evicted "
-            "workflow. Use REJECT or QUEUE until this is implemented."
+        if self._cancel_callback is None:
+            raise ConcurrencyLimitError(workflow_id, self._max_concurrent)
+
+        oldest_id = self._find_oldest_workflow_id()
+        if oldest_id is None:
+            # Edge case: slot became free between the capacity check and here.
+            self._running[workflow_id] = time.time()
+            return
+
+        logger.warning(
+            "ConcurrentWorkflowLimiter: DROP_OLDEST evicting %s to make room for %s",
+            oldest_id,
+            workflow_id,
         )
+        await self._cancel_callback(oldest_id)
+
+        # The callback must ultimately call release(), which removes oldest_id
+        # from _running.  Poll briefly (up to 5 s) to confirm the slot opened.
+        deadline = time.monotonic() + 5.0
+        while oldest_id in self._running and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+
+        if oldest_id in self._running:
+            logger.error(
+                "ConcurrentWorkflowLimiter: evicted workflow %s still running after "
+                "5 s; forcing slot removal",
+                oldest_id,
+            )
+            del self._running[oldest_id]
+
+        self._running[workflow_id] = time.time()
+        logger.info(
+            "ConcurrentWorkflowLimiter: DROP_OLDEST complete — %s now running (%d/%d)",
+            workflow_id,
+            self.running_count,
+            self._max_concurrent,
+        )
+
+    def _find_oldest_workflow_id(self) -> Optional[str]:
+        """Return the workflow_id with the earliest start timestamp, or None."""
+        if not self._running:
+            return None
+        return min(self._running, key=lambda wid: self._running[wid])
 
     async def _promote_queued(self) -> None:
         """Wake the next waiting workflow if there is capacity.
@@ -230,7 +295,11 @@ class ConcurrentWorkflowLimiter:
 
 
 class ConcurrencyLimitError(Exception):
-    """Raised when max_concurrent is reached and policy is REJECT."""
+    """Raised when max_concurrent is reached and the workflow is rejected.
+
+    This occurs when the policy is REJECT, or when DROP_OLDEST is configured
+    but no cancel callback has been registered (Issue #2573).
+    """
 
     def __init__(self, workflow_id: str, limit: int) -> None:
         self.workflow_id = workflow_id
@@ -250,11 +319,14 @@ _limiter: Optional[ConcurrentWorkflowLimiter] = None
 def get_concurrent_limiter(
     max_concurrent: int = 3,
     overflow_policy: OverflowPolicy = OverflowPolicy.REJECT,
+    cancel_callback: Optional[Callable[[str], Awaitable[None]]] = None,
 ) -> ConcurrentWorkflowLimiter:
     """
     Return the process-level ConcurrentWorkflowLimiter, creating it on first call.
 
     Issue #2159: Singleton so all routes share the same concurrency counter.
+    Issue #2573: *cancel_callback* is forwarded on construction only (first call).
+    For late binding use ``limiter.register_cancel_callback(cb)`` instead.
     Parameters are only used on first call (when the singleton is created).
     """
     global _limiter
@@ -262,5 +334,6 @@ def get_concurrent_limiter(
         _limiter = ConcurrentWorkflowLimiter(
             max_concurrent=max_concurrent,
             overflow_policy=overflow_policy,
+            cancel_callback=cancel_callback,
         )
     return _limiter
