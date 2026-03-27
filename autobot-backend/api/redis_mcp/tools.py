@@ -400,7 +400,10 @@ def _tool_redis_vector_create_index() -> MCPTool:
 def _tool_redis_vector_search() -> MCPTool:
     return MCPTool(
         name="redis_vector_search",
-        description="Similarity search by embedding vector using a RediSearch index.",
+        description=(
+            "Similarity search using a RediSearch index. "
+            "Provide query_text (auto-embedded) or query_vector (raw floats)."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -409,10 +412,14 @@ def _tool_redis_vector_search() -> MCPTool:
                     "description": "Index to search",
                     "default": "idx:agent_memory",
                 },
+                "query_text": {
+                    "type": "string",
+                    "description": "Text to embed and search (alternative to query_vector)",
+                },
                 "query_vector": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Query embedding vector",
+                    "description": "Raw embedding vector (alternative to query_text)",
                 },
                 "top_k": {
                     "type": "integer",
@@ -426,7 +433,6 @@ def _tool_redis_vector_search() -> MCPTool:
                 },
                 "database": {"type": "string", "default": "vectors"},
             },
-            "required": ["query_vector"],
         },
     )
 
@@ -434,7 +440,10 @@ def _tool_redis_vector_search() -> MCPTool:
 def _tool_redis_hybrid_search() -> MCPTool:
     return MCPTool(
         name="redis_hybrid_search",
-        description="Combined vector + filter query using RediSearch.",
+        description=(
+            "Combined vector + filter query using RediSearch. "
+            "Provide query_text (auto-embedded) or query_vector (raw floats)."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -442,10 +451,14 @@ def _tool_redis_hybrid_search() -> MCPTool:
                     "type": "string",
                     "default": "idx:agent_memory",
                 },
+                "query_text": {
+                    "type": "string",
+                    "description": "Text to embed and search (alternative to query_vector)",
+                },
                 "query_vector": {
                     "type": "array",
                     "items": {"type": "number"},
-                    "description": "Query embedding vector",
+                    "description": "Raw embedding vector (alternative to query_text)",
                 },
                 "filter_expression": {
                     "type": "string",

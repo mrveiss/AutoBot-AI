@@ -6,6 +6,7 @@ Vector Search tool handlers for Redis MCP Bridge (4 tools).
 
 Issue #2511: RediSearch vector index creation, similarity search,
 hybrid search, and index info — using Redis Stack 7.4.0 FT.* commands.
+Issue #2623: Transparent text-to-embedding conversion via NPU/Ollama fallback.
 """
 
 import logging
@@ -17,6 +18,16 @@ from type_defs.common import Metadata
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+
+async def _text_to_embedding(text: str) -> List[float]:
+    """Convert text to embedding using the existing RAG pipeline (Issue #2623).
+
+    Uses NPU worker with Ollama fallback — same pipeline as knowledge base.
+    """
+    from knowledge.facts import _generate_embedding_with_npu_fallback
+
+    return await _generate_embedding_with_npu_fallback(text)
 
 
 async def _get_client(database: str = "vectors"):
@@ -101,13 +112,22 @@ async def handle_redis_vector_create_index(
 
 
 async def handle_redis_vector_search(
-    query_vector: List[float],
+    query_vector: Optional[List[float]] = None,
+    query_text: Optional[str] = None,
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
     return_fields: Optional[List[str]] = None,
     database: str = "vectors",
 ) -> Metadata:
-    """Similarity search by embedding vector."""
+    """Similarity search by embedding vector or text (Issue #2623)."""
+    if query_vector is None and query_text is None:
+        return {
+            "status": "error",
+            "message": "Provide either query_text or query_vector",
+            "code": "MISSING_QUERY",
+        }
+    if query_vector is None:
+        query_vector = await _text_to_embedding(query_text)
     client = await _get_client(database)
     blob = _float_list_to_bytes(query_vector)
 
@@ -140,14 +160,23 @@ async def handle_redis_vector_search(
 
 
 async def handle_redis_hybrid_search(
-    query_vector: List[float],
-    filter_expression: str,
+    query_vector: Optional[List[float]] = None,
+    query_text: Optional[str] = None,
+    filter_expression: str = "",
     index_name: str = "idx:agent_memory",
     top_k: int = 10,
     return_fields: Optional[List[str]] = None,
     database: str = "vectors",
 ) -> Metadata:
-    """Vector + filter combined query."""
+    """Vector + filter combined query (Issue #2623: accepts query_text)."""
+    if query_vector is None and query_text is None:
+        return {
+            "status": "error",
+            "message": "Provide either query_text or query_vector",
+            "code": "MISSING_QUERY",
+        }
+    if query_vector is None:
+        query_vector = await _text_to_embedding(query_text)
     client = await _get_client(database)
     blob = _float_list_to_bytes(query_vector)
 

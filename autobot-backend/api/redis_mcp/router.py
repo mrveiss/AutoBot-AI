@@ -128,8 +128,9 @@ async def call_redis_mcp_tool(
 
     access = get_tool_access(tool_name, is_admin)
 
-    # Approval gate for destructive admin ops
-    if access == ToolAccess.APPROVAL_REQUIRED:
+    # Approval gate for destructive admin ops (Issue #2622)
+    # If the caller provides approved=true (after user confirmation), skip the gate.
+    if access == ToolAccess.APPROVAL_REQUIRED and not args.get("approved"):
         return {
             "status": "approval_required",
             "tool": tool_name,
@@ -313,7 +314,8 @@ async def _wrap_vector_create_index(args: dict) -> Metadata:
 
 async def _wrap_vector_search(args: dict) -> Metadata:
     return await handle_redis_vector_search(
-        query_vector=args["query_vector"],
+        query_vector=args.get("query_vector"),
+        query_text=args.get("query_text"),
         index_name=args.get("index_name", "idx:agent_memory"),
         top_k=args.get("top_k", 10),
         return_fields=args.get("return_fields"),
@@ -323,8 +325,9 @@ async def _wrap_vector_search(args: dict) -> Metadata:
 
 async def _wrap_hybrid_search(args: dict) -> Metadata:
     return await handle_redis_hybrid_search(
-        query_vector=args["query_vector"],
-        filter_expression=args["filter_expression"],
+        query_vector=args.get("query_vector"),
+        query_text=args.get("query_text"),
+        filter_expression=args.get("filter_expression", ""),
         index_name=args.get("index_name", "idx:agent_memory"),
         top_k=args.get("top_k", 10),
         return_fields=args.get("return_fields"),
