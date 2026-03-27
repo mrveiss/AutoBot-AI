@@ -45,7 +45,8 @@ def create_seq_api_key(
 
     try:
         # First, try to login to get session
-        login_data = {"Username": username, "Password": password}
+        # CodeQL: false positive — password must be sent to Seq login API
+        login_data = {"Username": username, "Password": password}  # noqa: S106
 
         response = session.post(f"{seq_url}/api/users/login", json=login_data)
         if response.status_code == 200:

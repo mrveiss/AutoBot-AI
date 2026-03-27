@@ -232,6 +232,7 @@ class RelationOperationsMixin:
             data = await self.redis_client.json().get(out_key)
             return data.get("relations", []) if data else []
         except Exception as e:
+            # CodeQL: false positive — entity_id is a UUID, not sensitive data
             logger.debug("Error getting outgoing relations for %s: %s", entity_id, e)
             return []
 
@@ -245,6 +246,7 @@ class RelationOperationsMixin:
             data = await self.redis_client.json().get(in_key)
             return data.get("relations", []) if data else []
         except Exception as e:
+            # CodeQL: false positive — entity_id is a UUID, not sensitive data
             logger.debug("Error getting incoming relations for %s: %s", entity_id, e)
             return []
 

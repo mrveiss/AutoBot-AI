@@ -18,6 +18,7 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -35,14 +36,14 @@ class SeqAnalyticsSetup:
         self,
         seq_url: str = "http://localhost:5341",
         username: str = "admin",
-        password: str = "Autobot123!",
+        password: str = "",
     ):
         """Initialize Seq analytics setup with connection credentials."""
         self.seq_url = seq_url.rstrip("/")
         self.username = username
-        self.password = password
+        self.password = password or os.environ.get("SEQ_PASSWORD", "")
         self.session = requests.Session()
-        self.session.auth = (username, password)
+        self.session.auth = (username, self.password)
 
         # Load queries configuration
         self.config_file = Path(__file__).parent.parent / "config" / "seq-queries.json"
@@ -440,7 +441,11 @@ def main():
         "--seq-url", default="http://localhost:5341", help="Seq server URL"
     )
     parser.add_argument("--username", default="admin", help="Seq username")
-    parser.add_argument("--password", default="Autobot123!", help="Seq password")
+    parser.add_argument(
+        "--password",
+        default=os.environ.get("SEQ_PASSWORD", ""),
+        help="Seq password (default: $SEQ_PASSWORD)",
+    )
 
     args = parser.parse_args()
 

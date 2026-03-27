@@ -163,7 +163,8 @@ class SecretMaskingExtension(Extension):
             )
             return False
 
-    def mask_secret(self, secret: str) -> str:
+    # CodeQL: false positive — this method intentionally handles secrets to mask them
+    def mask_secret(self, secret: str) -> str:  # noqa: S107
         """
         Mask a secret string.
 
@@ -204,7 +205,8 @@ class SecretMaskingExtension(Extension):
                 # Process in reverse to maintain correct positions
                 for match in reversed(matches):
                     if group == 0:
-                        secret = match.group(0)
+                        # CodeQL: false positive — extracting secret to mask it
+                        secret = match.group(0)  # noqa: S105
                         start, end = match.start(), match.end()
                     else:
                         try:

@@ -355,7 +355,7 @@ class EntityOperationsMixin:
 
     async def _generate_entity_embedding(
         self: AutoBotMemoryGraphCore,
-        entity_id: str,
+        entity_id: str,  # CodeQL: false positive — entity_id is a UUID, not sensitive
         entity: Dict[str, Any],
     ) -> None:
         """Generate and cache embedding for entity."""
