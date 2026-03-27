@@ -208,6 +208,56 @@ def _create_execution_result(
     }
 
 
+async def _try_mcp_dispatch(
+    tool_name: str,
+    tool_call: Dict[str, Any],
+    execution_results: List[Dict[str, Any]],
+) -> Optional[WorkflowMessage]:
+    """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Returns a WorkflowMessage on success, or None if the tool is not found
+    in the registry (so the caller can fall through to the unknown-tool error).
+    """
+    from services.mcp_dispatch import get_mcp_dispatcher
+
+    dispatcher = get_mcp_dispatcher()
+    # Lazy-load cache on first call; if cache is already loaded and tool is
+    # absent, skip a network round-trip.
+    if not dispatcher._cache_loaded:
+        await dispatcher.refresh_tool_cache()
+
+    tool = dispatcher.find_tool(tool_name)
+    if tool is None:
+        return None
+
+    arguments = tool_call.get("arguments", {})
+    mcp_result = await dispatcher.dispatch(tool_name, arguments)
+    bridge = mcp_result.get("bridge", "unknown")
+    success = mcp_result.get("success", False)
+    result_text = str(mcp_result.get("result", ""))
+
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": bridge,
+            "result": result_text,
+            "status": "success" if success else "error",
+        }
+    )
+    msg_type = "tool_result" if success else "error"
+    logger.info(
+        "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
+        tool_name,
+        bridge,
+        success,
+    )
+    return WorkflowMessage(
+        type=msg_type,
+        content=f"[{bridge}] {result_text}",
+        metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
+    )
+
+
 class ToolHandlerMixin:
     """Mixin for tool and command handling."""
 
@@ -1356,6 +1406,14 @@ class ToolHandlerMixin:
             return
 
         if tool_name != "execute_command":
+            # Issue #2513: Check MCP registry before reporting unknown tool.
+            mcp_result = await _try_mcp_dispatch(
+                tool_name, tool_call, execution_results
+            )
+            if mcp_result is not None:
+                yield mcp_result
+                return
+
             # Issue #2305: Return a tool error so the agent can self-correct instead of
             # silently dropping the call and causing an infinite hallucination loop.
             # Issue #2310: Track consecutive invalid calls; reminder injected at prompt-build time.
