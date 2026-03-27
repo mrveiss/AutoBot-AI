@@ -10,7 +10,7 @@ Enums, dataclasses, and Pydantic models for workflow automation.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from type_defs.common import Metadata
@@ -180,6 +180,8 @@ class ActiveWorkflow:
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
     # Issue #2153: Owner identifier for workflow secret resolution.
     owner_id: Optional[str] = None
+    # Issue #2601: Store step execution results keyed by step_id for reference passing.
+    step_results: Dict[str, Metadata] = field(default_factory=dict)
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""

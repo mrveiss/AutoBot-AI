@@ -9,9 +9,10 @@ Handles workflow step execution, dependency checking, and command execution.
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -99,6 +100,58 @@ def _redact_result_secrets(
     except Exception as exc:  # pragma: no cover
         logger.error("Secret redaction failed for workflow result: %s", exc)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Issue #2601 — Step reference resolution for vision step chaining
+# ---------------------------------------------------------------------------
+
+_REF_PATTERN = re.compile(r"\$\{steps\.(\w+)\.(.+?)\}")
+_ARRAY_PART = re.compile(r"^(\w+)\[(\d+)\]$")
+
+
+def _navigate_path(data: Any, path: str) -> Any:
+    """Navigate a dot-separated path with optional array indexing into *data*.
+
+    Example path: ``result.elements[0].coordinates``
+    Returns ``None`` for missing keys or out-of-range indices. (#2601)
+    """
+    current = data
+    for part in path.split("."):
+        if current is None:
+            return None
+        array_match = _ARRAY_PART.match(part)
+        if array_match:
+            key, index = array_match.group(1), int(array_match.group(2))
+            if isinstance(current, dict):
+                current = current.get(key)
+            if isinstance(current, (list, tuple)) and index < len(current):
+                current = current[index]
+            else:
+                return None
+        elif isinstance(current, dict):
+            current = current.get(part)
+        else:
+            return None
+    return current
+
+
+def _resolve_step_references(config: dict, step_results: dict) -> dict:
+    """Resolve ``${steps.<step_id>.<path>}`` references in step config values.
+
+    Only string values are scanned.  Non-matching strings and non-string values
+    are returned unchanged.  Unknown step IDs resolve to ``None``. (#2601)
+    """
+    resolved: dict = {}
+    for key, value in config.items():
+        if isinstance(value, str):
+            match = _REF_PATTERN.search(value)
+            if match:
+                step_id, path = match.group(1), match.group(2)
+                resolved[key] = _navigate_path(step_results.get(step_id), path)
+                continue
+        resolved[key] = value
+    return resolved
 
 
 class WorkflowExecutor:
@@ -452,12 +505,16 @@ class WorkflowExecutor:
             )
 
             # Issue #2397: Route vision node types to the vision step handler.
+            # Issue #2601: Resolve ${steps.<id>.<path>} references before executing.
             # All other step types fall through to the standard command executor.
             if current_step.step_type in VISION_STEP_TYPES:
+                resolved_config = _resolve_step_references(
+                    current_step.step_config or {}, workflow.step_results
+                )
                 result = await self._timeout_enforcer.run_with_timeout(
                     coro=execute_vision_step(
                         current_step.step_type,
-                        current_step.step_config or {},
+                        resolved_config,
                     ),
                     step_id=step_id,
                     timeout_seconds=current_step.timeout_seconds,
@@ -515,6 +572,9 @@ class WorkflowExecutor:
         current_step.status = WorkflowStepStatus.COMPLETED
         current_step.execution_result = result
         current_step.completed_at = datetime.now()
+
+        # Issue #2601: Store result so later vision steps can reference it.
+        workflow.step_results[step_id] = result
 
         self._record_step_metric("completed", current_step.step_type)
 

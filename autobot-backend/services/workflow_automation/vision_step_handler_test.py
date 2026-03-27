@@ -1,17 +1,22 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for vision workflow step execution handlers (#2397)."""
+"""Unit tests for vision workflow step execution handlers (#2397, #2601)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from services.workflow_automation.executor import (
+    _navigate_path,
+    _resolve_step_references,
+)
 from services.workflow_automation.vision_step_handler import (
     VISION_STEP_TYPES,
     _build_vnc_payload,
     _build_web_action_payload,
     _element_matches,
+    _get_backend_url,
     execute_vision_step,
 )
 
@@ -202,3 +207,135 @@ class TestExecuteVisionStep:
             result = await execute_vision_step("vision-click", {})
 
         assert result["target"] == "vnc"
+
+
+class TestGetBackendUrl:
+    """Tests for SSOT-based backend URL resolution (#2601)."""
+
+    def test_get_backend_url_uses_ssot(self):
+        """_get_backend_url delegates to ssot_config.backend_url."""
+        with patch(
+            "services.workflow_automation.vision_step_handler.ssot_config"
+        ) as mock_cfg:
+            mock_cfg.backend_url = "https://192.0.2.1:8443"
+            url = _get_backend_url()
+        assert url == "https://192.0.2.1:8443"
+
+    @pytest.mark.asyncio
+    async def test_execute_vision_step_default_url_from_ssot(self):
+        """When backend_url is omitted, execute_vision_step uses SSOT config."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status = MagicMock()
+
+        with patch(
+            "services.workflow_automation.vision_step_handler.ssot_config"
+        ) as mock_cfg, patch(
+            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
+        ) as mock_client:
+            mock_cfg.backend_url = "https://192.0.2.20:8443"
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_instance.post = AsyncMock(return_value=mock_response)
+
+            await execute_vision_step("vision-capture", {"target": "vnc"})
+
+        call_url = mock_instance.post.call_args[0][0]
+        assert call_url.startswith("https://192.0.2.20:8443")
+
+
+class TestWebOcrPipeline:
+    """Tests for the connected web OCR pipeline (#2601)."""
+
+    @pytest.mark.asyncio
+    async def test_web_ocr_calls_vision_endpoint(self):
+        """Web OCR captures screenshot then POSTs to /api/vision/ocr."""
+        screenshot_resp = MagicMock()
+        screenshot_resp.raise_for_status = MagicMock()
+        screenshot_resp.json.return_value = {"screenshot": "base64imgdata"}
+
+        ocr_resp = MagicMock()
+        ocr_resp.raise_for_status = MagicMock()
+        ocr_resp.json.return_value = {"text": "Hello World", "confidence": 0.99}
+
+        with patch(
+            "services.workflow_automation.vision_step_handler.httpx.AsyncClient"
+        ) as mock_client:
+            mock_instance = AsyncMock()
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_instance.post = AsyncMock(side_effect=[screenshot_resp, ocr_resp])
+
+            result = await execute_vision_step(
+                "vision-ocr",
+                {
+                    "target": "web",
+                    "browser_session_id": "sess-1",
+                    "region": [0, 0, 100, 100],
+                },
+                backend_url="https://localhost:8443",
+            )
+
+        assert result["success"] is True
+        ocr_call_kwargs = mock_instance.post.call_args_list[1]
+        assert "/api/vision/ocr" in ocr_call_kwargs[0][0]
+        sent_payload = ocr_call_kwargs[1]["json"]
+        assert sent_payload["image_data"] == "base64imgdata"
+        assert sent_payload["region"] == [0, 0, 100, 100]
+
+
+class TestNavigatePath:
+    """Tests for the path navigation helper (#2601)."""
+
+    def test_simple_key(self):
+        """Navigates a single-level key."""
+        assert _navigate_path({"a": 1}, "a") == 1
+
+    def test_nested_key(self):
+        """Navigates dot-separated nested keys."""
+        data = {"result": {"elements": [{"id": "btn"}]}}
+        assert _navigate_path(data, "result.elements[0].id") == "btn"
+
+    def test_array_index(self):
+        """Navigates array index in path."""
+        data = {"items": ["x", "y", "z"]}
+        assert _navigate_path(data, "items[1]") == "y"
+
+    def test_missing_key_returns_none(self):
+        """Missing key returns None rather than raising."""
+        assert _navigate_path({"a": 1}, "b") is None
+
+    def test_out_of_range_index_returns_none(self):
+        """Out-of-range array index returns None."""
+        assert _navigate_path({"items": [1]}, "items[5]") is None
+
+
+class TestResolveStepReferences:
+    """Tests for step config reference resolution (#2601)."""
+
+    def test_simple_reference_resolved(self):
+        """${steps.s1.result.elements[0].id} resolves from step_results."""
+        step_results = {"s1": {"result": {"elements": [{"id": "btn-42"}]}}}
+        config = {"target_element": "${steps.s1.result.elements[0].id}"}
+        resolved = _resolve_step_references(config, step_results)
+        assert resolved["target_element"] == "btn-42"
+
+    def test_no_reference_passes_through(self):
+        """Non-reference strings pass through unchanged."""
+        config = {"selector": "#my-button", "timeout": 5000}
+        resolved = _resolve_step_references(config, {})
+        assert resolved == {"selector": "#my-button", "timeout": 5000}
+
+    def test_unknown_step_id_resolves_to_none(self):
+        """Reference to an unknown step_id resolves to None."""
+        config = {"coord": "${steps.missing.x}"}
+        resolved = _resolve_step_references(config, {})
+        assert resolved["coord"] is None
+
+    def test_non_string_values_unchanged(self):
+        """Non-string config values (int, list, dict) are not modified."""
+        config = {"count": 3, "tags": ["a", "b"]}
+        resolved = _resolve_step_references(config, {})
+        assert resolved == {"count": 3, "tags": ["a", "b"]}

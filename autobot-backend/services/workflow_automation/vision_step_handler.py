@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Vision workflow step execution handlers (#2397).
+"""Vision workflow step execution handlers (#2397, #2601).
 
 Routes vision node types to the appropriate backend API endpoint
 based on the step's target property (vnc or web).
@@ -13,6 +13,8 @@ import time
 from typing import Any
 
 import httpx
+
+from autobot_shared.ssot_config import config as ssot_config
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +34,15 @@ VISION_STEP_TYPES: frozenset[str] = frozenset(_VNC_ENDPOINT.keys())
 _VNC_GET_STEPS: frozenset[str] = frozenset({"vision-click", "vision-type-text"})
 
 
+def _get_backend_url() -> str:
+    """Return the backend base URL from SSOT config (#2601)."""
+    return ssot_config.backend_url
+
+
 async def execute_vision_step(
     step_type: str,
     step_config: dict[str, Any],
-    backend_url: str = "https://localhost:8443",
+    backend_url: str | None = None,
 ) -> dict[str, Any]:
     """Execute a vision workflow step by routing to the appropriate API.
 
@@ -43,12 +50,14 @@ async def execute_vision_step(
         step_type: One of the VISION_STEP_TYPES (e.g. "vision-capture").
         step_config: Step configuration from the workflow definition.
             Expected keys: target ("vnc" or "web"), plus type-specific params.
-        backend_url: Backend base URL.
+        backend_url: Backend base URL. Defaults to SSOT config value (#2601).
 
     Returns:
         Execution result dict with keys: success, result, execution_time,
-        step_type, target.  (#2397)
+        step_type, target.  (#2397, #2601)
     """
+    if backend_url is None:
+        backend_url = _get_backend_url()
     target = step_config.get("target", "vnc")
     start = time.monotonic()
 
@@ -232,28 +241,46 @@ def _build_web_action_payload(
 async def _web_ocr_step(
     session_id: str, config: dict[str, Any], backend_url: str
 ) -> dict:
-    """Capture a browser screenshot then delegate OCR via the vision pipeline.
+    """Capture a browser screenshot then run OCR via the vision pipeline (#2601).
 
-    Full pipeline integration (screenshot bytes → vision OCR) is tracked
-    separately.  This step captures the screenshot and returns it so the
-    caller can chain with a vision-ocr VNC step if needed.  (#2397)
+    Two-stage pipeline:
+      1. POST to /api/research-browser/session/action with action=screenshot
+      2. POST the screenshot image data to /api/vision/ocr
     """
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
-        screenshot_resp = await client.post(
-            f"{backend_url}/api/research-browser/session/action",
-            json={"session_id": session_id, "action": "screenshot"},
+        screenshot_data = await _capture_browser_screenshot(
+            client, session_id, backend_url
         )
-        screenshot_resp.raise_for_status()
-        screenshot_data = screenshot_resp.json()
+        return await _run_ocr_on_screenshot(
+            client, screenshot_data, config, backend_url
+        )
 
-    logger.info(
-        "vision-ocr web step captured screenshot for session %s; "
-        "full OCR pipeline integration pending (#2397)",
-        session_id,
+
+async def _capture_browser_screenshot(
+    client: httpx.AsyncClient, session_id: str, backend_url: str
+) -> dict:
+    """POST screenshot action to the browser session API and return response JSON."""
+    resp = await client.post(
+        f"{backend_url}/api/research-browser/session/action",
+        json={"session_id": session_id, "action": "screenshot"},
     )
-    return {
-        "step_type": "vision-ocr",
-        "target": "web",
-        "screenshot": screenshot_data,
-        "note": "OCR on web target requires screenshot-to-vision pipeline (#2397)",
+    resp.raise_for_status()
+    data = resp.json()
+    logger.info("vision-ocr web step captured screenshot for session %s", session_id)
+    return data
+
+
+async def _run_ocr_on_screenshot(
+    client: httpx.AsyncClient,
+    screenshot_data: dict,
+    config: dict[str, Any],
+    backend_url: str,
+) -> dict:
+    """POST screenshot image data to /api/vision/ocr and return OCR result."""
+    ocr_payload = {
+        "image_data": screenshot_data.get("screenshot", ""),
+        "region": config.get("region"),
     }
+    ocr_resp = await client.post(f"{backend_url}/api/vision/ocr", json=ocr_payload)
+    ocr_resp.raise_for_status()
+    return ocr_resp.json()
