@@ -36,7 +36,7 @@ class ExperimentStore:
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis = await get_redis_client(
+            self._redis = get_redis_client(
                 async_client=True,
                 database=self.config.redis_database,
             )
@@ -54,7 +54,11 @@ class ExperimentStore:
             )
         return self._chromadb_collection
 
-    async def save_experiment(self, experiment: Experiment) -> None:
+    async def save_experiment(
+        self,
+        experiment: Experiment,
+        old_state: Optional[ExperimentState] = None,
+    ) -> None:
         """Persist experiment to Redis (always) and ChromaDB (if completed)."""
         redis = await self._get_redis()
         data = json.dumps(experiment.to_dict())
@@ -71,6 +75,13 @@ class ExperimentStore:
             self._redis_key("timeline"),
             {experiment.id: experiment.created_at},
         )
+
+        # Clean up old state index before adding to new one
+        if old_state is not None and old_state != experiment.state:
+            await redis.srem(
+                self._redis_key("state", old_state.value),
+                experiment.id,
+            )
 
         # Update state index
         await redis.sadd(
@@ -124,7 +135,10 @@ class ExperimentStore:
         ]
         if experiment.result:
             parts.append(f"val_bpb: {experiment.result.val_bpb}")
-            if experiment.improvement is not None:
+            if (
+                experiment.improvement is not None
+                and experiment.improvement_pct is not None
+            ):
                 parts.append(
                     f"Improvement: {experiment.improvement:.4f} "
                     f"({experiment.improvement_pct:.2f}%)"

@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, HyperParams
@@ -59,6 +60,7 @@ async def list_experiments(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     state: Optional[str] = Query(default=None),
+    _admin: bool = Depends(check_admin_permission),
 ):
     """List experiments, most recent first."""
     store = _get_store(request)
@@ -85,7 +87,10 @@ async def list_experiments(
 
 
 @router.get("/experiments/stats")
-async def get_stats(request: Request):
+async def get_stats(
+    request: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
     """Get aggregate experiment statistics."""
     store = _get_store(request)
     stats = await store.get_stats()
@@ -93,7 +98,11 @@ async def get_stats(request: Request):
 
 
 @router.get("/experiments/{experiment_id}")
-async def get_experiment(request: Request, experiment_id: str):
+async def get_experiment(
+    request: Request,
+    experiment_id: str,
+    _admin: bool = Depends(check_admin_permission),
+):
     """Get a single experiment by ID."""
     store = _get_store(request)
     experiment = await store.get_experiment(experiment_id)
@@ -103,8 +112,15 @@ async def get_experiment(request: Request, experiment_id: str):
 
 
 @router.post("/experiments")
-async def create_experiment(request: Request):
-    """Create and run a new experiment.
+async def create_experiment(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    _admin: bool = Depends(check_admin_permission),
+):
+    """Create and queue a new experiment (non-blocking).
+
+    Returns the experiment ID immediately. Poll GET /experiments/{id}
+    for status updates.
 
     Request body:
         hypothesis: str — what change is being tested
@@ -130,14 +146,19 @@ async def create_experiment(request: Request):
     if "hyperparams" in body:
         experiment.hyperparams = HyperParams.from_dict(body["hyperparams"])
 
-    # Run asynchronously — caller gets back the experiment ID immediately
-    # and can poll for status via GET /experiments/{id}
-    result = await runner.run_experiment(experiment)
-    return result.to_dict()
+    # Save as PENDING first, then run in background
+    store = _get_store(request)
+    await store.save_experiment(experiment)
+    background_tasks.add_task(runner.run_experiment, experiment)
+
+    return {"id": experiment.id, "state": experiment.state.value}
 
 
 @router.post("/experiments/baseline")
-async def set_baseline(request: Request):
+async def set_baseline(
+    request: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
     """Set the baseline val_bpb for improvement comparison.
 
     Request body:
@@ -156,7 +177,10 @@ async def set_baseline(request: Request):
 
 
 @router.get("/status")
-async def get_status(request: Request):
+async def get_status(
+    request: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
     """Get current runner status."""
     runner = _get_runner(request)
     store = _get_store(request)
@@ -168,7 +192,10 @@ async def get_status(request: Request):
 
 
 @router.post("/cancel")
-async def cancel_experiment(request: Request):
+async def cancel_experiment(
+    request: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
     """Cancel the currently running experiment."""
     runner = _get_runner(request)
     if not runner.is_running:

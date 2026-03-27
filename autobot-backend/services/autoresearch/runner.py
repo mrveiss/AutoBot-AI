@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Optional
 
@@ -21,6 +22,25 @@ from .parser import ExperimentOutputParser
 from .store import ExperimentStore
 
 logger = logging.getLogger(__name__)
+
+# Allowlist pattern for extra hyperparameter keys — alphanumeric + underscore only
+_EXTRA_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+# Keys that cannot be overridden via hp.extra (already set explicitly)
+_RESERVED_KEYS = frozenset(
+    {
+        "max_steps",
+        "learning_rate",
+        "batch_size",
+        "block_size",
+        "n_layer",
+        "n_head",
+        "n_embd",
+        "dropout",
+        "warmup_steps",
+        "weight_decay",
+    }
+)
 
 
 class ExperimentRunner:
@@ -36,6 +56,7 @@ class ExperimentRunner:
         self.store = store or ExperimentStore(self.config)
         self.parser = parser or ExperimentOutputParser()
         self._running: bool = False
+        self._lock = asyncio.Lock()
         self._current_process: Optional[asyncio.subprocess.Process] = None
 
     async def run_experiment(self, experiment: Experiment) -> Experiment:
@@ -47,13 +68,15 @@ class ExperimentRunner:
         Returns:
             Updated experiment with result and final state.
         """
-        if self._running:
-            raise RuntimeError("An experiment is already running")
+        async with self._lock:
+            if self._running:
+                raise RuntimeError("An experiment is already running")
+            self._running = True
 
-        self._running = True
+        old_state = experiment.state
         experiment.state = ExperimentState.RUNNING
         experiment.started_at = time.time()
-        await self.store.save_experiment(experiment)
+        await self.store.save_experiment(experiment, old_state=old_state)
 
         try:
             result = await self._execute_training(experiment)
@@ -61,9 +84,11 @@ class ExperimentRunner:
             experiment.completed_at = time.time()
 
             if result.success:
+                old_state = experiment.state
                 experiment.state = ExperimentState.COMPLETED
                 await self._evaluate_result(experiment)
             else:
+                old_state = experiment.state
                 experiment.state = ExperimentState.FAILED
                 logger.warning(
                     "Experiment %s failed: %s",
@@ -71,11 +96,13 @@ class ExperimentRunner:
                     result.error_message,
                 )
         except asyncio.CancelledError:
+            old_state = experiment.state
             experiment.state = ExperimentState.FAILED
             experiment.result = ExperimentResult(error_message="Experiment cancelled")
             experiment.completed_at = time.time()
             raise
         except Exception as exc:
+            old_state = experiment.state
             experiment.state = ExperimentState.FAILED
             experiment.result = ExperimentResult(error_message=str(exc))
             experiment.completed_at = time.time()
@@ -83,7 +110,7 @@ class ExperimentRunner:
         finally:
             self._running = False
             self._current_process = None
-            await self.store.save_experiment(experiment)
+            await self.store.save_experiment(experiment, old_state=old_state)
 
         return experiment
 
@@ -138,6 +165,7 @@ class ExperimentRunner:
     def _build_command(self, experiment: Experiment) -> list[str]:
         """Build the subprocess command for a training run."""
         hp = experiment.hyperparams
+        self._validate_extra_params(hp.extra)
         cmd = [
             self.config.python_bin,
             str(self.config.train_script),
@@ -155,6 +183,23 @@ class ExperimentRunner:
         for key, val in hp.extra.items():
             cmd.append(f"--{key}={val}")
         return cmd
+
+    @staticmethod
+    def _validate_extra_params(extra: dict) -> None:
+        """Validate extra hyperparameter keys to prevent flag injection."""
+        for key in extra:
+            if key in _RESERVED_KEYS:
+                raise ValueError(f"Extra param '{key}' conflicts with a built-in flag")
+            if not _EXTRA_KEY_PATTERN.match(key):
+                raise ValueError(
+                    f"Invalid extra param key '{key}': "
+                    "must be lowercase alphanumeric/underscore, 1-64 chars"
+                )
+        for val in extra.values():
+            if not isinstance(val, (int, float, str, bool)):
+                raise ValueError(
+                    f"Extra param values must be scalar, got {type(val).__name__}"
+                )
 
     async def _evaluate_result(self, experiment: Experiment) -> None:
         """Decide whether to keep or discard based on improvement threshold."""
