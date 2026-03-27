@@ -51,6 +51,25 @@ class MockWebSocket {
 // Replace global WebSocket
 global.WebSocket = MockWebSocket as any
 
+// Mock IntersectionObserver (not provided by jsdom 29+)
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    readonly root: Element | null = null
+    readonly rootMargin: string = '0px'
+    readonly thresholds: ReadonlyArray<number> = [0]
+    private callback: IntersectionObserverCallback
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback
+    }
+
+    observe = vi.fn()
+    unobserve = vi.fn()
+    disconnect = vi.fn()
+    takeRecords = vi.fn(() => [] as IntersectionObserverEntry[])
+  } as unknown as typeof IntersectionObserver
+}
+
 // Global test setup
 beforeEach(() => {
   // Clear all mocks before each test
