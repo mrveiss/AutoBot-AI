@@ -68,6 +68,13 @@ class RAGConfig:
     ewc_lambda: float = 0.4
     ewc_consolidation_interval: int = 100
 
+    # Neural Mesh staleness propagation (Issue #2111)
+    mesh_staleness_propagation: bool = False
+    mesh_staleness_max_depth: int = 3
+    mesh_staleness_decay: float = 0.7
+    mesh_staleness_threshold: float = 0.3
+    mesh_staleness_ttl: int = 3600
+
     # Issue #556: Category-based filtering for chat RAG
     # Default categories to search when no specific categories are specified
     # Available categories: system_knowledge, user_knowledge, autobot_knowledge
@@ -173,11 +180,13 @@ class RAGConfig:
             "enable_reranking": self.enable_reranking,
             "reranking_model": self.reranking_model,
             # Issue #2004: serialise as a plain dict for YAML round-trips.
+            # Issue #2111: staleness weight added.
             "rerank_weights": {
                 "reranker": self.rerank_weights.reranker,
                 "vector": self.rerank_weights.vector,
                 "edge": self.rerank_weights.edge,
                 "recency": self.rerank_weights.recency,
+                "staleness": self.rerank_weights.staleness,
             },
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
@@ -195,6 +204,12 @@ class RAGConfig:
             # EWC++ catastrophic forgetting prevention (Issue #2097)
             "ewc_lambda": self.ewc_lambda,
             "ewc_consolidation_interval": self.ewc_consolidation_interval,
+            # Neural Mesh staleness propagation (Issue #2111)
+            "mesh_staleness_propagation": self.mesh_staleness_propagation,
+            "mesh_staleness_max_depth": self.mesh_staleness_max_depth,
+            "mesh_staleness_decay": self.mesh_staleness_decay,
+            "mesh_staleness_threshold": self.mesh_staleness_threshold,
+            "mesh_staleness_ttl": self.mesh_staleness_ttl,
         }
 
 
