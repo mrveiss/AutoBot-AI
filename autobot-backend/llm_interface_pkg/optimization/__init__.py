@@ -34,6 +34,12 @@ from .router import (
     OptimizationRouter,
     get_optimization_router,
 )
+from .token_optimizer import (
+    TokenOptimizer,
+    TokenOptimizerConfig,
+    TokenSavingsRecord,
+    get_token_optimizer,
+)
 
 __all__ = [
     # Router
@@ -66,4 +72,9 @@ __all__ = [
     "OptimizedLLMMiddleware",
     "OptimizationMetrics",
     "get_optimization_middleware",
+    # Token Optimizer
+    "TokenOptimizer",
+    "TokenOptimizerConfig",
+    "TokenSavingsRecord",
+    "get_token_optimizer",
 ]
