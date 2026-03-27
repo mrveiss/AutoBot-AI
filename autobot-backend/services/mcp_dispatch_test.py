@@ -11,8 +11,11 @@ Coverage:
 - Dispatch of known tool with failing bridge response
 - get_tool_definitions() formats correctly
 - refresh_tool_cache() handles registry HTTP errors gracefully
+- Cache TTL triggers refresh after expiry (#2598)
+- RBAC filtering hides admin-only tools from non-admin callers (#2598)
 """
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -223,3 +226,112 @@ def test_get_mcp_dispatcher_returns_singleton():
     a = get_mcp_dispatcher()
     b = get_mcp_dispatcher()
     assert a is b
+
+
+# ---------------------------------------------------------------------------
+# Cache TTL (#2598)
+# ---------------------------------------------------------------------------
+
+_ADMIN_TOOL = {
+    "name": "redis_client_list",
+    "description": "List all Redis clients",
+    "input_schema": {},
+    "bridge": "redis_mcp",
+    "endpoint": "http://localhost:8001/api/redis/mcp/client_list",
+    "features": [],
+}
+
+
+@pytest.mark.asyncio
+async def test_cache_ttl_triggers_refresh():
+    """dispatch() should call refresh_tool_cache when cache is older than TTL (#2598)."""
+    d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
+    # Wind back timestamp so TTL appears expired
+    d._cache_timestamp = time.monotonic() - (d.CACHE_TTL_SECONDS + 1)
+
+    refresh_called = []
+
+    async def fake_refresh():
+        refresh_called.append(True)
+        d._cache_loaded = True
+        d._cache_timestamp = time.monotonic()
+        return 1
+
+    d.refresh_tool_cache = fake_refresh  # type: ignore[method-assign]
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"results": []})
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = AsyncMock(return_value=mock_response)
+
+    with patch("services.mcp_dispatch.get_http_client", return_value=mock_session):
+        await d.dispatch("search_knowledge_base", {})
+
+    assert refresh_called, "Expected refresh_tool_cache to be called after TTL expiry"
+
+
+@pytest.mark.asyncio
+async def test_cache_ttl_does_not_refresh_when_fresh():
+    """dispatch() should NOT call refresh_tool_cache when cache is still within TTL (#2598)."""
+    d = _make_dispatcher_with_cache(_SAMPLE_TOOL)
+    d._cache_timestamp = time.monotonic()  # just refreshed
+
+    refresh_called = []
+
+    async def fake_refresh():
+        refresh_called.append(True)
+        return 1
+
+    d.refresh_tool_cache = fake_refresh  # type: ignore[method-assign]
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"results": []})
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = AsyncMock(return_value=mock_response)
+
+    with patch("services.mcp_dispatch.get_http_client", return_value=mock_session):
+        await d.dispatch("search_knowledge_base", {})
+
+    assert not refresh_called, "Expected no refresh when cache is fresh"
+
+
+# ---------------------------------------------------------------------------
+# RBAC filtering (#2598)
+# ---------------------------------------------------------------------------
+
+
+def test_get_tool_definitions_filters_admin_tools_for_user():
+    """Admin-only tools should be hidden from role='user' (#2598)."""
+    d = _make_dispatcher_with_cache(_SAMPLE_TOOL, _ADMIN_TOOL)
+    defs = d.get_tool_definitions(role="user")
+    names = [t["name"] for t in defs]
+    assert "search_knowledge_base" in names
+    assert "redis_client_list" not in names
+
+
+def test_get_tool_definitions_shows_all_for_admin():
+    """All tools including admin-only should be visible for role='admin' (#2598)."""
+    d = _make_dispatcher_with_cache(_SAMPLE_TOOL, _ADMIN_TOOL)
+    defs = d.get_tool_definitions(role="admin")
+    names = [t["name"] for t in defs]
+    assert "search_knowledge_base" in names
+    assert "redis_client_list" in names
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejects_admin_tool_for_user():
+    """dispatch() should return success=False for admin-only tool when role='user' (#2598)."""
+    d = _make_dispatcher_with_cache(_ADMIN_TOOL)
+    d._cache_timestamp = time.monotonic()  # keep cache fresh to avoid network call
+
+    result = await d.dispatch("redis_client_list", {}, role="user")
+
+    assert result["success"] is False
+    assert "admin" in result["result"].lower()
+    assert result["bridge"] is None
