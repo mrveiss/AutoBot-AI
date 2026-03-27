@@ -1397,9 +1397,11 @@ class ToolHandlerMixin:
 
     async def _web_search_via_browser_vm(self, query: str) -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
-        from urllib.parse import quote_plus
+        from urllib.parse import (  # stdlib — lazy to match surrounding pattern
+            quote_plus,
+        )
 
-        from api.browser_mcp import send_to_browser_vm
+        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
 
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
 
@@ -1415,7 +1417,10 @@ class ToolHandlerMixin:
             inner = text_result.get("result", text_result)
             raw_text = inner.get("text", "")
             if raw_text:
-                truncated = raw_text[:3000]
+                max_len = 3000
+                truncated = raw_text[:max_len]
+                if len(raw_text) > max_len:
+                    truncated += "\n\n... [results truncated]"
                 return f'Web search results for "{query}":\n\n{truncated}'
 
         return f"No search results found for: {query}"
