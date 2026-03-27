@@ -12,7 +12,7 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -35,7 +35,7 @@ class AgentOrgNode(Base, TimestampMixin):
 
     __tablename__ = "agent_org_nodes"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
     reports_to = Column(String(255), nullable=True, index=True)
