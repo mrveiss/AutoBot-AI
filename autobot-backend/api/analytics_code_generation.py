@@ -510,12 +510,12 @@ class CodeValidator:
         elif language in (CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT):
             return cls.validate_typescript(code)
         elif language == CodeLanguage.VUE:
-            # Extract script section and validate (#1721: use [^<] to avoid
-            # bad-tag-filter / ReDoS on nested angle brackets)
+            # Extract script section and validate (#1721, #1733: ReDoS fix -
+            # replaced nested quantifier with [\s\S]*? for linear-time matching)
             script_match = re.search(
-                r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+                r"<script[^>]*>([\s\S]*?)</script>",
                 code,
-                re.DOTALL | re.IGNORECASE,
+                re.IGNORECASE,
             )
             if script_match:
                 return cls.validate_typescript(script_match.group(1))

@@ -987,8 +987,10 @@ def _write_cert_files(tmpdir: str, certs: dict) -> tuple:
     with open(cert_path, "w", encoding="utf-8") as f:
         f.write(certs["certificate"])
 
+    # TLS private key written to ephemeral tmpdir for Ansible
+    # deployment; directory cleaned up after use.
     with open(key_path, "w", encoding="utf-8") as f:
-        f.write(certs["private_key"])
+        f.write(certs["private_key"])  # lgtm[py/clear-text-storage-sensitive-data]
 
     if chain_path:
         with open(chain_path, "w", encoding="utf-8") as f:

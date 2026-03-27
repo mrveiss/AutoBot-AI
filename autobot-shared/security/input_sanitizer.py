@@ -56,6 +56,32 @@ def sanitize_ldap_filter(value: str) -> str:
     return "".join(result)
 
 
+_LDAP_DN_ESCAPE_MAP: dict[str, str] = {
+    "\\": "\\5c",
+    ",": "\\2c",
+    "+": "\\2b",
+    '"': "\\22",
+    "<": "\\3c",
+    ">": "\\3e",
+    ";": "\\3b",
+    "\x00": "\\00",
+    "=": "\\3d",
+    " ": "\\20",
+    "#": "\\23",
+}
+
+
+def sanitize_ldap_dn(value: str) -> str:
+    """Escape special characters for safe use in an LDAP distinguished name.
+
+    Implements RFC 4514 §2.4 escaping rules for DN attribute values.
+    """
+    result: list[str] = []
+    for ch in value:
+        result.append(_LDAP_DN_ESCAPE_MAP.get(ch, ch))
+    return "".join(result)
+
+
 # ── Regex ────────────────────────────────────────────────────────────
 
 

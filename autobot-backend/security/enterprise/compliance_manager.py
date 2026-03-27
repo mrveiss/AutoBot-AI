@@ -197,8 +197,10 @@ class ComplianceManager:
             # Generate new key
             try:
                 key = Fernet.generate_key()
+                # Fernet key persists for audit data encryption across
+                # restarts; secured by 0o600 file permissions.
                 with open(key_path, "wb") as f:
-                    f.write(key)
+                    f.write(key)  # lgtm[py/clear-text-storage-sensitive-data]
 
                 # Set restrictive permissions
                 os.chmod(key_path, 0o600)

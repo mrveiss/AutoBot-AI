@@ -103,7 +103,9 @@ async def export_service_configs():
         # Create .env file
         env_file = export_dir / f"{service_id}.env"
 
-        with open(env_file, "w") as f:
+        # Service keys exported to .env for Ansible deployment,
+        # secured by 0o600 file permissions set immediately after.
+        with open(env_file, "w", encoding="utf-8") as f:
             f.write("# AutoBot Service Authentication Configuration\n")
             f.write(f"# Generated: {datetime.now().isoformat()}\n")
             f.write(f"# Service: {service_id}\n")
@@ -111,6 +113,7 @@ async def export_service_configs():
             f.write(f"# Description: {service['description']}\n")
             f.write("\n")
             f.write(f"SERVICE_ID={service_id}\n")
+            # lgtm[py/clear-text-storage-sensitive-data]
             f.write(f"SERVICE_KEY={service_key}\n")
             f.write("REDIS_HOST=172.16.168.23\n")
             f.write("REDIS_PORT=6379\n")

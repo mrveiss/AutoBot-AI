@@ -267,8 +267,10 @@ class SecretsManager:
                 key = f.read()
         else:
             key = Fernet.generate_key()
+            # Fernet key must persist to decrypt secrets on next startup;
+            # secured by 0o600 file permissions.
             with open(self.key_file, "wb") as f:
-                f.write(key)
+                f.write(key)  # lgtm[py/clear-text-storage-sensitive-data]
             os.chmod(self.key_file, 0o600)  # Restrict permissions
 
         self.cipher = Fernet(key)

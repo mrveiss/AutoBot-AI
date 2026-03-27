@@ -817,6 +817,8 @@ async def add_url_to_knowledge(
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/url
     Issue #744: Requires admin authentication.
     """
+    from urllib.parse import urlparse
+
     import aiohttp
 
     from autobot_shared.security.input_sanitizer import validate_url
@@ -829,6 +831,11 @@ async def add_url_to_knowledge(
     try:
         validated_url = validate_url(request.url, allow_private=False)
     except ValueError:
+        raise HTTPException(status_code=400, detail="Request failed")
+
+    # Inline SSRF guard so static analysis can trace the sanitization (#1733)
+    parsed = urlparse(validated_url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=400, detail="Request failed")
 
     logger.info("Fetching content from URL: %s", validated_url)

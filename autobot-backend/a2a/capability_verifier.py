@@ -137,6 +137,8 @@ async def verify_remote_card(remote_url: str) -> CapabilityReport:
 
 async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     """Perform the actual HTTP fetch and verification."""
+    from urllib.parse import urlparse
+
     import aiohttp
 
     from autobot_shared.security.input_sanitizer import validate_url
@@ -150,6 +152,15 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
         )
 
     well_known = validated_url.rstrip("/") + "/.well-known/agent.json"
+
+    # Inline SSRF guard so static analysis can trace the sanitization (#1733)
+    parsed = urlparse(well_known)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return CapabilityReport(
+            verified=False,
+            warnings=[f"Invalid agent URL scheme or host: {well_known}"],
+        )
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
