@@ -74,7 +74,7 @@ accelerate>=1.2.0
 
 # Document Processing
 python-docx>=1.1.0
-pypdf>=6.8.0
+pypdf>=6.9.1
 
 # Development and Testing
 pytest>=8.3.0
