@@ -28,16 +28,20 @@ class RerankWeights:
     Weights do not need to sum to 1.0; compute_blended_score normalises them.
 
     Attributes:
-        reranker: Weight for the cross-encoder reranker score.
-        vector:   Weight for the original vector-similarity score.
-        edge:     Weight for graph edge strength (Neural Mesh phase 3+).
-        recency:  Weight for time-based recency score (Neural Mesh phase 3+).
+        reranker:  Weight for the cross-encoder reranker score.
+        vector:    Weight for the original vector-similarity score.
+        edge:      Weight for graph edge strength (Neural Mesh phase 3+).
+        recency:   Weight for time-based recency score (Neural Mesh phase 3+).
+        staleness: Weight for staleness penalty; 0 disables it (Issue #2111).
     """
 
     reranker: float = 0.8
     vector: float = 0.2
     edge: float = 0.0
     recency: float = 0.0
+    staleness: float = (
+        0.0  # Issue #2111: penalty weight for stale documents (0 = disabled)
+    )
 
 
 def recency_score(days_since_access: float) -> float:
@@ -55,28 +59,47 @@ def recency_score(days_since_access: float) -> float:
     return 1.0 / (1.0 + days_since_access)
 
 
+def staleness_penalty(staleness_score: float) -> float:
+    """Convert a staleness score (0-1) to a penalty factor (1-0).
+
+    Issue #2111: Used by compute_blended_score when RerankWeights.staleness > 0.
+    Fresh documents (staleness=0) get factor 1.0 (no penalty).
+    Very stale documents (staleness=1) get factor 0.0 (maximum penalty).
+
+    Args:
+        staleness_score: BFS-propagated staleness value from staleness_propagator.
+
+    Returns:
+        Penalty factor in range [0.0, 1.0].
+    """
+    return max(0.0, 1.0 - staleness_score)
+
+
 def compute_blended_score(
     reranker_score: float,
     vector_score: float,
     edge_weight: float = 0.0,
     recency_score_value: float = 0.0,
+    staleness_penalty_value: float = 1.0,
     weights: Optional[RerankWeights] = None,
 ) -> float:
-    """Compute a weighted blend of reranker, vector, edge, and recency scores.
+    """Compute a weighted blend of reranker, vector, edge, recency, and staleness scores.
 
     Issue #2004: Replaces the hardcoded 0.8 * reranker + 0.2 * original
     expression in _apply_rerank_scores().
+    Issue #2111: Adds optional staleness penalty term.
 
     Weights are normalised so that callers do not need to ensure they sum
     to exactly 1.0.  If the total weight is 0 the function falls back to
     the plain reranker score.
 
     Args:
-        reranker_score:      Sigmoid-normalised cross-encoder score (0-1).
-        vector_score:        Original vector-similarity score (0-1).
-        edge_weight:         Graph edge strength contribution (0-1).
-        recency_score_value: Time-based recency score (0-1).
-        weights:             RerankWeights instance; defaults to RerankWeights().
+        reranker_score:        Sigmoid-normalised cross-encoder score (0-1).
+        vector_score:          Original vector-similarity score (0-1).
+        edge_weight:           Graph edge strength contribution (0-1).
+        recency_score_value:   Time-based recency score (0-1).
+        staleness_penalty_value: staleness_penalty() output (1=fresh, 0=max stale).
+        weights:               RerankWeights instance; defaults to RerankWeights().
 
     Returns:
         Blended score in the same 0-1 range.
@@ -84,7 +107,13 @@ def compute_blended_score(
     if weights is None:
         weights = RerankWeights()
 
-    total_weight = weights.reranker + weights.vector + weights.edge + weights.recency
+    total_weight = (
+        weights.reranker
+        + weights.vector
+        + weights.edge
+        + weights.recency
+        + weights.staleness
+    )
     if total_weight == 0.0:
         logger.warning("All RerankWeights are zero; returning raw reranker score")
         return reranker_score
@@ -94,6 +123,7 @@ def compute_blended_score(
         + weights.vector * vector_score
         + weights.edge * edge_weight
         + weights.recency * recency_score_value
+        + weights.staleness * staleness_penalty_value
     )
     return blended / total_weight
 
