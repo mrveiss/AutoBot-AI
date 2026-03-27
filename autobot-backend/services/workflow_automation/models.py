@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
 
@@ -136,6 +136,8 @@ class WorkflowStep:
     execution_result: Optional[Metadata] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Issue #2159: Per-step timeout override (seconds). None uses WorkflowLimits default.
+    timeout_seconds: Optional[int] = None
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -224,6 +226,8 @@ class WorkflowStepRequest(BaseModel):
     requires_confirmation: bool = True
     risk_level: str = "low"
     dependencies: List[str] = []
+    # Issue #2159: Per-step timeout in seconds. None means use system default.
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class AutomatedWorkflowRequest(BaseModel):
