@@ -46,6 +46,15 @@ services:
           memory: 1G
           cpus: '1.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -75,6 +84,15 @@ services:
           memory: 1G
           cpus: '1.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -102,6 +120,15 @@ services:
           memory: 1G
           cpus: '1.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -158,6 +185,15 @@ services:
           memory: 2G
           cpus: '2.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -203,6 +239,15 @@ services:
         condition: service_healthy
       autobot-chromadb:
         condition: service_healthy
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
     networks:
       - autobot-data
       - autobot-app
@@ -243,6 +288,15 @@ services:
           memory: 1G
           cpus: '1.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -281,6 +335,18 @@ services:
           memory: 512M
           cpus: '0.5'
     logging: *default-logging
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx
     security_opt:
       - no-new-privileges:true
     networks:
@@ -310,6 +376,14 @@ services:
           memory: 8G  # 7B models need ~5.5GB; increase for larger models
           cpus: '4.0'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     networks:
@@ -338,6 +412,12 @@ services:
           memory: 512M
           cpus: '0.5'
     logging: *default-logging
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+      - /var/run
     security_opt:
       - no-new-privileges:true
     networks:
@@ -369,6 +449,16 @@ services:
           memory: 512M
           cpus: '0.5'
     logging: *default-logging
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
+      - /var/run
     security_opt:
       - no-new-privileges:true
     networks:
