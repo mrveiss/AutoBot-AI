@@ -226,6 +226,31 @@ all:
         browser_timeout: 30
         headless_mode: false
 
+    llm:
+      hosts:
+        autobot-llm:
+          ansible_host: 172.16.168.26  # LLM CPU node (#1040)
+          vm_id: "autobot-llm-vm"
+          vm_role: "llm"
+          vm_hostname: "autobot-llm"
+          vm_resources:
+            ram_mb: 16384
+            cpu_cores: 8
+            disk_gb: 100
+          services:
+            - ollama
+      vars:
+        ollama_port: 11434
+
+    reserved:
+      hosts:
+        autobot-reserved:
+          ansible_host: 172.16.168.27  # Reserved node - pending role assignment
+          vm_id: "autobot-reserved-vm"
+          vm_role: "reserved"
+          vm_hostname: "autobot-reserved"
+          services: []
+
 # Environment-specific groups
 production_vms:
   children:
@@ -234,6 +259,8 @@ production_vms:
     database:
     aiml:
     browser:
+    llm:
+    reserved:
   vars:
     environment_type: "production"
     monitoring_enabled: true
@@ -288,6 +315,8 @@ infrastructure:
     npu:
     aiml:
     browser:
+    llm:
+    reserved:
 
 # Cross-inventory aliases (#2515)
 # Ensure group names from hosts.yml and slm-nodes.yml resolve in production.yml.
@@ -307,6 +336,11 @@ ai_stack:
   children:
     aiml:
 
+# LLM inference nodes alias — used by provision-fleet-roles.yml (#1040)
+llm_nodes:
+  children:
+    llm:
+
 # slm_nodes group used by SLM-specific playbooks (deploy-slm-agent, cleanup-nodes, etc.)
 # Maps all nodes managed by the SLM system.
 slm_nodes:
@@ -318,3 +352,5 @@ slm_nodes:
     database:
     aiml:
     browser:
+    llm:
+    reserved:
