@@ -214,6 +214,11 @@
 
     <!-- Main Content -->
     <main class="workflow-content">
+      <!-- Child route content (#2368) -->
+      <router-view v-if="isChildRoute" />
+
+      <!-- Workflow Builder own content -->
+      <template v-else>
       <!-- Header -->
       <header class="content-header">
         <div class="header-left">
@@ -581,12 +586,14 @@
           </div>
         </section>
       </div>
+      </template>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
@@ -615,6 +622,10 @@ import {
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
+const route = useRoute();
+
+/** True when a child route (e.g. /automation/browser-automation) is active (#2368) */
+const isChildRoute = computed(() => route.matched.length > 1);
 const { showToast } = useToast();
 
 // Section Types
