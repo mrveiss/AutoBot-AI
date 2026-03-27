@@ -214,8 +214,15 @@ async def _try_mcp_dispatch(
     tool_name: str,
     tool_call: dict[str, Any],
     execution_results: list[dict[str, Any]],
+    role: str = "user",
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Args:
+        tool_name: Name of the tool to dispatch.
+        tool_call: Raw tool call dict from the LLM.
+        execution_results: Accumulator list for execution results.
+        role: Caller RBAC role forwarded to the dispatcher (#2629).
 
     Returns a WorkflowMessage on success, or None if the tool is not found
     in the registry (so the caller can fall through to the unknown-tool error).
@@ -233,7 +240,7 @@ async def _try_mcp_dispatch(
         return None
 
     arguments = tool_call.get("arguments", {})
-    mcp_result = await dispatcher.dispatch(tool_name, arguments)
+    mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
     bridge = mcp_result.get("bridge", "unknown")
     success = mcp_result.get("success", False)
     result_text = str(mcp_result.get("result", ""))
@@ -1493,25 +1500,13 @@ class ToolHandlerMixin:
             },
         )
 
-    async def _handle_unknown_tool(
+    def _build_unknown_tool_error(
         self,
         tool_name: str,
-        tool_call: dict[str, Any],
+        ctx: LLMIterationContext | None,
         execution_results: list[dict[str, Any]],
-        ctx: "LLMIterationContext | None" = None,
-    ):
-        """Handle an unrecognized tool name. Issue #2305, #2310, #2513.
-
-        Tries MCP dispatch first, then returns an error with the known tools list.
-        Extracted from _dispatch_tool_call for function length compliance.
-        """
-        # Issue #2513: Check MCP registry before reporting unknown tool.
-        mcp_result = await _try_mcp_dispatch(tool_name, tool_call, execution_results)
-        if mcp_result is not None:
-            yield mcp_result
-            return
-
-        # Issue #2305/#2310: Error feedback with consecutive tracking.
+    ) -> WorkflowMessage:
+        """Build error message for an unknown tool call (#2305, #2310)."""
         known_tools = sorted(
             {"respond", "delegate", "execute_command", "web_search"}
             | _BROWSER_TOOL_NAMES
@@ -1519,10 +1514,7 @@ class ToolHandlerMixin:
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls += 1
         consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
-        error_msg = (
-            f'Error: Tool "{tool_name}" not found. '
-            f"Available tools: {', '.join(known_tools)}"
-        )
+        error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
         logger.warning(
             "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
             tool_name,
@@ -1531,7 +1523,7 @@ class ToolHandlerMixin:
         execution_results.append(
             {"tool": tool_name, "status": "error", "error": error_msg}
         )
-        yield WorkflowMessage(
+        return WorkflowMessage(
             type="error",
             content=error_msg,
             metadata={"message_type": "unknown_tool", "tool_name": tool_name},
@@ -1546,12 +1538,14 @@ class ToolHandlerMixin:
         selected_model: str,
         execution_results: list[dict[str, Any]],
         additional_response_parts: list[str],
-        ctx: "LLMIterationContext | None" = None,
+        ctx: LLMIterationContext | None = None,
+        role: str = "user",
     ):
         """Dispatch a single tool call to appropriate handler. Issue #620.
 
         Issue #2310: Accepts optional ctx to track consecutive invalid tool calls
         and inject available-tools reminder after 2 consecutive failures.
+        Issue #2629: Accepts role to forward RBAC context to MCP dispatch.
 
         Yields:
             WorkflowMessage for tool execution stages
@@ -1590,10 +1584,17 @@ class ToolHandlerMixin:
             return
 
         if tool_name != "execute_command":
-            async for msg in self._handle_unknown_tool(
-                tool_name, tool_call, execution_results, ctx
-            ):
-                yield msg
+            # Issue #2513: Check MCP registry before reporting unknown tool.
+            # Issue #2629: Forward RBAC role so admin-only tools are enforced.
+            mcp_result = await _try_mcp_dispatch(
+                tool_name, tool_call, execution_results, role=role
+            )
+            if mcp_result is not None:
+                yield mcp_result
+                return
+
+            # Issue #2305/#2310: Report unknown tool and track consecutive failures.
+            yield self._build_unknown_tool_error(tool_name, ctx, execution_results)
             return
 
         if ctx is not None:
@@ -1616,7 +1617,7 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        ctx: "LLMIterationContext | None" = None,
+        ctx: LLMIterationContext | None = None,
     ):
         """Process all tool calls from LLM response.
 
