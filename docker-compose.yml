@@ -192,6 +192,12 @@ services:
       - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/2
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+    healthcheck:
+      test: ["CMD", "python3.12", "-m", "celery", "-A", "celery_app", "inspect", "ping", "--timeout", "5"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     depends_on:
       autobot-redis:
         condition: service_healthy
