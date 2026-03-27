@@ -90,6 +90,13 @@ yaml.safe_dump = _filtered_yaml_safe_dump
 logger = logging.getLogger(__name__)
 
 
+from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
+from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
+from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
+from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
+
+
 class ConfigManager:
     """Centralized configuration manager"""
 
@@ -180,26 +187,26 @@ class ConfigManager:
         "AUTOBOT_USE_PHI2": ["backend", "use_phi2"],
     }
 
-    # Issue #620: Agent model configuration extracted as class constant
+    # Issue #620, #2553: Agent model configuration — imports from SSOT constants
     AGENT_MODEL_DEFAULTS = {
-        # Core Orchestration - use available model for flexible reasoning
-        "orchestrator": "llama3.2:3b",
-        "default": "llama3.2:3b",
-        # Specialized Agents - optimized for task complexity
-        "chat": "llama3.2:1b",
-        "system_commands": "llama3.2:1b",
-        "rag": "dolphin-llama3:8b",
-        "knowledge_retrieval": "llama3.2:1b",
-        "research": "dolphin-llama3:8b",
+        # Core Orchestration
+        "orchestrator": _SSOT_ROUTING,
+        "default": _SSOT_QUALITY,
+        # Specialized Agents - optimized per 6-tier mapping
+        "chat": _SSOT_QUALITY,
+        "system_commands": _SSOT_SYSTEM,
+        "rag": _SSOT_INSTRUCTION,
+        "knowledge_retrieval": _SSOT_LIGHT,
+        "research": _SSOT_QUALITY,
         # Legacy compatibility
-        "search": "llama3.2:1b",
-        "code": "llama3.2:1b",
-        "analysis": "dolphin-llama3:8b",
-        "planning": "dolphin-llama3:8b",
+        "search": _SSOT_LIGHT,
+        "code": _SSOT_QUALITY,
+        "analysis": _SSOT_QUALITY,
+        "planning": _SSOT_QUALITY,
         # Fallback models
-        "orchestrator_fallback": "llama3.2:3b",
-        "chat_fallback": "llama3.2:1b",
-        "fallback": "dolphin-llama3:8b",
+        "orchestrator_fallback": _SSOT_ROUTING,
+        "chat_fallback": _SSOT_QUALITY,
+        "fallback": _SSOT_SYSTEM,
     }
 
     def __init__(self, config_dir: str = "config"):
@@ -348,8 +355,8 @@ class ConfigManager:
             "UNIFIED CONFIG: Skipping Ollama auto-detection during startup to prevent blocking"
         )
 
-        # Fallback to hardcoded default - use available model
-        return "llama3.2:3b"
+        # Fallback to SSOT default model
+        return _SSOT_QUALITY
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value by key"""

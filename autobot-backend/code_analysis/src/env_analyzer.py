@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL
+
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path
 # When running standalone, we need to add it manually
@@ -27,9 +29,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from config import UnifiedConfig
-
     from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -1324,7 +1325,7 @@ class EnvironmentAnalyzer:
     async def llm_filter_hardcoded(
         self,
         hardcoded_values: List[HardcodedValue],
-        model: str = "llama3.2:1b",
+        model: str = LIGHT_PROCESSING_MODEL,
         batch_size: int = 100,
         priority_filter: Optional[str] = None,
     ) -> List[HardcodedValue]:
@@ -1589,7 +1590,7 @@ class EnvironmentAnalyzer:
         self,
         root_path: str = ".",
         patterns: List[str] = None,
-        llm_model: str = "llama3.2:1b",
+        llm_model: str = LIGHT_PROCESSING_MODEL,
         filter_priority: Optional[str] = "high",
     ) -> Dict[str, Any]:
         """Analyze codebase with LLM filtering. Issue #633."""

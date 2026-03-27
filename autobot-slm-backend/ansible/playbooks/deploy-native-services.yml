@@ -549,13 +549,21 @@
             state: started
             daemon_reload: yes
 
-        - name: Pull default model
+        - name: Pull required Ollama models (6-tier mapping, #2553)
           shell: |
             sleep 10  # Wait for Ollama to start
-            /usr/local/bin/ollama pull llama3.2:1b
+            /usr/local/bin/ollama pull {{ item }}
           become_user: autobot-service
-          async: 300
-          poll: 10
+          async: 600
+          poll: 15
+          loop:
+            - "llama3.2:1b"           # Routing tier
+            - "gemma2:2b"             # Classification tier
+            - "phi3:mini"             # Light processing tier
+            - "mistral:7b-instruct"   # Instruction tier
+            - "dolphin-llama3:8b"     # System/uncensored tier
+            - "qwen3.5:9b"            # Quality tier
+            - "nomic-embed-text"      # Embeddings
 
     - name: Create AI Stack service
       copy:

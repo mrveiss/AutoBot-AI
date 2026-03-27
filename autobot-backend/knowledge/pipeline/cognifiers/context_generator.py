@@ -18,6 +18,7 @@ from knowledge.pipeline.registry import TaskRegistry
 from llm_interface_pkg import LLMInterface
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class ContextGeneratorCognifier(BaseCognifier):
     """Prepend LLM-generated context sentences to each chunk (Issue #1498)."""
 
     def __init__(self, model=None, ttl_days=None):
-        self.model = model or os.getenv("CONTEXT_MODEL", "llama3.2:3b")
+        self.model = model or os.getenv("CONTEXT_MODEL", LIGHT_PROCESSING_MODEL)
         days = ttl_days or int(os.getenv("CONTEXT_SUMMARY_TTL_DAYS", "30"))
         self.ttl_seconds = days * 86400
         self.llm = LLMInterface()

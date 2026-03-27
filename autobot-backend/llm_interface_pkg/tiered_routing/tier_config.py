@@ -12,14 +12,14 @@ from typing import Dict
 
 from config.registry import ConfigRegistry
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL
 
 
 @dataclass
 class TierModels:
     """Model definitions for each tier."""
 
-    simple: str = "gemma2:2b"
+    simple: str = CLASSIFICATION_MODEL
     complex: str = DEFAULT_LLM_MODEL
 
 
@@ -72,7 +72,7 @@ class TierConfig:
             enabled=tier_config.get("enabled", True),
             complexity_threshold=float(tier_config.get("complexity_threshold", 3.0)),
             models=TierModels(
-                simple=models_config.get("simple", "gemma2:2b"),
+                simple=models_config.get("simple", CLASSIFICATION_MODEL),
                 complex=models_config.get("complex", DEFAULT_LLM_MODEL),
             ),
             fallback_to_complex=tier_config.get("fallback_to_complex", True),

@@ -1,20 +1,39 @@
-# AI Agents Configuration
+# AI Agents Configuration (#2553)
 # Contains all AI agent and LLM-related settings
+# Model assignments use 6-tier mapping — change in ssot_config.py to change everywhere
 
 llm:
-  # Default model for most operations
-  default_model: dolphin-llama3:8b
+  # Default model for most operations (quality tier)
+  default_model: qwen3.5:9b
 
-  # Model assignments by agent type
+  # Model assignments by agent type (6-tier mapping)
   models:
-    chat: dolphin-llama3:8b
+    # Routing tier — fast orchestration
+    orchestrator: llama3.2:1b
+    # Classification tier — purpose-built
     classification: gemma2:2b
-    kb_librarian: dolphin-llama3:8b
-    rag: dolphin-llama3:8b
-    research: dolphin-llama3:8b
-    security_scanner: dolphin-llama3:8b
+    # Quality tier — user-facing
+    chat: qwen3.5:9b
+    # Light processing tier — structured tasks
+    kb_librarian: phi3:mini
+    knowledge_extraction: phi3:mini
+    knowledge_retrieval: phi3:mini
+    json_formatter: phi3:mini
+    npu_code_search: phi3:mini
+    # Instruction following tier — RAG, extraction
+    rag: mistral:7b-instruct
+    research: qwen3.5:9b
+    graph_entity_extractor: mistral:7b-instruct
+    man_page_knowledge_integrator: mistral:7b-instruct
+    librarian_assistant: mistral:7b-instruct
+    step_executor: mistral:7b-instruct
+    network_discovery: mistral:7b-instruct
+    # System/uncensored tier — command execution
     system_commands: dolphin-llama3:8b
+    enhanced_system_commands: dolphin-llama3:8b
     interactive_terminal: dolphin-llama3:8b
+    security_scanner: dolphin-llama3:8b
+    llm_failsafe: dolphin-llama3:8b
 
 agents:
   chat:

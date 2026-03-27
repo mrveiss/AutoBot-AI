@@ -38,6 +38,7 @@ config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 load_dotenv()
 
@@ -494,7 +495,7 @@ class UnifiedLLMInterface:
         # Ollama configuration
         ollama_enabled = config_manager.get("llm.ollama.enabled", True)
         ollama_base_url = config_manager.get("llm.ollama.base_url", _OLLAMA_DEFAULT_URL)
-        ollama_model = config_manager.get("llm.ollama.default_model", "deepseek-r1:14b")
+        ollama_model = config_manager.get("llm.ollama.default_model", DEFAULT_LLM_MODEL)
 
         configs[ProviderType.OLLAMA] = ProviderConfig(
             provider_type=ProviderType.OLLAMA,

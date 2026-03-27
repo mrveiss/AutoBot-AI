@@ -61,10 +61,28 @@ def _find_project_root() -> Path:
 
 PROJECT_ROOT = _find_project_root()
 
-# Default model constants - single source of truth for fallback values
-# These are used when .env doesn't specify a value
+# Default model constants - single source of truth for fallback values (#2553)
+# These are used when .env doesn't specify a value.
+# All agent/tier model assignments MUST reference these constants — never hardcode
+# model name strings elsewhere. Change models here to change the entire system.
+
+# Primary quality model — user-facing chat, research, code analysis, reasoning
 DEFAULT_LLM_MODEL = "qwen3.5:9b"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
+
+# Per-role model defaults (6-tier mapping)
+# Tier: Routing — fast routing/orchestration, minimal quality needed
+ROUTING_MODEL = "llama3.2:1b"
+# Tier: Classification — purpose-built for classification tasks
+CLASSIFICATION_MODEL = "gemma2:2b"
+# Tier: Light Processing — structured extraction, formatting, retrieval
+LIGHT_PROCESSING_MODEL = "phi3:mini"
+# Tier: Instruction Following — RAG, extraction, step execution
+INSTRUCTION_MODEL = "mistral:7b-instruct"
+# Tier: System/Uncensored — system commands, security scanning, terminal
+SYSTEM_MODEL = "dolphin-llama3:8b"
+# Tier: Quality — chat, research, code, reasoning (same as DEFAULT_LLM_MODEL)
+QUALITY_MODEL = DEFAULT_LLM_MODEL
 
 
 class VMConfig(BaseSettings):
@@ -142,7 +160,7 @@ class LLMConfig(BaseSettings):
         extra="ignore",
     )
 
-    # Primary models - all use DEFAULT_LLM_MODEL constant for consistency
+    # Primary models — each role maps to its optimal tier (#2553)
     default_model: str = Field(
         default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL"
     )
@@ -150,28 +168,20 @@ class LLMConfig(BaseSettings):
         default=DEFAULT_EMBEDDING_MODEL, alias="AUTOBOT_EMBEDDING_MODEL"
     )
     classification_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
+        default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
     )
-    reasoning_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_REASONING_MODEL"
-    )
-    rag_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RAG_MODEL")
-    coding_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_CODING_MODEL")
+    reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
+    rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
+    coding_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_CODING_MODEL")
 
-    # Agent/workflow models - all use DEFAULT_LLM_MODEL constant
+    # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
+        default=ROUTING_MODEL, alias="AUTOBOT_ORCHESTRATOR_MODEL"
     )
-    agent_model: str = Field(default=DEFAULT_LLM_MODEL, alias="AUTOBOT_AGENT_MODEL")
-    research_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_RESEARCH_MODEL"
-    )
-    analysis_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_ANALYSIS_MODEL"
-    )
-    planning_model: str = Field(
-        default=DEFAULT_LLM_MODEL, alias="AUTOBOT_PLANNING_MODEL"
-    )
+    agent_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_AGENT_MODEL")
+    research_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RESEARCH_MODEL")
+    analysis_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_ANALYSIS_MODEL")
+    planning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_PLANNING_MODEL")
 
     # Timeout (seconds)
     timeout: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
