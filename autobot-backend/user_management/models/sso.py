@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, Optional
 
 from constants.threshold_constants import CategoryDefaults
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import Uuid
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -52,14 +53,14 @@ class SSOProvider(Base, TimestampMixin):
     __tablename__ = "sso_providers"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Organization (nullable for global/social providers)
     org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
@@ -171,20 +172,20 @@ class UserSSOLink(Base, TimestampMixin):
     __tablename__ = "user_sso_links"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     provider_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("sso_providers.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
