@@ -193,7 +193,7 @@ class MigrationValidator:
 
             if not secret_data:
                 self.issues.append({
-                    "type": "secret", "id": secret_id[:8] + "...",
+                    "type": "secret", "id": secret_id,
                     "severity": "error", "issue": "Secret data is empty",
                 })
                 return
@@ -220,7 +220,7 @@ class MigrationValidator:
             else:
                 self.stats["secrets"]["unencrypted"] += 1
                 self.issues.append({
-                    "type": "secret", "id": secret_id[:8] + "...",
+                    "type": "secret", "id": secret_id,
                     "severity": "warning",
                     "issue": "Value may not be encrypted",
                 })
@@ -233,7 +233,7 @@ class MigrationValidator:
         except Exception as e:
             logger.error("Error validating secret %s...: %s", secret_id[:8], e)
             self.issues.append({
-                "type": "secret", "id": secret_id[:8] + "...",
+                "type": "secret", "id": secret_id,
                 "severity": "error",
                 "issue": f"Validation error: {e}",
             })
@@ -251,7 +251,7 @@ class MigrationValidator:
         else:
             self.stats["secrets"][absent_key] += 1
             self.issues.append({
-                "type": "secret", "id": secret_id[:8] + "...",
+                "type": "secret", "id": secret_id,
                 "severity": severity, "issue": issue_msg,
             })
 
