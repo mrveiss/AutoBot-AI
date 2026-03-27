@@ -563,7 +563,6 @@ class Phase9PerformanceMonitor:
         keywords = [
             "autobot",
             "fast_app_factory",
-            "run_autobot",
             "npu-worker",
             "ai-stack",
             "browser-service",
