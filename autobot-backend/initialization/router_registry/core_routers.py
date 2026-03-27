@@ -55,6 +55,7 @@ from api.process_management import router as process_management_router  # Issue 
 from api.prometheus_mcp import router as prometheus_mcp_router
 from api.prompts import router as prompts_router
 from api.redis import router as redis_router
+from api.redis_mcp import router as redis_mcp_router  # Issue #2511
 from api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
 from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
@@ -266,6 +267,7 @@ def _get_mcp_routers() -> list:
             ["prometheus_mcp", "mcp"],
             "prometheus_mcp",
         ),
+        (redis_mcp_router, "/redis", ["redis_mcp", "mcp"], "redis_mcp"),  # Issue #2511
     ]
 
 
