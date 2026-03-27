@@ -155,7 +155,8 @@ class RedisConnectionManager:
         tls_enabled = self.redis_config.get("tls_enabled", False)
         return {
             "host": self.redis_config.get("host", "localhost"),
-            "password": self.redis_config.get("password"),
+            # CodeQL: false positive — password must be passed to Redis connection
+            "password": self.redis_config.get("password"),  # noqa: S105
             "db": self.redis_config.get("db", 0),
             "max_connections": self.redis_config.get("max_connections", 20),
             "socket_timeout": self.redis_config.get("socket_timeout", 5),
@@ -189,7 +190,8 @@ class RedisConnectionManager:
         return {
             "host": config_params["host"],
             "port": config_params["port"],
-            "password": config_params["password"],
+            # CodeQL: false positive — password required for Redis auth
+            "password": config_params["password"],  # noqa: S105
             "db": config_params["db"],
             "max_connections": config_params["max_connections"],
             "socket_timeout": config_params["socket_timeout"],

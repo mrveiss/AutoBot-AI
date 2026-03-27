@@ -29,6 +29,7 @@ async def get_redis_metric(redis_client: Any, key: str, default: int = 0) -> int
         return int(value) if value else default
 
     except Exception:
+        # CodeQL: false positive — key is a Redis metric key name, not a secret
         logger.debug(
             "Redis metric fetch failed for key: %s",
             key.split(":")[-1] if key else "unknown",

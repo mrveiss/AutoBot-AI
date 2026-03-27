@@ -86,7 +86,7 @@ class MigrationValidator:
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
+            logger.error("Failed to connect to Redis: %s", e)
             raise
 
     async def validate_sessions(self) -> None:
@@ -159,7 +159,7 @@ class MigrationValidator:
                     )
 
             except Exception as e:
-                logger.error(f"Error validating session {session_id}: {e}")
+                logger.error("Error validating session %s: %s", session_id, e)
                 self.issues.append(
                     {
                         "type": "session",
@@ -193,7 +193,7 @@ class MigrationValidator:
 
             if not secret_data:
                 self.issues.append({
-                    "type": "secret", "id": secret_id,
+                    "type": "secret", "id": secret_id[:8] + "...",
                     "severity": "error", "issue": "Secret data is empty",
                 })
                 return
@@ -220,20 +220,20 @@ class MigrationValidator:
             else:
                 self.stats["secrets"]["unencrypted"] += 1
                 self.issues.append({
-                    "type": "secret", "id": secret_id,
+                    "type": "secret", "id": secret_id[:8] + "...",
                     "severity": "warning",
                     "issue": "Value may not be encrypted",
                 })
 
             if self.verbose and decoded.get("owner_id"):
                 logger.info(
-                    "Secret %s: owner=[REDACTED], scope=%s",
-                    secret_id, decoded.get("scope"),
+                    "Secret %s...: owner=[REDACTED], scope=%s",
+                    secret_id[:8], decoded.get("scope"),
                 )
         except Exception as e:
-            logger.error("Error validating secret %s: %s", secret_id, e)
+            logger.error("Error validating secret %s...: %s", secret_id[:8], e)
             self.issues.append({
-                "type": "secret", "id": secret_id,
+                "type": "secret", "id": secret_id[:8] + "...",
                 "severity": "error",
                 "issue": f"Validation error: {e}",
             })
@@ -251,7 +251,7 @@ class MigrationValidator:
         else:
             self.stats["secrets"][absent_key] += 1
             self.issues.append({
-                "type": "secret", "id": secret_id,
+                "type": "secret", "id": secret_id[:8] + "...",
                 "severity": severity, "issue": issue_msg,
             })
 
@@ -313,10 +313,10 @@ class MigrationValidator:
                                 )
 
                     except Exception as e:
-                        logger.debug(f"Error parsing message: {e}")
+                        logger.debug("Error parsing message: %s", e)
 
             except Exception as e:
-                logger.error(f"Error validating messages: {e}")
+                logger.error("Error validating messages: %s", e)
 
     async def validate_activities(self) -> None:
         """Validate activities have user_id"""
@@ -360,7 +360,7 @@ class MigrationValidator:
                     )
 
             except Exception as e:
-                logger.debug(f"Error validating activity: {e}")
+                logger.debug("Error validating activity: %s", e)
 
     async def validate_indices(self) -> None:
         """Validate Redis indices are properly populated"""
@@ -542,7 +542,7 @@ class MigrationValidator:
 
         # Generate and save report
         report = self.generate_report()
-        print("\n" + report)
+        logger.info("\n%s", report)
 
         # Save to file
         report_file = Path("/tmp/migration_validation_report.txt")
