@@ -57,16 +57,23 @@
           :status-message="`Trend: ${qualityScore.trend}`"
         />
       </div>
-      <!-- Issue #2068: Security, Performance, Redis score cards — detailed scores available in
-           the Codebase Analytics dashboard. Showing "Not Available" placeholder here. -->
-      <div class="score-card score-card--unavailable">
+      <!-- Issue #2115: Security score card — auto-loaded from cached results -->
+      <div v-if="hasSecurityCachedData" class="score-card">
+        <HealthScoreGauge
+          :score="securityScoreCached?.security_score ?? 0"
+          :grade="securityScoreCached?.grade ?? 'F'"
+          :label="$t('analytics.codeIntelligence.securityScore')"
+          :status-message="`${securityScoreCached?.total_findings ?? 0} findings · ${securityScoreCached?.risk_level ?? 'unknown'} risk`"
+        />
+      </div>
+      <div v-else class="score-card score-card--unavailable">
         <div class="unavailable-card-header">
           <i class="fas fa-shield-alt"></i>
           <span>{{ $t('analytics.codeIntelligence.securityScore') }}</span>
         </div>
         <div class="unavailable-card-body">
           <i class="fas fa-info-circle"></i>
-          <span>{{ $t('analytics.codeIntelligence.scoreNotAvailable') }}</span>
+          <span>{{ $t('analytics.codeIntelligence.noPreviousScan') }}</span>
         </div>
       </div>
       <div class="score-card score-card--unavailable">
@@ -189,24 +196,37 @@ const {
   analysisHistory,
   qualityScore,
   healthScore,
+  securityScoreCached,
   suggestions,
   analyzeCode,
   getAnalysis,
-  getQualityScore,
   getHealthScore,
+  getQualityScore,
   getSuggestions,
+  getSecurityScoreCached,
   getAnalysisHistory,
 } = useCodeIntelligence()
 
 const analysisPath = ref('')
 
-const hasScores = computed(() => healthScore.value !== null || qualityScore.value !== null)
+const hasScores = computed(() => {
+  return (
+    healthScore.value !== null ||
+    qualityScore.value !== null ||
+    (securityScoreCached.value !== null && securityScoreCached.value.status === 'success')
+  )
+})
+
+const hasSecurityCachedData = computed(() => {
+  return securityScoreCached.value !== null && securityScoreCached.value.status === 'success'
+})
 
 async function runAnalysis() {
   if (!analysisPath.value) return
   logger.info('Running code analysis')
   await analyzeCode({ code: analysisPath.value })
   await Promise.all([
+    getHealthScore(analysisPath.value),
     getQualityScore(analysisPath.value),
     getSuggestions(analysisPath.value),
   ])
@@ -231,7 +251,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 onMounted(async () => {
-  await Promise.all([getHealthScore(), getAnalysisHistory()])
+  await Promise.all([getSecurityScoreCached(), getAnalysisHistory()])
 })
 </script>
 

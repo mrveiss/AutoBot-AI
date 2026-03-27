@@ -1216,7 +1216,8 @@
       "securityScore": "Security Score",
       "performanceScore": "Performance Score",
       "redisScore": "Redis Usage Score",
-      "scoreNotAvailable": "Not available in this view — see Codebase Analytics"
+      "scoreNotAvailable": "Not available in this view — see Codebase Analytics",
+      "noPreviousScan": "No previous scan available"
     },
     "evolution": {
       "title": "Code Evolution",

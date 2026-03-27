@@ -110,6 +110,22 @@ export interface ComparisonResult {
   quality_change: number
 }
 
+export interface SecurityScoreCached {
+  status: 'success' | 'no_data'
+  from_cache?: boolean
+  completed_at?: string
+  security_score?: number
+  grade?: string
+  risk_level?: string
+  status_message?: string
+  total_findings?: number
+  critical_issues?: number
+  high_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
+  owasp_breakdown?: Record<string, number>
+}
+
 export interface UseCodeIntelligenceOptions {
   autoFetch?: boolean
 }
@@ -126,13 +142,29 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   const healthScore = ref<CodeHealthScore | null>(null)
   const suggestions = ref<CodeSuggestion[]>([])
   const trends = ref<AnalysisTrend[]>([])
+  const securityScoreCached = ref<SecurityScoreCached | null>(null)
   const isLoading = ref(false)
+  const loadingCount = ref(0)
   const error = ref<string | null>(null)
 
   // ===== API Methods =====
 
-  async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
+  /** Increment loading counter and set isLoading flag. */
+  function startLoading(): void {
+    loadingCount.value++
     isLoading.value = true
+  }
+
+  /** Decrement loading counter and clear isLoading when all done. */
+  function stopLoading(): void {
+    loadingCount.value = Math.max(0, loadingCount.value - 1)
+    if (loadingCount.value === 0) {
+      isLoading.value = false
+    }
+  }
+
+  async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.post('/api/code-intelligence/analyze', request)
@@ -145,12 +177,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getAnalysis(analysisId: string): Promise<CodeAnalysisResult | null> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.get(`/api/code-intelligence/analysis/${analysisId}`)
@@ -163,12 +195,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.post('/api/code-intelligence/quality-score', { code, language })
@@ -181,12 +213,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getSuggestions(code: string, language?: string): Promise<void> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.post('/api/code-intelligence/suggestions', { code, language })
@@ -197,15 +229,18 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       logger.error('Failed to fetch suggestions:', err)
       error.value = message
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
-  async function getHealthScore(): Promise<void> {
-    isLoading.value = true
+  async function getHealthScore(path?: string): Promise<void> {
+    startLoading()
     error.value = null
     try {
-      const data = await ApiClient.get('/api/code-intelligence/health-score')
+      const url = path
+        ? `/api/code-intelligence/health-score?path=${encodeURIComponent(path)}`
+        : '/api/code-intelligence/health-score'
+      const data = await ApiClient.get(url)
       healthScore.value = data
       logger.debug('Health score:', healthScore.value)
     } catch (err) {
@@ -213,12 +248,30 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       logger.error('Failed to fetch health score:', err)
       error.value = message
     } finally {
-      isLoading.value = false
+      stopLoading()
+    }
+  }
+
+  async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
+    startLoading()
+    error.value = null
+    try {
+      const data = await ApiClient.get('/api/code-intelligence/security/score/cached')
+      securityScoreCached.value = data
+      logger.debug('Cached security score:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch cached security score'
+      logger.error('Failed to fetch cached security score:', err)
+      error.value = message
+      return null
+    } finally {
+      stopLoading()
     }
   }
 
   async function getTrends(days: number = 30): Promise<void> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.get(`/api/code-intelligence/trends?days=${days}`)
@@ -229,12 +282,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       logger.error('Failed to fetch trends:', err)
       error.value = message
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function compareCode(file1: string, file2: string): Promise<ComparisonResult | null> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.post('/api/code-intelligence/compare', { file1, file2 })
@@ -246,12 +299,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getAnalysisHistory(limit: number = 50): Promise<void> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.get(`/api/code-intelligence/history?limit=${limit}`)
@@ -262,12 +315,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       logger.error('Failed to fetch history:', err)
       error.value = message
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function deleteAnalysis(analysisId: string): Promise<boolean> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       await ApiClient.delete(`/api/code-intelligence/analysis/${analysisId}`)
@@ -280,12 +333,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return false
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function batchAnalyze(files: Array<{ code: string; filename: string; language?: string }>): Promise<CodeAnalysisResult[]> {
-    isLoading.value = true
+    startLoading()
     error.value = null
     try {
       const data = await ApiClient.post('/api/code-intelligence/batch-analyze', { files })
@@ -297,7 +350,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
       error.value = message
       return []
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
@@ -305,7 +358,10 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
 
   onMounted(() => {
     if (autoFetch) {
-      Promise.all([getHealthScore(), getAnalysisHistory()])
+      Promise.all([
+        getSecurityScoreCached(),
+        getAnalysisHistory(),
+      ])
     }
   })
 
@@ -315,6 +371,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     analysisHistory,
     qualityScore,
     healthScore,
+    securityScoreCached,
     suggestions,
     trends,
     isLoading,
@@ -326,6 +383,7 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     getQualityScore,
     getSuggestions,
     getHealthScore,
+    getSecurityScoreCached,
     getTrends,
     compareCode,
     getAnalysisHistory,
