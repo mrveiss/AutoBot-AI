@@ -329,10 +329,23 @@ class TestResolveStepReferences:
         assert resolved == {"selector": "#my-button", "timeout": 5000}
 
     def test_unknown_step_id_resolves_to_none(self):
-        """Reference to an unknown step_id resolves to None."""
+        """Single reference to an unknown step_id resolves to None (raw navigated value)."""
         config = {"coord": "${steps.missing.x}"}
         resolved = _resolve_step_references(config, {})
         assert resolved["coord"] is None
+
+    def test_multiple_references_in_single_value(self):
+        """Multiple ${steps.*} tokens in one string value are all substituted. (#2632)"""
+        step_results = {"s1": {"result": {"x": 10, "y": 20}}}
+        config = {"label": "${steps.s1.result.x},${steps.s1.result.y}"}
+        resolved = _resolve_step_references(config, step_results)
+        assert resolved["label"] == "10,20"
+
+    def test_unresolved_reference_kept_as_is(self):
+        """Unknown step_id inside a multi-ref string keeps the original token. (#2632)"""
+        config = {"label": "${steps.unknown.foo},suffix"}
+        resolved = _resolve_step_references(config, {})
+        assert resolved["label"] == "${steps.unknown.foo},suffix"
 
     def test_non_string_values_unchanged(self):
         """Non-string config values (int, list, dict) are not modified."""

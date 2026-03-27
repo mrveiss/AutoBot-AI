@@ -106,7 +106,7 @@ def _redact_result_secrets(
 # Issue #2601 — Step reference resolution for vision step chaining
 # ---------------------------------------------------------------------------
 
-_REF_PATTERN = re.compile(r"\$\{steps\.(\w+)\.(.+?)\}")
+_REF_PATTERN = re.compile(r"\$\{steps\.(\w+)\.([^}]+)\}")
 _ARRAY_PART = re.compile(r"^(\w+)\[(\d+)\]$")
 
 
@@ -140,17 +140,30 @@ def _resolve_step_references(config: dict, step_results: dict) -> dict:
     """Resolve ``${steps.<step_id>.<path>}`` references in step config values.
 
     Only string values are scanned.  Non-matching strings and non-string values
-    are returned unchanged.  Unknown step IDs resolve to ``None``. (#2601)
+    are returned unchanged.
+
+    - A value that IS a single reference (entire string) returns the raw
+      navigated value preserving the original type (dict, list, int, …).
+    - A value that CONTAINS multiple references returns a substituted string.
+    - Unknown step IDs keep the original token unchanged. (#2601, #2632)
     """
+
+    def _replace_ref(match: re.Match) -> str:
+        step_id, path = match.group(1), match.group(2)
+        value = _navigate_path(step_results.get(step_id), path)
+        return str(value) if value is not None else match.group(0)
+
     resolved: dict = {}
     for key, value in config.items():
-        if isinstance(value, str):
-            match = _REF_PATTERN.search(value)
-            if match:
-                step_id, path = match.group(1), match.group(2)
+        if isinstance(value, str) and "${steps." in value:
+            sole = _REF_PATTERN.fullmatch(value)
+            if sole:
+                step_id, path = sole.group(1), sole.group(2)
                 resolved[key] = _navigate_path(step_results.get(step_id), path)
-                continue
-        resolved[key] = value
+            else:
+                resolved[key] = _REF_PATTERN.sub(_replace_ref, value)
+        else:
+            resolved[key] = value
     return resolved
 
 
@@ -504,13 +517,16 @@ class WorkflowExecutor:
                 current_step.command, owner_id
             )
 
+            # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
+            # types, not just vision.  Resolution is cheap and harmless for steps
+            # that have no step_config or no references in their config.
+            resolved_config = _resolve_step_references(
+                current_step.step_config or {}, workflow.step_results
+            )
+
             # Issue #2397: Route vision node types to the vision step handler.
-            # Issue #2601: Resolve ${steps.<id>.<path>} references before executing.
             # All other step types fall through to the standard command executor.
             if current_step.step_type in VISION_STEP_TYPES:
-                resolved_config = _resolve_step_references(
-                    current_step.step_config or {}, workflow.step_results
-                )
                 result = await self._timeout_enforcer.run_with_timeout(
                     coro=execute_vision_step(
                         current_step.step_type,
