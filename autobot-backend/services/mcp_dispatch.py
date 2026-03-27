@@ -18,9 +18,12 @@ Architecture:
 
 The dispatcher loads tool metadata from the registry on first use and
 caches it locally.  Cache can be refreshed explicitly via refresh_tool_cache().
+
+Cache TTL and RBAC filtering added in #2598.
 """
 
 import logging
+import time
 from typing import Optional
 
 import aiohttp
@@ -36,16 +39,41 @@ class MCPDispatcher:
 
     Caches tool metadata fetched from the registry so that repeated tool
     calls do not incur extra HTTP round-trips for discovery.
+
+    Cache refreshes automatically after CACHE_TTL_SECONDS (#2598).
+    Tools matching _ADMIN_ONLY_TOOLS patterns require role="admin" (#2598).
     """
+
+    CACHE_TTL_SECONDS: int = 60
+
+    # Tool name substrings that require admin role (#2598)
+    _ADMIN_ONLY_TOOLS: frozenset = frozenset(
+        {
+            "client_list",
+            "slowlog",
+            "config_set",
+            "config_rewrite",
+            "debug",
+            "flushdb",
+            "flushall",
+        }
+    )
 
     def __init__(self) -> None:
         """Initialize dispatcher with empty tool cache."""
         self._tool_cache: dict[str, dict] = {}
         self._cache_loaded = False
+        self._cache_timestamp: float = 0.0
 
     # ------------------------------------------------------------------
     # Cache management
     # ------------------------------------------------------------------
+
+    async def _ensure_cache_fresh(self) -> None:
+        """Refresh the tool cache if it is empty or older than CACHE_TTL_SECONDS (#2598)."""
+        age = time.monotonic() - self._cache_timestamp
+        if not self._cache_loaded or age > self.CACHE_TTL_SECONDS:
+            await self.refresh_tool_cache()
 
     async def refresh_tool_cache(self) -> int:
         """Fetch all tools from the MCP registry and populate the local cache.
@@ -72,6 +100,7 @@ class MCPDispatcher:
                 tools = data.get("tools", [])
                 self._tool_cache = {tool["name"]: tool for tool in tools}
                 self._cache_loaded = True
+                self._cache_timestamp = time.monotonic()
                 logger.info(
                     "MCPDispatcher: cached %d tools from registry",
                     len(self._tool_cache),
@@ -96,20 +125,39 @@ class MCPDispatcher:
     # Dispatch
     # ------------------------------------------------------------------
 
-    async def dispatch(self, tool_name: str, arguments: dict) -> dict:
+    def _is_admin_only(self, tool_name: str) -> bool:
+        """Return True if tool_name matches any admin-only pattern (#2598)."""
+        return any(pattern in tool_name for pattern in self._ADMIN_ONLY_TOOLS)
+
+    async def dispatch(
+        self, tool_name: str, arguments: dict, role: str = "user"
+    ) -> dict:
         """Dispatch a tool call to its registered MCP bridge.
 
-        Loads the tool cache on first call if it has not been populated yet.
+        Refreshes the tool cache if stale (TTL-based, #2598).
+        Rejects admin-only tools when role != "admin" (#2598).
 
         Args:
             tool_name: Tool name from the LLM tool call.
             arguments: Tool arguments dict.
+            role: Caller role — "admin" or "user" (default).
 
         Returns:
             Dict with keys: success (bool), result (str | dict), bridge (str | None).
         """
-        if not self._cache_loaded:
-            await self.refresh_tool_cache()
+        await self._ensure_cache_fresh()
+
+        if role != "admin" and self._is_admin_only(tool_name):
+            logger.warning(
+                "MCPDispatcher: role=%s denied access to admin-only tool %s",
+                role,
+                tool_name,
+            )
+            return {
+                "success": False,
+                "result": f"Tool {tool_name} requires admin role",
+                "bridge": None,
+            }
 
         tool = self.find_tool(tool_name)
         if not tool:
@@ -189,11 +237,15 @@ class MCPDispatcher:
     # Tool definition export
     # ------------------------------------------------------------------
 
-    def get_tool_definitions(self) -> list[dict]:
+    def get_tool_definitions(self, role: str = "user") -> list[dict]:
         """Return tool definitions in LLM-injectable format.
 
+        Admin-only tools are excluded when role != "admin" (#2598).
         Each entry contains name, description (prefixed with bridge name),
         and parameters (from the tool's input_schema).
+
+        Args:
+            role: Caller role — "admin" or "user" (default).
 
         Returns:
             List of tool definition dicts.
@@ -205,6 +257,7 @@ class MCPDispatcher:
                 "parameters": tool.get("input_schema", {}),
             }
             for tool in self._tool_cache.values()
+            if role == "admin" or not self._is_admin_only(tool["name"])
         ]
 
 
