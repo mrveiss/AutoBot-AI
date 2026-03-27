@@ -26,7 +26,7 @@ _SUBPROCESS_PROGRESS_TIMEOUT = 300  # 5 min without progress = stale
 _SUBPROCESS_WATCHDOG_INTERVAL = 30  # Check progress every 30 seconds
 
 # ---------------------------------------------------------------------------
-# Dedicated Indexing Thread Pool (Issue #XXX: Prevent thread starvation)
+# Dedicated Indexing Thread Pool (#2364: Prevent thread starvation on large repos)
 # ---------------------------------------------------------------------------
 _INDEXING_EXECUTOR: ThreadPoolExecutor | None = None
 _INDEXING_EXECUTOR_MAX_WORKERS = 4  # Dedicated threads for indexing operations
