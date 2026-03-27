@@ -10,6 +10,7 @@ workflows and providing configurable overflow handling (reject/queue/drop-oldest
 
 import asyncio
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
@@ -112,8 +113,6 @@ class ConcurrentWorkflowLimiter:
         - QUEUE: awaits until a slot opens (FIFO order preserved).
         - DROP_OLDEST: cancels oldest running workflow first.
         """
-        import time
-
         if workflow_id in self._running:
             logger.warning(
                 "ConcurrentWorkflowLimiter: workflow %s already running", workflow_id
@@ -188,9 +187,7 @@ class ConcurrentWorkflowLimiter:
         raise ConcurrencyLimitError(workflow_id, self._max_concurrent)
 
     async def _enqueue(self, workflow_id: str) -> None:
-        """Block until a slot opens, then claim it."""
-        import time
-
+        """Block until a slot opens, then claim it. Timeout after 300s."""
         entry = _QueuedEntry(workflow_id=workflow_id)
         self._queue.append(entry)
         logger.info(
@@ -198,30 +195,31 @@ class ConcurrentWorkflowLimiter:
             workflow_id,
             len(self._queue),
         )
-        await entry.ready_event.wait()
+        try:
+            await asyncio.wait_for(entry.ready_event.wait(), timeout=300.0)
+        except asyncio.TimeoutError:
+            self._queue.remove(entry)
+            raise ConcurrencyLimitError(workflow_id, self._max_concurrent)
         self._running[workflow_id] = time.time()
 
     async def _drop_oldest_and_acquire(self, workflow_id: str) -> None:
-        """Cancel the oldest running workflow and claim its slot."""
-        import time
+        """Cancel the oldest running workflow and claim its slot.
 
-        if not self._running:
-            # Should not happen, but guard anyway
-            self._running[workflow_id] = time.time()
-            return
-
-        oldest_id = min(self._running, key=self._running.__getitem__)
-        logger.warning(
-            "ConcurrentWorkflowLimiter: dropping oldest workflow %s to make room for %s",
-            oldest_id,
-            workflow_id,
+        Requires a cancellation callback to actually stop the evicted workflow.
+        Until that callback mechanism exists, this policy is not safe to use.
+        """
+        raise NotImplementedError(
+            "DROP_OLDEST policy requires a cancellation callback to stop the evicted "
+            "workflow. Use REJECT or QUEUE until this is implemented."
         )
-        del self._running[oldest_id]
-        self._running[workflow_id] = time.time()
 
     async def _promote_queued(self) -> None:
-        """Wake the next waiting workflow if there is capacity."""
-        while self._queue and self.running_count < self._max_concurrent:
+        """Wake the next waiting workflow if there is capacity.
+
+        Only promote one entry per available slot to avoid over-promotion
+        (the awakened coroutine adds itself to _running asynchronously).
+        """
+        if self._queue and self.running_count < self._max_concurrent:
             entry = self._queue.popleft()
             entry.ready_event.set()
 

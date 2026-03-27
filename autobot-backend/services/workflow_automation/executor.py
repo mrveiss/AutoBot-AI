@@ -659,6 +659,10 @@ class WorkflowExecutor:
 
         self._record_cancellation_metrics(workflow, workflows)
 
+        # Issue #2159: Clean up cost tracker entry to prevent memory leak
+        if hasattr(self, "cost_tracker") and self.cost_tracker:
+            self.cost_tracker.finish(workflow.workflow_id)
+
         await self.messenger.send_message(
             workflow.session_id,
             {"type": "workflow_cancelled", "workflow_id": workflow.workflow_id},

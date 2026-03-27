@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
 
@@ -227,7 +227,7 @@ class WorkflowStepRequest(BaseModel):
     risk_level: str = "low"
     dependencies: List[str] = []
     # Issue #2159: Per-step timeout in seconds. None means use system default.
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class AutomatedWorkflowRequest(BaseModel):
