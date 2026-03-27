@@ -33,6 +33,7 @@ def _make_redis_mock() -> AsyncMock:
     """Return a Redis mock with xrange returning empty by default."""
     redis = AsyncMock()
     redis.xrange = AsyncMock(return_value=[])
+    redis.hgetall = AsyncMock(return_value={})
     return redis
 
 

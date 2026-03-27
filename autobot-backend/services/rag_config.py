@@ -121,6 +121,14 @@ class RAGConfig:
         if self.timeout_seconds <= 0:
             raise ValueError(f"timeout_seconds must be > 0, got {self.timeout_seconds}")
 
+        if self.ewc_lambda < 0:
+            raise ValueError(f"ewc_lambda must be >= 0, got {self.ewc_lambda}")
+
+        if self.ewc_consolidation_interval < 1:
+            raise ValueError(
+                f"ewc_consolidation_interval must be >= 1, got {self.ewc_consolidation_interval}"
+            )
+
     @classmethod
     def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
         """

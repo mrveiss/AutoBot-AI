@@ -62,6 +62,8 @@ class EdgeLearner:
         self.creation_threshold = creation_threshold
         self.initial_weight = initial_weight
         # EWC++ parameters (#2097)
+        if ewc_lambda < 0:
+            raise ValueError(f"ewc_lambda must be >= 0, got {ewc_lambda}")
         self.ewc_lambda = ewc_lambda
         self.ewc_consolidation_interval = ewc_consolidation_interval
         self._update_count: int = 0
