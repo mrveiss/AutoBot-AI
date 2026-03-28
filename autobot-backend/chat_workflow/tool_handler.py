@@ -210,40 +210,11 @@ def _create_execution_result(
     }
 
 
-def _handle_unknown_tool(
-    tool_name: str,
-    ctx: Optional["LLMIterationContext"],
-    execution_results: List[Dict[str, Any]],
-) -> WorkflowMessage:
-    """Build an error message for an unknown tool call. Issue #2305/#2310."""
-    known_tools = sorted(
-        {"respond", "delegate", "execute_command", "web_search"} | _BROWSER_TOOL_NAMES
-    )
-    if ctx is not None:
-        ctx.consecutive_invalid_tool_calls += 1
-    consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
-    error_msg = (
-        f'Error: Tool "{tool_name}" not found. '
-        f"Available tools: {', '.join(known_tools)}"
-    )
-    logger.warning(
-        "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
-        tool_name,
-        consecutive,
-    )
-    execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
-    return WorkflowMessage(
-        type="error",
-        content=error_msg,
-        metadata={"message_type": "unknown_tool", "tool_name": tool_name},
-    )
-
-
 def _build_mcp_approval_message(
     tool_name: str,
     bridge: str,
     raw_result: dict,
-    execution_results: List[Dict[str, Any]],
+    execution_results: list[dict[str, Any]],
 ) -> WorkflowMessage:
     """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
     approval_msg = raw_result.get("message", "This operation requires approval.")
