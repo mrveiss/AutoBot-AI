@@ -68,7 +68,7 @@
 ```
 
 **CI/CD Pipeline Features:**
-- ✅ Multi-Python version testing (3.10, 3.11)
+- ✅ Python 3.12 testing
 - ✅ Code quality checks (black, isort, flake8)
 - ✅ Security analysis (bandit)
 - ✅ Docker sandbox validation
