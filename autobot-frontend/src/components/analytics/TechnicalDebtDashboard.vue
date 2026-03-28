@@ -79,7 +79,7 @@
               <g transform="translate(100, 100)">
                 <circle r="70" fill="none" class="donut-bg" stroke-width="30" />
                 <circle
-                  v-for="(segment, index) in categorySegments"
+                  v-for="segment in categorySegments"
                   :key="segment.category"
                   r="70"
                   fill="none"

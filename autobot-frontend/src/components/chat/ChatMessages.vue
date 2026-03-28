@@ -47,7 +47,7 @@
           }"
         >
         <!-- Issue #1314: Local alias via single-element v-for -->
-        <template v-for="message in [filteredMessages[vItem.index]]" :key="0">
+        <template v-for="message in [filteredMessages[vItem.index]]" :key="message?.id ?? vItem.index">
         <div
           class="message-wrapper"
           :class="getMessageWrapperClass(message)"

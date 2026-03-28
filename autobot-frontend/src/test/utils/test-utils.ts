@@ -1,8 +1,20 @@
 import { render, type RenderOptions } from '@testing-library/vue'
 import { createTestingPinia } from '@pinia/testing'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createI18n } from 'vue-i18n'
 import { vi, type Mock } from 'vitest'
 import type { Component } from 'vue'
+
+// Minimal i18n instance for tests (vue-i18n 11 requires app.use(i18n))
+const createTestI18n = () =>
+  createI18n({
+    legacy: false,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: { en: {} },
+    missingWarn: false,
+    fallbackWarn: false,
+  })
 
 // Common test routes for components that use router
 const testRoutes = [
@@ -47,6 +59,7 @@ export const renderComponent = (
     ...global,
     plugins: [
       ...(global.plugins || []),
+      createTestI18n(),
       ...(router ? [createTestRouter(undefined, ['/terminal/test-session'])] : []),
       ...(pinia ? [createTestingPinia({ createSpy: vi.fn })] : []),
     ],

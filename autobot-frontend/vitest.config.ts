@@ -33,7 +33,8 @@ export default mergeConfig(
         'tests/**',
         'src/test/e2e/**',
         '**/*.e2e.test.ts',
-        '**/*.playwright.spec.ts'
+        '**/*.playwright.spec.ts',
+        '**/.worktrees/**',
       ],
 
       // Coverage configuration

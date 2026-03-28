@@ -487,7 +487,7 @@ describe('RedisServiceControl.vue', () => {
   });
 
   describe('WebSocket Real-Time Updates', () => {
-    it('subscribes to status updates on mount', () => {
+    it('subscribes to status updates on mount', async () => {
       const { useServiceManagement } = await import('@/composables/useServiceManagement');
       const mockSubscribe = vi.fn();
 
