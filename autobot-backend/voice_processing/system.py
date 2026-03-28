@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
 from task_execution_tracker import task_tracker

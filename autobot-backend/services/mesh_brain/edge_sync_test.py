@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from services.mesh_brain.edge_sync import MeshEdgeSync
 
 # =============================================================================

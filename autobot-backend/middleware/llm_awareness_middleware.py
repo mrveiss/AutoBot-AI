@@ -13,8 +13,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import Request
-from llm_self_awareness import get_llm_self_awareness
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from llm_self_awareness import get_llm_self_awareness
 
 logger = logging.getLogger(__name__)
 

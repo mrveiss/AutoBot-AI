@@ -13,8 +13,9 @@ import requests
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from desktop_streaming_manager import VNCServerManager, desktop_streaming
 from enhanced_memory_manager import TaskPriority
+
+from desktop_streaming_manager import VNCServerManager, desktop_streaming
 from takeover_manager import TakeoverTrigger, takeover_manager
 
 

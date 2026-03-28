@@ -14,6 +14,7 @@ import uuid
 from typing import Any, Optional
 
 from sqlalchemy import select
+
 from user_management.models.sso import SSOProvider, SSOProviderType, UserSSOLink
 from user_management.models.user import User
 from user_management.schemas.sso import SSOProviderCreate, SSOProviderUpdate

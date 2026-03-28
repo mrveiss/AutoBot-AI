@@ -54,10 +54,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from autobot_memory_graph import AutoBotMemoryGraph
-from services.rag_service import RAGService
-
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger
+from services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
 

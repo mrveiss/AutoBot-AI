@@ -8,9 +8,6 @@ import json
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission, get_current_user
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from exceptions import InternalError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -20,15 +17,18 @@ from fastapi import (
     Query,
     Request,
 )
+from pydantic import BaseModel, Field, field_validator
+
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from exceptions import InternalError
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field, field_validator
 from utils.path_validation import contains_path_traversal
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints

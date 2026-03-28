@@ -36,10 +36,11 @@ import time
 from typing import Any, Callable, Optional
 
 from fastapi import Request
-from middleware.proxy_utils import get_client_ip
-from services.audit_logger import AuditResult, get_audit_logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
+
+from middleware.proxy_utils import get_client_ip
+from services.audit_logger import AuditResult, get_audit_logger
 
 logger = logging.getLogger(__name__)
 

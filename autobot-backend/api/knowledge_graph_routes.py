@@ -13,9 +13,10 @@ import re
 from typing import List, Optional
 from uuid import UUID
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -168,9 +169,8 @@ async def search_events(
     try:
         from datetime import datetime
 
-        from knowledge.temporal_search import TemporalSearchService
-
         from autobot_shared.redis_client import get_redis_client
+        from knowledge.temporal_search import TemporalSearchService
 
         redis_client = get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
@@ -204,9 +204,8 @@ async def get_event_timeline(
     if not _SAFE_NAME_RE.match(entity_name):
         raise HTTPException(status_code=400, detail="Invalid entity name")
     try:
-        from knowledge.temporal_search import TemporalSearchService
-
         from autobot_shared.redis_client import get_redis_client
+        from knowledge.temporal_search import TemporalSearchService
 
         redis_client = get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)

@@ -19,12 +19,12 @@ from typing import Dict
 
 import yaml
 
+# SSOT Migration (Issue #602): Import SSOT config as primary source
+from autobot_shared.ssot_config import get_config as get_ssot_config
+
 # Legacy import for backward compatibility - these now read from SSOT
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
-
-# SSOT Migration (Issue #602): Import SSOT config as primary source
-from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Get SSOT config
 _ssot = get_ssot_config()

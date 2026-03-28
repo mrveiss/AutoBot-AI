@@ -11,6 +11,7 @@ import base64
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from media.audio.pipeline import AudioPipeline
 from media.core.types import MediaInput, MediaType, ProcessingIntent
 

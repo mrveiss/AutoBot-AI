@@ -12,13 +12,13 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from models.code_pattern import CodePattern
-from models.completion_feedback import CompletionFeedback
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from models.code_pattern import CodePattern
+from models.completion_feedback import CompletionFeedback
 
 logger = logging.getLogger(__name__)
 

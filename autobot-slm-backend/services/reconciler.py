@@ -16,6 +16,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -30,10 +34,6 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -189,8 +189,9 @@ class ReconcilerService:
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
-        from services.database import db_service
         from sqlalchemy import or_
+
+        from services.database import db_service
 
         async with db_service.session() as db:
             timeout_setting = await db.execute(

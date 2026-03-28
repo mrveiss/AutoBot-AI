@@ -16,6 +16,8 @@ Endpoints:
 
 import logging
 
+from fastapi import APIRouter, Depends, HTTPException
+
 from api.knowledge_models import (
     CompareVersionsRequest,
     CreateMetadataTemplateRequest,
@@ -25,7 +27,6 @@ from api.knowledge_models import (
     ValidateMetadataRequest,
 )
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, Depends, HTTPException
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)

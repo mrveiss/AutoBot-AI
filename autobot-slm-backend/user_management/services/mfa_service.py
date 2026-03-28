@@ -15,8 +15,9 @@ from typing import Optional
 
 from passlib.context import CryptContext
 from passlib.hash import bcrypt as bcrypt_hash
-from services.encryption import decrypt_data, encrypt_data
 from sqlalchemy import select
+
+from services.encryption import decrypt_data, encrypt_data
 from user_management.models.mfa import UserMFA
 from user_management.models.user import User
 from user_management.services.base_service import BaseService

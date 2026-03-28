@@ -11,9 +11,14 @@ Related to Issue #760 Phase 2.
 import logging
 from typing import Optional
 
-from api.websocket import ws_manager
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from api.websocket import ws_manager
+from config import settings
 from models.database import Agent
 from models.schemas import (
     AgentCreateRequest,
@@ -24,11 +29,6 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])

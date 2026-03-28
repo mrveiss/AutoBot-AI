@@ -14,6 +14,7 @@ from functools import wraps
 from typing import Callable, List, Optional, Set
 
 from fastapi import HTTPException, Request, status
+
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
 from user_management.services import TenantContext, UserService

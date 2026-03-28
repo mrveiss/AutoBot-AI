@@ -11,13 +11,14 @@ import logging
 import uuid
 from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+
 from api.user_management.dependencies import (
     get_team_service,
     require_org_context,
     require_user_management_enabled,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from user_management.services import TeamService, TenantContext
 from user_management.services.team_service import (
     DuplicateTeamError,

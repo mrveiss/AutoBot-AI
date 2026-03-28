@@ -16,13 +16,14 @@ Endpoints:
 
 import logging
 
+from fastapi import APIRouter, HTTPException
+
 from api.knowledge_models import (
     AutoApplySuggestionsRequest,
     SuggestAllRequest,
     SuggestCategoriesRequest,
     SuggestTagsRequest,
 )
-from fastapi import APIRouter, HTTPException
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)

@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urlparse
 
 import pytest
+
 from skills.builtin.community_growth import CommunityGrowthSkill
 
 

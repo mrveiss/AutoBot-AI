@@ -12,6 +12,9 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from api import (
     agents_router,
     api_keys_router,
@@ -59,15 +62,12 @@ from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from config import settings
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
-
-from config import settings
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -87,10 +87,9 @@ def _check_tablename_collisions() -> None:
     """
     # Import after path is set up so this function is safe to call early in lifespan.
     import user_management.models  # noqa: F401 — registers all UM models with UMBase
+    from autobot_shared.tablename_validator import check_tablename_collisions
     from models.database import Base as SLMBase
     from user_management.models.base import Base as UMBase
-
-    from autobot_shared.tablename_validator import check_tablename_collisions
 
     check_tablename_collisions(SLMBase.metadata, UMBase.metadata)
 

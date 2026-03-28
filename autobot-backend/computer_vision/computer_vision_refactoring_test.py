@@ -8,6 +8,7 @@ Verifies Tell Don't Ask pattern implementation and backward compatibility
 
 import numpy as np
 import pytest
+
 from computer_vision_system import (
     ContextAnalyzer,
     ElementType,

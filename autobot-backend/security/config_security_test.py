@@ -8,6 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+
 from config.manager import ConfigManager as ConfigManager
 
 

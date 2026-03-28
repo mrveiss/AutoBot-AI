@@ -12,9 +12,8 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from advanced_rag_optimizer import SearchResult
-from services.rag_service import RAGService
-
 from autobot_shared.logging_manager import get_llm_logger
+from services.rag_service import RAGService
 
 from .context_enhancer import get_context_enhancer
 from .doc_searcher import DocumentationSearcher, get_documentation_searcher

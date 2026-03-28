@@ -12,6 +12,7 @@ import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from media.core.types import MediaInput, MediaType, ProcessingIntent
 from media.image.pipeline import ImagePipeline
 

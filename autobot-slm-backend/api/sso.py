@@ -11,8 +11,9 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from services.auth import require_admin
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.auth import require_admin
 from user_management.database import get_slm_session
 from user_management.schemas.sso import (
     SSOProviderCreate,

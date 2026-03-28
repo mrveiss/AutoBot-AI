@@ -10,12 +10,12 @@ including Redis, knowledge base, chat workflow, LLM sync, AI Stack, and distribu
 
 import asyncio
 
-from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
-from initialization.ai_stack_init import initialize_ai_stack
-from utils.background_llm_sync import background_llm_sync
 
 from autobot_shared.logging_manager import get_logger
+from chat_workflow import ChatWorkflowManager
+from initialization.ai_stack_init import initialize_ai_stack
+from utils.background_llm_sync import background_llm_sync
 
 logger = get_logger(__name__, "backend")
 

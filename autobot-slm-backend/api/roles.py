@@ -14,14 +14,15 @@ import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from pydantic import BaseModel, Field
-from services.auth import get_current_user
-from services.database import get_db
-from services.role_registry import get_role_definitions, list_roles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from models.database import Node, NodeRole, Role, RoleStatus, SyncType
+from services.auth import get_current_user
+from services.database import get_db
+from services.role_registry import get_role_definitions, list_roles
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/roles", tags=["roles"])

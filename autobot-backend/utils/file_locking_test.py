@@ -307,6 +307,7 @@ class TestConcurrentFileWriteSafety:
     async def test_concurrent_writes_same_file_no_corruption(self):
         """Test that concurrent writes to same file don't corrupt data"""
         import aiofiles
+
         from api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -347,6 +348,7 @@ class TestConcurrentFileWriteSafety:
         import time
 
         import aiofiles
+
         from api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:

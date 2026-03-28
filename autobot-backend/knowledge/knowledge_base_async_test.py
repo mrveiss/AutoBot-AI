@@ -18,6 +18,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from knowledge_base import KnowledgeBase
 
 # Configure logging for tests

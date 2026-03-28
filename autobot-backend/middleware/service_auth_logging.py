@@ -11,8 +11,9 @@ authentication patterns without impacting service availability.
 
 import structlog
 from fastapi import Request
-from security.service_auth import validate_service_auth
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
 

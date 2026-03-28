@@ -13,8 +13,12 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 
-from api.websocket import ws_manager
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from api.websocket import ws_manager
 from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
     FleetServicesResponse,
@@ -34,9 +38,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_categorizer import categorize_service
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])

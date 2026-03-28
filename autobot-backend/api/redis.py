@@ -4,10 +4,10 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
-from services.config_service import ConfigService
-from utils.connection_utils import ConnectionTester
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.config_service import ConfigService
+from utils.connection_utils import ConnectionTester
 
 router = APIRouter()
 

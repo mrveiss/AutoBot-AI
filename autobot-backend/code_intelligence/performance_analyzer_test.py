@@ -20,6 +20,7 @@ import tempfile
 import textwrap
 
 import pytest
+
 from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceIssueType,

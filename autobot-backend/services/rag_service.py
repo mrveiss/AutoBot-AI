@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 from knowledge.search_components.query_classifier import get_query_classifier
 from live_event_manager import publish_live_event
 from services.context_sufficiency import (
@@ -27,9 +29,6 @@ from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
-
-from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("rag_service")
 

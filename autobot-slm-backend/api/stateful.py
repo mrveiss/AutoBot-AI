@@ -14,6 +14,10 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import Backup, BackupStatus, Node, Replication, ReplicationStatus
 from models.schemas import (
     ActionResponse,
@@ -30,9 +34,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.replication import replication_service
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])

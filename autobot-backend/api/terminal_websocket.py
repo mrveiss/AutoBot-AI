@@ -9,12 +9,13 @@ import logging
 import os
 from typing import Any, Dict
 
+from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
+
 from agents.system_command_agent import SystemCommandAgent
 from event_manager import event_manager
-from fastapi import WebSocket, WebSocketDisconnect
 from services.terminal_completion_service import TerminalCompletionService
 from services.terminal_history_service import TerminalHistoryService
-from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
 

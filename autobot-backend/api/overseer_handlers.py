@@ -15,6 +15,8 @@ import asyncio
 import logging
 from typing import Any, Dict, Optional
 
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
 from agents.overseer import OverseerAgent, OverseerUpdate, StepExecutorAgent, StepResult
 from agents.overseer.types import (
     CommandBreakdownPart,
@@ -24,7 +26,6 @@ from agents.overseer.types import (
 )
 from auth_middleware import get_current_user
 from chat_history import ChatHistoryManager
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 

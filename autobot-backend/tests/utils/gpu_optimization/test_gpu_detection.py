@@ -7,6 +7,7 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from utils.gpu_optimization.gpu_detection import (
     _check_amd_gpu,
     _check_intel_gpu,

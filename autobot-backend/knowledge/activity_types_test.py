@@ -18,6 +18,8 @@ import uuid
 from datetime import datetime
 
 import pytest
+from pydantic import ValidationError
+
 from knowledge.activity_types import (
     BrowserActivity,
     DesktopActivity,
@@ -25,7 +27,6 @@ from knowledge.activity_types import (
     SecretUsage,
     TerminalActivity,
 )
-from pydantic import ValidationError
 
 
 class TestTerminalActivity:

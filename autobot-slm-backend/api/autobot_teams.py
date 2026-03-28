@@ -13,8 +13,9 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from services.auth import require_admin
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.auth import require_admin
 from user_management.database import get_autobot_session
 from user_management.services import TeamService, TenantContext
 

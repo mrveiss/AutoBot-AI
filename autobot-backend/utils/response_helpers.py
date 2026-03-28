@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+
 from type_defs.common import Metadata
 
 if TYPE_CHECKING:

@@ -11,6 +11,9 @@ Integrates RBAC filtering and routes to the appropriate handler module.
 import logging
 from typing import Any, Dict, List
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
 from api.redis_mcp.data_access import (
     handle_redis_delete,
     handle_redis_get,
@@ -50,12 +53,9 @@ from api.redis_mcp.vector_search import (
     handle_redis_vector_search,
 )
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-from type_defs.common import Metadata
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_management.types import DATABASE_MAPPING
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

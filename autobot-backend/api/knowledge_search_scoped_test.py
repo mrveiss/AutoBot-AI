@@ -155,8 +155,9 @@ async def test_scoped_search_passes_filters_to_kb():
 @pytest.mark.asyncio
 async def test_scoped_search_no_kb_raises_503():
     """Missing knowledge base returns 503."""
-    from api.knowledge_search_scoped import ScopedSearchRequest, scoped_search
     from fastapi import HTTPException
+
+    from api.knowledge_search_scoped import ScopedSearchRequest, scoped_search
 
     with patch(
         "api.knowledge_search_scoped.get_or_create_knowledge_base",

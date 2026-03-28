@@ -9,6 +9,7 @@ Issue #1968: Only-last-logit optimization for autoregressive generation.
 
 import pytest
 import torch
+
 from llm_interface_pkg.optimization.inference_utils import (
     InferenceConfig,
     InferenceMode,

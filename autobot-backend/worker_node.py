@@ -11,6 +11,7 @@ import sys
 from typing import Any, Dict, Optional
 
 import psutil
+
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
@@ -29,17 +30,16 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
+from autobot_shared.redis_client import get_redis_client
+
+# Import the centralized ConfigManager and Redis client utility
+from config import config as global_config_manager
 from event_manager import event_manager
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from security_layer import SecurityLayer
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
-
-from autobot_shared.redis_client import get_redis_client
-
-# Import the centralized ConfigManager and Redis client utility
-from config import config as global_config_manager
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith("linux"):

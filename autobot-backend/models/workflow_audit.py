@@ -14,6 +14,7 @@ from sqlalchemy import Column, DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base
 
 

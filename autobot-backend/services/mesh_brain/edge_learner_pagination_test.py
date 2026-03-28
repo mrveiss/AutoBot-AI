@@ -11,6 +11,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
+
 from services.mesh_brain.edge_learner import EdgeLearner
 
 _EMA_DECAY = 0.95

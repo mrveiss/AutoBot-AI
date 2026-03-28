@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict, List
 
 import aiohttp
+
 from skills.models import SkillState
 from skills.sync.base_sync import BaseRepoSync
 

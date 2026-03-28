@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     EventSeverity,
     EventType,
@@ -45,9 +49,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
-from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/updates", tags=["updates"])

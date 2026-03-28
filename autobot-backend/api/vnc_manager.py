@@ -17,6 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
 # Issue #74 - Area 5: Human-like behavior helpers
 from api.vnc_humanization import (
     humanize_action_delay,
@@ -27,12 +30,9 @@ from api.vnc_humanization import (
     simulate_mouse_curve,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ Uses unittest.mock — no network, no database.
 """
 
 import pytest
+
 from services.a2a_card_fetcher import _A2A_ROLE, _fetch_one
 
 # ---------------------------------------------------------------------------

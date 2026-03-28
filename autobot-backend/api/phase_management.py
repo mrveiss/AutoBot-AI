@@ -13,10 +13,10 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
-from phase_progression_manager import get_progression_manager
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from phase_progression_manager import get_progression_manager
 from scripts.phase_validation_system import PhaseValidator
 
 router = APIRouter()

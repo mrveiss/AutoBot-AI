@@ -16,12 +16,12 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 import aiohttp
-from circuit_breaker import circuit_breaker_async
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from circuit_breaker import circuit_breaker_async
 from config import ConfigManager
 
 from ..models import LLMRequest, LLMResponse, LLMSettings

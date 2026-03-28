@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 import yaml
-from constants.path_constants import PATH
 from performance_monitor import PerformanceMonitor
+
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

@@ -19,9 +19,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from models.database import Node, Service, ServiceStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import Node, Service, ServiceStatus
 
 logger = logging.getLogger(__name__)
 

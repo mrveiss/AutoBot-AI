@@ -21,12 +21,12 @@ from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmb
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
-from utils.chromadb_client import get_chromadb_client as create_chromadb_client
-from utils.chromadb_client import wrap_collection_async
-from utils.knowledge_base_timeouts import kb_timeouts
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from config import ConfigManager
+from utils.chromadb_client import get_chromadb_client as create_chromadb_client
+from utils.chromadb_client import wrap_collection_async
+from utils.knowledge_base_timeouts import kb_timeouts
 
 if TYPE_CHECKING:
     pass

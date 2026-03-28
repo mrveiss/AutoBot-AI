@@ -12,13 +12,13 @@ Author: mrveiss
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import get_current_user
-from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from type_defs.common import Metadata
 
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
+from type_defs.common import Metadata
 
 router = APIRouter(tags=["vision", "gui-automation"])
 logger = logging.getLogger(__name__)

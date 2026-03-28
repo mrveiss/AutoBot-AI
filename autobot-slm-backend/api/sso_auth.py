@@ -12,8 +12,9 @@ import uuid
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
-from services.auth import auth_service
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.auth import auth_service
 from user_management.database import get_slm_session
 from user_management.schemas.sso import LDAPLoginRequest, SSOLoginInitResponse
 from user_management.services.base_service import TenantContext

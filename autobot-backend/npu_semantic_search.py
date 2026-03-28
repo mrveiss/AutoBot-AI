@@ -17,11 +17,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import numpy as np
+
 from ai_hardware_accelerator import (
     HardwareDevice,
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
+from config import cfg
 
 # Import existing AutoBot components
 from constants.threshold_constants import TimingConstants
@@ -37,10 +41,6 @@ from utils.gpu_vector_search import (
     VectorSearchConfig,
     get_hybrid_vector_search,
 )
-
-from autobot_shared.http_client import get_http_client
-from autobot_shared.logging_manager import get_llm_logger
-from config import cfg
 
 # Import ChromaDB for multi-modal vector storage
 try:

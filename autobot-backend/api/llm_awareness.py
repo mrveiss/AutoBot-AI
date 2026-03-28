@@ -11,10 +11,10 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
-from llm_self_awareness import get_llm_self_awareness
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from llm_self_awareness import get_llm_self_awareness
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -21,8 +21,9 @@ from uuid import uuid4
 
 import aiofiles
 import yaml
-from constants.path_constants import PATH
 from cryptography.fernet import Fernet
+
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

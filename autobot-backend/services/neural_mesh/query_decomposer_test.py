@@ -11,6 +11,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from services.neural_mesh.query_decomposer import (
     DecompositionPlan,
     DecompositionStep,

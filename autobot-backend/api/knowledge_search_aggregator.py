@@ -22,10 +22,10 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

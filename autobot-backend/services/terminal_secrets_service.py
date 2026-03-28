@@ -38,12 +38,11 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from autobot_shared.security.path_validator import validate_relative_path
 from services.agent_secrets_integration import (
     AgentSecretsIntegration,
     get_agent_secrets_integration,
 )
-
-from autobot_shared.security.path_validator import validate_relative_path
 
 logger = logging.getLogger(__name__)
 

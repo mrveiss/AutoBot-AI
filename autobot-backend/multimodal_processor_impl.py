@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.config_manager import get_config_section
 from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
@@ -23,8 +24,6 @@ from media.core.types import MediaInput as NewMediaInput
 from media.core.types import MediaType as NewMediaType
 from media.core.types import ProcessingIntent as NewProcessingIntent
 from media.manager import get_media_pipeline_manager
-
-from autobot_shared.config_manager import get_config_section
 
 logger = logging.getLogger(__name__)
 

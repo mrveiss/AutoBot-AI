@@ -12,12 +12,12 @@ Issue #688: User ownership model for chat-derived knowledge
 import logging
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from api.knowledge_models import ShareFactRequest, UpdateVisibilityRequest
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, Depends, HTTPException, Request
-from knowledge_factory import get_or_create_knowledge_base
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

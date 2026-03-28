@@ -10,9 +10,9 @@ FastAPI router endpoints for advanced workflow operations.
 import logging
 from typing import Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from .orchestrator import AdvancedWorkflowOrchestrator

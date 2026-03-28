@@ -15,6 +15,7 @@ Tests verify:
 from typing import Optional
 
 import pytest
+
 from extensions.base import Extension, HookContext
 from extensions.builtin import LoggingExtension, SecretMaskingExtension
 from extensions.hooks import HookPoint, get_hook_metadata

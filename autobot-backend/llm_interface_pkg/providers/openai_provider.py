@@ -12,9 +12,10 @@ import logging
 import time
 from typing import Optional
 
-from circuit_breaker import circuit_breaker_async
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
+
+from circuit_breaker import circuit_breaker_async
 
 from ..models import LLMRequest, LLMResponse
 

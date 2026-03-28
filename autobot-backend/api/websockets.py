@@ -15,9 +15,9 @@ from typing import Callable, Dict, Optional, Tuple
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
-from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

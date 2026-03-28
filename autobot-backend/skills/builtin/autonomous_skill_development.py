@@ -81,10 +81,11 @@ async def _get_governance_mode() -> str:
     Helper for AutonomousSkillDevelopmentSkill.execute (Issue #951).
     """
     try:
-        from skills.db import get_skills_engine
-        from skills.models import GovernanceConfig
         from sqlalchemy import select
         from sqlalchemy.ext.asyncio import AsyncSession
+
+        from skills.db import get_skills_engine
+        from skills.models import GovernanceConfig
 
         engine = get_skills_engine()
         async with AsyncSession(engine) as session:
@@ -147,9 +148,10 @@ async def _save_draft(pkg: Dict[str, Any], requested_by: str, gap: str) -> str:
     Returns the new SkillPackage ID.
     """
     try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
         from skills.db import get_skills_engine
         from skills.models import SkillPackage, SkillState
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         engine = get_skills_engine()
         async with AsyncSession(engine) as session:

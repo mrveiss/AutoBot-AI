@@ -4,17 +4,16 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_client import get_redis_client
+
+# Import the centralized ConfigManager and Redis client utility
+from config import config as global_config_manager
 from encryption_service import (
     decrypt_data,
     encrypt_data,
     get_encryption_service,
     is_encryption_enabled,
 )
-
-from autobot_shared.redis_client import get_redis_client
-
-# Import the centralized ConfigManager and Redis client utility
-from config import config as global_config_manager
 
 
 class ChatHistoryManager:

@@ -33,10 +33,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import StringParsingConstants
 from type_defs.common import Metadata
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,6 @@ Called by main.py lifespan via _seed_default_agents().
 
 import logging
 
-from models.database import Agent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +21,7 @@ from autobot_shared.ssot_config import (
     QUALITY_MODEL,
     ROUTING_MODEL,
 )
+from models.database import Agent
 
 logger = logging.getLogger(__name__)
 

@@ -10,6 +10,7 @@ Covers:
 """
 
 import pytest
+
 from utils.model_optimization.types import (
     ModelInfo,
     ModelPerformanceLevel,

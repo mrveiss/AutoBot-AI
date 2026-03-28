@@ -14,6 +14,11 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     AuditLog,
     Certificate,
@@ -39,12 +44,8 @@ from models.schemas import (
     SecurityPolicyUpdate,
     ThreatSummary,
 )
-from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/security", tags=["security"])

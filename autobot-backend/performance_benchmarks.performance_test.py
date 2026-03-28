@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import psutil
 import pytest
 from enhanced_memory_manager import EnhancedMemoryManager
+
 from knowledge_base import KnowledgeBase
 
 # Import components to benchmark

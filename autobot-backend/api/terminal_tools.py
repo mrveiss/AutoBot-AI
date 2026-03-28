@@ -19,9 +19,9 @@ These endpoints are imported into terminal.py via router inclusion.
 
 import logging
 
-from api.terminal_models import ToolInstallRequest
 from fastapi import APIRouter
 
+from api.terminal_models import ToolInstallRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

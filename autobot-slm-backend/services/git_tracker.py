@@ -13,9 +13,10 @@ import os
 from datetime import datetime
 from typing import Optional, Tuple
 
-from models.database import CodeSource, Setting
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import CodeSource, Setting
 
 logger = logging.getLogger(__name__)
 

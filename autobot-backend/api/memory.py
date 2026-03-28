@@ -31,15 +31,15 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
-from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
+
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration

@@ -12,9 +12,10 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from services.auth import auth_service, get_current_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.auth import auth_service, get_current_user
 from user_management.database import get_slm_session
 from user_management.models.user import User
 from user_management.schemas.mfa import (

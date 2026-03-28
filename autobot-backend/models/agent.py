@@ -15,6 +15,7 @@ from enum import Enum
 
 from sqlalchemy import Column, String, Text
 from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 

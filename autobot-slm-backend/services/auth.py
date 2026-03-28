@@ -15,13 +15,13 @@ import jwt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
-from models.schemas import TokenResponse, UserCreate, UserResponse
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from user_management.models.user import User
 
 from config import settings
+from models.schemas import TokenResponse, UserCreate, UserResponse
+from user_management.models.user import User
 
 logger = logging.getLogger(__name__)
 

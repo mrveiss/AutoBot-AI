@@ -18,8 +18,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from services.auth import get_current_user
 from typing_extensions import Annotated
+
+from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])

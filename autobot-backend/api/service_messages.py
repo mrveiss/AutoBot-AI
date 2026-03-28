@@ -15,12 +15,12 @@ Endpoints:
 import logging
 from typing import List, Optional
 
-from auth_middleware import auth_middleware
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
+from auth_middleware import auth_middleware
 from autobot_shared.message_bus import get_message_bus
+from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = logging.getLogger(__name__)
 

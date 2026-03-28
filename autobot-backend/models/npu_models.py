@@ -11,9 +11,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field, validator
+
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
-from pydantic import BaseModel, Field, validator
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")

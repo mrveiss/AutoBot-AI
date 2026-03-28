@@ -14,6 +14,8 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from PIL import Image
+
 from computer_vision_system import computer_vision_system
 from context_aware_decision_system import DecisionType, context_aware_decision_system
 
@@ -24,7 +26,6 @@ from multimodal_processor import (
     ProcessingIntent,
     multimodal_processor,
 )
-from PIL import Image
 from voice_processing_system import AudioInput, voice_processing_system
 
 

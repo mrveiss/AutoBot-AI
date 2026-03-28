@@ -15,6 +15,12 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -26,14 +32,8 @@ from models.database import (
     Service,
     ServiceStatus,
 )
-from pydantic import BaseModel, Field
 from services.auth import get_current_user
 from services.database import get_db
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])

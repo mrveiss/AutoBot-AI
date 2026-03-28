@@ -20,10 +20,11 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis
-from constants.network_constants import ServiceURLs
-from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+
+from constants.network_constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,

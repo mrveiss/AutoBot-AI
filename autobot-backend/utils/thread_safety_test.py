@@ -184,9 +184,8 @@ class TestConfigServiceFileLocking:
         import tempfile
         from pathlib import Path
 
-        from services.config_service import ConfigService
-
         from config import unified_config_manager
+        from services.config_service import ConfigService
 
         errors = []
         save_count = {"count": 0}

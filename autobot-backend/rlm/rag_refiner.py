@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import httpx
+
 from rlm.types import RLMConfig
 
 logger = logging.getLogger(__name__)

@@ -11,6 +11,7 @@ import base64
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from media.core.types import MediaInput, MediaType, ProcessingIntent
 from media.document.pipeline import DocumentPipeline
 

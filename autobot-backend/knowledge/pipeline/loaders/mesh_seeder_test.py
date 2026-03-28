@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.loaders.mesh_seeder import MeshSeeder
 from knowledge.pipeline.models.chunk import ProcessedChunk

@@ -14,10 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
-from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
-from services.database import db_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
+from services.database import db_service
 
 logger = logging.getLogger(__name__)
 

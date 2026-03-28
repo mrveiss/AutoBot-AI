@@ -10,11 +10,12 @@ import uuid
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends
-from models.database import EventSeverity, Node, NodeEvent
 from pydantic import BaseModel
-from services.database import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import EventSeverity, Node, NodeEvent
+from services.database import get_db
 
 logger = logging.getLogger(__name__)
 

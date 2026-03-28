@@ -14,8 +14,9 @@ import logging
 import time
 from typing import Callable
 
-from constants.threshold_constants import RetryConfig
 from fastapi import HTTPException
+
+from constants.threshold_constants import RetryConfig
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy

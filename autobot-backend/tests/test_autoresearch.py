@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+
 from services.autoresearch.config import AutoResearchConfig
 from services.autoresearch.models import (
     Experiment,

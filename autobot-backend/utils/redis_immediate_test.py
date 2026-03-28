@@ -13,9 +13,9 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
 import redis
-from constants.network_constants import NetworkConstants
 
 from autobot_shared.redis_client import get_redis_client
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

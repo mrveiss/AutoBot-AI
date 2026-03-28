@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+
 from services.workflow_automation.executor import (
     _navigate_path,
     _resolve_step_references,

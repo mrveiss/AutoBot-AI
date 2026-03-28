@@ -13,10 +13,9 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
-
 # Import the centralized ConfigManager
 from config import config as global_config_manager
+from secure_command_executor import CommandRisk, SecureCommandExecutor, SecurityPolicy
 
 logger = logging.getLogger(__name__)
 

@@ -12,6 +12,7 @@ from itertools import combinations
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 

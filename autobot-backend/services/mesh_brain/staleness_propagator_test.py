@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+
 from services.mesh_brain.staleness_propagator import (
     StalenessResult,
     get_staleness_score,
