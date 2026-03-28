@@ -38,6 +38,7 @@ from typing import Optional
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
 from autobot_shared.ssot_config import (
+    DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
 )
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
@@ -85,7 +86,7 @@ class ModelConstants:
     DEFAULT_GOOGLE_MODEL: str = FALLBACK_GOOGLE_MODEL
 
     # Role-specific models — all from SSOT constants (#2553)
-    EMBEDDING_MODEL: str = "nomic-embed-text:latest"
+    EMBEDDING_MODEL: str = DEFAULT_EMBEDDING_MODEL
     CLASSIFICATION_MODEL: str = SSOT_CLASSIFICATION_MODEL
     REASONING_MODEL: str = SSOT_QUALITY_MODEL
     RAG_MODEL: str = SSOT_QUALITY_MODEL
@@ -242,8 +243,8 @@ def get_model_endpoint(provider: str) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from config.registry import ConfigRegistry
-        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")  # noqa: ssot-fallback
-        port = ConfigRegistry.get("port.ollama", "11434")
+        host = ConfigRegistry.get("vm.ollama")
+        port = ConfigRegistry.get("port.ollama")
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.
 

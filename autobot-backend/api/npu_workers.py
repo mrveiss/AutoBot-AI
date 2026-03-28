@@ -50,6 +50,9 @@ from models.npu_models import (
 )
 from services.npu_worker_manager import get_worker_manager
 
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 logger = logging.getLogger(__name__)
 
 # Create router with /api/npu prefix
@@ -683,10 +686,8 @@ async def proxy_npu_health():
     """
     from autobot_shared.ssot_config import config as ssot_config
 
-    npu_host = ssot_config.get_host(
-        "npu_worker", "172.16.168.22"  # noqa: ssot-fallback
-    )
-    npu_port = ssot_config.get_port("npu_worker", 8081)
+    npu_host = ssot_config.vm.npu
+    npu_port = ssot_config.port.npu
     url = f"http://{npu_host}:{npu_port}/health"
 
     try:
@@ -800,8 +801,8 @@ def _generate_repair_bootstrap_config() -> dict:
         },
         "models": {
             "autoload_defaults": True,
-            "default_embedding": "nomic-embed-text",
-            "default_llm": "llama3.2:1b-instruct-q4_K_M",
+            "default_embedding": DEFAULT_EMBEDDING_MODEL,
+            "default_llm": DEFAULT_LLM_MODEL,
         },
         "logging": {"level": "INFO", "format": "structured"},
     }
@@ -1371,8 +1372,8 @@ def _build_worker_models_config() -> dict:
     """
     return {
         "autoload_defaults": True,
-        "default_embedding": "nomic-embed-text",
-        "default_llm": "llama3.2:1b-instruct-q4_K_M",
+        "default_embedding": DEFAULT_EMBEDDING_MODEL,
+        "default_llm": DEFAULT_LLM_MODEL,
     }
 
 

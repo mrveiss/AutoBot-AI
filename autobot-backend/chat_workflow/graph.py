@@ -657,10 +657,9 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = os.environ.get(
-            "AUTOBOT_REDIS_HOST", "172.16.168.23"  # noqa: ssot-fallback
-        )
-        _REDIS_URI = f"redis://{redis_host}:6379"
+        redis_host = os.environ.get("AUTOBOT_REDIS_HOST", "localhost")
+        redis_port = os.environ.get("AUTOBOT_REDIS_PORT", "6379")
+        _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",
             _REDIS_URI,

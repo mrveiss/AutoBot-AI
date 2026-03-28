@@ -17,6 +17,7 @@ import {
   type LLMProviderConfig,
   type LLMTestResponse,
 } from '@/composables/useLlmConfigApi'
+import ssotConfig from '@/config/ssot-config'
 
 const api = useLlmConfigApi()
 
@@ -33,7 +34,7 @@ const config = reactive<LLMConfig>({
   active_provider: 'ollama',
   providers: [],
   ollama_host: '0.0.0.0',
-  ollama_port: 11434,
+  ollama_port: ssotConfig.port.ollama,
   gpu_models: [],
   cpu_models: [],
   max_loaded_models: 5,

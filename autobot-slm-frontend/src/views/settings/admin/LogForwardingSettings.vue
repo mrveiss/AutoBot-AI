@@ -12,6 +12,7 @@
 
 import { ref, reactive, onMounted } from 'vue'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
+import config from '@/config/ssot-config'
 
 const api = useAutobotApi()
 
@@ -261,7 +262,7 @@ function getUrlPlaceholder(): string {
     case 'http':
       return 'https://webhook.example.com/logs'
     case 'elasticsearch':
-      return 'http://elasticsearch:9200'
+      return `http://elasticsearch:${config.port.elasticsearch}`
     default:
       return ''
   }
@@ -620,7 +621,7 @@ onMounted(async () => {
                 v-model="formData.config.url"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="http://elasticsearch:9200"
+                :placeholder="`http://elasticsearch:${config.port.elasticsearch}`"
               />
             </div>
             <div>

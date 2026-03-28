@@ -30,6 +30,8 @@ export interface SLMConfig {
     prometheus: number
     redis: number
     vnc: number
+    ollama: number
+    elasticsearch: number
   }
   hosts: {
     id: string
@@ -75,6 +77,8 @@ const config: SLMConfig = {
     prometheus: 9090,
     redis: 6379,
     vnc: 6080,
+    ollama: 11434,
+    elasticsearch: 9200,
   },
   hosts: [
     { id: 'main', name: 'Main Server', ip: '172.16.168.20', description: 'WSL Backend Server' },

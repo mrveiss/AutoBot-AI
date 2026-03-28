@@ -21,8 +21,8 @@ const success = ref<string | null>(null)
 
 const settings = ref({
   monitoring_location: 'local',
-  prometheus_url: 'http://localhost:9090',
-  grafana_url: 'http://localhost:3000',
+  prometheus_url: getPrometheusUrl(),
+  grafana_url: getGrafanaUrl(),
   scrape_interval: '15',
   retention_days: '30',
   alerting_enabled: true,

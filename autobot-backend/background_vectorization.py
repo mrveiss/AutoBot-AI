@@ -16,6 +16,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
 
 # Embedding analytics integration (Issue #285)
@@ -46,7 +47,7 @@ class BackgroundVectorizer:
         self.batch_size = 50
         self.batch_delay = 0.5
         # Embedding model used (from config or default)
-        self.embedding_model = "nomic-embed-text:latest"
+        self.embedding_model = DEFAULT_EMBEDDING_MODEL
 
     async def _track_embedding_usage(
         self,

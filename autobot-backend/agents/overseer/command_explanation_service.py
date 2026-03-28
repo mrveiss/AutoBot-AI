@@ -18,6 +18,7 @@ from typing import Dict, Optional
 
 from autobot_shared.http_client import get_http_client
 from dependencies import global_config_manager
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
@@ -67,7 +68,7 @@ class CommandExplanationService:
         try:
             return global_config_manager.get_selected_model()
         except Exception:
-            return "qwen3:14b"
+            return DEFAULT_LLM_MODEL
 
     def _get_cache_key(self, command: str) -> str:
         """Generate cache key for a command."""

@@ -20,6 +20,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import unified_config_manager
 from services.config_service import ConfigService
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +79,8 @@ async def get_embedding_settings(
                 "providers": {
                     "ollama": {
                         "endpoint": f"{config.ollama_url}/api/embeddings",
-                        "selected_model": "nomic-embed-text:latest",
-                        "models": ["nomic-embed-text:latest"],
+                        "selected_model": DEFAULT_EMBEDDING_MODEL,
+                        "models": [DEFAULT_EMBEDDING_MODEL],
                     }
                 },
             }

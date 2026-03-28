@@ -33,7 +33,7 @@ The pre-commit hook automatically scans staged files before every commit:
 ```bash
 # Runs automatically on git commit
 # Located at: .git/hooks/pre-commit-hardcode-check
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 ```
 
 **What it checks**:
@@ -56,17 +56,46 @@ Run the detection script manually to audit the entire codebase:
 
 ```bash
 # Scan entire codebase for violations
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # Get detailed report with line numbers
-./infrastructure/shared/scripts/detect-hardcoded-values.sh | less
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh | less
 
 # Scan specific file or directory
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
 ```
 
-**Script location**: `infrastructure/shared/scripts/detect-hardcoded-values.sh`
+**Script location**: `autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh`
+
+---
+
+## ConfigRegistry Fallback Pattern (Issue #2671)
+
+`registry_defaults.py` now sources all default values from `autobot_shared.ssot_config` at import time. This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks** — the registry defaults tier provides SSOT-sourced values automatically.
+
+```python
+# GOOD — no hardcoded fallback needed
+redis_host = ConfigRegistry.get("vm.redis")
+npu_port = ConfigRegistry.get("port.npu")
+
+# BAD — redundant hardcoded fallback (will trigger detection script)
+redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+```
+
+For model names and embedding models, use the SSOT constants:
+
+```python
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, DEFAULT_EMBEDDING_MODEL
+
+# GOOD
+model = DEFAULT_LLM_MODEL
+embedding = DEFAULT_EMBEDDING_MODEL
+
+# BAD
+model = "qwen3.5:9b"
+embedding = "nomic-embed-text:latest"
+```
 
 ---
 
@@ -215,7 +244,7 @@ git commit --no-verify -m "Your message"
 ### Script Location
 
 ```text
-infrastructure/shared/scripts/detect-hardcoded-values.sh
+autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 ```
 
 ### What It Detects
@@ -272,12 +301,12 @@ If needed, install manually:
 
 ```bash
 # Make script executable
-chmod +x infrastructure/shared/scripts/detect-hardcoded-values.sh
+chmod +x autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # Create pre-commit hook
 cat > .git/hooks/pre-commit-hardcode-check << 'EOF'
 #!/bin/bash
-./infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
 if [ $? -ne 0 ]; then
     echo "Hardcoded values detected. Fix violations before committing."
     exit 1
@@ -308,10 +337,10 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 
 ```bash
 # Before starting work
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # After making changes
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
 ```
 
 ### 3. Keep .env.example Updated
