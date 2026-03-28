@@ -786,16 +786,16 @@ def _generate_repair_bootstrap_config() -> dict:
 
     return {
         "redis": {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
             "db": 0,
             "socket_timeout": 5,
             "max_connections": 10,
         },
         "backend": {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
+            "host": ssot_config.vm.main,
+            "port": ssot_config.port.backend,
             "register_with_backend": True,
             "health_check_interval": 30,
         },
@@ -1019,17 +1019,17 @@ def _build_pairing_config() -> Tuple[Dict, str]:
 
     worker_config = {
         "redis": {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
             "db": 0,
         },
         "backend": {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
+            "host": ssot_config.vm.main,
+            "port": ssot_config.port.backend,
         },
     }
-    main_host = f"{ssot_config.backend.host}:{ssot_config.backend.port}"
+    main_host = f"{ssot_config.vm.main}:{ssot_config.port.backend}"
     return worker_config, main_host
 
 
@@ -1332,8 +1332,8 @@ def _build_worker_redis_config(ssot_config) -> dict:
         Redis configuration dict for workers
     """
     return {
-        "host": ssot_config.redis.host,
-        "port": ssot_config.redis.port,
+        "host": ssot_config.vm.redis,
+        "port": ssot_config.port.redis,
         "password": ssot_config.redis.password,
         "db": 0,  # Default db for workers
         "socket_timeout": 5,
@@ -1354,8 +1354,8 @@ def _build_worker_backend_config(ssot_config) -> dict:
         Backend configuration dict for workers
     """
     return {
-        "host": ssot_config.backend.host,
-        "port": ssot_config.backend.port,
+        "host": ssot_config.vm.main,
+        "port": ssot_config.port.backend,
         "register_with_backend": True,
         "health_check_interval": 30,
     }
