@@ -332,7 +332,7 @@ class MultiLanguageAnalyzer:
 
         logger.info(
             f"Registered analyzer: {analyzer.analyzer_name} "
-            f"for languages: {[l.value for l in analyzer.supported_languages]}"
+            f"for languages: {[lang.value for lang in analyzer.supported_languages]}"
         )
 
     def get_analyzers_for_file(self, file_path: Path) -> List[BaseLanguageAnalyzer]:
