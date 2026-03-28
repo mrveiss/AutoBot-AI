@@ -1,155 +1,117 @@
 # Installation Guide
 
-Complete step-by-step installation instructions for AutoBot on Linux, Windows, and macOS.
+Complete installation instructions for AutoBot. Two deployment methods: bare-metal (systemd) or Docker.
 
 ## Prerequisites
 
 ### System Requirements
-- **Operating System**: Linux (Ubuntu/Debian/Kali), Windows 10+ with WSL2, or macOS 12+
-- **Python**: 3.10+ (3.11+ recommended for Intel NPU support)
-- **Node.js**: 20.x LTS (for frontend development)
-- **RAM**: 8GB minimum, 16GB+ recommended for local LLM inference
-- **Storage**: 10GB free space minimum
 
-### Hardware Requirements (Optional)
-- **GPU**: NVIDIA GPU with 8GB+ VRAM for local LLM acceleration
-  - NVIDIA drivers 470+ and CUDA 11.8+ toolkit
-- **Intel NPU**: Intel Meteor Lake or newer for NPU acceleration
-  - OpenVINO toolkit 2024.0+
-- **AMD GPU**: AMD GPU with ROCm 5.4+ support
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| OS | Debian/Ubuntu or WSL2 | Ubuntu 22.04 LTS |
+| RAM | 16 GB | 32 GB+ |
+| CPU | 8 cores | 16+ cores |
+| Storage | 50 GB | 200 GB+ (model + knowledge base storage) |
+| GPU | — | NVIDIA (CUDA) or Intel NPU for accelerated inference |
+| Python | 3.12 | 3.12 (installed automatically by installer) |
+| Node.js | 18 | 20 (installed automatically by installer) |
 
-### Required Software
-- **Git** - Version control (for cloning repository)
-- **curl** - Command line tool for downloads
-- **Python Build Tools** - For compiling dependencies
+### Required Permissions (Bare-Metal Install)
+
+- **Root access (`sudo`)** — the installer must run as root
+- **systemd** — required for service management (PostgreSQL, nginx, SLM backend)
+- **Internet access** — outbound HTTPS to github.com and package repositories (deb.nodesource.com, PPA)
+
+> **WSL2 users:** systemd must be enabled before running the installer. Add the following to `/etc/wsl.conf` and restart WSL:
+> ```ini
+> [boot]
+> systemd=true
+> ```
+
+### What the Installer Creates
+
+| Resource | Purpose |
+|----------|---------|
+| `autobot` system user | Runs all services (with passwordless sudo) |
+| `/opt/autobot/` | Application base directory |
+| `/var/log/autobot/` | Installation and service logs |
+| `/etc/autobot/` | Secrets and configuration |
+| SSH key pair | Fleet management (`/home/autobot/.ssh/autobot_key`) |
+| Self-signed TLS cert | HTTPS for nginx |
 
 ## Installation Methods
 
-### Method 1: Single-Command Setup (Recommended)
+### Method 1: Bare-Metal Install (Recommended)
 
-This automated method handles all dependencies and configuration:
+Installs all services directly on the host using systemd:
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-repo/AutoBot-AI.git
+git clone https://github.com/mrveiss/AutoBot-AI.git
+cd AutoBot-AI
+sudo ./install.sh              # Interactive install
+sudo ./install.sh --unattended # Unattended (CI/automation)
+```
+
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--unattended` | No prompts, use all defaults |
+| `--reinstall` | Force reinstall over existing installation |
+| `--branch=BRANCH` | Git branch to install (default: `Dev_new_gui`) |
+| `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
+
+**The installer will:**
+1. Verify root access, systemd, disk space (5 GB+), memory (2 GB+), and internet
+2. Install system packages (Python 3.12, Node.js 20, nginx, Ansible, build tools, libpq)
+3. Create the `autobot` system user with passwordless sudo
+4. Clone the repository and distribute code to service directories
+5. Run Ansible deployment for the SLM stack (PostgreSQL, backend, nginx)
+6. Verify all services are running and healthy
+7. Display admin credentials and save them to `/root/autobot-credentials.txt`
+
+Takes 10-20 minutes depending on internet speed. Logs: `/var/log/autobot/`.
+
+**Post-install access:**
+
+| Service | URL |
+|---------|-----|
+| SLM Admin | `https://<server-ip>/` |
+| Service Logs | `journalctl -u autobot-slm-backend -f` |
+
+### Method 2: Docker (Single Node)
+
+Run the entire stack on one machine with Docker Compose. No system users or packages installed on the host — Docker handles all isolation.
+
+**Requirements:** Docker Engine 24+ and Docker Compose v2.
+
+```bash
+git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 
-# Run automated setup (creates venv, installs dependencies, configures)
-chmod +x setup_agent.sh
-./setup_agent.sh
+# Core services (backend, SLM, frontend, Redis, PostgreSQL, ChromaDB)
+docker compose --env-file docker/.env.docker up -d --build
+
+# Include local Ollama LLM
+docker compose --env-file docker/.env.docker --profile ollama up -d --build
+
+# Include Prometheus + Grafana monitoring
+docker compose --env-file docker/.env.docker --profile monitoring up -d --build
 ```
 
-**The setup script will:**
-- Detect your environment (Linux/WSL2/macOS)
-- Install system packages (build tools, Redis, Tesseract OCR)
-- Set up Python 3.10+ via pyenv if needed
-- Create isolated virtual environment in `bin/`
-- Install all Python dependencies from `requirements.txt`
-- Install Node.js dependencies for frontend
-- Create necessary directories (`data/`, `logs/`, `config/`)
-- Copy configuration template to `config/config.yaml`
-- Set up Git hooks and environment
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| SLM Admin | http://localhost/slm |
+| Backend API | http://localhost/api |
+| RedisInsight | http://localhost:8001 |
+| Ollama | http://localhost:11434 (if `--profile ollama`) |
+| Grafana | http://localhost:3000 (if `--profile monitoring`) |
 
-### Method 2: Manual Installation
-
-If automated setup fails or you prefer manual control:
-
-#### Step 1: System Dependencies
-
-**Ubuntu/Debian:**
+**Dev mode** with hot reload:
 ```bash
-# Update package list
-sudo apt update
-
-# Install system dependencies
-sudo apt install -y build-essential curl git python3-dev python3-venv \
-                    nodejs npm redis-server tesseract-ocr libffi-dev \
-                    libjpeg-dev zlib1g-dev libssl-dev
-
-# Start Redis service
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
-```
-
-**CentOS/RHEL/Fedora:**
-```bash
-# Install system dependencies
-sudo dnf install -y gcc gcc-c++ make curl git python3-devel python3-pip \
-                    nodejs npm redis tesseract openssl-devel libffi-devel \
-                    libjpeg-turbo-devel zlib-devel
-
-# Start Redis service
-sudo systemctl enable redis
-sudo systemctl start redis
-```
-
-**macOS:**
-```bash
-# Install Homebrew if not present
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install dependencies
-brew install python@3.11 node redis tesseract git curl
-brew services start redis
-```
-
-**Windows (WSL2):**
-```bash
-# Update WSL2 Ubuntu
-sudo apt update && sudo apt upgrade -y
-
-# Install dependencies (same as Ubuntu above)
-sudo apt install -y build-essential curl git python3-dev python3-venv \
-                    nodejs npm redis-server tesseract-ocr libffi-dev \
-                    libjpeg-dev zlib1g-dev libssl-dev
-```
-
-#### Step 2: Python Environment Setup
-
-```bash
-# Navigate to project directory
-cd AutoBot-AI
-
-# Create virtual environment using system Python 3.10+
-python3 -m venv bin
-source bin/activate  # Linux/macOS
-# or: bin\Scripts\activate  # Windows
-
-# Upgrade pip and install core tools
-pip install --upgrade pip setuptools wheel
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-#### Step 3: Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd autobot-vue
-
-# Install Node.js dependencies
-npm install
-
-# Build frontend for production
-npm run build
-
-# Return to project root
-cd ..
-```
-
-#### Step 4: Configuration Setup
-
-```bash
-# Create necessary directories
-mkdir -p data/chats data/chromadb data/messages logs config
-
-# Copy configuration template
-cp config/config.yaml.template config/config.yaml
-
-# Set proper permissions
-chmod 755 data logs config
-chmod 644 config/config.yaml
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose up -d
 ```
 
 ## LLM Provider Setup

@@ -159,6 +159,11 @@ preflight_checks() {
     fi
     success "Running as root"
 
+    if ! pidof systemd &>/dev/null; then
+        fatal "systemd is required. On WSL2: add [boot] systemd=true to /etc/wsl.conf and restart WSL"
+    fi
+    success "systemd is running"
+
     if [[ ! -f /etc/debian_version ]]; then
         fatal "This script requires Debian or Ubuntu"
     fi
