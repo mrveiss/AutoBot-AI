@@ -10,6 +10,7 @@ Issue #2623: Transparent text-to-embedding conversion via NPU/Ollama fallback.
 """
 
 import logging
+import re
 import struct
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,13 @@ from type_defs.common import Metadata
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+# Upper bound for KNN top_k to prevent resource exhaustion (#2511)
+_MAX_TOP_K = 500
+
+# Allow only safe RediSearch filter tokens: alphanumerics, field refs (@),
+# comparisons, parentheses, spaces, colons, hyphens, underscores, dots.
+_SAFE_FILTER_PATTERN = re.compile(r"^[@\w\s:.\-()=<>|&*{}\[\],\"']+$")
 
 
 async def _text_to_embedding(text: str) -> List[float]:
@@ -45,28 +53,18 @@ def _float_list_to_bytes(vector: List[float]) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-async def handle_redis_vector_create_index(
-    index_name: str = "idx:agent_memory",
-    prefix: str = "autobot:agent:memory:",
-    vector_field: str = "embedding",
-    dimensions: int = 1536,
-    distance_metric: str = "COSINE",
+def _build_index_schema(
+    vector_field: str,
+    dimensions: int,
+    distance_metric: str,
     extra_fields: Optional[List[Dict[str, str]]] = None,
-    database: str = "vectors",
-) -> Metadata:
-    """Create a RediSearch vector index using HNSW."""
-    client = await _get_client(database)
-
-    # Build the FT.CREATE command arguments
-    schema_args: List[Any] = []
-
-    # Add extra fields first (TEXT, TAG, NUMERIC)
+) -> List[Any]:
+    """Build FT.CREATE SCHEMA arguments for a vector index (#2511)."""
+    schema: List[Any] = []
     if extra_fields:
         for field in extra_fields:
-            schema_args.extend([field["name"], field["type"]])
-
-    # Add the vector field last
-    schema_args.extend(
+            schema.extend([field["name"], field["type"]])
+    schema.extend(
         [
             vector_field,
             "VECTOR",
@@ -80,7 +78,23 @@ async def handle_redis_vector_create_index(
             distance_metric,
         ]
     )
+    return schema
 
+
+async def handle_redis_vector_create_index(
+    index_name: str = "idx:agent_memory",
+    prefix: str = "autobot:agent:memory:",
+    vector_field: str = "embedding",
+    dimensions: int = 1536,
+    distance_metric: str = "COSINE",
+    extra_fields: Optional[List[Dict[str, str]]] = None,
+    database: str = "vectors",
+) -> Metadata:
+    """Create a RediSearch vector index using HNSW."""
+    client = await _get_client(database)
+    schema_args = _build_index_schema(
+        vector_field, dimensions, distance_metric, extra_fields
+    )
     try:
         await client.execute_command(
             "FT.CREATE",
@@ -101,8 +115,7 @@ async def handle_redis_vector_create_index(
             "distance_metric": distance_metric,
         }
     except Exception as e:
-        error_msg = str(e)
-        if "Index already exists" in error_msg:
+        if "Index already exists" in str(e):
             return {
                 "status": "success",
                 "index_name": index_name,
@@ -111,27 +124,29 @@ async def handle_redis_vector_create_index(
         raise
 
 
-async def handle_redis_vector_search(
-    query_vector: Optional[List[float]] = None,
-    query_text: Optional[str] = None,
-    index_name: str = "idx:agent_memory",
-    top_k: int = 10,
-    return_fields: Optional[List[str]] = None,
-    database: str = "vectors",
+async def _execute_vector_query(
+    query_str: str,
+    query_vector: Optional[List[float]],
+    query_text: Optional[str],
+    index_name: str,
+    top_k: int,
+    return_fields: Optional[List[str]],
+    database: str,
+    extra_meta: Optional[Dict[str, Any]] = None,
 ) -> Metadata:
-    """Similarity search by embedding vector or text (Issue #2623)."""
+    """Shared KNN query execution for vector and hybrid search (#2511)."""
     if query_vector is None and query_text is None:
         return {
             "status": "error",
             "message": "Provide either query_text or query_vector",
             "code": "MISSING_QUERY",
         }
+    top_k = min(max(1, top_k), _MAX_TOP_K)
     if query_vector is None:
         query_vector = await _text_to_embedding(query_text)
     client = await _get_client(database)
     blob = _float_list_to_bytes(query_vector)
 
-    query_str = f"*=>[KNN {top_k} @embedding $BLOB AS score]"
     cmd_args = [
         "FT.SEARCH",
         index_name,
@@ -151,12 +166,37 @@ async def handle_redis_vector_search(
 
     raw = await client.execute_command(*cmd_args)
     results = _parse_ft_search_results(raw)
-    return {
+    meta: Dict[str, Any] = {
         "status": "success",
         "index_name": index_name,
         "results": results,
         "count": len(results),
     }
+    if extra_meta:
+        meta.update(extra_meta)
+    return meta
+
+
+async def handle_redis_vector_search(
+    query_vector: Optional[List[float]] = None,
+    query_text: Optional[str] = None,
+    index_name: str = "idx:agent_memory",
+    top_k: int = 10,
+    return_fields: Optional[List[str]] = None,
+    database: str = "vectors",
+) -> Metadata:
+    """Similarity search by embedding vector or text (Issue #2623)."""
+    top_k = min(max(1, top_k), _MAX_TOP_K)
+    query_str = f"*=>[KNN {top_k} @embedding $BLOB AS score]"
+    return await _execute_vector_query(
+        query_str,
+        query_vector,
+        query_text,
+        index_name,
+        top_k,
+        return_fields,
+        database,
+    )
 
 
 async def handle_redis_hybrid_search(
@@ -169,44 +209,25 @@ async def handle_redis_hybrid_search(
     database: str = "vectors",
 ) -> Metadata:
     """Vector + filter combined query (Issue #2623: accepts query_text)."""
-    if query_vector is None and query_text is None:
+    if filter_expression and not _SAFE_FILTER_PATTERN.match(filter_expression):
         return {
             "status": "error",
-            "message": "Provide either query_text or query_vector",
-            "code": "MISSING_QUERY",
+            "message": "Invalid filter_expression: contains disallowed characters",
+            "code": "INVALID_FILTER",
         }
-    if query_vector is None:
-        query_vector = await _text_to_embedding(query_text)
-    client = await _get_client(database)
-    blob = _float_list_to_bytes(query_vector)
-
-    query_str = f"({filter_expression})=>[KNN {top_k} @embedding $BLOB AS score]"
-    cmd_args = [
-        "FT.SEARCH",
-        index_name,
+    top_k = min(max(1, top_k), _MAX_TOP_K)
+    pre = f"({filter_expression})" if filter_expression else "*"
+    query_str = f"{pre}=>[KNN {top_k} @embedding $BLOB AS score]"
+    return await _execute_vector_query(
         query_str,
-        "PARAMS",
-        "2",
-        "BLOB",
-        blob,
-        "SORTBY",
-        "score",
-        "DIALECT",
-        "2",
-    ]
-    if return_fields:
-        cmd_args.extend(["RETURN", str(len(return_fields) + 1), "score"])
-        cmd_args.extend(return_fields)
-
-    raw = await client.execute_command(*cmd_args)
-    results = _parse_ft_search_results(raw)
-    return {
-        "status": "success",
-        "index_name": index_name,
-        "filter": filter_expression,
-        "results": results,
-        "count": len(results),
-    }
+        query_vector,
+        query_text,
+        index_name,
+        top_k,
+        return_fields,
+        database,
+        extra_meta={"filter": filter_expression} if filter_expression else None,
+    )
 
 
 async def handle_redis_vector_index_info(

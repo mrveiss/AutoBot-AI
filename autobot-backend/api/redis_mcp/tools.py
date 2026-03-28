@@ -8,7 +8,7 @@ Issue #2511: 25 tool definitions across 3 categories.
 Follows the pattern established by filesystem_mcp.py (Issue #620 refactoring).
 """
 
-from typing import List
+from __future__ import annotations
 
 from pydantic import BaseModel
 from type_defs.common import JSONObject
@@ -592,7 +592,7 @@ def _tool_redis_slowlog() -> MCPTool:
 # ---------------------------------------------------------------------------
 
 
-def get_data_access_tools() -> List[MCPTool]:
+def get_data_access_tools() -> list[MCPTool]:
     """Return all 15 data access tool definitions."""
     return [
         _tool_redis_get(),
@@ -613,7 +613,7 @@ def get_data_access_tools() -> List[MCPTool]:
     ]
 
 
-def get_vector_search_tools() -> List[MCPTool]:
+def get_vector_search_tools() -> list[MCPTool]:
     """Return all 4 vector search tool definitions."""
     return [
         _tool_redis_vector_create_index(),
@@ -623,7 +623,7 @@ def get_vector_search_tools() -> List[MCPTool]:
     ]
 
 
-def get_ops_intelligence_tools() -> List[MCPTool]:
+def get_ops_intelligence_tools() -> list[MCPTool]:
     """Return all 6 ops intelligence tool definitions."""
     return [
         _tool_redis_server_info(),
@@ -635,9 +635,9 @@ def get_ops_intelligence_tools() -> List[MCPTool]:
     ]
 
 
-def get_all_tools() -> List[MCPTool]:
+def get_all_tools() -> list[MCPTool]:
     """Return all 25 Redis MCP tool definitions."""
-    tools: List[MCPTool] = []
+    tools: list[MCPTool] = []
     tools.extend(get_data_access_tools())
     tools.extend(get_vector_search_tools())
     tools.extend(get_ops_intelligence_tools())

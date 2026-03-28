@@ -9,7 +9,7 @@ Integrates RBAC filtering and routes to the appropriate handler module.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from api.redis_mcp.data_access import (
     handle_redis_delete,
@@ -55,8 +55,12 @@ from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_management.types import DATABASE_MAPPING
 
 logger = logging.getLogger(__name__)
+
+# Valid database names for parameter validation (#2511)
+_VALID_DATABASES = frozenset(DATABASE_MAPPING.keys())
 
 router = APIRouter(
     tags=["redis_mcp", "mcp"],
@@ -141,12 +145,21 @@ async def call_redis_mcp_tool(
             "arguments": args,
         }
 
-    # Namespace validation for write tools
-    key = _extract_key(args)
-    if key and access in (ToolAccess.SCOPED_WRITE, ToolAccess.FULL_WRITE):
-        valid, ns_error = validate_key_namespace(key, is_admin, access)
-        if not valid:
-            raise HTTPException(status_code=403, detail=ns_error)
+    # Namespace validation for write tools — validate ALL keys (#2511)
+    keys = _extract_keys(args)
+    if keys and access in (ToolAccess.SCOPED_WRITE, ToolAccess.FULL_WRITE):
+        for key in keys:
+            valid, ns_error = validate_key_namespace(key, is_admin, access)
+            if not valid:
+                raise HTTPException(status_code=403, detail=ns_error)
+
+    # Database parameter validation (#2511)
+    db = args.get("database")
+    if db and db not in _VALID_DATABASES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid database '{db}'. Valid: {sorted(_VALID_DATABASES)}",
+        )
 
     # Route to handler
     handler = _TOOL_HANDLERS.get(tool_name)
@@ -417,10 +430,10 @@ def _is_admin(user: dict) -> bool:
     return role in ("admin", "superadmin")
 
 
-def _extract_key(args: dict) -> Optional[str]:
-    """Extract the primary key from tool arguments."""
+def _extract_keys(args: dict) -> list[str]:
+    """Extract all keys from tool arguments for namespace validation."""
     if "key" in args:
-        return args["key"]
+        return [args["key"]]
     if "keys" in args and args["keys"]:
-        return args["keys"][0]
-    return None
+        return list(args["keys"])
+    return []

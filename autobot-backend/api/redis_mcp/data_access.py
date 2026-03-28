@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 _SCAN_MAX_KEYS = 100
 
 
+def _decode(value):
+    """Decode bytes to UTF-8 string, pass through other types."""
+    return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
 async def _get_client(database: str = "main"):
     """Get an async Redis client for the given database."""
     return await get_redis_client(async_client=True, database=database)
@@ -209,18 +214,10 @@ async def handle_redis_xrange(
     if count is not None:
         kwargs["count"] = count
     raw = await client.xrange(key, min=start, max=end, **kwargs)
-    entries = []
-    for entry_id, fields in raw:
-        decoded_id = (
-            entry_id.decode("utf-8") if isinstance(entry_id, bytes) else entry_id
-        )
-        decoded_fields = {
-            (k.decode("utf-8") if isinstance(k, bytes) else k): (
-                v.decode("utf-8") if isinstance(v, bytes) else v
-            )
-            for k, v in fields.items()
-        }
-        entries.append({"id": decoded_id, "fields": decoded_fields})
+    entries = [
+        {"id": _decode(eid), "fields": {_decode(k): _decode(v) for k, v in f.items()}}
+        for eid, f in raw
+    ]
     return {
         "status": "success",
         "key": key,

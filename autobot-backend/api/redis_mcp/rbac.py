@@ -50,8 +50,8 @@ TOOL_ACCESS_MATRIX = {
     "redis_rpush": (ToolAccess.SCOPED_WRITE, ToolAccess.FULL_WRITE),
     "redis_xadd": (ToolAccess.SCOPED_WRITE, ToolAccess.FULL_WRITE),
     "redis_delete": (ToolAccess.SCOPED_WRITE, ToolAccess.APPROVAL_REQUIRED),
-    # Vector Search — both roles full access
-    "redis_vector_create_index": (ToolAccess.FULL_WRITE, ToolAccess.FULL_WRITE),
+    # Vector Search — index creation restricted for users (#2511)
+    "redis_vector_create_index": (ToolAccess.SCOPED_WRITE, ToolAccess.FULL_WRITE),
     "redis_vector_search": (ToolAccess.READ, ToolAccess.READ),
     "redis_hybrid_search": (ToolAccess.READ, ToolAccess.READ),
     "redis_vector_index_info": (ToolAccess.READ, ToolAccess.READ),
