@@ -84,11 +84,10 @@ class ExperimentRunner:
             experiment.completed_at = time.time()
 
             if result.success:
-                old_state = experiment.state
                 experiment.state = ExperimentState.COMPLETED
+                # _evaluate_result sets state to KEPT or DISCARDED
                 await self._evaluate_result(experiment)
             else:
-                old_state = experiment.state
                 experiment.state = ExperimentState.FAILED
                 logger.warning(
                     "Experiment %s failed: %s",
@@ -96,13 +95,11 @@ class ExperimentRunner:
                     result.error_message,
                 )
         except asyncio.CancelledError:
-            old_state = experiment.state
             experiment.state = ExperimentState.FAILED
             experiment.result = ExperimentResult(error_message="Experiment cancelled")
             experiment.completed_at = time.time()
             raise
         except Exception as exc:
-            old_state = experiment.state
             experiment.state = ExperimentState.FAILED
             experiment.result = ExperimentResult(error_message=str(exc))
             experiment.completed_at = time.time()
@@ -110,6 +107,7 @@ class ExperimentRunner:
         finally:
             self._running = False
             self._current_process = None
+            # Single save with old_state=RUNNING → final state (no intermediate saves)
             await self.store.save_experiment(experiment, old_state=old_state)
 
         return experiment
@@ -195,10 +193,15 @@ class ExperimentRunner:
                     f"Invalid extra param key '{key}': "
                     "must be lowercase alphanumeric/underscore, 1-64 chars"
                 )
-        for val in extra.values():
+        for key, val in extra.items():
             if not isinstance(val, (int, float, str, bool)):
                 raise ValueError(
                     f"Extra param values must be scalar, got {type(val).__name__}"
+                )
+            if isinstance(val, str) and (len(val) > 256 or "--" in val):
+                raise ValueError(
+                    f"Extra param '{key}': string values must be ≤256 chars "
+                    "and cannot contain '--'"
                 )
 
     async def _evaluate_result(self, experiment: Experiment) -> None:
@@ -223,12 +226,6 @@ class ExperimentRunner:
 
         if improvement >= self.config.improvement_threshold:
             experiment.state = ExperimentState.KEPT
-            await self.store.update_experiment_state(
-                experiment.id,
-                ExperimentState.COMPLETED,
-                ExperimentState.KEPT,
-            )
-            # Update baseline to new best
             await self.store.set_baseline(experiment.result.val_bpb)
             logger.info(
                 "Experiment %s KEPT — val_bpb improved by %.4f (%.2f%%)",
@@ -238,11 +235,6 @@ class ExperimentRunner:
             )
         else:
             experiment.state = ExperimentState.DISCARDED
-            await self.store.update_experiment_state(
-                experiment.id,
-                ExperimentState.COMPLETED,
-                ExperimentState.DISCARDED,
-            )
             logger.info(
                 "Experiment %s DISCARDED — improvement %.4f below threshold %.4f",
                 experiment.id,

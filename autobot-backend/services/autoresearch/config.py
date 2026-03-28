@@ -30,19 +30,22 @@ class AutoResearchConfig:
     )
 
     # Training defaults
-    default_training_timeout: int = int(
-        os.getenv("AUTOBOT_AUTORESEARCH_TIMEOUT", "600")
+    default_training_timeout: int = field(
+        default_factory=lambda: int(os.getenv("AUTOBOT_AUTORESEARCH_TIMEOUT", "600"))
     )
-    default_max_steps: int = int(os.getenv("AUTOBOT_AUTORESEARCH_MAX_STEPS", "5000"))
+    default_max_steps: int = field(
+        default_factory=lambda: int(os.getenv("AUTOBOT_AUTORESEARCH_MAX_STEPS", "5000"))
+    )
 
     # Experiment evaluation
-    improvement_threshold: float = float(
-        os.getenv("AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD", "0.01")
+    improvement_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD", "0.01")
+        )
     )
-    significant_improvement_threshold: float = float(
-        os.getenv(
-            "AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD",
-            "0.05",
+    significant_improvement_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD", "0.05")
         )
     )
 

@@ -182,8 +182,18 @@ class ExperimentStore:
         redis = await self._get_redis()
 
         if state is not None:
-            ids = await redis.smembers(self._redis_key("state", state.value))
-            experiment_ids = sorted(ids, reverse=True)[offset : offset + limit]
+            # Intersect state set with timeline for chronological ordering
+            state_ids = await redis.smembers(self._redis_key("state", state.value))
+            if not state_ids:
+                return []
+            # Score experiments by their timeline position (created_at)
+            scored = []
+            for eid in state_ids:
+                score = await redis.zscore(self._redis_key("timeline"), eid)
+                if score is not None:
+                    scored.append((eid, score))
+            scored.sort(key=lambda x: x[1], reverse=True)
+            experiment_ids = [eid for eid, _ in scored[offset : offset + limit]]
         else:
             experiment_ids = await redis.zrevrange(
                 self._redis_key("timeline"),

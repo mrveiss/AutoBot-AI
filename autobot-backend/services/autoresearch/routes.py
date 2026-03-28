@@ -10,10 +10,11 @@ Issue #2597: Endpoints for managing experiments, viewing results, and stats.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 from auth_middleware import check_admin_permission
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, HyperParams
@@ -23,6 +24,19 @@ from .store import ExperimentStore
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["autoresearch"])
+
+
+class CreateExperimentRequest(BaseModel):
+    hypothesis: str = Field(default="", max_length=1000)
+    description: str = Field(default="", max_length=5000)
+    code_diff: str = Field(default="", max_length=50000)
+    tags: List[str] = Field(default_factory=list, max_length=20)
+    hyperparams: Optional[Dict] = None
+
+
+class SetBaselineRequest(BaseModel):
+    val_bpb: float
+
 
 # Lazy-initialized singleton
 _runner: Optional[ExperimentRunner] = None
@@ -114,6 +128,7 @@ async def get_experiment(
 @router.post("/experiments")
 async def create_experiment(
     request: Request,
+    body: CreateExperimentRequest,
     background_tasks: BackgroundTasks,
     _admin: bool = Depends(check_admin_permission),
 ):
@@ -121,13 +136,6 @@ async def create_experiment(
 
     Returns the experiment ID immediately. Poll GET /experiments/{id}
     for status updates.
-
-    Request body:
-        hypothesis: str — what change is being tested
-        description: str — optional longer description
-        code_diff: str — the code change being tested
-        hyperparams: dict — training hyperparameters (optional)
-        tags: list[str] — optional tags
     """
     runner = _get_runner(request)
     if runner.is_running:
@@ -136,17 +144,15 @@ async def create_experiment(
             detail="An experiment is already running",
         )
 
-    body = await request.json()
     experiment = Experiment(
-        hypothesis=body.get("hypothesis", ""),
-        description=body.get("description", ""),
-        code_diff=body.get("code_diff", ""),
-        tags=body.get("tags", []),
+        hypothesis=body.hypothesis,
+        description=body.description,
+        code_diff=body.code_diff,
+        tags=body.tags,
     )
-    if "hyperparams" in body:
-        experiment.hyperparams = HyperParams.from_dict(body["hyperparams"])
+    if body.hyperparams:
+        experiment.hyperparams = HyperParams.from_dict(body.hyperparams)
 
-    # Save as PENDING first, then run in background
     store = _get_store(request)
     await store.save_experiment(experiment)
     background_tasks.add_task(runner.run_experiment, experiment)
@@ -157,23 +163,13 @@ async def create_experiment(
 @router.post("/experiments/baseline")
 async def set_baseline(
     request: Request,
+    body: SetBaselineRequest,
     _admin: bool = Depends(check_admin_permission),
 ):
-    """Set the baseline val_bpb for improvement comparison.
-
-    Request body:
-        val_bpb: float — the baseline value
-    """
+    """Set the baseline val_bpb for improvement comparison."""
     store = _get_store(request)
-    body = await request.json()
-    val_bpb = body.get("val_bpb")
-    if val_bpb is None or not isinstance(val_bpb, (int, float)):
-        raise HTTPException(
-            status_code=400,
-            detail="val_bpb must be a number",
-        )
-    await store.set_baseline(float(val_bpb))
-    return {"baseline_val_bpb": val_bpb}
+    await store.set_baseline(body.val_bpb)
+    return {"baseline_val_bpb": body.val_bpb}
 
 
 @router.get("/status")
