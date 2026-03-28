@@ -304,6 +304,19 @@ MCP_BRIDGES = [
             "list_available_metrics",
         ],
     ),
+    (
+        "redis_mcp",
+        "Redis Data & Operations - Direct Redis access, vector search, server ops",
+        "/api/redis/mcp/tools",
+        [
+            "data_access",
+            "vector_search",
+            "hybrid_search",
+            "ops_intelligence",
+            "stream_health",
+            "rbac_filtering",
+        ],
+    ),
 ]
 
 

@@ -210,6 +210,43 @@ def _create_execution_result(
     }
 
 
+def _build_mcp_approval_message(
+    tool_name: str,
+    bridge: str,
+    raw_result: dict,
+    execution_results: list[dict[str, Any]],
+) -> WorkflowMessage:
+    """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
+    approval_msg = raw_result.get("message", "This operation requires approval.")
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": bridge,
+            "result": approval_msg,
+            "status": "approval_required",
+        }
+    )
+    logger.info(
+        "[Issue #2622] MCP approval required: tool=%s bridge=%s",
+        tool_name,
+        bridge,
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=(
+            f"[{bridge}] **Approval required:** {approval_msg}\n"
+            "Ask the user to confirm, then retry with `approved: true` "
+            "in the arguments."
+        ),
+        metadata={
+            "tool_name": tool_name,
+            "bridge": bridge,
+            "mcp_dispatch": True,
+            "approval_required": True,
+        },
+    )
+
+
 async def _try_mcp_dispatch(
     tool_name: str,
     tool_call: dict[str, Any],
@@ -230,8 +267,6 @@ async def _try_mcp_dispatch(
     from services.mcp_dispatch import get_mcp_dispatcher
 
     dispatcher = get_mcp_dispatcher()
-    # Lazy-load cache on first call; if cache is already loaded and tool is
-    # absent, skip a network round-trip.
     if not dispatcher._cache_loaded:
         await dispatcher.refresh_tool_cache()
 
@@ -243,8 +278,15 @@ async def _try_mcp_dispatch(
     mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
     bridge = mcp_result.get("bridge", "unknown")
     success = mcp_result.get("success", False)
-    result_text = str(mcp_result.get("result", ""))
+    raw_result = mcp_result.get("result", "")
 
+    # Issue #2622: Detect approval_required from MCP bridges
+    if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
+        return _build_mcp_approval_message(
+            tool_name, bridge, raw_result, execution_results
+        )
+
+    result_text = str(raw_result)
     execution_results.append(
         {
             "tool": tool_name,
