@@ -318,8 +318,8 @@ redis:
   databases:
     main: 0
     knowledge: 0  # RediSearch indexes MUST be on DB 0
-    celery_broker: 1      # Celery task broker
-    celery_results: 2     # Celery task results
+    celery_broker: 14     # Celery task broker (moved from 1/2 to avoid knowledge/prompts clash)
+    celery_results: 15    # Celery task results
     metrics: 1    # Performance metrics and monitoring data
     prompts: 2
     agents: 3

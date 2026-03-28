@@ -61,11 +61,11 @@ REDIS_PASSWORD="${AUTOBOT_REDIS_PASSWORD:-}"
 if [ -n "$REDIS_PASSWORD" ]; then
     # URL-encode the password (handle +, /, =, etc.)
     ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$REDIS_PASSWORD', safe=''))")
-    DEFAULT_BROKER="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/1"
-    DEFAULT_BACKEND="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/2"
+    DEFAULT_BROKER="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/14"
+    DEFAULT_BACKEND="redis://:${ENCODED_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/15"
 else
-    DEFAULT_BROKER="redis://${REDIS_HOST}:${REDIS_PORT}/1"
-    DEFAULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/2"
+    DEFAULT_BROKER="redis://${REDIS_HOST}:${REDIS_PORT}/14"
+    DEFAULT_BACKEND="redis://${REDIS_HOST}:${REDIS_PORT}/15"
 fi
 
 export CELERY_BROKER_URL="${CELERY_BROKER_URL:-$DEFAULT_BROKER}"
