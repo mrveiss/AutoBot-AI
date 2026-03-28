@@ -18,6 +18,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import config from '@/config/ssot-config'
 
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
@@ -840,9 +841,9 @@ const scoreColor = computed(() => {
               <li>TLS certificates are deployed to the selected nodes</li>
               <li>Service configurations are updated to use HTTPS/TLS</li>
               <li>Services are restarted to apply the changes</li>
-              <li>Frontend will be accessible at https://frontend-host:443</li>
-              <li>Backend API will be accessible at https://backend-host:8443</li>
-              <li>Redis will accept TLS connections on port 6380</li>
+              <li>Frontend will be accessible at https://frontend-host:{{ config.port.tlsFrontend }}</li>
+              <li>Backend API will be accessible at https://backend-host:{{ config.port.tlsBackend }}</li>
+              <li>Redis will accept TLS connections on port {{ config.port.tlsRedis }}</li>
             </ul>
           </div>
         </div>

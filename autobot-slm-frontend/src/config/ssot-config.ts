@@ -32,6 +32,9 @@ export interface SLMConfig {
     vnc: number
     ollama: number
     elasticsearch: number
+    tlsFrontend: number
+    tlsBackend: number
+    tlsRedis: number
   }
   hosts: {
     id: string
@@ -79,6 +82,9 @@ const config: SLMConfig = {
     vnc: 6080,
     ollama: 11434,
     elasticsearch: 9200,
+    tlsFrontend: 443,
+    tlsBackend: 8443,
+    tlsRedis: 6380,
   },
   hosts: [
     { id: 'main', name: 'Main Server', ip: '172.16.168.20', description: 'WSL Backend Server' },

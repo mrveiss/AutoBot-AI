@@ -243,6 +243,11 @@ scan_ssot_ports() {
                 continue
             fi
 
+            # Skip JSON schema examples, docstrings, and URL examples (#2687)
+            if echo "$line_content" | grep -qE '(json_schema_extra|"example"|placeholder=|e\.g\.,|"url":\s*"http)'; then
+                continue
+            fi
+
             report_ssot_violation "$file" "$line_num" ":$port" "$ssot_config" "$line_content"
 
         done < <(grep -rn --include="*.py" --include="*.ts" --include="*.vue" \
@@ -277,6 +282,15 @@ scan_ssot_models() {
 
             # Skip if using getenv/config access
             if echo "$line_content" | grep -qE '(os\.getenv|config\.get|getenv|CONFIG\[|AUTOBOT_)'; then
+                continue
+            fi
+
+            # Skip cost tables (dict keys), docstrings, and discovery lists (#2687)
+            if echo "$line_content" | grep -qE '(cost_per|compute_cost|"models":\s*\[|embedding_models\s*=|complex requests to)'; then
+                continue
+            fi
+            # Skip bare string list items like "model-name:tag", (#2687)
+            if echo "$line_content" | grep -qP '^\s+"[a-z0-9_-]+:[a-z0-9]+"'; then
                 continue
             fi
 
@@ -337,6 +351,11 @@ scan_urls() {
 
         # Skip if using config access or example domains
         if echo "$line_content" | grep -qE '(getenv|config\.|CONFIG\[|example\.com|example\.org|example\.net|autobot\.local)'; then
+            continue
+        fi
+
+        # Skip SVG/W3C namespace URLs and placeholder attributes (#2687)
+        if echo "$line_content" | grep -qE '(w3\.org|xmlns=|placeholder=)'; then
             continue
         fi
 
