@@ -100,9 +100,9 @@ jobs:
         echo "Checking code formatting with black..."
         black --check autobot-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88
 
-        # Import sorting check (matches pre-commit isort config)
+        # Import sorting check — reads pyproject.toml for profile, src_paths, known_first_party (#2679)
         echo "Checking import sorting with isort..."
-        isort --check-only --profile=black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/
+        isort --check-only --settings-path=. autobot-backend/ autobot-slm-backend/ autobot-shared/
 
         # Linting (uses project .flake8 config — same as pre-commit)
         echo "Running flake8 linter..."
