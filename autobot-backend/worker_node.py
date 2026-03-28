@@ -29,8 +29,6 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
-# Import the centralized ConfigManager and Redis client utility
-from config import config as global_config_manager
 from event_manager import event_manager
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
@@ -39,6 +37,9 @@ from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
 
 from autobot_shared.redis_client import get_redis_client
+
+# Import the centralized ConfigManager and Redis client utility
+from config import config as global_config_manager
 
 # Conditional import for GUIController based on OS
 if sys.platform.startswith("linux"):

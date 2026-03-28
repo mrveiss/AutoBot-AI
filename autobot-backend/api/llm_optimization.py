@@ -11,7 +11,6 @@ import time
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from config import ConfigManager
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from llm_interface import LLMInterface
@@ -19,6 +18,7 @@ from pydantic import BaseModel
 from utils.model_optimizer import TaskRequest, get_model_optimizer
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

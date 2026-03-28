@@ -35,10 +35,11 @@ DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
 async def seed_agents():
     """Seed agents from backend DEFAULT_AGENT_CONFIGS."""
     # Import here to avoid circular imports
-    from config import settings  # noqa: F401
     from models.database import Agent
     from services.database import db_service
     from sqlalchemy import select
+
+    from config import settings  # noqa: F401
 
     # Initialize database
     await db_service.initialize()

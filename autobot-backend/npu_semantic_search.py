@@ -22,7 +22,6 @@ from ai_hardware_accelerator import (
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
-from config import cfg
 
 # Import existing AutoBot components
 from constants.threshold_constants import TimingConstants
@@ -41,6 +40,7 @@ from utils.gpu_vector_search import (
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
+from config import cfg
 
 # Import ChromaDB for multi-modal vector storage
 try:

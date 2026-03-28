@@ -21,10 +21,10 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiohttp
 import psutil
-from config import ConfigManager
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 

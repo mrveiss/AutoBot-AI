@@ -32,10 +32,10 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import ConfigManager
 from constants.path_constants import PATH
 
 from autobot_shared.http_client import get_http_client
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 

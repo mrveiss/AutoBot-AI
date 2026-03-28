@@ -15,6 +15,7 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 import torch
+
 from config import get_config_section
 
 from ..base import BaseModalProcessor

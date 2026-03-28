@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Any, Dict
 
 import psutil
+
 from config import config_manager
 
 logger = logging.getLogger(__name__)

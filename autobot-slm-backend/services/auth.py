@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import jwt
-from config import settings
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
@@ -21,6 +20,8 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.models.user import User
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 

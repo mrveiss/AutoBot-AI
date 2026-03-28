@@ -64,6 +64,10 @@ const canEnroll = computed(() => {
   return props.node.status === 'registered' || props.node.status === 'pending'
 })
 
+const isDecommissioned = computed(() => {
+  return props.node.status === 'decommissioned'
+})
+
 const isEnrolling = computed(() => {
   return props.node.status === 'enrolling'
 })
@@ -123,7 +127,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
 <template>
   <div
-    class="card p-4 hover:shadow-md transition-shadow relative"
+    :class="['card p-4 hover:shadow-md transition-shadow relative', isDecommissioned ? 'opacity-60 border-dashed' : '']"
     role="listitem"
     :aria-label="`Node ${node.hostname}, status: ${statusText}`"
     @mouseleave="closeMenu"
@@ -203,9 +207,21 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
               </svg>
               Services
             </button>
+            <!-- Re-enroll for decommissioned nodes (#2681) -->
+            <button
+              v-if="isDecommissioned"
+              @click="handleAction('reenroll')"
+              role="menuitem"
+              class="w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Re-enroll Node
+            </button>
             <hr class="my-1 border-gray-200" role="separator" />
             <button
-              v-if="node.status !== 'decommissioned' && !node.node_id.startsWith('00-')"
+              v-if="!isDecommissioned && !node.node_id.startsWith('00-')"
               @click="handleAction('decommission')"
               role="menuitem"
               class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"

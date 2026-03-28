@@ -12,8 +12,9 @@ Validates:
 import os
 
 import pytest
-from config import UnifiedConfigManager
 from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
+
+from config import UnifiedConfigManager
 
 
 class TestUnifiedConfigTimeouts:

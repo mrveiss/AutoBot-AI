@@ -16,6 +16,7 @@ import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
+import { useRoles } from '@/composables/useRoles'
 
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
@@ -37,6 +38,9 @@ const router = useRouter()
 
 // Connection test composable (Issue #737)
 const connectionTest = useNodeConnectionTest()
+
+// Roles composable for re-enrollment (#2681)
+const rolesComposable = useRoles()
 
 // WebSocket for real-time updates
 const ws = useSlmWebSocket()
@@ -206,6 +210,9 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'decommission':
       showDecommissionModal.value = true
       break
+    case 'reenroll':
+      handleReenroll(nodeId)
+      break
     case 'restart':
       handleRestart(nodeId)
       break
@@ -336,6 +343,27 @@ async function handleRestart(nodeId: string): Promise<void> {
     alert(`Failed to reboot node: ${err instanceof Error ? err.message : 'Unknown error'}`)
   } finally {
     isRestarting.value = false
+  }
+}
+
+async function handleReenroll(nodeId: string): Promise<void> {
+  const node = fleetStore.getNode(nodeId)
+  const hostname = node?.hostname || nodeId
+  if (!confirm(`Re-enroll node "${hostname}"? This will reset it to pending status for fresh enrollment.`)) {
+    return
+  }
+
+  try {
+    const result = await rolesComposable.reenrollNode(nodeId)
+    if (result.success) {
+      logger.info('Node reset for re-enrollment:', nodeId)
+      await refreshFleet()
+    } else {
+      alert(`Re-enrollment failed: ${result.message}`)
+    }
+  } catch (err) {
+    logger.error('Failed to re-enroll node:', err)
+    alert(`Failed to re-enroll: ${err instanceof Error ? err.message : 'Unknown error'}`)
   }
 }
 </script>

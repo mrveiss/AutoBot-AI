@@ -15,10 +15,11 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
-from config import ConfigManager
 from fastapi import Request
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
+
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 

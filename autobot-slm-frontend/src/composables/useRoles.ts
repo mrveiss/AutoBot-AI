@@ -405,6 +405,29 @@ export function useRoles() {
     }
   }
 
+  async function reenrollNode(
+    nodeId: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const resp = await client.post<{
+        success: boolean
+        message: string
+      }>(`/api/nodes/${nodeId}/reenroll`)
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      const msg =
+        err.response?.data?.detail ||
+        err.message ||
+        'Re-enrollment failed'
+      error.value = msg
+      return { success: false, message: msg }
+    }
+  }
+
   return reactive({
     roles,
     isLoading,
@@ -425,5 +448,6 @@ export function useRoles() {
     executeNodeAction,
     decommissionPreflight,
     decommissionNode,
+    reenrollNode,
   })
 }

@@ -20,7 +20,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from config import config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from conversation import ConversationManager
 from llm_interface import LLMInterface
@@ -43,6 +42,7 @@ from utils.agent_selection import reserve_agent as _reserve_agent
 from utils.agent_selection import update_agent_performance as _update_performance
 
 from autobot_shared.logging_manager import get_logger
+from config import config_manager
 
 logger = get_logger("orchestrator")
 

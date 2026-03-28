@@ -8,8 +8,9 @@ import os
 from typing import Any, Dict, List, Optional
 
 import yaml
-from config import config as global_config_manager
 from constants.network_constants import NetworkConstants
+
+from config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 

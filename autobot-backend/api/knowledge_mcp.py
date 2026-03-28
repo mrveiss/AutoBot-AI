@@ -17,7 +17,6 @@ import threading
 from typing import List, Optional
 
 from auth_middleware import get_current_user
-from config import config as global_config_manager
 from constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends
 from knowledge_base import KnowledgeBase
@@ -27,6 +26,7 @@ from utils.service_registry import get_service_url
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

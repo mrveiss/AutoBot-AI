@@ -1347,6 +1347,62 @@ def _create_decommission_deployment(
     )
 
 
+@router.post("/{node_id}/reenroll")
+async def reenroll_node(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Reset a decommissioned node to pending so it can be re-enrolled (#2681).
+
+    Clears stale credentials and configs, resets status to PENDING,
+    and logs the event.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+    if node.status != NodeStatus.DECOMMISSIONED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Node must be decommissioned to re-enroll (current: {node.status})",
+        )
+
+    # Clear stale data from previous life
+    await db.execute(delete(NodeCredential).where(NodeCredential.node_id == node_id))
+    await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node_id))
+
+    node.status = NodeStatus.PENDING.value
+    node.updated_at = datetime.utcnow()
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.STATUS_CHANGED,
+        EventSeverity.INFO,
+        f"Node reset to pending for re-enrollment by {current_user.get('username', 'unknown')}",
+    )
+    await db.commit()
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_status_changed",
+        {"status": "pending", "previous_status": "decommissioned"},
+    )
+
+    logger.info(
+        "Node %s reset from decommissioned to pending for re-enrollment",
+        node_id,
+    )
+    return {
+        "success": True,
+        "message": f"Node {node_id} is ready for re-enrollment",
+    }
+
+
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_node(
     node_id: str,

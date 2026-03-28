@@ -16,7 +16,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -33,6 +32,8 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 

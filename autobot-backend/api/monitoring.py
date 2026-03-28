@@ -28,7 +28,6 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
-from config import ConfigManager
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
@@ -59,6 +58,7 @@ from utils.performance_monitor import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()

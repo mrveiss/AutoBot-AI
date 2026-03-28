@@ -263,8 +263,9 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from config import unified_config_manager
         from services.config_service import ConfigService
+
+        from config import unified_config_manager
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)

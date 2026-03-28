@@ -14,7 +14,6 @@ from datetime import timedelta
 from typing import Union
 
 from api.security import create_audit_log
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.schemas import (
     MfaChallengeResponse,
@@ -31,6 +30,7 @@ from user_management.models.user import User
 from user_management.services import TenantContext, UserService
 
 from autobot_shared.proxy_utils import get_client_ip
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])

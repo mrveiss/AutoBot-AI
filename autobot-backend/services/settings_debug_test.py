@@ -13,8 +13,9 @@ import requests
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
 
-from config import global_config_manager
 from services.config_service import ConfigService
+
+from config import global_config_manager
 
 
 async def test_config_service():

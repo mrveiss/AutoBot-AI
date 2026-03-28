@@ -8,7 +8,6 @@ import sys
 from datetime import datetime
 
 from auth_middleware import check_admin_permission
-from config import ConfigManager
 from constants.model_constants import ModelConstants as ModelConsts
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
@@ -16,6 +15,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from utils.advanced_cache_manager import cache_manager, cache_response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 # Create singleton config instance
 config = ConfigManager()

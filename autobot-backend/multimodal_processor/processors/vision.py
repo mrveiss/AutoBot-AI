@@ -16,8 +16,9 @@ import time
 from typing import Any, Dict
 
 import torch
-from config import get_config_section
 from PIL import Image
+
+from config import get_config_section
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult

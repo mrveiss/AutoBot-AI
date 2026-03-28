@@ -14,9 +14,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from config import config_manager
 from cryptography.fernet import Fernet
 from type_defs.common import Metadata
+
+from config import config_manager
 
 logger = logging.getLogger(__name__)
 

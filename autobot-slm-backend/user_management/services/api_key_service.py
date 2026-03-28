@@ -15,10 +15,11 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from config import settings
 from sqlalchemy import select
 from user_management.models.api_key import APIKey
 from user_management.services.base_service import BaseService
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 

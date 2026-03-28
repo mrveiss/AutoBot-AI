@@ -9,8 +9,9 @@ Ensures all log/data writes use consistent, configurable paths.
 import logging
 from pathlib import Path
 
-from config import unified_config_manager
 from type_defs.common import Metadata
+
+from config import unified_config_manager
 
 logger = logging.getLogger(__name__)
 

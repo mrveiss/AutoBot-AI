@@ -13,7 +13,6 @@ Configures all middleware for FastAPI application:
 import logging
 from typing import List, Optional
 
-from config import ConfigManager
 from constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
@@ -21,6 +20,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 

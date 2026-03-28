@@ -15,7 +15,6 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from config import config_manager
 from models.atomic_fact import AtomicFact
 from models.entity_mapping import (
     EntityMapping,
@@ -27,6 +26,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from config import config_manager
 
 logger = get_llm_logger("entity_resolver")
 

@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.database import (
     Deployment,
@@ -33,6 +32,8 @@ from services.database import get_db
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])

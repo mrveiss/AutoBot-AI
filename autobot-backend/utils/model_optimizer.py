@@ -24,8 +24,6 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-from config import ConfigManager
-
 # Re-export all public API from the package for backward compatibility
 from utils.model_optimization import (
     CODE_COMPLEXITY_KEYWORDS,
@@ -43,6 +41,7 @@ from utils.model_optimization import (
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.redis_client import get_redis_client
+from config import ConfigManager
 
 # Create singleton config instance
 config = ConfigManager()

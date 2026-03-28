@@ -5,7 +5,6 @@ import asyncio
 import logging
 
 from auth_middleware import check_admin_permission, get_current_user
-from config import ConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from constants.model_constants import ModelConstants
@@ -18,6 +17,7 @@ from utils.advanced_cache_manager import cache_response
 from utils.connection_utils import ConnectionTester, ModelManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 # Create singleton config instance
 config = ConfigManager()
