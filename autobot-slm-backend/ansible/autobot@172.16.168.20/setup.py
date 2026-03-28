@@ -11,7 +11,7 @@ setup(
     author="mrveiss",
     description="Shared utilities for AutoBot platform",
     packages=find_packages(),
-    python_requires=">=3.10",
+    python_requires=">=3.12",
     install_requires=[
         "redis>=5.0.0",
         "pydantic>=2.0.0",
