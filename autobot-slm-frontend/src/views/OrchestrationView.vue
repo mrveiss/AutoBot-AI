@@ -207,7 +207,11 @@ const expandedFleetServices = ref<Set<string>>(new Set())
 
 function toggleFleetService(serviceName: string): void {
   const next = new Set(expandedFleetServices.value)
-  next.has(serviceName) ? next.delete(serviceName) : next.add(serviceName)
+  if (next.has(serviceName)) {
+    next.delete(serviceName)
+  } else {
+    next.add(serviceName)
+  }
   expandedFleetServices.value = next
 }
 
