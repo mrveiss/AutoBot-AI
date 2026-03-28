@@ -821,21 +821,46 @@ async def _execute_provision_playbook(
     roles: list,
     target_roles: list,
 ) -> dict:
-    """Helper for provision_node_roles. Ref: #1088.
+    """Helper for provision_node_roles. Ref: #1088, #2678.
 
-    Runs deploy.yml playbook, updates role statuses, and returns result dict.
-    Raises HTTPException on playbook failure.
+    Builds a temp single-host inventory from the node's IP and ssh_user
+    (same pattern as decommission) so provisioning works regardless of
+    whether the node appears in the static inventory.
     """
     from services.playbook_executor import get_playbook_executor
 
-    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
-    # hostname is user-editable and can drift from inventory host names (#921)
     executor = get_playbook_executor()
-    result = await executor.execute_playbook(
-        playbook_name="deploy.yml",
-        limit=[node.node_id],
-        extra_vars={"target_roles": ",".join(target_roles)},
+    ssh_user = node.ssh_user or "autobot"
+    inventory_content = (
+        "all:\n"
+        "  hosts:\n"
+        "    provision_target:\n"
+        f"      ansible_host: {node.ip_address}\n"
+        f"      ansible_user: {ssh_user}\n"
+        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
+        "      ansible_python_interpreter: /usr/bin/python3\n"
     )
+    tmp_inv = None
+    try:
+        tmp_inv = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            prefix="provision_inv_",
+            dir=str(executor.ansible_dir),
+            delete=False,
+        )
+        tmp_inv.write(inventory_content)
+        tmp_inv.flush()
+        tmp_inv.close()
+
+        result = await executor.execute_playbook(
+            playbook_name="deploy.yml",
+            inventory_path=Path(tmp_inv.name),
+            extra_vars={"target_roles": ",".join(target_roles)},
+        )
+    finally:
+        if tmp_inv and os.path.exists(tmp_inv.name):
+            os.unlink(tmp_inv.name)
 
     for role in roles:
         role.status = "installed" if result["success"] else "failed"
