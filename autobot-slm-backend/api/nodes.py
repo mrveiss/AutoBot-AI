@@ -17,6 +17,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     Certificate,
     CodeStatus,
@@ -61,15 +67,10 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
-from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import delete, func, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -1136,13 +1137,15 @@ async def _run_decommission_playbook(ip_address: str, backup: bool) -> dict:
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    # Build temp inventory targeting node by IP (#2678)
+    # Build temp inventory targeting node by IP (#2678).
+    # Connect as 'martins' (not 'autobot') so the playbook can fully
+    # remove the autobot user without killing its own SSH session.
     inventory_content = (
         "all:\n"
         "  hosts:\n"
         "    decommission_target:\n"
         f"      ansible_host: {ip_address}\n"
-        "      ansible_user: autobot\n"
+        "      ansible_user: martins\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
@@ -2399,9 +2402,10 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
+    from sqlalchemy import or_
+
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
-    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))

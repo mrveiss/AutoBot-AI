@@ -270,6 +270,7 @@
     # =======================================================================
     # PHASE 7: REMOVE AUTOBOT USERS AND SYSTEM CONFIG
     # =======================================================================
+    # Safe to pkill/userdel autobot here because we connect as 'martins'.
     - name: "Phase 7 — Remove AutoBot users and system config"
       block:
         - name: Kill any processes owned by autobot user
@@ -282,6 +283,7 @@
             state: absent
             remove: true
             force: true
+          ignore_errors: true
 
         - name: Remove autobot_admin emergency user
           ansible.builtin.user:
