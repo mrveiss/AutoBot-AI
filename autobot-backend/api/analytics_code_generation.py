@@ -27,10 +27,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # LLM Interface for real code generation

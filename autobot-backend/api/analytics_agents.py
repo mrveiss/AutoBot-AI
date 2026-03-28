@@ -16,12 +16,12 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 import logging
 from typing import Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["analytics", "agents"])

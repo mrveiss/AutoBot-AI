@@ -5,8 +5,9 @@
 Main router combining all codebase analytics endpoints
 """
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends
+
+from auth_middleware import check_admin_permission
 
 # Issue #244: Cross-Language Pattern Detector
 # Issue #208: Code Pattern Detection & Optimization

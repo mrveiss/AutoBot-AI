@@ -11,9 +11,10 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 
-from api.monitoring import ws_manager
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
+
+from api.monitoring import ws_manager
 
 logger = logging.getLogger(__name__)
 

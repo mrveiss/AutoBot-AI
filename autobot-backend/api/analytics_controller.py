@@ -27,13 +27,12 @@ import redis
 
 # Import models from dedicated module (Issue #185)
 from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from config import ConfigManager
 from constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.system_metrics import get_metrics_collector
-
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from config import ConfigManager
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor

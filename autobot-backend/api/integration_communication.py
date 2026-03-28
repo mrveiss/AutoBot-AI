@@ -12,15 +12,16 @@ listing channels/guilds.
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.communication_integration import (
     DiscordIntegration,
     SlackIntegration,
     TeamsIntegration,
 )
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

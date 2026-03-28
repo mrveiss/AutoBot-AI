@@ -13,6 +13,10 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,
@@ -20,13 +24,9 @@ from enhanced_memory_manager_async import (
     TaskStatus,
     get_async_enhanced_memory_manager,
 )
-from fastapi import APIRouter, HTTPException, Query
 from markdown_reference_system import MarkdownReferenceSystem
-from pydantic import BaseModel
 from task_execution_tracker import task_tracker
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

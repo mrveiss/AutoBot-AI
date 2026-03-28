@@ -6,11 +6,13 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import auth_middleware, get_current_user
-from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from auth_middleware import auth_middleware, get_current_user
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
@@ -28,8 +30,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration
@@ -1914,9 +1914,8 @@ async def share_session(
     shared_by = user_data.get("username", "unknown")
 
     # Share session access
-    from security.session_ownership import SessionOwnershipValidator
-
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_ownership import SessionOwnershipValidator
 
     redis = await get_redis_mgr(async_client=True, database="main")
     validator = SessionOwnershipValidator(redis)

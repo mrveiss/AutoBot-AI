@@ -21,11 +21,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 

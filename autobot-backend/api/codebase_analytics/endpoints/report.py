@@ -15,6 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
@@ -28,8 +32,6 @@ from code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
-from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -43,8 +45,6 @@ from utils.file_categorization import (
     FILE_CATEGORY_TEST,
 )
 from utils.io_executor import get_analytics_executor, run_in_analytics_executor
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401

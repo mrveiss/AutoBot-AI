@@ -10,15 +10,15 @@ Advanced code analysis endpoints for development acceleration using NPU and Redi
 import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
 from agents.development_speedup_agent import (
     analyze_codebase,
     find_duplicates,
     get_development_speedup_agent,
 )
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

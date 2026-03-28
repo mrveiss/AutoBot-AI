@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import aiofiles
 import yaml
+
 from agents.system_knowledge_manager import SystemKnowledgeManager
 from intelligence.os_detector import LinuxDistro, OSType, get_os_detector
 from knowledge_base import KnowledgeBase

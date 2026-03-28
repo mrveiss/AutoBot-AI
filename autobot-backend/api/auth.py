@@ -13,13 +13,13 @@ from time import time
 from typing import Dict, List, Optional
 
 import jwt as pyjwt
-from auth_middleware import auth_middleware
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
+
+from auth_middleware import auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -17,8 +17,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
-from type_defs.common import Metadata
-from utils.error_metrics import get_metrics_collector
 
 from autobot_shared.error_boundaries import (
     ErrorCategory,
@@ -27,6 +25,8 @@ from autobot_shared.error_boundaries import (
     with_error_handling,
 )
 from config import ConfigManager
+from type_defs.common import Metadata
+from utils.error_metrics import get_metrics_collector
 
 # Create singleton config instance
 config = ConfigManager()

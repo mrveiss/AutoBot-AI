@@ -12,15 +12,14 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from constants.threshold_constants import LLMDefaults
-from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from constants.threshold_constants import LLMDefaults
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

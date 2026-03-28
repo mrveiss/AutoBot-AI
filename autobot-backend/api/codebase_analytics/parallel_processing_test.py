@@ -16,6 +16,7 @@ Tests the following functionality:
 from pathlib import Path
 
 import pytest
+
 from api.codebase_analytics.types import (
     AnalysisBatchResult,
     FileAnalysisResult,

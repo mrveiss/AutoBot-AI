@@ -39,13 +39,12 @@ from agents.agent_orchestration import (  # noqa: F401
     DistributedAgentInfo,
     DistributedAgentManager,
 )
-from llm_interface import LLMInterface
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

@@ -32,6 +32,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import aiofiles
+
 from type_defs.common import JSONObject, Metadata
 from utils.io_executor import run_in_file_executor
 
@@ -59,10 +60,10 @@ async def _get_file_lock(filepath: str) -> asyncio.Lock:
         return _file_locks[filepath]
 
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_path
 

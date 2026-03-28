@@ -13,9 +13,14 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -23,11 +28,7 @@ from models.heartbeat import (
     HeartbeatRunEvent,
     WakeupTrigger,
 )
-from pydantic import BaseModel, Field
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

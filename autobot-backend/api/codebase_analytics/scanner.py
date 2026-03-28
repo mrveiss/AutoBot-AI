@@ -32,8 +32,9 @@ from collections import deque
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from constants.path_constants import PATH
 from fastapi import HTTPException
+
+from constants.path_constants import PATH
 from type_defs.common import Metadata
 
 from .chromadb_storage import _recreate_chromadb_collection  # noqa: F401

@@ -20,14 +20,14 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
 from services.audit_logger import audit_log
 from services.feature_flags import EnforcementMode, FeatureFlags, get_feature_flags
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

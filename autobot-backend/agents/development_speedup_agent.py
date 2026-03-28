@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
-from agents.npu_code_search_agent import get_npu_code_search
 
+from agents.npu_code_search_agent import get_npu_code_search
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

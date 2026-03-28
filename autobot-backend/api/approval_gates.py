@@ -12,13 +12,14 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.approval import ApprovalStatus, ApprovalType
-from pydantic import BaseModel, Field
 from services.approval_gate_service import ApprovalGateService
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
