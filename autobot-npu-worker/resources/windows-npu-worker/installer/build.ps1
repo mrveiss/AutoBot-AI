@@ -86,7 +86,7 @@ try {
     }
 } catch {
     Write-Host " FAILED" -ForegroundColor Red
-    Write-Host "Error: Python 3.10+ is required. Please install from https://www.python.org/" -ForegroundColor Red
+    Write-Host "Error: Python 3.12+ is required. Please install from https://www.python.org/" -ForegroundColor Red
     exit 1
 }
 

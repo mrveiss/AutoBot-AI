@@ -116,7 +116,7 @@ Worker connects to:
 ### Prerequisites
 - Windows 10/11 (64-bit)
 - Administrator rights
-- Python 3.10+ (can be bundled)
+- Python 3.12+ (can be bundled)
 - Network access to AutoBot infrastructure
 - 2GB free disk space
 
@@ -271,7 +271,7 @@ python-dotenv>=1.0.0
 
 ### External Tools
 - **NSSM**: Auto-downloaded during installation (2.24)
-- **Python**: 3.10+ (system installation or bundled)
+- **Python**: 3.12+ (system installation or bundled)
 
 ## Testing & Validation
 
@@ -478,7 +478,7 @@ windows-npu-worker/
 ### Pre-Installation
 - [ ] Windows 10/11 (64-bit) confirmed
 - [ ] Administrator access available
-- [ ] Python 3.10+ installed (or will install embedded)
+- [ ] Python 3.12+ installed (or will install embedded)
 - [ ] 2GB disk space available
 - [ ] Network access to 172.16.168.20 and 172.16.168.23 confirmed
 

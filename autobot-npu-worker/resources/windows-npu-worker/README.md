@@ -22,7 +22,7 @@ This package provides a standalone NPU worker installation for Windows systems. 
 ## System Requirements
 
 - **Operating System**: Windows 10/11 (64-bit)
-- **Python**: 3.10 or higher (can be bundled with installation)
+- **Python**: 3.12 or higher (can be bundled with installation)
 - **Hardware**: Intel CPU with NPU support (Core Ultra series or newer)
 - **RAM**: Minimum 8GB, Recommended 16GB
 - **Disk Space**: 2GB for installation + models

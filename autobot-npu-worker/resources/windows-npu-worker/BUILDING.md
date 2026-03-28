@@ -17,7 +17,7 @@ Complete guide for building the Windows NPU Worker installer from source.
 
 ### Required Software
 
-1. **Python 3.10+**
+1. **Python 3.12+**
    - Download: https://www.python.org/downloads/
    - Ensure "Add Python to PATH" is checked during installation
    - Verify: `python --version`
@@ -332,7 +332,7 @@ To include embedded Python (larger package, no external Python needed):
 
 **1. Download Python embedded:**
 ```powershell
-Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" -OutFile "python-embed.zip"
+Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.0/python-3.12.0-embed-amd64.zip" -OutFile "python-embed.zip"
 Expand-Archive python-embed.zip -DestinationPath installer\resources\python-embed\
 ```
 
@@ -506,7 +506,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Install Inno Setup
         run: choco install innosetup
       - name: Build

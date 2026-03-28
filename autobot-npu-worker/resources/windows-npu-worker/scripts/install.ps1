@@ -80,10 +80,10 @@ if (-not $SkipPythonCheck) {
         $pythonVersion = & python --version 2>&1
         if ($pythonVersion -match "Python 3\.(\d+)") {
             $minorVersion = [int]$matches[1]
-            if ($minorVersion -ge 10) {
+            if ($minorVersion -ge 12) {
                 Write-Success "Python version: OK ($pythonVersion)"
             } else {
-                Write-Error "Error: Python 3.10 or later required (found: $pythonVersion)"
+                Write-Error "Error: Python 3.12 or later required (found: $pythonVersion)"
                 Write-Info "Download Python from: https://www.python.org/downloads/"
                 exit 1
             }
@@ -91,7 +91,7 @@ if (-not $SkipPythonCheck) {
             throw "Invalid Python version"
         }
     } catch {
-        Write-Error "Error: Python 3.10+ not found in PATH"
+        Write-Error "Error: Python 3.12+ not found in PATH"
         Write-Info "Download Python from: https://www.python.org/downloads/"
         Write-Info "Or run with -SkipPythonCheck to use embedded Python"
         exit 1
