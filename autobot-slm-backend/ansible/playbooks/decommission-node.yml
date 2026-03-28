@@ -268,33 +268,16 @@
           ignore_errors: true
 
     # =======================================================================
-    # PHASE 7: REMOVE AUTOBOT USERS AND SYSTEM CONFIG
+    # PHASE 7: REMOVE SYSTEM CONFIG (user cleaned up last via delayed task)
     # =======================================================================
-    - name: "Phase 7 — Remove AutoBot users and system config"
+    - name: "Phase 7 — Remove system config and non-session users"
       block:
-        - name: Kill any processes owned by autobot user
-          ansible.builtin.shell: "pkill -u autobot || true"
-          changed_when: false
-
-        - name: Remove autobot user and home directory
-          ansible.builtin.user:
-            name: autobot
-            state: absent
-            remove: true
-            force: true
-
         - name: Remove autobot_admin emergency user
           ansible.builtin.user:
             name: autobot_admin
             state: absent
             remove: true
             force: true
-          ignore_errors: true
-
-        - name: Remove autobot group
-          ansible.builtin.group:
-            name: autobot
-            state: absent
           ignore_errors: true
 
         - name: Remove sudoers entries
@@ -321,6 +304,22 @@
         - name: Reload nginx if still running
           ansible.builtin.shell: "systemctl is-active nginx && systemctl reload nginx || true"
           changed_when: false
+
+        - name: Strip autobot user SSH keys and lock account
+          ansible.builtin.shell: |
+            rm -f /home/autobot/.ssh/authorized_keys
+            passwd -l autobot 2>/dev/null || true
+          changed_when: true
+
+        - name: Schedule autobot user removal after Ansible disconnects
+          ansible.builtin.shell: |
+            nohup bash -c '
+              sleep 30
+              userdel -rf autobot 2>/dev/null
+              groupdel autobot 2>/dev/null
+              rm -rf /home/autobot
+            ' </dev/null >/dev/null 2>&1 &
+          changed_when: true
 
     # =======================================================================
     # PHASE 8: CLEAN CACHES AND TEMP FILES
