@@ -93,7 +93,7 @@ async def _get_checkpoint_redis():
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        return await get_redis_client(database="analytics", async_client=True)
+        return get_redis_client(database="analytics", async_client=True)
     except Exception:
         return None
 

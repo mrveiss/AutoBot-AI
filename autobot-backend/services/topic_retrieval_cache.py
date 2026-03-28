@@ -287,7 +287,7 @@ class TopicRetrievalCache:
     async def _fetch_chunks(self, key: str) -> Optional[List[CachedChunk]]:
         """Fetch cached chunks from Redis."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
             if client is None:
                 return None
             raw = await client.get(key)
@@ -309,7 +309,7 @@ class TopicRetrievalCache:
     async def _store_chunks(self, key: str, payload: List[Dict]) -> bool:
         """Persist chunk list in Redis with TTL."""
         try:
-            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
             if client is None:
                 return False
             await client.set(
@@ -343,9 +343,7 @@ class TopicRetrievalCache:
             results = await self._collection.get(limit=excess, include=["metadatas"])
             if results and results.get("ids"):
                 ids_to_delete = results["ids"]
-                client = await get_redis_client(
-                    async_client=True, database=_REDIS_DATABASE
-                )
+                client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
                 if client:
                     for meta in results.get("metadatas", []):
                         rkey = meta.get("redis_key", "")

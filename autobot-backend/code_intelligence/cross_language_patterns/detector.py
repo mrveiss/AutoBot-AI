@@ -168,7 +168,7 @@ class CrossLanguagePatternDetector:
             try:
                 from autobot_shared.redis_client import get_redis_client
 
-                self._redis_client = await get_redis_client(
+                self._redis_client = get_redis_client(
                     async_client=True, database="analytics"
                 )
                 logger.info("Redis client initialized for analytics")
