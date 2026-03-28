@@ -379,12 +379,13 @@ export function useRoles() {
     nodeId: string,
     backup: boolean,
     confirmNodeId: string
-  ): Promise<{ success: boolean; message?: string; deployment_id?: string }> {
+  ): Promise<{ success: boolean; message?: string; deployment_id?: string; output?: string }> {
     try {
       const resp = await client.post<{
         success: boolean
         message: string
         deployment_id: string
+        output: string
       }>(`/api/nodes/${nodeId}/decommission`, {
         backup,
         confirm_node_id: confirmNodeId,

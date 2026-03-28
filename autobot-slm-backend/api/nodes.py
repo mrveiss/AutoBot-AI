@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import tempfile
 import time
 import uuid
 from datetime import datetime
@@ -1125,18 +1126,62 @@ async def decommission_preflight(
     }
 
 
-async def _run_decommission_playbook(node_id: str, backup: bool) -> dict:
-    """Execute the decommission Ansible playbook (#1369)."""
+async def _run_decommission_playbook(ip_address: str, backup: bool) -> dict:
+    """Execute the decommission Ansible playbook (#1369, #2678).
+
+    Uses a temporary single-host inventory built from the node's IP
+    to avoid silent no-op when node_id doesn't match a static
+    inventory hostname.
+    """
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    return await executor.execute_playbook(
-        playbook_name="playbooks/decommission-node.yml",
-        limit=[node_id],
-        extra_vars={
-            "backup_before_decommission": str(backup).lower(),
-        },
+    # Build temp inventory targeting node by IP (#2678)
+    inventory_content = (
+        "all:\n"
+        "  hosts:\n"
+        "    decommission_target:\n"
+        f"      ansible_host: {ip_address}\n"
+        "      ansible_user: autobot\n"
+        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
+        "      ansible_python_interpreter: /usr/bin/python3\n"
     )
+    tmp_inv = None
+    try:
+        tmp_inv = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            prefix="decommission_inv_",
+            dir=str(executor.ansible_dir),
+            delete=False,
+        )
+        tmp_inv.write(inventory_content)
+        tmp_inv.flush()
+        tmp_inv.close()
+
+        result = await executor.execute_playbook(
+            playbook_name="playbooks/decommission-node.yml",
+            inventory_path=Path(tmp_inv.name),
+            extra_vars={
+                "backup_before_decommission": str(backup).lower(),
+            },
+        )
+        # Detect silent no-op: Ansible exits 0 even when no hosts matched
+        output = result.get("output", "")
+        if result["success"] and "decommission_target" not in output:
+            logger.error(
+                "Decommission playbook ran but target host %s was never reached",
+                ip_address,
+            )
+            result["success"] = False
+            result["output"] += (
+                "\n\nERROR: Playbook completed but target host was "
+                "never reached. Check SSH connectivity to " + ip_address
+            )
+        return result
+    finally:
+        if tmp_inv and os.path.exists(tmp_inv.name):
+            os.unlink(tmp_inv.name)
 
 
 async def _cleanup_decommissioned_node(
@@ -1182,14 +1227,14 @@ async def _fail_deployment(
 async def _execute_decommission(
     db: AsyncSession,
     deployment: Deployment,
-    node_id: str,
+    ip_address: str,
     backup: bool,
 ) -> dict:
-    """Run decommission playbook; fail deployment on error (#1369)."""
+    """Run decommission playbook; fail deployment on error (#1369, #2678)."""
     try:
-        result = await _run_decommission_playbook(node_id, backup)
+        result = await _run_decommission_playbook(ip_address, backup)
     except Exception:
-        logger.exception("Decommission playbook failed for node %s", node_id)
+        logger.exception("Decommission playbook failed for node %s", ip_address)
         await _fail_deployment(db, deployment, "Playbook execution failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1257,7 +1302,7 @@ async def decommission_node(
         ansible_result = await _execute_decommission(
             db,
             deployment,
-            node_id,
+            node.ip_address,
             request.backup,
         )
     await _cleanup_decommissioned_node(
@@ -1276,6 +1321,7 @@ async def decommission_node(
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,
+        "output": ansible_result.get("output", ""),
     }
 
 
