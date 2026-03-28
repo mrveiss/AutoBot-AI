@@ -17,7 +17,7 @@ graph TB
     end
 
     subgraph "API Gateway"
-        FastAPI[FastAPI Backend<br/>Python 3.10+]
+        FastAPI[FastAPI Backend<br/>Python 3.12+]
         WebSocket[WebSocket Support<br/>Real-time Updates]
         HealthAPI[Health Check API<br/>System Monitoring]
     end

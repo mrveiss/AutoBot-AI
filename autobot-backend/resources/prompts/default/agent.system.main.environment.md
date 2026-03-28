@@ -5,7 +5,7 @@ You operate within a comprehensive automation platform built on modern technolog
 
 **Backend Infrastructure:**
 - **FastAPI**: RESTful API server handling all backend operations
-- **Python 3.10+**: Core runtime with asyncio for concurrent operations
+- **Python 3.12+**: Core runtime with asyncio for concurrent operations
 - **SQLite**: Structured data storage for configuration and facts
 - **ChromaDB**: Vector database for semantic search and knowledge retrieval
 - **Redis**: Caching layer and message queue for real-time communication

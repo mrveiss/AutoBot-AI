@@ -240,7 +240,7 @@ echo 'source /opt/intel/openvino_2024/setupvars.sh' >> ~/.bashrc
 ```bash
 # Verify Python environment
 source bin/activate
-python --version  # Should be 3.10+
+python --version  # Should be 3.12+
 pip list | grep -E "(fastapi|ollama|redis|chromadb)"
 
 # Verify Node.js build

@@ -71,7 +71,7 @@ curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Verify installations
-python3 --version  # Should be 3.10+
+python3 --version  # Should be 3.12+
 node --version     # Should be 18+
 docker --version   # Should be 24+
 ```

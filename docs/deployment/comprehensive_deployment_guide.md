@@ -64,8 +64,8 @@ AutoBot can be deployed in various configurations depending on your needs:
 
 #### Core Dependencies
 ```bash
-# Python 3.10+
-python3 --version  # Should be 3.10 or higher
+# Python 3.12+
+python3 --version  # Should be 3.12 or higher
 
 # Node.js 18+
 node --version     # Should be 18.0.0 or higher
