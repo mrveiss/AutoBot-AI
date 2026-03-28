@@ -289,8 +289,8 @@ scan_ssot_models() {
             if echo "$line_content" | grep -qE '(cost_per|compute_cost|"models":\s*\[|embedding_models\s*=|complex requests to)'; then
                 continue
             fi
-            # Skip bare string list items like "model-name:tag", (#2687)
-            if echo "$line_content" | grep -qP '^\s+"[a-z0-9_-]+:[a-z0-9]+"'; then
+            # Skip bare string list items like "model-name:tag", (#2687, #2695)
+            if [[ "$line_content" =~ ^[[:space:]]+\"[a-z0-9_-]+:[a-z0-9]+\" ]]; then
                 continue
             fi
 
