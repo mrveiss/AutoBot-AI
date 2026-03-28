@@ -1,5 +1,5 @@
 # CI requirements — role-based split for isolated dependency management (#1655)
-# Python version: 3.10 (installed via deadsnakes PPA on self-hosted runner)
+# Python version: 3.12 (installed via deadsnakes PPA on self-hosted runner)
 #
 # Each file groups tightly-coupled packages so version conflicts
 # stay contained within their ecosystem. To debug a conflict,
