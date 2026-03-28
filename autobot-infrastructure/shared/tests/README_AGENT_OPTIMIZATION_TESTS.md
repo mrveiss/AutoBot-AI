@@ -256,7 +256,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.10'
+          python-version: '3.12'
       - name: Install dependencies
         run: |
           pip install pytest pytest-asyncio pytest-cov
@@ -429,5 +429,5 @@ Compare future runs against baseline to detect performance regressions.
 
 **Last Updated:** 2025-10-10
 **Test Suite Version:** 1.0.0
-**Python Version:** 3.10.13
+**Python Version:** 3.12
 **pytest Version:** >=7.0.0
