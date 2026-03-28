@@ -1127,25 +1127,24 @@ async def decommission_preflight(
     }
 
 
-async def _run_decommission_playbook(ip_address: str, backup: bool) -> dict:
+async def _run_decommission_playbook(
+    ip_address: str, ssh_user: str, backup: bool
+) -> dict:
     """Execute the decommission Ansible playbook (#1369, #2678).
 
-    Uses a temporary single-host inventory built from the node's IP
-    to avoid silent no-op when node_id doesn't match a static
-    inventory hostname.
+    Connects as the node's original SSH user (stored in Node.ssh_user
+    at enrollment time) so the playbook can safely remove the autobot
+    service account without killing its own session.
     """
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    # Build temp inventory targeting node by IP (#2678).
-    # Connect as 'martins' (not 'autobot') so the playbook can fully
-    # remove the autobot user without killing its own SSH session.
     inventory_content = (
         "all:\n"
         "  hosts:\n"
         "    decommission_target:\n"
         f"      ansible_host: {ip_address}\n"
-        "      ansible_user: martins\n"
+        f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
@@ -1231,11 +1230,12 @@ async def _execute_decommission(
     db: AsyncSession,
     deployment: Deployment,
     ip_address: str,
+    ssh_user: str,
     backup: bool,
 ) -> dict:
     """Run decommission playbook; fail deployment on error (#1369, #2678)."""
     try:
-        result = await _run_decommission_playbook(ip_address, backup)
+        result = await _run_decommission_playbook(ip_address, ssh_user, backup)
     except Exception:
         logger.exception("Decommission playbook failed for node %s", ip_address)
         await _fail_deployment(db, deployment, "Playbook execution failed")
@@ -1306,6 +1306,7 @@ async def decommission_node(
             db,
             deployment,
             node.ip_address,
+            node.ssh_user or "autobot",
             request.backup,
         )
     await _cleanup_decommissioned_node(
