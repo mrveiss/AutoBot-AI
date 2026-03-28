@@ -39,8 +39,9 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from pydantic import BaseModel, Field, validator
+
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from type_defs.common import Metadata
 from utils.path_validation import contains_path_traversal
 

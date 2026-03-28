@@ -424,7 +424,7 @@ class BatchingAnalyzer:
             if line_diff >= 50:
                 continue
             return BatchingOpportunity(
-                opportunity_id=f"batch_{hash(file_path)%10000:04d}",
+                opportunity_id=f"batch_{hash(file_path) % 10000:04d}",
                 file_path=file_path,
                 related_calls=[
                     (p.line_number, p.code_snippet[:50]) for p in sorted_pats[i : i + 2]

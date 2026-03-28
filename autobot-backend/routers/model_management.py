@@ -14,12 +14,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from models.ml_model import MLModel
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from models.ml_model import MLModel
 
 logger = logging.getLogger(__name__)
 

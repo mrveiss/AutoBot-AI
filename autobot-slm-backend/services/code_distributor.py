@@ -17,9 +17,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
+from sqlalchemy import select
+
 from models.database import Setting
 from services.database import db_service
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 

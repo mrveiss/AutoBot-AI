@@ -23,9 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.path_constants import PATH
-
 from autobot_shared.ssot_config import get_ollama_url
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -557,6 +556,7 @@ class DocIndexerService:
             import asyncio
 
             from llama_index.embeddings.ollama import OllamaEmbedding
+
             from utils.chromadb_client import get_chromadb_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"

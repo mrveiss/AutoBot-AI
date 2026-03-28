@@ -10,15 +10,16 @@ Issue #679: Permission-filtered knowledge search that respects hierarchical acce
 import logging
 from typing import List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
 from knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,
     filter_search_results_by_permission,
 )
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field
 from user_management.models.user import User
 
 logger = logging.getLogger(__name__)

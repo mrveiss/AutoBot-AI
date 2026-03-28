@@ -12,11 +12,10 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from knowledge.search_components.reranking import RerankWeights
 from type_defs.common import Metadata
-
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
 

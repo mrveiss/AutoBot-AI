@@ -13,6 +13,7 @@ import uuid
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 

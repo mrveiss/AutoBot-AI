@@ -11,6 +11,7 @@ Issue #429: Tests for semantic and keyword search fixes.
 from unittest.mock import AsyncMock
 
 import pytest
+
 from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult
 
 

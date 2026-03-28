@@ -11,6 +11,9 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.collaboration import (
     InviteRequest,
     RemoveRequest,
@@ -23,10 +26,8 @@ from api.collaboration import (
     remove_collaborator,
     share_secret_with_session,
 )
-from fastapi import HTTPException, status
 from models.secret import Secret, SecretScope, SecretType
 from models.session_collaboration import PermissionLevel, SessionCollaboration
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.fixture

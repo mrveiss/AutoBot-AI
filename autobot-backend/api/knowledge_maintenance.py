@@ -21,6 +21,8 @@ import logging
 from datetime import datetime
 from pathlib import Path as PathLib
 
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+
 # Import Pydantic models from dedicated module
 from api.knowledge_models import (
     BackupRequest,
@@ -36,11 +38,9 @@ from api.knowledge_models import (
     UpdateFactRequest,
 )
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from knowledge_factory import get_or_create_knowledge_base
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
+from knowledge_factory import get_or_create_knowledge_base
 
 # Set up logging
 logger = logging.getLogger(__name__)

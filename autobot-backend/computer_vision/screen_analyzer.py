@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from PIL import Image
+
 from desktop_streaming_manager import desktop_streaming
 from memory import TaskPriority
 from multimodal_processor import (
@@ -25,7 +27,6 @@ from multimodal_processor import (
     ProcessingIntent,
     unified_processor,
 )
-from PIL import Image
 from task_execution_tracker import task_tracker
 
 from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine

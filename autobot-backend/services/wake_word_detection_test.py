@@ -7,6 +7,7 @@ import asyncio
 import time
 
 import pytest
+
 from services.wake_word_service import (
     WakeWordConfig,
     WakeWordDetector,

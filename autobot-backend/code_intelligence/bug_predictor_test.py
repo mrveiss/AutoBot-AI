@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+
 from code_intelligence.bug_predictor import (
     BugPredictor,
     FileRiskAssessment,

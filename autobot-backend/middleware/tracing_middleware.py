@@ -21,12 +21,13 @@ import re
 import time
 from typing import Callable, Optional
 
-from middleware.proxy_utils import get_client_ip
 from opentelemetry.trace import SpanKind, Status, StatusCode
-from services.tracing_service import get_tracing_service
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+from middleware.proxy_utils import get_client_ip
+from services.tracing_service import get_tracing_service
 
 logger = logging.getLogger(__name__)
 

@@ -27,14 +27,14 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
+from autobot_shared.redis_client import get_redis_client
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
-from pydantic import BaseModel, Field
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

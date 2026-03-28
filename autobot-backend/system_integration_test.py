@@ -3,9 +3,10 @@ Integration tests for complete AutoBot system workflows
 Tests how different system components work together end-to-end
 """
 
+from fastapi.testclient import TestClient
+
 # Import system components
 from app_factory import create_app
-from fastapi.testclient import TestClient
 
 
 class TestAutoBootSystemIntegration:

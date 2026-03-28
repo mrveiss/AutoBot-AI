@@ -98,8 +98,9 @@ async def test_org_audit_log_org_admin_allowed():
 @pytest.mark.asyncio
 async def test_org_audit_log_regular_user_forbidden():
     """Regular user cannot access org audit log (403)."""
-    from api.knowledge_audit import get_organization_audit_log
     from fastapi import HTTPException
+
+    from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u3", "org_id": "org1", "role": "user"}
 
@@ -112,8 +113,9 @@ async def test_org_audit_log_regular_user_forbidden():
 @pytest.mark.asyncio
 async def test_org_audit_log_no_role_forbidden():
     """Missing role key defaults to empty string → 403."""
-    from api.knowledge_audit import get_organization_audit_log
     from fastapi import HTTPException
+
+    from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u4", "org_id": "org1"}  # no "role" key
 
@@ -126,8 +128,9 @@ async def test_org_audit_log_no_role_forbidden():
 @pytest.mark.asyncio
 async def test_org_audit_log_no_org_id_bad_request():
     """User without org_id gets 400."""
-    from api.knowledge_audit import get_organization_audit_log
     from fastapi import HTTPException
+
+    from api.knowledge_audit import get_organization_audit_log
 
     user = {"user_id": "u5", "role": "admin"}  # no org_id
 
@@ -174,8 +177,9 @@ async def test_compliance_report_regular_user_forbidden():
     """Regular user cannot generate compliance report (403)."""
     from datetime import datetime
 
-    from api.knowledge_audit import ComplianceReportRequest, generate_compliance_report
     from fastapi import HTTPException
+
+    from api.knowledge_audit import ComplianceReportRequest, generate_compliance_report
 
     user = {"user_id": "u3", "org_id": "org1", "role": "member"}
     report_req = ComplianceReportRequest(
@@ -221,8 +225,9 @@ async def test_compliance_summary_org_admin_allowed():
 @pytest.mark.asyncio
 async def test_compliance_summary_regular_user_forbidden():
     """Regular user cannot access compliance summary (403)."""
-    from api.knowledge_audit import get_compliance_summary
     from fastapi import HTTPException
+
+    from api.knowledge_audit import get_compliance_summary
 
     user = {"user_id": "u3", "org_id": "org1", "role": "viewer"}
 

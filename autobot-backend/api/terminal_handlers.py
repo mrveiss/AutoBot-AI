@@ -28,6 +28,8 @@ import time
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
+from fastapi import WebSocket
+
 # Import models from dedicated module (Issue #185)
 from api.terminal_models import (
     MODERATE_RISK_PATTERNS,
@@ -38,7 +40,6 @@ from api.terminal_models import (
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
-from fastapi import WebSocket
 from services.simple_pty import simple_pty_manager
 
 # Import extracted modules (Issue #290)
@@ -636,6 +637,7 @@ class ConsolidatedTerminalWebSocket:
             from pathlib import Path
 
             import aiofiles
+
             from utils.encoding_utils import strip_ansi_codes
 
             # Strip ANSI escape codes before writing to transcript
@@ -1176,6 +1178,7 @@ class ConsolidatedTerminalWebSocket:
         from pathlib import Path
 
         import aiofiles
+
         from utils.encoding_utils import strip_ansi_codes
 
         try:

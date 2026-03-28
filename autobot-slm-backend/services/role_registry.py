@@ -13,9 +13,10 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-from models.database import Role, SyncType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import Role, SyncType
 
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")

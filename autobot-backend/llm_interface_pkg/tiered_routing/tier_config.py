@@ -10,9 +10,8 @@ Issue #748: Tiered Model Distribution Implementation.
 from dataclasses import dataclass, field
 from typing import Dict
 
-from config.registry import ConfigRegistry
-
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL
+from config.registry import ConfigRegistry
 
 
 @dataclass

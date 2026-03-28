@@ -11,6 +11,7 @@ Follows the pattern established by filesystem_mcp.py (Issue #620 refactoring).
 from __future__ import annotations
 
 from pydantic import BaseModel
+
 from type_defs.common import JSONObject
 
 

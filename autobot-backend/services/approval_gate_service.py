@@ -14,10 +14,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
 
 logger = logging.getLogger(__name__)
 

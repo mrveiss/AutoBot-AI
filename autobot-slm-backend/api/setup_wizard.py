@@ -21,6 +21,7 @@ _PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
 from services.auth import get_current_user
 from services.database import db_service
 from services.playbook_executor import get_playbook_executor
@@ -73,8 +74,9 @@ class ProvisionRequest(BaseModel):
 
 async def _get_setting(key: str, default: str = "") -> str:
     """Read a setting value from the database."""
-    from models.database import Setting
     from sqlalchemy import select
+
+    from models.database import Setting
 
     async with db_service.session() as session:
         result = await session.execute(select(Setting).where(Setting.key == key))
@@ -84,8 +86,9 @@ async def _get_setting(key: str, default: str = "") -> str:
 
 async def _set_setting(key: str, value: str) -> None:
     """Write a setting value to the database."""
-    from models.database import Setting
     from sqlalchemy import select
+
+    from models.database import Setting
 
     async with db_service.session() as session:
         result = await session.execute(select(Setting).where(Setting.key == key))
@@ -162,8 +165,9 @@ async def _generate_dynamic_inventory(
     node_ids: Optional[list[str]] = None,
 ) -> Optional[Path]:
     """Build Ansible inventory with role-based groups (#1346)."""
-    from models.database import Node, NodeRole
     from sqlalchemy import select
+
+    from models.database import Node, NodeRole
 
     async with db_service.session() as session:
         query = select(Node)
@@ -496,9 +500,10 @@ async def validate_fleet(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Validate that all fleet nodes are healthy."""
+    from sqlalchemy import func, select
+
     from models.database import Node, NodeRole
     from services.role_registry import DEFAULT_ROLES
-    from sqlalchemy import func, select
 
     async with db_service.session() as session:
         node_count_result = await session.execute(select(func.count(Node.id)))

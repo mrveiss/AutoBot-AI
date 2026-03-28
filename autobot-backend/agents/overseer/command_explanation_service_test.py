@@ -7,6 +7,7 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
+
 from agents.overseer.command_explanation_service import (
     CommandExplanationService,
     get_command_explanation_service,

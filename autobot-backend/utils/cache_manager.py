@@ -24,10 +24,10 @@ import logging
 from typing import Any, Optional
 
 from fastapi import Request
-from type_defs.common import Metadata
 
 # Import centralized Redis client utility
 from autobot_shared.redis_client import get_redis_client
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

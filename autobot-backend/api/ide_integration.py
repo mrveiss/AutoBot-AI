@@ -26,12 +26,12 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter
-from models.completion_context import CompletionContext
 from pydantic import BaseModel, Field
-from services.context_analyzer import ContextAnalyzer
-from services.pattern_extractor import PatternExtractor
 
 from autobot_shared.redis_client import get_redis_client
+from models.completion_context import CompletionContext
+from services.context_analyzer import ContextAnalyzer
+from services.pattern_extractor import PatternExtractor
 
 logger = logging.getLogger(__name__)
 

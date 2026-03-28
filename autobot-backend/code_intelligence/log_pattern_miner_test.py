@@ -15,6 +15,7 @@ Tests the dynamic log pattern mining functionality including:
 from datetime import datetime, timedelta
 
 import pytest
+
 from code_intelligence.log_pattern_miner import (
     Anomaly,
     AnomalyType,
@@ -79,7 +80,7 @@ def sample_mixed_logs():
     for i in range(20):
         ts = (base_time + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
         lines.append(
-            f"{ts} - API - INFO - SESSION=s{i%3} "
+            f"{ts} - API - INFO - SESSION=s{i % 3} "
             f"API_CALL: GET /api/data DURATION={10 + i}ms STATUS=200"
         )
 

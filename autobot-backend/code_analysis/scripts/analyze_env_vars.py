@@ -7,8 +7,9 @@ import asyncio
 import json
 from pathlib import Path
 
-from constants.network_constants import NetworkConstants
 from env_analyzer import EnvironmentAnalyzer
+
+from constants.network_constants import NetworkConstants
 
 
 def _print_analysis_summary(results: dict) -> None:

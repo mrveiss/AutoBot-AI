@@ -4,6 +4,7 @@
 """Tests for VRAM-aware model selection. Issue #1966."""
 
 import pytest
+
 from utils.model_optimization.types import (
     ModelInfo,
     ModelPerformanceLevel,

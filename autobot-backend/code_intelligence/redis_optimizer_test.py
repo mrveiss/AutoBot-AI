@@ -17,6 +17,7 @@ import tempfile
 import textwrap
 
 import pytest
+
 from code_intelligence.redis_optimizer import (
     OptimizationSeverity,
     OptimizationType,

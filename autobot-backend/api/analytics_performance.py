@@ -17,10 +17,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 

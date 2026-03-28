@@ -19,14 +19,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
 from dependencies import get_config, get_knowledge_base
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
@@ -47,8 +49,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -84,6 +84,7 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
     from llm_service import LLMService
+
     from utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)

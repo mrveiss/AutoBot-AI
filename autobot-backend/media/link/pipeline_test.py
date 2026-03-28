@@ -10,6 +10,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from media.core.types import MediaInput, MediaType, ProcessingIntent
 from media.link.pipeline import LinkPipeline
 

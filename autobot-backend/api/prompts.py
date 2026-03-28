@@ -8,9 +8,9 @@ import time
 from typing import Dict, Optional
 
 import aiofiles
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 

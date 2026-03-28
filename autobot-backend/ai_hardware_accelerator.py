@@ -19,6 +19,12 @@ import aiohttp
 import numpy as np
 import torch
 import torch.nn.functional as F
+from PIL import Image
+
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
+from config import cfg
 
 # Import centralized components
 from constants.model_constants import model_config
@@ -27,12 +33,6 @@ from constants.threshold_constants import (
     ResourceThresholds,
     TimingConstants,
 )
-from PIL import Image
-
-from autobot_shared.http_client import get_http_client
-from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
-from config import cfg
 
 # Import transformers models for multi-modal embeddings
 try:

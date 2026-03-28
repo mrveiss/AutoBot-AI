@@ -15,6 +15,7 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
+
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 try:

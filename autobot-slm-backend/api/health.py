@@ -11,13 +11,14 @@ import time
 
 import psutil
 from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import Node, NodeStatus
 from models.schemas import HealthResponse, SystemMetrics
 from services.auth import get_current_user
 from services.database import get_db
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])

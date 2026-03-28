@@ -14,10 +14,10 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
-from llm_interface import LLMInterface, get_llm_interface
 
 from autobot_shared.redis_client import get_redis_client
 from config import ConfigManager, unified_config_manager
+from llm_interface import LLMInterface, get_llm_interface
 
 logger = logging.getLogger(__name__)
 

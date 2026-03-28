@@ -15,9 +15,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
+from autobot_shared.tracing import (
+    instrument_aiohttp,
+    instrument_redis,
+    shutdown_tracing,
+)
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from fastapi import FastAPI
+from config import ConfigManager
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
@@ -25,13 +32,6 @@ from type_defs.common import Metadata
 from user_management.database import init_database
 from utils.background_llm_sync import BackgroundLLMSync
 from utils.io_executor import shutdown_executors as shutdown_io_executors
-
-from autobot_shared.tracing import (
-    instrument_aiohttp,
-    instrument_redis,
-    shutdown_tracing,
-)
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation

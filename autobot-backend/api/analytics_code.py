@@ -13,10 +13,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from api.analytics_models import CodeAnalysisRequest
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.analytics_models import CodeAnalysisRequest
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import shared analytics controller from analytics module

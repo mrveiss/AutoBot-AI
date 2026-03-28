@@ -7,6 +7,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from services.mesh_brain.mesh_db import MeshDB
 
 _UNSET = object()  # sentinel for "argument not supplied"

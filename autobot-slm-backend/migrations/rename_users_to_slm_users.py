@@ -28,6 +28,7 @@ def migrate(db_url: str) -> None:
     migration is a no-op there.
     """
     import psycopg2
+
     from migrations.runner import _parse_db_url
 
     params = _parse_db_url(db_url)

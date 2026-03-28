@@ -10,6 +10,7 @@ Tests for code completion endpoint.
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from api.ide_integration import (
     CompletionItem,
     CompletionItemKind,

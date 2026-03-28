@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
+
 from services.llm_cost_tracker import (
     MODEL_PRICING,
     PRICING_STALENESS_DAYS,

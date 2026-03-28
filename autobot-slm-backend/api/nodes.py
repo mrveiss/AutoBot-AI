@@ -17,6 +17,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     Certificate,
     CodeStatus,
@@ -61,15 +67,10 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
-from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import delete, func, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -1126,23 +1127,24 @@ async def decommission_preflight(
     }
 
 
-async def _run_decommission_playbook(ip_address: str, backup: bool) -> dict:
+async def _run_decommission_playbook(
+    ip_address: str, ssh_user: str, backup: bool
+) -> dict:
     """Execute the decommission Ansible playbook (#1369, #2678).
 
-    Uses a temporary single-host inventory built from the node's IP
-    to avoid silent no-op when node_id doesn't match a static
-    inventory hostname.
+    Connects as the node's original SSH user (stored in Node.ssh_user
+    at enrollment time) so the playbook can safely remove the autobot
+    service account without killing its own session.
     """
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    # Build temp inventory targeting node by IP (#2678)
     inventory_content = (
         "all:\n"
         "  hosts:\n"
         "    decommission_target:\n"
         f"      ansible_host: {ip_address}\n"
-        "      ansible_user: autobot\n"
+        f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
@@ -1228,11 +1230,12 @@ async def _execute_decommission(
     db: AsyncSession,
     deployment: Deployment,
     ip_address: str,
+    ssh_user: str,
     backup: bool,
 ) -> dict:
     """Run decommission playbook; fail deployment on error (#1369, #2678)."""
     try:
-        result = await _run_decommission_playbook(ip_address, backup)
+        result = await _run_decommission_playbook(ip_address, ssh_user, backup)
     except Exception:
         logger.exception("Decommission playbook failed for node %s", ip_address)
         await _fail_deployment(db, deployment, "Playbook execution failed")
@@ -1303,6 +1306,7 @@ async def decommission_node(
             db,
             deployment,
             node.ip_address,
+            node.ssh_user or "autobot",
             request.backup,
         )
     await _cleanup_decommissioned_node(
@@ -2399,9 +2403,10 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
+    from sqlalchemy import or_
+
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
-    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))

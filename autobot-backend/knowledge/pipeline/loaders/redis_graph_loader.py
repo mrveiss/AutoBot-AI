@@ -10,13 +10,12 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import logging
 from typing import List
 
+from autobot_shared.redis_client import get_redis_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import TemporalEvent
 from knowledge.pipeline.models.relationship import Relationship
 from knowledge.pipeline.registry import TaskRegistry
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -12,9 +12,10 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentState, HyperParams

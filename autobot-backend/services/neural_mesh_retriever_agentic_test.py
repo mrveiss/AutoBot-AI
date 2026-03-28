@@ -10,6 +10,7 @@ tests run without a database, Redis, or model server.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from services.neural_mesh_retriever import MeshRetrievalResult, NeuralMeshRetriever
 
 # =============================================================================

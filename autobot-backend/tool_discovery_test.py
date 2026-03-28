@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+
 from tool_discovery import ESSENTIAL_TOOLS, discover_tools
 
 

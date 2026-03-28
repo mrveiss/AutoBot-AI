@@ -29,13 +29,13 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
-from constants.threshold_constants import TimingConstants
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from config import unified_config_manager
+from constants.threshold_constants import TimingConstants
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 # Use .parent (autobot-backend/) so paths work in both Docker (/app/autobot-backend/)

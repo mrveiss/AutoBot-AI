@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import yaml
+
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from models.npu_models import (

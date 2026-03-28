@@ -17,6 +17,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 

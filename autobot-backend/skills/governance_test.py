@@ -8,6 +8,7 @@ import tempfile
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from skills.governance import GovernanceEngine
 from skills.models import GovernanceMode
 from skills.promoter import SkillPromoter

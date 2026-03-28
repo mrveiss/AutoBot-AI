@@ -13,8 +13,9 @@ Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, Query
+
+from auth_middleware import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["infrastructure"])

@@ -27,6 +27,9 @@ import os
 import time
 from typing import Any, Dict, Optional
 
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, Field
+
 from a2a.agent_card import build_agent_card
 from a2a.capability_verifier import verify_local_card, verify_remote_card
 from a2a.security import SecurityCardSigner
@@ -35,8 +38,6 @@ from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.types import Task
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

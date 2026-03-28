@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
 

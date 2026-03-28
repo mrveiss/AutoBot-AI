@@ -11,13 +11,14 @@ import logging
 import uuid
 from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+
 from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
     require_user_management_enabled,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,

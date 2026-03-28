@@ -12,10 +12,11 @@ import logging
 import os
 from typing import List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
 from services.process_adapter_service import ProcessAdapterService
 
 logger = logging.getLogger(__name__)

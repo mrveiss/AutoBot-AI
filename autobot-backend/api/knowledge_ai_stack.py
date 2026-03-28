@@ -14,12 +14,14 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import get_current_user
-from dependencies import get_knowledge_base
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from dependencies import get_knowledge_base
+from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
 from utils.response_helpers import (
@@ -27,8 +29,6 @@ from utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

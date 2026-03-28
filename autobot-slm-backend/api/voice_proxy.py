@@ -19,6 +19,7 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
+
 from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)

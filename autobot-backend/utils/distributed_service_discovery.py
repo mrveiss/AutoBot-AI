@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import aiohttp
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 
 from autobot_shared.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 
 logger = logging.getLogger(__name__)
 

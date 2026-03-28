@@ -10,6 +10,7 @@ Related Issue: #166 - Architecture Roadmap Phase 1 - Critical Fixes
 """
 
 import pytest
+
 from slash_command_handler import (
     CommandType,
     SlashCommandHandler,

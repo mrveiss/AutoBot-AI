@@ -8,6 +8,7 @@ import tempfile
 import textwrap
 
 import pytest
+
 from skills.models import SkillState
 from skills.sync.local_sync import LocalDirSync
 

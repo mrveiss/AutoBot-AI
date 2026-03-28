@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+
 from skills.generator import SkillGenerator
 from skills.validator import SkillValidator
 

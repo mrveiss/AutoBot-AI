@@ -16,11 +16,11 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import aiohttp
+
+from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
-
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

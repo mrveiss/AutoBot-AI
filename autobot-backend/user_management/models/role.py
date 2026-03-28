@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:

@@ -388,6 +388,7 @@ class TerminalTool:
     async def _query_agent_terminal_sessions(self, conversation_id: str) -> list:
         """Query agent terminal API for sessions linked to conversation. Returns empty list on error."""
         import aiohttp
+
         from constants.network_constants import NetworkConstants
 
         # CRITICAL: Use /api/agent-terminal/sessions (not /api/terminal/sessions)
@@ -432,6 +433,7 @@ class TerminalTool:
     async def _fetch_command_messages(self, conversation_id: str) -> list:
         """Fetch command-related messages from chat history. Returns empty list on error."""
         import aiohttp
+
         from constants.network_constants import NetworkConstants
 
         backend_url = (

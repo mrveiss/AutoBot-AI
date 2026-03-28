@@ -23,8 +23,6 @@ import logging
 import sys
 from typing import Dict, List, Optional
 
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -37,6 +35,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))

@@ -19,13 +19,13 @@ Remaining endpoints:
 
 from typing import List
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from services.saved_reports_service import get_saved_reports_service
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.saved_reports_service import get_saved_reports_service
 
 router = APIRouter(tags=["bi-reports"])
 

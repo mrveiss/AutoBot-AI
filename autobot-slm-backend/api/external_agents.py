@@ -24,13 +24,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from models.database import ExternalAgent
 from pydantic import BaseModel, Field
-from services.auth import get_current_user
-from services.database import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from models.database import ExternalAgent
+from services.auth import get_current_user
+from services.database import get_db
 
 logger = logging.getLogger(__name__)
 

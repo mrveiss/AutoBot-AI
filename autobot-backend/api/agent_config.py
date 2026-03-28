@@ -14,18 +14,18 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.user_management.dependencies import get_db_session
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
-from sqlalchemy.ext.asyncio import AsyncSession
 from utils.connection_utils import ModelManager
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

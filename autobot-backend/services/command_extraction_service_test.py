@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from services.command_extraction_service import (
     ExtractedCommand,
     _extract_command_descriptions,

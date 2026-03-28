@@ -39,6 +39,7 @@ from agents.machine_aware_system_knowledge_manager import (
     MachineProfile,
 )
 from agents.system_knowledge_manager import SystemKnowledgeManager
+from autobot_shared.logging_manager import get_llm_logger
 from knowledge_base import KnowledgeBase
 from temporal_knowledge_manager import (
     FreshnessStatus,
@@ -47,8 +48,6 @@ from temporal_knowledge_manager import (
     TemporalKnowledgeManager,
     TemporalMetadata,
 )
-
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("unified_knowledge_manager")
 

@@ -33,8 +33,9 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from services.tts_client import get_tts_client
 from starlette.websockets import WebSocketState
+
+from services.tts_client import get_tts_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

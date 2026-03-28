@@ -7,6 +7,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+
 from config.manager import UnifiedConfigManager as ConfigManager
 from config.manager import get_unified_config_manager
 

@@ -19,12 +19,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.llm_cost_tracker import MODEL_PRICING, get_cost_tracker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cost", tags=["analytics", "cost"])

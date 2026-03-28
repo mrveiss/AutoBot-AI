@@ -20,12 +20,12 @@ from typing import Any
 
 import aiohttp
 import xxhash
-from constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
 from config import ConfigManager
+from constants.model_constants import ModelConstants
 
 # Issue #1403: Adapter registry
 from .adapters.registry import get_adapter_registry

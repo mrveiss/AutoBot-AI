@@ -22,9 +22,8 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from type_defs.common import Metadata
-
 from autobot_shared.redis_client import get_redis_client
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

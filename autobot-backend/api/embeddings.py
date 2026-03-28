@@ -12,14 +12,14 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from services.config_service import ConfigService
 
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import unified_config_manager
+from services.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 

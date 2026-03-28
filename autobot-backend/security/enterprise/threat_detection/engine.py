@@ -21,11 +21,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import yaml
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 from .analyzers import (
     APIAbuseAnalyzer,

@@ -19,12 +19,12 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

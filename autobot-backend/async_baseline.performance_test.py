@@ -32,10 +32,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
-from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_redis_client
+from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
 logging.basicConfig(

@@ -32,9 +32,8 @@ if _env_path.exists():
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from app_factory import create_app
-from constants.network_constants import NetworkConstants
-
 from autobot_shared.logging_manager import get_logger
+from constants.network_constants import NetworkConstants
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
 logger = get_logger(__name__, "backend")

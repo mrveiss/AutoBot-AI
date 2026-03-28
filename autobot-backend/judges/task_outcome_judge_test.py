@@ -10,6 +10,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from judges.task_outcome_judge import (
     MAX_OUTCOMES_PER_TYPE,
     REDIS_OUTCOMES_KEY,

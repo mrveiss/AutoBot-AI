@@ -20,6 +20,7 @@ import statistics
 import time
 
 import pytest
+
 from knowledge_base import KnowledgeBase
 
 

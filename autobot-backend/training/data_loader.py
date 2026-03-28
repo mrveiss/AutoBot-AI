@@ -12,12 +12,12 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 import torch
-from models.code_pattern import CodePattern
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from torch.utils.data import Dataset
 
 from autobot_shared.ssot_config import config
+from models.code_pattern import CodePattern
 
 logger = logging.getLogger(__name__)
 

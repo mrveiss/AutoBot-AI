@@ -14,10 +14,10 @@ from typing import Dict, List, Set
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
-from utils.background_task_manager import BackgroundTaskManager
-from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.background_task_manager import BackgroundTaskManager
+from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root

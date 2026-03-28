@@ -10,6 +10,7 @@ classify queries into QueryComplexity tiers.
 """
 
 import pytest
+
 from knowledge.search_components.query_classifier import (
     QueryClassifier,
     QueryComplexity,

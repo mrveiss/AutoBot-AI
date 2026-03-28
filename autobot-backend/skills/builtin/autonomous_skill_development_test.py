@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from skills.builtin.autonomous_skill_development import (
     AutonomousSkillDevelopmentSkill,
     _get_governance_mode,

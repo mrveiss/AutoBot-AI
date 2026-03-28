@@ -13,6 +13,7 @@ query enhancement (Issue #249 Phase 3).
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from services.chat_knowledge_service import (
     ChatKnowledgeService,

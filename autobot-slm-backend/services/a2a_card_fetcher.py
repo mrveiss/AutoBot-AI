@@ -58,8 +58,9 @@ async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
 
 async def _store_card(db, node, card: Optional[Dict[str, Any]]) -> None:
     """Persist the fetched card into Node.extra_data."""
-    from models.database import Node
     from sqlalchemy import update
+
+    from models.database import Node
 
     extra = dict(node.extra_data or {})
     extra["a2a_card"] = card
@@ -76,9 +77,10 @@ async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
 
     Returns the card dict on success, None otherwise.
     """
+    from sqlalchemy import select
+
     from models.database import Node
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -99,9 +101,10 @@ async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
 
 async def _refresh_all_backend_nodes() -> None:
     """Fetch A2A cards for every online backend node."""
+    from sqlalchemy import select
+
     from models.database import Node
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(
@@ -173,9 +176,10 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     Respects the agent's ssl_verify flag.  Decrypts api_key if present.
     Returns the card dict on success, None otherwise.
     """
+    from sqlalchemy import select, update
+
     from models.database import ExternalAgent
     from services.database import db_service
-    from sqlalchemy import select, update
 
     async with db_service.session() as db:
         result = await db.execute(
@@ -211,9 +215,10 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
 
 async def _refresh_all_external_agents() -> None:
     """Re-fetch cards for every enabled ExternalAgent."""
+    from sqlalchemy import select
+
     from models.database import ExternalAgent
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(

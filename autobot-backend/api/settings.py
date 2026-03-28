@@ -6,23 +6,23 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission
 from celery.result import AsyncResult
-from celery_app import celery_app
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.user_management.dependencies import get_db_session
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from celery_app import celery_app
 from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
-from sqlalchemy.ext.asyncio import AsyncSession
 from tasks.system_tasks import (
     check_available_updates,
     initialize_rbac,
     run_system_update,
 )
 from utils.catalog_http_exceptions import raise_server_error
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 

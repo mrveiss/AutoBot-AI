@@ -13,11 +13,11 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import aiohttp
+
+from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 from type_defs.common import Metadata
 from utils.chat_exceptions import ServiceUnavailableError
-
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 

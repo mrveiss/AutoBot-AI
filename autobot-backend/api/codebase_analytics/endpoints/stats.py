@@ -12,9 +12,9 @@ from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.chromadb_client import get_all_paginated
 
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection

@@ -14,9 +14,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from models.process_run import AgentSession
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from models.process_run import AgentSession
 
 logger = logging.getLogger(__name__)
 

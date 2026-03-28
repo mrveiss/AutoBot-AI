@@ -12,14 +12,15 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import SystemSecret
 from models.schemas import SecretCreate, SecretResponse, SecretUpdate
 from services.auth import require_admin
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])

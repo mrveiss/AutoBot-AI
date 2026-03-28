@@ -32,6 +32,7 @@ except ImportError:
     openai = None
 
 import aiohttp
+
 from config.manager import get_config_manager as _get_cfg
 
 config_manager = _get_cfg()

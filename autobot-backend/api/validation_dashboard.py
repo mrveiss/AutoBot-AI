@@ -18,6 +18,8 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import (
     raise_not_found_error,
@@ -25,8 +27,6 @@ from utils.catalog_http_exceptions import (
     raise_service_unavailable,
     raise_validation_error,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 

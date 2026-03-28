@@ -11,12 +11,13 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from services.config_revision_service import ConfigRevisionService
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.user_management.dependencies import get_db_session
+from auth_middleware import get_current_user
+from services.config_revision_service import ConfigRevisionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

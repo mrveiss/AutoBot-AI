@@ -18,6 +18,7 @@ import logging
 import sys
 
 import psycopg2
+
 from migrations.utils import (
     add_column_if_not_exists,
     create_index_if_not_exists,

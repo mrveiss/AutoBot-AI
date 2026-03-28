@@ -11,9 +11,9 @@ import json
 import logging
 import threading
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from .manager import WorkflowAutomationManager

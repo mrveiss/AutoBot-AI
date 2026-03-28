@@ -10,10 +10,11 @@ Advanced multi-agent orchestration endpoints with improved coordination and stra
 import logging
 from typing import Optional
 
-from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+from auth_middleware import check_admin_permission, get_current_user
 
 try:
     from enhanced_multi_agent_orchestrator import (

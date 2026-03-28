@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import psutil
+
 from monitoring.prometheus_metrics import get_metrics_manager
 
 try:

@@ -14,15 +14,15 @@ import re
 from collections import defaultdict
 from typing import List, Optional
 
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
 from agents.npu_code_search_agent import (
     get_npu_code_search,
     index_project,
     search_codebase,
 )
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 

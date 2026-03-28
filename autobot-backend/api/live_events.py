@@ -24,10 +24,10 @@ import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from live_event_manager import live_event_manager
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from live_event_manager import live_event_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

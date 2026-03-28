@@ -14,11 +14,12 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from constants.threshold_constants import CategoryDefaults
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
+
+from constants.threshold_constants import CategoryDefaults
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:

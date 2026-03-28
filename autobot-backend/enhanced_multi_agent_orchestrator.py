@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from agents.agent_client import AgentRegistry as AgentClientRegistry
 from agents.llm_failsafe_agent import get_robust_llm_response
+from autobot_shared.redis_client import get_redis_client
 
 # Re-export all public API from the package for backward compatibility
 from enhanced_orchestration import (
@@ -37,8 +38,6 @@ from enhanced_orchestration import (
     WorkflowPlanner,
 )
 from event_manager import event_manager
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

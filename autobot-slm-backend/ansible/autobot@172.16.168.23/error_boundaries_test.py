@@ -11,6 +11,7 @@ Tests the new components added in Phase 1:
 import asyncio
 
 import pytest
+
 from utils.error_boundaries import APIErrorResponse, ErrorCategory, with_error_handling
 
 

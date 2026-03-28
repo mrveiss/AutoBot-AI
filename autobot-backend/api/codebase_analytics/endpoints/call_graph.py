@@ -15,10 +15,10 @@ from typing import Dict, List, Optional
 import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from utils.io_executor import get_analytics_executor
 
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
 

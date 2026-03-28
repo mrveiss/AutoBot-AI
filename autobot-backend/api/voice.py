@@ -6,12 +6,12 @@ import logging
 import os
 import tempfile
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
-from services.tts_client import get_tts_client
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.tts_client import get_tts_client
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

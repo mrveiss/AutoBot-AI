@@ -7,9 +7,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from auth_middleware import check_admin_permission
 from skills.db import get_skills_engine
 from skills.generator import SkillGenerator
 from skills.models import (
@@ -22,8 +25,6 @@ from skills.models import (
 )
 from skills.promoter import SkillPromoter
 from skills.validator import SkillValidator
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

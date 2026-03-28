@@ -12,10 +12,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from constants.path_constants import PATH
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from constants.path_constants import PATH
 
 
 class IndexCodebaseRequest(BaseModel):

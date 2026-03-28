@@ -8,12 +8,12 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 
 import logging
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

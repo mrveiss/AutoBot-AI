@@ -7,11 +7,11 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # Import the security API module
 from api.security import CommandApprovalRequest, router
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 
 class TestSecurityAPI:

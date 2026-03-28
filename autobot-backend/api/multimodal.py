@@ -13,10 +13,13 @@ import uuid
 from typing import Dict, List, Optional, Union
 
 import torch
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
+
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -26,10 +29,7 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from pydantic import BaseModel, Field
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

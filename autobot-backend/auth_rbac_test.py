@@ -18,6 +18,8 @@ These tests verify:
 from unittest.mock import Mock, patch
 
 import pytest
+from fastapi import Request
+
 from auth_rbac import (
     ROLE_PERMISSIONS,
     Permission,
@@ -28,7 +30,6 @@ from auth_rbac import (
     require_permission,
     require_role,
 )
-from fastapi import Request
 
 
 class TestPermissionEnum:

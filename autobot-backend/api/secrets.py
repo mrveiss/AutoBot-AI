@@ -28,16 +28,16 @@ from enum import Enum
 from time import time
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
-from autobot_memory_graph import AutoBotMemoryGraph
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from middleware.proxy_utils import get_client_ip
 from pydantic import BaseModel, Field, field_validator
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from middleware.proxy_utils import get_client_ip
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

@@ -14,11 +14,11 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
-from monitoring.prometheus_metrics import get_metrics_manager
 from pydantic import BaseModel
-from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from monitoring.prometheus_metrics import get_metrics_manager
+from type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

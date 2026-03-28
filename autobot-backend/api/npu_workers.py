@@ -35,9 +35,11 @@ Endpoints:
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -47,8 +49,6 @@ from models.npu_models import (
     WorkerTestResult,
 )
 from services.npu_worker_manager import get_worker_manager
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

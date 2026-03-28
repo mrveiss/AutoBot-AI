@@ -16,6 +16,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from models.activities import (
     BrowserActivityModel,
     DesktopActivityModel,
@@ -23,7 +25,6 @@ from models.activities import (
     SecretUsageModel,
     TerminalActivityModel,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 

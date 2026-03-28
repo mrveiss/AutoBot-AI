@@ -12,15 +12,16 @@ getting account information.
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.cloud_integration import (
     AWSIntegration,
     AzureIntegration,
     GCPIntegration,
 )
-from pydantic import BaseModel, Field
 
 router = APIRouter(
     tags=["integrations-cloud"],

@@ -14,14 +14,14 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
-from plugin_sdk.base import PluginRegistry
-from plugin_sdk.loader import PluginLoader
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from plugin_sdk.base import PluginRegistry
+from plugin_sdk.loader import PluginLoader
 
 logger = logging.getLogger(__name__)
 

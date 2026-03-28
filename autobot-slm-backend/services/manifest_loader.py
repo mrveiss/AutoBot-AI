@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import yaml
+
 from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
