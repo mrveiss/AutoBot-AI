@@ -116,7 +116,7 @@ async def list_entities(
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=True, database="knowledge")
+        redis_client = await get_redis_client(async_client=True, database="knowledge")
         entities = await _list_entities_from_redis(
             redis_client, entity_type, query, limit
         )
@@ -138,7 +138,7 @@ async def get_entity_relationships(
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=True, database="knowledge")
+        redis_client = await get_redis_client(async_client=True, database="knowledge")
         relationships = await _get_relationships_from_redis(
             redis_client, entity_id, relationship_type, limit
         )
@@ -172,7 +172,7 @@ async def search_events(
         from autobot_shared.redis_client import get_redis_client
         from knowledge.temporal_search import TemporalSearchService
 
-        redis_client = get_redis_client(async_client=True, database="knowledge")
+        redis_client = await get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
         start = datetime.fromisoformat(start_date) if start_date else datetime.min
@@ -207,7 +207,7 @@ async def get_event_timeline(
         from autobot_shared.redis_client import get_redis_client
         from knowledge.temporal_search import TemporalSearchService
 
-        redis_client = get_redis_client(async_client=True, database="knowledge")
+        redis_client = await get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
         events = await temporal_svc.get_event_timeline(

@@ -130,7 +130,7 @@ class WorkflowStateMachine:
 
     async def _get_redis(self) -> Any:
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database="main")
+            self._redis = await get_redis_client(async_client=True, database="main")
         return self._redis
 
     # -- Create --------------------------------------------------------

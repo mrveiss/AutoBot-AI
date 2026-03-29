@@ -54,7 +54,7 @@ class AccessControlMetrics:
         """Get Redis metrics database (DB 4)"""
         if not self._redis:
             # Get async Redis client for metrics database (returns coroutine, must await)
-            self._redis = get_redis_client(async_client=True, database="metrics")
+            self._redis = await get_redis_client(async_client=True, database="metrics")
         return self._redis
 
     async def record_violation(

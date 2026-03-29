@@ -113,7 +113,7 @@ class GovernanceEngine:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             await redis.publish(
                 REDIS_APPROVAL_CHANNEL,
                 json.dumps(

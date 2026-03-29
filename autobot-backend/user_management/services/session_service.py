@@ -45,7 +45,7 @@ class SessionService:
             token: JWT token to invalidate
             ttl: Time to live in seconds (default 24 hours)
         """
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         key = f"session:blacklist:{user_id}"
         token_hash = self.hash_token(token)
 
@@ -65,7 +65,7 @@ class SessionService:
         Returns:
             True if token is blacklisted, False otherwise
         """
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         key = f"session:blacklist:{user_id}"
         token_hash = self.hash_token(token)
 
@@ -90,7 +90,7 @@ class SessionService:
         Returns:
             Number of sessions invalidated
         """
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         key = f"session:blacklist:{user_id}"
 
         # Get existing token hashes (if any)
