@@ -186,11 +186,14 @@ def _get_local_ips() -> set:
     except Exception:
         pass
     # Also include the configured external_url IP
-    from config import settings
+    try:
+        from config import settings
 
-    own_ip = urlparse(settings.external_url).hostname or ""
-    if own_ip:
-        local_ips.add(own_ip)
+        own_ip = urlparse(settings.external_url).hostname or ""
+        if own_ip:
+            local_ips.add(own_ip)
+    except Exception:
+        pass
     return local_ips
 
 
