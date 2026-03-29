@@ -323,7 +323,7 @@ redis:
     metrics: 4    # Performance metrics and monitoring data (see network_constants.py METRICS_DB=4)
     prompts: 2
     agents: 3
-    cache: 4
+    cache: 5    # General purpose caching (see ssot_config.py db_cache=5)
     sessions: 6
     chat_history: 8
     backup: 10
