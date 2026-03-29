@@ -197,8 +197,8 @@ sudo apt-get -y install cuda
 
 **Install PyTorch with CUDA:**
 ```bash
-# Activate virtual environment
-source bin/activate
+# Activate the AutoBot virtual environment
+source /opt/autobot/autobot-slm-backend/venv/bin/activate
 
 # Install PyTorch with CUDA support
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
@@ -217,7 +217,7 @@ sudo apt install rocm-dkms rocm-dev rocm-libs
 
 **Install PyTorch with ROCm:**
 ```bash
-source bin/activate
+source /opt/autobot/autobot-slm-backend/venv/bin/activate
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.4.2
 ```
 
@@ -232,124 +232,92 @@ sudo mv l_openvino_toolkit_ubuntu20_2024.0.0.14509.34caeefd078 /opt/intel/openvi
 echo 'source /opt/intel/openvino_2024/setupvars.sh' >> ~/.bashrc
 ```
 
-## Verification and First Run
+## Verification
 
-### Verify Installation
+### Bare-Metal Install
 
-**Check dependencies:**
+The installer runs its own verification (Phase 5). After completion, confirm services are healthy:
+
 ```bash
-# Verify Python environment
-source bin/activate
-python --version  # Should be 3.12+
-pip list | grep -E "(fastapi|ollama|redis|chromadb)"
+# Check systemd services
+systemctl status autobot-slm-backend --no-pager
+systemctl status postgresql --no-pager
+systemctl status nginx --no-pager
 
-# Verify Node.js build
-cd autobot-vue && npm run build && cd ..
+# Verify HTTPS endpoint
+curl -sk https://127.0.0.1/api/health | jq
 
-# Verify Redis connection
-redis-cli ping  # Should return "PONG"
+# Check recent logs for errors
+journalctl -u autobot-slm-backend -n 20 --no-pager
+```
 
-# Test GPU (if installed)
+**Access the web interface:**
+
+| Service | URL |
+|---------|-----|
+| SLM Admin | `https://<server-ip>/` |
+
+Credentials are displayed at the end of the install and saved to `/root/autobot-credentials.txt`.
+
+### Docker Install
+
+```bash
+# Verify all containers are running
+docker compose ps
+
+# Check backend health
+curl -s http://localhost/api/health | jq
+
+# View logs
+docker compose logs -f --tail=50
+```
+
+**Access the web interface:**
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost |
+| SLM Admin | http://localhost/slm |
+| Backend API | http://localhost/api |
+
+### GPU Verification (Optional)
+
+```bash
+# NVIDIA
+nvidia-smi
+
+# PyTorch CUDA check (inside the AutoBot venv)
+source /opt/autobot/autobot-slm-backend/venv/bin/activate
 python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-```
-
-**Configuration validation:**
-```bash
-# Validate configuration file
-python -c "from src.config import validate_config; print(validate_config())"
-```
-
-### First Launch
-
-```bash
-# Launch AutoBot (all services)
-./run_agent.sh
-```
-
-**Expected output:**
-```
-Starting AutoBot services...
-✓ Backend server starting on http://localhost:8001
-✓ Frontend development server on http://localhost:5173
-✓ Redis connection established
-✓ LLM provider connected
-✓ Knowledge base initialized
-✓ All systems operational
-```
-
-### Access Interface
-
-Open your web browser and navigate to:
-- **Main Interface**: http://localhost:5173
-- **API Documentation**: http://localhost:8001/docs
-- **Health Check**: http://localhost:8001/api/health
-
-## Post-Installation Configuration
-
-### Basic Configuration
-
-Edit `config/config.yaml` for your environment:
-
-```yaml
-# Basic settings that may need adjustment
-backend:
-  server_port: 8001  # Change if port conflict
-
-llm_config:
-  default_llm: "ollama_tinyllama"  # Choose your preferred model
-
-memory:
-  redis:
-    enabled: true  # Set false if Redis unavailable
-  chromadb:
-    enabled: true
-    path: "data/chromadb"
-
-logging:
-  log_level: "info"  # debug, info, warning, error
-```
-
-### Security Setup
-
-```bash
-# Set secure file permissions
-chmod 600 config/config.yaml  # Restrict config file access
-chmod 700 data/               # Restrict data directory
-
-# Generate secure secret keys (optional)
-python -c "import secrets; print(f'SECRET_KEY={secrets.token_hex(32)}')" >> .env
 ```
 
 ## Troubleshooting Installation
 
 ### Common Issues
 
-**Issue: Permission denied during setup**
+**Issue: Permission denied running install.sh**
 ```bash
-# Fix script permissions
-chmod +x setup_agent.sh run_agent.sh
-
-# Run with sudo if needed
-sudo ./setup_agent.sh
+# The installer requires root
+chmod +x install.sh
+sudo ./install.sh
 ```
 
-**Issue: Python version not found**
+**Issue: systemd not running (WSL2)**
 ```bash
-# Install Python 3.12 via deadsnakes PPA (Issue #1898)
+# Enable systemd in WSL2
+sudo tee /etc/wsl.conf <<'EOF'
+[boot]
+systemd=true
+EOF
+# Then restart WSL from PowerShell: wsl --shutdown
+```
+
+**Issue: Python 3.12 not found**
+```bash
+# Install Python 3.12 via deadsnakes PPA
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
 sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-```
-
-**Issue: Redis connection failed**
-```bash
-# Install and start Redis
-sudo apt install redis-server
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
-
-# Test connection
-redis-cli ping
 ```
 
 **Issue: Node.js/npm not found**
@@ -357,6 +325,16 @@ redis-cli ping
 # Install Node.js 20.x LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
+```
+
+**Issue: Ansible deployment failed**
+```bash
+# Check the install log for details
+tail -100 /var/log/autobot/install-*.log
+
+# Re-run just the Ansible phase
+cd /opt/autobot/code_source/autobot-slm-backend/ansible
+ansible-playbook -i inventory/localhost.yml playbooks/deploy-slm-manager.yml --skip-tags seed,provision
 ```
 
 **Issue: GPU not detected**
@@ -373,11 +351,10 @@ lsmod | grep nvidia  # Should show nvidia modules
 
 If installation fails:
 
-1. **Check logs**: `tail -f logs/setup.log`
+1. **Check logs**: `tail -100 /var/log/autobot/install-*.log`
 2. **Verify prerequisites**: Ensure all system requirements are met
-3. **Manual installation**: Follow Method 2 step-by-step
-4. **GitHub Issues**: Report installation problems with system details
-5. **Community Support**: Check discussions for similar issues
+3. **Try Docker**: Use Method 2 as an alternative to bare-metal
+4. **GitHub Issues**: Report installation problems with system details at https://github.com/mrveiss/AutoBot-AI/issues
 
 ### Next Steps
 
@@ -385,7 +362,3 @@ After successful installation:
 1. **[Quick Start Guide](02-quickstart.md)** - Learn basic usage
 2. **[Configuration Guide](../configuration.md)** - Detailed configuration options
 3. **[Troubleshooting Guide](04-troubleshooting.md)** - Common runtime issues
-
----
-
-**Installation complete!** AutoBot is now ready for use. 🚀
