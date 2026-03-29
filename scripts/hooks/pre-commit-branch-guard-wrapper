@@ -157,13 +157,15 @@ if [ $HOOK_EXIT -ne 0 ]; then
     exit $HOOK_EXIT
 fi
 
-# --- 6. Post-hook validation: detect commit contamination (#2697) ---
+# --- 6. Post-hook validation: detect commit contamination (#2697, #2761) ---
 # Compare currently-staged file count against the original count.
 # If extra files appeared in the index, something went wrong.
+# Uses a fixed minimum (3) plus 20% to avoid integer-division blind spots
+# on small commits where STAGED_COUNT / 5 rounds to 0 (#2761).
 POST_STAGED_COUNT=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | wc -l)
 
-if [ "$POST_STAGED_COUNT" -gt "$((STAGED_COUNT + STAGED_COUNT / 5))" ]; then
-    # More than 20% extra files appeared — likely contamination
+if [ "$POST_STAGED_COUNT" -gt "$((STAGED_COUNT + 3 + STAGED_COUNT / 5))" ]; then
+    # More than 3 + 20% extra files appeared — likely contamination (#2761)
     EXTRA=$((POST_STAGED_COUNT - STAGED_COUNT))
     echo ""
     echo -e "${BOLD}${RED}WARNING: Possible commit contamination detected (#2697)${NC}"
