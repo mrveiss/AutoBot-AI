@@ -360,5 +360,5 @@ If installation fails:
 
 After successful installation:
 1. **[Quick Start Guide](../user/quick-start-chat.md)** - Your first conversation
-2. **[Configuration Guide](../configuration.md)** - Detailed configuration options
+2. **[Settings Guide](../user/guides/settings.md)** - Configuration and preferences
 3. **[User Guides](../user/README.md)** - Complete user documentation
