@@ -534,6 +534,17 @@
         - backend_migration_result.rc | default(0) != 0
       tags: [backend, migrate]
 
+    - name: "[PLAY 2] Backend | Read existing secret key before .env regen (#2649)"
+      ansible.builtin.shell:
+        cmd: grep '^SECRET_KEY=' /opt/autobot/autobot-backend/.env | cut -d= -f2-
+      register: existing_secret_key
+      become: true
+      become_user: autobot
+      when: "'01-Backend' in inventory_hostname"
+      failed_when: false
+      changed_when: false
+      tags: [backend, env]
+
     - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
       ansible.builtin.template:
         src: ../roles/backend/templates/backend.env.j2
@@ -555,8 +566,8 @@
         backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
         backend_redis_port: 6379
         backend_redis_password: ""
-        backend_secret_key: "{{ lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true) }}"
-        backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+        backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
+        backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
         backend_llm_provider: "ollama"
         backend_llm_endpoint: "http://127.0.0.1:11434"
         backend_llm_model: "{{ lookup('env', 'AUTOBOT_DEFAULT_LLM_MODEL') | default('qwen3.5:9b', true) }}"
