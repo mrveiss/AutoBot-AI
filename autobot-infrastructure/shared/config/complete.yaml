@@ -327,7 +327,7 @@ redis:
     sessions: 6
     chat_history: 8
     backup: 10
-    testing: 15
+    testing: 13    # Moved from 15 to avoid collision with celery_results (#2720)
 
   # Knowledge base specific - DB 1 per ADR-002 and ssot_config.py
   kb_db: 1
