@@ -74,7 +74,7 @@ class CodeQualityDashboard:
     """Comprehensive code quality dashboard"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
 
         # Initialize all analyzers
@@ -92,6 +92,14 @@ class CodeQualityDashboard:
         self.ISSUES_KEY = "code_quality:issues"
 
         logger.info("Code Quality Dashboard initialized with all analyzers")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def _gather_analysis_results(
         self, root_path: str, patterns: List[str]
@@ -791,6 +799,7 @@ class CodeQualityDashboard:
 
     async def _save_quality_trend(self, metrics: QualityMetrics, issue_count: int):
         """Save quality trend data"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 trend = QualityTrend(
@@ -818,6 +827,7 @@ class CodeQualityDashboard:
 
     async def _get_quality_trends(self) -> List[Dict[str, Any]]:
         """Get historical quality trends"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 trends = await self.redis_client.lrange(self.TRENDS_KEY, 0, -1)
@@ -828,6 +838,7 @@ class CodeQualityDashboard:
 
     async def _cache_dashboard_report(self, report: Dict[str, Any]):
         """Cache dashboard report"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 await self.redis_client.setex(

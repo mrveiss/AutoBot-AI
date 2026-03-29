@@ -214,7 +214,7 @@ class SecurityAnalyzer:
         }
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
         self.SECURITY_KEY = "security_analysis:vulnerabilities"
         self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
@@ -224,6 +224,14 @@ class SecurityAnalyzer:
             **self._build_xss_disclosure_patterns(),
         }
         logger.info("Security Analyzer initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def analyze_security(
         self, root_path: str = ".", patterns: List[str] = None
@@ -835,6 +843,7 @@ class SecurityAnalyzer:
 
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.SECURITY_KEY
@@ -845,6 +854,7 @@ class SecurityAnalyzer:
 
     async def _clear_cache(self):
         """Clear analysis cache"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 cursor = 0

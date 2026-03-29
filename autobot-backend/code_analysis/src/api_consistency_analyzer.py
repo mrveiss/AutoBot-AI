@@ -66,7 +66,7 @@ class APIConsistencyAnalyzer:
     """Analyzes API endpoints for consistency and best practices"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
 
         # Caching keys
@@ -112,6 +112,14 @@ class APIConsistencyAnalyzer:
             self._compiled_framework_patterns[framework] = compiled_list
 
         logger.info("API Consistency Analyzer initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def analyze_api_consistency(
         self, root_path: str = ".", patterns: List[str] = None
@@ -889,6 +897,7 @@ class APIConsistencyAnalyzer:
 
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.API_KEY
@@ -899,6 +908,7 @@ class APIConsistencyAnalyzer:
 
     async def _clear_cache(self):
         """Clear analysis cache"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 cursor = 0
