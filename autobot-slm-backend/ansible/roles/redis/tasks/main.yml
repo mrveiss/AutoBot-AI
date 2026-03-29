@@ -42,6 +42,26 @@
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
+- name: "Redis | Create redis system group"
+  group:
+    name: redis
+    system: true
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Create redis system user"
+  user:
+    name: redis
+    group: redis
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/redis-stack
+    create_home: false
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
 - name: "Redis | Create Redis data directory"
   file:
     path: /var/lib/redis-stack
