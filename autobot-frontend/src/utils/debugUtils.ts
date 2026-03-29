@@ -27,7 +27,7 @@ export interface ConsoleLogEntry {
   level: LogLevel
   message: string
   timestamp: number
-  data?: any
+  args?: unknown[]
 }
 
 /**
