@@ -858,7 +858,7 @@ class RedisOptimizer:
                         line_start=block_start,
                         line_end=block_start + block.count("\n"),
                         description="Potentially blocking Redis call in async function",
-                        suggestion="Use async Redis client: redis = await get_redis_client(async_client=True)",
+                        suggestion="Use async Redis client: redis = get_redis_client(async_client=True)",
                         estimated_improvement="Non-blocking async I/O, better concurrency",
                         metrics={"blocking_calls": len(sync_calls)},
                     )
