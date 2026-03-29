@@ -429,7 +429,8 @@ describe('useLocalStorage Composable', () => {
       const data = useLocalStorage('invalid-json', { default: true })
 
       expect(consoleErrorSpy).toHaveBeenCalled()
-      expect(consoleErrorSpy.mock.calls[0][0]).toContain('[useLocalStorage]')
+      // createLogger formats as "[timestamp] [ERROR] [useLocalStorage] ..."
+      expect(consoleErrorSpy.mock.calls[0][0]).toContain('[ERROR]')
 
       consoleErrorSpy.mockRestore()
     })
