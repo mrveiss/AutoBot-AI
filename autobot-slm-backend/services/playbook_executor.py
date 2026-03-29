@@ -175,11 +175,7 @@ class PlaybookExecutor:
         """
         ansible_cmd = self._find_ansible_playbook()
         effective_inventory = inventory_path or self.inventory_path
-        # Run via sudo to escape systemd ProtectSystem=strict namespace (#2722)
-        cmd = [
-            "/usr/bin/sudo", "-n", "-u", "autobot",
-            ansible_cmd, "-i", str(effective_inventory), str(playbook_path),
-        ]
+        cmd = [ansible_cmd, "-i", str(effective_inventory), str(playbook_path)]
 
         if limit:
             cmd.extend(["--limit", ",".join(limit)])
