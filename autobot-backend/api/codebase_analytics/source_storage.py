@@ -89,6 +89,16 @@ async def list_sources(owner_id: Optional[str] = None) -> List[CodeSource]:
     return sources
 
 
+async def get_default_source_id() -> Optional[str]:
+    """Return the ID of the most recently indexed source, or None (#2653)."""
+    sources = await list_sources()
+    if not sources:
+        return None
+    # Prefer most recently indexed source
+    sources.sort(key=lambda s: s.last_indexed_at or "", reverse=True)
+    return sources[0].id
+
+
 async def delete_source(source_id: str) -> bool:
     """Delete a CodeSource from Redis.
 

@@ -564,6 +564,11 @@ async def get_codebase_problems(
     source_id: Optional[str] = None,
 ):
     """Get real code problems detected during analysis (#1710: per-source)."""
+    # Default to most recent source to prevent cross-project data mixing (#2653)
+    if not source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
+
+        source_id = await get_default_source_id()
     code_collection = await asyncio.to_thread(get_code_collection)
     all_problems = []
     storage_type = "chromadb"
