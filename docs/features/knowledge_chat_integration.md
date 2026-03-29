@@ -19,7 +19,7 @@ Integrate the Knowledge Manager's 14,000+ vector-indexed facts into the chat sys
 
 ## Current Architecture
 
-### Knowledge Manager (✅ Operational)
+### Knowledge Manager (Operational)
 - **Location**: `src/knowledge_base_v2.py`
 - **Vectors**: 14,047 indexed with 768-dimensional embeddings
 - **Search**: Semantic search via LlamaIndex + Redis
@@ -27,7 +27,7 @@ Integrate the Knowledge Manager's 14,000+ vector-indexed facts into the chat sys
 
 ### Chat System
 - **Location**: `autobot-backend/api/chat.py`
-- **LLM**: Ollama integration (llama3.2:3b)
+- **LLM**: Ollama integration (6-tier routing; chat uses Quality tier: qwen3.5:9b)
 - **WebSocket**: Real-time streaming responses
 - **State**: Manages conversation history
 
@@ -39,7 +39,7 @@ Integrate the Knowledge Manager's 14,000+ vector-indexed facts into the chat sys
 
 **Architecture:**
 ```
-User Query → Query Analysis → Knowledge Retrieval → Context Augmentation → LLM Response
+User Query -> Query Analysis -> Knowledge Retrieval -> Context Augmentation -> LLM Response
 ```
 
 **Implementation:**
@@ -84,11 +84,11 @@ User Query → Query Analysis → Knowledge Retrieval → Context Augmentation �
 - **`autobot-backend/agents/rag_agent.py`**: Enhanced RAG orchestration
 
 **Advantages:**
-- ✅ Most accurate - uses actual stored knowledge
-- ✅ Cites sources from knowledge base
-- ✅ Reduces hallucinations
-- ✅ Handles 14,000+ facts efficiently
-- ✅ Automatic relevance ranking via vector search
+- Most accurate - uses actual stored knowledge
+- Cites sources from knowledge base
+- Reduces hallucinations
+- Handles 14,000+ facts efficiently
+- Automatic relevance ranking via vector search
 
 **Considerations:**
 - Latency: +100-300ms for knowledge retrieval
@@ -101,7 +101,7 @@ User Query → Query Analysis → Knowledge Retrieval → Context Augmentation �
 
 **Architecture:**
 ```
-User Query → Agent Router → Knowledge Agent (if needed) → Response Agent → User
+User Query -> Agent Router -> Knowledge Agent (if needed) -> Response Agent -> User
 ```
 
 **Implementation:**
@@ -134,9 +134,9 @@ User Query → Agent Router → Knowledge Agent (if needed) → Response Agent �
 - **`autobot-backend/api/chat.py`**: Use orchestrator
 
 **Advantages:**
-- ✅ Flexible - can combine multiple agents
-- ✅ Extensible - easy to add more agents
-- ✅ Selective - only uses KB when beneficial
+- Flexible - can combine multiple agents
+- Extensible - easy to add more agents
+- Selective - only uses KB when beneficial
 
 **Considerations:**
 - More complex architecture
@@ -177,10 +177,10 @@ async def chat_with_knowledge(message: str, session_id: str):
 ```
 
 **Advantages:**
-- ✅ Best of both worlds
-- ✅ Efficient knowledge retrieval
-- ✅ Agent flexibility
-- ✅ Automatic relevance detection
+- Best of both worlds
+- Efficient knowledge retrieval
+- Agent flexibility
+- Automatic relevance detection
 
 ---
 
@@ -370,7 +370,7 @@ Response:
    ```
 
 3. **Knowledge Indicator**
-   - Show 🧠 icon when knowledge is used
+   - Show icon when knowledge is used
    - Display "Using knowledge base..." during retrieval
    - Show number of facts retrieved
 
@@ -523,7 +523,7 @@ logger.info(
 ## Next Steps
 
 ### **Immediate (Week 1)**
-1. ✅ Fix stats display (COMPLETED)
+1. Fix stats display (COMPLETED)
 2. Implement basic RAG integration
 3. Add knowledge toggle to UI
 4. Test with sample queries

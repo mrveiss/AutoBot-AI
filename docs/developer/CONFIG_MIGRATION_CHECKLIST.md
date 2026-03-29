@@ -19,7 +19,7 @@ Before migrating any code, verify:
 
 - [ ] Search for hardcoded IPs: `grep -rn "172\.16\.168\." src/ backend/`
 - [ ] Search for hardcoded ports: `grep -rn ":[0-9]\{4,5\}" src/ backend/`
-- [ ] Search for hardcoded model names: `grep -rn "llama\|mistral\|dolphin" src/ backend/`
+- [ ] Search for hardcoded model names: `grep -rn "llama\|mistral\|dolphin\|gemma\|phi3\|qwen" src/ backend/`
 - [ ] Search for direct os.getenv: `grep -rn "os\.getenv" src/ backend/`
 
 ### Step 2: Import SSOT Config
@@ -40,7 +40,7 @@ from src.config.ssot_config import config
 | `"172.16.168.23"` | `config.redis.host` |
 | `8001` (backend port) | `config.backend.port` |
 | `6379` (redis port) | `config.redis.port` |
-| `"llama3.2:3b"` | `config.llm.default_model` |
+| `"qwen3.5:9b"` | `config.llm.default_model` |
 
 - [ ] All hardcoded IPs replaced
 - [ ] All hardcoded ports replaced
@@ -168,5 +168,5 @@ After completing migration:
 ---
 
 **Author**: mrveiss
-**Copyright**: © 2025 mrveiss
+**Copyright**: (c) 2025 mrveiss
 **Issue**: #604 - SSOT Phase 4 Cleanup

@@ -16,7 +16,7 @@ The following values must NEVER be hardcoded in source files:
 |------|----------|---------------------|
 | **IP Addresses** | `"172.16.168.20"`, `"192.168.1.100"` | `config.backend.host` (Python) or SSOT env vars |
 | **Port Numbers** | `8001`, `6379`, `5173` | `config.backend.port` (Python) or SSOT env vars |
-| **LLM Model Names** | `"llama3.2:1b-instruct-q4_K_M"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
+| **LLM Model Names** | `"qwen3.5:9b"`, `"mistral:7b-instruct"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
 | **URLs** | `"http://example.com/api"` | `getBackendUrl()` (TypeScript) or SSOT config |
 | **API Keys/Secrets** | `"sk-abc123..."`, `"password123"` | Environment variables (NEVER commit) |
 
@@ -72,14 +72,14 @@ Run the detection script manually to audit the entire codebase:
 
 ## ConfigRegistry Fallback Pattern (Issue #2671)
 
-`registry_defaults.py` now sources all default values from `autobot_shared.ssot_config` at import time. This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks** — the registry defaults tier provides SSOT-sourced values automatically.
+`registry_defaults.py` now sources all default values from `autobot_shared.ssot_config` at import time. This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks** -- the registry defaults tier provides SSOT-sourced values automatically.
 
 ```python
-# GOOD — no hardcoded fallback needed
+# GOOD -- no hardcoded fallback needed
 redis_host = ConfigRegistry.get("vm.redis")
 npu_port = ConfigRegistry.get("port.npu")
 
-# BAD — redundant hardcoded fallback (will trigger detection script)
+# BAD -- redundant hardcoded fallback (will trigger detection script)
 redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
 ```
 
@@ -154,7 +154,7 @@ BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 
 ```python
 # BAD - Hardcoded model name
-model = "llama3.2:1b-instruct-q4_K_M"
+model = "qwen3.5:9b"
 
 # GOOD - Use SSOT config
 from autobot_shared.ssot_config import config
@@ -164,7 +164,7 @@ model = config.llm.default_model
 **Environment variable**: Set in `.env` file:
 
 ```bash
-AUTOBOT_DEFAULT_LLM_MODEL=llama3.2:1b-instruct-q4_K_M
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 ### 3. For Other Values (URLs, API Keys, etc.)
@@ -262,7 +262,7 @@ autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 **LLM Model Names**:
 
-- Ollama models: `llama3.2:1b-instruct-q4_K_M`
+- Ollama models: `qwen3.5:9b`, `mistral:7b-instruct`, `gemma2:2b`, `llama3.2:1b`
 - OpenAI models: `gpt-4`, `gpt-3.5-turbo`
 - Anthropic models: `claude-3-opus`
 

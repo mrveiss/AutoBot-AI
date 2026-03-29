@@ -2,44 +2,55 @@
 
 ## Overview
 
-AutoBot implements a sophisticated multi-agent architecture that distributes tasks across specialized agents, each optimized for specific types of requests. This approach maximizes efficiency while minimizing resource usage by using appropriately sized models for different complexity levels.
+AutoBot implements a sophisticated multi-agent architecture that distributes tasks across specialized agents, each optimized for specific types of requests. The system uses a 6-tier model routing architecture (#2553) that assigns appropriately sized models for different complexity levels.
 
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Agent Orchestrator                        │
-│                   (Llama 3.2 3B Instruct)                     │
-│                                                                 │
-│  • Request routing and coordination                            │
-│  • Multi-agent workflow orchestration                         │
-│  • Response synthesis and optimization                        │
-└─────────────────┬───────────────────────────────────────────────┘
-                  │
-         ┌────────┴────────┐
-         │   Route Request │
-         └────────┬────────┘
-                  │
-    ┌─────────────┼─────────────┐
-    │             │             │
-    ▼             ▼             ▼
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│ Chat    │  │System   │  │   RAG   │
-│ Agent   │  │Commands │  │ Agent   │
-│ (1B)    │  │Agent(1B)│  │ (3B)    │
-└─────────┘  └─────────┘  └─────────┘
-    ▼             ▼             ▼
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│Knowledge│  │Research │  │GUI Ctrl │
-│Retrieval│  │ Agent   │  │ Agent   │
-│ (1B)    │  │(3B+Web) │  │ (TBD)   │
-└─────────┘  └─────────┘  └─────────┘
++-------------------------------------------------------------------+
+|                      Agent Orchestrator                            |
+|                      (llama3.2:1b - Routing tier)                 |
+|                                                                    |
+|  - Request routing and coordination                               |
+|  - Multi-agent workflow orchestration                             |
+|  - Response synthesis and optimization                            |
++-------------------+-----------------------------------------------+
+                    |
+           +--------+--------+
+           |   Route Request  |
+           +--------+--------+
+                    |
+    +---------------+---------------+
+    |               |               |
+    v               v               v
++---------+  +---------+  +---------+
+| Chat    |  |System   |  |   RAG   |
+| Agent   |  |Commands |  | Agent   |
+|(Quality)|  |(System) |  |(Instr.) |
++---------+  +---------+  +---------+
+    v               v               v
++---------+  +---------+  +---------+
+|Knowledge|  |Research |  |GUI Ctrl |
+|Retrieval|  | Agent   |  | Agent   |
+|(Classif)|  |(Quality)|  | (TBD)   |
++---------+  +---------+  +---------+
 ```
+
+## 6-Tier Model Architecture
+
+| Tier | Model | Purpose |
+|------|-------|---------|
+| **Routing** | `llama3.2:1b` | Orchestrator, request routing |
+| **Classification** | `gemma2:2b` | Intent detection, category assignment |
+| **Light Processing** | `phi3:mini` | Extraction, formatting |
+| **Instruction** | `mistral:7b-instruct` | RAG, step execution |
+| **System** | `dolphin-llama3:8b` | Commands, security |
+| **Quality** | `qwen3.5:9b` | Chat, research, code |
 
 ## Agent Specifications
 
 ### 1. Agent Orchestrator
-- **Model**: Llama 3.2 3B Instruct (Q4_K_M)
+- **Model**: llama3.2:1b (Routing tier)
 - **Role**: Central coordinator and router
 - **Responsibilities**:
   - Analyze incoming requests
@@ -51,7 +62,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 **File**: `autobot-backend/agents/agent_orchestrator.py`
 
 ### 2. Chat Agent
-- **Model**: Llama 3.2 1B Instruct (Q4_K_M)
+- **Model**: qwen3.5:9b (Quality tier)
 - **Role**: Conversational interactions specialist
 - **Responsibilities**:
   - Handle greetings, small talk, simple Q&A
@@ -60,20 +71,19 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
   - Basic explanation and clarification
 
 **Strengths**:
-- Very fast response times
-- Low resource usage
+- High-quality conversational responses
 - Natural conversation flow
-- Good for simple interactions
+- Good for complex interactions
+- Strong reasoning capabilities
 
 **Limitations**:
-- Cannot handle complex reasoning
-- Limited technical analysis capability
-- No multi-step task coordination
+- Higher resource usage than routing tier
+- Cannot handle system-level operations
 
 **File**: `autobot-backend/agents/chat_agent.py`
 
 ### 3. Enhanced System Commands Agent
-- **Model**: Llama 3.2 1B Instruct (Q4_K_M)
+- **Model**: dolphin-llama3:8b (System tier)
 - **Role**: System command generation and validation
 - **Responsibilities**:
   - Generate shell commands from natural language
@@ -88,10 +98,9 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 - Security-focused prompting
 
 **Strengths**:
-- Fast command generation
+- Unrestricted command generation
 - Strong security validation
 - Clear command explanations
-- Resource efficient
 
 **Limitations**:
 - Cannot handle complex system analysis
@@ -101,7 +110,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 **File**: `autobot-backend/agents/enhanced_system_commands_agent.py`
 
 ### 4. RAG Agent (Retrieval-Augmented Generation)
-- **Model**: Llama 3.2 3B Instruct (Q4_K_M)
+- **Model**: mistral:7b-instruct (Instruction tier)
 - **Role**: Document synthesis and analysis specialist
 - **Responsibilities**:
   - Synthesize information from multiple documents
@@ -123,7 +132,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 **File**: `autobot-backend/agents/rag_agent.py`
 
 ### 5. Knowledge Retrieval Agent
-- **Model**: Llama 3.2 1B Instruct (Q4_K_M)
+- **Model**: gemma2:2b (Classification tier)
 - **Role**: Fast fact lookup and simple retrieval
 - **Responsibilities**:
   - Quick knowledge base searches
@@ -145,7 +154,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 **File**: `autobot-backend/agents/kb_librarian_agent.py` (Enhanced)
 
 ### 6. Research Agent
-- **Model**: Llama 3.2 3B Instruct (Q4_K_M) + Playwright
+- **Model**: qwen3.5:9b (Quality tier) + Playwright
 - **Role**: Web research and information gathering
 - **Responsibilities**:
   - Coordinate multi-step web research
@@ -182,7 +191,7 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
    - Used for: research + synthesis, command + analysis
 
 3. **Orchestrator Fallback**
-   - Complex reasoning tasks requiring 3B model
+   - Complex reasoning tasks requiring higher-tier models
    - Multi-step problem solving
    - Used when no single agent is sufficient
 
@@ -200,18 +209,20 @@ AutoBot implements a sophisticated multi-agent architecture that distributes tas
 
 ## Configuration
 
-### Model Assignment Configuration
+### Model Assignment Configuration (6-Tier)
 
 The system uses the `get_task_specific_model()` function from `src/config.py`:
 
 ```python
 agent_models = {
-    "orchestrator": "llama3.2:3b-instruct-q4_K_M",
-    "chat": "llama3.2:1b-instruct-q4_K_M",
-    "system_commands": "llama3.2:1b-instruct-q4_K_M",
-    "rag": "llama3.2:3b-instruct-q4_K_M",
-    "knowledge_retrieval": "llama3.2:1b-instruct-q4_K_M",
-    "research": "llama3.2:3b-instruct-q4_K_M",
+    "orchestrator": "llama3.2:1b",           # Routing tier
+    "classification": "gemma2:2b",            # Classification tier
+    "extraction": "phi3:mini",                # Light Processing tier
+    "rag": "mistral:7b-instruct",            # Instruction tier
+    "system_commands": "dolphin-llama3:8b",   # System tier
+    "chat": "qwen3.5:9b",                    # Quality tier
+    "research": "qwen3.5:9b",                # Quality tier
+    "knowledge_retrieval": "gemma2:2b",       # Classification tier
 }
 ```
 
@@ -219,23 +230,27 @@ agent_models = {
 
 Override specific agent models:
 ```bash
-export AUTOBOT_MODEL_CHAT="llama3.2:1b-instruct-q4_K_M"
-export AUTOBOT_MODEL_SYSTEM_COMMANDS="codellama:7b-instruct"
-export AUTOBOT_MODEL_RAG="llama3.2:3b-instruct-q4_K_M"
+export AUTOBOT_MODEL_TIER_ROUTING="llama3.2:1b"
+export AUTOBOT_MODEL_TIER_CLASSIFICATION="gemma2:2b"
+export AUTOBOT_MODEL_TIER_LIGHT="phi3:mini"
+export AUTOBOT_MODEL_TIER_INSTRUCTION="mistral:7b-instruct"
+export AUTOBOT_MODEL_TIER_SYSTEM="dolphin-llama3:8b"
+export AUTOBOT_MODEL_TIER_QUALITY="qwen3.5:9b"
 ```
 
 ## Resource Usage
 
 ### Memory Requirements (Approximate)
 
-| Agent | Model Size | RAM Usage | VRAM Usage |
-|-------|------------|-----------|------------|
-| Chat Agent | 1B | 1.2 GB | 0.8 GB |
-| System Commands | 1B | 1.2 GB | 0.8 GB |
-| Knowledge Retrieval | 1B | 1.2 GB | 0.8 GB |
-| RAG Agent | 3B | 3.5 GB | 2.2 GB |
-| Research Agent | 3B | 3.5 GB | 2.2 GB |
-| Orchestrator | 3B | 3.5 GB | 2.2 GB |
+| Agent | Model | Tier | RAM Usage | VRAM Usage |
+|-------|-------|------|-----------|------------|
+| Orchestrator | llama3.2:1b | Routing | 1.2 GB | 0.8 GB |
+| Classification | gemma2:2b | Classification | 1.8 GB | 1.2 GB |
+| Knowledge Retrieval | gemma2:2b | Classification | 1.8 GB | 1.2 GB |
+| RAG Agent | mistral:7b-instruct | Instruction | 4.1 GB | 3.5 GB |
+| System Commands | dolphin-llama3:8b | System | 4.7 GB | 4.0 GB |
+| Chat Agent | qwen3.5:9b | Quality | 5.5 GB | 4.5 GB |
+| Research Agent | qwen3.5:9b | Quality | 5.5 GB | 4.5 GB |
 
 **Note**: Models are loaded on-demand and can share memory when using the same base model.
 
@@ -245,17 +260,20 @@ export AUTOBOT_MODEL_RAG="llama3.2:3b-instruct-q4_K_M"
 
 | Agent | Cold Start | Warm Response | Throughput |
 |-------|------------|---------------|------------|
-| Chat Agent | 2-3s | 200-500ms | High |
-| System Commands | 2-3s | 300-600ms | High |
+| Orchestrator | 1-2s | 80-200ms | Very High |
+| Classification | 1-2s | 150-300ms | High |
 | Knowledge Retrieval | 1-2s | 100-300ms | Very High |
 | RAG Agent | 3-4s | 800-1500ms | Medium |
+| System Commands | 3-4s | 400-800ms | Medium |
+| Chat Agent | 3-5s | 500-1500ms | Medium |
 | Research Agent | 5-10s | 2-5s | Low |
 
 ### Resource Efficiency
 
-- **1B agents**: Optimized for speed and low resource usage
-- **3B agents**: Balance between capability and efficiency
-- **Orchestrator**: Smart routing minimizes unnecessary 3B model usage
+- **Routing/Classification tier agents**: Optimized for speed and low resource usage
+- **Instruction/System tier agents**: Balance between capability and efficiency
+- **Quality tier agents**: Maximum capability for complex tasks
+- **Orchestrator**: Smart routing minimizes unnecessary large model usage
 
 ## Integration Points
 
@@ -389,9 +407,13 @@ agent.health_check()  # Returns status and capabilities
    # Check Ollama model availability
    ollama list
 
-   # Pull required models
-   ollama pull llama3.2:1b-instruct-q4_K_M
-   ollama pull llama3.2:3b-instruct-q4_K_M
+   # Pull required 6-tier models
+   ollama pull llama3.2:1b
+   ollama pull gemma2:2b
+   ollama pull phi3:mini
+   ollama pull mistral:7b-instruct
+   ollama pull dolphin-llama3:8b
+   ollama pull qwen3.5:9b
    ```
 
 2. **Memory Issues**
@@ -414,4 +436,4 @@ export AUTOBOT_LOG_LEVEL=DEBUG
 
 ---
 
-This multi-agent architecture provides a robust foundation for efficient, specialized AI assistance while maintaining resource efficiency and response quality.
+This multi-agent architecture provides a robust foundation for efficient, specialized AI assistance while maintaining resource efficiency and response quality through the 6-tier model routing system.
