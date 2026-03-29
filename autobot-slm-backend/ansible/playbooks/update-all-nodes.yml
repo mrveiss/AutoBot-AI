@@ -522,6 +522,44 @@
         - backend_migration_result.rc | default(0) != 0
       tags: [backend, migrate]
 
+    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
+      ansible.builtin.template:
+        src: ../roles/backend/templates/backend.env.j2
+        dest: /opt/autobot/autobot-backend/.env
+        mode: "0600"
+        owner: autobot
+        group: autobot
+        backup: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      vars:
+        backend_install_dir: /opt/autobot/autobot-backend
+        backend_code_dir: /opt/autobot/autobot-backend
+        backend_log_dir: /var/log/autobot
+        backend_data_dir: /var/lib/autobot
+        backend_host: "0.0.0.0"
+        backend_port: 8443
+        backend_workers: 1
+        backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
+        backend_redis_port: 6379
+        backend_redis_password: ""
+        backend_secret_key: "{{ lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true) }}"
+        backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+        backend_llm_provider: "ollama"
+        backend_llm_endpoint: "http://127.0.0.1:11434"
+        backend_llm_model: "{{ lookup('env', 'AUTOBOT_DEFAULT_LLM_MODEL') | default('qwen3.5:9b', true) }}"
+        backend_routing_model: "{{ lookup('env', 'AUTOBOT_ROUTING_MODEL') | default('llama3.2:1b', true) }}"
+        backend_classification_model: "{{ lookup('env', 'AUTOBOT_CLASSIFICATION_MODEL') | default('gemma3:4b', true) }}"
+        service_auth_service_id: "main-backend"
+        service_auth_keys_dir: "/etc/autobot/service-keys"
+        service_auth_enforcement_mode: false
+        service_auth_override_token: ""
+        service_auth_circuit_breaker_percentage: 100
+        service_auth_timestamp_window: 300
+        service_auth_rate_limit_window: 300
+        service_auth_rate_limit_max_failures: 10
+      tags: [backend, env]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
