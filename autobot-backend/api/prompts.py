@@ -452,6 +452,9 @@ async def revert_prompt(
             )
         )
         return await _write_prompt_from_default(prompt_id, default_file_path, prompts_dir)
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g. 404 from _write_prompt_from_default) — #2745
+        raise
     except OSError as e:
         logger.error("Failed to read/write prompt file during revert %s: %s", prompt_id, e)
         raise HTTPException(status_code=500, detail="Failed to access prompt file")
