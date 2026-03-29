@@ -171,7 +171,7 @@ backend:
     - "http://127.0.0.1:5173"
 
 llm_config:
-  orchestrator_llm: "ollama_llama3.2:3b"
+  orchestrator_llm: "ollama_llama3.2:1b"
   default_llm: "ollama_llama3.2:1b"
 
 memory:

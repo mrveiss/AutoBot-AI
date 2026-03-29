@@ -402,7 +402,7 @@ Context window in `autobot-backend/api/chat_enhanced.py` increased 50x (10→500
 - Round-trip: VM0→VM4→VM0 with massive context payload
 
 **Model Context Overflow:**
-- llama3.2:3b has ~2048 token context window
+- llama3.2:1b has ~2048 token context window
 - 200 messages × 100 tokens/message ≈ 20,000 tokens
 - **10x context overflow** causes silent truncation or LLM failure
 
@@ -410,7 +410,7 @@ Context window in `autobot-backend/api/chat_enhanced.py` increased 50x (10→500
 - Different AI providers have different context limits:
   - OpenAI GPT-4: 128K tokens ✓ (works)
   - Anthropic Claude: 200K tokens ✓ (works)
-  - Ollama llama3.2:3b: 2K tokens ✗ (fails)
+  - Ollama llama3.2:1b: 2K tokens ✗ (fails)
 - 200 messages breaks some providers, works for others
 - Inconsistent behavior across distributed AI stack
 
@@ -1926,7 +1926,7 @@ class AutoBotConfig(BaseSettings):
 
     # LLM configuration
     max_context_messages: int = 20
-    default_model: str = "llama3.2:3b"
+    default_model: str = "llama3.2:1b"
 
     # Performance
     max_concurrent_requests: int = 50

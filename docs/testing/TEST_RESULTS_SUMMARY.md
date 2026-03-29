@@ -92,7 +92,7 @@
 ### Backend Health
 ✅ **System Status:** Healthy
 - Backend API: ✅ Connected (port 8001)
-- LLM Service: ✅ Connected (`artifish/llama3.2-uncensored:latest`)
+- LLM Service: ✅ Connected (`dolphin-llama3:8b`)
 - Embedding Model: ✅ Available (`nomic-embed-text:latest`)
 - Redis Database: ✅ Connected with search module
 - Docker Containers: ✅ All running (Redis, AI-stack, Playwright)

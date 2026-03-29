@@ -54,14 +54,14 @@ This document describes the containerized architecture for AutoBot components th
 
 ### 3. RAG Agent
 - **Purpose**: Document processing and synthesis
-- **Model**: `artifish/llama3.2-uncensored:latest` (2.2GB)
+- **Model**: `dolphin-llama3:8b` (4.7GB)
 - **Port**: 8003
 - **Resources**: 3GB memory limit
 - **Benefits**: Dedicated document AI processing
 
 ### 4. Chat Agent
 - **Purpose**: Lightweight conversational interactions
-- **Model**: `llama3.2:3b-instruct-q4_K_M` (2GB)
+- **Model**: `phi3:mini` (2.3GB)
 - **Port**: 8004
 - **Resources**: 2GB memory limit
 - **Benefits**: Fast response times, isolated chat processing
