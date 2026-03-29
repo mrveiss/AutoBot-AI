@@ -35,7 +35,10 @@
       "base_url": "http://localhost:11434",
       "models": {
         "qwen3.5:9b": "qwen3.5:9b",
-        "gemma3:4b": "gemma3:4b",
+        "dolphin-llama3:8b": "dolphin-llama3:8b",
+        "mistral:7b-instruct": "mistral:7b-instruct",
+        "phi3:mini": "phi3:mini",
+        "gemma2:2b": "gemma2:2b",
         "llama3.2:1b": "llama3.2:1b",
         "nomic-embed-text": "nomic-embed-text"
       }

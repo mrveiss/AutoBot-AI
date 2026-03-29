@@ -18,8 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import (
     CLASSIFICATION_MODEL,
+    INSTRUCTION_MODEL,
+    LIGHT_PROCESSING_MODEL,
     QUALITY_MODEL,
     ROUTING_MODEL,
+    SYSTEM_MODEL,
 )
 from models.database import Agent
 
@@ -28,9 +31,12 @@ logger = logging.getLogger(__name__)
 # Default Ollama endpoint used for all seeded agents
 _DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
 
-# 3-tier model mapping from SSOT constants (#2553)
+# 6-tier model mapping from SSOT constants (#2553)
 _ROUTING = ROUTING_MODEL
 _CLASSIFICATION = CLASSIFICATION_MODEL
+_LIGHT = LIGHT_PROCESSING_MODEL
+_INSTRUCTION = INSTRUCTION_MODEL
+_SYSTEM = SYSTEM_MODEL
 _QUALITY = QUALITY_MODEL
 
 # All 29 AutoBot agents — mirrors DEFAULT_AGENT_CONFIGS exactly.
@@ -79,7 +85,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Manages knowledge base operations including document ingestion, search, "
             "and retrieval. Invoked by AsyncChatWorkflow when knowledge patterns detected."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _LIGHT,
         "is_default": False,
         "is_active": True,
     },
@@ -90,7 +96,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs Retrieval-Augmented Generation by combining vector search with "
             "LLM synthesis. Uses ChromaDB for vector operations."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -112,7 +118,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Extracts structured entities and relationships from unstructured text. "
             "Invoked by kb_librarian during document ingestion."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _LIGHT,
         "is_default": False,
         "is_active": True,
     },
@@ -123,7 +129,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Fast semantic search using vector embeddings. Invoked by AgentRouter "
             "for knowledge queries."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _LIGHT,
         "is_default": False,
         "is_active": True,
     },
@@ -146,7 +152,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Executes system commands with full terminal streaming and security validation. "
             "Invoked via SYSTEM_COMMAND_PATTERNS."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _SYSTEM,
         "is_default": False,
         "is_active": True,
     },
@@ -157,7 +163,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Advanced system command generation with security-focused validation. "
             "Used when higher security assurance needed."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _SYSTEM,
         "is_default": False,
         "is_active": True,
     },
@@ -168,7 +174,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs defensive security scans including port scanning, service detection, "
             "SSL analysis, and DNS enumeration."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _SYSTEM,
         "is_default": False,
         "is_active": True,
     },
@@ -179,7 +185,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Discovers network assets and creates topology maps. Supports network scanning, "
             "host discovery, ARP scanning, and traceroute."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -190,7 +196,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Manages full PTY terminal sessions with sudo handling and user takeover "
             "capability. Used for persistent shell sessions."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _SYSTEM,
         "is_default": False,
         "is_active": True,
     },
@@ -234,7 +240,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Parses, validates, and formats JSON responses from other LLMs. "
             "Provides robust JSON handling with fallback mechanisms."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _LIGHT,
         "is_default": False,
         "is_active": True,
     },
@@ -245,7 +251,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Automatically extracts entities and relationships from conversations "
             "to populate AutoBot Memory Graph."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -267,7 +273,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Executes individual tasks/steps from OverseerAgent plans. "
             "Handles command validation and PTY terminal execution with streaming output."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -279,7 +285,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "High-performance semantic code search using NPU acceleration (OpenVINO) "
             "with Redis indexing."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _LIGHT,
         "is_default": False,
         "is_active": True,
     },
@@ -290,7 +296,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Performs web research using Playwright and manages knowledge. "
             "Stores quality content in knowledge base for future reference."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -334,7 +340,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Scrapes, parses, and integrates Linux man pages into machine-aware "
             "knowledge system."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _INSTRUCTION,
         "is_default": False,
         "is_active": True,
     },
@@ -345,7 +351,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Multi-tier failsafe system ensuring LLM communication even when primary "
             "systems fail. Implements PRIMARY → SECONDARY → BASIC → EMERGENCY fallback."
         ),
-        "llm_model": _QUALITY,
+        "llm_model": _SYSTEM,
         "is_default": False,
         "is_active": True,
     },

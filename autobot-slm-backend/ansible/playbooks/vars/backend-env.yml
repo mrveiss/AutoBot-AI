@@ -21,10 +21,13 @@ backend_redis_password: ""
 backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
 backend_llm_provider: "ollama"
 backend_llm_endpoint: "http://127.0.0.1:11434"
-# 3-tier model mapping (#2553) — defaults from SSOT, overridable via env
+# 6-tier model mapping (#2553) — defaults from SSOT, overridable via env
 backend_llm_model: "{{ lookup('env', 'AUTOBOT_DEFAULT_LLM_MODEL') | default('qwen3.5:9b', true) }}"
 backend_routing_model: "{{ lookup('env', 'AUTOBOT_ROUTING_MODEL') | default('llama3.2:1b', true) }}"
-backend_classification_model: "{{ lookup('env', 'AUTOBOT_CLASSIFICATION_MODEL') | default('gemma3:4b', true) }}"
+backend_classification_model: "{{ lookup('env', 'AUTOBOT_CLASSIFICATION_MODEL') | default('gemma2:2b', true) }}"
+backend_light_model: "{{ lookup('env', 'AUTOBOT_LIGHT_PROCESSING_MODEL') | default('phi3:mini', true) }}"
+backend_instruction_model: "{{ lookup('env', 'AUTOBOT_INSTRUCTION_MODEL') | default('mistral:7b-instruct', true) }}"
+backend_system_model: "{{ lookup('env', 'AUTOBOT_SYSTEM_MODEL') | default('dolphin-llama3:8b', true) }}"
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
 service_auth_enforcement_mode: false

@@ -41,8 +41,11 @@ from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
 )
+from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL
 from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
 from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
+from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE (#2553)
@@ -85,11 +88,14 @@ class ModelConstants:
     DEFAULT_ANTHROPIC_MODEL: str = FALLBACK_ANTHROPIC_MODEL
     DEFAULT_GOOGLE_MODEL: str = FALLBACK_GOOGLE_MODEL
 
-    # Role-specific models — all from SSOT constants (#2553)
+    # Role-specific models — 6-tier mapping from SSOT constants (#2553)
     EMBEDDING_MODEL: str = DEFAULT_EMBEDDING_MODEL
     CLASSIFICATION_MODEL: str = SSOT_CLASSIFICATION_MODEL
+    LIGHT_PROCESSING_MODEL: str = SSOT_LIGHT_PROCESSING_MODEL
+    INSTRUCTION_MODEL: str = SSOT_INSTRUCTION_MODEL
+    SYSTEM_MODEL: str = SSOT_SYSTEM_MODEL
     REASONING_MODEL: str = SSOT_QUALITY_MODEL
-    RAG_MODEL: str = SSOT_QUALITY_MODEL
+    RAG_MODEL: str = SSOT_INSTRUCTION_MODEL
     CODING_MODEL: str = SSOT_QUALITY_MODEL
     ORCHESTRATOR_MODEL: str = SSOT_ROUTING_MODEL
 
