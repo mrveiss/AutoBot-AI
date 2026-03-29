@@ -405,8 +405,11 @@ async def _run_provisioning_task(
         _write_provision_log(f"EXCEPTION: {exc}")
         logger.exception("Fleet provisioning error: %s", exc)
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
-        await ws_manager.send_provision_status("failed", "", elapsed, error=str(exc))
-        await ws_manager.send_provision_log("error", f"Provisioning error: {exc}")
+        # Sanitize — Ansible exceptions may contain credentials (#2754)
+        await ws_manager.send_provision_status("failed", "", elapsed, error="internal error")
+        await ws_manager.send_provision_log(
+            "error", "Provisioning error: internal error (see server logs)"
+        )
     finally:
         _provision_state["finished_at"] = time.time()
         if temp_inventory_path and temp_inventory_path.exists():

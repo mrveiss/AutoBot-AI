@@ -9,6 +9,7 @@ Provides real-time updates for deployments and system events.
 
 import asyncio
 import logging
+import time
 from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -216,10 +217,9 @@ class ConnectionManager:
         )
 
     async def send_provision_status(
-        self, status: str, stage: str = "", elapsed: float = 0, error: str = None
+        self, status: str, stage: str = "", elapsed: float = 0, error: str | None = None
     ) -> None:
         """Send a provisioning status update to watchers (#2754)."""
-        import time
 
         await self.broadcast(
             "provision",
@@ -353,7 +353,11 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
 
 @router.websocket("/provision")
 async def provision_websocket(websocket: WebSocket):
-    """WebSocket endpoint for watching provisioning progress (#2754)."""
+    """WebSocket endpoint for watching provisioning progress (#2754).
+
+    NOTE: No authentication — consistent with other WS endpoints.
+    See follow-up issue for adding token-based auth to all WS routes.
+    """
     channel = "provision"
     await ws_manager.connect(websocket, channel)
 
