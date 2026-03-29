@@ -453,13 +453,15 @@ class SyncOrchestrator:
             return False, str(e), None
 
     def _is_local_source(self, node_ip: str) -> bool:
-        """Return True if the code-source node is this machine. Helper for #1194."""
-        from urllib.parse import urlparse
+        """Return True if the code-source node is this machine (#1194, #2759).
 
-        from config import settings
+        Delegates to ``autobot_shared.network_utils.is_local_ip`` which uses
+        the most robust detection strategy: ``ip addr`` enumeration plus the
+        ``settings.external_url`` hostname fallback.
+        """
+        from autobot_shared.network_utils import is_local_ip
 
-        own_ip = urlparse(settings.external_url).hostname or ""
-        return node_ip in {"127.0.0.1", "localhost", own_ip}
+        return is_local_ip(node_ip)
 
     async def _git_pull_local(self, repo_path: str, branch: str) -> Tuple[bool, str]:
         """Run git pull origin <branch> in a local repo. Helper for #1194."""

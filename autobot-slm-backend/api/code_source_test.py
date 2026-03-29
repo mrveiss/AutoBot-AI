@@ -261,27 +261,34 @@ class TestLocalNodeValidation:
 
     @pytest.mark.asyncio
     async def test_is_local_node_localhost(self):
-        """Test _is_local_node detects localhost (#2721)."""
+        """Test _is_local_node detects localhost (#2721, #2759)."""
         node = MockNode()
         node.ip_address = "127.0.0.1"
-        with patch("code_source_module.urlparse") as mock_parse:
-            mock_parse.return_value.hostname = "172.16.168.19"
+        # Patch shared utility so the test is deterministic regardless of host (#2759)
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
             assert _is_local_node(node) is True
 
     @pytest.mark.asyncio
     async def test_is_local_node_own_ip(self):
-        """Test _is_local_node detects own IP from settings (#2721)."""
+        """Test _is_local_node detects own IP from settings (#2721, #2759)."""
         node = MockNode()
         node.ip_address = "172.16.168.19"
-        with patch("code_source_module.urlparse") as mock_parse:
-            mock_parse.return_value.hostname = "172.16.168.19"
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
             assert _is_local_node(node) is True
 
     @pytest.mark.asyncio
     async def test_is_local_node_remote(self):
-        """Test _is_local_node returns False for remote nodes (#2721)."""
+        """Test _is_local_node returns False for remote nodes (#2721, #2759)."""
         node = MockNode()
         node.ip_address = "172.16.168.20"
-        with patch("code_source_module.urlparse") as mock_parse:
-            mock_parse.return_value.hostname = "172.16.168.19"
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
             assert _is_local_node(node) is False

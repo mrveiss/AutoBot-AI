@@ -15,8 +15,6 @@ import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional
-from urllib.parse import urlparse
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -168,38 +166,16 @@ async def _ensure_code_source_role(db: AsyncSession, node_id: str) -> None:
         )
 
 
-def _get_local_ips() -> set:
-    """Return all IPv4 addresses assigned to this machine (#2721)."""
-    import re
-    import subprocess
-
-    local_ips = {"127.0.0.1", "localhost"}
-    try:
-        result = subprocess.run(
-            ["ip", "-4", "addr", "show"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        for match in re.finditer(r"inet (\d+\.\d+\.\d+\.\d+)", result.stdout):
-            local_ips.add(match.group(1))
-    except Exception:
-        pass
-    # Also include the configured external_url IP
-    try:
-        from config import settings
-
-        own_ip = urlparse(settings.external_url).hostname or ""
-        if own_ip:
-            local_ips.add(own_ip)
-    except Exception:
-        pass
-    return local_ips
-
-
 def _is_local_node(node: Node) -> bool:
-    """Return True if the node is the local SLM Manager (#2721)."""
-    return node.ip_address in _get_local_ips()
+    """Return True if the node is the local SLM Manager (#2721, #2759).
+
+    Delegates to ``autobot_shared.network_utils.is_local_ip`` which uses the
+    most robust detection strategy: ``ip addr`` enumeration plus the
+    ``settings.external_url`` hostname fallback.
+    """
+    from autobot_shared.network_utils import is_local_ip
+
+    return is_local_ip(node.ip_address)
 
 
 async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
