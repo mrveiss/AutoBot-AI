@@ -136,7 +136,7 @@
 
 - name: "Redis | Wait for Redis to be ready"
   wait_for:
-    host: "{{ ansible_default_ipv4.address }}"
+    host: 127.0.0.1
     port: "{{ redis_port }}"
     timeout: 60
     state: started
@@ -144,7 +144,7 @@
 
 - name: "Redis | Test Redis connectivity"
   command: >
-    redis-cli -h {{ ansible_default_ipv4.address }} -p {{ redis_port }}
+    redis-cli -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
     ping
   register: redis_ping
