@@ -29,9 +29,15 @@ class PlaybookExecutor:
             ansible_dir: Path to Ansible directory (defaults to autobot-slm-backend/ansible)
         """
         if ansible_dir is None:
+            # Use code_source for latest Ansible roles; fall back to deployed copy
             ansible_dir = Path(
-                os.getenv("SLM_ANSIBLE_DIR", "/opt/autobot/autobot-slm-backend/ansible")
+                os.getenv(
+                    "SLM_ANSIBLE_DIR",
+                    "/opt/autobot/code_source/autobot-slm-backend/ansible",
+                )
             )
+            if not ansible_dir.exists():
+                ansible_dir = Path("/opt/autobot/autobot-slm-backend/ansible")
         self.ansible_dir = ansible_dir
         self.inventory_path = ansible_dir / "inventory" / "slm-nodes.yml"
 
