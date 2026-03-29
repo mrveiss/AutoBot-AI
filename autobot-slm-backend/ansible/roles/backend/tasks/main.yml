@@ -125,7 +125,7 @@
 
 - name: Sync autobot-backend code from code_source
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot-backend/"
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
     dest: "{{ backend_code_dir }}/"
     rsync_opts:
       - "--exclude=__pycache__"
@@ -137,7 +137,7 @@
 
 - name: Sync autobot-shared to backend install dir
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot-shared/"
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-shared/"
     dest: "{{ backend_install_dir }}/autobot-shared/"
     rsync_opts:
       - "--exclude=__pycache__"
