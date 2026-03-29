@@ -141,10 +141,13 @@
     - name: "App | Deploy VNC role"
       ansible.builtin.include_role:
         name: vnc
+        apply:
+          tags: ['vnc', 'provision']
       when: >-
         'vnc' in (node_roles | default([])) or
         inventory_hostname in groups.get('main', []) or
-        inventory_hostname in groups.get('backend', [])
+        inventory_hostname in groups.get('backend', []) or
+        inventory_hostname in groups.get('vnc_nodes', [])
       tags: ['vnc', 'provision']
 
 # -------------------------------------------------------------------

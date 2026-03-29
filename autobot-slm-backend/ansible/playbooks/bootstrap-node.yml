@@ -1,0 +1,231 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Bootstrap Fresh Node Playbook - Issue #1525
+#
+# Bootstraps a fresh Ubuntu machine for AutoBot management:
+# 1. Creates autobot user with passwordless sudo
+# 2. Deploys SSH public key for key-based auth
+# 3. Installs base packages (openssh-server, python3, etc.)
+# 4. Verifies SSH key access works
+#
+# This playbook connects with PASSWORD auth (the initial Ubuntu user)
+# and prepares the node so all other playbooks can use SSH key auth.
+#
+# Usage:
+#   # Provide the initial Ubuntu user + password via --ask-pass:
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/bootstrap-node.yml \
+#     --limit 05-LLM-CPU \
+#     -e "ansible_user=martins" \
+#     --ask-pass --ask-become-pass
+#
+#   # Or with a one-off inventory for an unregistered host:
+#   ansible-playbook playbooks/bootstrap-node.yml \
+#     -i "172.16.168.26," \
+#     -e "ansible_user=martins" \
+#     --ask-pass --ask-become-pass
+#
+# After bootstrap, verify key auth works:
+#   ssh -i ~/.ssh/autobot_key autobot@<host-ip> whoami
+#
+# Then enroll the node:
+#   ansible-playbook -i inventory/slm-nodes.yml playbooks/enroll-node.yml \
+#     --limit 05-LLM-CPU -e "node_role=vnc"
+---
+- name: "Bootstrap Fresh Node for AutoBot"
+  hosts: all
+  gather_facts: true
+  become: true
+
+  vars:
+    autobot_user: "autobot"
+    autobot_group: "autobot"
+    autobot_home: "/home/autobot"
+    autobot_data_dir: "/var/lib/autobot"
+    autobot_log_dir: "/var/log/autobot"
+    autobot_cert_dir: "/etc/autobot/certs"
+    ssh_pubkey_path: "/home/autobot/.ssh/autobot_key.pub"
+
+  pre_tasks:
+    - name: "Verify target is a Debian/Ubuntu system"
+      ansible.builtin.assert:
+        that: ansible_os_family == 'Debian'
+        fail_msg: >-
+          Unsupported OS family: {{ ansible_os_family }}.
+          AutoBot requires Ubuntu or Debian.
+        success_msg: "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: "Display bootstrap info"
+      ansible.builtin.debug:
+        msg:
+          - "========================================"
+          - "AutoBot Node Bootstrap - Issue #1525"
+          - "========================================"
+          - "Target: {{ inventory_hostname }} ({{ ansible_default_ipv4.address | default('N/A') }})"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Initial user: {{ ansible_user }}"
+          - "Will create: {{ autobot_user }}"
+
+  tasks:
+    # ===========================================
+    # Step 1: System Preparation
+    # ===========================================
+    - name: "Update apt cache"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: "Install essential packages"
+      ansible.builtin.apt:
+        name:
+          - openssh-server
+          - python3
+          - python3-pip
+          - python3-venv
+          - sudo
+          - curl
+          - wget
+          - gnupg
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+          - git
+          - vim
+          - htop
+          - net-tools
+          - rsync
+          - ufw
+        state: present
+
+    - name: "Ensure SSH service is enabled and running"
+      ansible.builtin.systemd:
+        name: ssh
+        enabled: true
+        state: started
+
+    # ===========================================
+    # Step 2: Create autobot User
+    # ===========================================
+    - name: "Create autobot group"
+      ansible.builtin.group:
+        name: "{{ autobot_group }}"
+        state: present
+
+    - name: "Create autobot user"
+      ansible.builtin.user:
+        name: "{{ autobot_user }}"
+        group: "{{ autobot_group }}"
+        groups: sudo
+        shell: /bin/bash
+        home: "{{ autobot_home }}"
+        create_home: true
+        state: present
+
+    - name: "Configure passwordless sudo for autobot"
+      ansible.builtin.copy:
+        content: "{{ autobot_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        dest: "/etc/sudoers.d/90-{{ autobot_user }}"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: "visudo -cf %s"
+
+    # ===========================================
+    # Step 3: Deploy SSH Key
+    # ===========================================
+    - name: "Create .ssh directory for autobot"
+      ansible.builtin.file:
+        path: "{{ autobot_home }}/.ssh"
+        state: directory
+        owner: "{{ autobot_user }}"
+        group: "{{ autobot_group }}"
+        mode: "0700"
+
+    - name: "Deploy SSH authorized key"
+      ansible.posix.authorized_key:
+        user: "{{ autobot_user }}"
+        state: present
+        key: "{{ lookup('file', ssh_pubkey_path) }}"
+
+    # ===========================================
+    # Step 4: Create AutoBot Directories
+    # ===========================================
+    - name: "Create AutoBot directories"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ autobot_user }}"
+        group: "{{ autobot_group }}"
+        mode: "0755"
+      loop:
+        - "{{ autobot_data_dir }}"
+        - "{{ autobot_log_dir }}"
+        - "{{ autobot_cert_dir }}"
+
+    # ===========================================
+    # Step 5: Configure Firewall
+    # ===========================================
+    - name: "Allow SSH through UFW"
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+        comment: "SSH access - DO NOT REMOVE"
+
+    - name: "Allow VNC port (5900) from internal subnet"
+      community.general.ufw:
+        rule: allow
+        port: "5900"
+        proto: tcp
+        src: "172.16.168.0/24"
+        comment: "VNC server - internal only"
+
+    - name: "Allow websockify port (6080) from internal subnet"
+      community.general.ufw:
+        rule: allow
+        port: "6080"
+        proto: tcp
+        src: "172.16.168.0/24"
+        comment: "noVNC websockify - internal only"
+
+    - name: "Enable UFW with deny-incoming default"
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    # ===========================================
+    # Step 6: Verify SSH Key Access
+    # ===========================================
+    - name: "Test SSH key access works for autobot user"
+      ansible.builtin.command:
+        cmd: >-
+          ssh -o StrictHostKeyChecking=accept-new
+          -o BatchMode=yes
+          -o ConnectTimeout=5
+          -i {{ ssh_pubkey_path | replace('.pub', '') }}
+          {{ autobot_user }}@{{ ansible_default_ipv4.address }}
+          whoami
+      delegate_to: localhost
+      become: false
+      register: ssh_key_test
+      changed_when: false
+      failed_when: false
+
+  post_tasks:
+    - name: "Bootstrap Summary"
+      ansible.builtin.debug:
+        msg:
+          - "========================================"
+          - "Bootstrap Complete"
+          - "========================================"
+          - "Host: {{ inventory_hostname }} ({{ ansible_default_ipv4.address | default('N/A') }})"
+          - "User: {{ autobot_user }} created with passwordless sudo"
+          - "SSH Key: {{ 'VERIFIED' if ssh_key_test.rc | default(1) == 0 else 'DEPLOY MANUALLY — see below' }}"
+          - "Firewall: SSH + VNC + websockify allowed"
+          - ""
+          - "Next steps:"
+          - "  1. Verify: ssh -i ~/.ssh/autobot_key {{ autobot_user }}@{{ ansible_default_ipv4.address }}"
+          - "  2. Enroll:  ansible-playbook -i inventory/slm-nodes.yml playbooks/enroll-node.yml --limit {{ inventory_hostname }} -e node_role=vnc"
+          - "  3. VNC:     ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml --limit {{ inventory_hostname }} --tags vnc"

@@ -77,13 +77,18 @@ all:
             - autobot-playwright
             - nginx
 
-        # LLM CPU node (#1040)
+        # LLM CPU node (#1040) — also VNC desktop (#1525)
         05-LLM-CPU:
           ansible_host: 172.16.168.26
           slm_node_id: "05-LLM-CPU"
           slm_node_role: "llm"
+          node_roles:
+            - llm
+            - vnc
           slm_services_to_monitor:
             - ollama
+            - vnc-server
+            - vnc-websockify
 
         # Reserved node - pending role assignment
         06-Node-27:
@@ -122,6 +127,11 @@ all:
 
     # LLM inference nodes (CPU or GPU) — #1040
     llm_nodes:
+      hosts:
+        05-LLM-CPU:
+
+    # VNC desktop nodes (#1525, #2407)
+    vnc_nodes:
       hosts:
         05-LLM-CPU:
 
