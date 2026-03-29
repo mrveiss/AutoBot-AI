@@ -2067,6 +2067,11 @@ async def generate_analysis_report(
     Returns:
         Markdown formatted report as plain text
     """
+    # Default to most recent source to prevent cross-project data mixing (#2653)
+    if not source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
+
+        source_id = await get_default_source_id()
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id)
     analyses = await _resolve_analyses(
         quick=quick,
