@@ -562,9 +562,15 @@ async def validate_fleet(
         )
         online_nodes = online_result.scalar() or 0
 
-        required_roles = [r["name"] for r in DEFAULT_ROLES if r.get("required")]
+        # Only check roles that are actually assigned to nodes (#2747)
+        # Roles not yet assigned via wizard are not "missing"
+        assigned_roles = (
+            await session.execute(
+                select(NodeRole.role_name).distinct()
+            )
+        ).scalars().all()
         missing_roles = []
-        for role_name in required_roles:
+        for role_name in assigned_roles:
             active = await session.execute(
                 select(func.count(NodeRole.id)).where(
                     NodeRole.role_name == role_name,
@@ -576,7 +582,7 @@ async def validate_fleet(
 
     health = "healthy"
     if missing_roles:
-        health = "critical"
+        health = "degraded"
     elif online_nodes < total_nodes:
         health = "degraded"
 
@@ -585,5 +591,5 @@ async def validate_fleet(
         "total_nodes": total_nodes,
         "online_nodes": online_nodes,
         "missing_required_roles": missing_roles,
-        "ready": health in ("healthy", "degraded") and total_nodes > 0,
+        "ready": total_nodes > 0,
     }
