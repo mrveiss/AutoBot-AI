@@ -204,6 +204,35 @@ class ConnectionManager:
         # Broadcast to node-specific channel
         await self.broadcast(f"node:{node_id}", event_message)
 
+    async def send_provision_log(self, log_type: str, message: str) -> None:
+        """Send a provisioning log line to watchers (#2754)."""
+        await self.broadcast(
+            "provision",
+            {
+                "type": "log",
+                "log_type": log_type,
+                "message": message,
+            },
+        )
+
+    async def send_provision_status(
+        self, status: str, stage: str = "", elapsed: float = 0, error: str = None
+    ) -> None:
+        """Send a provisioning status update to watchers (#2754)."""
+        import time
+
+        await self.broadcast(
+            "provision",
+            {
+                "type": "status",
+                "status": status,
+                "stage": stage,
+                "elapsed_seconds": round(elapsed, 1),
+                "error": error,
+                "timestamp": time.time(),
+            },
+        )
+
 
 # Global connection manager instance
 ws_manager = ConnectionManager()
@@ -318,5 +347,35 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
         logger.debug("Client disconnected from node %s events", node_id)
     except Exception as e:
         logger.error("WebSocket error for node %s: %s", node_id, e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
+@router.websocket("/provision")
+async def provision_websocket(websocket: WebSocket):
+    """WebSocket endpoint for watching provisioning progress (#2754)."""
+    channel = "provision"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        await websocket.send_json(
+            {"type": "connected", "message": "Connected to provision stream"}
+        )
+
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from provision stream")
+    except Exception as e:
+        logger.error("WebSocket error for provision: %s", e)
     finally:
         await ws_manager.disconnect(websocket, channel)

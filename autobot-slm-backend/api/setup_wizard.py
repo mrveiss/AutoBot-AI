@@ -22,6 +22,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from api.websocket import ws_manager
 from services.auth import get_current_user
 from services.database import db_service
 from services.playbook_executor import get_playbook_executor
@@ -345,6 +346,8 @@ async def _run_provisioning_task(
         f"Node IDs: {node_ids or 'all'}\n"
         f"{'=' * 60}"
     )
+    await ws_manager.send_provision_status("running", "starting", 0)
+    await ws_manager.send_provision_log("info", "Provisioning started")
 
     temp_inventory_path = None
     try:
@@ -354,6 +357,8 @@ async def _run_provisioning_task(
             _provision_state["error"] = "No nodes found for provisioning"
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: No nodes found for provisioning")
+            await ws_manager.send_provision_status("failed", "", 0, error="No nodes found for provisioning")
+            await ws_manager.send_provision_log("error", "No nodes found for provisioning")
             return
 
         _write_provision_log(
@@ -365,9 +370,19 @@ async def _run_provisioning_task(
 
         async def log_callback(progress: dict) -> None:
             msg = progress.get("message", "")
+            stage = progress.get("stage", "")
             if msg:
                 _provision_state["output_lines"].append(msg)
                 _write_provision_log(msg)
+                # Broadcast via WebSocket (#2754)
+                log_type = "task"
+                if stage.endswith("_complete") or stage == "complete":
+                    log_type = "success"
+                elif "error" in msg.lower() or "failed" in msg.lower():
+                    log_type = "error"
+                await ws_manager.send_provision_log(log_type, msg)
+                elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+                await ws_manager.send_provision_status("running", stage, elapsed)
 
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
@@ -376,11 +391,22 @@ async def _run_provisioning_task(
             progress_callback=log_callback,
         )
         _handle_provision_result(result)
+        elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+        if result.get("success"):
+            await ws_manager.send_provision_status("completed", "complete", elapsed)
+            await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
+        else:
+            rc = result.get("returncode", -1)
+            await ws_manager.send_provision_status("failed", "", elapsed, error=f"Ansible exited with code {rc}")
+            await ws_manager.send_provision_log("error", f"Provisioning failed (exit code {rc})")
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
         _write_provision_log(f"EXCEPTION: {exc}")
         logger.exception("Fleet provisioning error: %s", exc)
+        elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+        await ws_manager.send_provision_status("failed", "", elapsed, error=str(exc))
+        await ws_manager.send_provision_log("error", f"Provisioning error: {exc}")
     finally:
         _provision_state["finished_at"] = time.time()
         if temp_inventory_path and temp_inventory_path.exists():
