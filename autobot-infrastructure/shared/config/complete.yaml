@@ -317,20 +317,20 @@ redis:
   # Database allocation
   databases:
     main: 0
-    knowledge: 0  # RediSearch indexes MUST be on DB 0
+    knowledge: 1  # Knowledge base and documents (see ADR-002, ssot_config.py db_knowledge=1)
     celery_broker: 14     # Celery task broker (moved from 1/2 to avoid knowledge/prompts clash)
     celery_results: 15    # Celery task results
-    metrics: 1    # Performance metrics and monitoring data
+    metrics: 4    # Performance metrics and monitoring data (see network_constants.py METRICS_DB=4)
     prompts: 2
     agents: 3
-    cache: 4
+    cache: 5    # General purpose caching (see ssot_config.py db_cache=5)
     sessions: 6
     chat_history: 8
     backup: 10
     testing: 15
 
-  # Knowledge base specific - RediSearch requirement
-  kb_db: 0
+  # Knowledge base specific - DB 1 per ADR-002 and ssot_config.py
+  kb_db: 1
 
   # Pub/Sub channels
   channels:
