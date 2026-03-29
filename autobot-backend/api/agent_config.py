@@ -622,6 +622,40 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
+async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manager) -> dict:
+    """Resolve model, enabled state, and config_source for a single agent. Ref: #2735.
+
+    Tries SLM first; falls back to local unified config.
+    """
+    slm_config = await _get_agent_config_from_slm(agent_id)
+    if slm_config:
+        current_model = slm_config.get("model", config["default_model"])
+        enabled = slm_config.get("enabled", True)
+        config_source = "slm"
+    else:
+        current_model = unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", config["default_model"]
+        )
+        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
+        config_source = "local"
+
+    return {
+        "id": agent_id,
+        "name": config["name"],
+        "description": config["description"],
+        "type": "backend",
+        "model": current_model,
+        "enabled": enabled,
+        "status": "connected" if enabled and current_model else "disconnected",
+        "priority": config["priority"],
+        "tasks": config["tasks"],
+        "mcp_tools": config.get("mcp_tools", []),
+        "invoked_by": config.get("invoked_by", ""),
+        "source_file": config.get("source_file", ""),
+        "config_source": config_source,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_agents",
@@ -640,39 +674,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        # Try SLM first, fallback to local config
-        slm_config = await _get_agent_config_from_slm(agent_id)
-
-        if slm_config:
-            current_model = slm_config.get("model", config["default_model"])
-            enabled = slm_config.get("enabled", True)
-            config_source = "slm"
-        else:
-            current_model = unified_config_manager.get_nested(
-                f"agents.{agent_id}.model", config["default_model"]
-            )
-            enabled = unified_config_manager.get_nested(
-                f"agents.{agent_id}.enabled", config["enabled"]
-            )
-            config_source = "local"
-
-        backend_agents.append(
-            {
-                "id": agent_id,
-                "name": config["name"],
-                "description": config["description"],
-                "type": "backend",
-                "model": current_model,
-                "enabled": enabled,
-                "status": "connected" if enabled and current_model else "disconnected",
-                "priority": config["priority"],
-                "tasks": config["tasks"],
-                "mcp_tools": config.get("mcp_tools", []),
-                "invoked_by": config.get("invoked_by", ""),
-                "source_file": config.get("source_file", ""),
-                "config_source": config_source,
-            }
-        )
+        backend_agents.append(await _resolve_agent_entry(agent_id, config, unified_config_manager))
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -831,6 +833,52 @@ async def get_agent_config(
     return JSONResponse(status_code=200, content=agent_config)
 
 
+async def _apply_agent_model_update(
+    agent_id: str,
+    update: "AgentModelUpdate",
+    unified_config_manager,
+    session: "AsyncSession",
+) -> dict:
+    """Persist model/provider change and record audit revision. Ref: #2735.
+
+    Returns the ``updated_config`` dict ready for the API response.
+    """
+    base = DEFAULT_AGENT_CONFIGS[agent_id]
+    before_config = {
+        "model": unified_config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
+        "provider": unified_config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
+    }
+
+    # Persist changes
+    unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
+    if update.provider:
+        unified_config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
+    unified_config_manager.save_settings()
+    ConfigService.clear_cache()
+
+    # Issue #1747: Record audit revision
+    after_config = {"model": update.model, "provider": update.provider}
+    await ConfigRevisionService(session).create_revision(
+        entity_type="agent",
+        entity_id=agent_id,
+        before_config=before_config,
+        after_config=after_config,
+        source="api",
+        created_by="admin",
+    )
+
+    logger.info("Updated agent %s model to %s (provider: %s)", agent_id, update.model, update.provider)
+
+    return {
+        "agent_id": agent_id,
+        "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
+        "model": update.model,
+        "provider": update.provider,
+        "status": "updated",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_agent_model",
@@ -854,62 +902,13 @@ async def update_agent_model(
 
     from config import unified_config_manager
 
-    # Validate the update request
     if update.agent_id != agent_id:
         raise HTTPException(
             status_code=400,
             detail="Agent ID in URL must match agent ID in request body",
         )
 
-    # Issue #1747: Snapshot before config
-    base = DEFAULT_AGENT_CONFIGS[agent_id]
-    before_config = {
-        "model": unified_config_manager.get_nested(
-            f"agents.{agent_id}.model", base["default_model"]
-        ),
-        "provider": unified_config_manager.get_nested(
-            f"agents.{agent_id}.provider", base["provider"]
-        ),
-    }
-
-    # Update the configuration
-    unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
-    if update.provider:
-        unified_config_manager.set_nested(
-            f"agents.{agent_id}.provider", update.provider
-        )
-
-    # Save the configuration and clear cache
-    unified_config_manager.save_settings()
-    ConfigService.clear_cache()
-
-    # Issue #1747: Record audit revision
-    after_config = {"model": update.model, "provider": update.provider}
-    await ConfigRevisionService(session).create_revision(
-        entity_type="agent",
-        entity_id=agent_id,
-        before_config=before_config,
-        after_config=after_config,
-        source="api",
-        created_by="admin",
-    )
-
-    logger.info(
-        "Updated agent %s model to %s (provider: %s)",
-        agent_id,
-        update.model,
-        update.provider,
-    )
-
-    # Return updated configuration
-    updated_config = {
-        "agent_id": agent_id,
-        "agent_name": DEFAULT_AGENT_CONFIGS[agent_id]["name"],
-        "model": update.model,
-        "provider": update.provider,
-        "status": "updated",
-        "timestamp": datetime.now().isoformat(),
-    }
+    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session)
 
     return JSONResponse(
         status_code=200,

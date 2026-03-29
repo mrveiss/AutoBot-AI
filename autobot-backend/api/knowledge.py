@@ -800,6 +800,32 @@ async def add_facts_to_knowledge(
     }
 
 
+async def _fetch_and_extract_url(validated_url: str, fallback_title: str) -> "tuple[str, str]":
+    """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
+
+    Raises HTTPException on HTTP error or connection failure.
+    Prevents SSRF via redirect (#1721).
+    """
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                validated_url,
+                timeout=aiohttp.ClientTimeout(total=30),
+                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=400, detail=f"HTTP {response.status}")
+                html_content = await response.text()
+                # Use safe HTML parser instead of regex (Issue #549 Code Review)
+                content, extracted_title = _sanitize_html_content(html_content)
+                title = fallback_title or extracted_title or validated_url
+                return content, title
+    except aiohttp.ClientError:
+        raise HTTPException(status_code=400, detail="Failed to fetch URL")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_url_to_knowledge",
@@ -818,8 +844,6 @@ async def add_url_to_knowledge(
     Issue #744: Requires admin authentication.
     """
     from urllib.parse import urlparse
-
-    import aiohttp
 
     from autobot_shared.security.input_sanitizer import validate_url
 
@@ -840,25 +864,7 @@ async def add_url_to_knowledge(
 
     logger.info("Fetching content from URL: %s", validated_url)
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                validated_url,
-                timeout=aiohttp.ClientTimeout(total=30),
-                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=400, detail=f"HTTP {response.status}"
-                    )
-                html_content = await response.text()
-
-                # Use safe HTML parser instead of regex (Issue #549 Code Review)
-                content, extracted_title = _sanitize_html_content(html_content)
-                title = request.title or extracted_title or validated_url
-
-    except aiohttp.ClientError:
-        raise HTTPException(status_code=400, detail="Failed to fetch URL")
+    content, title = await _fetch_and_extract_url(validated_url, request.title or "")
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,

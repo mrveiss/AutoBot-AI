@@ -415,6 +415,25 @@ def _resolve_service_urls() -> tuple:
     return npu_url, browser_url, ollama_url
 
 
+def _safe_result(res, default=("offline", "Error")):
+    """Return res if it is a tuple, else default. Ref: #2735."""
+    return res if isinstance(res, tuple) else default
+
+
+def _to_service_entry(name: str, host: str, port: int, status: str, msg: str) -> dict:
+    """Build a single ServicesSummary-compatible dict. Ref: #2735."""
+    is_healthy = status == "online"
+    return {
+        "name": name,
+        "host": host,
+        "port": port,
+        "status": "healthy" if is_healthy else "offline",
+        "response_time_ms": 0,
+        "health_score": 100 if is_healthy else 0,
+        "uptime_hours": 0,
+    }
+
+
 def _build_service_list(results: list) -> list:
     """Helper for get_services_health. Ref: #1088.
 
@@ -422,63 +441,32 @@ def _build_service_list(results: list) -> list:
     Each entry is a dict with name, host, port, status, response_time_ms,
     health_score, and uptime_hours fields.
     """
-
-    def _safe(res, default=("offline", "Error")):
-        return res if isinstance(res, tuple) else default
-
-    def _to_service(name, host, port, status, msg):
-        is_healthy = status == "online"
-        return {
-            "name": name,
-            "host": host,
-            "port": port,
-            "status": "healthy" if is_healthy else "offline",
-            "response_time_ms": 0,
-            "health_score": 100 if is_healthy else 0,
-            "uptime_hours": 0,
-        }
-
-    redis_s, redis_m = _safe(results[0])
-    npu_s, npu_m = _safe(results[1])
-    ollama_s, ollama_m = _safe(results[2])
-    browser_s, browser_m = _safe(results[3])
+    redis_s, redis_m = _safe_result(results[0])
+    npu_s, npu_m = _safe_result(results[1])
+    ollama_s, ollama_m = _safe_result(results[2])
+    browser_s, browser_m = _safe_result(results[3])
 
     # Issue #1229/#2671: Use ConfigRegistry (defaults from SSOT via registry_defaults)
     return [
-        _to_service(
-            "Backend API",
-            ConfigRegistry.get("vm.main"),
-            int(ConfigRegistry.get("port.backend")),
-            "online",
-            "Running",
+        _to_service_entry(
+            "Backend API", ConfigRegistry.get("vm.main"),
+            int(ConfigRegistry.get("port.backend")), "online", "Running",
         ),
-        _to_service(
-            "Redis",
-            ConfigRegistry.get("vm.redis"),
-            int(ConfigRegistry.get("port.redis")),
-            redis_s,
-            redis_m,
+        _to_service_entry(
+            "Redis", ConfigRegistry.get("vm.redis"),
+            int(ConfigRegistry.get("port.redis")), redis_s, redis_m,
         ),
-        _to_service(
-            "NPU Worker",
-            ConfigRegistry.get("vm.npu"),
-            int(ConfigRegistry.get("port.npu")),
-            npu_s,
-            npu_m,
+        _to_service_entry(
+            "NPU Worker", ConfigRegistry.get("vm.npu"),
+            int(ConfigRegistry.get("port.npu")), npu_s, npu_m,
         ),
-        _to_service(
-            "Ollama",
-            ConfigRegistry.get("vm.llm"),
-            int(ConfigRegistry.get("port.ollama")),
-            ollama_s,
-            ollama_m,
+        _to_service_entry(
+            "Ollama", ConfigRegistry.get("vm.llm"),
+            int(ConfigRegistry.get("port.ollama")), ollama_s, ollama_m,
         ),
-        _to_service(
-            "Browser",
-            ConfigRegistry.get("vm.browser"),
-            int(ConfigRegistry.get("port.browser")),
-            browser_s,
-            browser_m,
+        _to_service_entry(
+            "Browser", ConfigRegistry.get("vm.browser"),
+            int(ConfigRegistry.get("port.browser")), browser_s, browser_m,
         ),
     ]
 

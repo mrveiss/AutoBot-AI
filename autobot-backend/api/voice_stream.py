@@ -84,6 +84,66 @@ async def _send_json(ws: WebSocket, data: dict) -> bool:
     return False
 
 
+async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
+    """Cancel a task if it exists and is not yet done. Ref: #2735."""
+    if task and not task.done():
+        task.cancel()
+
+
+async def _process_tts_chunk(
+    ws: WebSocket,
+    i: int,
+    total: int,
+    next_task: "asyncio.Task | None",
+    chunks: list,
+    cancel_event: asyncio.Event,
+    tts,
+    voice_id: str,
+    language: str,
+) -> "tuple[bool, asyncio.Task | None]":
+    """Await the current TTS task, pre-fetch the next chunk, and send audio. Ref: #2735.
+
+    Returns (should_continue, next_task). Returns (False, None) on cancellation,
+    empty audio, send failure, or unrecoverable error.
+    """
+    if cancel_event.is_set():
+        logger.debug("TTS cancelled at chunk %d/%d", i, total)
+        await _cancel_pending_task(next_task)
+        return False, None
+
+    try:
+        wav_bytes = await next_task if next_task else b""
+        if not wav_bytes:
+            return False, None
+
+        # Pre-fetch next chunk while sending current (#1527)
+        prefetch: asyncio.Task | None = None
+        if i + 1 < total and not cancel_event.is_set():
+            prefetch = asyncio.create_task(
+                tts.synthesize(chunks[i + 1], voice_id=voice_id, language=language)
+            )
+
+        audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+
+        if cancel_event.is_set():
+            await _cancel_pending_task(prefetch)
+            return False, None
+
+        sent = await _send_json(ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total})
+        if not sent:
+            await _cancel_pending_task(prefetch)
+            return False, None
+
+        return True, prefetch
+    except asyncio.CancelledError:
+        return False, None
+    except Exception as e:
+        logger.error("TTS error chunk %d: %s", i, e)
+        await _send_json(ws, {"type": "error", "message": f"TTS synthesis failed: {e}"})
+        await _cancel_pending_task(next_task)
+        return False, None
+
+
 async def _stream_chunks_pipelined(
     ws: WebSocket,
     text: str,
@@ -117,61 +177,10 @@ async def _stream_chunks_pipelined(
         )
 
     for i in range(total):
-        if cancel_event.is_set():
-            logger.debug("TTS cancelled at chunk %d/%d", i, total)
-            if next_task and not next_task.done():
-                next_task.cancel()
-            break
-
-        try:
-            wav_bytes = await next_task if next_task else b""
-            if not wav_bytes:
-                break
-
-            # Pre-fetch next chunk while sending current (#1527)
-            next_task = None
-            if i + 1 < total and not cancel_event.is_set():
-                next_task = asyncio.create_task(
-                    tts.synthesize(
-                        chunks[i + 1],
-                        voice_id=voice_id,
-                        language=language,
-                    )
-                )
-
-            audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-
-            if cancel_event.is_set():
-                if next_task and not next_task.done():
-                    next_task.cancel()
-                break
-
-            sent = await _send_json(
-                ws,
-                {
-                    "type": "tts_audio",
-                    "data": audio_b64,
-                    "chunk": i + 1,
-                    "total": total,
-                },
-            )
-            if not sent:
-                if next_task and not next_task.done():
-                    next_task.cancel()
-                break
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            logger.error("TTS error chunk %d: %s", i, e)
-            await _send_json(
-                ws,
-                {
-                    "type": "error",
-                    "message": f"TTS synthesis failed: {e}",
-                },
-            )
-            if next_task and not next_task.done():
-                next_task.cancel()
+        ok, next_task = await _process_tts_chunk(
+            ws, i, total, next_task, chunks, cancel_event, tts, voice_id, language
+        )
+        if not ok:
             break
 
     await _send_json(ws, {"type": "tts_end"})
@@ -276,6 +285,26 @@ async def _drain_sentence_queue(queue: asyncio.Queue) -> None:
             break
 
 
+async def _handle_barge_in(ws: WebSocket, ctx: dict, tts_task: "asyncio.Task | None") -> None:
+    """Handle barge-in: cancel active TTS, drain queue, restart worker. Ref: #2735."""
+    logger.debug("Barge-in received")
+    await _cancel_active_tts(ctx["cancel_tts"], tts_task)
+    # Cancel in-flight queue worker to interrupt synthesis (#1319)
+    worker = ctx.get("queue_worker_task")
+    if worker and not worker.done():
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
+    await _drain_sentence_queue(ctx["sentence_queue"])
+    # Restart queue worker for future sentences
+    ctx["queue_worker_task"] = asyncio.create_task(
+        _tts_queue_worker(ws, ctx["sentence_queue"], ctx["cancel_tts"])
+    )
+    await ctx["set_state"]("listening")
+
+
 async def _handle_ws_message(
     msg: dict,
     ws: WebSocket,
@@ -290,22 +319,7 @@ async def _handle_ws_message(
     tts_task = ctx["tts_task"]
 
     if msg_type == "barge_in":
-        logger.debug("Barge-in received")
-        await _cancel_active_tts(ctx["cancel_tts"], tts_task)
-        # Cancel in-flight queue worker to interrupt synthesis (#1319)
-        worker = ctx.get("queue_worker_task")
-        if worker and not worker.done():
-            worker.cancel()
-            try:
-                await worker
-            except asyncio.CancelledError:
-                pass
-        await _drain_sentence_queue(ctx["sentence_queue"])
-        # Restart queue worker for future sentences
-        ctx["queue_worker_task"] = asyncio.create_task(
-            _tts_queue_worker(ws, ctx["sentence_queue"], ctx["cancel_tts"])
-        )
-        await ctx["set_state"]("listening")
+        await _handle_barge_in(ws, ctx, tts_task)
 
     elif msg_type == "start_listening":
         if ctx["get_state"]() == "speaking":
