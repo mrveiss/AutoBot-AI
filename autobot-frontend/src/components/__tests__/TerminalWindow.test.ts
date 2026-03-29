@@ -10,12 +10,33 @@ import {
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websocket-mock'
 
-// Mock dependencies
+// Mock dependencies — Vitest 4 hoists vi.mock factories above imports,
+// so we cannot reference createMockApiService() here. Use inline vi.fn()
+// calls instead (same pattern as ChatInterface.test.ts). (#2676)
 vi.mock('@/utils/ApiClient', () => ({
-  default: createMockApiService().client,
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+  },
 }))
 
-vi.mock('@/services/api', () => createMockApiService())
+vi.mock('@/services/api', () => ({
+  default: {
+    sendMessage: vi.fn(),
+    executeCommand: vi.fn(),
+    interruptProcess: vi.fn(),
+    killAllProcesses: vi.fn(),
+  },
+  apiService: {
+    sendMessage: vi.fn(),
+    executeCommand: vi.fn(),
+    interruptProcess: vi.fn(),
+    killAllProcesses: vi.fn(),
+  },
+}))
 
 describe('TerminalWindow', () => {
   let user: ReturnType<typeof userEvent.setup>

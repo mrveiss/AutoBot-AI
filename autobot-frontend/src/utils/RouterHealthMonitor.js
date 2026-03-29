@@ -75,7 +75,7 @@ class RouterHealthMonitor {
         });
 
         // Monitor before each navigation
-        this.router.beforeEach((to, from, next) => {
+        this.router.beforeEach((to, from) => {
             // Clear any existing timeout
             if (this.pendingNavigation?.timeout) {
                 clearTimeout(this.pendingNavigation.timeout);
@@ -90,8 +90,6 @@ class RouterHealthMonitor {
             //         this.handleNavigationTimeout(to, from);
             //     }, this.navigationTimeout)
             // };
-
-            next();
         });
     }
 

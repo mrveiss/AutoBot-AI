@@ -473,7 +473,7 @@ export const useAppStore = defineStore('app', () => {
   persist: {
     key: 'autobot-app',
     storage: localStorage,
-    paths: [
+    pick: [
       'sessions',
       'currentSessionId',
       'notificationSettings',

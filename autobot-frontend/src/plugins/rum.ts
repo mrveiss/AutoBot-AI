@@ -73,13 +73,13 @@ export default {
     })
 
     // Track route changes
+    // Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
     if (options.router) {
-      options.router.beforeEach((to, from, next) => {
+      options.router.beforeEach((to, from) => {
         rumAgent.trackUserInteraction('route_change', null, {
           from: from.path,
           to: to.path
         })
-        next()
       })
     }
 

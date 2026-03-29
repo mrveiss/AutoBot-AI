@@ -916,7 +916,7 @@ export const useChatStore = defineStore('chat', () => {
     key: 'autobot-chat-store',
     storage: localStorage,
     // Only persist essential chat data, not sensitive information
-    paths: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
+    pick: ['sessions', 'currentSessionId', 'settings.autoSave', 'settings.persistHistory', 'sidebarCollapsed'],
     // Exclude sensitive settings like API keys, system prompts, etc.
     serializer: {
       deserialize: (value: string) => {

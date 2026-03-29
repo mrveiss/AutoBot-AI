@@ -760,7 +760,8 @@ router.onError((error) => {
 })
 
 // Global navigation guards with enhanced error handling
-router.beforeEach(async (to, from, next) => {
+// Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
+router.beforeEach(async (to, from) => {
   try {
     const appStore = useAppStore()
     const userStore = useUserStore()
@@ -790,7 +791,6 @@ router.beforeEach(async (to, from, next) => {
       if (backendAuthenticated) {
         logger.debug('Backend auto-authenticated user (single_user mode)')
         // Continue to route - user is now authenticated
-        next()
         return
       }
     }
@@ -807,16 +807,14 @@ router.beforeEach(async (to, from, next) => {
         })
       }
 
-      // Redirect to login (no redirect param — clean URL)
-      next({ name: 'login' })
-      return
+      // Redirect to login (no redirect param -- clean URL)
+      return { name: 'login' }
     }
 
     // If user is authenticated and trying to access login page, redirect to chat
     if (to.name === 'login' && userStore.isAuthenticated) {
       logger.debug('User already authenticated, redirecting to chat')
-      next({ path: '/chat' })
-      return
+      return { path: '/chat' }
     }
 
     // Check for expired tokens
@@ -826,8 +824,7 @@ router.beforeEach(async (to, from, next) => {
 
       // If the route requires auth, redirect to login
       if (requiresAuth) {
-        next({ name: 'login' })
-        return
+        return { name: 'login' }
       }
     }
 
@@ -859,8 +856,7 @@ router.beforeEach(async (to, from, next) => {
       })
     }
 
-    // Continue navigation
-    next()
+    // Continue navigation (returning undefined allows navigation to proceed)
 
   } catch (error: unknown) {
     logger.error('Navigation guard error:', error)
@@ -879,7 +875,7 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // Even on error, continue navigation to prevent blocking
-    next()
+    // (returning undefined allows navigation to proceed)
   }
 })
 
