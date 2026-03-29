@@ -1687,26 +1687,19 @@ class ChatWorkflowManager(
 
         return f"**Step {step_num}:** `{cmd}`\n- Status: {status}\n- Output:\n```\n{output_text}\n```"
 
-    def _get_continuation_instructions(
-        self,
-        original_message: str,
-        steps_completed: int,
-        consecutive_invalid_tool_calls: int = 0,
-    ) -> str:
-        """Get the critical instructions for continuation prompts.
+    def _build_tools_reminder(self, consecutive_invalid_tool_calls: int) -> str:
+        """Build an optional tool-name correction block for continuation prompts. Issue #2735.
 
-        Issue #651: Enhanced instructions to prevent premature task completion.
-        Issue #2310: Injects available-tools reminder after 2+ consecutive invalid tool calls.
+        Returns a non-empty string only when the LLM has made 2+ consecutive invalid
+        tool calls (Issue #2310), so the reminder is injected into the next prompt.
         """
-        # Issue #2310: Build optional tools reminder block when LLM has repeatedly
-        # hallucinated non-existent tool names.
-        tools_reminder = ""
-        if consecutive_invalid_tool_calls >= 2:
-            logger.warning(
-                "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
-                consecutive_invalid_tool_calls,
-            )
-            tools_reminder = f"""
+        if consecutive_invalid_tool_calls < 2:
+            return ""
+        logger.warning(
+            "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
+            consecutive_invalid_tool_calls,
+        )
+        return f"""
 **[SYSTEM] TOOL NAME CORRECTION REQUIRED:**
 Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. \
 You MUST use ONLY the following tool names:
@@ -1727,6 +1720,21 @@ You MUST use ONLY the following tool names:
 Do NOT invent new tool names. Use ONLY the names listed above.
 
 """
+
+    def _get_continuation_instructions(
+        self,
+        original_message: str,
+        steps_completed: int,
+        consecutive_invalid_tool_calls: int = 0,
+    ) -> str:
+        """Get the critical instructions for continuation prompts.
+
+        Issue #651: Enhanced instructions to prevent premature task completion.
+        Issue #2310: Injects available-tools reminder after 2+ consecutive invalid tool calls.
+        """
+        # Issue #2310: Build optional tools reminder block when LLM has repeatedly
+        # hallucinated non-existent tool names.
+        tools_reminder = self._build_tools_reminder(consecutive_invalid_tool_calls)
 
         return f"""**CRITICAL MULTI-STEP TASK INSTRUCTIONS - READ CAREFULLY:**
 {tools_reminder}
