@@ -459,6 +459,31 @@ class RAGService:
         )
         return results, metrics
 
+    async def _emit_ranked_feedback(self, query: str, results: List[SearchResult]) -> None:
+        """Classify query complexity and emit retrieval feedback to event + Redis stream.
+
+        ranked_ids: results already sorted by rerank_score (post-rerank order).
+        retrieved_ids: re-sorted by hybrid_score to recover pre-rerank retrieval order.
+        Ref: #2024, #1516, #2035, #2735.
+        """
+        classifier = get_query_classifier()
+        complexity = classifier.classify(query)
+        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
+        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
+        await self._emit_retrieval_feedback(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
+            complexity=complexity.value,
+        )
+        await self._store_feedback_in_stream(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
+            complexity=complexity.value,
+        )
+
     async def advanced_search(
         self,
         query: str,
@@ -506,30 +531,7 @@ class RAGService:
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
 
-        # Classify query complexity for feedback tagging (Issue #2024)
-        classifier = get_query_classifier()
-        complexity = classifier.classify(query)
-
-        # Emit retrieval feedback event and persist to Redis stream (#1516, #2035)
-        # ranked_ids: results are already sorted by rerank_score (post-rerank order).
-        # retrieved_ids: re-sort by hybrid_score to recover pre-rerank retrieval order.
-        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
-        pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [
-            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
-        ]
-        await self._emit_retrieval_feedback(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=ranked_ids,
-            complexity=complexity.value,
-        )
-        await self._store_feedback_in_stream(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=ranked_ids,
-            complexity=complexity.value,
-        )
+        await self._emit_ranked_feedback(query, results)
 
         return results, metrics
 
