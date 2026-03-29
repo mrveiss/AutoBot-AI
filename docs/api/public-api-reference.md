@@ -63,14 +63,17 @@ Authenticate and receive a JWT token.
 
 ```json
 {
+  "success": true,
+  "message": "Login successful",
   "token": "eyJhbGciOiJIUzI1NiIs...",
+  "session_id": "sess_abc123",
   "user": {
     "username": "string",
-    "role": "string",
     "user_id": "string",
-    "org_id": "string"
-  },
-  "expires_in": 3600
+    "role": "string",
+    "email": "string",
+    "last_login": "2026-03-15T12:00:00Z"
+  }
 }
 ```
 
@@ -362,7 +365,7 @@ Delete a chat session.
 }
 ```
 
-### POST /chat/sessions/{session_id}/export
+### GET /chat/sessions/{session_id}/export
 
 Export a chat session.
 
