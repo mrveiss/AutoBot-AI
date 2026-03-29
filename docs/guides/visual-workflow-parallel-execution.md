@@ -20,7 +20,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import config
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 async def run_parallel_fleet_audit(token: str):
@@ -40,31 +40,31 @@ async def run_parallel_fleet_audit(token: str):
                     "id": "audit_frontend",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.frontend,
+                    "target_node": config.vm.frontend,
                     "command": "/opt/autobot/scripts/audit/check_permissions.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
-                    "inputs": {"target_host": config.vms.frontend},
+                    "inputs": {"target_host": config.vm.frontend},
                 },
                 {
                     "id": "audit_npu",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.npu,
+                    "target_node": config.vm.npu,
                     "command": "/opt/autobot/scripts/audit/check_services.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
-                    "inputs": {"target_host": config.vms.npu},
+                    "inputs": {"target_host": config.vm.npu},
                 },
                 {
                     "id": "audit_ai_stack",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.ai_stack,
+                    "target_node": config.vm.aistack,
                     "command": "/opt/autobot/scripts/audit/check_network.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
-                    "inputs": {"target_host": config.vms.ai_stack},
+                    "inputs": {"target_host": config.vm.aistack},
                 },
                 {
                     "id": "aggregate_results",
@@ -432,7 +432,7 @@ import json
 
 from autobot_shared.ssot_config import config
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 async def create_parallel_fleet_audit():
     """Define a workflow that runs three audit scripts in parallel across the fleet.
@@ -452,12 +452,12 @@ async def create_parallel_fleet_audit():
                     "id": "audit_frontend",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.frontend,
+                    "target_node": config.vm.frontend,
                     "command": "/opt/autobot/scripts/audit/check_permissions.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
                     "inputs": {
-                        "target_host": config.vms.frontend,
+                        "target_host": config.vm.frontend,
                         "script": "/opt/autobot/scripts/audit/check_permissions.sh",
                     },
                 },
@@ -465,12 +465,12 @@ async def create_parallel_fleet_audit():
                     "id": "audit_npu",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.npu,
+                    "target_node": config.vm.npu,
                     "command": "/opt/autobot/scripts/audit/check_services.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
                     "inputs": {
-                        "target_host": config.vms.npu,
+                        "target_host": config.vm.npu,
                         "script": "/opt/autobot/scripts/audit/check_services.sh",
                     },
                 },
@@ -478,12 +478,12 @@ async def create_parallel_fleet_audit():
                     "id": "audit_ai_stack",
                     "agent_type": "system_commands",
                     "action": "execute_shell",
-                    "target_node": config.vms.ai_stack,
+                    "target_node": config.vm.aistack,
                     "command": "/opt/autobot/scripts/audit/check_network.sh",
                     "parallel_group": "audit_batch_1",
                     "timeout": 300,
                     "inputs": {
-                        "target_host": config.vms.ai_stack,
+                        "target_host": config.vm.aistack,
                         "script": "/opt/autobot/scripts/audit/check_network.sh",
                     },
                 },
@@ -1019,7 +1019,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import config
 
-SLM_URL = f"https://{config.vms.slm}:{config.ports.backend}"
+SLM_URL = f"https://{config.vm.slm}:{config.port.backend}"
 
 async def get_slm_token() -> str:
     """Authenticate with the SLM and return a Bearer token."""
@@ -1710,7 +1710,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import config
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 workflow = {
     "user_message": "Run security audit across frontend, NPU, and AI Stack nodes",

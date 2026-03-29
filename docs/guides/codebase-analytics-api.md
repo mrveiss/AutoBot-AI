@@ -15,8 +15,9 @@ Here is the complete flow:
 import asyncio
 
 import aiohttp
+from autobot_shared.ssot_config import config
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -223,7 +224,7 @@ import aiohttp
 import asyncio
 import json
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -297,7 +298,7 @@ TypeScript/Vue files for API calls, then cross-references them.
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -341,7 +342,7 @@ For a richer report, combine the coverage data with indexed statistics:
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -1610,7 +1611,7 @@ that specific code source rather than the global dataset.
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 async def get_project_stats(source_id: str) -> dict:

@@ -23,7 +23,7 @@ from autobot_shared.ssot_config import config
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 async def run_vnc_ui_test(token: str, target_host: str = "172.16.168.25"):

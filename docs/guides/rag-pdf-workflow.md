@@ -19,7 +19,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import config
 
-BACKEND = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 
 
 async def rag_pdf_workflow(token: str, pdf_path: str, query: str):
@@ -265,7 +265,7 @@ import aiohttp
 
 from autobot_shared.ssot_config import config
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 async def upload_pdf(pdf_path: str, category: str = "documentation") -> dict:
@@ -336,7 +336,7 @@ from autobot_shared.ssot_config import config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 async def upload_pdf_repository(
@@ -795,7 +795,7 @@ from autobot_shared.ssot_config import config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 def _build_ssl_context() -> ssl.SSLContext:
@@ -1410,7 +1410,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
 def _build_ssl_context() -> ssl.SSLContext:
