@@ -610,8 +610,7 @@ class LLMCostTracker:
         error_message: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> LLMUsageRecord:
-        """
-        Track an LLM API usage event. Ref: #1088.
+        """Track an LLM API usage event. Ref: #1088.
 
         Supports request object or individual keyword params (legacy).
         Delegates to _resolve_usage_params then _build_and_persist_record.
@@ -619,48 +618,12 @@ class LLMCostTracker:
         Returns:
             LLMUsageRecord with calculated cost
         """
-        (
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            session_id,
-            user_id,
-            agent_id,
-            endpoint,
-            latency_ms,
-            success,
-            error_message,
-            metadata,
-        ) = self._resolve_usage_params(
-            request,
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            session_id,
-            user_id,
-            agent_id,
-            endpoint,
-            latency_ms,
-            success,
-            error_message,
-            metadata,
+        params = self._resolve_usage_params(
+            request, provider, model, input_tokens, output_tokens,
+            session_id, user_id, agent_id, endpoint, latency_ms,
+            success, error_message, metadata,
         )
-        return await self._build_and_persist_record(
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            session_id,
-            user_id,
-            agent_id,
-            endpoint,
-            latency_ms,
-            success,
-            error_message,
-            metadata,
-        )
+        return await self._build_and_persist_record(*params)
 
     async def _store_usage_record(self, record: LLMUsageRecord) -> None:
         """Store usage record in Redis.

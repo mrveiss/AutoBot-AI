@@ -57,6 +57,46 @@ __all__ = [
 ]
 
 
+def _read_hnsw_params(cursor: "sqlite3.Cursor", collection_id: str) -> dict:
+    """Read HNSW metadata for one collection from collection_metadata table.
+
+    Ref: #2735. Helper for _migrate_legacy_collection_configs.
+    """
+    cursor.execute(
+        "SELECT key, str_value, int_value, float_value "
+        "FROM collection_metadata WHERE collection_id=?",
+        (collection_id,),
+    )
+    hnsw: dict = {}
+    for key, sv, iv, fv in cursor.fetchall():
+        if key.startswith("hnsw:"):
+            hnsw[key[5:]] = sv if sv is not None else (iv if iv is not None else fv)
+    return hnsw
+
+
+def _build_collection_config_json(hnsw: dict) -> str:
+    """Build the ChromaDB 0.5.x config_json_str from HNSW parameter dict.
+
+    Ref: #2735. Helper for _migrate_legacy_collection_configs.
+    """
+    return json.dumps(
+        {
+            "hnsw_configuration": {
+                "space": hnsw.get("space", "l2"),
+                "ef_construction": hnsw.get("construction_ef", 100),
+                "ef_search": hnsw.get("search_ef", 10),
+                "num_threads": 4,
+                "M": hnsw.get("M", 16),
+                "resize_factor": 1.2,
+                "batch_size": 100,
+                "sync_threshold": 1000,
+                "_type": "HNSWConfigurationInternal",
+            },
+            "_type": "CollectionConfigurationInternal",
+        }
+    )
+
+
 def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
     """Migrate ChromaDB collections missing _type in config_json_str.
 
@@ -76,40 +116,13 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
         rows = cursor.fetchall()
 
         fixed = 0
-        for cid, name, config_str in rows:
+        for cid, _name, config_str in rows:
             config = json.loads(config_str) if config_str else {}
             if "_type" in config:
                 continue
 
-            # Read HNSW metadata stored by the old version
-            cursor.execute(
-                "SELECT key, str_value, int_value, float_value "
-                "FROM collection_metadata WHERE collection_id=?",
-                (cid,),
-            )
-            hnsw = {}
-            for key, sv, iv, fv in cursor.fetchall():
-                if key.startswith("hnsw:"):
-                    hnsw[key[5:]] = (
-                        sv if sv is not None else (iv if iv is not None else fv)
-                    )
-
-            new_cfg = json.dumps(
-                {
-                    "hnsw_configuration": {
-                        "space": hnsw.get("space", "l2"),
-                        "ef_construction": hnsw.get("construction_ef", 100),
-                        "ef_search": hnsw.get("search_ef", 10),
-                        "num_threads": 4,
-                        "M": hnsw.get("M", 16),
-                        "resize_factor": 1.2,
-                        "batch_size": 100,
-                        "sync_threshold": 1000,
-                        "_type": "HNSWConfigurationInternal",
-                    },
-                    "_type": "CollectionConfigurationInternal",
-                }
-            )
+            hnsw = _read_hnsw_params(cursor, cid)
+            new_cfg = _build_collection_config_json(hnsw)
             cursor.execute(
                 "UPDATE collections SET config_json_str=? WHERE id=?",
                 (new_cfg, cid),
@@ -118,10 +131,7 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
 
         if fixed:
             conn.commit()
-            logger.info(
-                "Migrated %d ChromaDB collection config(s) " "to 0.5.x format",
-                fixed,
-            )
+            logger.info("Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed)
         conn.close()
     except Exception as e:
         logger.warning("ChromaDB config migration check failed: %s", e)

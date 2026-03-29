@@ -54,25 +54,30 @@ class ProcessAdapter(AdapterBase):
             )
         return self._tools[name]
 
-    async def execute(self, request: LLMRequest) -> LLMResponse:
-        """Execute LLM call by spawning a CLI subprocess."""
-        tool_name = request.metadata.get("process_tool")
-        tool_config = self._get_tool_config(tool_name)
-        start = time.time()
+    def _build_prompt(self, messages: list) -> str:
+        """Assemble a flat prompt string from a message list.
 
-        prompt_parts = []
-        for msg in request.messages:
+        System messages are prepended; all others are appended in order.
+        Ref: #2735.
+        """
+        prompt_parts: list = []
+        for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
             if role == "system":
                 prompt_parts.insert(0, content)
             else:
                 prompt_parts.append(content)
-        prompt = "\n\n".join(prompt_parts)
+        return "\n\n".join(prompt_parts)
 
-        binary = tool_config["binary"]
-        args = list(tool_config.get("args", []))
+    async def _run_subprocess(
+        self, binary: str, args: list, prompt: str, tool_name: str, request_id: str
+    ) -> LLMResponse:
+        """Spawn the CLI binary, feed the prompt via stdin, and return an LLMResponse.
 
+        Handles both successful runs and TimeoutError. Ref: #2735.
+        """
+        start = time.time()
         try:
             proc = await asyncio.create_subprocess_exec(
                 binary,
@@ -85,32 +90,20 @@ class ProcessAdapter(AdapterBase):
                 proc.communicate(input=prompt.encode("utf-8")),
                 timeout=self._timeout,
             )
-
             content = stdout.decode("utf-8").strip()
             elapsed = time.time() - start
-
             if proc.returncode != 0:
                 err = stderr.decode("utf-8").strip()
-                logger.error(
-                    "Process %s exited %d: %s",
-                    binary,
-                    proc.returncode,
-                    err,
-                )
+                logger.error("Process %s exited %d: %s", binary, proc.returncode, err)
                 content = content or f"Process error: {err}"
-
             return LLMResponse(
                 content=content,
                 model=f"process:{tool_name or binary}",
                 provider="process",
                 processing_time=elapsed,
-                request_id=request.request_id,
-                metadata={
-                    "exit_code": proc.returncode,
-                    "binary": binary,
-                },
+                request_id=request_id,
+                metadata={"exit_code": proc.returncode, "binary": binary},
             )
-
         except asyncio.TimeoutError:
             elapsed = time.time() - start
             return LLMResponse(
@@ -118,9 +111,18 @@ class ProcessAdapter(AdapterBase):
                 model=f"process:{tool_name or binary}",
                 provider="process",
                 processing_time=elapsed,
-                request_id=request.request_id,
+                request_id=request_id,
                 error="timeout",
             )
+
+    async def execute(self, request: LLMRequest) -> LLMResponse:
+        """Execute LLM call by spawning a CLI subprocess."""
+        tool_name = request.metadata.get("process_tool")
+        tool_config = self._get_tool_config(tool_name)
+        prompt = self._build_prompt(request.messages)
+        binary = tool_config["binary"]
+        args = list(tool_config.get("args", []))
+        return await self._run_subprocess(binary, args, prompt, tool_name, request.request_id)
 
     async def test_environment(self) -> EnvironmentTestResult:
         """Test that configured CLI tools are available."""
