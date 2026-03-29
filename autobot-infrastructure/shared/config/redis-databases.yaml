@@ -46,6 +46,12 @@ redis_databases:
   codebase:
     db: 11
     description: "Codebase analytics (alias for analytics DB)"
+  celery_broker:
+    db: 14
+    description: "Celery task broker"
+  celery_results:
+    db: 15
+    description: "Celery task results backend"
 
 # Connection settings
 host: localhost
