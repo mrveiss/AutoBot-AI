@@ -25,11 +25,9 @@ nginx_http_port: 80
 
 # Backend connection (user backend on main machine)
 # Backend runs on HTTPS port 8443 with SSL certificates
-# Set dynamically by _build_infra_vars() in setup_wizard.py at provisioning time
-backend_host: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
-backend_port: 8443
-backend_protocol: "https"
-frontend_backend_url: "{{ backend_protocol }}://{{ backend_host }}:{{ backend_port }}"
+# backend_host and backend_port are set dynamically by
+# _build_infra_vars() in setup_wizard.py at provisioning time
+frontend_backend_url: "{{ backend_protocol | default('https') }}://{{ backend_host | default(ansible_default_ipv4.address | default(ansible_host)) }}:{{ backend_port | default(8443) }}"
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3
