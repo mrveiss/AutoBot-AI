@@ -131,7 +131,7 @@ function handleClose(): void {
         <div class="progress-header">
           <span class="step-counter">
             <i class="fas fa-tasks" aria-hidden="true"></i>
-            Step {{ currentStepNumber }} of {{ totalSteps }}
+            {{ t('terminal.window.stepProgress', { current: currentStepNumber, total: totalSteps }) }}
           </span>
           <span class="progress-percent">{{ progressPercent }}%</span>
         </div>
@@ -192,7 +192,7 @@ function handleClose(): void {
 
     <!-- No step data fallback -->
     <div v-else class="step-confirmation-empty">
-      <p>No step data available.</p>
+      <p>{{ t('terminal.window.noStepData') }}</p>
     </div>
 
     <template #actions>
@@ -210,7 +210,7 @@ function handleClose(): void {
         @click="handleExecuteAll"
       >
         <i class="fas fa-forward" aria-hidden="true"></i>
-        {{ t('terminal.window.executeAll') }}
+        {{ t('terminal.modal.executeAll') }}
       </BaseButton>
 
       <BaseButton
