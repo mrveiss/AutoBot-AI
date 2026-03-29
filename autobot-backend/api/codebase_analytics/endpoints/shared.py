@@ -198,7 +198,15 @@ def filter_problems_by_file_existence(
             validated.append({**problem, "file_verified": False})
             continue
 
-        full_path = base / fp
+        full_path = (base / fp).resolve()
+        if not full_path.is_relative_to(base.resolve()):
+            dropped += 1
+            logger.debug(
+                "Dropping problem with path traversal outside root: %s (resolved: %s)",
+                fp,
+                full_path,
+            )
+            continue
         if full_path.exists():
             validated.append({**problem, "file_verified": True})
         else:
