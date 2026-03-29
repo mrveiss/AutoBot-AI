@@ -28,6 +28,7 @@ nginx_http_port: 80
 backend_host: "172.16.168.20"
 backend_port: 8443
 backend_protocol: "https"
+frontend_backend_url: "{{ backend_protocol }}://{{ backend_host }}:{{ backend_port }}"
 
 # Issue #1098: Backend upstream health tracking
 backend_max_fails: 3

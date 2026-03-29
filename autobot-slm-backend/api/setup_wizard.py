@@ -210,8 +210,11 @@ async def _generate_dynamic_inventory(
             node_id_to_hostname[node.node_id] = inventory_name
             node_id_to_ip[node.node_id] = node.ip_address
 
-        # Only include active roles in Ansible groups (#1431)
-        nr_query = select(NodeRole).where(NodeRole.status == "active")
+        # Include all assigned roles for provisioning (active + inactive + not_installed)
+        # The wizard provisions roles that aren't yet active (#2747)
+        nr_query = select(NodeRole).where(
+            NodeRole.status.in_(["active", "inactive", "not_installed"])
+        )
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
