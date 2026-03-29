@@ -158,6 +158,67 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
+def filter_problems_by_file_existence(
+    problems: list[dict],
+    root_path: "Path | str | None" = None,
+) -> list[dict]:
+    """
+    Filter LLM-indexed problems to only those whose file_path exists on disk.
+
+    Issue #2724: The analytics problems scanner can produce findings that
+    reference file paths that do not exist in the indexed repository (hallucinated
+    paths from LLM analysis).  This validator resolves each relative file_path
+    against root_path and drops any finding whose path cannot be confirmed on
+    disk.  Validated findings receive ``file_verified: True`` so callers can
+    distinguish them from raw, unvalidated data.
+
+    Args:
+        problems: List of problem dicts as returned by ChromaDB queries.
+                  Each dict may contain a ``file_path`` key with a relative
+                  path string.
+        root_path: Absolute base directory to resolve relative paths against.
+                   Defaults to the project root when None or empty.
+
+    Returns:
+        Filtered list containing only problems whose file_path exists.
+        Each retained problem gains ``file_verified: True``.
+    """
+    if not problems:
+        return problems
+
+    base = Path(root_path) if root_path else get_project_root()
+
+    validated: list[dict] = []
+    dropped = 0
+
+    for problem in problems:
+        fp = problem.get("file_path", "")
+        if not fp:
+            # No file_path — keep as-is (cannot validate)
+            validated.append({**problem, "file_verified": False})
+            continue
+
+        full_path = base / fp
+        if full_path.exists():
+            validated.append({**problem, "file_verified": True})
+        else:
+            dropped += 1
+            logger.debug(
+                "Dropping problem with non-existent file path: %s (resolved: %s)",
+                fp,
+                full_path,
+            )
+
+    if dropped:
+        logger.info(
+            "File path validation: dropped %d/%d problems with non-existent paths (#2724)",
+            dropped,
+            len(problems),
+        )
+
+    return validated
+
+
 # =============================================================================
 # Import Context Utilities (Issue #713)
 # =============================================================================
