@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 # Setup logging
 logging.basicConfig(
@@ -21,41 +22,78 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Critical models that must be installed
+# ---------------------------------------------------------------------------
+# SSOT model constants — loaded from agents.yaml (#2584)
+# All model name strings MUST come from this block; never hardcode elsewhere.
+# Source of truth: autobot-infrastructure/shared/config/agents.yaml
+# ---------------------------------------------------------------------------
+_AGENTS_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "agents.yaml"
+
+
+def _load_agents_config() -> dict[str, Any]:
+    """Load agents.yaml; return empty dict on any error so defaults still apply."""
+    try:
+        import yaml  # PyYAML — always available in the AutoBot environment
+
+        with open(_AGENTS_CONFIG_PATH, encoding="utf-8") as fh:
+            return yaml.safe_load(fh) or {}
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Could not load agents.yaml (%s); using built-in defaults", exc)
+        return {}
+
+
+def _get_model(role: str, fallback: str) -> str:
+    """Return the model name for *role* from agents.yaml, or *fallback*."""
+    cfg = _load_agents_config()
+    return cfg.get("llm", {}).get("models", {}).get(role, fallback) or fallback
+
+
+# Per-role model names — single source of truth for this script (#2584)
+# These resolve at import time against the live agents.yaml.
+# llm.default_model sits one level above llm.models; retrieve it separately.
+_DEFAULT_MODEL = _load_agents_config().get("llm", {}).get("default_model", "qwen3.5:9b")
+_ROUTING_MODEL = _get_model("orchestrator", "llama3.2:1b")
+_CLASSIFICATION_MODEL = _get_model("classification", "gemma3:4b")
+_RAG_MODEL = _get_model("rag", "qwen3.5:9b")
+_CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
+_CODE_MODEL = _get_model("npu_code_search", "qwen3.5:9b")
+_EMBEDDING_MODEL = "nomic-embed-text:latest"  # embeddings.model in agents.yaml
+
+# Critical models that must be installed (derived from SSOT roles above)
 _CRITICAL_MODELS = [
-    "tinyllama:latest",
-    "phi3:3.8b",
-    "codellama:7b-instruct",
-    "qwen2.5:7b",
-    "qwen3.5:9b",
+    _ROUTING_MODEL,
+    _CLASSIFICATION_MODEL,
+    _CODE_MODEL,
+    _RAG_MODEL,
+    _DEFAULT_MODEL,
 ]
 
 # Model installation priority and rationale
 _MODEL_PRIORITY = {
-    "tinyllama:latest": {
+    _ROUTING_MODEL: {
         "priority": 1,
-        "reason": "Critical: Referenced in orchestrator.py",
-        "size_estimate": "637MB",
+        "reason": "Routing tier — orchestrator, fast intent dispatch",
+        "size_estimate": "~700MB",
     },
-    "phi3:3.8b": {
+    _CLASSIFICATION_MODEL: {
         "priority": 2,
-        "reason": "Fast inference, good for classification",
-        "size_estimate": "2.2GB",
+        "reason": "Classification tier — intent detection",
+        "size_estimate": "~2.5GB",
     },
-    "codellama:7b-instruct": {
+    _CODE_MODEL: {
         "priority": 3,
-        "reason": "Specialized code analysis and generation",
-        "size_estimate": "3.8GB",
+        "reason": "Quality tier — code search and NPU analysis",
+        "size_estimate": "~5GB",
     },
-    "qwen2.5:7b": {
+    _RAG_MODEL: {
         "priority": 4,
-        "reason": "Enhanced reasoning capabilities",
-        "size_estimate": "4.1GB",
+        "reason": "Quality tier — RAG and knowledge retrieval",
+        "size_estimate": "~5GB",
     },
-    "qwen3.5:9b": {
+    _DEFAULT_MODEL: {
         "priority": 5,
-        "reason": "Default LLM — tool use and general tasks",
-        "size_estimate": "4.1GB",
+        "reason": "Default quality model — tool use and general tasks",
+        "size_estimate": "~5GB",
     },
 }
 
@@ -197,28 +235,32 @@ class LLMModelOptimizer:
     # -- update_configurations decomposition (#2410) --
 
     def _get_config_updates(self) -> dict:
-        """Return the file-to-updates mapping for configuration patches."""
+        """Return the file-to-updates mapping for configuration patches.
+
+        All model name strings are derived from SSOT constants at the top of this
+        module (loaded from agents.yaml) — never hardcoded here (#2584).
+        """
         return {
             "src/orchestrator.py": [{
                 "find": 'llm_config.get("ollama", {}).get("model", "tinyllama:latest")',
-                "replace": 'llm_config.get("ollama", {}).get("model", "artifish/llama3.2-uncensored:latest")',
+                "replace": f'llm_config.get("ollama", {{}}).get("model", "{_ROUTING_MODEL}")',
                 "line_context": "orchestrator_llm_model",
             }],
             "src/config.py": [
                 {
-                    "find": '"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b")',
-                    "replace": '"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "artifish/llama3.2-uncensored:latest")',
-                    "line_context": "models configuration",
+                    "find": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b")',
+                    "replace": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "{_ROUTING_MODEL}")',
+                    "line_context": "models configuration — orchestrator",
                 },
                 {
-                    "find": '"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")',
-                    "replace": '"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma3:1b")',
-                    "line_context": "models configuration",
+                    "find": f'"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")',
+                    "replace": f'"classification": os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "{_CLASSIFICATION_MODEL}")',
+                    "line_context": "models configuration — classification",
                 },
             ],
             "backend/utils/connection_utils.py": [{
                 "find": '"deepseek-r1:14b"',
-                "replace": '"artifish/llama3.2-uncensored:latest"',
+                "replace": f'"{_DEFAULT_MODEL}"',
                 "line_context": "AUTOBOT_DEFAULT_LLM_MODEL default",
             }],
         }
@@ -272,7 +314,10 @@ class LLMModelOptimizer:
     # -- optimize_for_hardware decomposition (#2410) --
 
     def _build_hardware_config(self) -> dict:
-        """Build RTX 4070 + Intel NPU optimization config."""
+        """Build RTX 4070 + Intel NPU optimization config.
+
+        Model names are derived from SSOT constants loaded from agents.yaml (#2584).
+        """
         return {
             "gpu_optimization": {
                 "device_id": 0,
@@ -280,24 +325,24 @@ class LLMModelOptimizer:
                 "concurrent_models": 2,
                 "model_rotation": True,
                 "preferred_models": [
-                    "wizard-vicuna-uncensored:13b",
-                    "dolphin-llama3:8b",
-                    "artifish/llama3.2-uncensored:latest",
-                    "llama3.2:3b-instruct-q4_K_M",
+                    _DEFAULT_MODEL,
+                    _RAG_MODEL,
+                    _CHAT_MODEL,
+                    _ROUTING_MODEL,
                 ],
             },
             "npu_optimization": {
                 "enabled": True,
-                "target_models": ["gemma3:270m", "gemma3:1b", "nomic-embed-text:latest"],
+                "target_models": [_CLASSIFICATION_MODEL, _EMBEDDING_MODEL],
                 "optimization_flags": ["int8_quantization", "dynamic_batching", "memory_pooling"],
             },
             "model_routing": {
-                "classification": {"model": "gemma3:1b", "device": "npu", "priority": "speed"},
-                "chat": {"model": "llama3.2:3b-instruct-q4_K_M", "device": "gpu", "priority": "balanced"},
-                "research": {"model": "wizard-vicuna-uncensored:13b", "device": "gpu", "priority": "quality"},
-                "rag": {"model": "dolphin-llama3:8b", "device": "gpu", "priority": "reasoning"},
-                "code": {"model": "codellama:7b-instruct", "device": "gpu", "priority": "specialized"},
-                "system_commands": {"model": "gemma3:270m", "device": "npu", "priority": "speed"},
+                "classification": {"model": _CLASSIFICATION_MODEL, "device": "npu", "priority": "speed"},
+                "chat": {"model": _CHAT_MODEL, "device": "gpu", "priority": "balanced"},
+                "research": {"model": _DEFAULT_MODEL, "device": "gpu", "priority": "quality"},
+                "rag": {"model": _RAG_MODEL, "device": "gpu", "priority": "reasoning"},
+                "code": {"model": _CODE_MODEL, "device": "gpu", "priority": "specialized"},
+                "system_commands": {"model": _CLASSIFICATION_MODEL, "device": "npu", "priority": "speed"},
             },
         }
 
@@ -328,13 +373,16 @@ class LLMModelOptimizer:
             self.optimization_results["hardware_config"] = saved
 
     async def validate_optimization(self):
-        """Validate that optimizations are working."""
+        """Validate that optimizations are working.
+
+        Model names are derived from SSOT constants loaded from agents.yaml (#2584).
+        """
         logger.info("Validating optimization results...")
         results = {}
         models = [
-            "artifish/llama3.2-uncensored:latest",
-            "gemma3:1b",
-            "nomic-embed-text:latest",
+            _DEFAULT_MODEL,
+            _CLASSIFICATION_MODEL,
+            _EMBEDDING_MODEL,
         ]
 
         for model in models:
