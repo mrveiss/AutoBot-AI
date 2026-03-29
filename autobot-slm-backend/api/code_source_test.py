@@ -36,6 +36,9 @@ code_source_module = __import__("importlib.util").util.module_from_spec(spec)
 sys.modules["services.auth"] = MagicMock()
 sys.modules["services.database"] = MagicMock()
 sys.modules["models.database"] = MagicMock()
+_mock_config = MagicMock()
+_mock_config.settings.external_url = "http://172.16.168.19:8080"
+sys.modules["config"] = _mock_config
 
 spec.loader.exec_module(code_source_module)
 
