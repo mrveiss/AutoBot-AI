@@ -54,7 +54,7 @@ AUTOBOT_PROMPT_MANAGER_STRING=
             List of category names
 
 # Configurable string value
-AUTOBOT_CONFIG_STRING=dolphin-llama3:8b
+AUTOBOT_CONFIG_STRING=qwen3.5:9b
 # Configurable string value
 AUTOBOT_VOICE_INTERFACE_STRING=continuous_listening
 # Configurable string value

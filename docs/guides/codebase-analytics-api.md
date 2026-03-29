@@ -1419,7 +1419,7 @@ opportunities. Uses the `EnvironmentAnalyzer` from `tools/code-analysis-suite`.
 | `refresh` | bool | false | Force fresh analysis |
 | `patterns` | string | `"**/*.py"` | Glob patterns (comma-separated) |
 | `use_llm_filter` | bool | false | Use LLM to filter false positives |
-| `llm_model` | string | `"llama3.2:1b"` | Ollama model for LLM filtering |
+| `llm_model` | string | `"gemma2:2b"` | Ollama model for LLM filtering |
 | `filter_priority` | string | `"high"` | Priority level: `high`, `medium`, `low`, `all` |
 
 **Response:**
