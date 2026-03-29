@@ -112,7 +112,7 @@ class WorkflowStateMachine:
 
     async def _redis(self):
         """Get async Redis client for workflows db."""
-        return get_redis_client(async_client=True, database=REDIS_DATABASE)
+        return await get_redis_client(async_client=True, database=REDIS_DATABASE)
 
     async def _persist(self, state: WorkflowState) -> None:
         """Serialize and store *state* in Redis."""

@@ -344,7 +344,7 @@ class SemanticQueryCache:
     async def _fetch_response(self, key: str) -> Optional[Dict]:
         """Fetch cached response payload from Redis."""
         try:
-            client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
             if client is None:
                 return None
             raw = await client.get(key)
@@ -358,7 +358,7 @@ class SemanticQueryCache:
     async def _store_response(self, key: str, payload: Dict) -> bool:
         """Persist response payload in Redis with TTL."""
         try:
-            client = get_redis_client(async_client=True, database=_REDIS_DATABASE)
+            client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
             if client is None:
                 return False
             await client.set(

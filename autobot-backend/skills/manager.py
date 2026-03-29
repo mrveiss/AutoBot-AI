@@ -93,7 +93,7 @@ class SkillManager:
 
         Returns mapping of skill_name -> enabled.
         """
-        redis_client = _get_redis()
+        redis_client = await _get_redis()
         if not redis_client:
             return {}
         key = f"{REDIS_USER_SKILLS_PREFIX}{user_id}"
@@ -109,7 +109,7 @@ class SkillManager:
         self, user_id: str, preferences: Dict[str, bool]
     ) -> bool:
         """Save per-user skill preferences to Redis."""
-        redis_client = _get_redis()
+        redis_client = await _get_redis()
         if not redis_client:
             return False
         key = f"{REDIS_USER_SKILLS_PREFIX}{user_id}"
@@ -124,7 +124,7 @@ class SkillManager:
         self, skill_name: str, config: Dict[str, Any]
     ) -> bool:
         """Persist a skill's configuration to Redis."""
-        redis_client = _get_redis()
+        redis_client = await _get_redis()
         if not redis_client:
             return False
         key = f"{REDIS_SKILL_PREFIX}{skill_name}"
@@ -137,7 +137,7 @@ class SkillManager:
 
     async def persist_skill_enabled(self, skill_name: str, enabled: bool) -> bool:
         """Persist a skill's enabled/disabled state to Redis (Issue #993)."""
-        redis_client = _get_redis()
+        redis_client = await _get_redis()
         if not redis_client:
             return False
         key = f"{REDIS_SKILL_ENABLED_PREFIX}{skill_name}"
@@ -150,7 +150,7 @@ class SkillManager:
 
     async def _load_persisted_configs(self) -> None:
         """Load persisted configs and enabled states from Redis (Issues #731, #993)."""
-        redis_client = _get_redis()
+        redis_client = await _get_redis()
         if not redis_client:
             return
         for skill_info in self._registry.list_skills():
@@ -209,7 +209,7 @@ def _matches_query(skill_info: Dict[str, Any], query: str) -> bool:
     return False
 
 
-def _get_redis():
+async def _get_redis():
     """Get async Redis client, returning None if unavailable.
 
     Helper for SkillManager Redis operations (Issue #731).
@@ -217,7 +217,7 @@ def _get_redis():
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        return get_redis_client(async_client=True, database="main")
+        return await get_redis_client(async_client=True, database="main")
     except Exception:
         logger.debug("Redis not available for skill persistence")
         return None

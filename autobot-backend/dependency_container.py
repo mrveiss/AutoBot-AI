@@ -83,7 +83,7 @@ class AsyncServiceContainer:
 
     async def _create_redis_manager(self) -> async_redis.Redis:
         """Factory for Redis manager"""
-        return get_redis_client(async_client=True, database="main")
+        return await get_redis_client(async_client=True, database="main")
 
     async def _create_config_manager(self) -> ConfigManager:
         """Factory for config manager"""

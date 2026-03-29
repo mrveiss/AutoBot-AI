@@ -240,7 +240,7 @@ async def validate_service_auth(request: Request) -> Dict:
         pass
 
         # Get main Redis database for service key storage
-        redis = get_redis_client(async_client=True, database="main")
+        redis = await get_redis_client(async_client=True, database="main")
 
         # Create auth manager and validate
         auth_manager = ServiceAuthManager(redis)

@@ -76,7 +76,7 @@ class ExperimentTracker:
             rationale=rationale,
             related_issue=related_issue,
         )
-        redis_client = get_redis_client(async_client=True, database="analytics")
+        redis_client = await get_redis_client(async_client=True, database="analytics")
         if redis_client:
             await redis_client.rpush(REDIS_KEY, json.dumps(record.to_dict()))
             await redis_client.ltrim(REDIS_KEY, -10000, -1)  # Cap at 10k (#2031)
@@ -87,7 +87,7 @@ class ExperimentTracker:
         self, area: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """List all experiments, optionally filtered by area."""
-        redis_client = get_redis_client(async_client=True, database="analytics")
+        redis_client = await get_redis_client(async_client=True, database="analytics")
         if not redis_client:
             return []
         raw = await redis_client.lrange(REDIS_KEY, 0, -1)

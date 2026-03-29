@@ -537,7 +537,7 @@ class RedisServiceManager:
             from autobot_shared.redis_client import get_redis_client
 
             ping_start = datetime.now()
-            client = get_redis_client(async_client=True, database="main")
+            client = await get_redis_client(async_client=True, database="main")
             await client.ping()
             response_time_ms = (datetime.now() - ping_start).total_seconds() * 1000
             return True, response_time_ms

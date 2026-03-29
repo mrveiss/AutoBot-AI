@@ -187,7 +187,7 @@ async def _publish_new_draft_event(skill_name: str, skill_id: str, gap: str) -> 
 
         from autobot_shared.redis_client import get_redis_client
 
-        redis = get_redis_client(async_client=True, database="main")
+        redis = await get_redis_client(async_client=True, database="main")
         await redis.publish(
             "skills:new_draft",
             json.dumps(

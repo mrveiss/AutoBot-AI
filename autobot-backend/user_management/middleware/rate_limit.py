@@ -39,7 +39,7 @@ class PasswordChangeRateLimiter:
         Raises:
             RateLimitExceeded: If limit exceeded
         """
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         key = f"password_change_attempts:{user_id}"
 
         attempts = await redis_client.get(key)
@@ -61,7 +61,7 @@ class PasswordChangeRateLimiter:
             user_id: User ID
             success: Whether attempt was successful
         """
-        redis_client = get_redis_client(async_client=True, database="main")
+        redis_client = await get_redis_client(async_client=True, database="main")
         key = f"password_change_attempts:{user_id}"
 
         if success:

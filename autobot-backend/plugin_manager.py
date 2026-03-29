@@ -367,14 +367,14 @@ async def update_plugin_config(
 
 async def _save_plugin_config(plugin_name: str, config: Dict) -> None:
     """Save plugin configuration to Redis."""
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     key = f"plugin:config:{plugin_name}"
     await redis.set(key, json.dumps(config))
 
 
 async def _load_plugin_config(plugin_name: str) -> Optional[Dict]:
     """Load plugin configuration from Redis."""
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     key = f"plugin:config:{plugin_name}"
     data = await redis.get(key)
     return json.loads(data) if data else None

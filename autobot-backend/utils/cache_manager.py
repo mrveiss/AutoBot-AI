@@ -49,13 +49,7 @@ class CacheManager:
 
         try:
             # Get async Redis client
-            client = get_redis_client(async_client=True)
-
-            # If it's a coroutine, await it
-            if hasattr(client, "__await__"):
-                self._redis_client = await client
-            else:
-                self._redis_client = client
+            self._redis_client = await get_redis_client(async_client=True)
 
             if self._redis_client:
                 logger.info("CacheManager Redis client initialized successfully")
