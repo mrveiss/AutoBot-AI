@@ -594,6 +594,44 @@ def _build_export_response_json(
     )
 
 
+async def _load_env_analysis_cache() -> tuple:
+    """Thread-safe cache read for export_env_analysis. Returns (full_data, error_response).
+
+    Issue #2735: Extracted from export_env_analysis for length compliance.
+    Issue #559: Thread-safe access to _env_analysis_full_cache.
+    Returns (full_data, None) on success or (None, JSONResponse) when cache is empty.
+    """
+    async with _env_analysis_cache_lock:
+        if not _env_analysis_full_cache:
+            return None, JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No cached analysis available. Run environment analysis first.",
+                    "hardcoded_values": [],
+                    "recommendations": [],
+                    "total": 0,
+                },
+                status_code=404,
+            )
+        return _env_analysis_full_cache.copy(), None
+
+
+def _validate_export_severity(severity: Optional[str]) -> Optional[JSONResponse]:
+    """Return a 400 JSONResponse if severity is invalid, else None. Issue #2735."""
+    if severity and severity.lower() not in _VALID_SEVERITIES:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
+                "hardcoded_values": [],
+                "recommendations": [],
+                "total": 0,
+            },
+            status_code=400,
+        )
+    return None
+
+
 @router.get("/env-analysis/export")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -618,34 +656,15 @@ async def export_env_analysis(
     """
     Export full environment analysis results without truncation (Issue #631).
     Issue #665: Refactored to use extracted helpers for filtering and sorting.
+    Issue #2735: Cache load and severity validation extracted to helpers.
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _env_analysis_cache_lock:
-        if not _env_analysis_full_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No cached analysis available. Run environment analysis first.",
-                    "hardcoded_values": [],
-                    "recommendations": [],
-                    "total": 0,
-                },
-                status_code=404,
-            )
-        full_data = _env_analysis_full_cache.copy()
+    full_data, cache_error = await _load_env_analysis_cache()
+    if cache_error is not None:
+        return cache_error
 
-    # Validate severity (Issue #665: use module constant)
-    if severity and severity.lower() not in _VALID_SEVERITIES:
-        return JSONResponse(
-            {
-                "status": "error",
-                "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
-                "hardcoded_values": [],
-                "recommendations": [],
-                "total": 0,
-            },
-            status_code=400,
-        )
+    severity_error = _validate_export_severity(severity)
+    if severity_error is not None:
+        return severity_error
 
     # Issue #631: Copy to avoid mutating cache; Issue #665: use helpers
     hardcoded_values = list(full_data.get("hardcoded_values", []))
@@ -658,11 +677,5 @@ async def export_env_analysis(
 
     recommendations = full_data.get("recommendations", [])
     return _build_export_response_json(
-        full_data,
-        hardcoded_values,
-        recommendations,
-        include_recommendations,
-        category,
-        severity,
-        limit,
+        full_data, hardcoded_values, recommendations, include_recommendations, category, severity, limit,
     )
