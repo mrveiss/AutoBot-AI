@@ -41,10 +41,12 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-frontend
     state: absent
+  when: "'slm-frontend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "Backend | Clean: wrong-node autobot-slm-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
+  when: "'slm-backend' not in (node_roles | default([]))"
   tags: ['clean']

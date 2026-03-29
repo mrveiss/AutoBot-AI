@@ -27,6 +27,7 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
+  when: "'slm-backend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "AI Stack | Clean: legacy npu-worker dir"
