@@ -192,7 +192,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Redis setup
         self.redis_client = get_redis_client(async_client=False)
-        self.redis_async_client = get_redis_client(async_client=True)
+        self.redis_async_client = None  # Lazy init (#2725)
 
         # Worker node for NPU capabilities
         self.worker_node = WorkerNode()
@@ -246,6 +246,13 @@ class NPUCodeSearchAgent(StandardizedAgent):
         except Exception as e:
             self.logger.warning("Failed to initialize NPU: %s", e)
             self.npu_available = False
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_async_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_async_client = await get_redis_client(async_client=True)
 
     async def _ensure_search_engine_initialized(self):
         """Lazy-initialize NPU semantic search engine when needed (Issue #68)"""

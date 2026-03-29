@@ -58,7 +58,7 @@ class ArchitecturalPatternAnalyzer:
         Args:
             redis_client: Optional Redis client for caching
         """
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
 
         # Caching keys
@@ -72,6 +72,14 @@ class ArchitecturalPatternAnalyzer:
         self._issue_detector = IssueDetector(self._dependency_analyzer)
 
         logger.info("Architectural Pattern Analyzer initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def analyze_architecture(
         self, root_path: str = ".", patterns: List[str] = None
@@ -173,6 +181,7 @@ class ArchitecturalPatternAnalyzer:
 
     async def _cache_results(self, results: Dict[str, Any]) -> None:
         """Cache analysis results in Redis."""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.ARCHITECTURE_KEY
@@ -183,6 +192,7 @@ class ArchitecturalPatternAnalyzer:
 
     async def _clear_cache(self) -> None:
         """Clear analysis cache."""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 cursor = 0

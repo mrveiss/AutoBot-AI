@@ -151,7 +151,7 @@ class OwnershipAnalyzer:
         if redis_client is not None:
             self.redis_client = redis_client
         elif _REDIS_AVAILABLE and get_redis_client is not None:
-            self.redis_client = get_redis_client(async_client=True)
+            self.redis_client = None  # Lazy init (#2725)
         else:
             self.redis_client = None
             logger.info("Redis not available - caching disabled for OwnershipAnalyzer")
@@ -163,6 +163,14 @@ class OwnershipAnalyzer:
         self.GAPS_KEY = "ownership_analysis:gaps"
 
         logger.info("OwnershipAnalyzer initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def analyze_ownership(
         self,
@@ -843,6 +851,7 @@ class OwnershipAnalyzer:
 
     async def _cache_results(self, results: Dict[str, Any]) -> None:
         """Cache analysis results in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 value = json.dumps(results, default=str)
@@ -852,6 +861,7 @@ class OwnershipAnalyzer:
 
     async def _clear_cache(self) -> None:
         """Clear analysis cache"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 cursor = 0
@@ -868,6 +878,7 @@ class OwnershipAnalyzer:
 
     async def get_cached_results(self) -> Optional[Dict[str, Any]]:
         """Get cached analysis results"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 value = await self.redis_client.get(self.OWNERSHIP_KEY)

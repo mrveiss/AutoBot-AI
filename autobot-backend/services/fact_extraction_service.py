@@ -40,7 +40,7 @@ class FactExtractionService:
         """
         self.knowledge_base = knowledge_base
         self.extraction_agent = KnowledgeExtractionAgent()
-        self.redis_client = get_redis_client(async_client=True)
+        self.redis_client = None  # Lazy init (#2725)
 
         # Configuration
         self.fact_storage_prefix = "atomic_fact:"
@@ -58,6 +58,14 @@ class FactExtractionService:
         )
 
         logger.info("Fact Extraction Service initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def _apply_fact_processing(self, extraction_result) -> None:
         """Apply deduplication and entity resolution to extracted facts (Issue #398: extracted).
@@ -857,6 +865,7 @@ class FactExtractionService:
         Returns:
             Dictionary with extraction statistics
         """
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}

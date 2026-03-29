@@ -146,7 +146,7 @@ class TemporalInvalidationService:
             fact_extraction_service: Service for fact operations
         """
         self.fact_extraction_service = fact_extraction_service
-        self.redis_client = get_redis_client(async_client=True)
+        self.redis_client = None  # Lazy init (#2725)
 
         # Configuration
         self.invalidation_rules_key = "temporal_invalidation_rules"
@@ -167,6 +167,14 @@ class TemporalInvalidationService:
         )
 
         logger.info("Temporal Invalidation Service initialized")
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     def _create_default_rules(self) -> List[InvalidationRule]:
         """Create default invalidation rules."""
@@ -219,6 +227,7 @@ class TemporalInvalidationService:
 
     async def initialize_rules(self) -> Dict[str, Any]:
         """Initialize invalidation rules in Redis."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {"status": "error", "message": "Redis client not available"}
@@ -255,6 +264,7 @@ class TemporalInvalidationService:
 
     async def _load_invalidation_rules(self) -> Dict[str, InvalidationRule]:
         """Load invalidation rules from Redis."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {}
@@ -279,6 +289,7 @@ class TemporalInvalidationService:
 
     async def _store_invalidation_rules(self, rules: Dict[str, InvalidationRule]):
         """Store invalidation rules to Redis."""
+        await self._ensure_redis()
         try:
             if not self.redis_client or not rules:
                 return
@@ -717,6 +728,7 @@ class TemporalInvalidationService:
 
     async def _record_invalidation_sweep(self, **kwargs):
         """Record invalidation sweep history."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return
@@ -901,6 +913,7 @@ class TemporalInvalidationService:
 
     async def get_invalidation_statistics(self) -> Dict[str, Any]:
         """Get statistics about temporal invalidation operations."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}

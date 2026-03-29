@@ -80,7 +80,7 @@ class EnhancedMultiAgentOrchestrator:
 
         # Redis for distributed coordination
         self.redis_client = get_redis_client(async_client=False)
-        self.redis_async = get_redis_client(async_client=True)
+        self.redis_async = None  # Lazy init (#2725)
 
         # Agent registry with capabilities
         self.agent_capabilities = {
@@ -125,6 +125,14 @@ class EnhancedMultiAgentOrchestrator:
 
         # Agent client registry for actual agent instances
         self._agent_client_registry = AgentClientRegistry()
+
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_async is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_async = await get_redis_client(async_client=True)
 
     def _get_strategy_handler(self) -> ExecutionStrategyHandler:
         """Lazy initialization of strategy handler."""
@@ -450,6 +458,7 @@ class EnhancedMultiAgentOrchestrator:
 
     async def _coordinate_collaboration(self, plan: WorkflowPlan, collab_channel: str):
         """Coordinate inter-agent collaboration"""
+        await self._ensure_redis()
         try:
             pubsub = self.redis_async.pubsub()
             await pubsub.subscribe(collab_channel)
@@ -483,6 +492,7 @@ class EnhancedMultiAgentOrchestrator:
 
     async def _broadcast_to_agents(self, channel: str, data: Dict[str, Any]):
         """Broadcast data to agents on collaboration channel"""
+        await self._ensure_redis()
         await self.redis_async.publish(channel, json.dumps(data))
 
     async def _update_performance_metrics(
