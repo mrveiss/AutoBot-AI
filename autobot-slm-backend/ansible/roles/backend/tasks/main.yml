@@ -225,14 +225,6 @@
   become_user: "{{ backend_user }}"
   when: backend_install_dir is defined
 
-- name: Install root requirements first
-  ansible.builtin.pip:
-    requirements: "{{ backend_install_dir }}/requirements.txt"
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
-
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
     cmd: "grep -Ev '^-e.*autobot-shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
