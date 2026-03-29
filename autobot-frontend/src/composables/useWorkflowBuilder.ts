@@ -582,8 +582,11 @@ export function useWorkflowBuilder() {
   const loadingCapabilities = ref(false);
   const loadingExamples = ref(false);
 
-  // Error state
-  const error = ref<string | null>(null);
+  // Error state — accumulated to prevent race conditions (#2626)
+  const errors = ref<string[]>([]);
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  );
 
   // Data state
   const activeWorkflows = ref<ActiveWorkflow[]>([]);
@@ -788,7 +791,7 @@ export function useWorkflowBuilder() {
     context?: Record<string, unknown>
   ): Promise<WorkflowExecutionResult | null> {
     executingWorkflow.value = true;
-    error.value = null;
+    errors.value = [];
 
     const response = await apiClient.executeWorkflow(goal, strategy, context);
     executingWorkflow.value = false;
@@ -797,7 +800,7 @@ export function useWorkflowBuilder() {
       logger.info('Workflow executed:', response.data);
       return response.data;
     } else {
-      error.value = response.error || 'Failed to execute workflow';
+      errors.value = [...errors.value, response.error || 'Failed to execute workflow'];
       logger.error('Workflow execution failed:', response.error);
       return null;
     }
@@ -809,7 +812,7 @@ export function useWorkflowBuilder() {
     context?: Record<string, unknown>
   ): Promise<WorkflowPlan | null> {
     loading.value = true;
-    error.value = null;
+    errors.value = [];
 
     const response = await apiClient.createWorkflowPlan(goal, context);
     loading.value = false;
@@ -819,7 +822,7 @@ export function useWorkflowBuilder() {
       logger.info('Workflow plan created:', response.data);
       return response.data.plan;
     } else {
-      error.value = response.error || 'Failed to create workflow plan';
+      errors.value = [...errors.value, response.error || 'Failed to create workflow plan'];
       logger.error('Plan creation failed:', response.error);
       return null;
     }
@@ -872,7 +875,7 @@ export function useWorkflowBuilder() {
     automationMode: AutomationMode = 'semi_automatic'
   ): Promise<string | null> {
     loading.value = true;
-    error.value = null;
+    errors.value = [];
 
     const response = await apiClient.createWorkflow(
       template.name,
@@ -889,7 +892,7 @@ export function useWorkflowBuilder() {
       await loadActiveWorkflows();
       return response.data.workflow_id;
     } else {
-      error.value = response.error || 'Failed to create workflow';
+      errors.value = [...errors.value, response.error || 'Failed to create workflow'];
       logger.error('Workflow creation failed:', response.error);
       return null;
     }
@@ -902,7 +905,7 @@ export function useWorkflowBuilder() {
     requireApproval: boolean = true
   ): Promise<string | null> {
     loading.value = true;
-    error.value = null;
+    errors.value = [];
 
     const response = await apiClient.createWorkflowFromChat(
       request,
@@ -920,7 +923,7 @@ export function useWorkflowBuilder() {
       await loadActiveWorkflows();
       return response.data.workflow_id;
     } else {
-      error.value = response.error || response.data?.message || 'Failed to create workflow';
+      errors.value = [...errors.value, response.error || response.data?.message || 'Failed to create workflow'];
       logger.error('Workflow creation from chat failed:', response.error);
       return null;
     }
@@ -929,7 +932,7 @@ export function useWorkflowBuilder() {
   /** Start workflow execution */
   async function startWorkflow(workflowId: string): Promise<boolean> {
     executingWorkflow.value = true;
-    error.value = null;
+    errors.value = [];
 
     const response = await apiClient.startWorkflow(workflowId);
     executingWorkflow.value = false;
@@ -939,7 +942,7 @@ export function useWorkflowBuilder() {
       await getWorkflowStatus(workflowId);
       return true;
     } else {
-      error.value = response.error || 'Failed to start workflow';
+      errors.value = [...errors.value, response.error || 'Failed to start workflow'];
       logger.error('Workflow start failed:', response.error);
       return false;
     }

@@ -14,7 +14,7 @@
  * Author: mrveiss
  */
 
-import { ref, type Ref } from 'vue'
+import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -39,7 +39,7 @@ export interface AnalyticsFetchOptions {
 export interface AnalyticsFetchReturn<T> {
   data: Ref<T | null>
   loading: Ref<boolean>
-  error: Ref<string | null>
+  error: ComputedRef<string | null>
   load: (
     query?: Record<string, string>,
     body?: Record<string, unknown>,
@@ -62,7 +62,10 @@ export function useAnalyticsFetch<T = Record<string, unknown>>(
 ): AnalyticsFetchReturn<T> {
   const data: Ref<T | null> = ref(null)
   const loading: Ref<boolean> = ref(false)
-  const error: Ref<string | null> = ref(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
 
   const method = opts?.method ?? 'GET'
 
@@ -71,7 +74,7 @@ export function useAnalyticsFetch<T = Record<string, unknown>>(
     body?: Record<string, unknown>,
   ): Promise<T | null> => {
     loading.value = true
-    error.value = null
+    errors.value = []
     try {
       const backendUrl = await getBackendUrl()
       const qs = query
@@ -104,7 +107,7 @@ export function useAnalyticsFetch<T = Record<string, unknown>>(
       return data.value
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      error.value = msg
+      errors.value = [...errors.value, msg]
       logger.error(`Failed to load ${path}: ${msg}`)
       return null
     } finally {
@@ -115,7 +118,7 @@ export function useAnalyticsFetch<T = Record<string, unknown>>(
   const reset = () => {
     data.value = null
     loading.value = false
-    error.value = null
+    errors.value = []
   }
 
   return { data, loading, error, load, reset }

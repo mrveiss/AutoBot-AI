@@ -69,7 +69,10 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
   const selectedAgent = ref<SpecializedAgent | null>(null)
   const isLoading = ref(false)
   const isLoadingDetail = ref(false)
-  const error = ref<string | null>(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
 
   // ----- Computed -----
 
@@ -96,7 +99,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
 
   async function fetchAllAgents() {
     isLoading.value = true
-    error.value = null
+    errors.value = []
     try {
       const data = await ApiClient.get('/api/agent_config/agents/all')
       backendAgents.value = data.agents || []
@@ -109,7 +112,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
       )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      error.value = msg
+      errors.value = [...errors.value, msg]
       logger.error('Failed to fetch agents: %s', msg)
     } finally {
       isLoading.value = false

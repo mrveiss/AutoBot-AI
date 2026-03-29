@@ -70,9 +70,9 @@ export interface AsyncOperationReturn<T> {
   loading: Ref<boolean>
 
   /**
-   * Reactive error state - contains Error object if operation failed, null otherwise
+   * Reactive error state - computed from accumulated errors, null if none
    */
-  error: Ref<Error | null>
+  error: ComputedRef<Error | null>
 
   /**
    * Reactive data state - contains resolved data from successful operation, null otherwise
@@ -110,12 +110,12 @@ export interface AsyncOperationReturn<T> {
  * frontend. It automatically manages loading states, error handling, and success/error callbacks.
  *
  * **Concurrent Call Handling**:
- * - Latest call wins - if multiple calls are made, all execute but state reflects the last completed call
+ * - Errors from parallel calls accumulate instead of overwriting each other
  * - For sequential execution, use `await execute()` before calling again
  * - For cancellation, implement AbortController in your async function
  *
  * **Error Handling**:
- * - Errors are caught and stored in `error` ref
+ * - Errors are caught and accumulated in internal errors array
  * - Error object or string are normalized to Error type
  * - Optional `onError` callback for custom error handling
  * - Errors are re-thrown after handling, allowing upstream catch blocks
@@ -131,7 +131,12 @@ export function useAsyncOperation<T = any>(
 
   // Reactive state
   const loading = ref<boolean>(initialLoading)
-  const error = ref<Error | null>(null)
+  const errors = ref<Error[]>([])
+  const error = computed<Error | null>(() => {
+    if (errors.value.length === 0) return null
+    if (errors.value.length === 1) return errors.value[0]
+    return new Error(errors.value.map((e) => e.message).join('; '))
+  })
   const data = ref<T | null>(null)
 
   // Computed helpers
@@ -142,15 +147,15 @@ export function useAsyncOperation<T = any>(
    * Execute an async operation with automatic state management
    *
    * **State Management**:
-   * 1. Sets loading=true and clears error
+   * 1. Sets loading=true and clears errors
    * 2. Executes the async function
    * 3. On success: stores data, calls onSuccess callback
-   * 4. On error: stores error, calls onError callback
+   * 4. On error: accumulates error, calls onError callback
    * 5. Finally: sets loading=false
    *
    * **Concurrent Calls**:
-   * Multiple calls will execute in parallel. State (loading, error, data) reflects
-   * the most recently completed operation. If you need sequential execution, use:
+   * Multiple calls will execute in parallel. Errors accumulate rather than
+   * overwriting each other. If you need sequential execution, use:
    * `await execute(fn1); await execute(fn2)`
    *
    * @param fn - Async function to execute
@@ -158,9 +163,9 @@ export function useAsyncOperation<T = any>(
    * @throws Re-throws the error after handling (allows upstream error handling)
    */
   const execute = async (fn: () => Promise<T>): Promise<T> => {
-    // Set loading state and clear error
+    // Set loading state and clear errors
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       // Execute async operation
@@ -185,8 +190,8 @@ export function useAsyncOperation<T = any>(
         normalizedError.message = `${errorMessage}: ${normalizedError.message}`
       }
 
-      // Store error
-      error.value = normalizedError
+      // Accumulate error
+      errors.value = [...errors.value, normalizedError]
 
       // Call error callback if provided
       if (onError) {
@@ -211,7 +216,7 @@ export function useAsyncOperation<T = any>(
    */
   const reset = () => {
     loading.value = initialLoading
-    error.value = null
+    errors.value = []
     data.value = null
   }
 
