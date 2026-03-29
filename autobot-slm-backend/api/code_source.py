@@ -13,7 +13,9 @@ import os
 import tarfile
 import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -166,16 +168,41 @@ async def _ensure_code_source_role(db: AsyncSession, node_id: str) -> None:
         )
 
 
+def _is_local_node(node_ip: str) -> bool:
+    """Return True if node_ip refers to this machine.
+
+    Reuses the pattern from sync_orchestrator._is_local_source (Issue #1194) so
+    that code-source validation skips SSH when the target is the SLM Manager itself.
+    """
+    from config import settings
+
+    own_ip = urlparse(settings.external_url).hostname or ""
+    return node_ip in {"127.0.0.1", "localhost", own_ip}
+
+
 async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
     """Find paths similar to target (case-insensitive match).
 
     Helper for _validate_repo_path (#865).
     Returns the actual path if found, None otherwise.
+    Uses local filesystem operations when the node is the SLM Manager (#2721).
     """
     parent_dir = target_path.rsplit("/", 1)[0] if "/" in target_path else "/"
     basename = target_path.rsplit("/", 1)[-1] if "/" in target_path else target_path
 
-    # Check if parent directory exists and list contents
+    if _is_local_node(node.ip_address):
+        # Local node: scan parent directory directly without SSH (#2721)
+        try:
+            parent = Path(parent_dir)
+            if parent.is_dir():
+                for entry in parent.iterdir():
+                    if entry.name.lower() == basename.lower() and entry.name != basename:
+                        return f"{parent_dir}/{entry.name}"
+        except Exception as e:
+            logger.debug("Failed to search for similar paths locally: %s", e)
+        return None
+
+    # Remote node: use SSH
     ssh_cmd = [
         "ssh",
         "-o",
@@ -207,15 +234,28 @@ async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
 async def _validate_repo_path(node: Node, repo_path: str) -> None:
     """Validate that repo path exists on the source node.
 
-    Helper for assign_code_source (#865).
+    Helper for assign_code_source (#865, #2721).
+
+    When the node is the SLM Manager itself, uses local Path.is_dir() instead
+    of SSH to avoid the SSH-to-self failure described in Issue #2721.
 
     Args:
-        node: The source node to SSH into
+        node: The source node to validate against
         repo_path: The repository path to validate
 
     Raises:
         HTTPException: If path doesn't exist or SSH fails
     """
+    if _is_local_node(node.ip_address):
+        # Local node: validate path directly without SSH (#2721)
+        if not Path(repo_path).is_dir():
+            similar_path = await _find_similar_paths(node, repo_path)
+            error_detail = f"Repository path does not exist on source node: {repo_path}"
+            if similar_path:
+                error_detail += f". Did you mean: {similar_path}?"
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail)
+        return
+
     ssh_cmd = [
         "ssh",
         "-o",
@@ -255,7 +295,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         logger.error("SSH validation failed for %s: %s", node.hostname, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to validate path on {node.hostname}",
+            detail=f"Failed to validate path on {node.hostname}",
         )
 
 
