@@ -479,6 +479,18 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, shared, symlink]
 
+    - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
+      ansible.builtin.file:
+        src: /opt/autobot/autobot-shared
+        dest: /opt/autobot/autobot-backend/autobot_shared
+        state: link
+        force: true
+        owner: autobot
+        group: autobot
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared, symlink]
+
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
         path: /opt/autobot/autobot-backend/backend
