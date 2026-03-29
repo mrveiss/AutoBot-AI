@@ -224,8 +224,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/14
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/15
+      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
+      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
     healthcheck:

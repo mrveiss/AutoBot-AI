@@ -431,14 +431,14 @@ def get_network_config() -> NetworkConfig:
 
 
 class DatabaseConstants:
-    """Redis database assignments to eliminate hardcoded database numbers.
+    """Redis database assignments aligned with redis-databases.yaml (#2670).
 
-    All values must match ssot_config.py RedisConfig db_* fields (Issue #2723).
-    ssot_config.py is the authoritative source of truth; this class mirrors it
-    for callers that import from network_constants rather than ssot_config.
+    redis-databases.yaml is the single source of truth for DB allocation.
+    This class mirrors it for callers that import from network_constants.
+    Validated by tests/test_redis_db_ssot.py.
     """
 
-    # Core databases — aligned with ssot_config.RedisConfig (Issue #2723)
+    # Core databases — aligned with redis-databases.yaml (#2670)
     MAIN_DB = 0
     KNOWLEDGE_DB = 1
     PROMPTS_DB = 2
@@ -446,15 +446,20 @@ class DatabaseConstants:
     METRICS_DB = 4
     CACHE_DB = 5
     SESSIONS_DB = 6
-    TASKS_DB = 7
+    TASKS_DB = 7  # workflows in redis-databases.yaml
     LOGS_DB = 8
     TEMP_DB = 9
-    BACKUP_DB = 10
+    AUDIT_DB = 10
+    ANALYTICS_DB = 11
+    CELERY_BROKER_DB = 14
+    CELERY_RESULTS_DB = 15
     TESTING_DB = 13
+    # Legacy alias
+    BACKUP_DB = 10  # Alias for AUDIT_DB
 
     @classmethod
     def get_db_description(cls, db_number: int) -> str:
-        """Get description for database number"""
+        """Get description for database number."""
         descriptions = {
             cls.MAIN_DB: "Main application data",
             cls.KNOWLEDGE_DB: "Knowledge base and documents",
@@ -463,10 +468,13 @@ class DatabaseConstants:
             cls.METRICS_DB: "Performance metrics",
             cls.CACHE_DB: "Application cache",
             cls.SESSIONS_DB: "User sessions",
-            cls.TASKS_DB: "Task queue and workflow state",
-            cls.LOGS_DB: "Application logs",
+            cls.TASKS_DB: "Workflow state and execution",
+            cls.LOGS_DB: "Log data and history",
             cls.TEMP_DB: "Temporary data",
-            cls.BACKUP_DB: "Backup data",
+            cls.AUDIT_DB: "Security audit logging",
+            cls.ANALYTICS_DB: "Codebase analytics",
+            cls.CELERY_BROKER_DB: "Celery task broker",
+            cls.CELERY_RESULTS_DB: "Celery task results backend",
             cls.TESTING_DB: "Test isolation database",
         }
         return descriptions.get(db_number, f"Database {db_number}")
