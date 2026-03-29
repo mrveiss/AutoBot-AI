@@ -30,12 +30,12 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Tier | Purpose |
 |----------|---------|------|---------|
-| `AUTOBOT_MODEL_TIER_ROUTING` | `llama3.2:1b` | Routing | Orchestrator, request routing |
-| `AUTOBOT_MODEL_TIER_CLASSIFICATION` | `gemma2:2b` | Classification | Intent detection, category assignment |
-| `AUTOBOT_MODEL_TIER_LIGHT` | `phi3:mini` | Light Processing | Extraction, formatting |
-| `AUTOBOT_MODEL_TIER_INSTRUCTION` | `mistral:7b-instruct` | Instruction | RAG, step execution |
-| `AUTOBOT_MODEL_TIER_SYSTEM` | `dolphin-llama3:8b` | System | Commands, security |
-| `AUTOBOT_MODEL_TIER_QUALITY` | `qwen3.5:9b` | Quality | Chat, research, code |
+| `AUTOBOT_ROUTING_MODEL` | `llama3.2:1b` | Routing | Orchestrator, request routing |
+| `AUTOBOT_CLASSIFICATION_MODEL` | `gemma2:2b` | Classification | Intent detection, category assignment |
+| `AUTOBOT_LIGHT_PROCESSING_MODEL` | `phi3:mini` | Light Processing | Extraction, formatting |
+| `AUTOBOT_INSTRUCTION_MODEL` | `mistral:7b-instruct` | Instruction | RAG, step execution |
+| `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |
 
 ## Redis Configuration
 
@@ -135,9 +135,9 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 export AUTOBOT_DEFAULT_LLM_MODEL="qwen3.5:9b"
 
 # Override specific tiers
-export AUTOBOT_MODEL_TIER_ROUTING="llama3.2:1b"
-export AUTOBOT_MODEL_TIER_INSTRUCTION="mistral:7b-instruct"
-export AUTOBOT_MODEL_TIER_SYSTEM="dolphin-llama3:8b"
+export AUTOBOT_ROUTING_MODEL="llama3.2:1b"
+export AUTOBOT_INSTRUCTION_MODEL="mistral:7b-instruct"
+export AUTOBOT_SYSTEM_MODEL="dolphin-llama3:8b"
 ```
 
 ### Using Different Backend Port
