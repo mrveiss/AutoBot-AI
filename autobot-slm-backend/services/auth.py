@@ -11,11 +11,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt
 import jwt
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
-from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,6 @@ from user_management.models.user import User
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 
@@ -37,7 +36,7 @@ class AuthService:
 
     def hash_password(self, password: str) -> str:
         """Hash a password."""
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     def create_access_token(
         self, data: dict, expires_delta: Optional[timedelta] = None
