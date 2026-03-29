@@ -527,7 +527,6 @@ register_local_node() {
             \"ip_address\": \"${local_ip}\",
             \"node_id\": \"00-SLM-Manager\",
             \"roles\": [
-                \"slm-agent\",
                 \"slm-backend\",
                 \"slm-frontend\",
                 \"slm-database\",
