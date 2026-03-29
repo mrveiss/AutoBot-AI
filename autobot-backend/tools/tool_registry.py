@@ -14,6 +14,8 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from chat_workflow.tool_handler import BROWSER_TOOL_NAMES
+
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
@@ -530,10 +532,12 @@ class ToolRegistry:
     def get_available_tools(self) -> List[str]:
         """Get list of available tool names.
 
-        Issue #2594: Includes browser tools (Issue #1368) and web_search (Issue #2306)
-        to match the chat workflow's ToolHandlerMixin dispatch capabilities.
+        Browser tool names are derived from BROWSER_TOOL_NAMES in
+        chat_workflow.tool_handler (Issue #2609) so both layers share a single
+        source of truth. Issue #2594: also includes web_search (Issue #2306).
         """
-        return [
+        # Registry-owned tools (system, knowledge-base, GUI, conversation)
+        registry_tools = [
             "execute_system_command",
             "query_system_information",
             "list_system_services",
@@ -551,15 +555,7 @@ class ToolRegistry:
             "bring_window_to_front",
             "ask_user_for_manual",
             "respond_conversationally",
-            # Issue #1368: Browser tools routed to browser VM
-            "navigate",
-            "click",
-            "fill",
-            "select",
-            "hover",
-            "screenshot",
-            "evaluate",
-            "get_text",
-            "get_attribute",
-            "wait_for_selector",
         ]
+        # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
+        # and imported here so the two lists cannot drift independently.
+        return registry_tools + sorted(BROWSER_TOOL_NAMES)
