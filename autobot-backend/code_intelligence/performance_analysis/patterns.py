@@ -150,6 +150,12 @@ SAFE_PATTERNS = {
     # Async wrapping - already offloaded to thread
     "asyncio.to_thread": "already offloaded via asyncio.to_thread()",
     "run_in_executor": "already offloaded via run_in_executor()",
+    # Issue #2656: SQLAlchemy AsyncSession / async-engine execute() is
+    # async-safe and always used with ``await`` in async FastAPI handlers.
+    # Flagging these as blocking produces a false positive.
+    "db.execute": "SQLAlchemy AsyncSession.execute() - async-safe",
+    "session.execute": "SQLAlchemy AsyncSession.execute() - async-safe",
+    "conn.execute": "SQLAlchemy async connection.execute() - async-safe",
     # Logging calls - non-blocking in practice (Issue #1226)
     "logger.info": "logger call (non-blocking)",
     "logger.debug": "logger call (non-blocking)",
