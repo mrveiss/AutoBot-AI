@@ -332,17 +332,24 @@ class CrossLanguagePatternDetector:
         return any(skip in path.parts for skip in _SKIP_DIRS)
 
     async def _collect_files(self) -> Tuple[List[Path], List[Path], List[Path]]:
-        """Collect files to analyze by language."""
+        """Collect files to analyze by language.
+
+        Issue #2655: Fixed Python search dirs — AutoBot uses 'autobot-backend/'
+        at the project root, not 'backend/' or 'src/'.
+        """
         python_files = []
         typescript_files = []
         vue_files = []
 
-        backend_dir = self.project_root / "backend"
+        # Issue #2655: Search 'autobot-backend/' (AutoBot layout) as well as the
+        # legacy 'backend/' and 'src/' paths for compatibility with other project layouts.
+        backend_dir = self.project_root / "autobot-backend"
+        legacy_backend_dir = self.project_root / "backend"
         src_dir = self.project_root / "src"
         frontend_dir = self.project_root / "autobot-frontend" / "src"
 
         # Collect Python files
-        for search_dir in [backend_dir, src_dir]:
+        for search_dir in [backend_dir, legacy_backend_dir, src_dir]:
             if search_dir.exists():
                 for file_path in search_dir.rglob("*.py"):
                     if not self._should_skip_directory(file_path):
