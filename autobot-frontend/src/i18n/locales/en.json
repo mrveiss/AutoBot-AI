@@ -3516,6 +3516,8 @@
       "skipDesc": "Skip this command and continue to next step",
       "takeControlLabel": "Take Control:",
       "takeControlDesc": "Pause automation and perform manual steps",
+      "noStepData": "No step data available.",
+      "stepProgress": "Step {current} of {total}",
       "statusConnected": "Connected",
       "statusConnecting": "Connecting...",
       "statusDisconnected": "Disconnected",
