@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 # Maximum keys returned by scan to prevent unbounded responses
 _SCAN_MAX_KEYS = 100
 
+# Issue #2646: auto-expire agent memory keys to prevent unbounded growth
+AGENT_MEMORY_TTL_SECONDS = 86400  # 24 hours
+AGENT_MEMORY_PREFIX = "autobot:agent:memory:"
+
 
 def _decode(value):
     """Decode bytes to UTF-8 string, pass through other types."""
@@ -53,13 +57,20 @@ async def handle_redis_set(
     ttl: Optional[int] = None,
     database: str = "main",
 ) -> Metadata:
-    """Set a string value with optional TTL."""
+    """Set a string value with optional TTL.
+
+    Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically when
+    no explicit TTL is provided (Issue #2646).
+    """
     client = await _get_client(database)
-    if ttl and ttl > 0:
-        await client.setex(key, ttl, value)
+    effective_ttl = ttl
+    if not effective_ttl and key.startswith(AGENT_MEMORY_PREFIX):
+        effective_ttl = AGENT_MEMORY_TTL_SECONDS
+    if effective_ttl and effective_ttl > 0:
+        await client.setex(key, effective_ttl, value)
     else:
         await client.set(key, value)
-    return {"status": "success", "key": key, "ttl": ttl}
+    return {"status": "success", "key": key, "ttl": effective_ttl}
 
 
 async def handle_redis_delete(keys: List[str], database: str = "main") -> Metadata:
@@ -112,11 +123,16 @@ async def handle_redis_hgetall(key: str, database: str = "main") -> Metadata:
 async def handle_redis_hset(
     key: str, mapping: Dict[str, Any], database: str = "main"
 ) -> Metadata:
-    """Set one or more hash fields."""
+    """Set one or more hash fields.
+
+    Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically (Issue #2646).
+    """
     client = await _get_client(database)
     # Convert all values to strings for Redis
     str_mapping = {k: str(v) for k, v in mapping.items()}
     added = await client.hset(key, mapping=str_mapping)
+    if key.startswith(AGENT_MEMORY_PREFIX):
+        await client.expire(key, AGENT_MEMORY_TTL_SECONDS)
     return {
         "status": "success",
         "key": key,
