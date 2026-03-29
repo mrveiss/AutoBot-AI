@@ -25,8 +25,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Issue #1368: Browser tool names that route to browser_mcp handlers
-_BROWSER_TOOL_NAMES = frozenset(
+# Issue #1368: Browser tool names that route to browser_mcp handlers.
+# Exported (no leading underscore) so ToolRegistry can derive its list from this
+# single source of truth rather than maintaining a duplicate. Issue #2609.
+BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "navigate",
         "click",
@@ -1562,7 +1564,7 @@ class ToolHandlerMixin:
         """Build error message for an unknown tool call (#2305, #2310)."""
         known_tools = sorted(
             {"respond", "delegate", "execute_command", "web_search"}
-            | _BROWSER_TOOL_NAMES
+            | BROWSER_TOOL_NAMES
         )
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls += 1
@@ -1616,7 +1618,7 @@ class ToolHandlerMixin:
             return
 
         # Issue #1368: Route browser tools to browser VM
-        if tool_name in _BROWSER_TOOL_NAMES:
+        if tool_name in BROWSER_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
             async for msg in self._handle_browser_tool(tool_call, execution_results):
