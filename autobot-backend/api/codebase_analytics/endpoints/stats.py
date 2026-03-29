@@ -19,7 +19,7 @@ from utils.chromadb_client import get_all_paginated
 
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
-from .shared import _in_memory_storage, filter_problems_by_file_existence, get_project_root
+from .shared import _in_memory_storage, filter_problems_by_file_existence, get_project_root, resolve_source_root
 
 logger = logging.getLogger(__name__)
 
@@ -416,7 +416,7 @@ def _fetch_problems_from_chromadb(
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
-    root = Path(source_root) if source_root else get_project_root()
+    root = source_root if source_root else get_project_root()
     return filter_problems_by_file_existence(problems, root)
 
 
@@ -581,18 +581,9 @@ async def get_codebase_problems(
 
         source_id = await get_default_source_id()
 
-    # Issue #2724: Resolve source root asynchronously so _fetch_problems_from_chromadb
+    # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # can validate file paths without needing to do async I/O in a sync context.
-    source_root: Optional[Path] = None
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                source_root = Path(source.clone_path)
-        except Exception as _src_exc:
-            logger.debug("Could not resolve source root for %s: %s", source_id, _src_exc)
+    source_root = await resolve_source_root(source_id)
 
     code_collection = await asyncio.to_thread(get_code_collection)
     all_problems = []

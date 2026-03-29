@@ -51,7 +51,7 @@ from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
 from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
-from .shared import filter_problems_by_file_existence, get_project_root
+from .shared import filter_problems_by_file_existence, get_project_root, resolve_source_root
 
 logger = logging.getLogger(__name__)
 
@@ -2100,18 +2100,9 @@ async def generate_analysis_report(
 
         source_id = await get_default_source_id()
 
-    # Issue #2724: Resolve source root asynchronously so _fetch_problems_from_chromadb
+    # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
     # (which runs in a thread) can validate file paths without blocking the event loop.
-    source_root: Optional[Path] = None
-    if source_id:
-        try:
-            from api.codebase_analytics.source_storage import get_source
-
-            source = await get_source(source_id)
-            if source and source.clone_path:
-                source_root = Path(source.clone_path)
-        except Exception as _src_exc:
-            logger.debug("Could not resolve source root for %s: %s", source_id, _src_exc)
+    source_root = await resolve_source_root(source_id)
 
     problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
     analyses = await _resolve_analyses(
