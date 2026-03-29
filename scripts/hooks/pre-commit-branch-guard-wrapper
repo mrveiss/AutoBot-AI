@@ -162,8 +162,8 @@ fi
 # If extra files appeared in the index, something went wrong.
 POST_STAGED_COUNT=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | wc -l)
 
-if [ "$POST_STAGED_COUNT" -gt "$((STAGED_COUNT + STAGED_COUNT / 5))" ]; then
-    # More than 20% extra files appeared — likely contamination
+if [ "$POST_STAGED_COUNT" -gt "$((STAGED_COUNT + 3 + STAGED_COUNT / 5))" ]; then
+    # More than 3 + 20% extra files appeared — likely contamination (#2761)
     EXTRA=$((POST_STAGED_COUNT - STAGED_COUNT))
     echo ""
     echo -e "${BOLD}${RED}WARNING: Possible commit contamination detected (#2697)${NC}"
