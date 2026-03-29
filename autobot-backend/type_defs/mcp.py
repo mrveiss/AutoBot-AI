@@ -9,7 +9,7 @@ Provides strongly-typed MCP tool and response structures.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from type_defs.common import JSONValue, Metadata
 
@@ -43,38 +43,35 @@ class MCPInputSchema(BaseModel):
 class MCPToolDefinition(BaseModel):
     """MCP tool definition structure."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: MCPToolName
     description: str
     input_schema: MCPInputSchema = Field(alias="inputSchema")
     category: Optional[str] = None
     tags: Optional[List[str]] = None
 
-    class Config:
-        populate_by_name = True
-
 
 class MCPSuccessResponse(BaseModel):
     """MCP success response structure."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     success: bool = True
     content: List[Dict[str, JSONValue]] = Field(default_factory=list)
     is_error: bool = Field(False, alias="isError")
 
-    class Config:
-        populate_by_name = True
-
 
 class MCPErrorResponse(BaseModel):
     """MCP error response structure."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     success: bool = False
     error: str
     error_code: Optional[str] = None
     is_error: bool = Field(True, alias="isError")
     details: Optional[Metadata] = None
-
-    class Config:
-        populate_by_name = True
 
 
 # Union type for MCP tool responses
@@ -91,25 +88,23 @@ class MCPTextContent(BaseModel):
 class MCPImageContent(BaseModel):
     """MCP image content block."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     type: Literal["image"] = "image"
     data: str  # Base64 encoded
     mime_type: str = Field(alias="mimeType")
 
-    class Config:
-        populate_by_name = True
-
 
 class MCPResourceContent(BaseModel):
     """MCP resource content block."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     type: Literal["resource"] = "resource"
     uri: MCPResourceUri
     mime_type: Optional[str] = Field(None, alias="mimeType")
     text: Optional[str] = None
     blob: Optional[str] = None  # Base64 encoded
-
-    class Config:
-        populate_by_name = True
 
 
 # Content types that can appear in MCP responses
@@ -136,13 +131,12 @@ class MCPToolCallResult(BaseModel):
 class MCPResourceDefinition(BaseModel):
     """MCP resource definition structure."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     uri: MCPResourceUri
     name: str
     description: Optional[str] = None
     mime_type: Optional[str] = Field(None, alias="mimeType")
-
-    class Config:
-        populate_by_name = True
 
 
 class MCPPromptDefinition(BaseModel):
