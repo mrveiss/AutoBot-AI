@@ -475,6 +475,25 @@ async def create_node(
 
     await _create_registration_event(db, node_id, node, node_data, initial_status)
 
+    # Create NodeRole entries for each registered role (#2747)
+    if node_data.roles:
+        for role_name in node_data.roles:
+            existing = await db.execute(
+                select(NodeRole).where(
+                    NodeRole.node_id == node_id,
+                    NodeRole.role_name == role_name,
+                )
+            )
+            if not existing.scalar_one_or_none():
+                db.add(
+                    NodeRole(
+                        node_id=node_id,
+                        role_name=role_name,
+                        status="active",
+                        assignment_type="manual",
+                    )
+                )
+
     await db.commit()
     await db.refresh(node)
 
