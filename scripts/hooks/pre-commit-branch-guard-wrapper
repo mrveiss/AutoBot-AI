@@ -3,8 +3,8 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Pre-commit wrapper: Stash-Free Hook Runner (Issue #2512, #1689)
-# ================================================================
+# Pre-commit wrapper: Stash-Free Hook Runner (Issue #2512, #1689, #2697)
+# ======================================================================
 #
 # Runs pre-commit with --files (staged files only), which makes
 # pre-commit skip its internal stash push/pop cycle entirely.
@@ -12,13 +12,19 @@
 #   - Branch switching during commits (#1670, #1689, #2497)
 #   - Stash pop injecting unrelated files (#1503)
 #   - Stash pop losing stashed content (#2512)
+#   - Commit contamination with 100+ staged files (#2697)
+#
+# For large file lists (100+), files are batched via xargs to avoid
+# shell argument limits and pre-commit internal fallback behavior.
+# Unstaged changes are protected by a manual stash/restore cycle
+# that is immune to pre-commit's internal stash operations.
 #
 # Also retains the branch guard as a safety net.
 #
 # The post-checkout hook auto-installs this wrapper. If `pre-commit install`
 # overwrites it, the next checkout re-wraps it.
 #
-# Related: #1670, #1503, #1689, #2497, #2512
+# Related: #1670, #1503, #1689, #2497, #2512, #2697
 
 set -uo pipefail
 
@@ -28,23 +34,122 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Maximum files per pre-commit batch to avoid argument overflow (#2697)
+BATCH_THRESHOLD=50
+BATCH_SIZE=40
+
 # --- 1. Record branch BEFORE the pre-commit framework runs ---
 BRANCH_BEFORE=$(git branch --show-current 2>/dev/null)
 
-# --- 2. Run pre-commit with --files to SKIP its internal stash cycle (#2512) ---
-# pre-commit's stash push/pop causes: branch switching (#1670), file contamination
-# (#1503), content loss (#2512). Passing --files makes pre-commit set stash=False.
+# --- 2. Collect staged files safely (NUL-delimited) ---
+# Using -z for NUL-delimited output handles filenames with spaces,
+# quotes, and other special characters correctly.
+STAGED_TMPFILE=$(mktemp "${TMPDIR:-/tmp}/pre-commit-staged.XXXXXX")
+trap 'rm -f "$STAGED_TMPFILE"' EXIT
 
-# Collect staged files (Added, Copied, Modified, Renamed — excludes Deleted)
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)
+git diff --cached --name-only --diff-filter=ACMR -z 2>/dev/null > "$STAGED_TMPFILE"
 
-if [ -n "$STAGED_FILES" ]; then
-    # Run pre-commit directly with --files (bypasses stash entirely)
-    pre-commit run --files $STAGED_FILES
+# Count staged files (NUL-delimited: count NUL bytes + 1 if file non-empty)
+STAGED_COUNT=0
+if [ -s "$STAGED_TMPFILE" ]; then
+    # tr counts NUL bytes; file has trailing NUL so count equals file count
+    STAGED_COUNT=$(tr -cd '\0' < "$STAGED_TMPFILE" | wc -c)
+fi
+
+if [ "$STAGED_COUNT" -eq 0 ]; then
+    # No staged files — nothing to check
+    exit 0
+fi
+
+# --- 3. Protect unstaged changes from pre-commit interference (#2697) ---
+# When many files are staged and other files have unstaged modifications,
+# pre-commit's internal file handling can sweep unstaged changes into the
+# commit or revert working tree edits. We protect against this by saving
+# and restoring unstaged changes ourselves.
+HAS_UNSTAGED=false
+UNSTAGED_PATCH=""
+
+# Check if there are unstaged changes (modified tracked files not in index)
+if ! git diff --quiet 2>/dev/null; then
+    HAS_UNSTAGED=true
+    UNSTAGED_PATCH=$(mktemp "${TMPDIR:-/tmp}/pre-commit-unstaged.XXXXXX")
+    trap 'rm -f "$STAGED_TMPFILE" "$UNSTAGED_PATCH"' EXIT
+
+    # Save unstaged changes as a patch (binary-safe)
+    git diff --binary > "$UNSTAGED_PATCH" 2>/dev/null
+
+    # Remove unstaged changes from staged files only so pre-commit sees
+    # the staged versions. Scoped to staged files to avoid nuking
+    # unrelated unstaged work in other files.
+    xargs -0 git checkout -- < "$STAGED_TMPFILE" 2>/dev/null
+fi
+
+# --- 4. Run pre-commit with --files in batches (#2697) ---
+# For large file lists, batching prevents shell argument overflow and
+# ensures pre-commit processes each batch with --files (stash=False).
+HOOK_EXIT=0
+
+if [ "$STAGED_COUNT" -le "$BATCH_THRESHOLD" ]; then
+    # Small batch: pass all files at once using NUL-delimited xargs
+    xargs -0 pre-commit run --files < "$STAGED_TMPFILE"
     HOOK_EXIT=$?
 else
-    # No staged files — nothing to check
-    HOOK_EXIT=0
+    # Large batch: split into chunks of BATCH_SIZE (#2697)
+    echo -e "${CYAN}[pre-commit] ${STAGED_COUNT} staged files — running in batches of ${BATCH_SIZE}${NC}"
+
+    BATCH_NUM=0
+    BATCH_FILES=()
+
+    while IFS= read -r -d '' filename; do
+        BATCH_FILES+=("$filename")
+
+        if [ "${#BATCH_FILES[@]}" -ge "$BATCH_SIZE" ]; then
+            BATCH_NUM=$((BATCH_NUM + 1))
+            echo -e "${CYAN}[pre-commit] Batch ${BATCH_NUM} (${#BATCH_FILES[@]} files)...${NC}"
+
+            pre-commit run --files "${BATCH_FILES[@]}"
+            BATCH_EXIT=$?
+
+            if [ "$BATCH_EXIT" -ne 0 ]; then
+                HOOK_EXIT=$BATCH_EXIT
+                # Re-stage any auto-fixed files from this batch before stopping
+                printf '%s\0' "${BATCH_FILES[@]}" | xargs -0 git add -- 2>/dev/null
+                break
+            fi
+
+            # Re-stage any auto-fixed files (e.g., Black, isort reformats)
+            printf '%s\0' "${BATCH_FILES[@]}" | xargs -0 git add -- 2>/dev/null
+            BATCH_FILES=()
+        fi
+    done < "$STAGED_TMPFILE"
+
+    # Process remaining files in the last partial batch
+    if [ "$HOOK_EXIT" -eq 0 ] && [ "${#BATCH_FILES[@]}" -gt 0 ]; then
+        BATCH_NUM=$((BATCH_NUM + 1))
+        echo -e "${CYAN}[pre-commit] Batch ${BATCH_NUM} (${#BATCH_FILES[@]} files)...${NC}"
+
+        pre-commit run --files "${BATCH_FILES[@]}"
+        BATCH_EXIT=$?
+
+        if [ "$BATCH_EXIT" -ne 0 ]; then
+            HOOK_EXIT=$BATCH_EXIT
+        fi
+
+        # Re-stage any auto-fixed files
+        printf '%s\0' "${BATCH_FILES[@]}" | xargs -0 git add -- 2>/dev/null
+    fi
+fi
+
+# --- 5. Restore unstaged changes (#2697) ---
+# Re-apply the unstaged working tree changes we saved earlier,
+# regardless of whether hooks passed or failed.
+if [ "$HAS_UNSTAGED" = true ] && [ -n "$UNSTAGED_PATCH" ] && [ -s "$UNSTAGED_PATCH" ]; then
+    git apply --allow-empty "$UNSTAGED_PATCH" 2>/dev/null || {
+        echo -e "${YELLOW}[pre-commit] Warning: could not fully restore unstaged changes.${NC}"
+        echo -e "${YELLOW}[pre-commit] Patch saved at: ${UNSTAGED_PATCH}${NC}"
+        # Don't delete the patch on failure so user can recover manually
+        trap 'rm -f "$STAGED_TMPFILE"' EXIT
+    }
 fi
 
 # If hooks failed, propagate the failure immediately
@@ -52,7 +157,29 @@ if [ $HOOK_EXIT -ne 0 ]; then
     exit $HOOK_EXIT
 fi
 
-# --- 3. Check if branch changed after stash/pop ---
+# --- 6. Post-hook validation: detect commit contamination (#2697) ---
+# Compare currently-staged file count against the original count.
+# If extra files appeared in the index, something went wrong.
+POST_STAGED_COUNT=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | wc -l)
+
+if [ "$POST_STAGED_COUNT" -gt "$((STAGED_COUNT + STAGED_COUNT / 5))" ]; then
+    # More than 20% extra files appeared — likely contamination
+    EXTRA=$((POST_STAGED_COUNT - STAGED_COUNT))
+    echo ""
+    echo -e "${BOLD}${RED}WARNING: Possible commit contamination detected (#2697)${NC}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo -e "  Originally staged: ${BOLD}${STAGED_COUNT}${NC} files"
+    echo -e "  Currently staged:  ${BOLD}${RED}${POST_STAGED_COUNT}${NC} files (+${EXTRA} unexpected)"
+    echo ""
+    echo "  Pre-commit hooks may have added unintended files to the index."
+    echo "  Review with: git diff --cached --stat"
+    echo ""
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo ""
+    exit 1
+fi
+
+# --- 7. Check if branch changed after stash/pop ---
 BRANCH_AFTER=$(git branch --show-current 2>/dev/null)
 
 if [ -z "$BRANCH_BEFORE" ] || [ -z "$BRANCH_AFTER" ]; then
