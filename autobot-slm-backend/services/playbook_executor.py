@@ -308,8 +308,12 @@ class PlaybookExecutor:
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 
         try:
+            env = self._build_ansible_env()
+            # Override ansible.cfg default inventory to prevent merging
+            # with production.yml when wizard passes a temp inventory (#2836)
+            env["ANSIBLE_INVENTORY"] = str(effective_inventory)
             proc_result = await self._run_subprocess(
-                cmd, self._build_ansible_env(), progress_callback
+                cmd, env, progress_callback
             )
             success = proc_result["returncode"] == 0
             if success:
