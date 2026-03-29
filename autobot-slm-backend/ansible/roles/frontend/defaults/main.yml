@@ -25,8 +25,8 @@ nginx_http_port: 80
 
 # Backend connection (user backend on main machine)
 # Backend runs on HTTPS port 8443 with SSL certificates
-# Overridden by dynamic inventory infra_vars at provisioning time
-backend_host: "127.0.0.1"
+# Set dynamically by _build_infra_vars() in setup_wizard.py at provisioning time
+backend_host: "{{ ansible_default_ipv4.address | default(ansible_host) }}"
 backend_port: 8443
 backend_protocol: "https"
 frontend_backend_url: "{{ backend_protocol }}://{{ backend_host }}:{{ backend_port }}"
