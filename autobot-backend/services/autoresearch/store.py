@@ -10,6 +10,7 @@ ChromaDB for semantic knowledge search over experiment findings.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -252,10 +253,10 @@ class ExperimentStore:
             stats.baseline_val_bpb = float(baseline)
 
         # Compute timing stats from completed experiments
-        completed = await self.list_experiments(
-            limit=100, state=ExperimentState.COMPLETED
+        completed, kept = await asyncio.gather(
+            self.list_experiments(limit=100, state=ExperimentState.COMPLETED),
+            self.list_experiments(limit=100, state=ExperimentState.KEPT),
         )
-        kept = await self.list_experiments(limit=100, state=ExperimentState.KEPT)
         all_done = completed + kept
 
         if all_done:
