@@ -643,7 +643,8 @@ describe('useErrorHandler Composable', () => {
       await executePromise
 
       expect(consoleWarn).toHaveBeenCalled()
-      expect(consoleWarn.mock.calls[0][0]).toContain('Attempt 1/2 failed')
+      // createLogger passes [timestamp] as first arg, message as second
+      expect(consoleWarn.mock.calls[0].join(' ')).toContain('Attempt 1/2 failed')
     })
 
     it('should not retry when retry: false', async () => {
@@ -950,7 +951,8 @@ describe('useErrorHandler Composable', () => {
       await wrapper.vm.execute()
 
       expect(consoleError).toHaveBeenCalled()
-      expect(consoleError.mock.calls[0][0]).toBe('[Error]')
+      // createLogger prefixes with timestamp; check all args
+      expect(consoleError.mock.calls[0].join(' ')).toContain('[ERROR]')
     })
 
     it('should not log when logErrors: false', async () => {
@@ -995,7 +997,7 @@ describe('useErrorHandler Composable', () => {
       await wrapper.vm.execute()
 
       expect(consoleError).toHaveBeenCalled()
-      expect(consoleError.mock.calls[0][0]).toBe('[CUSTOM ERROR]')
+      expect(consoleError.mock.calls[0].join(' ')).toContain('CUSTOM ERROR')
     })
 
     it('should log retry attempts', async () => {
@@ -1044,8 +1046,10 @@ describe('useErrorHandler Composable', () => {
       const wrapper = mount(TestComponent)
       await wrapper.vm.execute()
 
-      expect(consoleError.mock.calls[0][0]).toBe('[Test]')
-      expect(consoleError.mock.calls[0][1]).toBeInstanceOf(Error)
+      const allArgs = consoleError.mock.calls[0].join(' ')
+      expect(allArgs).toContain('Test')
+      // Error instance is passed in one of the args
+      expect(consoleError.mock.calls[0].some((a: unknown) => a instanceof Error)).toBe(true)
     })
 
     it('should log errors by default', async () => {
@@ -1153,11 +1157,14 @@ describe('useErrorHandler Composable', () => {
       const wrapper = mount(TestComponent)
       const promise = wrapper.vm.execute()
 
-      await vi.runAllTimersAsync(); vi.advanceTimersByTime(999)
+      // Advance only 999ms — debounce at 1000ms should not have fired
+      vi.advanceTimersByTime(999)
       await nextTick()
       expect(executed).toBe(false)
 
-      await vi.runAllTimersAsync(); vi.advanceTimersByTime(1)
+      // Advance 1 more ms to trigger debounce
+      vi.advanceTimersByTime(1)
+      await vi.runAllTimersAsync()
       await promise
       expect(executed).toBe(true)
     })
