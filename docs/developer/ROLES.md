@@ -352,7 +352,7 @@ These conflicts drive the default fleet layout:
 | **External deps** | — |
 | **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | — (binary install from ollama.ai) |
-| **CPU models** | nomic-embed-text, llama3.2:1b, llama3.2:3b, llama3.2:latest, gemma2:2b |
+| **CPU models** | nomic-embed-text, llama3.2:1b, llama3.2:1b, llama3.2:latest, gemma2:2b |
 | **Concurrency** | max_loaded=2, num_parallel=2, keep_alive=5m |
 | **Degraded without** | Local CPU inference — system falls back to cloud providers (OpenAI, Anthropic, Mistral) |
 | **Notes** | Cloud providers (OpenAI, Anthropic, Mistral) are alternative LLM backends — local LLM nodes are optional if cloud is configured. |

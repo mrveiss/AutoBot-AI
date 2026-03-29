@@ -110,7 +110,7 @@ docker compose --env-file docker/.env.docker --profile monitoring up -d --build
 
 **Dev mode** with hot reload:
 ```bash
-cp docker-compose.override.example.yml docker-compose.override.yml
+# Optional: cp docker-compose.override.example.yml docker-compose.override.yml
 docker compose up -d
 ```
 
@@ -148,7 +148,7 @@ echo 'export OPENAI_API_KEY="your-api-key"' >> ~/.bashrc  # pragma: allowlist se
 source ~/.bashrc
 ```
 
-**Configuration:** Edit `config/config.yaml`:
+**Configuration:** Configure via `.env` or environment variables:
 ```yaml
 llm_config:
   default_llm: "openai_gpt35"
@@ -168,7 +168,7 @@ export ANTHROPIC_API_KEY="your-anthropic-api-key-here"  # pragma: allowlist secr
 echo 'export ANTHROPIC_API_KEY="your-api-key"' >> ~/.bashrc  # pragma: allowlist secret
 ```
 
-**Configuration:** Edit `config/config.yaml`:
+**Configuration:** Configure via `.env` or environment variables:
 ```yaml
 llm_config:
   default_llm: "anthropic_claude"
@@ -359,6 +359,6 @@ If installation fails:
 ### Next Steps
 
 After successful installation:
-1. **[Quick Start Guide](02-quickstart.md)** - Learn basic usage
+1. **[Quick Start Guide](../user/quick-start-chat.md)** - Your first conversation
 2. **[Configuration Guide](../configuration.md)** - Detailed configuration options
-3. **[Troubleshooting Guide](04-troubleshooting.md)** - Common runtime issues
+3. **[User Guides](../user/README.md)** - Complete user documentation

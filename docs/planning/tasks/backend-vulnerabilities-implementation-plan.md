@@ -596,7 +596,7 @@ Day 5:   Task 3.6 (Gradual rollout)
 - **Model Capabilities Example:**
   ```python
   {
-      "llama3.2:3b": {"context_window": 2048},
+      "llama3.2:1b": {"context_window": 2048},
       "gpt-4": {"context_window": 128000},
       "claude-3": {"context_window": 200000}
   }
@@ -668,7 +668,7 @@ Day 5:   Task 3.6 (Gradual rollout)
     max_context_messages: 20  # Safe default
     token_safety_margin: 200
     models:
-      llama3.2:3b:
+      llama3.2:1b:
         max_context_messages: 15  # Smaller context for smaller models
   ```
 
