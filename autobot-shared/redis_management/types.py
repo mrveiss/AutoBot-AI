@@ -100,6 +100,7 @@ _FALLBACK_MAPPING: Dict[str, int] = {
     "audit": 10,
     "analytics": 11,
     "codebase": 11,
+    "testing": 13,
     "celery_broker": 14,
     "celery_results": 15,
 }
@@ -110,7 +111,7 @@ _ALIASES: Dict[str, int] = {
     "conversations": 3,  # Alias for agents (conversation storage)
     "locks": 6,  # Alias for sessions (distributed locks)
     "memory": 0,  # Uses DB 0 — required for RediSearch indexing (FT.*)
-    "vectors": 1,  # Alias for knowledge (vector embeddings)
+    "vectors": 8,  # LlamaIndex vector store — DB 8 per docs/system-state.md
     "facts": 1,  # Knowledge facts and rules
 }
 
@@ -148,9 +149,11 @@ class RedisDatabase(Enum):
     TEMP = 9
     AUDIT = 10
     ANALYTICS = 11
+    TESTING = 13
     CELERY_BROKER = 14
     CELERY_RESULTS = 15
     # Aliases — share DB numbers with canonical entries
+    VECTORS = 8  # LlamaIndex vector store
     MEMORY = 0  # RediSearch indexing on DB 0
 
 
