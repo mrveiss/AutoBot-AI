@@ -1,5 +1,127 @@
 # Visual Workflow System with Parallel Execution
 
+
+## Quick Answer
+
+**How do you create and execute a visual workflow with parallel fleet execution in AutoBot?**
+
+Define workflow steps with a shared `parallel_group` (no inter-dependencies) so the
+execution engine runs them concurrently. Steps with `dependencies` wait for
+predecessors. Here is a complete example that runs audit scripts in parallel across
+three fleet nodes, then aggregates results:
+
+```python
+#!/usr/bin/env python3
+"""Create and execute a parallel fleet workflow via the AutoBot API."""
+
+import asyncio
+
+import aiohttp
+
+from autobot_shared.ssot_config import config
+
+BACKEND_URL = f"https://{config.vms.main}:{config.ports.backend}"
+
+
+async def run_parallel_fleet_audit(token: str):
+    """Submit a parallel workflow that audits three fleet nodes simultaneously.
+
+    Steps 1-3 share parallel_group 'audit_batch_1' and run concurrently.
+    Step 4 depends on all three completing before it aggregates results.
+    """
+    workflow = {
+        "user_message": "Run security audit across fleet in parallel",
+        "auto_approve": False,
+        "workflow_template": {
+            "name": "parallel_fleet_audit",
+            "description": "Audit scripts on three nodes simultaneously",
+            "steps": [
+                {
+                    "id": "audit_frontend",
+                    "agent_type": "system_commands",
+                    "action": "execute_shell",
+                    "target_node": config.vms.frontend,
+                    "command": "/opt/autobot/scripts/audit/check_permissions.sh",
+                    "parallel_group": "audit_batch_1",
+                    "timeout": 300,
+                    "inputs": {"target_host": config.vms.frontend},
+                },
+                {
+                    "id": "audit_npu",
+                    "agent_type": "system_commands",
+                    "action": "execute_shell",
+                    "target_node": config.vms.npu,
+                    "command": "/opt/autobot/scripts/audit/check_services.sh",
+                    "parallel_group": "audit_batch_1",
+                    "timeout": 300,
+                    "inputs": {"target_host": config.vms.npu},
+                },
+                {
+                    "id": "audit_ai_stack",
+                    "agent_type": "system_commands",
+                    "action": "execute_shell",
+                    "target_node": config.vms.ai_stack,
+                    "command": "/opt/autobot/scripts/audit/check_network.sh",
+                    "parallel_group": "audit_batch_1",
+                    "timeout": 300,
+                    "inputs": {"target_host": config.vms.ai_stack},
+                },
+                {
+                    "id": "aggregate_results",
+                    "agent_type": "orchestrator",
+                    "action": "aggregate_results",
+                    "dependencies": ["audit_frontend", "audit_npu", "audit_ai_stack"],
+                    "user_approval_required": False,
+                    "inputs": {"report_format": "markdown"},
+                },
+            ],
+        },
+    }
+
+    async with aiohttp.ClientSession() as session:
+        # Submit workflow
+        resp = await session.post(
+            f"{BACKEND_URL}/api/workflow/execute",
+            json=workflow,
+            headers={"Authorization": f"Bearer {token}"},
+            ssl=False,
+        )
+        result = await resp.json()
+        workflow_id = result.get("workflow_id")
+
+        # Poll status
+        while workflow_id:
+            status_resp = await session.get(
+                f"{BACKEND_URL}/api/workflow/workflow/{workflow_id}/status",
+                headers={"Authorization": f"Bearer {token}"},
+                ssl=False,
+            )
+            status = await status_resp.json()
+            print(f"Progress: {status.get('progress', 0) * 100:.0f}%  "
+                  f"Step: {status.get('current_step_info', {}).get('description', 'N/A')}")
+            if status.get("status") in ("complete", "failed", "cancelled"):
+                break
+            await asyncio.sleep(5)
+
+        return result
+
+
+if __name__ == "__main__":
+    import sys
+    token = sys.argv[1] if len(sys.argv) > 1 else "YOUR_JWT_TOKEN"
+    asyncio.run(run_parallel_fleet_audit(token))
+```
+
+**In the Visual Builder UI** (`/workflow-builder`):
+1. Add three step nodes (one per fleet node), do NOT connect them to each other
+2. Add one aggregation node, draw edges FROM each audit node TO it
+3. Click Save, switch to Runner tab, click Execute
+
+For execution strategies (sequential, pipeline, adaptive) see [Section 5](#5-parallel-execution-engine).
+
+---
+
+
 AutoBot's workflow system orchestrates multi-agent task execution with support for
 parallel step groups, dependency-based scheduling, and distributed fleet operations.
 This guide covers defining, executing, and monitoring workflows that run shell scripts

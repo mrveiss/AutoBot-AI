@@ -1,5 +1,130 @@
 # RAG Workflow with PDF Documents in AutoBot
 
+
+## Quick Answer
+
+**How do you implement a RAG workflow that fetches context from a PDF repository before generating a response?**
+
+Upload a PDF to the knowledge base, wait for vectorization, then query with
+RAG-enhanced search. The LLM receives the relevant PDF chunks as context and
+returns a response with citations. Here is the complete end-to-end flow:
+
+```python
+#!/usr/bin/env python3
+"""RAG with PDF: upload, vectorize, query with context-augmented LLM response."""
+
+import asyncio
+
+import aiohttp
+
+from autobot_shared.ssot_config import config
+
+BACKEND = f"https://{config.vms.main}:{config.ports.backend}"
+
+
+async def rag_pdf_workflow(token: str, pdf_path: str, query: str):
+    """Upload a PDF, wait for indexing, and query with RAG.
+
+    Args:
+        token: Admin JWT token.
+        pdf_path: Local path to the PDF file.
+        query: Question to ask against the PDF content.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with aiohttp.ClientSession() as session:
+        # Step 1: Upload the PDF to the knowledge base
+        form = aiohttp.FormData()
+        form.add_field("file", open(pdf_path, "rb"), filename=pdf_path.split("/")[-1])
+        form.add_field("category", "documentation")
+
+        resp = await session.post(
+            f"{BACKEND}/api/knowledge_base/upload",
+            data=form,
+            headers=headers,
+            ssl=False,
+        )
+        upload_result = await resp.json()
+        fact_id = upload_result.get("fact_id")
+        print(f"Uploaded PDF: fact_id={fact_id}")
+
+        # Step 2: Wait for vectorization to complete
+        for attempt in range(30):
+            status_resp = await session.get(
+                f"{BACKEND}/api/knowledge_base/vectorization/status/{fact_id}",
+                headers=headers,
+                ssl=False,
+            )
+            status = await status_resp.json()
+            if status.get("status") == "completed":
+                print(f"Vectorization complete: {status.get('chunks', 0)} chunks")
+                break
+            await asyncio.sleep(2)
+
+        # Step 3: Query with RAG-enhanced search (hybrid mode)
+        search_resp = await session.post(
+            f"{BACKEND}/api/knowledge_base/search",
+            json={
+                "query": query,
+                "search_type": "hybrid",
+                "limit": 5,
+                "include_context": True,
+            },
+            headers=headers,
+            ssl=False,
+        )
+        results = await search_resp.json()
+        print(f"Found {len(results.get('results', []))} relevant chunks")
+
+        # Step 4: Send query to chat with RAG context (automatic KB integration)
+        chat_resp = await session.post(
+            f"{BACKEND}/api/chat/message",
+            json={
+                "message": query,
+                "session_id": "rag-test",
+                "use_knowledge": True,
+            },
+            headers=headers,
+            ssl=False,
+        )
+        chat_result = await chat_resp.json()
+        print(f"LLM Response: {chat_result.get('response', '')[:200]}")
+        print(f"Citations: {chat_result.get('citations', [])}")
+
+        return chat_result
+
+
+if __name__ == "__main__":
+    import sys
+    auth_token = sys.argv[1] if len(sys.argv) > 1 else "YOUR_JWT_TOKEN"
+    asyncio.run(rag_pdf_workflow(
+        auth_token,
+        pdf_path="/opt/autobot/data/docs/architecture.pdf",
+        query="What is the deployment architecture?",
+    ))
+```
+
+**curl quick check:**
+
+```bash
+# Upload PDF
+curl -sk -X POST "$BACKEND/api/knowledge_base/upload" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@/path/to/document.pdf" -F "category=documentation"
+
+# Search with RAG
+curl -sk -X POST "$BACKEND/api/knowledge_base/search" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "deployment architecture", "search_type": "hybrid", "limit": 5}'
+```
+
+For hybrid scoring, graph RAG, and the full vectorization pipeline, see
+[Section 5](#5-enhanced-search-with-hybrid-scoring) and [Section 7](#7-graph-rag-advanced).
+
+---
+
+
 > **Benchmark target:** Implement a Retrieval-Augmented Generation (RAG) workflow that
 > fetches context from a PDF repository before generating a response.
 
