@@ -1,23 +1,28 @@
 # AutoBot Agent System: Complete Guide
 
-## 🚀 Quick Reference
+## Quick Reference
 
 AutoBot features a revolutionary multi-agent system with intelligent orchestration. This guide provides comprehensive information for developers working with the agent architecture.
 
-## 📋 Agent System Overview
+## Agent System Overview
 
 ### **Architecture Pattern**
 ```
-User Request → Classification Agent → Orchestrator → Multi-Agent Execution → Result Synthesis
+User Request -> Classification Agent -> Orchestrator -> Multi-Agent Execution -> Result Synthesis
 ```
 
-### **Agent Tiers**
-- **Tier 1**: Core agents (always available) - 1B models for speed
-- **Tier 2**: Processing agents (on-demand) - 3B models for complexity
-- **Tier 3**: Specialized agents (task-specific) - Tool orchestration
-- **Tier 4**: Advanced agents (multi-modal) - Cutting-edge AI integration
+### **6-Tier Model Architecture**
 
-## 🤖 Agent Development
+| Tier | Model | Purpose |
+|------|-------|---------|
+| **Routing** | `llama3.2:1b` | Orchestrator, request routing |
+| **Classification** | `gemma2:2b` | Intent detection, category assignment |
+| **Light Processing** | `phi3:mini` | Extraction, formatting, templates |
+| **Instruction** | `mistral:7b-instruct` | RAG, step execution, document synthesis |
+| **System** | `dolphin-llama3:8b` | System commands, security analysis |
+| **Quality** | `qwen3.5:9b` | Chat, research, code generation |
+
+## Agent Development
 
 ### **Creating a New Agent**
 
@@ -82,17 +87,21 @@ async def test_your_agent_basic_functionality():
     assert response.agent_type == "your_agent"
 ```
 
-## 🔧 Agent Configuration
+## Agent Configuration
 
-### **Model Assignment**
+### **Model Assignment (6-Tier Architecture)**
 ```python
-# In src/config.py
+# In src/config.py - uses 6-tier model routing (#2553)
 def get_task_specific_model(self, task_type: str) -> str:
     task_models = {
-        "chat": "llama3.2:1b",           # Speed priority
-        "orchestrator": "llama3.2:3b",   # Complexity priority
-        "rag": "llama3.2:3b",           # Reasoning priority
-        "your_agent": "llama3.2:1b",    # Configure as needed
+        "orchestrator": "llama3.2:1b",        # Routing tier
+        "classification": "gemma2:2b",         # Classification tier
+        "extraction": "phi3:mini",             # Light Processing tier
+        "rag": "mistral:7b-instruct",          # Instruction tier
+        "system_commands": "dolphin-llama3:8b", # System tier
+        "chat": "qwen3.5:9b",                 # Quality tier
+        "research": "qwen3.5:9b",             # Quality tier
+        "your_agent": "gemma2:2b",            # Configure per tier
     }
     return task_models.get(task_type, self.default_model)
 ```
@@ -109,7 +118,7 @@ AGENT_RISK_LEVELS = {
 }
 ```
 
-## 🛡️ Security Guidelines
+## Security Guidelines
 
 ### **Security Validation**
 Always validate inputs and implement security controls:
@@ -179,7 +188,7 @@ async def execute_high_risk_operation(self, request: AgentRequest):
         return AgentResponse(status="denied", error="Operation denied by user")
 ```
 
-## 📊 Performance Optimization
+## Performance Optimization
 
 ### **Resource Management**
 ```python
@@ -231,7 +240,7 @@ class CachedAgent(BaseAgent):
         return data
 ```
 
-## 🔄 Agent Communication
+## Agent Communication
 
 ### **Inter-Agent Communication**
 ```python
@@ -282,7 +291,7 @@ class CommunicatingAgent(BaseAgent):
         )
 ```
 
-## 🏗️ Deployment Patterns
+## Deployment Patterns
 
 ### **Container-Based Agent**
 ```python
@@ -328,7 +337,7 @@ class NPUAgent(BaseAgent):
         )
 ```
 
-## 🧪 Testing & Debugging
+## Testing & Debugging
 
 ### **Agent Health Checks**
 ```python
@@ -362,7 +371,7 @@ async def test_agent_integration():
     assert response.agent_type == "your_agent"
 ```
 
-## 📈 Monitoring & Metrics
+## Monitoring & Metrics
 
 ### **Performance Tracking**
 ```python
@@ -393,7 +402,7 @@ class MonitoredAgent(BaseAgent):
             raise
 ```
 
-## 🔮 Advanced Features
+## Advanced Features
 
 ### **Self-Improving Agent**
 ```python
@@ -431,7 +440,7 @@ class LearningAgent(BaseAgent):
         pass
 ```
 
-## 🚀 Best Practices
+## Best Practices
 
 1. **Always extend BaseAgent** for standardized interface
 2. **Implement comprehensive error handling** with proper logging
@@ -444,7 +453,7 @@ class LearningAgent(BaseAgent):
 9. **Monitor performance** and optimize based on metrics
 10. **Follow security classifications** for risk-appropriate handling
 
-## 📚 Additional Resources
+## Additional Resources
 
 - [Base Agent Interface](autobot-backend/agents/base_agent.py) - Core agent implementation
 - [Agent Orchestrator](autobot-backend/agents/agent_orchestrator.py) - Multi-agent coordination

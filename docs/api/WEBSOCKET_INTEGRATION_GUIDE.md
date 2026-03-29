@@ -29,7 +29,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
   "type": "ping"
 }
 
-// Health check response  
+// Health check response
 {
   "type": "health_response",
   "payload": {
@@ -57,7 +57,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
   "payload": {
     "response": "AI response content",
     "chat_id": "uuid",
-    "model": "llama3.2:1b-instruct-q4_K_M",
+    "model": "qwen3.5:9b",
     "processing_time": 2.34
   }
 }
@@ -116,7 +116,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 }
 ```
 
-#### Workflow Events  
+#### Workflow Events
 ```typescript
 // Workflow step started
 {
@@ -301,7 +301,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
     "services": {
       "redis": "healthy",
       "ollama": "healthy",
-      "knowledge_base": "healthy"  
+      "knowledge_base": "healthy"
     }
   }
 }
@@ -1027,11 +1027,11 @@ class MessageFilter {
 
 This WebSocket integration guide provides:
 
-✅ **Complete Message Formats**: All server-to-client and client-to-server message types  
-✅ **React/Vue Integration**: Production-ready hooks and composables  
-✅ **Error Handling**: Connection recovery, message queuing, health monitoring  
-✅ **Testing Strategies**: Unit tests and integration tests  
-✅ **Performance Patterns**: Message batching, filtering, and optimization  
-✅ **Advanced Patterns**: Message routing, event aggregation, queue management  
+- **Complete Message Formats**: All server-to-client and client-to-server message types
+- **React/Vue Integration**: Production-ready hooks and composables
+- **Error Handling**: Connection recovery, message queuing, health monitoring
+- **Testing Strategies**: Unit tests and integration tests
+- **Performance Patterns**: Message batching, filtering, and optimization
+- **Advanced Patterns**: Message routing, event aggregation, queue management
 
 The WebSocket integration enables real-time communication for chat, workflows, system monitoring, and command execution with robust error handling and reconnection capabilities.

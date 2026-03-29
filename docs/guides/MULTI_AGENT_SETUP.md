@@ -27,10 +27,10 @@ ansible-playbook playbooks/deploy-full.yml
 ```
 
 This will:
-- ✅ Set up virtual environment with all dependencies
-- ✅ Download required Ollama models (1B and 3B)
-- ✅ Build Vue.js frontend
-- ✅ Start all services
+- Set up virtual environment with all dependencies
+- Download required Ollama models (6-tier architecture)
+- Build Vue.js frontend
+- Start all services
 
 ### 3. Verify Installation
 ```bash
@@ -42,31 +42,36 @@ This will:
 ./run_agent.sh
 ```
 
-## Multi-Agent Models Required
+## 6-Tier Model Architecture
 
-The setup script will automatically download uncensored models for unrestricted capabilities:
+The setup script will automatically download models for the 6-tier architecture:
 
-### Core Uncensored Models
-- **artifish/llama3.2-uncensored:1b** - Chat Agent & System Commands (1.2GB)
-- **artifish/llama3.2-uncensored:3b** - Orchestrator & RAG Agent (3.5GB)
+### Required Models
+
+| Tier | Model | Size | Purpose |
+|------|-------|------|---------|
+| Routing | `llama3.2:1b` | 1.2GB | Orchestrator, request routing |
+| Classification | `gemma2:2b` | 1.8GB | Intent detection, category assignment |
+| Light Processing | `phi3:mini` | 2.3GB | Extraction, formatting |
+| Instruction | `mistral:7b-instruct` | 4.1GB | RAG, step execution |
+| System | `dolphin-llama3:8b` | 4.7GB | Commands, security |
+| Quality | `qwen3.5:9b` | 5.5GB | Chat, research, code |
+
+### Embedding Model
 - **nomic-embed-text:latest** - Knowledge Base Embeddings (274MB)
 
-### Fallback Models
-- **artifish/llama3.2-uncensored:latest** - General uncensored fallback (2.0GB)
-- **llama3.2:1b-instruct-q4_K_M** - Standard 1B fallback (1.2GB)
-- **llama3.2:3b-instruct-q4_K_M** - Standard 3B fallback (3.5GB)
-
-**Total Download Size**: ~7GB
+**Total Download Size**: ~20GB
 
 ## Agent Architecture Overview
 
 ```
-Agent Orchestrator (3B) → Routes requests to specialized agents
-├── Chat Agent (1B) → Quick conversations
-├── System Commands Agent (1B) → Safe command generation  
-├── RAG Agent (3B) → Document synthesis
-├── Knowledge Retrieval Agent (1B) → Fast fact lookup
-└── Research Agent (3B+Web) → Web research + synthesis
+Agent Orchestrator (llama3.2:1b) -> Routes requests to specialized agents
++-- Classification Agent (gemma2:2b) -> Intent detection
++-- Chat Agent (qwen3.5:9b) -> Quality conversations
++-- System Commands Agent (dolphin-llama3:8b) -> Safe command generation
++-- RAG Agent (mistral:7b-instruct) -> Document synthesis
++-- Knowledge Retrieval Agent (gemma2:2b) -> Fast fact lookup
++-- Research Agent (qwen3.5:9b) -> Web research + synthesis
 ```
 
 ## Manual Model Installation
@@ -74,17 +79,16 @@ Agent Orchestrator (3B) → Routes requests to specialized agents
 If automatic installation fails:
 
 ```bash
-# Essential uncensored models
-ollama pull artifish/llama3.2-uncensored:1b
-ollama pull artifish/llama3.2-uncensored:3b
+# 6-tier models (all required)
+ollama pull llama3.2:1b
+ollama pull gemma2:2b
+ollama pull phi3:mini
+ollama pull mistral:7b-instruct
+ollama pull dolphin-llama3:8b
+ollama pull qwen3.5:9b
+
+# Embedding model
 ollama pull nomic-embed-text:latest
-
-# General uncensored fallback
-ollama pull artifish/llama3.2-uncensored:latest
-
-# Standard fallback models (if uncensored not available)
-ollama pull llama3.2:1b-instruct-q4_K_M
-ollama pull llama3.2:3b-instruct-q4_K_M
 ```
 
 ## Configuration Override
@@ -92,10 +96,12 @@ ollama pull llama3.2:3b-instruct-q4_K_M
 Set specific models via environment variables:
 
 ```bash
-export AUTOBOT_MODEL_CHAT="artifish/llama3.2-uncensored:1b"
-export AUTOBOT_MODEL_ORCHESTRATOR="artifish/llama3.2-uncensored:3b"
-export AUTOBOT_MODEL_RAG="artifish/llama3.2-uncensored:3b"
-export AUTOBOT_MODEL_SYSTEM_COMMANDS="artifish/llama3.2-uncensored:1b"
+export AUTOBOT_MODEL_TIER_ROUTING="llama3.2:1b"
+export AUTOBOT_MODEL_TIER_CLASSIFICATION="gemma2:2b"
+export AUTOBOT_MODEL_TIER_LIGHT="phi3:mini"
+export AUTOBOT_MODEL_TIER_INSTRUCTION="mistral:7b-instruct"
+export AUTOBOT_MODEL_TIER_SYSTEM="dolphin-llama3:8b"
+export AUTOBOT_MODEL_TIER_QUALITY="qwen3.5:9b"
 ```
 
 ## Troubleshooting
@@ -115,16 +121,16 @@ export AUTOBOT_MODEL_SYSTEM_COMMANDS="artifish/llama3.2-uncensored:1b"
 
 3. **Memory issues**
    - Close other applications
-   - Use smaller uncensored models:
+   - Use only lower-tier models for development:
      ```bash
-     export AUTOBOT_MODEL_ORCHESTRATOR="artifish/llama3.2-uncensored:1b"
-     export AUTOBOT_MODEL_RAG="artifish/llama3.2-uncensored:1b"
+     export AUTOBOT_MODEL_TIER_QUALITY="mistral:7b-instruct"
+     export AUTOBOT_MODEL_TIER_SYSTEM="mistral:7b-instruct"
      ```
 
 4. **Docker issues**
    ```bash
    sudo systemctl start docker
-   # Use Ansible playbooks (see autobot-slm-backend/ansible/) or ./run_agent.sh  # Re-run setup
+   # Use Ansible playbooks (see autobot-slm-backend/ansible/) or ./run_agent.sh
    ```
 
 ### Verification Commands
@@ -138,7 +144,7 @@ docker ps
 
 # Check Python dependencies
 source venv/bin/activate
-python3 -c "from src.agents import get_agent_orchestrator; print('✅ Multi-agent ready')"
+python3 -c "from src.agents import get_agent_orchestrator; print('Multi-agent ready')"
 
 # Check configuration
 python3 -c "from src.config import global_config_manager; print(f'Chat model: {global_config_manager.get_task_specific_model(\"chat\")}')"
@@ -146,13 +152,14 @@ python3 -c "from src.config import global_config_manager; print(f'Chat model: {g
 
 ## Performance Expectations
 
-| Agent | Model Size | Response Time | Memory Usage |
-|-------|------------|---------------|-------------|
-| Chat Agent | 1B | 200-500ms | 1.2GB |
-| System Commands | 1B | 300-600ms | 1.2GB |
-| Knowledge Retrieval | 1B | 100-300ms | 1.2GB |
-| RAG Agent | 3B | 800-1500ms | 3.5GB |
-| Orchestrator | 3B | 1-2s | 3.5GB |
+| Agent | Model | Tier | Response Time | Memory Usage |
+|-------|-------|------|---------------|-------------|
+| Orchestrator | llama3.2:1b | Routing | 100-200ms | 1.2GB |
+| Classification | gemma2:2b | Classification | 150-300ms | 1.8GB |
+| Chat Agent | qwen3.5:9b | Quality | 500-1500ms | 5.5GB |
+| System Commands | dolphin-llama3:8b | System | 400-800ms | 4.7GB |
+| Knowledge Retrieval | gemma2:2b | Classification | 100-300ms | 1.8GB |
+| RAG Agent | mistral:7b-instruct | Instruction | 800-1500ms | 4.1GB |
 
 **Note**: Models share memory when using the same base model.
 
@@ -173,4 +180,4 @@ For advanced users, see:
 
 ---
 
-**Ready to experience intelligent multi-agent AI assistance!** 🤖✨
+**Ready to experience intelligent multi-agent AI assistance!**

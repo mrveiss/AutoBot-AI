@@ -11,7 +11,7 @@ https://172.16.168.20:8443/
 ```
 
 ### OpenAPI Documentation
-- **Swagger UI**: `https://172.16.168.20:8443/docs`  
+- **Swagger UI**: `https://172.16.168.20:8443/docs`
 - **OpenAPI JSON**: `https://172.16.168.20:8443/openapi.json`
 
 ## Core API Endpoints
@@ -110,7 +110,7 @@ GET /api/async_chat/health
   "status": "healthy|degraded|unhealthy",
   "llm": {
     "status": "healthy",
-    "model": "llama3.2:1b-instruct-q4_K_M"
+    "model": "qwen3.5:9b"
   },
   "async_architecture": true,
   "service": "chat"
@@ -380,7 +380,7 @@ GET /api/system/health
   "details": {
     "ollama": {
       "status": "connected",
-      "model": "llama3.2:1b-instruct-q4_K_M"
+      "model": "qwen3.5:9b"
     }
   }
 }
@@ -547,7 +547,7 @@ Content-Type: application/json
 ### HTTP Status Codes
 - `200`: Success
 - `400`: Bad Request (validation error)
-- `408`: Request Timeout  
+- `408`: Request Timeout
 - `422`: Validation Error
 - `500`: Internal Server Error
 
@@ -814,55 +814,3 @@ async function systemHealthCheck() {
   }
 }
 ```
-
-### WebSocket Testing
-```typescript
-// Test WebSocket connectivity and message handling
-function testWebSocket() {
-  const ws = new WebSocket('ws://172.16.168.20:8443/ws-test');
-
-  ws.onopen = () => {
-    console.log('Test WebSocket connected');
-    ws.send('test message');
-  };
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('Received:', data);
-
-    if (data.type === 'echo') {
-      console.log('Echo test successful');
-      ws.close();
-    }
-  };
-}
-```
-
-## 10. Migration & Updates
-
-### API Versioning
-Currently all APIs are unversioned. Future versions may introduce:
-- `/api/v1/` prefix for versioned endpoints
-- Deprecation headers for outdated endpoints
-- Migration guides for breaking changes
-
-### Backward Compatibility
-- Current endpoints will remain functional
-- New features will be additive, not replacing
-- Breaking changes will be announced with migration period
-
----
-
-## Summary
-
-This specification covers all major API endpoints needed for frontend integration:
-
-✅ **Chat System**: 7 endpoints for async chat functionality  
-✅ **Knowledge Base**: 15+ endpoints for knowledge management  
-✅ **WebSocket**: Real-time communication with 10+ message types  
-✅ **System Monitoring**: Health checks and configuration endpoints  
-✅ **Error Handling**: Standardized error responses and recovery  
-✅ **Integration Examples**: TypeScript/React/Vue.js examples  
-✅ **Performance Guidelines**: Timeouts, rate limiting, error recovery  
-
-The AutoBot backend provides a comprehensive API surface for building sophisticated frontend applications with real-time chat, knowledge management, and system monitoring capabilities.
