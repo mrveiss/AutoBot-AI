@@ -251,11 +251,27 @@ async def _generate_dynamic_inventory(
         hosts, all_node_roles, node_id_to_hostname
     )
     infra_vars = _build_infra_vars(all_active, all_ip_map)
+
+    # Derive slm_host from external_url so the slm_agent role resolves the
+    # correct admin URL on single-host installs (#2747).  On single-host the
+    # SLM Manager runs on the same machine as the backend; external_url holds
+    # the routable IP that remote nodes should use.  The slm_agent role's
+    # default builds slm_admin_url from this value, and the template's
+    # auto-detect logic then rewrites it to 127.0.0.1 when the agent is
+    # co-located — but only after slm_host contains the real local IP rather
+    # than the hardcoded multi-node default (172.16.168.19).
+    from urllib.parse import urlparse
+
+    from config import settings as _slm_settings
+
+    _slm_host = urlparse(_slm_settings.external_url).hostname or "127.0.0.1"
+
     inventory = {
         "all": {
             "vars": {
                 "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
                 "ansible_python_interpreter": "/usr/bin/python3",
+                "slm_host": _slm_host,
                 **infra_vars,
             },
             "hosts": hosts,

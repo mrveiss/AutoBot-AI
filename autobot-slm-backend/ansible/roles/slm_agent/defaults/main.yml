@@ -6,7 +6,12 @@
 # Override these in inventory or playbook variables
 
 # Admin connectivity
-slm_admin_url: "https://{{ slm_host | default('172.16.168.19') }}"
+# slm_host must be provided by inventory or via -e.  The setup wizard
+# injects it from settings.external_url (#2747); static inventories derive
+# it from hostvars['autobot-slm']['ansible_host'].  The loopback fallback
+# here is intentionally safe: it triggers an obvious connection failure
+# rather than silently routing to a different machine's IP.
+slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}"
 slm_heartbeat_interval: 30
 
 # Agent user/group (should match common role's autobot user)

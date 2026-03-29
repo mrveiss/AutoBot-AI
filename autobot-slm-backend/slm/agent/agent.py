@@ -86,8 +86,11 @@ def _get_default_admin_url() -> str:
 
         return get_config().slm_url
     except Exception:
-        # Fallback for standalone deployments without full AutoBot
-        slm_host = os.getenv("SLM_HOST", "172.16.168.19")  # noqa: ssot-fallback
+        # Fallback for standalone deployments without full AutoBot.
+        # Use 127.0.0.1 rather than a hardcoded fleet IP so the agent fails
+        # clearly on a misconfigured node instead of routing to the wrong host
+        # (#2747).  Set SLM_ADMIN_URL or SLM_HOST env vars to override.
+        slm_host = os.getenv("SLM_HOST", "127.0.0.1")  # noqa: ssot-fallback
         return f"http://{slm_host}:8000"
 
 
