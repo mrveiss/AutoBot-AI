@@ -30,7 +30,6 @@ from .models import (
 from .safety_limits import (
     CostTracker,
     StepTimeoutEnforcer,
-    StepTimeoutError,
     WorkflowLimits,
 )
 from .state_machine import WorkflowPhase, WorkflowStateMachine
@@ -510,8 +509,6 @@ class WorkflowExecutor:
 
         try:
             await self._resolve_and_run_step(workflow, current_step, step_id, workflows)
-        except StepTimeoutError as e:
-            await self._handle_step_execution_failure(workflow, current_step, step_id, e)
         except Exception as e:
             await self._handle_step_execution_failure(workflow, current_step, step_id, e)
 
