@@ -5,9 +5,8 @@
 # stay contained within their ecosystem. To debug a conflict,
 # install individual files: pip install -r requirements-ci/framework.txt
 #
-# NOTE: The llama-index umbrella package is installed separately with
-# --no-deps in the CI workflow because it constrains llama-index-readers-file<0.6,
-# but we need >=0.6.0 for pypdf 6.x compatibility.
+# NOTE: llama-index upgraded to 0.14.x (#2669) — the --no-deps workaround
+# for llama-index-readers-file<0.6 constraint is no longer needed.
 
 -r requirements-ci/framework.txt
 -r requirements-ci/networking.txt

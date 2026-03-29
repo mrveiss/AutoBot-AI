@@ -386,7 +386,7 @@ setup_slm_backend() {
             pydantic \
             pydantic-settings \
             PyJWT[crypto] \
-            passlib[bcrypt] \
+            bcrypt \
             aiofiles \
             ansible-runner \
             websockets \
@@ -606,8 +606,8 @@ create_admin_user() {
 
     # Hash the password using Python
     HASHED_PASSWORD=$(python3 -c "
-from passlib.hash import bcrypt
-print(bcrypt.hash('$ADMIN_PASSWORD'))
+import bcrypt
+print(bcrypt.hashpw('$ADMIN_PASSWORD'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'))
 ")
 
     cat > "$INSTALL_DIR/config/admin.json" << EOF

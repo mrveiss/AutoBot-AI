@@ -88,12 +88,13 @@ ENV PYTHONPATH=/app:/app/autobot-backend:/app/autobot-shared
 ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 ENV AUTOBOT_DEPLOYMENT_MODE=local
+ENV AUTOBOT_BACKEND_PORT=8001
 
-EXPOSE 8000
+EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -f http://localhost:8000/api/system/health || exit 1
+    CMD curl -f http://localhost:${AUTOBOT_BACKEND_PORT}/api/system/health || exit 1
 
-CMD ["python3.12", "-m", "uvicorn", "main:app", \
-     "--host", "0.0.0.0", "--port", "8000", \
-     "--workers", "1", "--app-dir", "/app/autobot-backend"]
+CMD python3.12 -m uvicorn main:app \
+    --host 0.0.0.0 --port ${AUTOBOT_BACKEND_PORT} \
+    --workers 1 --app-dir /app/autobot-backend

@@ -13,8 +13,7 @@ import secrets
 import uuid
 from typing import Optional
 
-from passlib.context import CryptContext
-from passlib.hash import bcrypt as bcrypt_hash
+import bcrypt
 from sqlalchemy import select
 
 from services.encryption import decrypt_data, encrypt_data
@@ -30,7 +29,6 @@ except ImportError:
     PYOTP_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class MFAServiceError(Exception):
@@ -113,7 +111,7 @@ class MFAService(BaseService):
         if not user:
             raise MFAServiceError("User not found")
 
-        if not pwd_context.verify(password, user.password_hash):
+        if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
             raise MFAServiceError("Invalid password")
 
         await self._delete_mfa_record(user_id)
@@ -135,7 +133,9 @@ class MFAService(BaseService):
     async def regenerate_backup_codes(self, user_id: uuid.UUID, password: str) -> list:
         """Regenerate backup codes (requires password)."""
         user = await self._get_user_by_id(user_id)
-        if not user or not pwd_context.verify(password, user.password_hash):
+        if not user or not bcrypt.checkpw(
+            password.encode("utf-8"), user.password_hash.encode("utf-8")
+        ):
             raise MFAServiceError("Invalid password")
 
         mfa = await self._get_verified_mfa(user_id)
@@ -181,7 +181,10 @@ class MFAService(BaseService):
     @staticmethod
     def _encrypt_backup_codes(codes: list) -> str:
         """Encrypt backup codes after hashing."""
-        hashed = [bcrypt_hash.hash(code) for code in codes]
+        hashed = [
+            bcrypt.hashpw(code.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            for code in codes
+        ]
         return encrypt_data(json.dumps(hashed))
 
     @staticmethod
@@ -288,10 +291,16 @@ class MFAService(BaseService):
     @staticmethod
     def _check_backup_code(code: str, hashed_codes: list) -> bool:
         """Check if code matches any hashed backup code."""
-        return any(bcrypt_hash.verify(code, hashed) for hashed in hashed_codes)
+        return any(
+            bcrypt.checkpw(code.encode("utf-8"), hashed.encode("utf-8"))
+            for hashed in hashed_codes
+        )
 
     def _remove_backup_code(self, mfa: UserMFA, code: str, hashed_codes: list) -> None:
         """Remove used backup code."""
-        new_codes = [h for h in hashed_codes if not bcrypt_hash.verify(code, h)]
+        new_codes = [
+            h for h in hashed_codes
+            if not bcrypt.checkpw(code.encode("utf-8"), h.encode("utf-8"))
+        ]
         mfa.backup_codes_encrypted = encrypt_data(json.dumps(new_codes))
         mfa.use_backup_code()

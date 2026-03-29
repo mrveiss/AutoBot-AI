@@ -38,7 +38,7 @@ services:
       - ./docker/backend/dev-entrypoint.sh:/app/docker/backend/dev-entrypoint.sh
     command: >
       python3.12 -m uvicorn main:app
-        --host 0.0.0.0 --port 8000
+        --host 0.0.0.0 --port 8001
         --reload
         --reload-dir /app/autobot-backend
         --reload-dir /app/autobot-shared
