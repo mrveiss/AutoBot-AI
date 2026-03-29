@@ -172,6 +172,43 @@ class ExperimentStore:
             return None
         return Experiment.from_dict(json.loads(data))
 
+    async def _fetch_experiments_by_ids(self, experiment_ids: List[str]) -> List[Experiment]:
+        """Batch-fetch experiments from Redis using a single HMGET call.
+
+        Replaces N individual HGET calls with one pipeline command — see #2684.
+        """
+        if not experiment_ids:
+            return []
+        redis = await self._get_redis()
+        raw_values = await redis.hmget(self._redis_key("experiments"), *experiment_ids)
+        experiments = []
+        for raw in raw_values:
+            if raw is not None:
+                experiments.append(Experiment.from_dict(json.loads(raw)))
+        return experiments
+
+    async def _sorted_ids_for_state(
+        self, redis, state: ExperimentState, limit: int, offset: int
+    ) -> List[str]:
+        """Return experiment IDs for *state*, ordered newest-first, with paging.
+
+        Uses a single pipeline to batch all ZSCORE calls — see #2684.
+        """
+        state_ids = await redis.smembers(self._redis_key("state", state.value))
+        if not state_ids:
+            return []
+
+        timeline_key = self._redis_key("timeline")
+        pipe = redis.pipeline()
+        id_list = [eid if isinstance(eid, str) else eid.decode("utf-8") for eid in state_ids]
+        for eid in id_list:
+            pipe.zscore(timeline_key, eid)
+        scores = await pipe.execute()
+
+        scored = [(eid, sc) for eid, sc in zip(id_list, scores) if sc is not None]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [eid for eid, _ in scored[offset : offset + limit]]
+
     async def list_experiments(
         self,
         limit: int = 50,
@@ -182,33 +219,18 @@ class ExperimentStore:
         redis = await self._get_redis()
 
         if state is not None:
-            # Intersect state set with timeline for chronological ordering
-            state_ids = await redis.smembers(self._redis_key("state", state.value))
-            if not state_ids:
-                return []
-            # Score experiments by their timeline position (created_at)
-            scored = []
-            for eid in state_ids:
-                score = await redis.zscore(self._redis_key("timeline"), eid)
-                if score is not None:
-                    scored.append((eid, score))
-            scored.sort(key=lambda x: x[1], reverse=True)
-            experiment_ids = [eid for eid, _ in scored[offset : offset + limit]]
+            experiment_ids = await self._sorted_ids_for_state(redis, state, limit, offset)
         else:
             experiment_ids = await redis.zrevrange(
                 self._redis_key("timeline"),
                 offset,
                 offset + limit - 1,
             )
+            experiment_ids = [
+                eid if isinstance(eid, str) else eid.decode("utf-8") for eid in experiment_ids
+            ]
 
-        experiments = []
-        for eid in experiment_ids:
-            exp = await self.get_experiment(
-                eid if isinstance(eid, str) else eid.decode("utf-8")
-            )
-            if exp:
-                experiments.append(exp)
-        return experiments
+        return await self._fetch_experiments_by_ids(experiment_ids)
 
     async def get_stats(self) -> ExperimentStats:
         """Compute aggregate statistics across all experiments."""
