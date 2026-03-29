@@ -7,7 +7,7 @@
  * Issue #74 - Area 4: Advanced Session Management
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -37,7 +37,10 @@ export interface ConnectionMetrics {
 
 export function useVncConnection(sessionId: string = 'default') {
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
   const settings = ref<ConnectionSettings | null>(null)
   const metrics = ref<ConnectionMetrics | null>(null)
 
@@ -46,7 +49,7 @@ export function useVncConnection(sessionId: string = 'default') {
    */
   async function loadSettings(): Promise<void> {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       const data = await ApiClient.get<ConnectionSettings>(
@@ -55,7 +58,7 @@ export function useVncConnection(sessionId: string = 'default') {
       settings.value = data
     } catch (err: any) {
       logger.error('Failed to load connection settings:', err)
-      error.value = 'Failed to load connection settings'
+      errors.value = [...errors.value, 'Failed to load connection settings']
     } finally {
       loading.value = false
     }
@@ -66,7 +69,7 @@ export function useVncConnection(sessionId: string = 'default') {
    */
   async function updateSettings(newSettings: ConnectionSettings): Promise<boolean> {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       await ApiClient.post(
@@ -77,7 +80,7 @@ export function useVncConnection(sessionId: string = 'default') {
       return true
     } catch (err: any) {
       logger.error('Failed to update connection settings:', err)
-      error.value = 'Failed to update connection settings'
+      errors.value = [...errors.value, 'Failed to update connection settings']
       return false
     } finally {
       loading.value = false
