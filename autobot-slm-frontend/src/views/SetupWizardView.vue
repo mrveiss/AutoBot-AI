@@ -301,8 +301,26 @@
           This may take several minutes.
         </p>
 
-        <div v-if="provisionOutput" class="provision-log">
-          <pre>{{ provisionOutput }}</pre>
+        <!-- Phase & status bar -->
+        <div v-if="provisioning" class="provision-status-bar">
+          <span class="provision-stage">{{ provisionStage }}</span>
+          <span class="provision-elapsed">{{ provisionElapsed }}s</span>
+        </div>
+
+        <!-- Streaming log panel -->
+        <div
+          v-if="provisionLogs.length > 0"
+          ref="logContainerRef"
+          class="provision-log"
+        >
+          <div
+            v-for="(entry, idx) in provisionLogs"
+            :key="idx"
+            class="log-entry"
+            :class="`log-${entry.type}`"
+          >
+            {{ entry.message }}
+          </div>
         </div>
 
         <button
@@ -372,9 +390,10 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SetupWizard')
@@ -502,8 +521,18 @@ function roleState(node: Node, roleName: string): RoleState {
 // ── Provisioning ──────────────────────────────────────────────────────────
 
 const provisioning = ref(false)
-const provisionOutput = ref('')
 const provisionComplete = ref(false)
+
+interface ProvisionLogEntry {
+  type: 'info' | 'task' | 'success' | 'error' | 'warning'
+  message: string
+}
+
+const provisionLogs = ref<ProvisionLogEntry[]>([])
+const provisionStage = ref('')
+const provisionElapsed = ref(0)
+const logContainerRef = ref<HTMLElement | null>(null)
+let provisionWs: WebSocket | null = null
 
 // ── Health check ──────────────────────────────────────────────────────────
 
@@ -710,46 +739,111 @@ async function saveRoles() {
 
 let provisionPollTimer: ReturnType<typeof setInterval> | null = null
 
-async function provisionFleet() {
-  provisioning.value = true
-  provisionOutput.value = 'Starting fleet provisioning...\n'
-  let linesSeen = 0
+function connectProvisionWs() {
+  // Use SSOT config for WS URL (Issue #2489: Docker prefix support)
+  const cfg = getConfig()
+  const apiPrefix = cfg.apiBaseUrl.startsWith('/') ? cfg.apiBaseUrl : ''
+  const url = `${cfg.wsBaseUrl}${apiPrefix}/api/ws/provision`
 
-  try {
-    await provisionWizardFleet(nodes.value.map(n => n.node_id))
-  } catch (err: unknown) {
-    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
-    provisionOutput.value += `\nERROR: ${detail}\n`
-    provisioning.value = false
-    return
+  provisionWs = new WebSocket(url)
+
+  provisionWs.onopen = () => {
+    logger.info('Provision WebSocket connected')
   }
 
-  // Poll for progress (#1384)
+  provisionWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+
+      if (msg.type === 'log') {
+        provisionLogs.value.push({
+          type: msg.log_type || 'info',
+          message: msg.message,
+        })
+        scrollProvisionLog()
+      } else if (msg.type === 'status') {
+        provisionStage.value = formatStage(msg.stage || '')
+        provisionElapsed.value = Math.round(msg.elapsed_seconds || 0)
+
+        if (msg.status === 'completed') {
+          provisionComplete.value = true
+          provisioning.value = false
+          disconnectProvisionWs()
+        } else if (msg.status === 'failed') {
+          provisionLogs.value.push({
+            type: 'error',
+            message: msg.error || 'Provisioning failed',
+          })
+          provisioning.value = false
+          scrollProvisionLog()
+          disconnectProvisionWs()
+        }
+      } else if (msg.type === 'ping') {
+        provisionWs?.send('pong')
+      }
+    } catch {
+      // Ignore non-JSON messages (pong, etc.)
+    }
+  }
+
+  provisionWs.onclose = () => {
+    logger.debug('Provision WebSocket closed')
+    // If still provisioning, fall back to polling
+    if (provisioning.value) {
+      logger.info('WebSocket closed during provisioning, falling back to polling')
+      startProvisionPolling()
+    }
+  }
+
+  provisionWs.onerror = (err) => {
+    logger.error('Provision WebSocket error:', err)
+  }
+}
+
+function disconnectProvisionWs() {
+  if (provisionWs) {
+    provisionWs.onclose = null // Prevent fallback trigger
+    provisionWs.close()
+    provisionWs = null
+  }
+  stopProvisionPolling()
+}
+
+function startProvisionPolling() {
+  let linesSeen = provisionLogs.value.length
   provisionPollTimer = setInterval(async () => {
     try {
       const status = await getProvisionStatus(linesSeen)
       if (status.lines.length > 0) {
-        provisionOutput.value += status.lines.join('\n') + '\n'
+        for (const line of status.lines) {
+          provisionLogs.value.push({ type: 'info', message: line })
+        }
         linesSeen = status.total_lines
+        scrollProvisionLog()
       }
       if (status.elapsed_seconds) {
-        provisionOutput.value = provisionOutput.value.replace(
-          /^Starting fleet provisioning\.\.\.\n/,
-          `Provisioning in progress (${Math.round(status.elapsed_seconds)}s)...\n`
-        )
+        provisionElapsed.value = Math.round(status.elapsed_seconds)
       }
       if (status.status === 'completed') {
         stopProvisionPolling()
-        provisionOutput.value += '\nProvisioning completed successfully.\n'
+        provisionLogs.value.push({
+          type: 'success',
+          message: 'Provisioning completed successfully.',
+        })
         provisionComplete.value = true
         provisioning.value = false
+        scrollProvisionLog()
       } else if (status.status === 'failed') {
         stopProvisionPolling()
-        provisionOutput.value += `\nERROR: ${status.error || 'Provisioning failed'}\n`
+        provisionLogs.value.push({
+          type: 'error',
+          message: status.error || 'Provisioning failed',
+        })
         provisioning.value = false
+        scrollProvisionLog()
       }
     } catch {
-      // Poll failure is transient — keep trying
+      // Poll failure is transient - keep trying
     }
   }, 2000)
 }
@@ -761,8 +855,60 @@ function stopProvisionPolling() {
   }
 }
 
+function formatStage(stage: string): string {
+  const stageLabels: Record<string, string> = {
+    starting: 'Starting...',
+    slm_starting: 'Preparing SLM server',
+    slm_syncing: 'Syncing SLM backend',
+    slm_restarting: 'Restarting SLM backend',
+    slm_waiting: 'Waiting for SLM backend',
+    slm_complete: 'SLM server updated',
+    play1_start: 'Phase 1: SLM Server',
+    play2_start: 'Phase 2: Infrastructure',
+    nodes_starting: 'Updating infrastructure nodes',
+    node_backend: 'Syncing backend node',
+    node_frontend: 'Syncing frontend node',
+    node_npu: 'Syncing NPU worker',
+    node_browser: 'Syncing browser automation',
+    node_complete: 'Node update complete',
+    complete: 'Complete',
+  }
+  return stageLabels[stage] || stage.replace(/_/g, ' ')
+}
+
+function scrollProvisionLog() {
+  nextTick(() => {
+    if (logContainerRef.value) {
+      logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+    }
+  })
+}
+
+async function provisionFleet() {
+  provisioning.value = true
+  provisionLogs.value = []
+  provisionStage.value = 'Starting...'
+  provisionElapsed.value = 0
+
+  provisionLogs.value.push({ type: 'info', message: 'Starting fleet provisioning...' })
+
+  // Connect WebSocket first
+  connectProvisionWs()
+
+  try {
+    await provisionWizardFleet(nodes.value.map(n => n.node_id))
+  } catch (err: unknown) {
+    const detail =
+      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+      'Unknown error'
+    provisionLogs.value.push({ type: 'error', message: `ERROR: ${detail}` })
+    provisioning.value = false
+    disconnectProvisionWs()
+  }
+}
+
 onUnmounted(() => {
-  stopProvisionPolling()
+  disconnectProvisionWs()
 })
 
 async function checkFleetHealth() {
@@ -1244,17 +1390,59 @@ input.full-width {
   border: 1px solid var(--border-color, #333);
   border-radius: 6px;
   padding: 1rem;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
   margin-bottom: 1rem;
-}
-
-.provision-log pre {
-  margin: 0;
   font-family: monospace;
   font-size: 0.8rem;
+}
+
+.log-entry {
+  padding: 2px 0;
   white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-info {
   color: #a0d0a0;
+}
+
+.log-task {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.log-success {
+  color: #4ade80;
+}
+
+.log-error {
+  color: #f87171;
+}
+
+.log-warning {
+  color: #fbbf24;
+}
+
+.provision-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.provision-stage {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.provision-elapsed {
+  color: var(--text-secondary, #999);
 }
 
 /* Health summary */
