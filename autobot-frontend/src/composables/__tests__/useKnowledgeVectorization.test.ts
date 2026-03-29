@@ -18,10 +18,10 @@ import { useKnowledgeVectorization } from '../useKnowledgeVectorization'
 
 // Mock useKnowledgeBase composable
 vi.mock('../useKnowledgeBase', () => ({
-  useKnowledgeBase: () => ({
+  useKnowledgeBase: vi.fn(() => ({
     vectorizeFacts: vi.fn(),
     getVectorizationStatus: vi.fn()
-  })
+  }))
 }))
 
 // Mock ApiClient
