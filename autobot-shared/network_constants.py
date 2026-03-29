@@ -431,23 +431,26 @@ def get_network_config() -> NetworkConfig:
 
 
 class DatabaseConstants:
-    """Redis database assignments to eliminate hardcoded database numbers"""
+    """Redis database assignments to eliminate hardcoded database numbers.
 
-    # Core databases
+    All values must match ssot_config.py RedisConfig db_* fields (Issue #2723).
+    ssot_config.py is the authoritative source of truth; this class mirrors it
+    for callers that import from network_constants rather than ssot_config.
+    """
+
+    # Core databases — aligned with ssot_config.RedisConfig (Issue #2723)
     MAIN_DB = 0
     KNOWLEDGE_DB = 1
-    CACHE_DB = 2
-    VECTORS_DB = 8
-
-    # Specialized databases
-    SESSIONS_DB = 3
+    PROMPTS_DB = 2
+    AGENTS_DB = 3
     METRICS_DB = 4
-    LOGS_DB = 5
-    CONFIG_DB = 6
-    WORKFLOWS_DB = 7
+    CACHE_DB = 5
+    SESSIONS_DB = 6
+    TASKS_DB = 7
+    LOGS_DB = 8
     TEMP_DB = 9
-    MONITORING_DB = 10
-    RATE_LIMITING_DB = 11
+    BACKUP_DB = 10
+    TESTING_DB = 13
 
     @classmethod
     def get_db_description(cls, db_number: int) -> str:
@@ -455,16 +458,16 @@ class DatabaseConstants:
         descriptions = {
             cls.MAIN_DB: "Main application data",
             cls.KNOWLEDGE_DB: "Knowledge base and documents",
+            cls.PROMPTS_DB: "Prompt templates and configurations",
+            cls.AGENTS_DB: "Agent state and definitions",
+            cls.METRICS_DB: "Performance metrics",
             cls.CACHE_DB: "Application cache",
             cls.SESSIONS_DB: "User sessions",
-            cls.METRICS_DB: "Performance metrics",
+            cls.TASKS_DB: "Task queue and workflow state",
             cls.LOGS_DB: "Application logs",
-            cls.CONFIG_DB: "Configuration data",
-            cls.WORKFLOWS_DB: "Workflow definitions",
-            cls.VECTORS_DB: "Vector embeddings",
             cls.TEMP_DB: "Temporary data",
-            cls.MONITORING_DB: "System monitoring",
-            cls.RATE_LIMITING_DB: "Rate limiting data",
+            cls.BACKUP_DB: "Backup data",
+            cls.TESTING_DB: "Test isolation database",
         }
         return descriptions.get(db_number, f"Database {db_number}")
 
