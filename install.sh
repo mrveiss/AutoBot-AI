@@ -531,14 +531,7 @@ register_local_node() {
                 \"slm-backend\",
                 \"slm-frontend\",
                 \"slm-database\",
-                \"slm-monitoring\",
-                \"backend\",
-                \"celery\",
-                \"frontend\",
-                \"redis\",
-                \"ai-stack\",
-                \"chromadb\",
-                \"browser-service\"
+                \"slm-monitoring\"
             ],
             \"ssh_user\": \"autobot\",
             \"ssh_port\": 22,
