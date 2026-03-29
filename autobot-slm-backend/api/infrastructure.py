@@ -611,8 +611,20 @@ async def _run_playbook(
             logger.error("Playbook file missing: %s", playbook_path)
             return
 
-        inventory_dir = os.path.join(os.path.dirname(PLAYBOOKS_DIR), "inventory")
-        inventory_path = os.path.join(inventory_dir, "slm-nodes.yml")
+        # Generate dynamic inventory from DB instead of static file (#2700)
+        from api.setup_wizard import _generate_dynamic_inventory
+
+        inventory_path_obj = await _generate_dynamic_inventory()
+        if not inventory_path_obj:
+            execution.status = PlaybookStatus.FAILED
+            execution.completed_at = datetime.now(timezone.utc)
+            execution.output.append(
+                "[ERROR] No nodes registered — cannot build inventory. "
+                "Register nodes via the setup wizard first."
+            )
+            logger.error("Dynamic inventory generation failed: no nodes in DB")
+            return
+        inventory_path = str(inventory_path_obj)
         cmd = _build_playbook_command(
             playbook_path, inventory_path, playbook, limit_hosts, variables
         )
