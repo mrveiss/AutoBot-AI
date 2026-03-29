@@ -22,10 +22,13 @@ models_dir: "/var/lib/autobot/models"
 install_openvino: true
 openvino_version: "2023.3.0"
 install_ollama: true
-# Required Ollama models — 3-tier agent mapping (#2553)
+# Required Ollama models — 6-tier agent mapping (#2553)
 ollama_models:
   - "llama3.2:1b"           # Routing tier (orchestrator)
-  - "gemma3:4b"             # Classification tier (intent detection)
+  - "gemma2:2b"             # Classification tier (intent detection)
+  - "phi3:mini"             # Light processing tier
+  - "mistral:7b-instruct"   # Instruction following tier
+  - "dolphin-llama3:8b"     # System/uncensored tier
   - "qwen3.5:9b"            # Quality/tools tier (all tool-using agents)
   - "nomic-embed-text"      # Embeddings
 

@@ -18,13 +18,24 @@ AutoBot supports comprehensive configuration through environment variables with 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_OLLAMA_HOST` | `http://localhost:11434` | Ollama server endpoint |
-| `AUTOBOT_OLLAMA_MODEL` | `deepseek-r1:14b` | Default Ollama model |
+| `AUTOBOT_OLLAMA_MODEL` | `qwen3.5:9b` | Default Ollama model (deprecated, use `AUTOBOT_DEFAULT_LLM_MODEL`) |
 | `AUTOBOT_OLLAMA_ENDPOINT` | `http://localhost:11434/api/generate` | Ollama API endpoint |
-| `AUTOBOT_OLLAMA_SELECTED_MODEL` | `deepseek-r1:14b` | Currently selected Ollama model |
-| `AUTOBOT_ORCHESTRATOR_LLM` | `deepseek-r1:14b` | LLM model for orchestrator |
-| `AUTOBOT_DEFAULT_LLM` | `ollama_deepseek-r1:14b` | Default LLM identifier |
-| `AUTOBOT_TASK_LLM` | `ollama_deepseek-r1:14b` | Task-specific LLM identifier |
+| `AUTOBOT_OLLAMA_SELECTED_MODEL` | `qwen3.5:9b` | Currently selected Ollama model |
+| `AUTOBOT_ORCHESTRATOR_LLM` | `llama3.2:1b` | LLM model for orchestrator (Routing tier) |
+| `AUTOBOT_DEFAULT_LLM` | `ollama_qwen3.5:9b` | Default LLM identifier |
+| `AUTOBOT_TASK_LLM` | `ollama_qwen3.5:9b` | Task-specific LLM identifier |
 | `AUTOBOT_LLM_PROVIDER_TYPE` | `local` | LLM provider type (local/cloud) |
+
+### 6-Tier Model Configuration
+
+| Variable | Default | Tier | Purpose |
+|----------|---------|------|---------|
+| `AUTOBOT_ROUTING_MODEL` | `llama3.2:1b` | Routing | Orchestrator, request routing |
+| `AUTOBOT_CLASSIFICATION_MODEL` | `gemma2:2b` | Classification | Intent detection, category assignment |
+| `AUTOBOT_LIGHT_PROCESSING_MODEL` | `phi3:mini` | Light Processing | Extraction, formatting |
+| `AUTOBOT_INSTRUCTION_MODEL` | `mistral:7b-instruct` | Instruction | RAG, step execution |
+| `AUTOBOT_SYSTEM_MODEL` | `dolphin-llama3:8b` | System | Commands, security |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Quality | Chat, research, code |
 
 ## Redis Configuration
 
@@ -118,10 +129,15 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 
 ## Usage Examples
 
-### Setting Model to DeepSeek
+### Setting Default LLM Model
 ```bash
-export AUTOBOT_OLLAMA_MODEL="deepseek-r1:14b"
-export AUTOBOT_ORCHESTRATOR_LLM="deepseek-r1:14b"
+# Quality tier (default for complex tasks)
+export AUTOBOT_DEFAULT_LLM_MODEL="qwen3.5:9b"
+
+# Override specific tiers
+export AUTOBOT_ROUTING_MODEL="llama3.2:1b"
+export AUTOBOT_INSTRUCTION_MODEL="mistral:7b-instruct"
+export AUTOBOT_SYSTEM_MODEL="dolphin-llama3:8b"
 ```
 
 ### Using Different Backend Port

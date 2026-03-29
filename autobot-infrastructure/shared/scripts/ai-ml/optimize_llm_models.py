@@ -53,7 +53,7 @@ def _get_model(role: str, fallback: str) -> str:
 # llm.default_model sits one level above llm.models; retrieve it separately.
 _DEFAULT_MODEL = _load_agents_config().get("llm", {}).get("default_model", "qwen3.5:9b")
 _ROUTING_MODEL = _get_model("orchestrator", "llama3.2:1b")
-_CLASSIFICATION_MODEL = _get_model("classification", "gemma3:4b")
+_CLASSIFICATION_MODEL = _get_model("classification", "gemma2:2b")
 _RAG_MODEL = _get_model("rag", "qwen3.5:9b")
 _CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
 _CODE_MODEL = _get_model("npu_code_search", "qwen3.5:9b")

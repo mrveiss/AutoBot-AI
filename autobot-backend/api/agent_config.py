@@ -29,10 +29,13 @@ from utils.connection_utils import ModelManager
 
 logger = logging.getLogger(__name__)
 
-# 3-tier model mapping (#2553) — all defaults from SSOT constants.
+# 6-tier model mapping (#2553) — all defaults from SSOT constants.
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as _SSOT_CLASSIFICATION
+from autobot_shared.ssot_config import INSTRUCTION_MODEL as _SSOT_INSTRUCTION
+from autobot_shared.ssot_config import LIGHT_PROCESSING_MODEL as _SSOT_LIGHT
 from autobot_shared.ssot_config import QUALITY_MODEL as _SSOT_QUALITY
 from autobot_shared.ssot_config import ROUTING_MODEL as _SSOT_ROUTING
+from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 # Routing tier — orchestrator only, no tool use
 ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
@@ -40,7 +43,13 @@ ROUTING_TIER_MODEL = os.getenv("AUTOBOT_ROUTING_MODEL", _SSOT_ROUTING)
 CLASSIFICATION_TIER_MODEL = os.getenv(
     "AUTOBOT_CLASSIFICATION_MODEL", _SSOT_CLASSIFICATION
 )
-# Quality/tools tier — all tool-using agents
+# Light processing tier — extraction, formatting, lightweight tasks
+LIGHT_TIER_MODEL = os.getenv("AUTOBOT_LIGHT_PROCESSING_MODEL", _SSOT_LIGHT)
+# Instruction following tier — RAG, entity extraction, instruction following
+INSTRUCTION_TIER_MODEL = os.getenv("AUTOBOT_INSTRUCTION_MODEL", _SSOT_INSTRUCTION)
+# System/uncensored tier — system commands, security tasks
+SYSTEM_TIER_MODEL = os.getenv("AUTOBOT_SYSTEM_MODEL", _SSOT_SYSTEM)
+# Quality tier — user-facing chat, research, code analysis
 QUALITY_TIER_MODEL = os.getenv(
     "AUTOBOT_DEFAULT_LLM_MODEL",
     os.getenv("AUTOBOT_DEFAULT_AGENT_MODEL", _SSOT_QUALITY),
@@ -165,7 +174,7 @@ DEFAULT_AGENT_CONFIGS = {
     "kb_librarian": {
         "name": "Knowledge Base Librarian",
         "description": "Manages knowledge base operations including document ingestion, search, and retrieval. Invoked by AsyncChatWorkflow when knowledge patterns detected ('according to', 'based on documents'). Uses LlamaIndex for indexing.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": LIGHT_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -177,7 +186,7 @@ DEFAULT_AGENT_CONFIGS = {
     "rag": {
         "name": "RAG Agent",
         "description": "Performs Retrieval-Augmented Generation by combining vector search with LLM synthesis. Invoked as secondary agent when knowledge retrieval needs synthesis. Uses ChromaDB for vector operations.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -201,7 +210,7 @@ DEFAULT_AGENT_CONFIGS = {
     "knowledge_extraction": {
         "name": "Knowledge Extraction Agent",
         "description": "Extracts structured entities and relationships from unstructured text. Invoked by kb_librarian during document ingestion. Feeds data to graph_entity_extractor for knowledge graphs.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": LIGHT_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -213,7 +222,7 @@ DEFAULT_AGENT_CONFIGS = {
     "knowledge_retrieval": {
         "name": "Knowledge Retrieval Agent",
         "description": "Fast semantic search using vector embeddings. Invoked by AgentRouter for knowledge queries. Primary agent for KNOWLEDGE_PATTERNS, often paired with RAG for synthesis.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": LIGHT_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 2,
@@ -238,7 +247,7 @@ DEFAULT_AGENT_CONFIGS = {
     "system_commands": {
         "name": "System Commands Agent",
         "description": "Executes system commands with full terminal streaming and security validation. Invoked by AgentRouter via SYSTEM_COMMAND_PATTERNS ('run', 'execute', 'command', 'shell', 'terminal'). Supports sudo handling and persistent sessions (ssh, tmux, screen).",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": SYSTEM_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -250,7 +259,7 @@ DEFAULT_AGENT_CONFIGS = {
     "enhanced_system_commands": {
         "name": "Enhanced System Commands Agent",
         "description": "Advanced system command generation with security-focused validation. Extends StandardizedAgent with whitelisted commands and dangerous pattern detection. Used when higher security assurance needed.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": SYSTEM_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -262,7 +271,7 @@ DEFAULT_AGENT_CONFIGS = {
     "security_scanner": {
         "name": "Security Scanner Agent",
         "description": "Performs defensive security scans including port scanning, service detection, SSL analysis, and DNS enumeration. Supports vulnerability assessments with restricted target validation (localhost only by default).",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": SYSTEM_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -274,7 +283,7 @@ DEFAULT_AGENT_CONFIGS = {
     "network_discovery": {
         "name": "Network Discovery Agent",
         "description": "Discovers network assets and creates topology maps. Supports network scanning, host discovery, ARP scanning, traceroute, and asset inventory. Uses configurable default scan networks.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -286,7 +295,7 @@ DEFAULT_AGENT_CONFIGS = {
     "interactive_terminal": {
         "name": "Interactive Terminal Agent",
         "description": "Manages full PTY terminal sessions with sudo handling and user takeover capability. Provides interactive I/O for persistent shell sessions (ssh, tmux, docker exec). Used by SystemCommandAgent for complex operations.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": SYSTEM_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -334,7 +343,7 @@ DEFAULT_AGENT_CONFIGS = {
     "json_formatter": {
         "name": "JSON Formatter Agent",
         "description": "Parses, validates, and formats JSON responses from other LLMs. Provides robust JSON handling with fallback mechanisms, data type validation, and confidence scoring. Used for structured LLM output processing.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": LIGHT_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -346,7 +355,7 @@ DEFAULT_AGENT_CONFIGS = {
     "graph_entity_extractor": {
         "name": "Graph Entity Extractor",
         "description": "Automatically extracts entities and relationships from conversations to populate AutoBot Memory Graph. Composes KnowledgeExtractionAgent for fact extraction and AutoBotMemoryGraph for storage. Uses co-occurrence and context for relationship inference.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,
@@ -359,7 +368,7 @@ DEFAULT_AGENT_CONFIGS = {
     "npu_code_search": {
         "name": "NPU Code Search Agent",
         "description": "High-performance semantic code search using NPU acceleration (OpenVINO) with Redis indexing. Extends StandardizedAgent with hardware-optimized embeddings. Handles large codebase analysis efficiently on NPU Worker VM.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": LIGHT_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
@@ -380,7 +389,7 @@ DEFAULT_AGENT_CONFIGS = {
             "high-quality results in the knowledge base. Called by the orchestrator "
             "when local KB results are insufficient or the query requires current data."
         ),
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
@@ -429,7 +438,7 @@ DEFAULT_AGENT_CONFIGS = {
     "man_page_knowledge_integrator": {
         "name": "Man Page Knowledge Integrator",
         "description": "Scrapes, parses, and integrates Linux man pages into machine-aware knowledge system. Extracts structured data (synopsis, options, examples, see_also) from man page content with machine_id tracking.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
@@ -441,7 +450,7 @@ DEFAULT_AGENT_CONFIGS = {
     "llm_failsafe": {
         "name": "LLM Failsafe Agent",
         "description": "Multi-tier failsafe system ensuring LLM communication even when primary systems fail. Implements PRIMARY → SECONDARY → BASIC → EMERGENCY fallback tiers. Provides graceful degradation with rule-based and static responses.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": SYSTEM_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
@@ -507,7 +516,7 @@ DEFAULT_AGENT_CONFIGS = {
     "step_executor": {
         "name": "Step Executor Agent",
         "description": "Executes individual tasks/steps from OverseerAgent plans. Handles command validation, PTY terminal execution with streaming output, and generates two-part explanations (command explanation + output explanation). Supports security validation against dangerous patterns.",
-        "default_model": QUALITY_TIER_MODEL,
+        "default_model": INSTRUCTION_TIER_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 3,

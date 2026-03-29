@@ -15,19 +15,19 @@ llm_pull_models: false
 # Override with true/false to skip detection.
 llm_has_gpu: "auto"
 
+# 6-tier model mapping (#2553)
 # Models requiring GPU for reasonable performance (>= 7B parameters)
 llm_gpu_models:
-  - qwen3.5:9b      # Default LLM for all agents
-  - deepseek-r1:14b           # Multi-provider fallback
-  - codellama:13b             # Code generation
+  - mistral:7b-instruct      # Instruction following tier
+  - dolphin-llama3:8b         # System/uncensored tier
+  - qwen3.5:9b                # Quality/tools tier (default LLM)
 
 # Lightweight models that run well on CPU (<= 3B parameters)
 llm_cpu_models:
   - nomic-embed-text          # Embeddings (vectorization, RAG, memory graph)
-  - llama3.2:1b               # Tier 1 fast ops (env analyzer, codebase analytics)
-  - llama3.2:3b               # Tier 2 processing
-  - llama3.2:latest           # Agent think tool reasoning
-  - gemma2:2b                 # Tiered routing simple tier
+  - llama3.2:1b               # Routing tier (orchestrator)
+  - gemma2:2b                 # Classification tier (intent detection)
+  - phi3:mini                 # Light processing tier
 
 # Server settings
 llm_host: "0.0.0.0"

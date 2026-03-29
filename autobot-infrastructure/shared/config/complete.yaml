@@ -638,7 +638,7 @@ llm:
     max_retries: 3            # Maximum retries before falling back
     fallback_models:          # Ordered list of fallback models
       - "qwen3.5:9b"
-      - "gemma3:4b"
+      - "gemma2:2b"
       - "llama3.2:1b"
 
   # Performance targets
@@ -650,7 +650,7 @@ llm:
   # Existing LLM Configuration (continued)
   fallback_models:
     - "qwen3.5:9b"
-    - "gemma3:4b"
+    - "gemma2:2b"
     - "llama3.2:1b"
   emergency_fallback_model: "llama3.2:1b"
 

@@ -70,11 +70,14 @@ PROJECT_ROOT = _find_project_root()
 DEFAULT_LLM_MODEL = "qwen3.5:9b"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 
-# Per-role model defaults (3-tier mapping, #2553)
-# All tool-using agents use QUALITY_MODEL for reliable function calling.
+# Per-role model defaults (6-tier mapping, #2553)
+# Each tier is optimised for its workload class — see docs/developer/TIERED_MODEL_ROUTING.md
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
-CLASSIFICATION_MODEL = "gemma3:4b"  # Intent detection, classification
-QUALITY_MODEL = DEFAULT_LLM_MODEL  # All tool-using agents + user-facing
+CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
+LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
+INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction following
+SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
+QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
 
 class VMConfig(BaseSettings):
@@ -152,7 +155,7 @@ class LLMConfig(BaseSettings):
         extra="ignore",
     )
 
-    # Primary models — each role maps to its optimal tier (#2553)
+    # Primary models — each role maps to its optimal 6-tier (#2553)
     default_model: str = Field(
         default=DEFAULT_LLM_MODEL, alias="AUTOBOT_DEFAULT_LLM_MODEL"
     )
@@ -163,8 +166,19 @@ class LLMConfig(BaseSettings):
         default=CLASSIFICATION_MODEL, alias="AUTOBOT_CLASSIFICATION_MODEL"
     )
     reasoning_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_REASONING_MODEL")
-    rag_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_RAG_MODEL")
+    rag_model: str = Field(default=INSTRUCTION_MODEL, alias="AUTOBOT_RAG_MODEL")
     coding_model: str = Field(default=QUALITY_MODEL, alias="AUTOBOT_CODING_MODEL")
+
+    # 6-tier model fields (#2553)
+    light_processing_model: str = Field(
+        default=LIGHT_PROCESSING_MODEL, alias="AUTOBOT_LIGHT_PROCESSING_MODEL"
+    )
+    instruction_model: str = Field(
+        default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL"
+    )
+    system_model: str = Field(
+        default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL"
+    )
 
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(
