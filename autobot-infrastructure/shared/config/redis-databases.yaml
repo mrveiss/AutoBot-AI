@@ -46,6 +46,9 @@ redis_databases:
   codebase:
     db: 11
     description: "Codebase analytics (alias for analytics DB)"
+  testing:
+    db: 13
+    description: "Test suite isolation database (#2720)"
   celery_broker:
     db: 14
     description: "Celery task broker"

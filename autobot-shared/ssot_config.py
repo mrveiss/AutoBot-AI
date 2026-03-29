@@ -483,7 +483,10 @@ class RedisConfig(BaseSettings):
     db_logs: int = Field(default=8, alias="AUTOBOT_REDIS_DB_LOGS")
     db_temp: int = Field(default=9, alias="AUTOBOT_REDIS_DB_TEMP")
     db_backup: int = Field(default=10, alias="AUTOBOT_REDIS_DB_BACKUP")
-    db_testing: int = Field(default=15, alias="AUTOBOT_REDIS_DB_TESTING")
+    db_analytics: int = Field(default=11, alias="AUTOBOT_REDIS_DB_ANALYTICS")
+    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
+    db_celery_broker: int = Field(default=14, alias="AUTOBOT_REDIS_DB_CELERY_BROKER")
+    db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
 
     # LangGraph checkpoint TTL (#1481)
     checkpoint_ttl_minutes: int = Field(
