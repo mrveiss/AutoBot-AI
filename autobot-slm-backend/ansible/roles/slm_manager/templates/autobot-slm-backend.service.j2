@@ -22,10 +22,9 @@ StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
 # Security hardening
 # NoNewPrivileges intentionally omitted: the backend needs sudo systemctl
 # for self-restart during GUI-triggered SLM sync (#926 code_sync.py)
-# ProtectSystem=strict removed (#2722): backend runs Ansible provisioning
-# which requires full filesystem access (apt, systemd, etc.)
+# ProtectSystem and ProtectHome removed (#2722): backend runs Ansible
+# provisioning which requires full filesystem access (apt, useradd, etc.)
 PrivateTmp=true
-ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target
