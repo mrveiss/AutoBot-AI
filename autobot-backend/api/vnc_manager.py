@@ -135,6 +135,26 @@ def is_vnc_running() -> bool:
         return False
 
 
+def _launch_websockify() -> None:
+    """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735."""
+    websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
+    vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
+    subprocess.Popen(  # nosec B607
+        [
+            "/usr/bin/websockify",
+            "--web",
+            "/usr/share/novnc",
+            "--cert=/etc/autobot/certs/server-cert.pem",
+            "--key=/etc/autobot/certs/server-key.pem",
+            "--ssl-only",
+            websockify_bind,
+            vnc_target,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def start_vnc_server() -> Dict[str, str]:
     """Start VNC server on display :1 with full XFCE desktop"""
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
@@ -153,7 +173,6 @@ def start_vnc_server() -> Dict[str, str]:
         }
 
     try:
-        # Start VNC server
         result = subprocess.run(  # nosec B607
             [
                 "/usr/bin/vncserver",
@@ -176,31 +195,9 @@ def start_vnc_server() -> Dict[str, str]:
         )
 
         if result.returncode != 0:
-            return {
-                "status": "error",
-                "message": f"VNC server failed to start: {result.stderr}",
-            }
+            return {"status": "error", "message": f"VNC server failed to start: {result.stderr}"}
 
-        # Start websockify for noVNC access (TLS-only, bound to localhost — proxied by nginx)
-        websockify_bind = (
-            f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
-        )
-        vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
-        subprocess.Popen(  # nosec B607
-            [
-                "/usr/bin/websockify",
-                "--web",
-                "/usr/share/novnc",
-                "--cert=/etc/autobot/certs/server-cert.pem",
-                "--key=/etc/autobot/certs/server-key.pem",
-                "--ssl-only",
-                websockify_bind,
-                vnc_target,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
+        _launch_websockify()
         return {"status": "started", "message": "VNC server started successfully"}
 
     except subprocess.TimeoutExpired:
