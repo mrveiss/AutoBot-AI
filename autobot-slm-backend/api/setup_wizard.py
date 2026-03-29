@@ -180,12 +180,29 @@ async def _generate_dynamic_inventory(
         hosts: dict[str, dict] = {}
         node_id_to_hostname: dict[str, str] = {}
         node_id_to_ip: dict[str, str] = {}
+        # Detect local IPs for ansible_connection: local (#2722)
+        local_ips = {"127.0.0.1", "localhost"}
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["hostname", "-I"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            local_ips.update(result.stdout.split())
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
         for node in db_nodes:
             host_vars = {
                 "ansible_host": node.ip_address,
                 "ansible_user": node.ssh_user or "autobot",
                 "slm_node_id": node.node_id,
             }
+            if node.ip_address in local_ips:
+                host_vars["ansible_connection"] = "local"
             if node.ssh_port and node.ssh_port != 22:
                 host_vars["ansible_port"] = node.ssh_port
             inventory_name = node.ansible_target  # #1814

@@ -231,7 +231,7 @@ system_setup() {
         env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
             -o Dpkg::Options::="--force-confold" \
             python3 python3-pip python3-venv \
-            git curl wget openssl jq rsync sshpass \
+            git curl wget openssl jq rsync sshpass openssh-server \
             nginx \
             software-properties-common apt-transport-https \
             ca-certificates gnupg build-essential \
