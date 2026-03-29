@@ -833,11 +833,6 @@ async def get_agent_config(
     return JSONResponse(status_code=200, content=agent_config)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_agent_model",
-    error_code_prefix="AGENT_CONFIG",
-)
 async def _apply_agent_model_update(
     agent_id: str,
     update: "AgentModelUpdate",
@@ -884,6 +879,11 @@ async def _apply_agent_model_update(
     }
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_agent_model",
+    error_code_prefix="AGENT_CONFIG",
+)
 @router.post("/agents/{agent_id}/model")
 async def update_agent_model(
     agent_id: str,
