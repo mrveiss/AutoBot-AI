@@ -470,38 +470,34 @@ const router = createRouter({
 })
 
 // Authentication guard with admin role enforcement (Issue #729)
-router.beforeEach(async (to, _from, next) => {
+// Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
+router.beforeEach(async (to, _from) => {
   const authStore = useAuthStore()
 
   // Public routes don't need auth
   if (to.meta.public) {
     // If already authenticated, redirect to home
     if (authStore.isAuthenticated && to.name === 'login') {
-      next({ name: 'fleet' })
-      return
+      return { name: 'fleet' }
     }
-    next()
     return
   }
 
   // Check if authenticated
   if (!authStore.isAuthenticated) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
-    return
+    return { name: 'login', query: { redirect: to.fullPath } }
   }
 
   // Verify token is still valid
   const isValid = await authStore.checkAuth()
   if (!isValid) {
-    next({ name: 'login', query: { redirect: to.fullPath } })
-    return
+    return { name: 'login', query: { redirect: to.fullPath } }
   }
 
   // Check admin routes require admin role (Issue #729)
   if (to.meta.admin && !authStore.isAdmin) {
     // Redirect non-admin users to fleet overview
-    next({ name: 'fleet' })
-    return
+    return { name: 'fleet' }
   }
 
   // First-run wizard redirect (Issue #1294)
@@ -514,15 +510,14 @@ router.beforeEach(async (to, _from, next) => {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!data.completed) {
-        next({ name: 'setup' })
-        return
+        return { name: 'setup' }
       }
     } catch {
       // If setup endpoint fails, skip redirect (endpoint may not exist)
     }
   }
 
-  next()
+  // Continue navigation (returning undefined allows navigation to proceed)
 })
 
 // Update document title on navigation
