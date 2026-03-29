@@ -21,7 +21,7 @@
     backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
     backend_redis_port: 6379
     backend_redis_password: ""
-    backend_secret_key: "{{ lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true) }}"
+    backend_secret_key: "{{ _existing_secret.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
     backend_cors_origins: "http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},https://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }},http://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }},https://{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
     backend_llm_provider: "ollama"
     backend_llm_endpoint: "http://127.0.0.1:11434"
@@ -37,6 +37,15 @@
     service_auth_timestamp_window: 300
     service_auth_rate_limit_window: 300
     service_auth_rate_limit_max_failures: 10
+
+  pre_tasks:
+    - name: Read existing secret key from .env if present (#2726)
+      ansible.builtin.shell:
+        cmd: grep '^SECRET_KEY=' {{ backend_code_dir }}/.env | cut -d= -f2-
+      register: _existing_secret
+      failed_when: false
+      changed_when: false
+      become_user: "{{ backend_user }}"
 
   tasks:
     - name: Create backend directories if they don't exist
