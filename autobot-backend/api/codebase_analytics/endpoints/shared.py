@@ -147,6 +147,32 @@ COMMON_THIRD_PARTY = {
 }
 
 
+async def resolve_source_root(source_id: "str | None") -> "Path | None":
+    """Resolve the filesystem root for a given source ID.
+
+    Issue #2760: Extracted from duplicated blocks in report.py and stats.py.
+    Both endpoints contained identical 10-line blocks; this single helper
+    replaces both.
+
+    Args:
+        source_id: The source identifier to look up, or None.
+
+    Returns:
+        Path to the source clone directory, or None if unresolvable.
+    """
+    if not source_id:
+        return None
+    try:
+        from api.codebase_analytics.source_storage import get_source
+
+        source = await get_source(source_id)
+        if source and source.clone_path:
+            return Path(source.clone_path)
+    except Exception as exc:
+        logger.debug("Could not resolve source root for %s: %s", source_id, exc)
+    return None
+
+
 # Project root helper
 def get_project_root() -> Path:
     """
