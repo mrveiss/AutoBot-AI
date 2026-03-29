@@ -35,7 +35,8 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # Maximum files per pre-commit batch to avoid argument overflow (#2697)
-BATCH_SIZE=50
+BATCH_THRESHOLD=50
+BATCH_SIZE=40
 
 # --- 1. Record branch BEFORE the pre-commit framework runs ---
 BRANCH_BEFORE=$(git branch --show-current 2>/dev/null)
@@ -77,9 +78,10 @@ if ! git diff --quiet 2>/dev/null; then
     # Save unstaged changes as a patch (binary-safe)
     git diff --binary > "$UNSTAGED_PATCH" 2>/dev/null
 
-    # Remove unstaged changes from working tree so pre-commit only sees
-    # the staged versions of files. This prevents contamination.
-    git checkout -- . 2>/dev/null
+    # Remove unstaged changes from staged files only so pre-commit sees
+    # the staged versions. Scoped to staged files to avoid nuking
+    # unrelated unstaged work in other files.
+    xargs -0 git checkout -- < "$STAGED_TMPFILE" 2>/dev/null
 fi
 
 # --- 4. Run pre-commit with --files in batches (#2697) ---
@@ -87,9 +89,9 @@ fi
 # ensures pre-commit processes each batch with --files (stash=False).
 HOOK_EXIT=0
 
-if [ "$STAGED_COUNT" -le "$BATCH_SIZE" ]; then
-    # Small batch: pass all files at once (convert NUL to newline for xargs)
-    tr '\0' '\n' < "$STAGED_TMPFILE" | xargs -d '\n' pre-commit run --files
+if [ "$STAGED_COUNT" -le "$BATCH_THRESHOLD" ]; then
+    # Small batch: pass all files at once using NUL-delimited xargs
+    xargs -0 pre-commit run --files < "$STAGED_TMPFILE"
     HOOK_EXIT=$?
 else
     # Large batch: split into chunks of BATCH_SIZE (#2697)
