@@ -509,57 +509,60 @@ class WorkflowExecutor:
             return
 
         try:
-            # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
-            # Issue #2321: Capture resolved_names so redaction only scans
-            # injected secrets — not all secrets for all users.
-            owner_id = workflow.owner_id or workflow.session_id
-            resolved_command, resolved_names = _resolve_command_secrets(
-                current_step.command, owner_id
-            )
-
-            # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
-            # types, not just vision.  Resolution is cheap and harmless for steps
-            # that have no step_config or no references in their config.
-            resolved_config = _resolve_step_references(
-                current_step.step_config or {}, workflow.step_results
-            )
-
-            # Issue #2397: Route vision node types to the vision step handler.
-            # All other step types fall through to the standard command executor.
-            if current_step.step_type in VISION_STEP_TYPES:
-                result = await self._timeout_enforcer.run_with_timeout(
-                    coro=execute_vision_step(
-                        current_step.step_type,
-                        resolved_config,
-                    ),
-                    step_id=step_id,
-                    timeout_seconds=current_step.timeout_seconds,
-                    limits=self.limits,
-                )
-            else:
-                # Issue #2159: Wrap execution in per-step timeout enforcer
-                result = await self._timeout_enforcer.run_with_timeout(
-                    coro=self._execute_command(workflow.session_id, resolved_command),
-                    step_id=step_id,
-                    timeout_seconds=current_step.timeout_seconds,
-                    limits=self.limits,
-                )
-
-            # Issue #2153: Redact any secret values that may appear in output.
-            result = _redact_result_secrets(result, owner_id, resolved_names)
-
-            await self._finalize_step_result(
-                workflow, current_step, step_id, result, workflows
-            )
-
+            await self._resolve_and_run_step(workflow, current_step, step_id, workflows)
         except StepTimeoutError as e:
-            await self._handle_step_execution_failure(
-                workflow, current_step, step_id, e
-            )
+            await self._handle_step_execution_failure(workflow, current_step, step_id, e)
         except Exception as e:
-            await self._handle_step_execution_failure(
-                workflow, current_step, step_id, e
+            await self._handle_step_execution_failure(workflow, current_step, step_id, e)
+
+    async def _resolve_and_run_step(
+        self,
+        workflow: ActiveWorkflow,
+        current_step,
+        step_id: str,
+        workflows: Dict[str, ActiveWorkflow],
+    ) -> None:
+        """Resolve secrets/step-refs, execute the step, redact output, and finalize. Issue #2735.
+
+        Extracted from approve_and_execute_step to keep parent under 65 lines.
+        Handles both vision and command step types (Issues #2153, #2321, #2397, #2632).
+        """
+        # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
+        # Issue #2321: Capture resolved_names so redaction only scans
+        # injected secrets — not all secrets for all users.
+        owner_id = workflow.owner_id or workflow.session_id
+        resolved_command, resolved_names = _resolve_command_secrets(
+            current_step.command, owner_id
+        )
+
+        # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
+        # types, not just vision.  Resolution is cheap and harmless for steps
+        # that have no step_config or no references in their config.
+        resolved_config = _resolve_step_references(
+            current_step.step_config or {}, workflow.step_results
+        )
+
+        # Issue #2397: Route vision node types to the vision step handler.
+        # All other step types fall through to the standard command executor.
+        if current_step.step_type in VISION_STEP_TYPES:
+            result = await self._timeout_enforcer.run_with_timeout(
+                coro=execute_vision_step(current_step.step_type, resolved_config),
+                step_id=step_id,
+                timeout_seconds=current_step.timeout_seconds,
+                limits=self.limits,
             )
+        else:
+            # Issue #2159: Wrap execution in per-step timeout enforcer
+            result = await self._timeout_enforcer.run_with_timeout(
+                coro=self._execute_command(workflow.session_id, resolved_command),
+                step_id=step_id,
+                timeout_seconds=current_step.timeout_seconds,
+                limits=self.limits,
+            )
+
+        # Issue #2153: Redact any secret values that may appear in output.
+        result = _redact_result_secrets(result, owner_id, resolved_names)
+        await self._finalize_step_result(workflow, current_step, step_id, result, workflows)
 
     async def _finalize_step_result(
         self,

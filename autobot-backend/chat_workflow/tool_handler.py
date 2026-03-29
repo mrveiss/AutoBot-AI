@@ -1309,21 +1309,7 @@ class ToolHandlerMixin:
             from api.browser_mcp import send_to_browser_vm
 
             result = await send_to_browser_vm(tool_name, params)
-            summary = self._format_browser_result(tool_name, params, result)
-
-            execution_results.append(
-                {"tool": tool_name, "status": "success", "output": summary}
-            )
-            yield WorkflowMessage(
-                type="command_output",
-                content=summary,
-                metadata={
-                    "tool": tool_name,
-                    "params": params,
-                    "result": result,
-                    "status": "success",
-                },
-            )
+            yield self._record_browser_success(tool_name, params, result, execution_results)
 
         except Exception as e:
             error_msg = f"Browser tool '{tool_name}' failed: {e}"
@@ -1336,6 +1322,30 @@ class ToolHandlerMixin:
                 content=error_msg,
                 metadata={"tool": tool_name, "error": True},
             )
+
+    def _record_browser_success(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        result: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ) -> "WorkflowMessage":
+        """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
+
+        Extracted from _handle_browser_tool to keep parent under 65 lines.
+        """
+        summary = self._format_browser_result(tool_name, params, result)
+        execution_results.append({"tool": tool_name, "status": "success", "output": summary})
+        return WorkflowMessage(
+            type="command_output",
+            content=summary,
+            metadata={
+                "tool": tool_name,
+                "params": params,
+                "result": result,
+                "status": "success",
+            },
+        )
 
     def _format_browser_result(
         self,
@@ -1584,15 +1594,10 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext" | None = None,
         role: str = "user",
     ):
-        """Dispatch a single tool call to appropriate handler. Issue #620.
+        """Route a tool call to the appropriate handler. Issue #620/#2310/#2629.
 
-        Issue #2310: Accepts optional ctx to track consecutive invalid tool calls
-        and inject available-tools reminder after 2 consecutive failures.
-        Issue #2629: Accepts role to forward RBAC context to MCP dispatch.
-
-        Yields:
-            WorkflowMessage for tool execution stages
-            Tuple of (break_loop, respond_content) for respond tool
+        Yields WorkflowMessage for execution stages, or (break_loop, respond_content) tuple
+        for the respond tool. Helpers handle MCP, browser, web_search, and execute_command.
         """
         tool_name = tool_call["name"]
 
@@ -1627,21 +1632,56 @@ class ToolHandlerMixin:
             return
 
         if tool_name != "execute_command":
-            # Issue #2513: Check MCP registry before reporting unknown tool.
-            # Issue #2629: Forward RBAC role so admin-only tools are enforced.
-            mcp_result = await _try_mcp_dispatch(
-                tool_name, tool_call, execution_results, role=role
-            )
-            if mcp_result is not None:
-                yield mcp_result
-                return
-
-            # Issue #2305/#2310: Report unknown tool and track consecutive failures.
-            yield self._build_unknown_tool_error(tool_name, ctx, execution_results)
+            async for msg in self._dispatch_mcp_or_unknown(tool_name, tool_call, execution_results, ctx, role):
+                yield msg
             return
 
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls = 0
+        async for msg in self._dispatch_execute_command(
+            tool_call, session_id, terminal_session_id, ollama_endpoint,
+            selected_model, execution_results, additional_response_parts,
+        ):
+            yield msg
+
+    async def _dispatch_mcp_or_unknown(
+        self,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext" | None,
+        role: str,
+    ):
+        """Try MCP dispatch; yield unknown-tool error if not registered. Issue #2513/#2629.
+
+        Extracted from _dispatch_tool_call (#2735) to keep parent under 65 lines.
+        """
+        # Issue #2513: Check MCP registry before reporting unknown tool.
+        # Issue #2629: Forward RBAC role so admin-only tools are enforced.
+        mcp_result = await _try_mcp_dispatch(
+            tool_name, tool_call, execution_results, role=role
+        )
+        if mcp_result is not None:
+            yield mcp_result
+            return
+
+        # Issue #2305/#2310: Report unknown tool and track consecutive failures.
+        yield self._build_unknown_tool_error(tool_name, ctx, execution_results)
+
+    async def _dispatch_execute_command(
+        self,
+        tool_call: dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+    ):
+        """Delegate execute_command tool call to _process_single_command. Issue #2735.
+
+        Extracted from _dispatch_tool_call to keep parent under 65 lines.
+        """
         async for msg in self._process_single_command(
             tool_call,
             session_id,
