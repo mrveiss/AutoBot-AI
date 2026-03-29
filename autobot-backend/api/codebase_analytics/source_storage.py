@@ -94,8 +94,8 @@ async def get_default_source_id() -> Optional[str]:
     sources = await list_sources()
     if not sources:
         return None
-    # Prefer most recently indexed source
-    sources.sort(key=lambda s: s.last_indexed_at or "", reverse=True)
+    # Prefer most recently synced source
+    sources.sort(key=lambda s: s.last_synced or "", reverse=True)
     return sources[0].id
 
 
