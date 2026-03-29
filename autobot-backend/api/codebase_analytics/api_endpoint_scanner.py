@@ -90,6 +90,12 @@ _INCLUDE_ROUTER_RE = re.compile(
     r"router\.include_router\s*\(\s*(\w+(?:\.\w+)?)\s*\)",
     re.MULTILINE,
 )
+# Issue #2652: Relative imports in subdirectory router files
+# from .subdir import module1, module2  OR  from . import module1
+_RELATIVE_IMPORT_RE = re.compile(
+    r"from\s+\.([\w.]*)\s+import\s+([^;\n\\]+)",
+    re.MULTILINE,
+)
 
 # Issue #1225: Tuple registry patterns (hoisted from _compile_config_tuple_patterns)
 _SIMPLE_TUPLE_RE = re.compile(
@@ -255,17 +261,23 @@ class BackendEndpointScanner:
         return imported_routers, imported_modules
 
     def _register_nested_router(
-        self, child_module: str, parent_prefix: str, parent_module: str
+        self,
+        child_module: str,
+        parent_prefix: str,
+        parent_module: str,
+        child_dir: Optional[str] = None,
     ) -> None:
         """
         Register nested router with parent's prefix if not already registered.
 
         Issue #665: Extracted from _scan_include_router_patterns to reduce function length.
+        Issue #2652: Added child_dir for subdirectory router files (e.g., codebase_analytics/endpoints/).
 
         Args:
             child_module: Child module name to register
             parent_prefix: Parent router's prefix to inherit
             parent_module: Parent module name for logging
+            child_dir: Optional subdirectory path relative to api/ (e.g., "codebase_analytics/endpoints")
         """
         # Issue #552: Only inherit parent prefix if module doesn't have
         # its own standalone registration (e.g., in feature_routers.py).
@@ -278,6 +290,10 @@ class BackendEndpointScanner:
             self._module_prefix_map[child_module] = parent_prefix
             self._module_prefix_map[f"api/{child_module}.py"] = parent_prefix
             self._module_prefix_map[f"api.{child_module}"] = parent_prefix
+            # Issue #2652: Also register subdirectory path if provided
+            if child_dir:
+                subdir_key = f"api/{child_dir}/{child_module}.py"
+                self._module_prefix_map[subdir_key] = parent_prefix
             logger.debug(
                 "Nested router: %s -> %s (from %s)",
                 child_module,
@@ -285,11 +301,86 @@ class BackendEndpointScanner:
                 parent_module,
             )
         else:
+            # Issue #2652: Even if already registered by module name, ensure
+            # the subdirectory file path key is also registered so _get_module_prefix
+            # can resolve it via direct file path match.
+            if child_dir:
+                subdir_key = f"api/{child_dir}/{child_module}.py"
+                if subdir_key not in self._module_prefix_map:
+                    self._module_prefix_map[subdir_key] = self._module_prefix_map[child_module]
             logger.debug(
                 "Skipping nested router %s (already registered at %s)",
                 child_module,
                 self._module_prefix_map[child_module],
             )
+
+    def _extract_relative_imports(self, content: str, file_dir: Path) -> dict[str, str]:
+        """
+        Extract relative imports from subdirectory router files.
+
+        Issue #2652: Handles patterns like:
+        - from .endpoints import pattern_analysis, cache, call_graph
+        - from . import some_module
+
+        Args:
+            content: File content to parse
+            file_dir: Directory of the file being parsed (for resolving relative paths)
+
+        Returns:
+            Dict mapping router_ref -> child_module name
+        """
+        relative_modules: dict[str, str] = {}
+        for match in _RELATIVE_IMPORT_RE.finditer(content):
+            sub_package = match.group(1).strip()  # e.g., "endpoints" or ""
+            names_str = match.group(2)
+            # Parse comma-separated names, ignoring parenthesised continuations
+            names = [n.strip().rstrip(")\\") for n in names_str.split(",")]
+            for name in names:
+                name = name.strip()
+                if not name or name.startswith("#"):
+                    continue
+                # Map both "name" and "name.router" so include_router(name.router) resolves
+                relative_modules[name] = name
+                relative_modules[f"{name}.router"] = name
+        return relative_modules
+
+    def _get_prefix_for_subdir_file(self, py_file: Path) -> tuple[str, Optional[str]]:
+        """
+        Determine the parent prefix and child_dir for a subdirectory router file.
+
+        Issue #2652: For files like api/codebase_analytics/router.py, look up the
+        prefix for the parent package (api.codebase_analytics).
+
+        Args:
+            py_file: Path to the Python file being scanned
+
+        Returns:
+            Tuple of (parent_prefix, child_dir) where child_dir is the subdirectory
+            relative to api/ (e.g., "codebase_analytics/endpoints"), or None for top-level files.
+        """
+        try:
+            rel = py_file.relative_to(self.backend_path)
+        except ValueError:
+            return self.API_PREFIX, None
+
+        parts = rel.parts  # e.g., ("codebase_analytics", "router.py")
+        if len(parts) < 2:
+            # Top-level file — handled by existing logic
+            return self._module_prefix_map.get(py_file.stem, self.API_PREFIX), None
+
+        # Build module path keys to look up (most specific first)
+        # For api/codebase_analytics/endpoints/pattern_analysis.py:
+        #   try "api.codebase_analytics.endpoints", "api.codebase_analytics", "codebase_analytics"
+        package_parts = parts[:-1]  # directory components only
+        for depth in range(len(package_parts), 0, -1):
+            sub_module = ".".join(package_parts[:depth])
+            for key in (f"api.{sub_module}", sub_module):
+                if key in self._module_prefix_map:
+                    # child_dir is the subdirectory where child modules live
+                    child_dir = "/".join(package_parts)
+                    return self._module_prefix_map[key], child_dir
+
+        return self.API_PREFIX, "/".join(package_parts)
 
     def _scan_include_router_patterns(self) -> None:
         """
@@ -299,6 +390,10 @@ class BackendEndpointScanner:
         - knowledge.py includes knowledge_vectorization.py and knowledge_maintenance.py
         - chat.py includes chat_sessions.py
         - analytics.py includes analytics_cost.py (which has its own prefix="/cost")
+
+        Issue #2652: Extended to scan subdirectory router files so nested include_router
+        chains (e.g., codebase_analytics/router.py -> endpoints/pattern_analysis.py)
+        correctly populate _module_prefix_map with subdirectory file path keys.
 
         These nested routers inherit the parent router's prefix, and may add their own.
         """
@@ -312,29 +407,39 @@ class BackendEndpointScanner:
             include_pattern,
         ) = self._compile_router_patterns()
 
-        for py_file in self.backend_path.glob("*.py"):
+        # Issue #2652: Use rglob to include subdirectory router files
+        for py_file in self.backend_path.rglob("*.py"):
             if py_file.name.startswith("__"):
                 continue
 
             try:
                 content = py_file.read_text(encoding="utf-8")
 
-                # Get parent module's prefix
-                parent_module = py_file.stem
-                parent_prefix = self._module_prefix_map.get(
-                    parent_module, self.API_PREFIX
-                )
+                # Determine if this is a top-level or subdirectory file
+                is_subdirectory = py_file.parent != self.backend_path
 
-                # Extract imports (Issue #665: extracted)
-                imported_routers, imported_modules = self._extract_router_imports(
-                    content, import_pattern, import_modules_pattern
-                )
+                if is_subdirectory:
+                    # Issue #2652: For subdirectory files, resolve prefix from package hierarchy
+                    parent_prefix, child_dir = self._get_prefix_for_subdir_file(py_file)
+                    # Merge relative imports with absolute import maps
+                    relative_modules = self._extract_relative_imports(content, py_file.parent)
+                    imported_routers, imported_modules = self._extract_router_imports(
+                        content, import_pattern, import_modules_pattern
+                    )
+                    imported_modules.update(relative_modules)
+                    parent_module = py_file.stem
+                else:
+                    # Top-level file: existing logic
+                    parent_module = py_file.stem
+                    parent_prefix = self._module_prefix_map.get(parent_module, self.API_PREFIX)
+                    child_dir = None
+                    imported_routers, imported_modules = self._extract_router_imports(
+                        content, import_pattern, import_modules_pattern
+                    )
 
                 # Check which routers are included
                 for match in include_pattern.finditer(content):
-                    router_ref = match.group(
-                        1
-                    )  # e.g., "vectorization_router" or "analytics_cost.router"
+                    router_ref = match.group(1)  # e.g., "vectorization_router" or "pattern_analysis.router"
 
                     child_module = None
                     if router_ref in imported_routers:
@@ -343,9 +448,9 @@ class BackendEndpointScanner:
                         child_module = imported_modules[router_ref]
 
                     if child_module:
-                        # Register nested router (Issue #665: extracted)
+                        # Register nested router (Issue #665: extracted, #2652: extended)
                         self._register_nested_router(
-                            child_module, parent_prefix, parent_module
+                            child_module, parent_prefix, parent_module, child_dir=child_dir
                         )
 
             except Exception as e:
