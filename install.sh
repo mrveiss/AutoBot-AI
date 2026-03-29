@@ -541,7 +541,26 @@ register_local_node() {
     case "${http_code}" in
         201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
         400) success "Local node already registered" ;;
-        *)   warn "Node registration returned HTTP ${http_code} — register manually via SLM UI" ;;
+        *)   warn "Node registration returned HTTP ${http_code} — register manually via SLM UI"
+             return ;;
+    esac
+
+    # Auto-assign SLM Manager as code source (#2755)
+    info "Assigning code source to SLM Manager..."
+    local cs_code
+    cs_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+        -X POST "${api_url}/api/code-source/assign" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${token}" \
+        -d "{
+            \"node_id\": \"00-SLM-Manager\",
+            \"repo_path\": \"${CODE_SOURCE}\",
+            \"branch\": \"${GIT_BRANCH}\"
+        }" 2>/dev/null)
+
+    case "${cs_code}" in
+        200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
+        *)   warn "Code source assignment returned HTTP ${cs_code} — assign manually via SLM UI > Code Sync" ;;
     esac
 }
 
