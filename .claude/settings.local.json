@@ -101,7 +101,17 @@
       "Bash(python3.12 -c \":*)",
       "Bash(do)",
       "Bash(echo \"Closed #$issue\")",
-      "Bash(sudo sed:*)"
+      "Bash(sudo sed:*)",
+      "Bash(git rebase:*)",
+      "Bash(sudo -u autobot git -C /opt/autobot/code_source checkout -- .)",
+      "Bash(sudo -u autobot git -C /opt/autobot/code_source pull origin Dev_new_gui)",
+      "Bash(sudo rsync:*)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\(''autobot-backend/api/codebase_analytics/endpoints/shared.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''Syntax OK''\\)\")",
+      "Bash(sudo -u autobot /opt/autobot/autobot-slm-backend/venv/bin/python3 -c \":*)",
+      "Read(//home/martins/.claude/projects/-home-martins-AutoBot-Ai-AutoBot-AI/fb547cec-0e60-46af-90b6-7074e1922ef5/subagents/**)",
+      "Read(//etc/**)",
+      "Bash(dpkg -L redis-stack-server)",
+      "Bash(echo -n \"#$issue: \")"
     ]
   }
 }
