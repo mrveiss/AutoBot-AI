@@ -90,4 +90,4 @@
   ansible.builtin.wait_for:
     port: "{{ postgresql_port }}"
     host: 127.0.0.1
-    timeout: 30
+    timeout: 60

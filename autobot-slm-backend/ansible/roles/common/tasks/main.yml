@@ -129,6 +129,15 @@
   become: yes
   tags: ['common', 'firewall']
 
+- name: "Common | Allow all localhost traffic (#2722)"
+  ufw:
+    rule: allow
+    from_ip: 127.0.0.1
+    to_ip: 127.0.0.1
+    comment: "Allow localhost"
+  become: yes
+  tags: ['common', 'firewall']
+
 - name: "Common | Merge base and role-specific firewall rules (#894)"
   set_fact:
     merged_firewall_rules: "{{ (security.base_firewall_rules | default([])) + (security.firewall_rules | default([])) }}"
