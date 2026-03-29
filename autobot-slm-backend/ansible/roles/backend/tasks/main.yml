@@ -183,6 +183,11 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
+- name: Check if backend code already synced
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/main.py"
+  register: _backend_code_present
+
 - name: Clone/update AutoBot repository
   ansible.builtin.git:
     repo: "{{ backend_repo_url }}"
@@ -190,7 +195,9 @@
     version: "{{ backend_version }}"
     force: true
   become_user: "{{ backend_user }}"
-  when: backend_deploy_from_git | default(true)
+  when:
+    - backend_deploy_from_git | default(true)
+    - not _backend_code_present.stat.exists
 
 - name: Check if valid venv exists
   ansible.builtin.stat:
