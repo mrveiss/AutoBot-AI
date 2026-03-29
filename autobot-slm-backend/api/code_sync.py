@@ -800,9 +800,10 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
     source_ip, source_user, repo_path = conn_info
 
-    # Detect if code source is on the same host — skip SSH entirely (#1191)
-    own_ip = urlparse(settings.external_url).hostname or ""
-    is_local_source = source_ip in {"127.0.0.1", "localhost", own_ip}
+    # Detect if code source is on the same host — skip SSH entirely (#1191, #2759)
+    from autobot_shared.network_utils import is_local_ip
+
+    is_local_source = is_local_ip(source_ip)
 
     if is_local_source:
         logger.info(
