@@ -471,7 +471,7 @@ class RedisConfig(BaseSettings):
     # Enable/disable Redis
     enabled: bool = Field(default=True, alias="AUTOBOT_REDIS_ENABLED")
 
-    # Database assignments
+    # Database assignments — defaults match redis-databases.yaml SSOT (#2670)
     db_main: int = Field(default=0, alias="AUTOBOT_REDIS_DB_MAIN")
     db_knowledge: int = Field(default=1, alias="AUTOBOT_REDIS_DB_KNOWLEDGE")
     db_prompts: int = Field(default=2, alias="AUTOBOT_REDIS_DB_PROMPTS")
@@ -482,11 +482,11 @@ class RedisConfig(BaseSettings):
     db_tasks: int = Field(default=7, alias="AUTOBOT_REDIS_DB_TASKS")
     db_logs: int = Field(default=8, alias="AUTOBOT_REDIS_DB_LOGS")
     db_temp: int = Field(default=9, alias="AUTOBOT_REDIS_DB_TEMP")
-    db_backup: int = Field(default=10, alias="AUTOBOT_REDIS_DB_BACKUP")
+    db_audit: int = Field(default=10, alias="AUTOBOT_REDIS_DB_AUDIT")
     db_analytics: int = Field(default=11, alias="AUTOBOT_REDIS_DB_ANALYTICS")
-    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
     db_celery_broker: int = Field(default=14, alias="AUTOBOT_REDIS_DB_CELERY_BROKER")
     db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
+    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
 
     # LangGraph checkpoint TTL (#1481)
     checkpoint_ttl_minutes: int = Field(

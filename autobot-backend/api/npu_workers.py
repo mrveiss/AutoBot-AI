@@ -40,6 +40,8 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_management.types import DATABASE_MAPPING
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -50,9 +52,6 @@ from models.npu_models import (
 )
 from services.npu_worker_manager import get_worker_manager
 
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 logger = logging.getLogger(__name__)
 
 # Create router with /api/npu prefix
@@ -789,7 +788,7 @@ def _generate_repair_bootstrap_config() -> dict:
             "host": ssot_config.vm.redis,
             "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
-            "db": 0,
+            "db": DATABASE_MAPPING["main"],
             "socket_timeout": 5,
             "max_connections": 10,
         },
@@ -1022,7 +1021,7 @@ def _build_pairing_config() -> Tuple[Dict, str]:
             "host": ssot_config.vm.redis,
             "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
-            "db": 0,
+            "db": DATABASE_MAPPING["main"],
         },
         "backend": {
             "host": ssot_config.vm.main,
@@ -1335,7 +1334,7 @@ def _build_worker_redis_config(ssot_config) -> dict:
         "host": ssot_config.vm.redis,
         "port": ssot_config.port.redis,
         "password": ssot_config.redis.password,
-        "db": 0,  # Default db for workers
+        "db": DATABASE_MAPPING["main"],
         "socket_timeout": 5,
         "max_connections": 10,
     }

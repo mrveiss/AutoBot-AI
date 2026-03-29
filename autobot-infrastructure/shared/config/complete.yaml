@@ -314,23 +314,9 @@ redis:
     socket_connect_timeout: 2
     retry_on_timeout: true
 
-  # Database allocation — aligned with redis-databases.yaml (#2670)
-  databases:
-    main: 0
-    knowledge: 1
-    prompts: 2
-    agents: 3
-    metrics: 4
-    cache: 5
-    sessions: 6
-    workflows: 7
-    logs: 8
-    temp: 9
-    audit: 10
-    analytics: 11
-    testing: 13       # Moved from 15 to avoid collision with celery_results (#2720)
-    celery_broker: 14
-    celery_results: 15
+  # Database allocation — SSOT is redis-databases.yaml (#2670).
+  # Do NOT duplicate DB numbers here; read from redis-databases.yaml instead.
+  databases_source: "autobot-infrastructure/shared/config/redis-databases.yaml"
 
   # Pub/Sub channels
   channels:

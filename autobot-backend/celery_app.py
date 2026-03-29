@@ -17,6 +17,7 @@ from pathlib import Path
 
 from celery import Celery
 
+from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config import ConfigManager
 
@@ -24,11 +25,11 @@ from config import ConfigManager
 config = ConfigManager()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
-# Environment variables take precedence, then SSOT config-based construction
+# DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)
 _redis_host = ssot_config.vm.redis
 _redis_password = ssot_config.redis.password
-_celery_broker_db = config.get("redis.databases.celery_broker", 14)
-_celery_results_db = config.get("redis.databases.celery_results", 15)
+_celery_broker_db = DATABASE_MAPPING["celery_broker"]
+_celery_results_db = DATABASE_MAPPING["celery_results"]
 
 # Issue #725: Check if TLS is enabled for Redis connections
 _redis_tls_enabled = ssot_config.tls.redis_tls_enabled

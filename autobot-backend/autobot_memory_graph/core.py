@@ -15,6 +15,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as _ssot_config
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class Config:
     def __init__(self):
         self.redis_host = _ssot_config.vm.redis  # (#1148)
         self.redis_port = 6379
-        self.redis_db = 1  # knowledge database
+        self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
         self.index_prefix = "autobot:entities"
         self.relations_prefix = "autobot:relations"
         self.embedding_model = "nomic-embed-text"

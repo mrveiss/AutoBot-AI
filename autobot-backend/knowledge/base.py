@@ -23,6 +23,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.redis_management.types import DATABASE_MAPPING
 from config import ConfigManager
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
@@ -78,7 +79,7 @@ class KnowledgeBaseCore:
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
-        self.redis_db = 1  # Default for knowledge base (historical compatibility)
+        self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
         self.redis_index_name = config.get(
             "redis.indexes.knowledge_base", "llama_index"
         )
