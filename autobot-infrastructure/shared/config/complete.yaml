@@ -610,7 +610,7 @@ llm:
     rag: "gemma3:270m"              # Lightweight model for RAG operations (291MB)
     chat: "llama3.2:1b-instruct-q4_K_M"  # Balanced model for chat (807MB)
     classification: "gemma3:270m"    # Fast model for message classification
-    fallback: "llama3.2:3b-instruct-q4_K_M"  # Heavier model for complex tasks
+    fallback: "qwen3.5:9b"  # Quality model for complex tasks (#2585)
 
   # Model optimization settings
   optimization:
@@ -637,9 +637,9 @@ llm:
     strategy: "performance"    # "performance", "size", "speed"
     max_retries: 3            # Maximum retries before falling back
     fallback_models:          # Ordered list of fallback models
-      - "llama3.2:3b-instruct-q4_K_M"
-      - "llama3.2:1b-instruct-q4_K_M"
-      - "gemma2:2b"
+      - "qwen3.5:9b"
+      - "gemma3:4b"
+      - "llama3.2:1b"
 
   # Performance targets
   targets:
@@ -649,10 +649,10 @@ llm:
 
   # Existing LLM Configuration (continued)
   fallback_models:
-    - "dolphin-llama3:8b"
-    - "llama3.2:3b"
-    - "nomic-embed-text:latest"
-  emergency_fallback_model: "phi:2.7b"
+    - "qwen3.5:9b"
+    - "gemma3:4b"
+    - "llama3.2:1b"
+  emergency_fallback_model: "llama3.2:1b"
 
   # Embedding settings
   embedding:
