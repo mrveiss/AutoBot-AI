@@ -11,6 +11,7 @@ PostgreSQL replaces SQLite for all database operations (Issue #786).
 import logging
 import os
 import secrets
+import socket
 import stat
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,25 @@ logger = logging.getLogger(__name__)
 # Filename for the auto-generated persistent keys file inside data_dir.
 # Issue #1726 — keeps keys stable across restarts when env vars are absent.
 _SLM_KEYS_FILE = ".slm_keys"
+
+
+def _get_local_ip() -> str:
+    """Return the machine's primary outbound IP address.
+
+    Opens a UDP socket toward a public address (no packet is actually sent)
+    to let the OS select the correct source interface, then reads the bound
+    address.  Falls back to ``127.0.0.1`` if the probe fails (e.g. no
+    network at import time), which is safe because callers that need a
+    routable IP should always set ``SLM_EXTERNAL_URL`` via the env file.
+
+    Issue #2758 — prevents external_url from defaulting to a hardcoded IP.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
 
 
 def _get_cors_origins() -> list:
@@ -236,9 +256,11 @@ class Settings(BaseSettings):
         if ip.strip()
     ]
 
-    # External URL - remote nodes use nginx reverse proxy
+    # External URL - remote nodes use nginx reverse proxy.
+    # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
+    # not set, instead of defaulting to a hardcoded address.
     external_url: str = os.getenv(
-        "SLM_EXTERNAL_URL", "https://172.16.168.19"  # noqa: ssot-fallback
+        "SLM_EXTERNAL_URL", f"https://{_get_local_ip()}"
     )
 
     model_config = ConfigDict(

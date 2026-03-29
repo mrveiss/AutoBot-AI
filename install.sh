@@ -392,13 +392,18 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key
+        local secret_key encryption_key local_ip
         secret_key=$(openssl rand -hex 32)
         encryption_key=$(openssl rand -hex 32)
+        # Issue #2758: detect the machine's primary outbound IP so that
+        # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
+        local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
+            || hostname -I | awk '{print $1}')
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+SLM_EXTERNAL_URL=https://${local_ip}
 EOF
         chmod 600 "${SECRETS_FILE}"
         success "  Secrets written to ${SECRETS_FILE}"
