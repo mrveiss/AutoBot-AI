@@ -199,16 +199,20 @@ def _get_environment_analyzer():
     try:
         import importlib.util
 
-        # Issue #542: Add project root so env_analyzer.py can import from utils
+        # Issue #542: Add backend root so env_analyzer.py can import from utils
+        # Issue #2655: Use autobot-backend/ (parents[3]) not repo root (parents[4])
+        backend_root = str(Path(__file__).resolve().parents[3])
         project_root = str(Path(__file__).resolve().parents[4])
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+        for path_entry in (backend_root, project_root):
+            if path_entry not in sys.path:
+                sys.path.insert(0, path_entry)
 
         # Issue #611: Load env_analyzer directly from file to avoid namespace conflict
+        # Issue #2655: Fixed path — env_analyzer lives in autobot-backend/code_analysis/src/,
+        # not in tools/code-analysis-suite/src/ (which does not exist in this layout).
         env_analyzer_path = (
-            Path(__file__).resolve().parents[4]
-            / "tools"
-            / "code-analysis-suite"
+            Path(__file__).resolve().parents[3]
+            / "code_analysis"
             / "src"
             / "env_analyzer.py"
         )
