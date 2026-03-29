@@ -103,23 +103,23 @@ async def _set_setting(key: str, value: str) -> None:
 def _build_inventory_children(
     hosts: dict[str, dict],
     node_roles: list,
-    node_id_to_hostname: dict[str, str],
+    node_id_to_inv_name: dict[str, str],
 ) -> tuple[dict[str, dict], dict[str, set[str]]]:
     """Build Ansible inventory ``children`` with role-based groups (#1346).
 
     Returns (children dict, ansible_groups) where ansible_groups maps
-    group name to set of hostnames for logging.
+    group name to set of inventory names for logging.
     """
     from services.role_registry import ROLE_ANSIBLE_GROUPS
 
     ansible_groups: dict[str, set[str]] = {}
     for nr in node_roles:
-        hostname = node_id_to_hostname.get(nr.node_id)
-        if not hostname:
+        inv_name = node_id_to_inv_name.get(nr.node_id)
+        if not inv_name:
             continue
         group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
         if group:
-            ansible_groups.setdefault(group, set()).add(hostname)
+            ansible_groups.setdefault(group, set()).add(inv_name)
 
     children: dict[str, dict] = {
         "slm_nodes": {"hosts": {h: None for h in hosts}},
@@ -207,7 +207,7 @@ async def _generate_dynamic_inventory(
                 host_vars["ansible_port"] = node.ssh_port
             inventory_name = node.ansible_target  # #1814
             hosts[inventory_name] = host_vars
-            node_id_to_hostname[node.node_id] = node.hostname
+            node_id_to_hostname[node.node_id] = inventory_name
             node_id_to_ip[node.node_id] = node.ip_address
 
         # Only include active roles in Ansible groups (#1431)
