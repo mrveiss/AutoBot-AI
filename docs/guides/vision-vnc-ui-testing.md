@@ -1,5 +1,119 @@
 # Vision Module: Automated UI Testing via VNC
 
+
+## Quick Answer
+
+**How do you use AutoBot's vision module to automate UI testing via VNC?**
+
+Capture a VNC desktop screenshot, detect UI elements with the ScreenAnalyzer, and
+interact with them through the VNC API. Here is a complete, self-contained test
+script with all imports:
+
+```python
+#!/usr/bin/env python3
+"""Automated UI test via VNC: capture screen, find button, click it, verify."""
+
+import asyncio
+import logging
+
+import aiohttp
+
+from autobot_shared.ssot_config import config
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
+
+
+async def run_vnc_ui_test(token: str, target_host: str = "172.16.168.25"):
+    """Capture a VNC desktop, detect UI elements, click a button, and verify.
+
+    Args:
+        token: JWT authentication token.
+        target_host: VNC host IP (default: browser worker .25).
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with aiohttp.ClientSession() as session:
+        # Step 1: Start a VNC session
+        resp = await session.post(
+            f"{BACKEND_URL}/api/vnc/sessions",
+            json={"host": target_host, "port": 5900, "password": "autobot"},
+            headers=headers,
+            ssl=False,
+        )
+        vnc_session = await resp.json()
+        session_id = vnc_session["session_id"]
+        logger.info("VNC session started: %s", session_id)
+
+        # Step 2: Analyze the current screen (captures screenshot + detects elements)
+        resp = await session.post(
+            f"{BACKEND_URL}/api/vision/analyze",
+            json={"session_id": session_id, "include_screenshot": True},
+            headers=headers,
+            ssl=False,
+        )
+        analysis = await resp.json()
+        elements = analysis.get("elements", [])
+        logger.info("Detected %d UI elements", len(elements))
+
+        # Step 3: Find a specific button by text content
+        submit_button = None
+        for elem in elements:
+            if elem.get("element_type") == "button" and "submit" in elem.get("text_content", "").lower():
+                submit_button = elem
+                break
+
+        if not submit_button:
+            logger.warning("Submit button not found on screen")
+            return False
+
+        # Step 4: Click the button via VNC interaction
+        cx, cy = submit_button["center_point"]
+        resp = await session.post(
+            f"{BACKEND_URL}/api/vnc/sessions/{session_id}/click",
+            json={"x": cx, "y": cy, "button": "left"},
+            headers=headers,
+            ssl=False,
+        )
+        click_result = await resp.json()
+        logger.info("Clicked button at (%d, %d): %s", cx, cy, click_result.get("status"))
+
+        # Step 5: Wait and re-analyze to verify the click had an effect
+        await asyncio.sleep(2)
+        resp = await session.post(
+            f"{BACKEND_URL}/api/vision/analyze",
+            json={"session_id": session_id},
+            headers=headers,
+            ssl=False,
+        )
+        after_analysis = await resp.json()
+        logger.info("Post-click: %d elements detected", len(after_analysis.get("elements", [])))
+
+        # Step 6: Clean up VNC session
+        await session.delete(
+            f"{BACKEND_URL}/api/vnc/sessions/{session_id}",
+            headers=headers,
+            ssl=False,
+        )
+        return True
+
+
+if __name__ == "__main__":
+    import sys
+    auth_token = sys.argv[1] if len(sys.argv) > 1 else "YOUR_JWT_TOKEN"
+    result = asyncio.run(run_vnc_ui_test(auth_token))
+    print(f"Test {'PASSED' if result else 'FAILED'}")
+```
+
+For element types, interaction types, and the multi-modal analysis pipeline, see
+[Section 1](#1-vision-module-architecture). For Playwright-based browser testing,
+see [Section 5](#5-playwright-integration).
+
+---
+
+
 > AutoBot's computer vision pipeline for detecting, analyzing, and interacting with
 > UI elements on remote VNC desktops. This guide covers the full stack from screen
 > capture through element detection to automated interaction, including a complete

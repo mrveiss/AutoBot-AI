@@ -1,5 +1,106 @@
 # SLM Bash Execution Guide
 
+
+## Quick Answer
+
+**How do you execute bash commands on a target group of Linux nodes via the AutoBot SLM?**
+
+Authenticate with the SLM API, then use the infrastructure execution endpoint to
+run Ansible playbooks targeting specific node groups. Here is a complete, runnable
+script:
+
+```python
+#!/usr/bin/env python3
+"""Execute a bash command on a fleet node group via the AutoBot SLM API."""
+
+import asyncio
+import json
+import ssl
+
+import aiohttp
+
+SLM_URL = "https://172.16.168.19"
+
+
+def _ssl_ctx() -> ssl.SSLContext:
+    """SSL context for self-signed SLM certificates."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
+async def execute_on_group(command: str, group: str = "all", become: bool = False):
+    """Authenticate with SLM and run a bash command on a target node group.
+
+    Args:
+        command: Shell command to execute (e.g., "df -h /").
+        group: Ansible inventory group (all, frontend, redis, ai_stack, npu_worker).
+        become: Whether to use sudo on the target nodes.
+    """
+    connector = aiohttp.TCPConnector(ssl=_ssl_ctx())
+    async with aiohttp.ClientSession(connector=connector) as session:
+        # 1. Authenticate
+        auth = await session.post(
+            f"{SLM_URL}/api/auth/login",
+            json={"username": "admin", "password": "your_password"},
+        )
+        token = (await auth.json())["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 2. Execute command via infrastructure playbook
+        resp = await session.post(
+            f"{SLM_URL}/api/infrastructure/execute",
+            json={
+                "playbook": "run-command.yml",
+                "extra_vars": {
+                    "target_hosts": group,
+                    "shell_command": command,
+                    "become": become,
+                },
+            },
+            headers=headers,
+        )
+        result = await resp.json()
+        execution_id = result.get("execution_id")
+
+        # 3. Poll for completion
+        while execution_id:
+            status = await session.get(
+                f"{SLM_URL}/api/infrastructure/status/{execution_id}",
+                headers=headers,
+            )
+            data = await status.json()
+            if data["status"] in ("completed", "failed"):
+                print(json.dumps(data, indent=2))
+                break
+            await asyncio.sleep(2)
+
+
+if __name__ == "__main__":
+    asyncio.run(execute_on_group("df -h /", group="all"))
+```
+
+**curl equivalent:**
+
+```bash
+TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your_password"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -sk -X POST https://172.16.168.19/api/infrastructure/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"playbook":"run-command.yml","extra_vars":{"target_hosts":"frontend","shell_command":"systemctl status nginx"}}'
+```
+
+For node groups, per-node execution, and the SLM dashboard UI, see
+[Section 2](#2-fleet-node-groups) and [Section 7](#7-using-the-slm-dashboard-ui).
+
+---
+
+
 Execute bash commands on target groups of Linux nodes using the AutoBot Service Lifecycle Manager (SLM).
 
 ---

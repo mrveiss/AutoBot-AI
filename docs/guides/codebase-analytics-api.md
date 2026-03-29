@@ -1,5 +1,112 @@
 # Codebase Analytics Engine -- API Guide
 
+
+## Quick Answer
+
+**How do you use the codebase analytics API to get API coverage for a project?**
+
+Index the project, wait for completion, then fetch the endpoint coverage report.
+Here is the complete flow:
+
+```python
+#!/usr/bin/env python3
+"""Index a codebase and retrieve the API endpoint coverage report."""
+
+import asyncio
+
+import aiohttp
+from autobot_shared.ssot_config import config
+
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
+API = f"{BACKEND}/api/analytics/codebase"
+
+
+async def get_api_coverage(token: str, project_path: str = "/opt/autobot"):
+    """Index a project and retrieve its API endpoint coverage report.
+
+    Args:
+        token: Admin JWT token.
+        project_path: Absolute path to the project directory.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with aiohttp.ClientSession() as session:
+        # Step 1: Start indexing
+        resp = await session.post(
+            f"{API}/index",
+            json={"root_path": project_path},
+            headers=headers,
+            ssl=False,
+        )
+        index_result = await resp.json()
+        print(f"Indexing started: {index_result.get('status')}")
+
+        # Step 2: Poll until indexing completes
+        while True:
+            status_resp = await session.get(
+                f"{API}/index/status",
+                headers=headers,
+                ssl=False,
+            )
+            status = await status_resp.json()
+            if status.get("status") in ("completed", "idle"):
+                print(f"Indexing done: {status.get('files_indexed', 0)} files")
+                break
+            print(f"Indexing: {status.get('progress', 0)}%")
+            await asyncio.sleep(3)
+
+        # Step 3: Get API endpoint coverage
+        coverage_resp = await session.get(
+            f"{API}/endpoint-coverage",
+            headers=headers,
+            ssl=False,
+        )
+        coverage = await coverage_resp.json()
+
+        total = coverage.get("total_endpoints", 0)
+        tested = coverage.get("tested_endpoints", 0)
+        pct = (tested / total * 100) if total > 0 else 0
+        print(f"API Coverage: {tested}/{total} endpoints ({pct:.1f}%)")
+
+        # Step 4: Get full stats
+        stats_resp = await session.get(
+            f"{API}/stats",
+            headers=headers,
+            ssl=False,
+        )
+        stats = await stats_resp.json()
+        print(f"Total functions: {stats.get('total_functions', 0)}")
+        print(f"Total classes: {stats.get('total_classes', 0)}")
+
+        return coverage
+
+
+if __name__ == "__main__":
+    import sys
+    auth_token = sys.argv[1] if len(sys.argv) > 1 else "YOUR_JWT_TOKEN"
+    asyncio.run(get_api_coverage(auth_token))
+```
+
+**curl quick check:**
+
+```bash
+# Index
+curl -sk -X POST "$BACKEND/api/analytics/codebase/index" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"root_path": "/opt/autobot"}'
+
+# Coverage
+curl -sk "$BACKEND/api/analytics/codebase/endpoint-coverage" \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+```
+
+For the full endpoint reference, report generation, and SDK client, see
+[Section 5](#5-api-endpoint-coverage-endpoints) and [Section 12](#12-python-sdk-client).
+
+---
+
+
 > **Base URL:** `https://172.16.168.20:8443`
 > **API Prefix:** `/api/analytics/codebase`
 > **Auth:** All endpoints require admin permission (`check_admin_permission` dependency)
@@ -117,7 +224,7 @@ import aiohttp
 import asyncio
 import json
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -191,7 +298,7 @@ TypeScript/Vue files for API calls, then cross-references them.
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -235,7 +342,7 @@ For a richer report, combine the coverage data with indexed statistics:
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 
@@ -1504,7 +1611,7 @@ that specific code source rather than the global dataset.
 import aiohttp
 import asyncio
 
-BACKEND = "https://172.16.168.20:8443"
+BACKEND = f"https://{config.vm.main}:{config.port.backend}"
 API = f"{BACKEND}/api/analytics/codebase"
 
 async def get_project_stats(source_id: str) -> dict:

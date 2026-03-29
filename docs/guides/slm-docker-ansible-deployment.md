@@ -1,5 +1,143 @@
 # Deploying Docker Containers via SLM Ansible Playbooks
 
+
+## Quick Answer
+
+**How do you deploy a Docker container using the SLM and an Ansible playbook?**
+
+Use the SLM API to trigger an Ansible playbook that deploys a Docker container to a
+fleet node. The flow is: authenticate with the SLM, write an Ansible playbook for
+Docker deployment, execute it via the `/api/playbooks/execute` endpoint. Here is the
+complete end-to-end example:
+
+**1. Authenticate with the SLM:**
+
+```bash
+SLM_TOKEN=$(curl -sk -X POST https://172.16.168.19/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your_password"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+```
+
+**2. Create the Ansible playbook** (`ansible/playbooks/deploy-docker-app.yml`):
+
+```yaml
+---
+- name: Deploy Docker container to fleet node
+  hosts: "{{ target_hosts | default('ai_stack') }}"
+  become: true
+  vars:
+    container_name: "{{ app_name | default('my-app') }}"
+    container_image: "{{ image | default('nginx:latest') }}"
+    container_port: "{{ port | default('8080') }}"
+    host_port: "{{ host_port_map | default('8080') }}"
+  tasks:
+    - name: Ensure Docker is installed
+      ansible.builtin.apt:
+        name: [docker.io, docker-compose-v2]
+        state: present
+        update_cache: true
+
+    - name: Pull container image
+      community.docker.docker_image:
+        name: "{{ container_image }}"
+        source: pull
+
+    - name: Deploy container
+      community.docker.docker_container:
+        name: "{{ container_name }}"
+        image: "{{ container_image }}"
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "{{ host_port }}:{{ container_port }}"
+        env:
+          AUTOBOT_NODE: "{{ inventory_hostname }}"
+
+    - name: Verify container is running
+      ansible.builtin.command: docker inspect --format='{{ '{{' }}.State.Status{{ '}}' }}' {{ container_name }}
+      register: container_status
+      changed_when: false
+
+    - name: Assert container is running
+      ansible.builtin.assert:
+        that: container_status.stdout == "running"
+        fail_msg: "Container {{ container_name }} is not running"
+```
+
+**3. Execute via the SLM API:**
+
+```python
+import aiohttp
+import asyncio
+
+
+async def deploy_docker_via_slm():
+    """Deploy a Docker container to a fleet node using the SLM API."""
+    slm_url = "https://172.16.168.19"
+
+    async with aiohttp.ClientSession() as session:
+        # Authenticate
+        auth_resp = await session.post(
+            f"{slm_url}/api/auth/login",
+            json={"username": "admin", "password": "your_password"},
+            ssl=False,
+        )
+        token = (await auth_resp.json())["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Execute the playbook
+        resp = await session.post(
+            f"{slm_url}/api/playbooks/execute",
+            json={
+                "playbook": "deploy-docker-app.yml",
+                "extra_vars": {
+                    "target_hosts": "ai_stack",
+                    "app_name": "my-web-app",
+                    "image": "nginx:1.25",
+                    "port": "80",
+                    "host_port_map": "8080",
+                },
+            },
+            headers=headers,
+            ssl=False,
+        )
+        result = await resp.json()
+        execution_id = result["execution_id"]
+
+        # Poll for completion
+        while True:
+            status_resp = await session.get(
+                f"{slm_url}/api/playbooks/status/{execution_id}",
+                headers=headers,
+                ssl=False,
+            )
+            status = await status_resp.json()
+            print(f"Status: {status['status']}")
+            if status["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(3)
+
+        return status
+
+
+asyncio.run(deploy_docker_via_slm())
+```
+
+**4. Verify:**
+
+```bash
+curl -sk -H "Authorization: Bearer $SLM_TOKEN" \
+  https://172.16.168.19/api/nodes | python3 -m json.tool
+ssh autobot@172.16.168.24 "docker ps --filter name=my-web-app"
+```
+
+For rolling deployments, inventory configuration, and node lifecycle management,
+see [Section 8](#8-rolling-deployment-strategy) and [Section 10](#10-complete-end-to-end-example).
+
+---
+
+
 > **Benchmark:** Use the Service Lifecycle Manager to automate the deployment of a Docker container using an Ansible playbook.
 
 AutoBot's primary deployment model uses systemd services managed via Ansible. However, the SLM's Ansible playbook execution engine supports **any** deployment strategy, including Docker containers. This guide shows how to use the SLM API to deploy Docker containers to fleet nodes via Ansible playbooks. It covers SLM architecture, node lifecycle management, authentication, playbook authoring, API-driven execution, inventory configuration, rolling deployment strategies, operational gotchas, and a complete end-to-end example with verification.

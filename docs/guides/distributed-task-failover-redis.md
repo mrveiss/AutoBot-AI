@@ -1,5 +1,150 @@
 # Distributed Task Failover with Redis
 
+
+## Quick Answer
+
+**How do you configure distributed task failover with Redis in AutoBot?**
+
+Use the `TaskQueue` class to enqueue tasks with priority, register workers with
+heartbeats, and let the failover monitor automatically migrate tasks from dead
+workers. Here is a complete example showing task creation, worker registration,
+and explicit failover migration:
+
+```python
+#!/usr/bin/env python3
+"""Distributed task failover with Redis: enqueue, heartbeat, and migrate."""
+
+import asyncio
+import json
+import time
+import logging
+
+from autobot_shared.redis_client import get_redis_client
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+HEARTBEAT_TTL = 45  # seconds -- worker considered dead after this
+
+
+async def enqueue_task(queue_name: str, task_id: str, payload: dict, priority: int = 2):
+    """Enqueue a task into a Redis-backed priority queue.
+
+    Args:
+        queue_name: Name of the task queue (e.g., "npu_inference").
+        task_id: Unique task identifier.
+        payload: Task payload dict.
+        priority: 1=LOW, 2=NORMAL, 3=HIGH, 4=CRITICAL.
+    """
+    redis = await get_redis_client(async_client=True, database="main")
+    score = priority * 1_000_000 + int(time.time())
+
+    task_data = {
+        "id": task_id,
+        "type": queue_name,
+        "payload": json.dumps(payload),
+        "status": "queued",
+        "priority": str(priority),
+        "created_at": str(time.time()),
+        "max_retries": "3",
+        "retry_count": "0",
+        "worker_id": "",
+    }
+    await redis.hset(f"{queue_name}:tasks", task_id, json.dumps(task_data))
+    await redis.zadd(f"{queue_name}:pending", {task_id: score})
+    logger.info("Enqueued task %s with priority %d", task_id, priority)
+
+
+async def register_worker(worker_id: str, capabilities: list[str]):
+    """Register a worker and start its heartbeat loop.
+
+    Args:
+        worker_id: Unique worker identifier (e.g., "npu-worker-1").
+        capabilities: List of task types this worker can handle.
+    """
+    redis = await get_redis_client(async_client=True, database="main")
+    await redis.sadd("workers:registered", worker_id)
+    await redis.hset(f"worker:{worker_id}:config", mapping={
+        "capabilities": json.dumps(capabilities),
+        "max_concurrent": "3",
+    })
+
+    while True:
+        heartbeat = {
+            "worker_id": worker_id,
+            "timestamp": time.time(),
+            "load": 0,
+            "tasks_active": 0,
+            "capabilities": capabilities,
+        }
+        await redis.set(
+            f"worker:{worker_id}:heartbeat",
+            json.dumps(heartbeat),
+            ex=HEARTBEAT_TTL,
+        )
+        await asyncio.sleep(15)
+
+
+async def check_and_migrate_tasks(queue_name: str):
+    """Detect dead workers and migrate their tasks back to pending.
+
+    Checks all registered workers for expired heartbeats. Tasks assigned
+    to dead workers are moved from running back to pending with incremented
+    retry_count.
+    """
+    redis = await get_redis_client(async_client=True, database="main")
+    workers = await redis.smembers("workers:registered")
+
+    for worker_id_bytes in workers:
+        worker_id = worker_id_bytes.decode()
+        heartbeat = await redis.get(f"worker:{worker_id}:heartbeat")
+
+        if heartbeat is None:
+            # Worker is dead -- migrate its tasks
+            task_ids = await redis.smembers(f"worker:{worker_id}:tasks")
+            for tid_bytes in task_ids:
+                task_id = tid_bytes.decode()
+                raw = await redis.hget(f"{queue_name}:tasks", task_id)
+                if raw is None:
+                    continue
+                task = json.loads(raw)
+                retries = int(task.get("retry_count", 0))
+
+                if retries >= int(task.get("max_retries", 3)):
+                    # Move to failed permanently
+                    await redis.zadd(f"{queue_name}:failed", {task_id: time.time()})
+                    task["status"] = "failed_permanent"
+                    logger.warning("Task %s exceeded max retries", task_id)
+                else:
+                    # Re-enqueue with incremented retry count
+                    task["retry_count"] = str(retries + 1)
+                    task["status"] = "queued"
+                    task["previous_worker"] = worker_id
+                    task["worker_id"] = ""
+                    score = int(task["priority"]) * 1_000_000 + int(time.time())
+                    await redis.zadd(f"{queue_name}:pending", {task_id: score})
+                    await redis.zrem(f"{queue_name}:running", task_id)
+                    logger.info("Migrated task %s from dead worker %s (retry %d)",
+                                task_id, worker_id, retries + 1)
+
+                await redis.hset(f"{queue_name}:tasks", task_id, json.dumps(task))
+
+            # Log the failover event
+            event = {"worker": worker_id, "tasks": len(task_ids), "time": time.time()}
+            await redis.lpush("failover:log", json.dumps(event))
+            await redis.srem("workers:registered", worker_id)
+
+
+if __name__ == "__main__":
+    asyncio.run(enqueue_task("npu_inference", "task-001", {"model": "yolov8"}))
+```
+
+For the full task lifecycle, NPU worker distribution, and scheduler integration,
+see [Section 3](#3-task-lifecycle) and [Section 5](#5-failover-detection-and-task-migration).
+
+---
+
+
 > **Scope:** AutoBot's distributed task execution system across the 6-VM fleet,
 > using Redis-backed queues for task assignment, heartbeat monitoring, and
 > automatic failover when worker nodes become unreachable.

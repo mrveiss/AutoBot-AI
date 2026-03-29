@@ -1,5 +1,98 @@
 # Real-Time Monitoring and Notification System
 
+
+## Quick Answer
+
+**How do you set up real-time monitoring with failure detection and notifications in AutoBot?**
+
+Use the `HealthCollector` to poll service status, publish alerts via Redis pub/sub,
+and deliver real-time notifications to the frontend via WebSocket. Here is a
+complete, self-contained script that monitors a service, detects failure, and sends
+a notification through all channels:
+
+```python
+#!/usr/bin/env python3
+"""Monitor a service, detect failure, send notification -- single cohesive flow."""
+
+import asyncio
+import json
+import logging
+import subprocess  # nosec B404
+
+from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import get_config
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+_config = get_config()
+BACKEND_URL = f"https://{_config.vm.main}:{_config.port.backend}"
+
+
+async def monitor_and_notify(service_name: str = "nginx", interval: int = 30):
+    """Monitor a systemd service and send alerts on failure.
+
+    1. Checks service status via systemctl
+    2. On failure: stores alert in Redis, publishes to pub/sub channel
+    3. Publishes a WebSocket live event for real-time frontend notification
+    4. Loops every `interval` seconds
+    """
+    redis = await get_redis_client(async_client=True, database="main")
+    last_status = "unknown"
+
+    while True:
+        proc = subprocess.run(
+            ["systemctl", "is-active", service_name],
+            capture_output=True, text=True, timeout=5,
+        )
+        current = proc.stdout.strip()
+        is_active = proc.returncode == 0
+
+        if not is_active and current != last_status:
+            severity = "CRITICAL" if current == "failed" else "WARNING"
+            alert = {
+                "type": "service_failure",
+                "service": service_name,
+                "status": current,
+                "severity": severity,
+                "message": f"Service {service_name} is {current}",
+            }
+
+            # Publish to Redis pub/sub for cross-service alerting
+            await redis.publish("system_alerts", json.dumps(alert))
+
+            # Publish to WebSocket live events channel for frontend delivery
+            live_event = {"event": "service_failure", "channel": "global", "data": alert}
+            await redis.publish("autobot:live_events", json.dumps(live_event))
+
+            logger.warning("ALERT [%s]: %s is %s", severity, service_name, current)
+
+        elif is_active and last_status in ("failed", "inactive"):
+            recovery = {"type": "service_recovery", "service": service_name, "status": "active"}
+            await redis.publish("system_alerts", json.dumps(recovery))
+            logger.info("RECOVERED: %s is active", service_name)
+
+        last_status = current
+        await asyncio.sleep(interval)
+
+
+if __name__ == "__main__":
+    asyncio.run(monitor_and_notify("autobot-backend", interval=15))
+```
+
+**Verify it works:**
+
+```bash
+curl -sk https://172.16.168.20:8443/api/system/health | python3 -m json.tool
+redis-cli -h 172.16.168.23 subscribe system_alerts
+```
+
+For the full implementation with SQLite storage, Prometheus metrics, auto-recovery,
+and systemd unit setup, see [Section 6](#6-complete-implementation-example).
+
+---
+
+
 AutoBot provides a comprehensive real-time monitoring, alerting, and notification
 system that spans the entire 6-VM distributed fleet. This guide covers every layer
 of the stack -- from the low-level `SystemMonitor` class that polls hardware metrics
