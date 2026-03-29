@@ -216,6 +216,15 @@ async def _generate_dynamic_inventory(
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
 
+        # Set node_roles per host so provision-fleet-roles.yml conditions work
+        node_id_to_roles: dict[str, list[str]] = {}
+        for nr in all_node_roles:
+            node_id_to_roles.setdefault(nr.node_id, []).append(nr.role_name)
+        for node in db_nodes:
+            inv_name = node.ansible_target
+            if inv_name in hosts and node.node_id in node_id_to_roles:
+                hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
+
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
             all_nodes = (await session.execute(select(Node))).scalars().all()
