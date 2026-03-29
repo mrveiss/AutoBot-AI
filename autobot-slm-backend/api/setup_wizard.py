@@ -177,23 +177,13 @@ async def _generate_dynamic_inventory(
         if not db_nodes:
             return None
 
+        from autobot_shared.network_utils import get_local_ips
+
         hosts: dict[str, dict] = {}
         node_id_to_hostname: dict[str, str] = {}
         node_id_to_ip: dict[str, str] = {}
         # Detect local IPs for ansible_connection: local (#2722)
-        local_ips = {"127.0.0.1", "localhost"}
-        try:
-            import subprocess
-
-            result = subprocess.run(
-                ["hostname", "-I"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            local_ips.update(result.stdout.split())
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        local_ips = get_local_ips()
 
         for node in db_nodes:
             host_vars = {
