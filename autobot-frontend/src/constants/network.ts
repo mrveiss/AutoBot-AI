@@ -185,24 +185,26 @@ export class NetworkConfig {
 export const networkConfig = new NetworkConfig()
 
 /**
- * Redis database assignments to eliminate hardcoded database numbers
+ * Redis database assignments to eliminate hardcoded database numbers.
+ *
+ * All values must match ssot_config.py RedisConfig db_* fields (Issue #2723).
+ * ssot_config.py is the authoritative source of truth; this object mirrors it
+ * for frontend callers that import from network constants.
  */
 export const DatabaseConstants = Object.freeze({
-  // Core databases
+  // Core databases — aligned with ssot_config.RedisConfig (Issue #2762)
   MAIN_DB: 0,
   KNOWLEDGE_DB: 1,
-  CACHE_DB: 2,
-  VECTORS_DB: 8,
-
-  // Specialized databases
-  SESSIONS_DB: 3,
+  PROMPTS_DB: 2,
+  AGENTS_DB: 3,
   METRICS_DB: 4,
-  LOGS_DB: 5,
-  CONFIG_DB: 6,
-  WORKFLOWS_DB: 7,
+  CACHE_DB: 5,
+  SESSIONS_DB: 6,
+  TASKS_DB: 7,
+  LOGS_DB: 8,
   TEMP_DB: 9,
-  MONITORING_DB: 10,
-  RATE_LIMITING_DB: 11
+  BACKUP_DB: 10,
+  TESTING_DB: 15
 })
 
 // Legacy compatibility exports
