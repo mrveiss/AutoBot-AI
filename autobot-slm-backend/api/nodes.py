@@ -660,6 +660,21 @@ def _check_role_conflicts(
     return conflicts, warnings
 
 
+def _detect_orphaned_dependencies(
+    active_roles: list[str], removed_role: str
+) -> list[str]:
+    """Return dependencies no longer needed after removing a role."""
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    removed_deps = set(ROLE_DEPENDENCIES.get(removed_role, []))
+    if not removed_deps:
+        return []
+    still_needed: set[str] = set()
+    for role in active_roles:
+        still_needed.update(ROLE_DEPENDENCIES.get(role, []))
+    return sorted(removed_deps - still_needed)
+
+
 async def _run_preflight(
     node_id: str, role_name: str, db: AsyncSession
 ) -> PreflightResult:
@@ -971,6 +986,16 @@ async def remove_role_from_node(
     await db.delete(node_role)
     await db.commit()
 
+    # Detect orphaned dependencies after role removal
+    remaining_roles_result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id,
+            NodeRole.status.in_(["active", "inactive"]),
+        )
+    )
+    remaining_roles = [nr.role_name for nr in remaining_roles_result.scalars().all()]
+    orphaned_deps = _detect_orphaned_dependencies(remaining_roles, role_name)
+
     logger.info(
         "Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup
     )
@@ -980,7 +1005,53 @@ async def remove_role_from_node(
     }
     if backup and service_name:
         response["backup_path"] = ansible_result.get("backup_path")
+    if orphaned_deps:
+        response["orphaned_dependencies"] = orphaned_deps
     return response
+
+
+@router.delete("/{node_id}/dependencies/{dep_name}")
+async def mark_dependency_for_removal(
+    node_id: str,
+    dep_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """Mark an orphaned dependency for removal on next provisioning run."""
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    # Get node
+    query = select(Node).where(Node.node_id == node_id)
+    result = await db.execute(query)
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+
+    # Guard: check no active role needs this dependency
+    role_query = select(NodeRole).where(
+        NodeRole.node_id == node_id,
+        NodeRole.status.in_(["active", "inactive"]),
+    )
+    active_roles = [
+        nr.role_name for nr in (await db.execute(role_query)).scalars().all()
+    ]
+    for role in active_roles:
+        if dep_name in ROLE_DEPENDENCIES.get(role, []):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot remove {dep_name}: still required by role '{role}'",
+            )
+
+    # Add to pending removals in extra_data
+    extra = dict(node.extra_data) if node.extra_data else {}
+    pending = extra.get("pending_dep_removals", [])
+    if dep_name not in pending:
+        pending.append(dep_name)
+    extra["pending_dep_removals"] = pending
+    node.extra_data = extra
+    await db.commit()
+
+    return {"status": "marked_for_removal", "dependency": dep_name}
 
 
 async def _get_role_service_and_path(

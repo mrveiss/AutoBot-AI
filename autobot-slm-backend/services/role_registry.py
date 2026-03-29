@@ -375,6 +375,29 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "slm-monitoring": "00-SLM-Manager",
 }
 
+# Static dependency map: role -> infrastructure packages required.
+# Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
+# Dependencies are Ansible role names: nginx, python312, nodejs, postgresql.
+ROLE_DEPENDENCIES: Dict[str, List[str]] = {
+    # SLM roles
+    "slm-backend": ["python312", "nginx"],
+    "slm-frontend": ["nodejs", "nginx"],
+    "slm-database": ["postgresql"],
+    "slm-monitoring": [],
+    # Service roles
+    "backend": ["python312", "nginx"],
+    "celery": ["python312"],
+    "frontend": ["nodejs", "nginx"],
+    "redis": [],
+    "ai-stack": ["python312"],
+    "chromadb": ["python312"],
+    "browser-service": ["nodejs"],
+    "npu-worker": ["python312"],
+    "tts-worker": ["python312"],
+    "vnc": [],
+    "slm-agent": [],
+}
+
 
 async def seed_default_roles(db: AsyncSession) -> int:
     """Seed default roles if they don't exist."""

@@ -1,0 +1,47 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Shared dependency role: Python 3.12 (deadsnakes PPA)
+# Installs Python 3.12 interpreter and venv support.
+# Venv creation and pip installs stay in service roles.
+---
+
+- name: "python312 | Check if Python 3.12 is available"
+  ansible.builtin.command:
+    cmd: python3.12 --version
+  register: _py312_check
+  changed_when: false
+  failed_when: false
+  tags: ['deps', 'python312']
+
+- name: "python312 | Install software-properties-common"
+  ansible.builtin.apt:
+    name: software-properties-common
+    state: present
+  become: true
+  when: _py312_check.rc != 0
+  tags: ['deps', 'python312']
+
+- name: "python312 | Add deadsnakes PPA"
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+  become: true
+  when: _py312_check.rc != 0
+  tags: ['deps', 'python312']
+
+- name: "python312 | Install Python 3.12"
+  ansible.builtin.apt:
+    name: "{{ python312_packages }}"
+    state: present
+    update_cache: true
+  become: true
+  when: _py312_check.rc != 0
+  tags: ['deps', 'python312']
+
+- name: "python312 | Verify Python 3.12 is available"
+  ansible.builtin.command:
+    cmd: python3.12 --version
+  changed_when: false
+  tags: ['deps', 'python312']

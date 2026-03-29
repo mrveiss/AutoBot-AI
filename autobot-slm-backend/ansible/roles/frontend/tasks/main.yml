@@ -46,59 +46,9 @@
   tags: ['frontend', 'config']
 
 # ============================================================
-- name: "Frontend | Check if Node.js is already installed"
-  ansible.builtin.command:
-    cmd: node --version
-  register: _node_check
-  changed_when: false
-  failed_when: false
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Install Node.js prerequisites"
-  apt:
-    name:
-      - curl
-      - gnupg
-      - ca-certificates
-    state: present
-  become: yes
-  when: _node_check.rc != 0
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Check if NodeSource repo exists"
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/nodesource.list
-  register: _nodesource_repo
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Add NodeSource repository for Node.js"
-  ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
-  when:
-    - _node_check.rc != 0
-    - not _nodesource_repo.stat.exists
-  become: yes
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Install Node.js and nginx"
-  apt:
-    name:
-      - nodejs
-      - nginx
-      - build-essential
-    state: present
-    update_cache: yes
-  become: yes
-  when: _node_check.rc != 0
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Ensure nginx is installed"
-  apt:
-    name: nginx
-    state: present
-  become: yes
-  when: _node_check.rc == 0
-  tags: ['frontend', 'packages']
+# Node.js and nginx are installed by shared dependency roles
+# in Phase 0 (nodejs, nginx). No per-role install needed.
+# ============================================================
 
 - name: "Frontend | Verify Node.js installation"
   command: node --version

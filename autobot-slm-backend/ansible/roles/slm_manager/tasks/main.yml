@@ -25,39 +25,11 @@
       - python3
       - python3-pip
       - python3-venv
-      - nginx
       - openssl
       - software-properties-common
       - build-essential
     state: present
     update_cache: true
-  tags: ['slm', 'packages']
-
-# Python 3.12 from deadsnakes PPA (#2705)
-- name: "SLM | Check if Python 3.12 is available"
-  ansible.builtin.command:
-    cmd: python3.12 --version
-  register: _py312_check
-  changed_when: false
-  failed_when: false
-  tags: ['slm', 'packages']
-
-- name: "SLM | Add deadsnakes PPA for Python 3.12"
-  ansible.builtin.apt_repository:
-    repo: ppa:deadsnakes/ppa
-    state: present
-  when: _py312_check.rc != 0
-  tags: ['slm', 'packages']
-
-- name: "SLM | Install Python 3.12"
-  ansible.builtin.apt:
-    name:
-      - python3.12
-      - python3.12-venv
-      - python3.12-dev
-    state: present
-    update_cache: true
-  when: _py312_check.rc != 0
   tags: ['slm', 'packages']
 
 # ==========================================================
@@ -75,25 +47,6 @@
     name: ansible
     state: present
   tags: ['slm', 'packages', 'ansible']
-
-- name: "SLM | Check if NodeSource repo exists"
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/nodesource.list
-  register: slm_nodesource_repo
-  tags: ['slm', 'packages']
-
-- name: "SLM | Add NodeSource repository for Node.js 20.x"
-  ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  when: not slm_nodesource_repo.stat.exists
-  tags: ['slm', 'packages']
-
-- name: "SLM | Install Node.js (includes npm)"
-  ansible.builtin.apt:
-    name: nodejs
-    state: present
-    update_cache: true
-  tags: ['slm', 'packages']
 
 # ==========================================================
 # User and directories

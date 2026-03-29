@@ -69,25 +69,8 @@
 
 # ============================================================
 # Playwright headless browser automation
+# Node.js is installed by shared dependency roles in Phase 0
 # ============================================================
-- name: "Browser | Check if Node.js is already installed"
-  command: node --version
-  register: node_check
-  failed_when: false
-  changed_when: false
-  become: yes
-  tags: ['browser', 'packages']
-
-- name: "Browser | Install Node.js from NodeSource"
-  shell: |
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-  args:
-    creates: /usr/bin/node
-  when: node_check.rc != 0
-  become: yes
-  tags: ['browser', 'packages']
-
 - name: "Browser | Install Playwright system dependencies"
   apt:
     name:

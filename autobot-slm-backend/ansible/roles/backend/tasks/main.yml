@@ -50,28 +50,11 @@
   tags: ['backend', 'config']
 
 # ============================================================
-# Issue #1898: Standardize Python — deadsnakes PPA + Python 3.12 venv
+# Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
 # ============================================================
-- name: Install software-properties-common for PPA support
-  ansible.builtin.apt:
-    name: software-properties-common
-    state: present
-    update_cache: true
-
-- name: Add deadsnakes PPA for Python 3.12
-  ansible.builtin.apt_repository:
-    repo: "ppa:deadsnakes/ppa"
-    state: present
-    update_cache: true
-
-- name: Install Python 3.12 and build dependencies
+- name: "Backend | Install backend-specific system dependencies"
   ansible.builtin.apt:
     name:
-      - python3.12
-      - python3.12-venv
-      - python3.12-dev
-      - git
-      - curl
       - build-essential
       - libssl-dev
       - zlib1g-dev
@@ -85,6 +68,8 @@
       - libxmlsec1-dev
       - libffi-dev
       - liblzma-dev
+      - git
+      - curl
       # GUI / display (VNC, xvfb headless, GUI automation)
       - xvfb
       - x11-utils
@@ -101,6 +86,7 @@
       - python3-tk
     state: present
     update_cache: true
+  tags: ['backend', 'packages']
 
 
 - name: Create autobot user
@@ -374,13 +360,6 @@
 # Holds port backend_nginx_port (8443) permanently so WDF
 # rule is evaluated once for nginx, not on every uvicorn restart.
 # ==========================================================
-- name: "Backend nginx | Install nginx"
-  ansible.builtin.apt:
-    name: nginx
-    state: present
-    update_cache: true
-  tags: ['backend', 'nginx']
-
 - name: "Backend nginx | Deploy reverse-proxy vhost config"
   ansible.builtin.template:
     src: nginx-backend.conf.j2

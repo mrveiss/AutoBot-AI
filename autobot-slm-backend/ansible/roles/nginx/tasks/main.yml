@@ -1,0 +1,24 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Shared dependency role: nginx
+# Installs nginx and ensures service is running.
+# Vhost configuration stays in service roles (slm_manager, backend, frontend).
+---
+
+- name: "nginx | Install nginx"
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+  become: true
+  tags: ['deps', 'nginx']
+
+- name: "nginx | Ensure service is enabled and running"
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+  become: true
+  tags: ['deps', 'nginx']

@@ -17,6 +17,62 @@
 ---
 
 # -------------------------------------------------------------------
+# Phase 0: Shared Dependencies (nginx, python312, nodejs)
+# Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
+# -------------------------------------------------------------------
+- name: "Provision Phase 0: Shared Dependencies"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "Deps | Install nginx"
+      ansible.builtin.include_role:
+        name: nginx
+      when: "'nginx' in (node_dependencies | default([]))"
+      tags: ['deps', 'nginx']
+
+    - name: "Deps | Install Python 3.12"
+      ansible.builtin.include_role:
+        name: python312
+      when: "'python312' in (node_dependencies | default([]))"
+      tags: ['deps', 'python312']
+
+    - name: "Deps | Install Node.js"
+      ansible.builtin.include_role:
+        name: nodejs
+      when: "'nodejs' in (node_dependencies | default([]))"
+      tags: ['deps', 'nodejs']
+
+    # Orphan removals (admin-approved only)
+    - name: "Deps | Remove nginx if marked for removal"
+      ansible.builtin.apt:
+        name: nginx
+        state: absent
+        purge: true
+      when: "'nginx' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Python 3.12 if marked for removal"
+      ansible.builtin.apt:
+        name:
+          - python3.12
+          - python3.12-venv
+          - python3.12-dev
+        state: absent
+        purge: true
+      when: "'python312' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Node.js if marked for removal"
+      ansible.builtin.apt:
+        name: nodejs
+        state: absent
+        purge: true
+      when: "'nodejs' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+# -------------------------------------------------------------------
 # Phase 1: Common baseline on ALL target nodes
 # -------------------------------------------------------------------
 - name: "Provision Phase 1: Common Baseline"

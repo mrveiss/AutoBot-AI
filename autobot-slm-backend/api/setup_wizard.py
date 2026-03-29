@@ -228,6 +228,25 @@ async def _generate_dynamic_inventory(
             if inv_name in hosts and node.node_id in node_id_to_roles:
                 hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
 
+        # Resolve dependencies for Phase 0 (#2747)
+        from services.role_registry import ROLE_DEPENDENCIES
+
+        for node in db_nodes:
+            inv_name = node.ansible_target
+            if inv_name not in hosts:
+                continue
+            roles = hosts[inv_name].get("node_roles", [])
+            deps: set[str] = set()
+            for role in roles:
+                deps.update(ROLE_DEPENDENCIES.get(role, []))
+            hosts[inv_name]["node_dependencies"] = sorted(deps)
+
+            # Pending removals from extra_data
+            extra = node.extra_data or {}
+            pending = extra.get("pending_dep_removals", [])
+            if pending:
+                hosts[inv_name]["pending_dep_removals"] = pending
+
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
             all_nodes = (await session.execute(select(Node))).scalars().all()

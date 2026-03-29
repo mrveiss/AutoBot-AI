@@ -56,15 +56,13 @@
   tags: ['ai', 'config']
 
 # ============================================================
-- name: Install AI stack dependencies
+- name: "AI Stack | Install build dependencies"
   ansible.builtin.apt:
     name:
-      - python3
-      - python3-pip
-      - python3-venv
       - build-essential
     state: present
     update_cache: true
+  tags: ['ai-stack', 'packages']
 
 - name: Create AI stack directories
   ansible.builtin.file:
