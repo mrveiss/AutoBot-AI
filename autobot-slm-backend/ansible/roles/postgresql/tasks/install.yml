@@ -60,6 +60,13 @@
   become: true
   when: _pg_installed.rc != 0
 
+- name: Ensure en_US.UTF-8 locale is available
+  community.general.locale_gen:
+    name: en_US.UTF-8
+    state: present
+  become: true
+  ignore_errors: true
+
 - name: Install PostgreSQL packages
   ansible.builtin.apt:
     name:

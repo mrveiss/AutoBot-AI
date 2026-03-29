@@ -35,11 +35,13 @@ readonly REQUIRED_MEM_MB=2048
 # Runtime flags
 UNATTENDED=false
 REINSTALL=false
+UNINSTALL=false
+CONFIRM_YES=false
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
 
 # Phase tracking
-TOTAL_PHASES=6
+TOTAL_PHASES=7
 CURRENT_PHASE=0
 
 # Colors
@@ -129,6 +131,8 @@ After installation, use the SLM web UI setup wizard to add fleet nodes.
 Options:
   --unattended          Run without prompts, use all defaults
   --reinstall           Force reinstall over existing installation
+  --uninstall           Completely remove AutoBot and all dependencies (#2706)
+  --yes                 Skip confirmation prompts (use with --uninstall)
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
   --admin-pass=PASS     SLM admin password (auto-generated if not set)
   --help                Show this help message
@@ -138,6 +142,8 @@ Examples:
   sudo $0 --unattended                       # Default unattended install
   sudo $0 --unattended --admin-pass=MyPass   # Unattended with custom password
   sudo $0 --reinstall                        # Reinstall over existing
+  sudo $0 --uninstall                        # Full uninstall (with confirmation)
+  sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
 
 Post-Install:
   1. Open https://<server-ip> in a browser
@@ -230,6 +236,24 @@ system_setup() {
             software-properties-common apt-transport-https \
             ca-certificates gnupg build-essential \
             libpq-dev
+
+    if ! locale -a 2>/dev/null | grep -qi 'en_US\.utf-\?8'; then
+        run_ok "Generating en_US.UTF-8 locale" \
+            locale-gen en_US.UTF-8
+    fi
+
+    # Issue #2705: Python 3.12 required by autobot-shared
+    if ! command -v python3.12 &>/dev/null; then
+        run_ok "Adding deadsnakes PPA for Python 3.12" \
+            apt-add-repository -y ppa:deadsnakes/ppa
+        run_ok "Updating package lists (Python 3.12)" \
+            apt-get update -qq
+        run_ok "Installing Python 3.12" \
+            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+                python3.12 python3.12-venv python3.12-dev
+    else
+        success "  Python 3.12 already installed ($(python3.12 --version))"
+    fi
 
     if ! command -v ansible-playbook &>/dev/null; then
         run_ok "Adding Ansible PPA" \
@@ -458,7 +482,71 @@ service_verification() {
 }
 
 # =============================================================================
-# Phase 6: Finalize
+# Phase 6: Register Local Node (#2717)
+# =============================================================================
+
+register_local_node() {
+    phase "Register Local Node"
+
+    local api_url="https://127.0.0.1"
+    local local_ip
+    local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
+    local hostname_val
+    hostname_val=$(hostname)
+
+    # Authenticate
+    info "Authenticating with SLM API..."
+    local token
+    token=$(curl -sfk --max-time 10 \
+        -X POST "${api_url}/api/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+        2>/dev/null | jq -r '.access_token // empty')
+
+    if [[ -z "${token}" ]]; then
+        warn "Could not authenticate with SLM API — skipping node registration"
+        warn "Register manually: SLM UI > Fleet > Add Node"
+        return
+    fi
+    success "Authenticated with SLM API"
+
+    # Register this node with all single-host roles
+    info "Registering local node (${local_ip})..."
+    local http_code
+    http_code=$(curl -sfk --max-time 10 -o /dev/null -w "%{http_code}" \
+        -X POST "${api_url}/api/nodes" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${token}" \
+        -d "{
+            \"hostname\": \"${hostname_val}\",
+            \"ip_address\": \"${local_ip}\",
+            \"node_id\": \"00-SLM-Manager\",
+            \"roles\": [
+                \"autobot-slm-agent\",
+                \"autobot-slm-database\",
+                \"autobot-monitoring\",
+                \"autobot-backend\",
+                \"autobot-frontend\",
+                \"autobot-database\",
+                \"autobot-ai-stack\",
+                \"autobot-browser-worker\"
+            ],
+            \"ssh_user\": \"autobot\",
+            \"ssh_port\": 22,
+            \"auth_method\": \"key\",
+            \"import_existing\": true,
+            \"auto_enroll\": false
+        }" 2>/dev/null)
+
+    case "${http_code}" in
+        201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
+        400) success "Local node already registered" ;;
+        *)   warn "Node registration returned HTTP ${http_code} — register manually via SLM UI" ;;
+    esac
+}
+
+# =============================================================================
+# Phase 7: Finalize
 # =============================================================================
 
 finalize() {
@@ -477,7 +565,7 @@ AutoBot SLM Credentials
 Generated: $(date)
 Server:    ${server_ip}
 
-SLM URL:   https://${server_ip}/
+SLM URL:   https://${server_ip}/slm/
 Username:  admin
 Password:  ${ADMIN_PASSWORD}
 
@@ -493,14 +581,14 @@ EOF
     echo -e "${GREEN}  AutoBot SLM Installation Complete!${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo
-    echo -e "  ${BLUE}SLM URL:${NC}         https://${server_ip}/"
+    echo -e "  ${BLUE}SLM URL:${NC}         https://${server_ip}/slm/"
     echo -e "  ${BLUE}Admin Username:${NC}  admin"
     echo -e "  ${BLUE}Admin Password:${NC}  ${ADMIN_PASSWORD}"
     echo
     echo -e "  ${YELLOW}Note:${NC} Using self-signed certificate — browser will show a warning."
     echo
     echo -e "  ${CYAN}Next Steps:${NC}"
-    echo "    1. Open https://${server_ip}/ in your browser"
+    echo "    1. Open https://${server_ip}/slm/ in your browser"
     echo "    2. Accept the self-signed certificate warning"
     echo "    3. Log in with the admin credentials above"
     echo "    4. Follow the Setup Wizard to add and configure fleet nodes"
@@ -558,6 +646,8 @@ parse_args() {
         case $1 in
             --unattended)     UNATTENDED=true;        shift ;;
             --reinstall)      REINSTALL=true;          shift ;;
+            --uninstall)      UNINSTALL=true;          shift ;;
+            --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
             --help|-h)        print_usage; exit 0 ;;
@@ -567,11 +657,205 @@ parse_args() {
 }
 
 # =============================================================================
+# Uninstall (#2706)
+# =============================================================================
+
+uninstall() {
+    print_banner
+    _log_init
+    log "AutoBot Uninstaller started"
+
+    if [[ $EUID -ne 0 ]]; then
+        fatal "This script must be run as root (use sudo)"
+    fi
+
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}  WARNING: Full AutoBot Uninstall${NC}"
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    echo "  This will permanently remove:"
+    echo "    - All AutoBot services and data"
+    echo "    - PostgreSQL server and all databases"
+    echo "    - Node.js, Grafana, Ansible"
+    echo "    - APT repositories added by the installer"
+    echo "    - The 'autobot' system user"
+    echo "    - Directories: /opt/autobot, /etc/autobot, /var/lib/slm, /var/log/autobot"
+    echo
+
+    if ! ${CONFIRM_YES}; then
+        echo -e "  ${YELLOW}Type 'UNINSTALL' to confirm:${NC}"
+        read -rp "  > " confirmation
+        if [[ "${confirmation}" != "UNINSTALL" ]]; then
+            info "Uninstall cancelled."
+            exit 0
+        fi
+        echo
+    fi
+
+    info "Starting full uninstall..."
+
+    # ---- Phase 1: Stop and disable services ----
+    info "Stopping services..."
+    local services=(autobot-slm-backend nginx grafana-server postgresql)
+    for svc in "${services[@]}"; do
+        if systemctl is-active --quiet "${svc}" 2>/dev/null; then
+            systemctl stop "${svc}" >> "${LOG_FILE}" 2>&1 && success "  Stopped ${svc}" || warn "  Failed to stop ${svc}"
+        fi
+        if systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
+            systemctl disable "${svc}" >> "${LOG_FILE}" 2>&1 || true
+        fi
+    done
+
+    # Remove AutoBot systemd unit files
+    for unit_file in /etc/systemd/system/autobot-*.service; do
+        if [[ -f "${unit_file}" ]]; then
+            rm -f "${unit_file}"
+            log "  Removed ${unit_file}"
+        fi
+    done
+    systemctl daemon-reload >> "${LOG_FILE}" 2>&1 || true
+
+    # ---- Phase 2: Drop PostgreSQL databases and user ----
+    info "Removing PostgreSQL databases..."
+    if command -v psql &>/dev/null; then
+        systemctl start postgresql >> "${LOG_FILE}" 2>&1 || true
+        sleep 2
+        local dbs=(slm slm_users autobot_users)
+        for db in "${dbs[@]}"; do
+            if sudo -u postgres psql -lqt 2>/dev/null | cut -d\| -f1 | grep -qw "${db}"; then
+                sudo -u postgres dropdb "${db}" >> "${LOG_FILE}" 2>&1 && success "  Dropped database: ${db}" || warn "  Failed to drop: ${db}"
+            fi
+        done
+        if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='slm_app'" 2>/dev/null | grep -q 1; then
+            sudo -u postgres dropuser slm_app >> "${LOG_FILE}" 2>&1 && success "  Dropped user: slm_app" || warn "  Failed to drop user: slm_app"
+        fi
+        systemctl stop postgresql >> "${LOG_FILE}" 2>&1 || true
+    else
+        warn "  PostgreSQL not installed — skipping database cleanup"
+    fi
+
+    # ---- Phase 3: Remove APT packages ----
+    info "Removing installed packages..."
+    local pg_version
+    pg_version=$(pg_lsclusters 2>/dev/null | awk 'NR==2{print $1}' || echo "16")
+
+    # Drop the PostgreSQL cluster before purging
+    if command -v pg_dropcluster &>/dev/null; then
+        pg_dropcluster --stop "${pg_version}" main >> "${LOG_FILE}" 2>&1 || true
+    fi
+
+    local packages=(
+        "postgresql-${pg_version}"
+        "postgresql-client-${pg_version}"
+        "postgresql-contrib-${pg_version}"
+        python3-psycopg2
+        grafana
+        ansible
+        nodejs
+    )
+    for pkg in "${packages[@]}"; do
+        if dpkg -l "${pkg}" &>/dev/null 2>&1; then
+            env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq "${pkg}" >> "${LOG_FILE}" 2>&1 \
+                && success "  Purged ${pkg}" || warn "  Failed to purge ${pkg}"
+        fi
+    done
+
+    # Purge remaining PostgreSQL and Grafana config
+    env DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq 'postgresql-common' >> "${LOG_FILE}" 2>&1 || true
+    env DEBIAN_FRONTEND=noninteractive apt-get autoremove -y -qq >> "${LOG_FILE}" 2>&1 || true
+
+    # ---- Phase 4: Remove APT repositories ----
+    info "Removing APT repositories..."
+    local repo_files=(
+        /etc/apt/sources.list.d/pgdg.list
+        /etc/apt/sources.list.d/pgdg.sources
+        /etc/apt/sources.list.d/deadsnakes-*.list
+        /etc/apt/sources.list.d/deadsnakes-*.sources
+        /etc/apt/sources.list.d/nodesource.list
+        /etc/apt/sources.list.d/nodesource.sources
+        /etc/apt/sources.list.d/grafana.list
+        /etc/apt/sources.list.d/grafana.sources
+        /etc/apt/sources.list.d/ansible-*.list
+        /etc/apt/sources.list.d/ansible-*.sources
+    )
+    for pattern in "${repo_files[@]}"; do
+        # shellcheck disable=SC2086
+        for f in ${pattern}; do
+            if [[ -f "${f}" ]]; then
+                rm -f "${f}"
+                log "  Removed ${f}"
+            fi
+        done
+    done
+
+    # Remove signing keys
+    rm -f /usr/share/keyrings/pgdg.asc /usr/share/keyrings/grafana.gpg \
+          /usr/share/keyrings/nodesource.gpg 2>/dev/null || true
+    success "  APT repositories cleaned"
+
+    # ---- Phase 5: Remove directories and files ----
+    info "Removing AutoBot directories and files..."
+    local dirs=(
+        /opt/autobot
+        /var/lib/slm
+        /var/log/autobot
+        /etc/autobot
+        /var/lib/postgresql
+        /etc/postgresql
+        /var/lib/grafana
+        /etc/grafana
+    )
+    for dir in "${dirs[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            rm -rf "${dir}"
+            success "  Removed ${dir}"
+        fi
+    done
+
+    # Remove credential and config files
+    rm -f /root/autobot-credentials.txt 2>/dev/null || true
+    rm -f /etc/sudoers.d/autobot 2>/dev/null || true
+
+    # Remove nginx site config (but leave nginx installed)
+    rm -f /etc/nginx/sites-available/autobot-slm 2>/dev/null || true
+    rm -f /etc/nginx/sites-enabled/autobot-slm 2>/dev/null || true
+    rm -f /etc/systemd/system/nginx.service.d/ssl-cert-check.conf 2>/dev/null || true
+
+    # ---- Phase 6: Remove autobot user ----
+    info "Removing autobot user..."
+    if id "autobot" &>/dev/null; then
+        userdel -r autobot >> "${LOG_FILE}" 2>&1 && success "  Removed user: autobot" || warn "  Failed to remove user (may have running processes)"
+    fi
+    if getent group autobot &>/dev/null; then
+        groupdel autobot >> "${LOG_FILE}" 2>&1 || true
+    fi
+
+    # ---- Done ----
+    echo
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}  AutoBot has been completely uninstalled.${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo
+    echo -e "  ${CYAN}Removed:${NC} services, databases, packages, repos, user, data"
+    echo -e "  ${CYAN}Log:${NC}     ${LOG_FILE}"
+    echo
+    echo -e "  ${YELLOW}Note:${NC} nginx was left installed but AutoBot site config was removed."
+    echo -e "  To remove nginx too: ${BLUE}sudo apt purge nginx${NC}"
+    echo
+}
+
+# =============================================================================
 # Main
 # =============================================================================
 
 main() {
     parse_args "$@"
+
+    if ${UNINSTALL}; then
+        uninstall
+        exit 0
+    fi
+
     _log_init
     print_banner
     log "AutoBot Installer v${SCRIPT_VERSION}"
@@ -583,6 +867,7 @@ main() {
     code_deployment
     ansible_deployment
     service_verification
+    register_local_node
     finalize
 }
 

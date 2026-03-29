@@ -33,6 +33,33 @@
     update_cache: true
   tags: ['slm', 'packages']
 
+# Python 3.12 from deadsnakes PPA (#2705)
+- name: "SLM | Check if Python 3.12 is available"
+  ansible.builtin.command:
+    cmd: python3.12 --version
+  register: _py312_check
+  changed_when: false
+  failed_when: false
+  tags: ['slm', 'packages']
+
+- name: "SLM | Add deadsnakes PPA for Python 3.12"
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+  when: _py312_check.rc != 0
+  tags: ['slm', 'packages']
+
+- name: "SLM | Install Python 3.12"
+  ansible.builtin.apt:
+    name:
+      - python3.12
+      - python3.12-venv
+      - python3.12-dev
+    state: present
+    update_cache: true
+  when: _py312_check.rc != 0
+  tags: ['slm', 'packages']
+
 # ==========================================================
 # Ansible PPA (for latest Ansible 2.17+)
 # ==========================================================
@@ -93,6 +120,7 @@
     - "{{ slm_shared_dir }}"
     - "{{ slm_log_dir }}"
     - "{{ slm_certs_dir }}"
+    - /var/lib/slm
   tags: ['slm', 'directories']
 
 # ==========================================================
@@ -161,7 +189,7 @@
   register: slm_requirements_stat
   tags: ['slm', 'backend']
 
-- name: "SLM | Check venv Python version matches system"
+- name: "SLM | Check venv Python version matches target"
   ansible.builtin.shell:
     cmd: >-
       {{ slm_backend_dir }}/venv/bin/python3 --version 2>/dev/null
@@ -172,26 +200,18 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Get system Python version"
-  ansible.builtin.shell:
-    cmd: python3 --version | grep -oP '\d+\.\d+'
-  register: _sys_py_version
-  changed_when: false
-  when: slm_requirements_stat.stat.exists
-  tags: ['slm', 'backend']
-
-- name: "SLM | Remove stale venv after OS/Python upgrade"
+- name: "SLM | Remove stale venv if not Python 3.12"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != _sys_py_version.stdout
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.12'
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python virtual environment"
+- name: "SLM | Create Python 3.12 virtual environment"
   ansible.builtin.command:
-    cmd: python3 -m venv {{ slm_backend_dir }}/venv
+    cmd: python3.12 -m venv {{ slm_backend_dir }}/venv
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
@@ -208,7 +228,7 @@
 # Issue #937: Sync and install autobot-shared before requirements (prometheus metrics)
 - name: "SLM | Sync autobot-shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../autobot-shared/"
+    src: "{{ playbook_dir }}/../../../autobot-shared/"
     dest: "{{ slm_base_dir }}/autobot-shared/"
     rsync_opts:
       - "--exclude=__pycache__"

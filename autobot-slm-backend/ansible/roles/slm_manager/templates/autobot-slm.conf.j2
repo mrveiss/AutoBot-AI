@@ -171,9 +171,15 @@ server {
         proxy_read_timeout 3600;
     }
 
-    # Frontend SPA routing - serve index.html for all routes
-    location / {
-        try_files $uri $uri/ /index.html;
+    # SLM Frontend SPA at /slm/ subroute (#2716)
+    location /slm/ {
+        alias {{ slm_frontend_dir }}/dist/;
+        try_files $uri $uri/ /slm/index.html;
+    }
+
+    # Redirect root to /slm/
+    location = / {
+        return 302 /slm/;
     }
 
     # Gzip compression
