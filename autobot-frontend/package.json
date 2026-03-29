@@ -28,7 +28,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:all": "run-s test:unit test:integration test:playwright",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build",
+    "type-check": "vue-tsc --noEmit -p tsconfig.app.json",
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
@@ -116,4 +116,3 @@
     "vue-tsc": "^3.2.6"
   }
 }
-
