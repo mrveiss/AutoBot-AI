@@ -123,11 +123,35 @@
     - "{{ backend_data_dir }}"
     - "{{ backend_data_dir }}/conversation_files"
 
+- name: Sync autobot-backend code from code_source
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../../autobot-backend/"
+    dest: "{{ backend_code_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--exclude=venv"
+  tags: ['backend', 'deploy']
+
+- name: Sync autobot-shared to backend install dir
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../../autobot-shared/"
+    dest: "{{ backend_install_dir }}/autobot-shared/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+  tags: ['backend', 'deploy']
+
 - name: Create backend symlink for imports
   ansible.builtin.file:
     src: "{{ backend_code_dir }}"
     dest: "{{ backend_install_dir }}/backend"
     state: link
+    force: true
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
