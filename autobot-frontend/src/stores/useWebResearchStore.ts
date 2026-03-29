@@ -154,6 +154,6 @@ export const useWebResearchStore = defineStore('webResearch', () => {
   persist: {
     key: 'autobot-web-research',
     storage: localStorage,
-    paths: ['settings'] // Only persist settings, not status/loading/error
+    pick: ['settings'] // Only persist settings, not status/loading/error
   }
 })
