@@ -82,11 +82,11 @@ markdownify>=1.2.2              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r
 langchain>=1.2.13
 langchain-community>=0.4.1
 langchain-experimental>=0.4.1      # For advanced LangChain features
-llama-index>=0.14.19
-llama-index-llms-ollama>=0.10.1
-llama-index-embeddings-ollama>=0.9.0
-llama-index-vector-stores-redis>=0.8.0
-llama-index-readers-file>=0.6.0   # File readers for RAG - 0.6.0+ for core 0.13.0 + pypdf 6.x compatibility
+llama-index>=0.14.19,<0.15.0
+llama-index-llms-ollama>=0.10.1,<1.0.0
+llama-index-embeddings-ollama>=0.9.0,<1.0.0
+llama-index-vector-stores-redis>=0.8.0,<1.0.0
+llama-index-readers-file>=0.6.0,<1.0.0   # File readers for RAG - 0.6.0+ for core 0.13.0 + pypdf 6.x compatibility
 
 # ===== VOICE INTERFACE DEPENDENCIES =====
 # Moved to requirements-voice.txt to avoid CI/CD build failures
