@@ -75,7 +75,8 @@
       when:
         - current_service.service_name is defined
         - drain_enabled
-      ignore_errors: yes
+      # (#2872) Best-effort: service may already be stopped or not yet deployed
+      failed_when: false
       register: service_stopped
 
     - name: Wait for service to drain
@@ -127,7 +128,7 @@
 
     - name: Log reboot required status
       ansible.builtin.debug:
-        msg: "⚠️ REBOOT REQUIRED on {{ inventory_hostname }} - Kernel or critical library updated"
+        msg: "WARNING: REBOOT REQUIRED on {{ inventory_hostname }} - Kernel or critical library updated"
       when: reboot_required.stat.exists
 
     - name: Reboot if required and allowed
@@ -209,7 +210,9 @@
       when:
         - current_service.service_name is defined
         - service_stopped.changed | default(false)
-      ignore_errors: yes
+      # (#2872) Best-effort inside rescue: we are already in error recovery;
+      # service restart may fail if the update broke dependencies.
+      failed_when: false
 
     - name: Include system rollback tasks
       ansible.builtin.include_tasks: rollback-system.yml

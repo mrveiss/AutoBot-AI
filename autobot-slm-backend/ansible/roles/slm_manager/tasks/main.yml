@@ -90,6 +90,8 @@
     cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
   register: slm_cert_valid
   changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
   failed_when: false
   when: slm_cert_stat.stat.exists
   tags: ['slm', 'tls']
@@ -104,7 +106,6 @@
   when: >-
     not slm_cert_stat.stat.exists
     or (slm_cert_valid.rc | default(1)) != 0
-  changed_when: true
   notify: restart nginx
   tags: ['slm', 'tls']
 
@@ -168,6 +169,8 @@
       | grep -oP '\d+\.\d+'
   register: _venv_py_version
   changed_when: false
+  # (#2872) Intentional: venv may not exist yet on fresh install;
+  # rc != 0 triggers venv recreation below.
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
@@ -189,21 +192,11 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-# Issue #2857: Check pip existence before bootstrapping
-- name: "SLM | Check if pip is already installed in venv"
-  ansible.builtin.stat:
-    path: "{{ slm_backend_dir }}/venv/bin/pip"
-  register: _venv_pip_stat
-  when: slm_requirements_stat.stat.exists
-  tags: ['slm', 'backend']
-
 - name: "SLM | Bootstrap pip in virtual environment"
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/python3 -m ensurepip --upgrade"
   become_user: "{{ slm_user }}"
-  when:
-    - slm_requirements_stat.stat.exists
-    - not (_venv_pip_stat.stat.exists | default(false))
+  when: slm_requirements_stat.stat.exists
   changed_when: true
   tags: ['slm', 'backend']
 
@@ -229,17 +222,6 @@
     group: "{{ slm_group }}"
   tags: ['slm', 'backend']
 
-# Issue #2857: Check if autobot-shared is already installed before pip install
-- name: "SLM | Check if autobot-shared is installed in venv"
-  ansible.builtin.command:
-    cmd: "{{ slm_backend_dir }}/venv/bin/pip show autobot-shared"
-  become_user: "{{ slm_user }}"
-  register: _shared_installed
-  changed_when: false
-  failed_when: false
-  when: slm_requirements_stat.stat.exists
-  tags: ['slm', 'backend']
-
 - name: "SLM | Install autobot-shared in venv (editable)"
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
@@ -247,9 +229,7 @@
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
-  when:
-    - slm_requirements_stat.stat.exists
-    - _shared_installed.rc != 0
+  when: slm_requirements_stat.stat.exists
   changed_when: true
   tags: ['slm', 'backend']
 
@@ -341,7 +321,7 @@
   become_user: "{{ slm_user }}"
   when: slm_frontend_build and slm_package_json.stat.exists
   register: slm_frontend_build_result
-  changed_when: true
+  changed_when: slm_frontend_build_result.rc == 0
   environment:
     VITE_API_URL: "{{ '/slm' if (slm_colocated_frontend | default(false) | bool) else '' }}"
   tags: ['slm', 'frontend']
@@ -374,7 +354,7 @@
   when:
     - user_frontend_package_json.stat.exists | default(false)
   register: user_frontend_build_result
-  changed_when: true
+  changed_when: user_frontend_build_result.rc == 0
   tags: ['slm', 'frontend', 'colocated']
 
 # ==========================================================
@@ -453,24 +433,23 @@
   tags: ['slm', 'nginx']
 
 # ==========================================================
-# Firewall (#2857: replace ignore_errors with failed_when)
+# Firewall
 # ==========================================================
+- name: "SLM | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _slm_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['slm', 'firewall']
+
 - name: "SLM | Allow HTTP"
   community.general.ufw:
     rule: allow
     port: "80"
     proto: tcp
     comment: "HTTP - AutoBot SLM"
-  register: _ufw_http_result
-  failed_when:
-    - _ufw_http_result is failed
-    - "'ufw' not in (_ufw_http_result.msg | default(''))"
-  tags: ['slm', 'firewall']
-
-- name: "SLM | Warn if UFW HTTP rule skipped"
-  ansible.builtin.debug:
-    msg: "WARNING: UFW HTTP rule failed (UFW may not be installed): {{ _ufw_http_result.msg | default('unknown') }}"
-  when: _ufw_http_result is failed
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 - name: "SLM | Allow HTTPS"
@@ -479,35 +458,18 @@
     port: "443"
     proto: tcp
     comment: "HTTPS - AutoBot SLM"
-  register: _ufw_https_result
-  failed_when:
-    - _ufw_https_result is failed
-    - "'ufw' not in (_ufw_https_result.msg | default(''))"
-  tags: ['slm', 'firewall']
-
-- name: "SLM | Warn if UFW HTTPS rule skipped"
-  ansible.builtin.debug:
-    msg: "WARNING: UFW HTTPS rule failed (UFW may not be installed): {{ _ufw_https_result.msg | default('unknown') }}"
-  when: _ufw_https_result is failed
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 # ==========================================================
-# Start services (#2857: replace ignore_errors with proper error handling)
+# Start services
 # ==========================================================
+# (#2872) Removed ignore_errors — service start failures must surface.
+# If the service fails to start, deployment should report the real state.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: started
-  register: _slm_start_result
-  failed_when:
-    - _slm_start_result is failed
-    - "'Could not find the requested service' not in (_slm_start_result.msg | default(''))"
-  tags: ['slm', 'service']
-
-- name: "SLM | Warn if backend service failed to start"
-  ansible.builtin.debug:
-    msg: "WARNING: Backend service {{ slm_backend_service }} failed to start: {{ _slm_start_result.msg | default('unknown') }}"
-  when: _slm_start_result is failed
   tags: ['slm', 'service']
 
 - name: "SLM | Flush handlers to apply pending restarts"

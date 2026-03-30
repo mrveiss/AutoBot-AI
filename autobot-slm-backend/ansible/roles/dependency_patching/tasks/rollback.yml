@@ -26,13 +26,18 @@
   ansible.builtin.debug:
     msg: "Initiating rollback on {{ inventory_hostname }} from {{ latest_backup | default('no backup') }}"
 
+# (#2872) Rollback tasks use failed_when: false because they run during
+# error recovery — each step is best-effort and results are logged.
+# A final health check determines overall rollback success.
+
 - name: Stop service before rollback
   ansible.builtin.systemd:
     name: "{{ current_service.service_name }}"
     state: stopped
   when:
     - current_service.service_name is defined
-  ignore_errors: yes
+  # (#2872) Best-effort: service may already be stopped
+  failed_when: false
 
 - name: Set venv path variable
   ansible.builtin.set_fact:
@@ -93,7 +98,8 @@
     state: absent
   when:
     - temp_restore_dir.path is defined
-  ignore_errors: yes
+  # (#2872) Best-effort: temp dir cleanup is non-critical
+  failed_when: false
 
 - name: Restart service after rollback
   ansible.builtin.systemd:

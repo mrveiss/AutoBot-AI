@@ -35,6 +35,8 @@
   command: grep -A 10 "{{ hosts_marker_begin }}" /etc/hosts
   register: hosts_verify
   changed_when: false
+  # (#2872) Intentional: verification display — marker may not exist
+  # yet on first run before blockinfile executes.
   failed_when: false
 
 - name: Display /etc/hosts fleet entries

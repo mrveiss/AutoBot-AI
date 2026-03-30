@@ -12,6 +12,8 @@
     cmd: python3.12 --version
   register: _py312_check
   changed_when: false
+  # (#2872) Intentional: python3.12 may not be installed yet;
+  # rc != 0 triggers the deadsnakes PPA installation below.
   failed_when: false
   tags: ['deps', 'python312']
 

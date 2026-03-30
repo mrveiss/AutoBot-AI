@@ -49,7 +49,9 @@
   when:
     - drain_enabled
     - current_service.health_endpoint is defined
-  ignore_errors: yes
+  # (#2872) Intentional: drain endpoint is optional — most services don't
+  # implement it.  The result gates the POST drain task below.
+  failed_when: false
 
 - name: Drain active connections (if endpoint exists)
   ansible.builtin.uri:
@@ -59,8 +61,10 @@
   when:
     - drain_enabled
     - drain_check is defined
-    - drain_check.status == 200
-  ignore_errors: yes
+    - drain_check.status | default(0) == 200
+  # (#2872) Best-effort: drain may time out under heavy load; the service
+  # stop below will forcefully terminate remaining connections.
+  failed_when: false
 
 - name: Wait for connections to drain
   ansible.builtin.wait_for:
@@ -68,7 +72,7 @@
   when:
     - drain_enabled
     - drain_check is defined
-    - drain_check.status == 200
+    - drain_check.status | default(0) == 200
 
 - name: Enter maintenance mode - stop service gracefully
   ansible.builtin.systemd:
@@ -78,7 +82,9 @@
     - current_service.service_name is defined
     - restart_service_after_update
   register: service_stopped
-  ignore_errors: yes
+  # (#2872) Best-effort: service may already be stopped or may not exist
+  # yet on fresh provisioning.
+  failed_when: false
 
 - name: Record pre-update state
   ansible.builtin.set_fact:

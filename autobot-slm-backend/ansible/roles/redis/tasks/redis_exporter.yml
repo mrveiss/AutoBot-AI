@@ -81,6 +81,7 @@
   ansible.builtin.command: which ufw
   register: _ufw_check
   changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
   failed_when: false
   tags: ['redis', 'redis_exporter', 'firewall']
 

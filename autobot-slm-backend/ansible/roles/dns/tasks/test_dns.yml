@@ -9,6 +9,9 @@
   loop: "{{ fleet_host_entries }}"
   register: dns_resolution_test
   changed_when: false
+  # (#2872) Intentional: diagnostic test — results are parsed below to
+  # count failures and display a summary; individual resolution failures
+  # are expected on partially-provisioned fleets.
   failed_when: false
 
 - name: Display DNS resolution results
@@ -24,6 +27,8 @@
     state: started
   loop: "{{ dns_test_required_nodes }}"
   register: connectivity_test
+  # (#2872) Intentional: diagnostic test — nodes may be unreachable
+  # during initial provisioning; results counted and reported below.
   failed_when: false
   changed_when: false
 
