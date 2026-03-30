@@ -12,6 +12,7 @@
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('InfrastructureWizard')
 
@@ -129,7 +130,7 @@ function stopPolling(): void {
 async function loadPlaybooks(): Promise<void> {
   isLoadingPlaybooks.value = true
   try {
-    const response = await fetch('/api/infrastructure/playbooks', {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
       },
@@ -154,7 +155,7 @@ async function execute(): Promise<void> {
   executeError.value = null
 
   try {
-    const response = await fetch('/api/infrastructure/execute', {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ function startStatusPolling(executionId: string): void {
 
 async function pollExecutionStatus(executionId: string): Promise<void> {
   try {
-    const response = await fetch(`/api/infrastructure/executions/${executionId}`, {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/executions/${executionId}`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
       },

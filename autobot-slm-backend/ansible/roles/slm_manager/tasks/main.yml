@@ -312,7 +312,42 @@
   when: slm_frontend_build and slm_package_json.stat.exists
   register: slm_frontend_build_result
   changed_when: slm_frontend_build_result.rc == 0
+  environment:
+    VITE_API_URL: "{{ '/slm' if (slm_colocated_frontend | default(false) | bool) else '' }}"
   tags: ['slm', 'frontend']
+
+# ==========================================================
+# Co-located User Frontend build (#2829)
+# When SLM and user frontend share the same host, build both.
+# ==========================================================
+- name: "SLM | Check if user frontend package.json exists"
+  ansible.builtin.stat:
+    path: "{{ frontend_dist_dir | dirname }}/package.json"
+  register: user_frontend_package_json
+  when: slm_colocated_frontend | default(false) | bool
+  tags: ['slm', 'frontend', 'colocated']
+
+- name: "SLM | Install user frontend npm dependencies"
+  community.general.npm:
+    path: "{{ frontend_dist_dir | dirname }}"
+    state: present
+  become_user: "{{ slm_user }}"
+  when:
+    - slm_colocated_frontend | default(false) | bool
+    - user_frontend_package_json.stat.exists | default(false)
+  tags: ['slm', 'frontend', 'colocated']
+
+- name: "SLM | Build user frontend for production"
+  ansible.builtin.command:
+    cmd: npx vite build
+    chdir: "{{ frontend_dist_dir | dirname }}"
+  become_user: "{{ slm_user }}"
+  when:
+    - slm_colocated_frontend | default(false) | bool
+    - user_frontend_package_json.stat.exists | default(false)
+  register: user_frontend_build_result
+  changed_when: user_frontend_build_result.rc == 0
+  tags: ['slm', 'frontend', 'colocated']
 
 # ==========================================================
 # Grafana monitoring (Issue #853)

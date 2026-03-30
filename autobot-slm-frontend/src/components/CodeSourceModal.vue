@@ -13,6 +13,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
@@ -40,7 +41,7 @@ const isSaving = ref(false)
 const error = ref<string | null>(null)
 
 // Minimal axios client for code-source POST (Issue #860)
-const api = axios.create({ baseURL: '/api', timeout: 15000 })
+const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('slm_access_token')
   if (token) {

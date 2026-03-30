@@ -138,7 +138,7 @@ class PlaybookExecutor:
 
     def _parse_progress(self, line: str) -> Optional[Dict[str, str]]:
         """
-        Parse Ansible output line for progress updates (Issue #880).
+        Parse Ansible output line for progress updates (Issue #880, #2829).
 
         Args:
             line: Single line of Ansible output
@@ -146,7 +146,7 @@ class PlaybookExecutor:
         Returns:
             Dict with 'stage' and 'message' keys if progress found, None otherwise
         """
-        # Match TASK lines with [PLAY N] prefix
+        # Match TASK lines with [PLAY N] prefix (update-all-nodes.yml)
         if "TASK [" in line and "[PLAY " in line:
             try:
                 task_start = line.index("TASK [")
@@ -161,7 +161,32 @@ class PlaybookExecutor:
 
         # Match PLAY lines for overall progress
         if "PLAY [" in line:
-            return self._parse_play_line(line)
+            known = self._parse_play_line(line)
+            if known:
+                return known
+            # Generic PLAY match — extract play name for any playbook
+            try:
+                play_name = line.split("PLAY [")[1].split("]")[0]
+                return {"stage": "play", "message": play_name}
+            except (IndexError, ValueError):
+                pass
+
+        # Generic TASK match — stream task names for any playbook (#2829)
+        if "TASK [" in line:
+            try:
+                task_name = line.split("TASK [")[1].split("]")[0]
+                return {"stage": "task", "message": task_name}
+            except (IndexError, ValueError):
+                pass
+
+        # Surface fatal/failed lines so the UI shows errors in real time
+        stripped = line.strip()
+        if stripped.startswith("fatal:") or stripped.startswith("FAILED!"):
+            return {"stage": "error", "message": stripped[:200]}
+
+        # PLAY RECAP line
+        if "PLAY RECAP" in line:
+            return {"stage": "recap", "message": "Play recap"}
 
         return None
 
@@ -227,12 +252,28 @@ class PlaybookExecutor:
 
         return output_lines
 
+    @staticmethod
+    def _ensure_ansible_temp_dirs() -> None:
+        """Ensure Ansible temp directories exist with correct ownership (#2829).
+
+        When another user (e.g. a developer running ansible manually) creates
+        /tmp/ansible_local_tmp or /tmp/ansible_fact_cache first, the autobot
+        service user gets a permission denied error and Ansible exits with a
+        misleading code 4.  Pre-creating the dirs avoids this.
+        """
+        for tmp_dir in (
+            "/tmp/ansible_local_tmp",
+            "/tmp/ansible_fact_cache",
+        ):  # nosec B108
+            Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
+
     def _build_ansible_env(self) -> Dict[str, str]:
         """
         Build the environment dict for ansible-playbook subprocess. Ref: #1088.
 
         Helper for execute_playbook.
         """
+        self._ensure_ansible_temp_dirs()
         return {
             **os.environ,
             "ANSIBLE_FORCE_COLOR": "0",
@@ -312,9 +353,7 @@ class PlaybookExecutor:
             # Override ansible.cfg default inventory to prevent merging
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
-            proc_result = await self._run_subprocess(
-                cmd, env, progress_callback
-            )
+            proc_result = await self._run_subprocess(cmd, env, progress_callback)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")

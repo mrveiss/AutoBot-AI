@@ -13,7 +13,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import config from '@/config/ssot-config'
+import config, { getSlmApiBase } from '@/config/ssot-config'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -100,7 +100,7 @@ async function fetchAgents() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/agents', {
+    const response = await fetch(`${getSlmApiBase()}/agents`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
     if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`)
@@ -115,7 +115,7 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    const response = await fetch('/api/nodes', {
+    const response = await fetch(`${getSlmApiBase()}/nodes`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
     if (!response.ok) return

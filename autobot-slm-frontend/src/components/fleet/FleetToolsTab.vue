@@ -17,6 +17,7 @@
 import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 import { useNodeServices } from '@/composables/useNodeServices'
 
 const fleetStore = useFleetStore()
@@ -126,7 +127,7 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via SSH
-    const response = await fetch(`/api/nodes/${targetNode.node_id}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -162,7 +163,7 @@ async function runShellCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),

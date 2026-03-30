@@ -12,8 +12,9 @@
 
 import axios, { type AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
-const SLM_API_BASE = '/api'
+const SLM_API_BASE = getSlmApiBase()
 
 export interface MFASetupResponse {
   secret: string

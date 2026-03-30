@@ -13,6 +13,7 @@
  */
 
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DeploymentLogViewer')
@@ -87,7 +88,7 @@ function connect(): void {
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/ws/deployments/${props.deploymentId}`
+  const wsUrl = `${protocol}//${window.location.host}${getSlmApiBase()}/ws/deployments/${props.deploymentId}`
 
   logs.value.push({
     type: 'log',

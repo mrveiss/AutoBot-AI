@@ -43,9 +43,10 @@ import type {
   NPUWorkerConfig,
   FleetUpdateSummary,
 } from '@/types/slm'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // Backend response types (different from frontend SLMNode)
 interface BackendNodeResponse {

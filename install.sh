@@ -167,7 +167,8 @@ preflight_checks() {
     fi
     success "Running as root"
 
-    if ! pidof systemd &>/dev/null; then
+    # pidof fails on WSL2 (can't resolve /proc/1/exe), use ps fallback
+    if ! pidof systemd &>/dev/null && [[ "$(ps -p 1 -o comm= 2>/dev/null)" != "systemd" ]]; then
         fatal "systemd is required. On WSL2: add [boot] systemd=true to /etc/wsl.conf and restart WSL"
     fi
     success "systemd is running"

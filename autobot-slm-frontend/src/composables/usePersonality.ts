@@ -15,12 +15,13 @@ import axios from 'axios'
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePersonality')
 
 // Issue #1145: Route through SLM backend proxy (validates SLM JWT + forwards to main backend).
 // Using /autobot-api/personality caused JWT mismatch since SLM tokens are unknown to main backend.
-const API_BASE = '/api/personality'
+const API_BASE = `${getSlmApiBase()}/personality`
 
 export interface ProfileSummary {
   id: string

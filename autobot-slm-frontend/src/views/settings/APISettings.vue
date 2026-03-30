@@ -11,7 +11,7 @@
 
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
+import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
 
 const authStore = useAuthStore()
 const testingConnection = ref(false)
@@ -22,7 +22,7 @@ const connectionMessage = ref('')
 // nginx proxy). For display we need to resolve against window.location.origin.
 const origin = typeof window !== 'undefined' ? window.location.origin : ''
 const apiUrl = computed(() => origin || authStore.getApiUrl() || '(unavailable)')
-const wsUrl = computed(() => `${config.wsBaseUrl}/api/ws/events`)
+const wsUrl = computed(() => `${config.wsBaseUrl}${getSlmApiBase()}/ws/events`)
 
 async function testConnection(): Promise<void> {
   testingConnection.value = true
@@ -31,7 +31,7 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${apiUrl.value}/api/health`, {
+    const response = await fetch(`${getSlmApiBase()}/health`, {
       headers: authStore.getAuthHeaders(),
     })
 

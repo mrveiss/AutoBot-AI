@@ -102,6 +102,19 @@ export function getConfig(): SLMConfig {
 }
 
 /**
+ * Get the SLM API base path (#2829).
+ *
+ * Standalone SLM (separate host): VITE_API_URL is empty → returns '/api'
+ * Co-located with user frontend:  VITE_API_URL='/slm'  → returns '/slm/api'
+ *
+ * All SLM composables should use this instead of hardcoding '/api'.
+ */
+export function getSlmApiBase(): string {
+  const prefix = config.apiBaseUrl // '' or '/slm'
+  return `${prefix}/api`
+}
+
+/**
  * Get Grafana URL for embedding dashboards
  * Uses the SLM Grafana via nginx proxy at /grafana/
  * Dashboards are provisioned from AutoBot/config/grafana/dashboards/

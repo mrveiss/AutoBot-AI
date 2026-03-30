@@ -11,8 +11,9 @@
 
 import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
+import { getSlmApiBase } from '@/config/ssot-config'
 
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // =============================================================================
 // Type Definitions

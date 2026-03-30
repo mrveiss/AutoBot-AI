@@ -10,6 +10,7 @@
 import { ref } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useVncControls')
 
@@ -38,7 +39,7 @@ export interface VncActionResponse {
 }
 
 export function useVncControls() {
-  const client: AxiosInstance = axios.create({ baseURL: '/api' })
+  const client: AxiosInstance = axios.create({ baseURL: getSlmApiBase() })
   const loading = ref(false)
   const error = ref<string | null>(null)
 

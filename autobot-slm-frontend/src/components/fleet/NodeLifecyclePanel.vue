@@ -16,7 +16,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { getConfig } from '@/config/ssot-config'
+import { getConfig, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
@@ -502,7 +502,7 @@ function deselectAllUpdates(): void {
 // WebSocket connection for real-time node lifecycle events (Issue #813)
 function connectWebSocket(): void {
   const config = getConfig()
-  const wsUrl = `${config.wsBaseUrl}/api/ws/nodes/${props.nodeId}`
+  const wsUrl = `${config.wsBaseUrl}${getSlmApiBase()}/ws/nodes/${props.nodeId}`
 
   try {
     ws = new WebSocket(wsUrl)

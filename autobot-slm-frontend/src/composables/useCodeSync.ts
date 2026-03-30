@@ -13,9 +13,10 @@ import { ref, computed, readonly, toRef } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // =============================================================================
 // Type Definitions

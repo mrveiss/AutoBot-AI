@@ -132,6 +132,7 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
 
+# Skip nginx config when co-located with SLM — SLM nginx handles both (#2829)
 - name: "Frontend | Configure nginx"
   template:
     src: nginx-frontend.conf.j2
@@ -142,6 +143,7 @@
   notify:
     - test nginx config
     - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Enable nginx site"
@@ -151,6 +153,16 @@
     state: link
   become: yes
   notify: restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Disable standalone nginx when co-located with SLM (#2829)"
+  file:
+    path: /etc/nginx/sites-enabled/autobot-frontend
+    state: absent
+  become: yes
+  notify: restart nginx
+  when: slm_colocated_frontend | default(false) | bool
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Remove default nginx site"

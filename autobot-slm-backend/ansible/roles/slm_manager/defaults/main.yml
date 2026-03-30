@@ -40,6 +40,18 @@ slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
 slm_nginx_config: autobot-slm
 
 # ==========================================================
+# Co-located User Frontend (#2829)
+# When SLM and user frontend share the same host, the SLM
+# nginx config serves the user frontend at / and SLM at /slm/.
+# Set to true + provide paths when deploying single-host.
+# ==========================================================
+slm_colocated_frontend: false
+frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/dist"
+frontend_backend_host: 127.0.0.1
+frontend_backend_port: 8443
+frontend_backend_protocol: https
+
+# ==========================================================
 # Frontend Build
 # ==========================================================
 slm_frontend_build: true

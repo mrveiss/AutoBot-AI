@@ -14,11 +14,12 @@
 import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useOrchestration')
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // =============================================================================
 // Type Definitions

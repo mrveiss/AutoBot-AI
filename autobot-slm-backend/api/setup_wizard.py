@@ -238,6 +238,19 @@ async def _generate_dynamic_inventory(
             if pending:
                 hosts[inv_name]["pending_dep_removals"] = pending
 
+        # Detect co-located frontend for SLM nginx routing (#2829)
+        # When a node on the SLM host also has the 'frontend' role,
+        # set slm_colocated_frontend so the SLM nginx config serves
+        # user frontend at / and SLM at /slm/ instead of redirecting.
+        _frontend_roles = {"frontend", "autobot-frontend"}
+        for node in db_nodes:
+            inv_name = node.ansible_target
+            if inv_name not in hosts:
+                continue
+            roles = set(hosts[inv_name].get("node_roles", []))
+            if node.ip_address in local_ips and roles & _frontend_roles:
+                hosts[inv_name]["slm_colocated_frontend"] = True
+
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
             all_nodes = (await session.execute(select(Node))).scalars().all()
@@ -357,8 +370,12 @@ async def _run_provisioning_task(
             _provision_state["error"] = "No nodes found for provisioning"
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: No nodes found for provisioning")
-            await ws_manager.send_provision_status("failed", "", 0, error="No nodes found for provisioning")
-            await ws_manager.send_provision_log("error", "No nodes found for provisioning")
+            await ws_manager.send_provision_status(
+                "failed", "", 0, error="No nodes found for provisioning"
+            )
+            await ws_manager.send_provision_log(
+                "error", "No nodes found for provisioning"
+            )
             return
 
         _write_provision_log(
@@ -381,7 +398,9 @@ async def _run_provisioning_task(
                 elif "error" in msg.lower() or "failed" in msg.lower():
                     log_type = "error"
                 await ws_manager.send_provision_log(log_type, msg)
-                elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+                elapsed = time.time() - (
+                    _provision_state.get("started_at") or time.time()
+                )
                 await ws_manager.send_provision_status("running", stage, elapsed)
 
         result = await executor.execute_playbook(
@@ -394,11 +413,17 @@ async def _run_provisioning_task(
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
         if result.get("success"):
             await ws_manager.send_provision_status("completed", "complete", elapsed)
-            await ws_manager.send_provision_log("success", "Fleet provisioning completed successfully")
+            await ws_manager.send_provision_log(
+                "success", "Fleet provisioning completed successfully"
+            )
         else:
             rc = result.get("returncode", -1)
-            await ws_manager.send_provision_status("failed", "", elapsed, error=f"Ansible exited with code {rc}")
-            await ws_manager.send_provision_log("error", f"Provisioning failed (exit code {rc})")
+            await ws_manager.send_provision_status(
+                "failed", "", elapsed, error=f"Ansible exited with code {rc}"
+            )
+            await ws_manager.send_provision_log(
+                "error", f"Provisioning failed (exit code {rc})"
+            )
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
@@ -406,7 +431,9 @@ async def _run_provisioning_task(
         logger.exception("Fleet provisioning error: %s", exc)
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
         # Sanitize — Ansible exceptions may contain credentials (#2754)
-        await ws_manager.send_provision_status("failed", "", elapsed, error="internal error")
+        await ws_manager.send_provision_status(
+            "failed", "", elapsed, error="internal error"
+        )
         await ws_manager.send_provision_log(
             "error", "Provisioning error: internal error (see server logs)"
         )
@@ -599,10 +626,10 @@ async def validate_fleet(
         # Only check roles that are actually assigned to nodes (#2747)
         # Roles not yet assigned via wizard are not "missing"
         assigned_roles = (
-            await session.execute(
-                select(NodeRole.role_name).distinct()
-            )
-        ).scalars().all()
+            (await session.execute(select(NodeRole.role_name).distinct()))
+            .scalars()
+            .all()
+        )
         missing_roles = []
         for role_name in assigned_roles:
             active = await session.execute(

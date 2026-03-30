@@ -18,6 +18,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
@@ -112,7 +113,7 @@ async function runNetworkTest(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/test-connection`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/test-connection`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -153,7 +154,7 @@ async function runHealthCheck(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/health`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/health`, {
       headers: authStore.getAuthHeaders(),
     })
 
@@ -188,7 +189,7 @@ async function getServiceLogs(): Promise<void> {
 
   try {
     const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
+      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
       { headers: authStore.getAuthHeaders() }
     )
 
@@ -218,7 +219,7 @@ async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void
 
   try {
     const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
+      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
       {
         method: 'POST',
         headers: authStore.getAuthHeaders(),
@@ -261,7 +262,7 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via ansible ad-hoc
-    const response = await fetch(`/api/nodes/${targetNode.node_id}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -297,7 +298,7 @@ async function runAnsibleCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),

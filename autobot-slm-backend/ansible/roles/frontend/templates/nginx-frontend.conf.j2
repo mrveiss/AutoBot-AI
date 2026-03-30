@@ -4,7 +4,7 @@
 
 # Issue #1098: Health-aware upstream with failure tracking
 upstream autobot_backend {
-    server {{ backend_host }}:{{ backend_port }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
+    server {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }} max_fails={{ backend_max_fails | default(3) }} fail_timeout={{ backend_fail_timeout | default('30s') }};
 }
 
 server {
@@ -210,7 +210,7 @@ server {
 
     # VNC proxy for desktop access
     location /tools/novnc/ {
-        proxy_pass http://{{ backend_host }}:6080/;
+        proxy_pass http://{{ backend_host | default(ansible_host) }}:6080/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
