@@ -6,15 +6,20 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
+# Issue #2857: Replace ignore_errors with failed_when to surface restart failures
 - name: restart slm backend
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: restarted
-  ignore_errors: true
+  register: _handler_restart_result
+  failed_when:
+    - _handler_restart_result is failed
+    - "'Could not find the requested service' not in (_handler_restart_result.msg | default(''))"
 
 - name: test nginx config
   ansible.builtin.command:
     cmd: nginx -t
+  changed_when: false
 
 - name: reload nginx
   ansible.builtin.systemd:
