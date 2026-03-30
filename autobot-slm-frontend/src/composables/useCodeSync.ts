@@ -147,6 +147,23 @@ export interface ScheduleRunResponse {
   job_id: string | null
 }
 
+// Issue #2834: Drift detection types
+export interface DriftedFile {
+  path: string
+  source_checksum: string | null
+  deployed_checksum: string | null
+  status: 'modified' | 'source_only' | 'deployed_only'
+}
+
+export interface FileDriftReport {
+  source_dir: string
+  deployed_dir: string
+  drifted_files: DriftedFile[]
+  total_compared: number
+  drift_detected: boolean
+  checked_at: string
+}
+
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
@@ -185,6 +202,7 @@ export function useCodeSync() {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const lastRefresh = ref<Date | null>(null)
+  const driftReport = ref<FileDriftReport | null>(null) // Issue #2834
 
   // =============================================================================
   // Computed Properties
@@ -602,6 +620,36 @@ export function useCodeSync() {
   }
 
   // =============================================================================
+  // Drift Detection (Issue #2834)
+  // =============================================================================
+
+  /**
+   * Fetch a file-level drift report comparing code_source vs deployed files.
+   *
+   * @param component - Sub-directory to compare (default: autobot-slm-backend).
+   */
+  async function fetchDrift(component = 'autobot-slm-backend'): Promise<FileDriftReport | null> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await client.get<FileDriftReport>('/code-sync/drift', {
+        params: { component },
+      })
+      driftReport.value = response.data
+      return response.data
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch drift report'
+      if (axios.isAxiosError(e) && e.response?.data?.detail) {
+        error.value = e.response.data.detail
+      }
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // =============================================================================
   // Return Public API
   // =============================================================================
 
@@ -613,6 +661,7 @@ export function useCodeSync() {
     loading: readonly(loading),
     error: readonly(error),
     lastRefresh: readonly(lastRefresh),
+    driftReport: readonly(driftReport), // Issue #2834
 
     // Computed
     hasOutdatedNodes,
@@ -650,5 +699,8 @@ export function useCodeSync() {
     fetchRoles: rolesComposable.fetchRoles,
     syncRole: rolesComposable.syncRole,
     pullFromSource: rolesComposable.pullFromSource,
+
+    // Drift detection (Issue #2834)
+    fetchDrift,
   }
 }

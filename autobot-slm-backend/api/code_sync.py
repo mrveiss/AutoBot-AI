@@ -34,6 +34,7 @@ from models.schemas import (
     CodeSyncStatusResponse,
     CodeVersionNotification,
     CodeVersionNotificationResponse,
+    FileDriftReport,
     FleetSyncJobStatus,
     FleetSyncNodeStatus,
     FleetSyncRequest,
@@ -50,6 +51,11 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
+from services.drift_checker import (
+    build_drift_report,
+    get_default_deployed_dir,
+    get_default_source_dir,
+)
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
@@ -393,6 +399,46 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
     )
+
+
+@router.get("/drift", response_model=FileDriftReport)
+async def get_file_drift(
+    _: Annotated[dict, Depends(get_current_user)],
+    component: str = "autobot-slm-backend",
+) -> FileDriftReport:
+    """
+    Compare file checksums between code_source and the deployed directory (Issue #2834).
+
+    Detects files that have drifted due to manual patches or incomplete Ansible deploys.
+    Only Python, config, and script files are compared; .pyc, __pycache__, venv, and
+    .git directories are always excluded.
+
+    Query params:
+        component: Sub-directory to compare (default: autobot-slm-backend).
+
+    Returns a FileDriftReport with a list of drifted files and their checksums.
+    """
+    source_dir = get_default_source_dir(component)
+    deployed_dir = get_default_deployed_dir(component)
+
+    logger.info(
+        "drift check: comparing source=%s deployed=%s", source_dir, deployed_dir
+    )
+
+    report = await asyncio.get_running_loop().run_in_executor(
+        None,
+        build_drift_report,
+        source_dir,
+        deployed_dir,
+    )
+
+    logger.info(
+        "drift check: %d drifted files out of %d compared",
+        len(report["drifted_files"]),
+        report["total_compared"],
+    )
+
+    return FileDriftReport(**report)
 
 
 @router.post("/refresh", response_model=CodeSyncRefreshResponse)

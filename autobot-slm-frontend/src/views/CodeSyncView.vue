@@ -18,6 +18,7 @@ import {
   type SyncOptions,
   type UpdateSchedule,
   type ScheduleCreateRequest,
+  type FileDriftReport,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -60,6 +61,11 @@ const successMessage = ref<string | null>(null)
 const codeSourceComposable = useCodeSource()
 const codeSourceData = codeSourceComposable.codeSource
 const showCodeSourceModal = ref(false)
+
+// Drift detection state (Issue #2834)
+const driftReport = ref<FileDriftReport | null>(null)
+const isDriftLoading = ref(false)
+const showDriftDetails = ref(false)
 
 // =============================================================================
 // Computed Properties
@@ -348,6 +354,19 @@ function describeCron(expression: string): string {
 }
 
 // =============================================================================
+// Drift Detection (Issue #2834)
+// =============================================================================
+
+async function handleCheckDrift(): Promise<void> {
+  isDriftLoading.value = true
+  const result = await codeSync.fetchDrift()
+  if (result) {
+    driftReport.value = result
+    showDriftDetails.value = true
+  }
+  isDriftLoading.value = false
+}
+
 // =============================================================================
 // Lifecycle
 // =============================================================================
@@ -539,6 +558,125 @@ onUnmounted(() => {
       </div>
       <div v-else class="text-gray-500">
         No code source configured. Assign a node that has git access to the repository.
+      </div>
+    </div>
+
+    <!-- Deployed-vs-Source File Drift (Issue #2834) -->
+    <div class="card p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">File Drift Check</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            Compare checksums between code_source and deployed files to detect manual patches.
+          </p>
+        </div>
+        <button
+          @click="handleCheckDrift"
+          :disabled="isDriftLoading"
+          class="btn btn-secondary flex items-center gap-2 text-sm"
+        >
+          <svg
+            :class="['w-4 h-4', isDriftLoading ? 'animate-spin' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            />
+          </svg>
+          {{ isDriftLoading ? 'Checking...' : 'Check Drift' }}
+        </button>
+      </div>
+
+      <!-- Drift result summary -->
+      <div v-if="driftReport">
+        <div class="flex items-center gap-3 mb-3">
+          <span
+            v-if="driftReport.drift_detected"
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800"
+          >
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {{ driftReport.drifted_files.length }} drifted file{{ driftReport.drifted_files.length !== 1 ? 's' : '' }} detected
+          </span>
+          <span
+            v-else
+            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
+          >
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            No drift detected ({{ driftReport.total_compared }} files compared)
+          </span>
+          <span class="text-sm text-gray-400">
+            Checked {{ formatDate(driftReport.checked_at) }}
+          </span>
+        </div>
+
+        <div class="text-xs text-gray-400 mb-3">
+          Source: <code class="font-mono">{{ driftReport.source_dir }}</code>
+          &nbsp;&rarr;&nbsp;
+          Deployed: <code class="font-mono">{{ driftReport.deployed_dir }}</code>
+        </div>
+
+        <!-- Toggle details button -->
+        <button
+          v-if="driftReport.drift_detected"
+          @click="showDriftDetails = !showDriftDetails"
+          class="text-sm text-primary-600 hover:text-primary-800 font-medium mb-3"
+        >
+          {{ showDriftDetails ? 'Hide details' : 'Show details' }}
+        </button>
+
+        <!-- Drifted files table -->
+        <div v-if="showDriftDetails && driftReport.drifted_files.length > 0" class="overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left text-gray-500 border-b">
+                <th class="pb-2 pr-4 font-medium">Status</th>
+                <th class="pb-2 pr-4 font-medium">File</th>
+                <th class="pb-2 pr-4 font-medium">Source SHA-256</th>
+                <th class="pb-2 font-medium">Deployed SHA-256</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="file in driftReport.drifted_files"
+                :key="file.path"
+                class="border-b last:border-0"
+              >
+                <td class="py-2 pr-4">
+                  <span
+                    :class="{
+                      'text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded text-xs': file.status === 'modified',
+                      'text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs': file.status === 'source_only',
+                      'text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs': file.status === 'deployed_only',
+                    }"
+                  >
+                    {{ file.status === 'modified' ? 'Modified' : file.status === 'source_only' ? 'Source only' : 'Deployed only' }}
+                  </span>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs text-gray-700">{{ file.path }}</td>
+                <td class="py-2 pr-4 font-mono text-xs text-gray-500">
+                  {{ file.source_checksum ? file.source_checksum.substring(0, 16) + '...' : '—' }}
+                </td>
+                <td class="py-2 font-mono text-xs text-gray-500">
+                  {{ file.deployed_checksum ? file.deployed_checksum.substring(0, 16) + '...' : '—' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Placeholder when not yet checked -->
+      <div v-else class="text-sm text-gray-400">
+        Click "Check Drift" to compare file checksums between the code source and deployed directories.
       </div>
     </div>
 

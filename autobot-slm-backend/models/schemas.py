@@ -1557,6 +1557,26 @@ class CodeSyncRefreshResponse(BaseModel):
     has_update: bool = False
 
 
+class DriftedFile(BaseModel):
+    """A file whose checksum differs between code_source and deployed (Issue #2834)."""
+
+    path: str
+    source_checksum: Optional[str] = None
+    deployed_checksum: Optional[str] = None
+    status: str  # "modified" | "source_only" | "deployed_only"
+
+
+class FileDriftReport(BaseModel):
+    """Result of comparing code_source vs deployed file checksums (Issue #2834)."""
+
+    source_dir: str
+    deployed_dir: str
+    drifted_files: list[DriftedFile]
+    total_compared: int
+    drift_detected: bool
+    checked_at: str
+
+
 class PendingNodeResponse(BaseModel):
     """Node that needs code update."""
 
