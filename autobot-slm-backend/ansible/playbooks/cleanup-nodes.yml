@@ -8,6 +8,13 @@
 # Removes legacy directories, wrong-node role dirs, and stale loose files
 # from all fleet nodes, then reports the resulting /opt/autobot/ layout.
 #
+# WARNING: This playbook is for MULTI-NODE deployments ONLY.
+# Each play targets a specific host group (00-SLM-Manager, 01-Backend, etc.)
+# and deletes directories that should NOT exist on that node. Do NOT run this
+# on a single-host deployment — it will delete co-located role directories.
+# For single-host safety, use the role-level clean.yml tasks which check
+# node_roles before deleting cross-role directories (#2836).
+#
 # Usage:
 #   cd autobot-slm-backend/ansible
 #   ansible-playbook playbooks/cleanup-nodes.yml -i inventory/slm-nodes.yml

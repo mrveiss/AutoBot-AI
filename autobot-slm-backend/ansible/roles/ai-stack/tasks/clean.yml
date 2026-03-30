@@ -4,6 +4,16 @@
 ---
 # AI Stack role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes legacy and wrong-node directories from .24 (AI stack node).
+#
+# LEGACY directory deletions (ai-stack, npu-worker, browser-service) run
+# unconditionally because NO current role deploys to those paths — they are
+# pre-rename leftovers.
+#
+# Wrong-node deletions of CURRENT canonical dirs (autobot-backend,
+# autobot-frontend, autobot-slm-backend) ONLY run when node_roles is defined
+# (dynamic inventory). When undefined (localhost self-deploy via install.sh),
+# skip ALL cross-role deletions to prevent wiping co-located services on
+# single-host (#2836).
 
 - name: "AI Stack | Clean: legacy ai-stack dir (old name)"
   ansible.builtin.file:

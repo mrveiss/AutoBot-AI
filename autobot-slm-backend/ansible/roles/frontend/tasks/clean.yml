@@ -4,6 +4,16 @@
 ---
 # Frontend role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes legacy and wrong-node directories from .21 (frontend node).
+#
+# LEGACY directory deletions (autobot-user-frontend, npu-worker,
+# browser-service) run unconditionally because NO current role deploys to
+# those paths — they are pre-rename leftovers.
+#
+# Wrong-node deletions of CURRENT canonical dirs (autobot-slm-frontend,
+# autobot-slm-backend, autobot-backend) ONLY run when node_roles is defined
+# (dynamic inventory). When undefined (localhost self-deploy via install.sh),
+# skip ALL cross-role deletions to prevent wiping co-located services on
+# single-host (#2836).
 
 - name: "Frontend | Clean: legacy autobot-user-frontend dir"
   ansible.builtin.file:
