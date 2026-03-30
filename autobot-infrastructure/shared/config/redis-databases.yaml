@@ -26,9 +26,7 @@ redis_databases:
   workflows:
     db: 7
     description: "Workflow state and execution"
-  monitoring:
-    db: 7
-    description: "Infrastructure monitoring data (alias for workflows DB)"
+  # monitoring: removed — was unused alias of workflows (DB 7). See #2810.
   logs:
     db: 8
     description: "Log data and history"
@@ -43,9 +41,7 @@ redis_databases:
   analytics:
     db: 11
     description: "Codebase analytics and code analysis results"
-  codebase:
-    db: 11
-    description: "Codebase analytics (alias for analytics DB)"
+  # codebase: removed — was unused alias of analytics (DB 11). See #2810.
   testing:
     db: 13
     description: "Test suite isolation database (#2720)"
