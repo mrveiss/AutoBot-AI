@@ -12,12 +12,15 @@ import sqlite3
 import traceback
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 import logging
 
 import aioredis
 import redis
+
+logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 
 def test_redis_basic():
@@ -61,12 +64,12 @@ def test_redis_basic():
 
 
 def test_vector_database():
-    """Test vector database in Redis DB 8"""
-    logger.info("\n=== VECTOR DATABASE TEST (Redis DB 8) ===")
+    """Test vector database in Redis knowledge DB (DB 1 per redis-databases.yaml SSOT)"""
+    logger.info("\n=== VECTOR DATABASE TEST (Redis knowledge DB) ===")
 
     try:
         client = redis.Redis(
-            host="localhost", port=6379, db=8, decode_responses=False, socket_timeout=2
+            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=False, socket_timeout=2
         )
 
         # Check for LlamaIndex keys

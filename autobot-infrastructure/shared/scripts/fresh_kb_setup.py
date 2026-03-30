@@ -8,10 +8,15 @@ import logging
 import os
 import sys
 
-logger = logging.getLogger(__name__)
+import redis  # noqa: redis — standalone script, see Issue #1086
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 
 def _clean_redis() -> None:
@@ -20,7 +25,7 @@ def _clean_redis() -> None:
     Helper for fresh_setup (Issue #825).
     """
     logger.info("\n1. Cleaning Redis...")
-    r = redis.Redis(host="localhost", port=6379, db=0)
+    r = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE)
 
     try:
         indexes = r.execute_command("FT._LIST")
@@ -103,7 +108,7 @@ def _verify_index() -> None:
     Helper for fresh_setup (Issue #825).
     """
     logger.info("\n5. Checking created index...")
-    r = redis.Redis(host="localhost", port=6379, db=0)
+    r = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE)
 
     indexes = r.execute_command("FT._LIST")
     logger.info(f"   Indexes: {indexes}")

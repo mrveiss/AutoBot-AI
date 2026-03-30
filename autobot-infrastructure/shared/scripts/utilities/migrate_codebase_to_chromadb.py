@@ -11,6 +11,7 @@ from Redis DB 11 to a new ChromaDB collection 'autobot_code'.
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -27,6 +28,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): analytics = 11
+_DB_ANALYTICS = int(os.getenv("AUTOBOT_REDIS_DB_ANALYTICS", "11"))
 
 
 class CodebaseChromaDBMigration:
@@ -52,7 +56,7 @@ class CodebaseChromaDBMigration:
             self.redis_client = redis.Redis(
                 host=str(NetworkConstants.REDIS_VM_IP),
                 port=NetworkConstants.REDIS_PORT,
-                db=11,  # Codebase analytics database
+                db=_DB_ANALYTICS,  # Codebase analytics database (redis-databases.yaml SSOT, #2806)
                 decode_responses=True,
                 socket_timeout=30,
             )
