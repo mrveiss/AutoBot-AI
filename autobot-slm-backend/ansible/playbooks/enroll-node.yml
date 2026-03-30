@@ -157,11 +157,12 @@
             - "{{ autobot_cert_dir }}"
             - "{{ autobot_home }}/.ssh"
 
+        # Issue #2828: Use shared key path — accessible to any operator
         - name: "Configure SSH authorized keys"
           authorized_key:
             user: "{{ autobot_user }}"
             state: present
-            key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
+            key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
           ignore_errors: yes  # Key may not exist during initial enrollment
 
         - name: "Create emergency admin user"

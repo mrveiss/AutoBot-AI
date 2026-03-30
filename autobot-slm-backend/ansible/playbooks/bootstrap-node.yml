@@ -27,7 +27,7 @@
 #     --ask-pass --ask-become-pass
 #
 # After bootstrap, verify key auth works:
-#   ssh -i ~/.ssh/autobot_key autobot@<host-ip> whoami
+#   ssh -i /etc/autobot/ssh/autobot_key autobot@<host-ip> whoami
 #
 # Then enroll the node:
 #   ansible-playbook -i inventory/slm-nodes.yml playbooks/enroll-node.yml \
@@ -45,7 +45,8 @@
     autobot_data_dir: "/var/lib/autobot"
     autobot_log_dir: "/var/log/autobot"
     autobot_cert_dir: "/etc/autobot/certs"
-    ssh_pubkey_path: "/home/autobot/.ssh/autobot_key.pub"
+    # Issue #2828: Use shared key path — accessible to any user in autobot group
+    ssh_pubkey_path: "/etc/autobot/ssh/autobot_key.pub"
 
   pre_tasks:
     - name: "Verify target is a Debian/Ubuntu system"
@@ -226,6 +227,6 @@
           - "Firewall: SSH + VNC + websockify allowed"
           - ""
           - "Next steps:"
-          - "  1. Verify: ssh -i ~/.ssh/autobot_key {{ autobot_user }}@{{ ansible_default_ipv4.address }}"
+          - "  1. Verify: ssh -i /etc/autobot/ssh/autobot_key {{ autobot_user }}@{{ ansible_default_ipv4.address }}"
           - "  2. Enroll:  ansible-playbook -i inventory/slm-nodes.yml playbooks/enroll-node.yml --limit {{ inventory_hostname }} -e node_role=vnc"
           - "  3. VNC:     ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml --limit {{ inventory_hostname }} --tags vnc"
