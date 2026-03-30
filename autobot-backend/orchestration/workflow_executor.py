@@ -397,27 +397,29 @@ class WorkflowExecutor:
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Simulate step execution (placeholder for actual agent execution).
+        Placeholder — actual agent delegation is not implemented.
 
-        In real implementation, this would delegate to actual agents.
+        Issue #2869: Replace this method body with a real agent dispatch call.
+        Until then, raise explicitly so workflows fail loudly rather than
+        returning fake results that look like real work.
 
         Args:
             step: The step to execute
             context: Workflow context
-
-        Returns:
-            Execution result
         """
-        action = step["action"]
-
-        # Add small delay to simulate work
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-        return {
-            "action_completed": action,
-            "timestamp": time.time(),
-            "simulated": True,
-        }
+        step_id = step.get("id", "<unknown>")
+        action = step.get("action", "<unknown>")
+        logger.warning(
+            "Workflow step %s (action=%s) cannot be executed: "
+            "agent dispatch is not implemented. (#2869)",
+            step_id,
+            action,
+        )
+        raise NotImplementedError(
+            f"Workflow step '{step_id}' (action='{action}'): "
+            "agent execution is not implemented. "
+            "Wire _simulate_step_execution to the agent dispatcher. (#2869)"
+        )
 
     def _log_plan_details(self, workflow_id: str, plan_summary: Dict[str, Any]) -> None:
         """

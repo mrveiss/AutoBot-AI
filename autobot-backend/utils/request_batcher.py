@@ -649,11 +649,22 @@ class IntelligentRequestBatcher:
         return combined
 
     async def _execute_combined_request(self, content: str) -> str:
-        """Execute the combined request (placeholder for actual API call)"""
-        # This is where you would integrate with your actual Claude API client
-        # For now, returning a placeholder response
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate API call delay
-        return f"Response to combined request: {content[:100]}..."
+        """
+        Execute the combined request against the real API client.
+
+        Issue #2869: This method must be wired to an actual LLM/API client before
+        request batching can be used in production. Raises explicitly so batch
+        processing fails loudly rather than returning fake responses.
+        """
+        logger.warning(
+            "_execute_combined_request called but no API client is wired. (#2869) "
+            "Request content length: %d chars",
+            len(content),
+        )
+        raise NotImplementedError(
+            "_execute_combined_request: no API client is wired. "
+            "Inject a real LLM/API client into RequestBatcher before enabling batching. (#2869)"
+        )
 
     def _parse_batch_response(
         self, batch: List[BatchableRequest], response: str
