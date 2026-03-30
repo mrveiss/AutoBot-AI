@@ -201,6 +201,34 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
         raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
 
 
+async def _check_env_drift() -> None:
+    """Run .env drift check against SSOT config definitions (Issue #2650).
+
+    Non-critical: a failed or drifted check is logged as a warning and never
+    prevents startup.  This runs before other init steps so operators see drift
+    warnings at the very top of the startup log.
+    """
+    try:
+        from autobot_shared.env_drift_detector import check_env_drift
+
+        report = check_env_drift()
+        if report.error:
+            logger.warning("env drift check skipped: %s", report.error)
+        elif report.has_drift:
+            logger.warning(
+                "env drift detected — run 'python -m autobot_shared.env_drift_detector' "
+                "for details (%s)",
+                report.summary(),
+            )
+        else:
+            logger.info(
+                "env drift check passed: all %d SSOT keys present in .env",
+                len(report.ssot_keys),
+            )
+    except Exception as exc:
+        logger.warning("env drift check failed (non-critical): %s", exc)
+
+
 async def _init_config(app: FastAPI) -> None:
     """Helper for initialize_critical_services. Ref: #1088."""
     logger.info("✅ [ 10%] Config: Loading unified configuration...")
@@ -322,6 +350,9 @@ async def initialize_critical_services(app: FastAPI):
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
     try:
+        # Issue #2650: check .env drift before any service initialisation
+        await _check_env_drift()
+
         await _init_config(app)
         await _init_security_layer(app)
         await _init_database()
