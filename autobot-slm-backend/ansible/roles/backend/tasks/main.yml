@@ -305,14 +305,22 @@
     - /etc/autobot/certs/server-key.pem
     - /etc/autobot/certs/server-cert.pem
 
-- name: Deploy backend environment file (install dir — backwards compat)
+# Issue #2824: Deploy .env to backend_code_dir so the systemd
+# EnvironmentFile directive can find it.  Previous code deployed to
+# backend_install_dir which diverges when playbooks override
+# backend_code_dir (e.g. setup-user-backend.yml sets it to
+# backend_install_dir/autobot-backend).  The path expression here
+# mirrors the one used in autobot-backend.service.j2 line 15.
+- name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
   ansible.builtin.template:
     src: backend.env.j2
-    dest: "{{ backend_install_dir }}/.env"
+    dest: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
     mode: "0600"
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
+    backup: true
   notify: restart backend
+  tags: ['backend', 'config']
 
 - name: Deploy backend systemd service
   ansible.builtin.template:
@@ -394,7 +402,7 @@
 # UFW loopback0 rule (WSL2 mirrored networking)
 # WSL2 mirrored networking routes 127.0.0.1 traffic through
 # the loopback0 interface, NOT lo. UFW's default lo accept
-# rule does NOT cover loopback0, so nginx→uvicorn (port 8001)
+# rule does NOT cover loopback0, so nginx->uvicorn (port 8001)
 # connections are dropped by UFW INPUT DROP policy.
 # This rule is harmless on non-WSL2 hosts (no loopback0 traffic).
 # ==========================================================
