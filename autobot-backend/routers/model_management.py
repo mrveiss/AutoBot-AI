@@ -141,8 +141,7 @@ def _register_trained_model(trainer, request, final_metrics, duration):
     Looks up the most recently modified checkpoint file in trainer.model_dir and
     writes all training metrics into the record.
     """
-    db = _get_session()
-    try:
+    with _get_session() as db:
         model_files = list(Path(trainer.model_dir).glob("completion_model_v*.pt"))
         if model_files:
             latest_checkpoint = max(model_files, key=lambda p: p.stat().st_mtime)
@@ -168,8 +167,6 @@ def _register_trained_model(trainer, request, final_metrics, duration):
             db.add(model_record)
             db.commit()
             logger.info("Training complete: %s", version)
-    finally:
-        db.close()
 
 
 def _train_background(request):
@@ -222,8 +219,7 @@ async def list_models(
     - **language**: Filter by training language
     - **is_active**: Filter by active status
     """
-    db = _get_session()
-    try:
+    with _get_session() as db:
         query = db.query(MLModel)
 
         if language:
@@ -256,23 +252,18 @@ async def list_models(
             ],
             total=len(models),
         )
-    finally:
-        db.close()
 
 
 @router.get("/models/{version}", response_model=Dict)
 async def get_model(version: str):
     """Get detailed model metadata by version."""
-    db = _get_session()
-    try:
+    with _get_session() as db:
         model = db.query(MLModel).filter(MLModel.version == version).first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
 
         return model.to_dict()
-    finally:
-        db.close()
 
 
 @router.post("/models/{version}/activate")
@@ -282,8 +273,7 @@ async def activate_model(version: str):
 
     Deactivates any currently active model.
     """
-    db = _get_session()
-    try:
+    with _get_session() as db:
         # Find model
         model = db.query(MLModel).filter(MLModel.version == version).first()
 
@@ -298,25 +288,23 @@ async def activate_model(version: str):
         model.deployed_at = datetime.utcnow()
         db.commit()
 
-        # Load model into memory then atomically publish both globals (#2846).
-        # Loading outside the lock avoids holding it during a potentially slow
-        # checkpoint read; only the final pointer swap is locked.
-        trainer = _get_trainer_class()()
-        trainer.load_checkpoint(version)
-        with _model_lock:
-            global _active_model, _active_version
-            _active_model = trainer
-            _active_version = version
+    # Load model into memory then atomically publish both globals (#2846).
+    # Loading outside the session avoids holding the DB connection during a
+    # potentially slow checkpoint read; only the final pointer swap is locked.
+    trainer = _get_trainer_class()()
+    trainer.load_checkpoint(version)
+    with _model_lock:
+        global _active_model, _active_version
+        _active_model = trainer
+        _active_version = version
 
-        logger.info("Activated model: %s", version)
+    logger.info("Activated model: %s", version)
 
-        return {
-            "status": "success",
-            "message": f"Model {version} is now active",
-            "version": version,
-        }
-    finally:
-        db.close()
+    return {
+        "status": "success",
+        "message": f"Model {version} is now active",
+        "version": version,
+    }
 
 
 @router.get("/evaluate")
@@ -333,8 +321,7 @@ async def get_evaluation_metrics():
     if active_model_snapshot is None:
         raise HTTPException(status_code=400, detail="No active model")
 
-    db = _get_session()
-    try:
+    with _get_session() as db:
         model = db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
 
         if not model:
@@ -356,8 +343,6 @@ async def get_evaluation_metrics():
                 "num_parameters": model.num_parameters,
             },
         }
-    finally:
-        db.close()
 
 
 @router.post("/predict", response_model=PredictResponse)
