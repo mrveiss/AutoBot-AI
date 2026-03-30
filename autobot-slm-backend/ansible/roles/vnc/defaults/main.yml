@@ -25,3 +25,12 @@ vnc_always_shared: "{{ lookup('env', 'VNC_ALWAYS_SHARED') | default('0', true) }
 # Service management
 vnc_service_name: vnc-server
 websockify_service_name: vnc-websockify
+
+# SLM credential auto-registration (#2926)
+vnc_register_credentials: true
+slm_api_url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}"
+slm_admin_user: "admin"
+slm_admin_password: >-
+  {{ hostvars['00-SLM-Manager']['slm_admin_password']
+     | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
+     | default('admin') }}
