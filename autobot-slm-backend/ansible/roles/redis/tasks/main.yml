@@ -144,12 +144,13 @@
 
 - name: "Redis | Test Redis connectivity"
   command: >
-    redis-cli -h 127.0.0.1 -p {{ redis_port }}
+    {{ redis_cli_path | default('/opt/redis-stack/bin/redis-cli') }}
+    -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
     ping
   register: redis_ping
   changed_when: false
-  no_log: true  # Hide password from logs
+  no_log: "{{ redis_password is defined and redis_password | default(false) | bool }}"
   tags: ['redis', 'validation']
 
 - name: "Redis | Create backup directory"
