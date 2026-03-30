@@ -267,6 +267,77 @@ class PlaybookExecutor:
         ):  # nosec B108
             Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
 
+    async def _update_code_source(self) -> None:
+        """
+        Pull latest code into code_source before running a playbook (#2896).
+
+        Derives code_source root from self.ansible_dir (two levels up).
+        Skips silently when the path does not exist or has no .git dir — safe
+        in local dev environments.  Never blocks provisioning: any failure is
+        logged as a warning and the caller continues.
+        """
+        code_source_dir = self.ansible_dir.parent.parent
+        git_dir = code_source_dir / ".git"
+        if not git_dir.exists():
+            logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
+            return
+
+        branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+
+        async def _run_git(*args: str) -> int:
+            """Run a git command in code_source_dir with a 30-second timeout."""
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(code_source_dir),
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=30)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.communicate()
+                return -1
+            return proc.returncode
+
+        try:
+            if await _run_git("checkout", "--", ".") != 0:
+                logger.warning("_update_code_source: git checkout -- . failed; continuing")
+
+            if await _run_git("fetch", "origin") != 0:
+                logger.warning("_update_code_source: git fetch origin failed; continuing")
+                return
+
+            if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
+                logger.warning(
+                    "_update_code_source: git reset --hard origin/%s failed; continuing",
+                    branch,
+                )
+                return
+
+            # Log the resulting HEAD commit for traceability
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(code_source_dir),
+                "rev-parse",
+                "--short",
+                "HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            commit_hash = stdout.decode("utf-8", errors="replace").strip()
+            logger.info(
+                "_update_code_source: code_source updated to %s on branch %s",
+                commit_hash,
+                branch,
+            )
+        except Exception as exc:
+            logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
+
     def _build_ansible_env(self) -> Dict[str, str]:
         """
         Build the environment dict for ansible-playbook subprocess. Ref: #1088.
@@ -330,6 +401,8 @@ class PlaybookExecutor:
         Returns:
             Dict with keys: success (bool), output (str), returncode (int)
         """
+        await self._update_code_source()
+
         playbook_path = self.ansible_dir / playbook_name
         effective_inventory = inventory_path or self.inventory_path
 
