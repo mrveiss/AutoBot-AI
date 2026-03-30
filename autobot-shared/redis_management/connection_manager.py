@@ -58,6 +58,10 @@ from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionSt
 _config_manager = None
 _metrics_manager_getter = None
 
+# Locks for thread-safe lazy initialization of module-level globals (#2854).
+_config_manager_lock = Lock()
+_metrics_manager_lock = Lock()
+
 # Retry/timing defaults (previously from constants.threshold_constants)
 _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
@@ -65,28 +69,38 @@ _STANDARD_DELAY = 1.0
 
 
 def _get_config_manager():
-    """Lazy-load the backend config manager."""
+    """Lazy-load the backend config manager.
+
+    Thread-safe: uses _config_manager_lock to prevent double-initialization (#2854).
+    """
     global _config_manager
     if _config_manager is None:
-        try:
-            from config import config as cm
+        with _config_manager_lock:
+            if _config_manager is None:
+                try:
+                    from config import config as cm
 
-            _config_manager = cm
-        except ImportError:
-            pass
+                    _config_manager = cm
+                except ImportError:
+                    pass
     return _config_manager
 
 
 def _get_metrics_manager():
-    """Lazy-load the Prometheus metrics manager."""
+    """Lazy-load the Prometheus metrics manager.
+
+    Thread-safe: uses _metrics_manager_lock to prevent double-initialization (#2854).
+    """
     global _metrics_manager_getter
     if _metrics_manager_getter is None:
-        try:
-            from monitoring.prometheus_metrics import get_metrics_manager as gmm
+        with _metrics_manager_lock:
+            if _metrics_manager_getter is None:
+                try:
+                    from monitoring.prometheus_metrics import get_metrics_manager as gmm
 
-            _metrics_manager_getter = gmm
-        except ImportError:
-            _metrics_manager_getter = lambda: None  # noqa: E731
+                    _metrics_manager_getter = gmm
+                except ImportError:
+                    _metrics_manager_getter = lambda: None  # noqa: E731
     return _metrics_manager_getter()
 
 
