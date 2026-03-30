@@ -54,9 +54,9 @@ def _get_model(role: str, fallback: str) -> str:
 _DEFAULT_MODEL = _load_agents_config().get("llm", {}).get("default_model", "qwen3.5:9b")
 _ROUTING_MODEL = _get_model("orchestrator", "llama3.2:1b")
 _CLASSIFICATION_MODEL = _get_model("classification", "gemma2:2b")
-_RAG_MODEL = _get_model("rag", "qwen3.5:9b")
+_RAG_MODEL = _get_model("rag", "mistral:7b-instruct")
 _CHAT_MODEL = _get_model("chat", "qwen3.5:9b")
-_CODE_MODEL = _get_model("npu_code_search", "qwen3.5:9b")
+_CODE_MODEL = _get_model("npu_code_search", "phi3:mini")
 _EMBEDDING_MODEL = "nomic-embed-text:latest"  # embeddings.model in agents.yaml
 
 # Critical models that must be installed (derived from SSOT roles above)
