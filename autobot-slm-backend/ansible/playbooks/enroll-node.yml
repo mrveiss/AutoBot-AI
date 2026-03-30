@@ -38,7 +38,7 @@
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"
     # Password hash must be provided via Ansible Vault or --extra-vars.
-    # Generate with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('YOUR_PASSWORD'))"
+    # Generate with: python3 -c "import bcrypt; print(bcrypt.hashpw(b'YOUR_PASSWORD', bcrypt.gensalt()).decode())"
     # See: inventory/group_vars/vault.yml
     emergency_admin_password_hash: "{{ vault_emergency_admin_password_hash | default(omit) }}"
 

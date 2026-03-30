@@ -131,7 +131,7 @@ Minimal set (~10 packages):
 - ansible-runner
 - aiofiles
 - python-jose (JWT)
-- passlib (passwords)
+- bcrypt (passwords)
 - websockets
 
 ## Startup Flow
