@@ -11,7 +11,7 @@ pydantic>=2.5.0
 aiohttp>=3.9.0
 
 # Redis Client
-redis>=5.0.0
+redis>=7.4.0
 
 # =============================================================================
 # ONNX Runtime with OpenVINO Execution Provider (Issue #640)
@@ -20,7 +20,7 @@ redis>=5.0.0
 # DirectML doesn't properly expose Intel NPUs - OpenVINO EP has explicit
 # NPU device support via device_type='NPU' option.
 #
-# Device priority: NPU → GPU → CPU (automatic fallback)
+# Device priority: NPU -> GPU -> CPU (automatic fallback)
 # Requires: Windows 11 24H2+ with Intel AI Boost drivers for NPU
 
 # ONNX Runtime with OpenVINO (for Intel NPU/GPU acceleration)
