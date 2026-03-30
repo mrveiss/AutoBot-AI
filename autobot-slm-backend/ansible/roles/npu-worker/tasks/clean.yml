@@ -15,21 +15,27 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
-  when: "'backend' not in (node_roles | default([]))"
+  when:
+    - node_roles is defined
+    - "'backend' not in node_roles"
   tags: ['clean']
 
 - name: "NPU Worker | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
-  when: "'frontend' not in (node_roles | default([]))"
+  when:
+    - node_roles is defined
+    - "'frontend' not in node_roles"
   tags: ['clean']
 
 - name: "NPU Worker | Clean: wrong-node autobot-slm-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
-  when: "'slm-backend' not in (node_roles | default([]))"
+  when:
+    - node_roles is defined
+    - "'slm-backend' not in node_roles"
   tags: ['clean']
 
 - name: "NPU Worker | Clean: legacy browser-service dir"
