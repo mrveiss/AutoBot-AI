@@ -219,6 +219,21 @@ async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
 
+    # After enrollment, Ansible connects as 'autobot' (the user created
+    # during enrollment).  Preserve the original ssh_user in extra_data
+    # so decommission can connect as the original user to remove autobot.
+    # (#2826)
+    if node and node.ssh_user and node.ssh_user != "autobot":
+        extra = node.extra_data or {}
+        extra["original_ssh_user"] = node.ssh_user
+        node.extra_data = extra
+        node.ssh_user = "autobot"
+        logger.info(
+            "Node %s: ssh_user updated to 'autobot' (original: %s)",
+            node_id,
+            extra["original_ssh_user"],
+        )
+
     completion_details = {
         "hostname": node.hostname if node else None,
         "status": node.status if node else None,
@@ -1428,11 +1443,15 @@ async def decommission_node(
             "output": "Force decommission: Ansible playbook skipped (node already removed)"
         }
     else:
+        # Use original SSH user for decommission so Ansible can remove
+        # the autobot account without killing its own session (#2826)
+        extra = node.extra_data or {}
+        decom_user = extra.get("original_ssh_user", node.ssh_user or "autobot")
         ansible_result = await _execute_decommission(
             db,
             deployment,
             node.ip_address,
-            node.ssh_user or "autobot",
+            decom_user,
             request.backup,
         )
     await _cleanup_decommissioned_node(
