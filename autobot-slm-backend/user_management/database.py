@@ -7,6 +7,8 @@ Dual Database Engine Management for SLM
 Two SQLAlchemy async engines:
 - slm_engine: Local SLM admin users
 - autobot_engine: Remote AutoBot application users
+
+Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import logging
@@ -34,16 +36,43 @@ _slm_session_maker: async_sessionmaker[AsyncSession] | None = None
 _autobot_session_maker: async_sessionmaker[AsyncSession] | None = None
 
 
+def _get_pool_config() -> dict:
+    """Get database pool settings from SSOT config (#2860)."""
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        pool_cfg = get_config().database_pool
+        return {
+            "pool_size": pool_cfg.pool_size,
+            "max_overflow": pool_cfg.max_overflow,
+            "pool_recycle": pool_cfg.pool_recycle,
+            "pool_timeout": pool_cfg.pool_timeout,
+        }
+    except Exception:
+        logger.warning(
+            "Could not load SSOT database pool config, using defaults"
+        )
+        return {
+            "pool_size": 10,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+        }
+
+
 def get_slm_engine() -> AsyncEngine:
     """Get or create SLM database engine (local)."""
     global _slm_engine
     if _slm_engine is None:
         config = get_slm_db_config()
+        pool = _get_pool_config()
         _slm_engine = create_async_engine(
             config.url,
             echo=False,
-            pool_size=10,
-            max_overflow=10,
+            pool_size=pool["pool_size"],
+            max_overflow=pool["max_overflow"],
+            pool_recycle=pool["pool_recycle"],
+            pool_timeout=pool["pool_timeout"],
             pool_pre_ping=True,
         )
         logger.info("Created SLM database engine")
@@ -55,11 +84,14 @@ def get_autobot_engine() -> AsyncEngine:
     global _autobot_engine
     if _autobot_engine is None:
         config = get_autobot_db_config()
+        pool = _get_pool_config()
         _autobot_engine = create_async_engine(
             config.url,
             echo=False,
-            pool_size=20,
-            max_overflow=20,
+            pool_size=pool["pool_size"],
+            max_overflow=pool["max_overflow"],
+            pool_recycle=pool["pool_recycle"],
+            pool_timeout=pool["pool_timeout"],
             pool_pre_ping=True,
         )
         logger.info("Created AutoBot database engine")

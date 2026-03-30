@@ -75,6 +75,25 @@ def _get_cors_origins() -> list:
         ]
 
 
+def _get_ssot_pool_defaults() -> tuple:
+    """Load database pool defaults from SSOT config (#2860).
+
+    Returns:
+        Tuple of (pool_size, max_overflow, pool_recycle) from SSOT config.
+    """
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        pool_cfg = get_config().database_pool
+        return (pool_cfg.pool_size, pool_cfg.max_overflow, pool_cfg.pool_recycle)
+    except Exception:
+        return (10, 10, 3600)
+
+
+# Load SSOT defaults at module level so Settings class can reference them.
+_SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_defaults()
+
+
 class Settings(BaseSettings):
     """SLM Server Settings."""
 
@@ -108,10 +127,17 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
     )
 
-    # Database connection pool settings
-    db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", "20"))
-    db_pool_max_overflow: int = int(os.getenv("SLM_DB_POOL_MAX_OVERFLOW", "10"))
-    db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", "3600"))
+    # Database connection pool settings (#2860) — SSOT-coordinated defaults.
+    # SLM_DB_POOL_* env vars still override for per-service tuning.
+    db_pool_size: int = int(
+        os.getenv("SLM_DB_POOL_SIZE", str(_SSOT_POOL_SIZE))
+    )
+    db_pool_max_overflow: int = int(
+        os.getenv("SLM_DB_POOL_MAX_OVERFLOW", str(_SSOT_MAX_OVERFLOW))
+    )
+    db_pool_recycle: int = int(
+        os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE))
+    )
 
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
