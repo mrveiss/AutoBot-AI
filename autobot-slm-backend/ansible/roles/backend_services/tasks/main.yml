@@ -27,6 +27,9 @@
     virtualenv: /opt/autobot/venv
     virtualenv_python: python3.12
   become_user: autobot
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
 - name: Copy AutoBot application files
   synchronize:

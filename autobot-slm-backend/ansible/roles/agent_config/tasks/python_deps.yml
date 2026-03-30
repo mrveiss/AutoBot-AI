@@ -14,4 +14,7 @@
     requirements: "{{ project_root }}/{{ requirements_file }}"
     virtualenv: "{{ venv_dir }}"
   become_user: "{{ service_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: requirements_stat.stat.exists
