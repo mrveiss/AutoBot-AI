@@ -8,6 +8,7 @@ Endpoints for training, deploying, and serving code completion models.
 """
 
 import logging
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -28,21 +29,25 @@ router = APIRouter(tags=["ml-models"])
 # Database setup — deferred to avoid crash when config.database is unavailable
 _engine = None
 _SessionLocal = None
+_db_init_lock = threading.Lock()
 
 
 def _get_session():
     """Return a new SQLAlchemy session, creating the engine on first call.
 
     Deferred from module level to avoid DB connection at import time (Issue #940).
+    Thread-safe: uses _db_init_lock to prevent double-initialization (#2846).
     """
     global _engine, _SessionLocal
     if _SessionLocal is None:
-        db_url = (
-            f"postgresql://{config.database.user}:{config.database.password}"
-            f"@{config.database.host}:{config.database.port}/{config.database.name}"
-        )
-        _engine = create_engine(db_url)
-        _SessionLocal = sessionmaker(bind=_engine)
+        with _db_init_lock:
+            if _SessionLocal is None:
+                db_url = (
+                    f"postgresql://{config.database.user}:{config.database.password}"
+                    f"@{config.database.host}:{config.database.port}/{config.database.name}"
+                )
+                _engine = create_engine(db_url)
+                _SessionLocal = sessionmaker(bind=_engine)
     return _SessionLocal()
 
 
@@ -53,9 +58,12 @@ def _get_trainer_class():
     return CompletionTrainer
 
 
-# Active model cache
+# Active model cache — guarded by _model_lock to prevent torn reads/writes (#2846).
+# Both the async activate_model endpoint and the thread-pool background task write
+# these globals; threading.Lock is required (asyncio.Lock is not thread-safe).
 _active_model = None
 _active_version: Optional[str] = None
+_model_lock = threading.Lock()
 
 
 # =============================================================================
@@ -159,7 +167,7 @@ def _register_trained_model(trainer, request, final_metrics, duration):
             )
             db.add(model_record)
             db.commit()
-            logger.info(f"Training complete: {version}")
+            logger.info("Training complete: %s", version)
     finally:
         db.close()
 
@@ -182,7 +190,7 @@ def _train_background(request):
         final_metrics = history["metrics"][-1] if history["metrics"] else {}
         _register_trained_model(trainer, request, final_metrics, duration)
     except Exception as e:
-        logger.error(f"Training failed: {e}", exc_info=True)
+        logger.error("Training failed: %s", e, exc_info=True)
 
 
 @router.post("/train", response_model=TrainResponse)
@@ -274,8 +282,6 @@ async def activate_model(version: str):
 
     Deactivates any currently active model.
     """
-    global _active_model, _active_version
-
     db = _get_session()
     try:
         # Find model
@@ -292,13 +298,17 @@ async def activate_model(version: str):
         model.deployed_at = datetime.utcnow()
         db.commit()
 
-        # Load model into memory
+        # Load model into memory then atomically publish both globals (#2846).
+        # Loading outside the lock avoids holding it during a potentially slow
+        # checkpoint read; only the final pointer swap is locked.
         trainer = _get_trainer_class()()
         trainer.load_checkpoint(version)
-        _active_model = trainer
-        _active_version = version
+        with _model_lock:
+            global _active_model, _active_version
+            _active_model = trainer
+            _active_version = version
 
-        logger.info(f"Activated model: {version}")
+        logger.info("Activated model: %s", version)
 
         return {
             "status": "success",
@@ -316,12 +326,16 @@ async def get_evaluation_metrics():
 
     Returns latest metrics from validation set.
     """
-    if _active_model is None:
+    with _model_lock:
+        active_model_snapshot = _active_model
+        active_version_snapshot = _active_version
+
+    if active_model_snapshot is None:
         raise HTTPException(status_code=400, detail="No active model")
 
     db = _get_session()
     try:
-        model = db.query(MLModel).filter(MLModel.version == _active_version).first()
+        model = db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
 
         if not model:
             raise HTTPException(status_code=404, detail="Active model not found in DB")
@@ -355,23 +369,27 @@ async def predict_completion(request: PredictRequest):
     - **language**: Programming language
     - **top_k**: Number of suggestions to return
     """
-    if _active_model is None:
+    with _model_lock:
+        active_model_snapshot = _active_model
+        active_version_snapshot = _active_version
+
+    if active_model_snapshot is None:
         raise HTTPException(
             status_code=400, detail="No active model. Activate a model first."
         )
 
     try:
         # Tokenize context
-        tokenizer = _active_model.train_loader.dataset.tokenizer
+        tokenizer = active_model_snapshot.train_loader.dataset.tokenizer
         context_ids = tokenizer.encode(request.context, max_length=128)
         import torch
 
         input_tensor = torch.tensor([context_ids], dtype=torch.long).to(
-            _active_model.device
+            active_model_snapshot.device
         )
 
         # Get predictions
-        predictions = _active_model.model.predict(input_tensor, top_k=request.top_k)
+        predictions = active_model_snapshot.model.predict(input_tensor, top_k=request.top_k)
 
         # Decode token IDs to text
         token_ids = predictions["tokens"][0].cpu().tolist()
@@ -382,9 +400,9 @@ async def predict_completion(request: PredictRequest):
         return PredictResponse(
             suggestions=suggestions,
             confidence=confidence,
-            model_version=_active_version,
+            model_version=active_version_snapshot,
         )
 
     except Exception as e:
-        logger.error(f"Prediction failed: {e}", exc_info=True)
+        logger.error("Prediction failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
