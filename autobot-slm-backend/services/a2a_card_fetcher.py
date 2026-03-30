@@ -16,10 +16,15 @@ Public API:
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# TLS verification for A2A card fetches from internal backend nodes.
+# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs (#2852).
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 # Only nodes with this role expose the A2A endpoint
 _A2A_ROLE = "backend"
@@ -41,8 +46,9 @@ async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
 
     url = f"https://{ip_address}:{_A2A_PORT}{_WELL_KNOWN_PATH}"
     ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    if not _VERIFY_TLS:
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
         timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:

@@ -186,17 +186,17 @@ _ENROLLMENT_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
 
           import psutil
           import requests
-          import urllib3
           import yaml
-
-          # Suppress InsecureRequestWarning for self-signed certs
-          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           logging.basicConfig(
               level=logging.INFO,
               format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
           )
           logger = logging.getLogger("slm-agent")
+
+          # TLS verification for heartbeat calls to the SLM admin (#2852).
+          # Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs.
+          _VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
           class SLMAgent:
@@ -229,8 +229,7 @@ _ENROLLMENT_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
                   try:
                       health = self.collect_health()
                       url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
-                      # verify=False for self-signed certs on nginx proxy
-                      response = requests.post(url, json=health, timeout=10, verify=False)
+                      response = requests.post(url, json=health, timeout=10, verify=_VERIFY_TLS)
                       response.raise_for_status()
                       logger.debug("Heartbeat sent successfully")
                       return True

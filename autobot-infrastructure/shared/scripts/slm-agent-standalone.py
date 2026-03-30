@@ -23,11 +23,11 @@ from typing import Dict, List
 
 import psutil
 import requests
-import urllib3
 import yaml
 
-# Suppress InsecureRequestWarning for self-signed certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# TLS verification for heartbeat calls to the SLM admin (#2852).
+# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs.
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -202,7 +202,7 @@ class SLMAgent:
             }
 
             url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
-            response = requests.post(url, json=payload, timeout=10, verify=False)
+            response = requests.post(url, json=payload, timeout=10, verify=_VERIFY_TLS)
             response.raise_for_status()
 
             logger.debug(

@@ -176,8 +176,9 @@ class BlueGreenService:
         self.ansible_dir = Path(settings.ansible_dir)
         self._running_deployments: Dict[str, asyncio.Task] = {}
         self._monitoring_tasks: Dict[str, asyncio.Task] = {}
-        # SSL verification - configurable via settings
-        self._verify_ssl = getattr(settings, "verify_ssl", False)
+        # SSL verification - configurable via SLM_VERIFY_SSL env var (#2852).
+        # Defaults to True (verify); only set False in dev/test with self-signed certs.
+        self._verify_ssl = getattr(settings, "verify_ssl", True)
 
     # =========================================================================
     # Public Methods

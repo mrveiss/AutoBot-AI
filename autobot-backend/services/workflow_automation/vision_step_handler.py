@@ -9,12 +9,18 @@ based on the step's target property (vnc or web).
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any
 
 import httpx
 
 from autobot_shared.ssot_config import config as ssot_config
+
+# TLS verification for outbound calls to internal vision/browser services.
+# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test environments that use
+# self-signed certificates.  Production must leave this unset (#2852).
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +113,7 @@ async def _execute_vnc_step(
     if not endpoint:
         raise ValueError(f"Unknown vision step type: {step_type}")
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
+    async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
         if step_type == "vision-wait":
             payload = _build_vnc_payload(step_type, config)
             return await _poll_vnc_element(
@@ -210,7 +216,7 @@ async def _execute_web_step(
 
     action_payload = _build_web_action_payload(step_type, action_base, config)
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
+    async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
         response = await client.post(
             f"{backend_url}/api/research-browser/session/action",
             json={"session_id": session_id, **action_payload},
@@ -247,7 +253,7 @@ async def _web_ocr_step(
       1. POST to /api/research-browser/session/action with action=screenshot
       2. POST the screenshot image data to /api/vision/ocr
     """
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
+    async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=30.0) as client:
         screenshot_data = await _capture_browser_screenshot(
             client, session_id, backend_url
         )
