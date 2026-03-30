@@ -151,50 +151,54 @@ class IncrementalTrainer:
         Returns:
             Dictionary with update statistics
         """
-        db = self.SessionLocal()
-        try:
-            feedback_events = self._fetch_recent_feedback(db, time_window_hours)
+        with self.SessionLocal() as db:
+            try:
+                feedback_events = self._fetch_recent_feedback(db, time_window_hours)
 
-            if len(feedback_events) < min_feedback:
-                logger.info(
-                    f"Insufficient feedback for update: {len(feedback_events)} "
-                    f"< {min_feedback}"
+                if len(feedback_events) < min_feedback:
+                    logger.info(
+                        "Insufficient feedback for update: %d < %d",
+                        len(feedback_events),
+                        min_feedback,
+                    )
+                    return {
+                        "status": "skipped",
+                        "reason": "insufficient_feedback",
+                        "feedback_count": len(feedback_events),
+                    }
+
+                # Prepare and train
+                context_batch, target_batch = self._prepare_training_data(
+                    feedback_events
                 )
+                avg_loss, num_batches = self._run_training_loop(
+                    context_batch, target_batch
+                )
+
+                # Save updated model
+                self.trainer.save_checkpoint(is_best=False)
+
+                logger.info(
+                    "Incremental update complete: %d samples, avg_loss=%.4f",
+                    len(feedback_events),
+                    avg_loss,
+                )
+
                 return {
-                    "status": "skipped",
-                    "reason": "insufficient_feedback",
+                    "status": "success",
                     "feedback_count": len(feedback_events),
+                    "batches_processed": num_batches,
+                    "avg_loss": avg_loss,
+                    "timestamp": datetime.utcnow().isoformat(),
                 }
 
-            # Prepare and train
-            context_batch, target_batch = self._prepare_training_data(feedback_events)
-            avg_loss, num_batches = self._run_training_loop(context_batch, target_batch)
-
-            # Save updated model
-            self.trainer.save_checkpoint(is_best=False)
-
-            logger.info(
-                f"Incremental update complete: {len(feedback_events)} samples, "
-                f"avg_loss={avg_loss:.4f}"
-            )
-
-            return {
-                "status": "success",
-                "feedback_count": len(feedback_events),
-                "batches_processed": num_batches,
-                "avg_loss": avg_loss,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-
-        except Exception as e:
-            logger.error(f"Incremental training failed: {e}", exc_info=True)
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-        finally:
-            db.close()
+            except Exception as e:
+                logger.error("Incremental training failed: %s", e, exc_info=True)
+                return {
+                    "status": "error",
+                    "error": str(e),
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
 
     def trigger_full_retrain(
         self, language: Optional[str] = None, num_epochs: int = 5

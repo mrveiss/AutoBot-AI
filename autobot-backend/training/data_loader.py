@@ -99,26 +99,29 @@ class PatternDataset(Dataset):
         # Initialize tokenizer
         self.tokenizer = Tokenizer()
 
-        # Load patterns from database
-        self.patterns = self._load_patterns()
-
-        logger.info(
-            f"Loaded {len(self.patterns)} patterns "
-            f"(language={language}, type={pattern_type})"
-        )
-
-    def _load_patterns(self) -> List[CodePattern]:
-        """Load patterns from database."""
+        # Database setup — built once here so the connection pool is reused
+        # across repeated calls rather than re-created per _load_patterns call.
         DATABASE_URL = (
             f"postgresql://{config.database.user}:{config.database.password}"
             f"@{config.database.host}:{config.database.port}"
             f"/{config.database.name}"
         )
         engine = create_engine(DATABASE_URL)
-        SessionLocal = sessionmaker(bind=engine)
-        db = SessionLocal()
+        self._SessionLocal = sessionmaker(bind=engine)
 
-        try:
+        # Load patterns from database
+        self.patterns = self._load_patterns()
+
+        logger.info(
+            "Loaded %d patterns (language=%s, type=%s)",
+            len(self.patterns),
+            language,
+            pattern_type,
+        )
+
+    def _load_patterns(self) -> List[CodePattern]:
+        """Load patterns from database."""
+        with self._SessionLocal() as db:
             query = db.query(CodePattern).filter(
                 CodePattern.frequency >= self.min_frequency
             )
@@ -128,10 +131,7 @@ class PatternDataset(Dataset):
             if self.pattern_type:
                 query = query.filter(CodePattern.pattern_type == self.pattern_type)
 
-            patterns = query.all()
-            return patterns
-        finally:
-            db.close()
+            return query.all()
 
     def __len__(self) -> int:
         """Dataset length."""

@@ -61,48 +61,48 @@ class FeedbackTracker:
         completion_rank: Optional[int] = None,
     ) -> CompletionFeedback:
         """Record completion feedback event. Ref: #1088."""
-        db = self.SessionLocal()
-        try:
-            # Create feedback record
-            feedback = CompletionFeedback(
-                timestamp=datetime.utcnow(),
-                user_id=user_id,
-                context=context,
-                suggestion=suggestion,
-                language=language,
-                file_path=file_path,
-                action=action,
-                pattern_id=pattern_id,
-                confidence_score=str(confidence_score) if confidence_score else None,
-                completion_rank=completion_rank,
-            )
-            db.add(feedback)
+        with self.SessionLocal() as db:
+            try:
+                # Create feedback record
+                feedback = CompletionFeedback(
+                    timestamp=datetime.utcnow(),
+                    user_id=user_id,
+                    context=context,
+                    suggestion=suggestion,
+                    language=language,
+                    file_path=file_path,
+                    action=action,
+                    pattern_id=pattern_id,
+                    confidence_score=str(confidence_score) if confidence_score else None,
+                    completion_rank=completion_rank,
+                )
+                db.add(feedback)
 
-            # Update pattern statistics if pattern_id provided
-            if pattern_id:
-                self._update_pattern_statistics(db, pattern_id, action)
+                # Update pattern statistics if pattern_id provided
+                if pattern_id:
+                    self._update_pattern_statistics(db, pattern_id, action)
 
-            db.commit()
+                db.commit()
 
-            # Cache in Redis for fast metrics
-            self._cache_feedback_event(feedback)
+                # Cache in Redis for fast metrics
+                self._cache_feedback_event(feedback)
 
-            # Check if retraining threshold reached
-            self._check_retrain_threshold()
+                # Check if retraining threshold reached
+                self._check_retrain_threshold()
 
-            logger.info(
-                f"Recorded {action} feedback for pattern_id={pattern_id}, "
-                f"language={language}"
-            )
+                logger.info(
+                    "Recorded %s feedback for pattern_id=%s, language=%s",
+                    action,
+                    pattern_id,
+                    language,
+                )
 
-            return feedback
+                return feedback
 
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to record feedback: {e}", exc_info=True)
-            raise
-        finally:
-            db.close()
+            except Exception as e:
+                db.rollback()
+                logger.error("Failed to record feedback: %s", e, exc_info=True)
+                raise
 
     def _update_pattern_statistics(self, db, pattern_id: int, action: str):
         """Update pattern usage statistics."""
@@ -151,8 +151,7 @@ class FeedbackTracker:
 
     def _check_retrain_threshold(self):
         """Check if retraining threshold reached."""
-        db = self.SessionLocal()
-        try:
+        with self.SessionLocal() as db:
             # Get feedback count since last retrain
             last_retrain_str = self.redis_client.get(self.last_retrain_key)
             if last_retrain_str:
@@ -168,13 +167,11 @@ class FeedbackTracker:
 
             if feedback_count >= self.retrain_threshold:
                 logger.info(
-                    f"Retraining threshold reached: {feedback_count} "
-                    f"feedback events since {last_retrain}"
+                    "Retraining threshold reached: %d feedback events since %s",
+                    feedback_count,
+                    last_retrain,
                 )
                 # Note: Actual retraining triggered via API endpoint
-
-        finally:
-            db.close()
 
     def _get_language_breakdown(self, db, since: datetime) -> Dict:
         """
@@ -246,8 +243,7 @@ class FeedbackTracker:
         Returns:
             Dictionary with acceptance metrics
         """
-        db = self.SessionLocal()
-        try:
+        with self.SessionLocal() as db:
             # Time window
             since = datetime.utcnow() - timedelta(days=time_window_days)
 
@@ -280,9 +276,6 @@ class FeedbackTracker:
                 "top_patterns": self._get_top_patterns(db),
             }
 
-        finally:
-            db.close()
-
     def get_recent_feedback(
         self, limit: int = 50, action: Optional[str] = None
     ) -> List[Dict]:
@@ -296,8 +289,7 @@ class FeedbackTracker:
         Returns:
             List of recent feedback events
         """
-        db = self.SessionLocal()
-        try:
+        with self.SessionLocal() as db:
             query = db.query(CompletionFeedback).order_by(
                 CompletionFeedback.timestamp.desc()
             )
@@ -308,9 +300,6 @@ class FeedbackTracker:
             feedback_events = query.limit(limit).all()
 
             return [fb.to_dict() for fb in feedback_events]
-
-        finally:
-            db.close()
 
     def mark_retrain_completed(self):
         """Mark that retraining has completed."""
