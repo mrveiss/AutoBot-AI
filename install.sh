@@ -90,6 +90,16 @@ run_ok() {
     fi
 }
 
+# Detect the machine's primary outbound IP address (Issue #2825).
+# Uses 'ip route get 1.1.1.1' as the most reliable method; falls back to
+# 'hostname -I' on systems where the ip-route command is unavailable.
+# Callers should apply OVERRIDE_IP externally:
+#   ip="${OVERRIDE_IP:-$(get_primary_ip)}"
+get_primary_ip() {
+    ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
+        || hostname -I | awk '{print $1}'
+}
+
 # =============================================================================
 # Phase Progress
 # =============================================================================
@@ -400,8 +410,7 @@ INVENTORY
         encryption_key=$(openssl rand -hex 32)
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
-        local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
-            || hostname -I | awk '{print $1}')}"
+        local_ip="${OVERRIDE_IP:-$(get_primary_ip)}"
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
@@ -517,7 +526,7 @@ register_local_node() {
     success "HTTPS endpoint is ready"
 
     local local_ip
-    local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
+    local_ip="${OVERRIDE_IP:-$(get_primary_ip)}"
     local hostname_val
     hostname_val=$(hostname)
 
@@ -600,7 +609,7 @@ finalize() {
 
     local creds_file="/root/autobot-credentials.txt"
     local server_ip
-    server_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
+    server_ip="${OVERRIDE_IP:-$(get_primary_ip)}"
     cat > "${creds_file}" << EOF
 AutoBot SLM Credentials
 =======================
