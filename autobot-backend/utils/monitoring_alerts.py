@@ -785,8 +785,7 @@ class MonitoringAlertsManager:
 
         while self.running:
             try:
-                # TODO #729: Implement SLM-based infrastructure monitoring if needed
-                # For now, this monitoring loop is disabled as infrastructure APIs moved to SLM
+                # Infrastructure APIs moved to SLM; monitoring loop is disabled
                 logger.info(
                     "Monitoring loop running (infrastructure checks disabled - see Issue #729)"
                 )

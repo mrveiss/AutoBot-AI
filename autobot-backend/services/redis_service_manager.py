@@ -5,14 +5,12 @@
 Redis Service Manager
 Manages Redis Stack service lifecycle and health on the Redis VM (see NetworkConstants.REDIS_VM_IP)
 
-Related Issue: #729 - SSH operations now proxied through SLM API
-
-TODO (#729): This service needs refactoring to proxy SSH through SLM API
+SSH operations are proxied through the SLM API (resolved in #729).
 
 Features:
 - Service control operations (start/stop/restart)
 - Health monitoring and status checks
-- Integration with SSHManager for remote operations (will proxy through SLM)
+- Integration with SSHManager for remote operations (proxied through SLM)
 - Audit logging for all service operations
 - RBAC enforcement for admin/operator roles
 """
