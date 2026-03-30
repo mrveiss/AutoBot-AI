@@ -534,6 +534,14 @@ export default {
       }
     };
 
+    // Named handlers for global error listeners (#2849)
+    const handleWindowError = (event: ErrorEvent) => {
+      handleGlobalError(event.error || event);
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      handleGlobalError(event.reason);
+    };
+
     // Unified loading event handlers
     const handleLoadingComplete = () => {
       logger.debug('Loading completed successfully');
@@ -649,14 +657,9 @@ export default {
       // Add global click listener for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
 
-      // Set up global error handling
-      window.addEventListener('error', (event) => {
-        handleGlobalError(event.error || event);
-      });
-
-      window.addEventListener('unhandledrejection', (event) => {
-        handleGlobalError(event.reason);
-      });
+      // Set up global error handling (#2849: use named handlers for cleanup)
+      window.addEventListener('error', handleWindowError);
+      window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
       // CRITICAL FIX: Clear any stuck system notifications on startup
       logger.debug('Clearing stuck system notifications on startup...');
@@ -705,14 +708,16 @@ export default {
         appStore.setLoading(false);
       }
 
-      logger.debug('✅ Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
+      logger.debug('Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
     });
 
     onUnmounted(() => {
       logger.debug('Cleaning up optimized monitoring systems...');
 
-      // Clean up listeners
+      // Clean up listeners (#2849: remove all event listeners added in onMounted)
       document.removeEventListener('click', closeNavbarOnClickOutside);
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor

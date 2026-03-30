@@ -1270,6 +1270,15 @@ export default {
       }
     };
 
+    // Named click handler for focus recovery — must be named for removeEventListener (#2849)
+    const handleTerminalFocusClick = (event) => {
+      const terminalArea = document.querySelector('.terminal-window-standalone');
+      if (terminalArea && terminalArea.contains(event.target) &&
+          event.target !== terminalInput.value && canInput.value) {
+        nextTick(() => focusInput());
+      }
+    };
+
     // Lifecycle
     onMounted(async () => {
       startCursorBlink();
@@ -1288,15 +1297,8 @@ export default {
       nextTick(() => {
         focusInput();
 
-        // Add additional focus recovery mechanisms for automated testing
-        document.addEventListener('click', (event) => {
-          // If click is inside terminal area but not on input, restore focus
-          const terminalArea = document.querySelector('.terminal-window-standalone');
-          if (terminalArea && terminalArea.contains(event.target) &&
-              event.target !== terminalInput.value && canInput.value) {
-            nextTick(() => focusInput());
-          }
-        });
+        // Named click handler for focus recovery (#2849)
+        document.addEventListener('click', handleTerminalFocusClick);
 
         // Periodic focus check for automation scenarios (clean up on unmount)
         const focusInterval = setInterval(() => {
@@ -1319,6 +1321,7 @@ export default {
       }
 
       // Remove event listeners
+      document.removeEventListener('click', handleTerminalFocusClick);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('beforeunload', handleBeforeUnload);
 
