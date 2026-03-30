@@ -17,7 +17,7 @@ ai_port: 8080
 # ChromaDB
 chromadb_persist_dir: /var/lib/autobot/chromadb
 chromadb_host: "0.0.0.0"
-chromadb_port: 8000
+chromadb_port: 8100
 
 # Ollama (remote on backend node - resolved from inventory)
 ollama_host: "{{ backend_host | default(ansible_host) }}"

@@ -23,7 +23,7 @@
     ai_stack_install_dir: /opt/autobot/ai-stack
     ai_stack_user: autobot
     ai_stack_group: autobot
-    chromadb_port: 8000
+    chromadb_port: 8100
     chromadb_data_dir: /var/lib/autobot/chromadb
     ollama_port: 11434
     enable_ollama: false
