@@ -202,13 +202,19 @@
   become: yes
   tags: ['frontend', 'service']
 
-- name: "Frontend | Stop legacy Vite dev server (if running)"
+- name: "Frontend | Check if legacy Vite dev server service exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-frontend.service
+  register: _legacy_frontend_service
+  tags: ['frontend', 'cleanup']
+
+- name: "Frontend | Stop and disable legacy Vite dev server"
   systemd:
     name: autobot-frontend
     state: stopped
     enabled: no
   become: yes
-  ignore_errors: yes
+  when: _legacy_frontend_service.stat.exists
   tags: ['frontend', 'cleanup']
 
 - name: "Frontend | Display configuration summary"
