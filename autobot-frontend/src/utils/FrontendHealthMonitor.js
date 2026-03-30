@@ -4,7 +4,6 @@
  */
 
 import { cacheBuster } from './CacheBuster.js';
-import { routerHealthMonitor as _routerHealthMonitor } from './RouterHealthMonitor.js'; // Reserved for future router health integration
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for FrontendHealthMonitor
