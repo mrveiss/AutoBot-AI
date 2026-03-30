@@ -66,6 +66,17 @@
   become: yes
   tags: ['frontend', 'directories']
 
+- name: "Frontend | Sync frontend code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-frontend/"
+    dest: "{{ frontend_install_dir }}/autobot-frontend/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=__pycache__"
+      - "--exclude=.git"
+  tags: ['frontend', 'deploy']
+
 - name: "Frontend | Ensure TLS cert directory exists"
   file:
     path: "{{ frontend_tls_cert_dir }}"
