@@ -264,8 +264,6 @@
       @skip-step="skipCurrentStep"
       @take-manual-control="takeManualControl"
       @execute-all="executeAllRemainingSteps"
-      @save-workflow="saveCustomWorkflow"
-      @update-workflow="updateWorkflowSteps"
       @close="closeAdvancedModal"
     />
 
@@ -1453,21 +1451,6 @@ export default {
         automationPaused.value = false;
         waitingForUserConfirmation.value = false;
         processNextAutomationStep();
-      },
-      saveCustomWorkflow: (workflowData) => {
-        addOutputLine({
-          content: `💾 WORKFLOW SAVED: ${workflowData.name}`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
-      },
-      updateWorkflowSteps: (newSteps) => {
-        workflowSteps.value = newSteps;
-        addOutputLine({
-          content: `📋 WORKFLOW UPDATED: ${newSteps.length} steps configured`,
-          type: 'system_message',
-          timestamp: new Date()
-        });
       },
       closeAdvancedModal: () => {
         showManualStepModal.value = false;
