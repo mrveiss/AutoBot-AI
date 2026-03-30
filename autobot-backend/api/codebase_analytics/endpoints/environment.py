@@ -681,5 +681,11 @@ async def export_env_analysis(
 
     recommendations = full_data.get("recommendations", [])
     return _build_export_response_json(
-        full_data, hardcoded_values, recommendations, include_recommendations, category, severity, limit,
+        full_data,
+        hardcoded_values,
+        recommendations,
+        include_recommendations,
+        category,
+        severity,
+        limit,
     )

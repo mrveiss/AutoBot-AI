@@ -253,9 +253,7 @@ class TestLocalNodeValidation:
         (tmp_path / "CodeSource").mkdir()
 
         with patch(_LOCAL_NODE_PATCH, return_value=True):
-            result = await _find_similar_paths(
-                mock_node, str(tmp_path / "codesource")
-            )
+            result = await _find_similar_paths(mock_node, str(tmp_path / "codesource"))
 
             assert result == str(tmp_path / "CodeSource")
 

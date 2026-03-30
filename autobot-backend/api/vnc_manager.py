@@ -195,7 +195,10 @@ def start_vnc_server() -> Dict[str, str]:
         )
 
         if result.returncode != 0:
-            return {"status": "error", "message": f"VNC server failed to start: {result.stderr}"}
+            return {
+                "status": "error",
+                "message": f"VNC server failed to start: {result.stderr}",
+            }
 
         _launch_websockify()
         return {"status": "started", "message": "VNC server started successfully"}

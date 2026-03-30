@@ -42,9 +42,7 @@ def _get_pool_config() -> dict:
             "pool_timeout": pool_cfg.pool_timeout,
         }
     except Exception:
-        logger.warning(
-            "Could not load SSOT database pool config, using defaults"
-        )
+        logger.warning("Could not load SSOT database pool config, using defaults")
         return {
             "pool_size": 10,
             "max_overflow": 10,

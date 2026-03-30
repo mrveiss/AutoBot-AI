@@ -41,7 +41,9 @@ class RedisGraphLoader(BaseLoader):
         Args:
             context: Pipeline context with entities, relationships, events
         """
-        self.redis_client = await get_redis_client(async_client=True, database=self.database)
+        self.redis_client = await get_redis_client(
+            async_client=True, database=self.database
+        )
 
         entities: List[Entity] = context.entities
         relationships: List[Relationship] = context.relationships

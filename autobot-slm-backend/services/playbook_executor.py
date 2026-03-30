@@ -279,7 +279,9 @@ class PlaybookExecutor:
         code_source_dir = self.ansible_dir.parent.parent
         git_dir = code_source_dir / ".git"
         if not git_dir.exists():
-            logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
+            logger.debug(
+                "_update_code_source: no .git at %s — skipping", code_source_dir
+            )
             return
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
@@ -304,10 +306,14 @@ class PlaybookExecutor:
 
         try:
             if await _run_git("checkout", "--", ".") != 0:
-                logger.warning("_update_code_source: git checkout -- . failed; continuing")
+                logger.warning(
+                    "_update_code_source: git checkout -- . failed; continuing"
+                )
 
             if await _run_git("fetch", "origin") != 0:
-                logger.warning("_update_code_source: git fetch origin failed; continuing")
+                logger.warning(
+                    "_update_code_source: git fetch origin failed; continuing"
+                )
                 return
 
             if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
@@ -336,7 +342,9 @@ class PlaybookExecutor:
                 branch,
             )
         except Exception as exc:
-            logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
+            logger.warning(
+                "_update_code_source: unexpected error — %s; continuing", exc
+            )
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """

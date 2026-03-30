@@ -24,15 +24,23 @@ class ConfigSettings(BaseSettings):
     # File paths
     config_dir: Path = Field(default=Path("config"), validation_alias="CONFIG_DIR")
     config_file: str = Field(default="config.yaml", validation_alias="CONFIG_FILE")
-    settings_file: str = Field(default="settings.json", validation_alias="SETTINGS_FILE")
+    settings_file: str = Field(
+        default="settings.json", validation_alias="SETTINGS_FILE"
+    )
 
     # Cache settings
-    cache_ttl: int = Field(default=300, validation_alias="CONFIG_CACHE_TTL")  # 5 minutes
+    cache_ttl: int = Field(
+        default=300, validation_alias="CONFIG_CACHE_TTL"
+    )  # 5 minutes
     auto_reload: bool = Field(default=True, validation_alias="CONFIG_AUTO_RELOAD")
 
     # Redis settings for distributed config
-    use_redis_cache: bool = Field(default=True, validation_alias="USE_REDIS_CONFIG_CACHE")
-    redis_key_prefix: str = Field(default="config:", validation_alias="CONFIG_REDIS_PREFIX")
+    use_redis_cache: bool = Field(
+        default=True, validation_alias="USE_REDIS_CONFIG_CACHE"
+    )
+    redis_key_prefix: str = Field(
+        default="config:", validation_alias="CONFIG_REDIS_PREFIX"
+    )
 
 
 # Deprecated: use ConfigSettings instead

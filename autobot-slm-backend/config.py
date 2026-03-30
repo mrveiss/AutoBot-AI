@@ -74,7 +74,9 @@ def _get_cors_origins() -> list:
         origins.add(f"https://{NetworkConstants.FRONTEND_VM_IP}")
         return sorted(origins)
     except ImportError:
-        logger.warning("autobot_shared not available; falling back to localhost CORS only")
+        logger.warning(
+            "autobot_shared not available; falling back to localhost CORS only"
+        )
         return ["https://127.0.0.1", "http://127.0.0.1"]
 
 
@@ -98,7 +100,9 @@ def _get_trusted_proxies() -> list:
         proxies.append(NetworkConstants.SLM_VM_IP)
         proxies.append(NetworkConstants.FRONTEND_VM_IP)
     except ImportError:
-        logger.warning("autobot_shared not available; trusted_proxies limited to localhost")
+        logger.warning(
+            "autobot_shared not available; trusted_proxies limited to localhost"
+        )
     return proxies
 
 
@@ -156,9 +160,7 @@ class Settings(BaseSettings):
 
     # Database connection pool settings (#2860) — SSOT-coordinated defaults.
     # SLM_DB_POOL_* env vars still override for per-service tuning.
-    db_pool_size: int = int(
-        os.getenv("SLM_DB_POOL_SIZE", str(_SSOT_POOL_SIZE))
-    )
+    db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", str(_SSOT_POOL_SIZE)))
     db_pool_max_overflow: int = int(
         os.getenv("SLM_DB_POOL_MAX_OVERFLOW", str(_SSOT_MAX_OVERFLOW))
     )
@@ -305,9 +307,7 @@ class Settings(BaseSettings):
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
     # not set, instead of defaulting to a hardcoded address.
-    external_url: str = os.getenv(
-        "SLM_EXTERNAL_URL", f"https://{_get_local_ip()}"
-    )
+    external_url: str = os.getenv("SLM_EXTERNAL_URL", f"https://{_get_local_ip()}")
 
     # TLS verification for outbound HTTPS calls to internal nodes.
     # Set SLM_VERIFY_SSL=false ONLY in dev/test environments that use

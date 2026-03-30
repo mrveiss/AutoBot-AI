@@ -18,9 +18,9 @@ from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
-from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 

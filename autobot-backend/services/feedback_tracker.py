@@ -73,7 +73,9 @@ class FeedbackTracker:
                     file_path=file_path,
                     action=action,
                     pattern_id=pattern_id,
-                    confidence_score=str(confidence_score) if confidence_score else None,
+                    confidence_score=(
+                        str(confidence_score) if confidence_score else None
+                    ),
                     completion_rank=completion_rank,
                 )
                 db.add(feedback)

@@ -343,7 +343,9 @@ class TopicRetrievalCache:
             results = await self._collection.get(limit=excess, include=["metadatas"])
             if results and results.get("ids"):
                 ids_to_delete = results["ids"]
-                client = await get_redis_client(async_client=True, database=_REDIS_DATABASE)
+                client = await get_redis_client(
+                    async_client=True, database=_REDIS_DATABASE
+                )
                 if client:
                     for meta in results.get("metadatas", []):
                         rkey = meta.get("redis_key", "")

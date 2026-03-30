@@ -75,7 +75,9 @@ DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"
 ROUTING_MODEL = "llama3.2:1b"  # Orchestrator only, no tool use
 CLASSIFICATION_MODEL = "gemma2:2b"  # Intent detection, classification
 LIGHT_PROCESSING_MODEL = "phi3:mini"  # Extraction, formatting, lightweight tasks
-INSTRUCTION_MODEL = "mistral:7b-instruct"  # RAG, entity extraction, instruction following
+INSTRUCTION_MODEL = (
+    "mistral:7b-instruct"  # RAG, entity extraction, instruction following
+)
 SYSTEM_MODEL = "dolphin-llama3:8b"  # System commands, security (uncensored)
 QUALITY_MODEL = DEFAULT_LLM_MODEL  # User-facing chat, research, code analysis
 
@@ -176,9 +178,7 @@ class LLMConfig(BaseSettings):
     instruction_model: str = Field(
         default=INSTRUCTION_MODEL, alias="AUTOBOT_INSTRUCTION_MODEL"
     )
-    system_model: str = Field(
-        default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL"
-    )
+    system_model: str = Field(default=SYSTEM_MODEL, alias="AUTOBOT_SYSTEM_MODEL")
 
     # Agent/workflow models — each maps to its optimal tier (#2553)
     orchestrator_model: str = Field(

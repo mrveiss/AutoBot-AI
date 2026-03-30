@@ -510,7 +510,9 @@ class WorkflowExecutor:
         try:
             await self._resolve_and_run_step(workflow, current_step, step_id, workflows)
         except Exception as e:
-            await self._handle_step_execution_failure(workflow, current_step, step_id, e)
+            await self._handle_step_execution_failure(
+                workflow, current_step, step_id, e
+            )
 
     async def _resolve_and_run_step(
         self,
@@ -559,7 +561,9 @@ class WorkflowExecutor:
 
         # Issue #2153: Redact any secret values that may appear in output.
         result = _redact_result_secrets(result, owner_id, resolved_names)
-        await self._finalize_step_result(workflow, current_step, step_id, result, workflows)
+        await self._finalize_step_result(
+            workflow, current_step, step_id, result, workflows
+        )
 
     async def _finalize_step_result(
         self,

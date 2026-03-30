@@ -20,7 +20,6 @@ from fastapi.responses import PlainTextResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
-from constants.path_constants import PATH
 
 # Issue #244: Cross-Language Pattern Detection
 from code_intelligence.cross_language_patterns import (
@@ -33,6 +32,7 @@ from code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
+from constants.path_constants import PATH
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -51,7 +51,11 @@ from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
 from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
-from .shared import filter_problems_by_file_existence, get_project_root, resolve_source_root
+from .shared import (
+    filter_problems_by_file_existence,
+    get_project_root,
+    resolve_source_root,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2104,7 +2108,9 @@ async def generate_analysis_report(
     # (which runs in a thread) can validate file paths without blocking the event loop.
     source_root = await resolve_source_root(source_id)
 
-    problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id, source_root)
+    problems = await asyncio.to_thread(
+        _fetch_problems_from_chromadb, source_id, source_root
+    )
     analyses = await _resolve_analyses(
         quick=quick,
         include_bug_prediction=include_bug_prediction,

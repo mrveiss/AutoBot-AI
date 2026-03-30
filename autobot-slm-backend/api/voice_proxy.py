@@ -53,9 +53,7 @@ async def _proxy_to_main_backend(request: Request, path: str) -> Response:
     target_url = f"{AUTOBOT_BACKEND_URL}/api/voice/{path}"
 
     try:
-        async with httpx.AsyncClient(
-            verify=_VERIFY_TLS, timeout=_TIMEOUT
-        ) as client:
+        async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=_TIMEOUT) as client:
             response = await client.request(
                 method=request.method,
                 url=target_url,

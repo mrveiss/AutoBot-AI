@@ -307,7 +307,9 @@ class BackendEndpointScanner:
             if child_dir:
                 subdir_key = f"api/{child_dir}/{child_module}.py"
                 if subdir_key not in self._module_prefix_map:
-                    self._module_prefix_map[subdir_key] = self._module_prefix_map[child_module]
+                    self._module_prefix_map[subdir_key] = self._module_prefix_map[
+                        child_module
+                    ]
             logger.debug(
                 "Skipping nested router %s (already registered at %s)",
                 child_module,
@@ -410,7 +412,13 @@ class BackendEndpointScanner:
             imported_routers, imported_modules = self._extract_router_imports(
                 content, import_pattern, import_modules_pattern
             )
-        return parent_module, parent_prefix, child_dir, imported_routers, imported_modules
+        return (
+            parent_module,
+            parent_prefix,
+            child_dir,
+            imported_routers,
+            imported_modules,
+        )
 
     def _scan_include_router_patterns(self) -> None:
         """
@@ -431,7 +439,9 @@ class BackendEndpointScanner:
             return
 
         # Compile patterns (Issue #665: extracted)
-        import_pattern, import_modules_pattern, include_pattern = self._compile_router_patterns()
+        import_pattern, import_modules_pattern, include_pattern = (
+            self._compile_router_patterns()
+        )
 
         # Issue #2652: Use rglob to include subdirectory router files
         for py_file in self.backend_path.rglob("*.py"):
@@ -440,18 +450,31 @@ class BackendEndpointScanner:
 
             try:
                 content = py_file.read_text(encoding="utf-8")
-                parent_module, parent_prefix, child_dir, imported_routers, imported_modules = (
-                    self._resolve_router_context(py_file, content, import_pattern, import_modules_pattern)
+                (
+                    parent_module,
+                    parent_prefix,
+                    child_dir,
+                    imported_routers,
+                    imported_modules,
+                ) = self._resolve_router_context(
+                    py_file, content, import_pattern, import_modules_pattern
                 )
 
                 # Check which routers are included
                 for match in include_pattern.finditer(content):
-                    router_ref = match.group(1)  # e.g., "vectorization_router" or "pattern_analysis.router"
-                    child_module = imported_routers.get(router_ref) or imported_modules.get(router_ref)
+                    router_ref = match.group(
+                        1
+                    )  # e.g., "vectorization_router" or "pattern_analysis.router"
+                    child_module = imported_routers.get(
+                        router_ref
+                    ) or imported_modules.get(router_ref)
                     if child_module:
                         # Register nested router (Issue #665: extracted, #2652: extended)
                         self._register_nested_router(
-                            child_module, parent_prefix, parent_module, child_dir=child_dir
+                            child_module,
+                            parent_prefix,
+                            parent_module,
+                            child_dir=child_dir,
                         )
 
             except Exception as e:

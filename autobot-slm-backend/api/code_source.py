@@ -12,9 +12,10 @@ import logging
 import os
 import tarfile
 import tempfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -192,7 +193,10 @@ async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
             parent = Path(parent_dir)
             if parent.is_dir():
                 for entry in parent.iterdir():
-                    if entry.name.lower() == basename.lower() and entry.name != basename:
+                    if (
+                        entry.name.lower() == basename.lower()
+                        and entry.name != basename
+                    ):
                         return str(entry)
         except Exception as e:
             logger.debug("Failed to search for similar paths locally: %s", e)

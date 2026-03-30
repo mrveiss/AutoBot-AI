@@ -58,7 +58,9 @@ REGISTRY_DEFAULTS = {
     "port.frontend": str(_ssot.port.frontend),
     "port.redis": str(_ssot.port.redis),
     "port.ollama": str(_ssot.port.ollama),
-    "port.llm": str(_ssot.port.ollama),  # Provider-agnostic LLM port (defaults to Ollama)
+    "port.llm": str(
+        _ssot.port.ollama
+    ),  # Provider-agnostic LLM port (defaults to Ollama)
     "port.vnc": str(_ssot.port.vnc),
     "port.browser": str(_ssot.port.browser),
     "port.aistack": str(_ssot.port.aistack),

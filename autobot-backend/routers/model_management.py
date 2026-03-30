@@ -322,7 +322,9 @@ async def get_evaluation_metrics():
         raise HTTPException(status_code=400, detail="No active model")
 
     with _get_session() as db:
-        model = db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
+        model = (
+            db.query(MLModel).filter(MLModel.version == active_version_snapshot).first()
+        )
 
         if not model:
             raise HTTPException(status_code=404, detail="Active model not found in DB")
@@ -374,7 +376,9 @@ async def predict_completion(request: PredictRequest):
         )
 
         # Get predictions
-        predictions = active_model_snapshot.model.predict(input_tensor, top_k=request.top_k)
+        predictions = active_model_snapshot.model.predict(
+            input_tensor, top_k=request.top_k
+        )
 
         # Decode token IDs to text
         token_ids = predictions["tokens"][0].cpu().tolist()

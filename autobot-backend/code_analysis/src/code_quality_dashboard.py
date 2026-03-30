@@ -93,7 +93,6 @@ class CodeQualityDashboard:
 
         logger.info("Code Quality Dashboard initialized with all analyzers")
 
-
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_client is None:

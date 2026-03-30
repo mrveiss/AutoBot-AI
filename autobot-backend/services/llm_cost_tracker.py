@@ -619,9 +619,19 @@ class LLMCostTracker:
             LLMUsageRecord with calculated cost
         """
         params = self._resolve_usage_params(
-            request, provider, model, input_tokens, output_tokens,
-            session_id, user_id, agent_id, endpoint, latency_ms,
-            success, error_message, metadata,
+            request,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            agent_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
         )
         return await self._build_and_persist_record(*params)
 

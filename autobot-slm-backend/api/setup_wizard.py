@@ -411,6 +411,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
 
 # -- Provisioning State (#1384) ----------------------------------------------
 
+
 async def _activate_provisioned_roles(
     node_ids: Optional[list[str]],
 ) -> None:

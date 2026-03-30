@@ -192,7 +192,12 @@ async def handle_redis_lpush(
     effective_ttl = _resolve_ttl(ttl, key)
     if effective_ttl:
         await client.expire(key, effective_ttl)
-    return {"status": "success", "key": key, "list_length": length, "ttl": effective_ttl}
+    return {
+        "status": "success",
+        "key": key,
+        "list_length": length,
+        "ttl": effective_ttl,
+    }
 
 
 async def handle_redis_rpush(
@@ -212,7 +217,12 @@ async def handle_redis_rpush(
     effective_ttl = _resolve_ttl(ttl, key)
     if effective_ttl:
         await client.expire(key, effective_ttl)
-    return {"status": "success", "key": key, "list_length": length, "ttl": effective_ttl}
+    return {
+        "status": "success",
+        "key": key,
+        "list_length": length,
+        "ttl": effective_ttl,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +311,12 @@ async def handle_redis_xadd(
     effective_ttl = _resolve_ttl(ttl, key)
     if effective_ttl:
         await client.expire(key, effective_ttl)
-    return {"status": "success", "key": key, "entry_id": decoded_id, "ttl": effective_ttl}
+    return {
+        "status": "success",
+        "key": key,
+        "entry_id": decoded_id,
+        "ttl": effective_ttl,
+    }
 
 
 # ---------------------------------------------------------------------------

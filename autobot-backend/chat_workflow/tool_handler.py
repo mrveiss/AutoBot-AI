@@ -1311,7 +1311,9 @@ class ToolHandlerMixin:
             from api.browser_mcp import send_to_browser_vm
 
             result = await send_to_browser_vm(tool_name, params)
-            yield self._record_browser_success(tool_name, params, result, execution_results)
+            yield self._record_browser_success(
+                tool_name, params, result, execution_results
+            )
 
         except Exception as e:
             error_msg = f"Browser tool '{tool_name}' failed: {e}"
@@ -1337,7 +1339,9 @@ class ToolHandlerMixin:
         Extracted from _handle_browser_tool to keep parent under 65 lines.
         """
         summary = self._format_browser_result(tool_name, params, result)
-        execution_results.append({"tool": tool_name, "status": "success", "output": summary})
+        execution_results.append(
+            {"tool": tool_name, "status": "success", "output": summary}
+        )
         return WorkflowMessage(
             type="command_output",
             content=summary,
@@ -1634,15 +1638,22 @@ class ToolHandlerMixin:
             return
 
         if tool_name != "execute_command":
-            async for msg in self._dispatch_mcp_or_unknown(tool_name, tool_call, execution_results, ctx, role):
+            async for msg in self._dispatch_mcp_or_unknown(
+                tool_name, tool_call, execution_results, ctx, role
+            ):
                 yield msg
             return
 
         if ctx is not None:
             ctx.consecutive_invalid_tool_calls = 0
         async for msg in self._dispatch_execute_command(
-            tool_call, session_id, terminal_session_id, ollama_endpoint,
-            selected_model, execution_results, additional_response_parts,
+            tool_call,
+            session_id,
+            terminal_session_id,
+            ollama_endpoint,
+            selected_model,
+            execution_results,
+            additional_response_parts,
         ):
             yield msg
 
