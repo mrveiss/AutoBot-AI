@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from middleware import SecurityHeadersMiddleware
 from api import (
     agents_router,
     api_keys_router,
@@ -297,6 +298,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Issue #2858 — explicit CSRF mitigation + security headers.
+# Registered after CORSMiddleware so CORS headers are already present.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(health_router, prefix="/api")
 app.include_router(browser_router, prefix="/api")
