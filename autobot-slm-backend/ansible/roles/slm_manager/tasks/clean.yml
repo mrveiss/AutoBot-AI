@@ -11,12 +11,14 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
+  when: "'backend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
+  when: "'frontend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-user-backend dir"
@@ -53,10 +55,12 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-npu-worker
     state: absent
+  when: "'npu-worker' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "SLM | Clean: wrong-node autobot-browser-worker dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-browser-worker
     state: absent
+  when: "'browser' not in (node_roles | default([]))"
   tags: ['clean']

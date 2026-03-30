@@ -24,4 +24,4 @@
 - name: restart nginx backend
   ansible.builtin.systemd:
     name: nginx
-    state: restarted
+    state: reloaded
