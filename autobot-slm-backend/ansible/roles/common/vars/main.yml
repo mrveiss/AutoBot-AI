@@ -26,7 +26,9 @@ autobot_home: /home/autobot
 
 # Emergency admin user for fallback access when SSH keys fail
 emergency_admin_user: autobot_admin
-emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+# Password hash MUST come from Ansible Vault (vault_emergency_admin_password_hash)
+# or --extra-vars. Never hardcode hashes in version control (#2853).
+emergency_admin_password_hash: "{{ vault_emergency_admin_password_hash | default(omit) }}"
 
 autobot_directories:
   - "{{ autobot_home }}/autobot-vue"

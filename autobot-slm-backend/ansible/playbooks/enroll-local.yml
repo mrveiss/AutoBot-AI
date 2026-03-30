@@ -23,9 +23,8 @@
     slm_server_pubkey: "{{ lookup('env', 'SLM_PUBKEY') | default('', true) }}"
     # Emergency admin user - fallback access when SSH keys fail
     emergency_admin_user: autobot_admin
-    # Password hash for emergency admin (AutoBot!Admin2025)
-    # Generated with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('AutoBot!Admin2025'))"
-    emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+    # Password hash MUST come from Ansible Vault or --extra-vars (#2853)
+    emergency_admin_password_hash: "{{ vault_emergency_admin_password_hash | default(omit) }}"
 
   tasks:
     # ==========================================================
