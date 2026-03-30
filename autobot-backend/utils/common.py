@@ -10,11 +10,37 @@ functionality across the codebase.
 
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
+
+_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
+    """Validate a SQL identifier (table or column name) against an allowlist pattern.
+
+    Only permits names composed of ASCII letters, digits, and underscores, starting
+    with a letter or underscore. Prevents SQL injection via identifier interpolation. (#2845)
+
+    Args:
+        name: The identifier to validate.
+        label: Human-readable label used in the error message.
+
+    Returns:
+        The validated name unchanged.
+
+    Raises:
+        ValueError: If the name contains characters outside the allowed set.
+    """
+    if not _SQL_IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
+        )
+    return name
 
 
 def _is_path_in_allowed_dir(path_obj: Path, allowed_dirs: list) -> bool:
@@ -417,8 +443,9 @@ class DatabaseUtils:
             Number of rows, 0 if error
         """
         try:
+            _validate_sql_identifier(table_name, "table name")
             cursor = conn.cursor()
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")  # nosec B608
             result = cursor.fetchone()
             return result[0] if result else 0
         except Exception:
