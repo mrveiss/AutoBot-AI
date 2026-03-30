@@ -138,9 +138,13 @@ class MessageRouter:
         Returns:
             Dictionary with routing metrics
         """
-        # TODO: Implement routing stats tracking
-        return {
-            "total_routes": 0,
-            "routes_by_agent": {},
-            "average_confidence": 0.0,
-        }
+        # Stats tracking is not yet implemented. Raise explicitly so callers
+        # cannot silently consume zeroed-out metrics as real data.
+        # Issue #2869: wire to real counter/accumulator when ready.
+        logger.warning(
+            "get_routing_stats called but routing stats tracking is not implemented. (#2869)"
+        )
+        raise NotImplementedError(
+            "get_routing_stats: routing stats tracking is not implemented. "
+            "Add counter accumulation in route_message before enabling metrics. (#2869)"
+        )
