@@ -71,7 +71,7 @@ Key packages:
 - redis (5.0+)
 - pydantic (2.5+)
 - PyJWT[crypto]
-- passlib[bcrypt]
+- bcrypt (5.0+)
 - python-multipart
 - aiohttp
 
@@ -330,7 +330,7 @@ python3 -m playwright install webkit
 redis>=5.0.0
 pydantic>=2.5.0
 PyJWT[crypto]>=2.8.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=5.0.0
 ```
 
 ### User Backend
@@ -362,7 +362,7 @@ asyncpg>=0.29.0
 redis>=5.0.0
 pydantic>=2.5.0
 PyJWT[crypto]>=2.8.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=5.0.0
 python-multipart>=0.0.6
 aiohttp>=3.9.0
 ```
