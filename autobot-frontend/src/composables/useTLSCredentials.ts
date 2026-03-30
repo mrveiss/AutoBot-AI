@@ -125,7 +125,7 @@ async function slmFetch(
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
+    const errorData = await response.json().catch((err) => { logger.warn('Failed to parse TLS error response: %s', err); return {} })
     throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
   }
 
