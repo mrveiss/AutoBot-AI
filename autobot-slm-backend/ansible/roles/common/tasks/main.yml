@@ -60,6 +60,7 @@
     password: "{{ emergency_admin_password_hash }}"
     state: present
   become: yes
+  when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
 - name: "Common | Configure passwordless sudo for emergency admin"
@@ -71,6 +72,7 @@
     mode: '0440'
     validate: 'visudo -cf %s'
   become: yes
+  when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
 - name: "Common | Create AutoBot directory structure"
