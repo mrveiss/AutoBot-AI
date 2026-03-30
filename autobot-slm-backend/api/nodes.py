@@ -136,13 +136,11 @@ async def _process_role_report(
         node_role = result.scalar_one_or_none()
 
         if not node_role:
-            # Create new NodeRole with auto assignment type
-            node_role = NodeRole(
-                node_id=node_id,
-                role_name=role_name,
-                assignment_type="auto",
-            )
-            db.add(node_role)
+            # Only update roles that are already assigned — don't auto-create
+            # entries for roles detected on a node but not assigned via the
+            # wizard.  This prevents SLM-manager roles (slm-backend, etc.)
+            # from appearing on every node that runs the agent (#2900).
+            continue
 
         # Update role status
         node_role.status = report.status
