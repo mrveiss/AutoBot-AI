@@ -524,6 +524,7 @@ import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 
 const logger = createLogger('ChatMessages')
 
@@ -825,7 +826,7 @@ const formatMessageContentRaw = (content: string): string => {
   // Links
   formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
 
-  return formatted
+  return sanitizeChatHtml(formatted)
 }
 
 const formatMessageContent = (content: string, messageId?: string): string => {
