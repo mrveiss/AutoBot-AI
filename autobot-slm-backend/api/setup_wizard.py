@@ -586,7 +586,6 @@ async def validate_fleet(
     from sqlalchemy import func, select
 
     from models.database import Node, NodeRole
-    from services.role_registry import DEFAULT_ROLES
 
     async with db_service.session() as session:
         node_count_result = await session.execute(select(func.count(Node.id)))
