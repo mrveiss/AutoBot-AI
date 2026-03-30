@@ -106,6 +106,15 @@
   notify: reload firewall
   tags: ['redis', 'firewall']
 
+- name: "Redis | Ensure base systemd service file exists"
+  ansible.builtin.shell: |
+    if [ ! -f /etc/systemd/system/redis-stack-server.service ]; then
+      apt-get -o Dpkg::Options::="--force-confmiss" install --reinstall redis-stack-server -y
+    fi
+  become: yes
+  changed_when: false
+  tags: ['redis', 'systemd']
+
 - name: "Redis | Create systemd override directory"
   file:
     path: /etc/systemd/system/redis-stack-server.service.d
