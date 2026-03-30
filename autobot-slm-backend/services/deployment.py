@@ -653,7 +653,7 @@ class DeploymentService:
             "-e",
             f"target_host={host}",
             "-e",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
             "-e",
             "ansible_ssh_pipelining=false",
         ]
@@ -913,7 +913,7 @@ class DeploymentService:
             "-e",
             f"slm_heartbeat_interval={settings.heartbeat_interval}",
             "-e",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
             "-e",
             "ansible_ssh_pipelining=false",
         ]

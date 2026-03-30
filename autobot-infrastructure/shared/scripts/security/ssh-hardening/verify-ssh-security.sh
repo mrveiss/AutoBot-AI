@@ -76,13 +76,13 @@ test_ssh_config() {
     fi
 }
 
-# Test 2: Verify no StrictHostKeyChecking=no in config
+# Test 2: Verify no StrictHostKeyChecking=accept-new in config
 test_no_disabled_checking() {
     ((TOTAL_TESTS++))
     log_info "Test 2: Checking SSH config doesn't disable host key checking..."
 
     if grep -q "StrictHostKeyChecking.*no" "$SSH_CONFIG" 2>/dev/null; then
-        log_fail "SSH config contains 'StrictHostKeyChecking no' (VULNERABLE)"
+        log_fail "SSH config contains 'StrictHostKeyChecking accept-new' (VULNERABLE)"
         ((FAILED_TESTS++))
         return 1
     else
@@ -156,7 +156,7 @@ test_no_vulnerable_scripts() {
     log_info "Test 5: Checking for vulnerable SSH usage in scripts..."
 
     local vulnerable_count
-    vulnerable_count=$(grep -r "StrictHostKeyChecking=no" \
+    vulnerable_count=$(grep -r "StrictHostKeyChecking=accept-new" \
         /home/kali/Desktop/AutoBot/scripts/ 2>/dev/null | wc -l)
 
     if [ "$vulnerable_count" -eq 0 ]; then
@@ -164,7 +164,7 @@ test_no_vulnerable_scripts() {
         ((PASSED_TESTS++))
         return 0
     else
-        log_fail "Found $vulnerable_count instances of StrictHostKeyChecking=no in scripts"
+        log_fail "Found $vulnerable_count instances of StrictHostKeyChecking=accept-new in scripts"
         log_info "Scripts still need remediation"
         ((FAILED_TESTS++))
         return 1

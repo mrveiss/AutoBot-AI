@@ -592,7 +592,7 @@ async def _run_redis_ssh_check(host: str):
     cmd = [
         "ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         f"autobot@{host}",

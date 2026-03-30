@@ -244,7 +244,6 @@ class ServiceConfigurator:
                 vm_ip,
                 username=self.config.ssh_user,
                 client_keys=[str(self.config.ssh_key_path)],
-                known_hosts=None,
                 connect_timeout=10,
             ) as conn:
                 # Issue #620: Use extracted helper for service status check
@@ -279,7 +278,6 @@ class ServiceConfigurator:
                 vm_ip,
                 username=self.config.ssh_user,
                 client_keys=[str(self.config.ssh_key_path)],
-                known_hosts=None,
                 connect_timeout=10,
             ) as conn:
                 result = await conn.run(

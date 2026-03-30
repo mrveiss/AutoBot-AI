@@ -740,7 +740,7 @@ class ServiceOrchestrator:
         ssh_cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
             "ConnectTimeout=10",
             "-o",
@@ -847,7 +847,7 @@ class ServiceOrchestrator:
         cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
             "ConnectTimeout=3",
             "-o",

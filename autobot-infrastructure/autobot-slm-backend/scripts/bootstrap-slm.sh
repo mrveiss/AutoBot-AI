@@ -158,7 +158,7 @@ parse_args() {
 # =============================================================================
 
 build_ssh_cmd() {
-    local cmd="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    local cmd="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
     if [[ -n "$SSH_KEY" ]]; then
         cmd="$cmd -i $SSH_KEY"
     fi
@@ -168,9 +168,9 @@ build_ssh_cmd() {
 build_rsync_cmd() {
     local cmd="rsync -avz --delete"
     if [[ -n "$SSH_KEY" ]]; then
-        cmd="$cmd -e 'ssh -i $SSH_KEY -o StrictHostKeyChecking=no'"
+        cmd="$cmd -e 'ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new'"
     else
-        cmd="$cmd -e 'ssh -o StrictHostKeyChecking=no'"
+        cmd="$cmd -e 'ssh -o StrictHostKeyChecking=accept-new'"
     fi
     echo "$cmd"
 }
@@ -344,7 +344,7 @@ code_deployment() {
 
     info "Deploying autobot-slm-backend..."
     rsync -avz --delete \
-        -e "ssh -o StrictHostKeyChecking=no ${SSH_KEY:+-i $SSH_KEY}" \
+        -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-backend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_BACKEND}/" \
         > /dev/null
@@ -352,7 +352,7 @@ code_deployment() {
 
     info "Deploying autobot-slm-frontend..."
     rsync -avz --delete \
-        -e "ssh -o StrictHostKeyChecking=no ${SSH_KEY:+-i $SSH_KEY}" \
+        -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-frontend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_FRONTEND}/" \
         > /dev/null
@@ -360,7 +360,7 @@ code_deployment() {
 
     info "Deploying autobot-shared..."
     rsync -avz --delete \
-        -e "ssh -o StrictHostKeyChecking=no ${SSH_KEY:+-i $SSH_KEY}" \
+        -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-shared/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_SHARED}/" \
         > /dev/null

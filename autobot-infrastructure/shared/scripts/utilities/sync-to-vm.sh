@@ -245,13 +245,13 @@ sync_to_vm() {
             rsync -avz --delete --progress \
                 "${RSYNC_EXCLUDES[@]}" \
                 "$RSYNC_PATH" \
-                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
                 "$local_path/" "$REMOTE_USER@$vm_ip:$remote_path/"
         else
             log_info "Syncing file (rsync): $local_path -> $vm_name:$remote_path"
             rsync -avz --progress \
                 "$RSYNC_PATH" \
-                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+                -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
                 "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
         fi
     else
@@ -261,11 +261,11 @@ sync_to_vm() {
 
         if [ -d "$local_path" ]; then
             log_info "Syncing directory (scp): $local_path -> $vm_name:$remote_path"
-            scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r \
+            scp -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -r \
                 "$local_path" "$REMOTE_USER@$vm_ip:$(dirname "$remote_path")/"
         else
             log_info "Syncing file (scp): $local_path -> $vm_name:$remote_path"
-            scp -i "$SSH_KEY" -o StrictHostKeyChecking=no \
+            scp -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new \
                 "$local_path" "$REMOTE_USER@$vm_ip:$remote_path"
         fi
     fi

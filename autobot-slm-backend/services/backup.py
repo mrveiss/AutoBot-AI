@@ -138,7 +138,7 @@ class BackupService:
         scp_cmd = [
             "/usr/bin/scp",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-P",
             str(ssh_port),
             backup_path,
@@ -363,9 +363,8 @@ class BackupService:
         return [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=15",
             "-o",
@@ -514,7 +513,7 @@ class BackupService:
         scp_cmd = [
             "/usr/bin/scp",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
             "ConnectTimeout=30",
             "-P",

@@ -568,7 +568,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",

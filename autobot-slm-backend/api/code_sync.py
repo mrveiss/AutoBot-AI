@@ -526,7 +526,7 @@ async def _rsync_component(
     Helper for _sync_slm_from_code_source (#913).
     """
     ssh_opts = (
-        f"ssh -i {ssh_key} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new"
     )
     cmd = [
         "rsync",

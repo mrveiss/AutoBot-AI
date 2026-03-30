@@ -555,9 +555,8 @@ class ReplicationService:
         cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-o",
@@ -621,7 +620,7 @@ class ReplicationService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -679,7 +678,7 @@ class ReplicationService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -745,9 +744,8 @@ class ReplicationService:
         cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-p",
@@ -813,9 +811,8 @@ class ReplicationService:
         return [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-p",

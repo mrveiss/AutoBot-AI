@@ -45,31 +45,31 @@ Host autobot-frontend
     HostName 172.16.168.21
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-npu
     HostName 172.16.168.22
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-redis
     HostName 172.16.168.23
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-ai
     HostName 172.16.168.24
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-browser
     HostName 172.16.168.25
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 ```
 
 **Usage**:
