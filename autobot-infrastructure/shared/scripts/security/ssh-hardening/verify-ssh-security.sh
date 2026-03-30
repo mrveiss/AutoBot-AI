@@ -76,13 +76,13 @@ test_ssh_config() {
     fi
 }
 
-# Test 2: Verify no StrictHostKeyChecking=accept-new in config
+# Test 2: Verify no StrictHostKeyChecking=no in config
 test_no_disabled_checking() {
     ((TOTAL_TESTS++))
     log_info "Test 2: Checking SSH config doesn't disable host key checking..."
 
     if grep -q "StrictHostKeyChecking.*no" "$SSH_CONFIG" 2>/dev/null; then
-        log_fail "SSH config contains 'StrictHostKeyChecking accept-new' (VULNERABLE)"
+        log_fail "SSH config contains 'StrictHostKeyChecking no' (VULNERABLE)"
         ((FAILED_TESTS++))
         return 1
     else
