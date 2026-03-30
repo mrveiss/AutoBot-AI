@@ -7,6 +7,7 @@
 #
 # Runs hardcoded value detection with SSOT validation on PRs
 # Reports compliance percentage and highlights violations
+# SSOT violations are blocking — merges require compliance (Issue #2874)
 
 name: SSOT Coverage
 
@@ -145,12 +146,9 @@ jobs:
       run: |
         SSOT_VIOLATIONS="${{ steps.ssot_check.outputs.ssot_violations }}"
 
-        # Fail if there are SSOT violations (values that have config equivalents)
-        # This is a soft failure - continue-on-error allows the workflow to complete
-        # but marks the job as failed for visibility
+        # Fail the job if there are SSOT violations (Issue #2874)
         if [ "$SSOT_VIOLATIONS" -gt "0" ]; then
-          echo "::warning::Found $SSOT_VIOLATIONS hardcoded values that have SSOT config equivalents"
-          echo "::warning::Run './pipeline-scripts/detect-hardcoded-values.sh --report' locally for details"
-          # Currently warn-only mode - uncomment to enforce
-          # exit 1
+          echo "::error::Found $SSOT_VIOLATIONS hardcoded values that have SSOT config equivalents"
+          echo "::error::Run './pipeline-scripts/detect-hardcoded-values.sh --report' locally for details"
+          exit 1
         fi
