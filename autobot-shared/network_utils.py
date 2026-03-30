@@ -16,6 +16,7 @@ check works even when the process is behind a reverse proxy.
 import logging
 import re
 import subprocess
+import time
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -23,9 +24,18 @@ logger = logging.getLogger(__name__)
 # Loopback / well-known local aliases always considered local
 _LOOPBACK: frozenset = frozenset({"127.0.0.1", "::1", "localhost"})
 
+# Cache for get_local_ips() — IPs change rarely; avoid repeated subprocess calls (Issue #2791)
+_IP_CACHE_TTL: float = 60.0  # seconds
+_ip_cache: set | None = None
+_ip_cache_time: float = 0.0
+
 
 def get_local_ips() -> set:
     """Return all IP addresses (and aliases) that identify this machine.
+
+    Results are cached for ``_IP_CACHE_TTL`` seconds so that repeated calls
+    (e.g., per-request is_local_ip checks) do not spawn a subprocess on every
+    invocation (Issue #2791).
 
     Includes:
     - Loopback addresses (127.0.0.1, localhost, ::1)
@@ -35,6 +45,12 @@ def get_local_ips() -> set:
     Returns:
         A set of strings that are considered local identifiers.
     """
+    global _ip_cache, _ip_cache_time
+
+    now = time.monotonic()
+    if _ip_cache is not None and (now - _ip_cache_time) < _IP_CACHE_TTL:
+        return _ip_cache
+
     local_ips: set = set(_LOOPBACK)
 
     # Enumerate all interface IPs via ``ip addr``
@@ -61,6 +77,8 @@ def get_local_ips() -> set:
     except Exception:
         pass
 
+    _ip_cache = local_ips
+    _ip_cache_time = now
     return local_ips
 
 
