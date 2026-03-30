@@ -2,7 +2,7 @@
   <div v-if="attachments && attachments.length > 0" class="message-attachments">
     <div class="attachment-header">
       <i class="fas fa-paperclip" aria-hidden="true"></i>
-      <span>{{ attachments.length }} attachment{{ attachments.length > 1 ? 's' : '' }}</span>
+      <span>{{ $t('chat.messages.attachments', { count: attachments.length }) }}</span>
     </div>
     <div class="attachment-list">
       <div
