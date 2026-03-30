@@ -307,6 +307,95 @@ async def _generate_dynamic_inventory(
     return Path(path)
 
 
+async def _ssh_check_host(
+    hostname: str, ip: str, user: str, key: str
+) -> tuple[str, bool]:
+    """Run a single SSH connectivity probe and return (hostname, reachable).
+
+    Uses BatchMode=yes so the process never prompts for a password (#2897).
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "BatchMode=yes",
+            "-i",
+            key,
+            f"{user}@{ip}",
+            "echo",
+            "ok",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=10)
+        reachable = proc.returncode == 0
+    except (asyncio.TimeoutError, OSError):
+        reachable = False
+    return hostname, reachable
+
+
+async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
+    """Parse the generated inventory and SSH-probe each non-local host (#2897).
+
+    Local hosts (ansible_connection: local) are always considered reachable.
+    Probes run in parallel; each probe has a 5-second ConnectTimeout plus a
+    10-second asyncio timeout as a safety net.
+
+    Returns a dict mapping inventory hostname → reachable (bool).
+    """
+    raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
+    all_vars = raw.get("all", {}).get("vars", {})
+    default_key = str(
+        Path(
+            all_vars.get("ansible_ssh_private_key_file", "~/.ssh/autobot_key")
+        ).expanduser()
+    )
+    default_user = all_vars.get("ansible_user", "autobot")
+
+    hosts: dict[str, dict] = raw.get("all", {}).get("hosts", {})
+    tasks = []
+    local_hosts: set[str] = set()
+
+    for hostname, host_vars in hosts.items():
+        if not isinstance(host_vars, dict):
+            host_vars = {}
+        if host_vars.get("ansible_connection") == "local":
+            local_hosts.add(hostname)
+            continue
+        ip = host_vars.get("ansible_host", hostname)
+        user = host_vars.get("ansible_user", default_user)
+        key = str(
+            Path(
+                host_vars.get("ansible_ssh_private_key_file", default_key)
+            ).expanduser()
+        )
+        tasks.append(_ssh_check_host(hostname, ip, user, key))
+
+    results: dict[str, bool] = {h: True for h in local_hosts}
+    if tasks:
+        for hostname, reachable in await asyncio.gather(*tasks):
+            results[hostname] = reachable
+
+    for hostname, reachable in results.items():
+        if not reachable:
+            host_vars = hosts.get(hostname, {})
+            ip = (
+                host_vars.get("ansible_host", hostname)
+                if isinstance(host_vars, dict)
+                else hostname
+            )
+            logger.warning(
+                "Node %s (%s) is unreachable — skipping (not enrolled?)",
+                hostname,
+                ip,
+            )
+    return results
+
+
 # ── Provisioning State (#1384) ──────────────────────────────────────────────
 
 _provision_state: dict = {
@@ -383,6 +472,56 @@ async def _run_provisioning_task(
             f"{temp_inventory_path.read_text(encoding='utf-8')}"
         )
 
+        # Pre-check SSH reachability before running Ansible (#2897)
+        reachability = await _check_node_reachability(temp_inventory_path)
+        unreachable = [h for h, ok in reachability.items() if not ok]
+        reachable = [h for h, ok in reachability.items() if ok]
+
+        if unreachable:
+            raw_inv = yaml.safe_load(temp_inventory_path.read_text(encoding="utf-8"))
+            inv_hosts = raw_inv.get("all", {}).get("hosts", {})
+            for hostname in unreachable:
+                host_vars = inv_hosts.get(hostname, {})
+                ip = (
+                    host_vars.get("ansible_host", hostname)
+                    if isinstance(host_vars, dict)
+                    else hostname
+                )
+                msg = (
+                    f"Node {hostname} ({ip}) is unreachable — skipping (not enrolled?)"
+                )
+                _write_provision_log(f"WARNING: {msg}")
+                await ws_manager.send_provision_log("warning", msg)
+
+        if not reachable:
+            _provision_state["status"] = "failed"
+            _provision_state["error"] = (
+                "All nodes are unreachable — ensure nodes are enrolled before provisioning"
+            )
+            _provision_state["finished_at"] = time.time()
+            _write_provision_log("ERROR: All nodes are unreachable")
+            await ws_manager.send_provision_status(
+                "failed",
+                "",
+                0,
+                error="All nodes are unreachable — ensure nodes are enrolled before provisioning",
+            )
+            await ws_manager.send_provision_log(
+                "error",
+                "All nodes are unreachable — ensure nodes are enrolled before provisioning",
+            )
+            return
+
+        # Build --limit to include only reachable nodes (#2897)
+        reachability_limit: Optional[list[str]] = None
+        if unreachable:
+            reachability_limit = reachable
+            logger.info(
+                "Excluding %d unreachable node(s) from provisioning: %s",
+                len(unreachable),
+                unreachable,
+            )
+
         executor = get_playbook_executor()
 
         async def log_callback(progress: dict) -> None:
@@ -406,6 +545,7 @@ async def _run_provisioning_task(
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
             extra_vars={},
+            limit=reachability_limit,
             inventory_path=temp_inventory_path,
             progress_callback=log_callback,
         )
