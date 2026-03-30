@@ -398,6 +398,40 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
 
 # ── Provisioning State (#1384) ──────────────────────────────────────────────
 
+async def _activate_provisioned_roles(
+    node_ids: Optional[list[str]],
+) -> None:
+    """Mark all roles on provisioned nodes as 'active' (#2836, #2900).
+
+    After provisioning deploys code/services to a node, the role status
+    should reflect that.  Without this, roles stay 'inactive'/'not_installed'
+    and infra-var derivation (backend_host, redis_host) breaks.
+    """
+    from models.database import NodeRole
+
+    try:
+        async with db_service.session() as session:
+            query = select(NodeRole).where(
+                NodeRole.status.in_(["inactive", "not_installed"])
+            )
+            if node_ids:
+                query = query.where(NodeRole.node_id.in_(node_ids))
+            roles = (await session.execute(query)).scalars().all()
+            activated = []
+            for role in roles:
+                role.status = "active"
+                activated.append(f"{role.node_id}/{role.role_name}")
+            await session.commit()
+            if activated:
+                logger.info(
+                    "Activated %d roles after provisioning: %s",
+                    len(activated),
+                    activated,
+                )
+    except Exception as exc:
+        logger.warning("Failed to activate provisioned roles: %s", exc)
+
+
 _provision_state: dict = {
     "status": "idle",  # idle | running | completed | failed
     "started_at": None,
@@ -550,6 +584,11 @@ async def _run_provisioning_task(
             progress_callback=log_callback,
         )
         _handle_provision_result(result)
+
+        # Activate roles on provisioned nodes (#2836, #2900)
+        # Even with partial failures, roles on reachable nodes were deployed.
+        await _activate_provisioned_roles(reachable or node_ids)
+
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
         if result.get("success"):
             await ws_manager.send_provision_status("completed", "complete", elapsed)

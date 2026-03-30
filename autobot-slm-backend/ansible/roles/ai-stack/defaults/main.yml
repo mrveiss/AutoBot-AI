@@ -20,10 +20,10 @@ chromadb_host: "0.0.0.0"
 chromadb_port: 8000
 
 # Ollama (remote on backend node - resolved from inventory)
-ollama_host: "{{ backend_host }}"
+ollama_host: "{{ backend_host | default(ansible_host) }}"
 ollama_port: 11434
 
 # Redis connection (resolved from inventory)
-ai_redis_host: "{{ redis_host }}"
+ai_redis_host: "{{ redis_host | default(ansible_host) }}"
 ai_redis_port: "{{ redis_port | default(6379) }}"
 ai_redis_password: "{{ vault_redis_password | default('') }}"
