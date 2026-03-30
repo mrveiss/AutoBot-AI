@@ -109,6 +109,8 @@
     cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"
   register: _openvino_check
   changed_when: false
+  # (#2872) Intentional: pip show exits rc=1 when package is not installed;
+  # the result gates conditional OpenVINO installation below.
   failed_when: false
   become_user: "{{ npu_user }}"
 
@@ -175,6 +177,7 @@
   ansible.builtin.command: which ufw
   register: _ufw_installed
   changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
   failed_when: false
 
 - name: Configure UFW for NPU worker

@@ -8,6 +8,8 @@
   command: "{{ project_root }}/scripts/access_control/validate.sh"
   register: validation_result
   changed_when: false
+  # (#2872) Intentional: validation results are parsed below and the play
+  # fails at the threshold check task if the failure rate is too high.
   failed_when: false
 
 - name: Parse validation results

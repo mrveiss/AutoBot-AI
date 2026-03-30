@@ -10,7 +10,10 @@
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: restarted
-  ignore_errors: true
+  # (#2872) Intentional: during initial provisioning the service unit may
+  # not be deployed yet when this handler fires from a config template
+  # change.  The "Start backend service" task later ensures it runs.
+  failed_when: false
 
 - name: test nginx config
   ansible.builtin.command:

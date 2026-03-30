@@ -45,7 +45,16 @@
     name: ntpdate
     state: present
     lock_timeout: 120
-  ignore_errors: true
+  # (#2872) Intentional: ntpdate is not available in all distro repos
+  # (e.g. Kali rolling). Time sync falls back to systemd-timesyncd.
+  register: _ntpdate_install
+  failed_when: false
+  tags: ['time_sync', 'packages']
+
+- name: "Time Sync | Warn if ntpdate is unavailable"
+  ansible.builtin.debug:
+    msg: "WARNING: ntpdate package not available — force-sync will use systemd-timesyncd only"
+  when: _ntpdate_install.failed | default(false)
   tags: ['time_sync', 'packages']
 
 - name: "Time Sync | Check if chrony is requested"
@@ -84,7 +93,9 @@
         name: chrony
         state: stopped
         enabled: no
-      ignore_errors: yes
+      # (#2872) Intentional: chrony may not be installed; this is a
+      # cleanup task when switching from chrony to systemd-timesyncd.
+      failed_when: false
 
     - name: "Time Sync | Configure systemd-timesyncd"
       template:
@@ -118,6 +129,9 @@
           fi
         done
       register: ntpdate_result
+      # (#2872) Intentional: ntpdate may not be installed, or all NTP
+      # servers may be unreachable; the service restart below ensures
+      # ongoing synchronization.
       failed_when: false
 
     - name: "Time Sync | Restart time sync service"
@@ -146,6 +160,8 @@
 - name: "Time Sync | Check if system clock is synchronized"
   shell: timedatectl status | grep "System clock synchronized" | grep -q "yes"
   register: clock_sync_check
+  # (#2872) Intentional: clock may not be synchronized yet (e.g. fresh
+  # VM, unreachable NTP); a warning is displayed below instead of failing.
   failed_when: false
   changed_when: false
   tags: ['time_sync', 'validation']

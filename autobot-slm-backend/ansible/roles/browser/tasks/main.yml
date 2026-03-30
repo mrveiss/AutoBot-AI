@@ -114,13 +114,20 @@
   changed_when: false
   tags: ['browser', 'packages']
 
+- name: "Browser | Check if browser worker directory exists"
+  ansible.builtin.stat:
+    path: /opt/autobot/autobot-browser-worker/package.json
+  register: _browser_worker_dir
+  tags: ['browser', 'packages']
+
+# (#2872) Replaced failed_when: false with a stat guard — npm install
+# failures on a deployed worker directory must surface.
 - name: "Browser | Install Node.js dependencies for browser worker"
   npm:
     path: /opt/autobot/autobot-browser-worker
     state: present
   become: yes
-  when: "'autobot-browser-worker' is exists"
-  failed_when: false
+  when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
 - name: "Browser | Create VNC directory"

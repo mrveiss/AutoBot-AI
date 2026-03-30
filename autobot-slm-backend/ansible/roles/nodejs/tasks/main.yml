@@ -12,6 +12,8 @@
     cmd: node --version
   register: _node_check
   changed_when: false
+  # (#2872) Intentional: `node` exits rc=127 when not installed;
+  # the result gates conditional installation below.
   failed_when: false
   tags: ['deps', 'nodejs']
 

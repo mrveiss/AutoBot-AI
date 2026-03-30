@@ -16,7 +16,10 @@
     name: autobot-frontend
     state: restarted
   become: yes
-  ignore_errors: yes
+  # (#2872) Intentional: autobot-frontend service may not exist on hosts
+  # that serve only the static build via nginx (no dev server).  Handler
+  # is notified from tasks that conditionally deploy the unit file.
+  failed_when: false
 
 - name: reload systemd
   systemd:

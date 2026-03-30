@@ -90,6 +90,8 @@
     cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
   register: slm_cert_valid
   changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
   failed_when: false
   when: slm_cert_stat.stat.exists
   tags: ['slm', 'tls']
@@ -167,6 +169,8 @@
       | grep -oP '\d+\.\d+'
   register: _venv_py_version
   changed_when: false
+  # (#2872) Intentional: venv may not exist yet on fresh install;
+  # rc != 0 triggers venv recreation below.
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
@@ -431,13 +435,21 @@
 # ==========================================================
 # Firewall
 # ==========================================================
+- name: "SLM | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _slm_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['slm', 'firewall']
+
 - name: "SLM | Allow HTTP"
   community.general.ufw:
     rule: allow
     port: "80"
     proto: tcp
     comment: "HTTP - AutoBot SLM"
-  ignore_errors: true
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 - name: "SLM | Allow HTTPS"
@@ -446,17 +458,18 @@
     port: "443"
     proto: tcp
     comment: "HTTPS - AutoBot SLM"
-  ignore_errors: true
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 # ==========================================================
 # Start services
 # ==========================================================
+# (#2872) Removed ignore_errors — service start failures must surface.
+# If the service fails to start, deployment should report the real state.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: started
-  ignore_errors: true
   tags: ['slm', 'service']
 
 - name: "SLM | Flush handlers to apply pending restarts"

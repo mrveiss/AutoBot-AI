@@ -236,6 +236,9 @@
     cmd: "grep -Ev '^-e.*autobot-shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
   become_user: "{{ backend_user }}"
 
+# (#2872) Removed failed_when: false — pip install failures must surface.
+# The Ansible pip module raises on any pip error; the old bypass (Issue #892)
+# masked real dependency failures during deployment.
 - name: Install filtered backend requirements
   ansible.builtin.pip:
     requirements: "/tmp/requirements-filtered.txt"
@@ -246,8 +249,6 @@
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   register: pip_install_result
-  failed_when: false  # Issue #892: pip module doesn't expose rc, rely on default error handling
-  changed_when: pip_install_result.changed
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:
@@ -291,6 +292,8 @@
     cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
   register: backend_cert_valid
   changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
   failed_when: false
   when: backend_cert_stat.stat.exists
 
@@ -434,10 +437,18 @@
 # connections are dropped by UFW INPUT DROP policy.
 # This rule is harmless on non-WSL2 hosts (no loopback0 traffic).
 # ==========================================================
+- name: "Backend | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _backend_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['backend', 'ufw']
+
 - name: "Backend | Allow loopback0 interface (WSL2 mirrored networking)"
   community.general.ufw:
     rule: allow
     interface: loopback0
     direction: in
-  failed_when: false
+  when: _backend_ufw_check.rc == 0
   tags: ['backend', 'ufw']

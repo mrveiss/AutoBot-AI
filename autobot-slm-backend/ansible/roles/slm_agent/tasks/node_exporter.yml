@@ -81,7 +81,11 @@
 # ── Hardware-specific textfile collector remediation (#1147) ──────────────────
 # Mask collectors whose required hardware is absent to prevent failed-service
 # noise in the SLM fleet-health dashboard.  All checks use failed_when: false
-# so missing packages on already-clean nodes are silently skipped.
+# so missing hardware detection tools on clean nodes are silently skipped.
+# (#2872) All failed_when: false in this section are intentional — the
+# systemd mask commands target optional collector units that only exist on
+# systems with the prometheus-node-exporter Debian package (not our binary
+# install).  When the unit doesn't exist, systemd mask exits non-zero.
 
 - name: "Node Exporter | Detect IPMI device"
   ansible.builtin.stat:
@@ -94,6 +98,7 @@
     paths: /sys/class/infiniband
     file_type: any
   register: _ne_infiniband_devices
+  # (#2872) Intentional: /sys/class/infiniband may not exist
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -109,6 +114,7 @@
   ansible.builtin.command: which smartctl
   register: _ne_smartctl
   changed_when: false
+  # (#2872) Intentional: smartctl may not be installed
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -119,6 +125,7 @@
     daemon_reload: true
   become: yes
   when: not _ne_ipmi_device.stat.exists
+  # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -129,6 +136,7 @@
     daemon_reload: true
   become: yes
   when: _ne_infiniband_devices.files | default([]) | length == 0
+  # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -139,6 +147,7 @@
     daemon_reload: true
   become: yes
   when: _ne_nvme_devices.files | length == 0
+  # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -149,6 +158,7 @@
     daemon_reload: true
   become: yes
   when: _ne_smartctl.rc != 0
+  # (#2872) Intentional: collector unit may not exist (binary install)
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'collectors']
 
@@ -158,6 +168,7 @@
   ansible.builtin.command: which ufw
   register: _ufw_check
   changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts
   failed_when: false
   tags: ['slm_agent', 'node_exporter', 'firewall']
 

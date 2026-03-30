@@ -10,6 +10,8 @@
     cmd: "dpkg -l postgresql-{{ postgresql_version }}"
   register: _pg_installed
   changed_when: false
+  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
+  # the result gates conditional installation below.
   failed_when: false
 
 - name: Determine PostgreSQL APT release codename
@@ -65,7 +67,16 @@
     name: en_US.UTF-8
     state: present
   become: true
-  ignore_errors: true
+  # (#2872) Intentional: locale_gen may fail on minimal containers or
+  # systems without locales package; PostgreSQL will still work with C locale.
+  # Replaced ignore_errors with register + warning for visibility.
+  register: _locale_result
+  failed_when: false
+
+- name: Warn if locale generation failed
+  ansible.builtin.debug:
+    msg: "WARNING: en_US.UTF-8 locale generation failed — PostgreSQL will use system default locale"
+  when: _locale_result.failed | default(false)
 
 - name: Install PostgreSQL packages
   ansible.builtin.apt:

@@ -55,6 +55,8 @@
   loop: "{{ fleet_nodes }}"
   register: ssh_verify
   changed_when: false
+  # (#2872) Intentional: SSH connectivity test — some nodes may not yet
+  # be reachable if provisioning is still in progress; results displayed below.
   failed_when: false
 
 - name: Display SSH verification results
