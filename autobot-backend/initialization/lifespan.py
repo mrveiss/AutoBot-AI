@@ -883,6 +883,40 @@ async def _recover_index_queue():
         logger.warning("Index queue recovery failed (non-fatal): %s", e)
 
 
+async def _ensure_agent_memory_index() -> None:
+    """Auto-create the idx:agent_memory RediSearch vector index if it doesn't exist (#2645).
+
+    Idempotent — safe to call on every startup. If the index already exists,
+    handle_redis_vector_create_index returns immediately without error.
+    Uses the vectors database (Redis DB 8) with default agent-memory schema:
+    HNSW, FLOAT32, 1536 dimensions, COSINE distance.
+    """
+    logger.info("[ 93%%] Agent Memory Index: Ensuring idx:agent_memory exists...")
+    try:
+        from api.redis_mcp.vector_search import handle_redis_vector_create_index
+
+        result = await handle_redis_vector_create_index(
+            index_name="idx:agent_memory",
+            prefix="autobot:agent:memory:",
+            vector_field="embedding",
+            dimensions=1536,
+            distance_metric="COSINE",
+            database="vectors",
+        )
+        if result.get("message") == "Index already exists":
+            logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
+        else:
+            logger.info(
+                "[ 93%%] Agent Memory Index: idx:agent_memory created "
+                "(prefix=%s, dims=%d, metric=%s)",
+                result.get("prefix"),
+                result.get("dimensions"),
+                result.get("distance_metric"),
+            )
+    except Exception as e:
+        logger.warning("Agent memory index creation failed (non-critical): %s", e)
+
+
 async def _init_orchestrator(app: FastAPI) -> None:
     """Initialize and store the orchestrator on app.state (#2235).
 
@@ -990,6 +1024,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
         await _recover_index_queue()
+        await _ensure_agent_memory_index()
         await _init_process_adapter(app)
         await _init_orchestrator(app)
         await _seed_agent_registry()
