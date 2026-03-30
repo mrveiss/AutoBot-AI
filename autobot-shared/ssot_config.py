@@ -885,6 +885,59 @@ class TLSConfig(BaseSettings):
         )
 
 
+class DatabasePoolConfig(BaseSettings):
+    """Database connection pool configuration (#2860).
+
+    Centralizes SQLAlchemy and SQLite pool settings so all services use
+    coordinated pool sizes. Override via AUTOBOT_DB_POOL_* environment variables.
+
+    Usage:
+        from autobot_shared.ssot_config import config
+
+        # PostgreSQL (SQLAlchemy) pools
+        pool_size = config.database_pool.pool_size
+        max_overflow = config.database_pool.max_overflow
+
+        # SQLite pools
+        sqlite_size = config.database_pool.sqlite_pool_size
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    pool_size: int = Field(
+        default=10,
+        alias="AUTOBOT_DB_POOL_SIZE",
+        description="Number of persistent connections per SQLAlchemy engine",
+    )
+    max_overflow: int = Field(
+        default=10,
+        alias="AUTOBOT_DB_POOL_MAX_OVERFLOW",
+        description="Extra connections allowed above pool_size under load",
+    )
+    pool_recycle: int = Field(
+        default=3600,
+        alias="AUTOBOT_DB_POOL_RECYCLE",
+        description="Seconds before a connection is recycled",
+    )
+    pool_timeout: int = Field(
+        default=30,
+        alias="AUTOBOT_DB_POOL_TIMEOUT",
+        description="Seconds to wait for a connection from the pool",
+    )
+
+    # SQLite-specific pool size (separate because SQLite has lower
+    # concurrency limits than PostgreSQL)
+    sqlite_pool_size: int = Field(
+        default=10,
+        alias="AUTOBOT_SQLITE_POOL_SIZE",
+        description="Max connections per SQLite connection pool",
+    )
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -940,6 +993,7 @@ class AutoBotConfig(BaseSettings):
     tls: TLSConfig = Field(default_factory=TLSConfig)
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
+    database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
@@ -1451,6 +1505,7 @@ __all__ = [
     "CacheRedisConfig",
     "CacheL1Config",
     "CacheL2Config",
+    "DatabasePoolConfig",
     "FeatureConfig",
     "get_config",
     "reload_config",

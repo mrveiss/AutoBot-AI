@@ -5,6 +5,8 @@
 Async Database Connection Pool Manager
 Provides async connection pooling for SQLite and other databases using aiosqlite
 to improve performance and prevent blocking operations.
+
+Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import asyncio
@@ -25,6 +27,16 @@ from utils.database_helpers import join_results  # noqa: F401 - re-export
 logger = logging.getLogger(__name__)
 
 
+def _get_sqlite_pool_size() -> int:
+    """Get SQLite pool size from SSOT config (#2860)."""
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().database_pool.sqlite_pool_size
+    except Exception:
+        return 10
+
+
 @dataclass
 class PoolStats:
     """Connection pool statistics"""
@@ -42,7 +54,7 @@ class AsyncSQLiteConnectionPool:
     def __init__(
         self,
         db_path: str,
-        pool_size: int = 20,
+        pool_size: int | None = None,
         timeout: float = TimingConstants.SHORT_TIMEOUT,
     ):
         """
@@ -50,13 +62,14 @@ class AsyncSQLiteConnectionPool:
 
         Args:
             db_path: Path to SQLite database file
-            pool_size: Maximum number of connections in pool
+            pool_size: Maximum number of connections in pool.
+                       Defaults to SSOT config sqlite_pool_size (#2860).
             timeout: Timeout for acquiring connection from pool
         """
         self.db_path = db_path
-        self.pool_size = pool_size
+        self.pool_size = pool_size if pool_size is not None else _get_sqlite_pool_size()
         self.timeout = timeout
-        self._pool = asyncio.Queue(maxsize=pool_size)
+        self._pool = asyncio.Queue(maxsize=self.pool_size)
         self._lock = asyncio.Lock()
         self._created_connections = 0
         self._stats = PoolStats()
@@ -119,7 +132,8 @@ class AsyncSQLiteConnectionPool:
 
             self._initialized = True
             logger.info(
-                f"Async connection pool initialized with {initial_size} connections"
+                "Async connection pool initialized with %s connections",
+                initial_size,
             )
 
     async def _acquire_connection(self) -> aiosqlite.Connection:
@@ -249,14 +263,14 @@ _async_pools_lock = asyncio.Lock()
 
 
 async def get_async_connection_pool(
-    db_path: str, pool_size: int = 20
+    db_path: str, pool_size: int | None = None
 ) -> AsyncSQLiteConnectionPool:
     """
     Get or create an async connection pool for a database.
 
     Args:
         db_path: Path to database file
-        pool_size: Maximum pool size
+        pool_size: Maximum pool size. Defaults to SSOT config (#2860).
 
     Returns:
         AsyncSQLiteConnectionPool: Async connection pool instance
@@ -279,7 +293,9 @@ async def get_async_connection_pool(
         await pool._initialize_pool()
         _async_connection_pools[db_path] = pool
         logger.info(
-            f"Created async connection pool for {db_path} with size {pool_size}"
+            "Created async connection pool for %s with size %s",
+            db_path,
+            pool.pool_size,
         )
         return pool
 
