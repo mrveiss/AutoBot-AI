@@ -536,6 +536,7 @@ async def update_node(
             detail="Node not found",
         )
 
+    old_ip = node.ip_address
     update_data = node_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         if value is not None:
@@ -554,6 +555,16 @@ async def update_node(
             )
         raise
     await db.refresh(node)
+
+    # Warn when IP changes — agent config has a stale admin_url until
+    # re-provisioned (#2833).
+    if "ip_address" in update_data and node.ip_address != old_ip:
+        logger.warning(
+            "Node %s IP changed %s -> %s; re-provision to update agent config",
+            node_id,
+            old_ip,
+            node.ip_address,
+        )
 
     logger.info("Node updated: %s", node_id)
     return NodeResponse.model_validate(node)
