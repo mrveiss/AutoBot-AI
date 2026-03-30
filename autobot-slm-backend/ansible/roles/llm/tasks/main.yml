@@ -81,6 +81,7 @@
     name:
       - curl
       - ca-certificates
+      - zstd
     state: present
     update_cache: true
   when: not _ollama_binary.stat.exists
