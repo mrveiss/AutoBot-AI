@@ -15,12 +15,14 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
+  when: "'backend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "AI Stack | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
+  when: "'frontend' not in (node_roles | default([]))"
   tags: ['clean']
 
 - name: "AI Stack | Clean: wrong-node autobot-slm-backend dir"

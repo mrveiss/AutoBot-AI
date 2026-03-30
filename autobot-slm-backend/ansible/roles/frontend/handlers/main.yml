@@ -4,7 +4,7 @@
 - name: restart nginx
   systemd:
     name: nginx
-    state: restarted
+    state: reloaded
   become: yes
 
 - name: test nginx config
