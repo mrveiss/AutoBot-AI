@@ -5,6 +5,14 @@
 API Keys API
 
 Endpoints for managing long-lived API keys for programmatic access.
+
+Security note (Issue #2858):
+    All state-changing endpoints (POST, PATCH, DELETE) are protected against
+    CSRF by design: authentication uses HTTPBearer, so tokens are transmitted
+    in the ``Authorization`` header and are never auto-attached by the browser
+    to cross-origin requests.  The SecurityHeadersMiddleware (middleware/)
+    provides an additional enforcement layer that rejects state-changing
+    requests without an ``Authorization`` header.
 """
 
 import logging
