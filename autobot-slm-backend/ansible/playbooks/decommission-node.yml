@@ -55,6 +55,28 @@
     autobot_keyring_files:
       - /usr/share/keyrings/redis-archive-keyring.gpg
       - /usr/share/keyrings/nodesource.gpg
+    # Nginx configs to remove per role — explicit list instead of
+    # blanket "autobot*" glob to protect SLM configs on co-located
+    # hosts (#2918).  autobot-slm* is intentionally excluded; the API
+    # already blocks SLM Manager decommission (HTTP 400) but this
+    # provides defense-in-depth for manual playbook runs.
+    _nginx_role_configs:
+      # backend
+      - /etc/nginx/sites-enabled/autobot-backend.conf
+      - /etc/nginx/sites-available/autobot-backend.conf
+      - /etc/nginx/conf.d/autobot-backend.conf
+      # frontend
+      - /etc/nginx/sites-enabled/autobot-frontend
+      - /etc/nginx/sites-available/autobot-frontend
+      - /etc/nginx/conf.d/autobot-frontend.conf
+      # npu-worker
+      - /etc/nginx/sites-enabled/autobot-npu-worker.conf
+      - /etc/nginx/sites-available/autobot-npu-worker.conf
+      - /etc/nginx/conf.d/autobot-npu-worker.conf
+      # browser
+      - /etc/nginx/sites-enabled/autobot-browser.conf
+      - /etc/nginx/sites-available/autobot-browser.conf
+      - /etc/nginx/conf.d/autobot-browser.conf
 
   tasks:
     # =======================================================================
@@ -315,10 +337,13 @@
           ansible.builtin.shell: "crontab -r -u autobot 2>/dev/null || true"
           changed_when: false
 
-        - name: Remove autobot nginx configs
-          ansible.builtin.shell: "rm -f /etc/nginx/sites-enabled/autobot* /etc/nginx/sites-available/autobot* /etc/nginx/conf.d/autobot*"
-          changed_when: true
-          ignore_errors: true
+        # Explicit per-role nginx config removal (#2918).
+        # Does NOT touch autobot-slm* — see _nginx_role_configs var.
+        - name: Remove per-role autobot nginx configs
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ _nginx_role_configs }}"
 
         - name: Reload nginx if still running
           ansible.builtin.shell: "systemctl is-active nginx && systemctl reload nginx || true"
@@ -386,7 +411,7 @@
           - Users: autobot and autobot_admin removed
           - Sudoers: entries removed
           - Crontabs: cleaned
-          - Nginx: autobot configs removed
+          - Nginx: role-specific configs removed (SLM preserved)
           - Caches: pip, huggingface, ansible temp cleaned
           - Backup: {{ decommission_backup_path if (backup_before_decommission | default(false) | bool) else 'none (not requested)' }}
           ========================================
