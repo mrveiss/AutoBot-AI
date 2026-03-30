@@ -1,5 +1,5 @@
 # LangChain ecosystem — tightly coupled versions
-langchain==1.2.12
+langchain==1.2.13                # Issue #2808: bumped to match canonical minimum (was 1.2.12)
 langchain-classic==1.0.2
 langchain-community==0.4.1
 langchain-core==1.2.22
