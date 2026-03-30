@@ -920,8 +920,8 @@ def get_demo_content(filepath: str) -> str:
 import os
 
 # Configuration
-password = "admin123"  # TODO: move to env
-api_key = "sk-1234567890abcdef1234567890abcdef"
+password = "admin123"  # noqa: S105 — intentional demo credential for analyzer testing
+api_key = "sk-1234567890abcdef1234567890abcdef"  # noqa: S105 — intentional demo credential
 
 def process_data(items):
     for item in items:
