@@ -607,6 +607,35 @@ async def update_node_roles(
         )
 
     node.roles = roles_data.roles
+
+    # Sync NodeRole entries to match (#2829, #2836)
+    # The provisioning playbook reads node_roles from the NodeRole table,
+    # so we must keep it in sync with the Node.roles display column.
+    existing_roles = await db.execute(
+        select(NodeRole).where(NodeRole.node_id == node_id)
+    )
+    existing_map = {nr.role_name: nr for nr in existing_roles.scalars().all()}
+
+    desired_roles = set(roles_data.roles or [])
+    current_roles = set(existing_map.keys())
+
+    # Add new roles
+    for role_name in desired_roles - current_roles:
+        db.add(
+            NodeRole(
+                node_id=node_id,
+                role_name=role_name,
+                status="not_installed",
+                assignment_type="manual",
+            )
+        )
+
+    # Remove roles no longer assigned (except slm-agent — always keep)
+    for role_name in current_roles - desired_roles:
+        if role_name == "slm-agent":
+            continue
+        await db.delete(existing_map[role_name])
+
     await db.commit()
     await db.refresh(node)
 
