@@ -111,7 +111,9 @@ class MFAService(BaseService):
         if not user:
             raise MFAServiceError("User not found")
 
-        if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        if not bcrypt.checkpw(
+            password.encode("utf-8"), user.password_hash.encode("utf-8")
+        ):
             raise MFAServiceError("Invalid password")
 
         await self._delete_mfa_record(user_id)
@@ -299,7 +301,8 @@ class MFAService(BaseService):
     def _remove_backup_code(self, mfa: UserMFA, code: str, hashed_codes: list) -> None:
         """Remove used backup code."""
         new_codes = [
-            h for h in hashed_codes
+            h
+            for h in hashed_codes
             if not bcrypt.checkpw(code.encode("utf-8"), h.encode("utf-8"))
         ]
         mfa.backup_codes_encrypted = encrypt_data(json.dumps(new_codes))

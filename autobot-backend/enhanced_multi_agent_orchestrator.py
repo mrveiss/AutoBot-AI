@@ -126,7 +126,6 @@ class EnhancedMultiAgentOrchestrator:
         # Agent client registry for actual agent instances
         self._agent_client_registry = AgentClientRegistry()
 
-
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
         if self.redis_async is None:

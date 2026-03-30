@@ -173,7 +173,9 @@ class ExperimentStore:
             return None
         return Experiment.from_dict(json.loads(data))
 
-    async def _fetch_experiments_by_ids(self, experiment_ids: List[str]) -> List[Experiment]:
+    async def _fetch_experiments_by_ids(
+        self, experiment_ids: List[str]
+    ) -> List[Experiment]:
         """Batch-fetch experiments from Redis using a single HMGET call.
 
         Replaces N individual HGET calls with one pipeline command — see #2684.
@@ -201,7 +203,9 @@ class ExperimentStore:
 
         timeline_key = self._redis_key("timeline")
         pipe = redis.pipeline()
-        id_list = [eid if isinstance(eid, str) else eid.decode("utf-8") for eid in state_ids]
+        id_list = [
+            eid if isinstance(eid, str) else eid.decode("utf-8") for eid in state_ids
+        ]
         for eid in id_list:
             pipe.zscore(timeline_key, eid)
         scores = await pipe.execute()
@@ -220,7 +224,9 @@ class ExperimentStore:
         redis = await self._get_redis()
 
         if state is not None:
-            experiment_ids = await self._sorted_ids_for_state(redis, state, limit, offset)
+            experiment_ids = await self._sorted_ids_for_state(
+                redis, state, limit, offset
+            )
         else:
             experiment_ids = await redis.zrevrange(
                 self._redis_key("timeline"),
@@ -228,7 +234,8 @@ class ExperimentStore:
                 offset + limit - 1,
             )
             experiment_ids = [
-                eid if isinstance(eid, str) else eid.decode("utf-8") for eid in experiment_ids
+                eid if isinstance(eid, str) else eid.decode("utf-8")
+                for eid in experiment_ids
             ]
 
         return await self._fetch_experiments_by_ids(experiment_ids)

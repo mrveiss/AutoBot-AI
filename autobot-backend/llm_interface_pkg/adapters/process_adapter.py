@@ -122,7 +122,9 @@ class ProcessAdapter(AdapterBase):
         prompt = self._build_prompt(request.messages)
         binary = tool_config["binary"]
         args = list(tool_config.get("args", []))
-        return await self._run_subprocess(binary, args, prompt, tool_name, request.request_id)
+        return await self._run_subprocess(
+            binary, args, prompt, tool_name, request.request_id
+        )
 
     async def test_environment(self) -> EnvironmentTestResult:
         """Test that configured CLI tools are available."""

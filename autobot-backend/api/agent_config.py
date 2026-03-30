@@ -631,7 +631,9 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
     )
 
 
-async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manager) -> dict:
+async def _resolve_agent_entry(
+    agent_id: str, config: dict, unified_config_manager
+) -> dict:
     """Resolve model, enabled state, and config_source for a single agent. Ref: #2735.
 
     Tries SLM first; falls back to local unified config.
@@ -645,7 +647,9 @@ async def _resolve_agent_entry(agent_id: str, config: dict, unified_config_manag
         current_model = unified_config_manager.get_nested(
             f"agents.{agent_id}.model", config["default_model"]
         )
-        enabled = unified_config_manager.get_nested(f"agents.{agent_id}.enabled", config["enabled"])
+        enabled = unified_config_manager.get_nested(
+            f"agents.{agent_id}.enabled", config["enabled"]
+        )
         config_source = "local"
 
     return {
@@ -683,7 +687,9 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
 
     backend_agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        backend_agents.append(await _resolve_agent_entry(agent_id, config, unified_config_manager))
+        backend_agents.append(
+            await _resolve_agent_entry(agent_id, config, unified_config_manager)
+        )
 
     healthy_count = sum(1 for a in backend_agents if a["status"] == "connected")
 
@@ -854,14 +860,20 @@ async def _apply_agent_model_update(
     """
     base = DEFAULT_AGENT_CONFIGS[agent_id]
     before_config = {
-        "model": unified_config_manager.get_nested(f"agents.{agent_id}.model", base["default_model"]),
-        "provider": unified_config_manager.get_nested(f"agents.{agent_id}.provider", base["provider"]),
+        "model": unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", base["default_model"]
+        ),
+        "provider": unified_config_manager.get_nested(
+            f"agents.{agent_id}.provider", base["provider"]
+        ),
     }
 
     # Persist changes
     unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
     if update.provider:
-        unified_config_manager.set_nested(f"agents.{agent_id}.provider", update.provider)
+        unified_config_manager.set_nested(
+            f"agents.{agent_id}.provider", update.provider
+        )
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
@@ -876,7 +888,12 @@ async def _apply_agent_model_update(
         created_by="admin",
     )
 
-    logger.info("Updated agent %s model to %s (provider: %s)", agent_id, update.model, update.provider)
+    logger.info(
+        "Updated agent %s model to %s (provider: %s)",
+        agent_id,
+        update.model,
+        update.provider,
+    )
 
     return {
         "agent_id": agent_id,
@@ -917,7 +934,9 @@ async def update_agent_model(
             detail="Agent ID in URL must match agent ID in request body",
         )
 
-    updated_config = await _apply_agent_model_update(agent_id, update, unified_config_manager, session)
+    updated_config = await _apply_agent_model_update(
+        agent_id, update, unified_config_manager, session
+    )
 
     return JSONResponse(
         status_code=200,

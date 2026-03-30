@@ -19,7 +19,12 @@ from utils.chromadb_client import get_all_paginated
 
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
-from .shared import _in_memory_storage, filter_problems_by_file_existence, get_project_root, resolve_source_root
+from .shared import (
+    _in_memory_storage,
+    filter_problems_by_file_existence,
+    get_project_root,
+    resolve_source_root,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -593,7 +598,10 @@ async def get_codebase_problems(
     if code_collection:
         try:
             all_problems = _fetch_problems_from_chromadb(
-                code_collection, problem_type, source_id=source_id, source_root=source_root
+                code_collection,
+                problem_type,
+                source_id=source_id,
+                source_root=source_root,
             )
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:

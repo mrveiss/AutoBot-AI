@@ -742,7 +742,9 @@ class DocIndexerService:
                 return result
 
             rel_path = os.path.relpath(file_str, self._root_dir)
-            indexed, total_chunks = await self._index_file_chunks(file_str, content, rel_path, tier)
+            indexed, total_chunks = await self._index_file_chunks(
+                file_str, content, rel_path, tier
+            )
 
             if total_chunks == 0:
                 result.skipped = 1

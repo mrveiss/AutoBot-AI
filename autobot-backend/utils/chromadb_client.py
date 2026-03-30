@@ -131,7 +131,9 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
 
         if fixed:
             conn.commit()
-            logger.info("Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed)
+            logger.info(
+                "Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed
+            )
         conn.close()
     except Exception as e:
         logger.warning("ChromaDB config migration check failed: %s", e)

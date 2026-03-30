@@ -391,13 +391,19 @@ async def _write_prompt_from_default(
     """
     if not await asyncio.to_thread(os.path.exists, default_file_path):
         logger.warning("No default found for prompt %s", prompt_id)
-        raise HTTPException(status_code=404, detail=f"No default prompt found for {prompt_id}")
+        raise HTTPException(
+            status_code=404, detail=f"No default prompt found for {prompt_id}"
+        )
 
     async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
         default_content = await f.read()
 
-    custom_file_path = str(validate_relative_path(prompt_id.replace("_", "/"), prompts_dir))
-    await asyncio.to_thread(os.makedirs, os.path.dirname(custom_file_path), exist_ok=True)
+    custom_file_path = str(
+        validate_relative_path(prompt_id.replace("_", "/"), prompts_dir)
+    )
+    await asyncio.to_thread(
+        os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
+    )
 
     # Issue #514: per-file locking to prevent concurrent write corruption
     file_lock = await _get_prompt_file_lock(custom_file_path)
@@ -451,12 +457,16 @@ async def revert_prompt(
                 prompts_dir,
             )
         )
-        return await _write_prompt_from_default(prompt_id, default_file_path, prompts_dir)
+        return await _write_prompt_from_default(
+            prompt_id, default_file_path, prompts_dir
+        )
     except HTTPException:
         # Re-raise HTTP exceptions (e.g. 404 from _write_prompt_from_default) — #2745
         raise
     except OSError as e:
-        logger.error("Failed to read/write prompt file during revert %s: %s", prompt_id, e)
+        logger.error(
+            "Failed to read/write prompt file during revert %s: %s", prompt_id, e
+        )
         raise HTTPException(status_code=500, detail="Failed to access prompt file")
     except Exception as e:
         logger.error("Error reverting prompt %s: %s", prompt_id, str(e))

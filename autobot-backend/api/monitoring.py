@@ -449,24 +449,39 @@ def _build_service_list(results: list) -> list:
     # Issue #1229/#2671: Use ConfigRegistry (defaults from SSOT via registry_defaults)
     return [
         _to_service_entry(
-            "Backend API", ConfigRegistry.get("vm.main"),
-            int(ConfigRegistry.get("port.backend")), "online", "Running",
+            "Backend API",
+            ConfigRegistry.get("vm.main"),
+            int(ConfigRegistry.get("port.backend")),
+            "online",
+            "Running",
         ),
         _to_service_entry(
-            "Redis", ConfigRegistry.get("vm.redis"),
-            int(ConfigRegistry.get("port.redis")), redis_s, redis_m,
+            "Redis",
+            ConfigRegistry.get("vm.redis"),
+            int(ConfigRegistry.get("port.redis")),
+            redis_s,
+            redis_m,
         ),
         _to_service_entry(
-            "NPU Worker", ConfigRegistry.get("vm.npu"),
-            int(ConfigRegistry.get("port.npu")), npu_s, npu_m,
+            "NPU Worker",
+            ConfigRegistry.get("vm.npu"),
+            int(ConfigRegistry.get("port.npu")),
+            npu_s,
+            npu_m,
         ),
         _to_service_entry(
-            "Ollama", ConfigRegistry.get("vm.llm"),
-            int(ConfigRegistry.get("port.ollama")), ollama_s, ollama_m,
+            "Ollama",
+            ConfigRegistry.get("vm.llm"),
+            int(ConfigRegistry.get("port.ollama")),
+            ollama_s,
+            ollama_m,
         ),
         _to_service_entry(
-            "Browser", ConfigRegistry.get("vm.browser"),
-            int(ConfigRegistry.get("port.browser")), browser_s, browser_m,
+            "Browser",
+            ConfigRegistry.get("vm.browser"),
+            int(ConfigRegistry.get("port.browser")),
+            browser_s,
+            browser_m,
         ),
     ]
 

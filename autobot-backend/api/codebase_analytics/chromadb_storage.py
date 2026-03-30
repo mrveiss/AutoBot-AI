@@ -781,7 +781,9 @@ async def _prepare_batch_data(
         source_id=source_id,
     )
 
-    _append_stats_document(analysis_results, batch_ids, batch_documents, batch_metadatas, source_id)
+    _append_stats_document(
+        analysis_results, batch_ids, batch_documents, batch_metadatas, source_id
+    )
 
     update_phase("prepare", "completed")
     return batch_ids, batch_documents, batch_metadatas
@@ -795,7 +797,9 @@ def _append_stats_document(
     source_id: Optional[str] = None,
 ) -> None:
     """Append the codebase_stats document to the batch lists (Issue #2735)."""
-    stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results, source_id=source_id)
+    stats_id, stats_doc, stats_meta = _prepare_stats_document(
+        analysis_results, source_id=source_id
+    )
     batch_ids.append(stats_id)
     batch_documents.append(stats_doc)
     batch_metadatas.append(stats_meta)
@@ -852,7 +856,9 @@ def _slice_batch(
     Issue #660: Preserves optional pre-computed embeddings slice.
     """
     end_idx = min(start_idx + batch_size, len(batch_ids))
-    slice_embeddings = batch_embeddings[start_idx:end_idx] if batch_embeddings is not None else None
+    slice_embeddings = (
+        batch_embeddings[start_idx:end_idx] if batch_embeddings is not None else None
+    )
     return (
         batch_ids[start_idx:end_idx],
         batch_documents[start_idx:end_idx],
@@ -888,7 +894,11 @@ async def _record_batch_progress(
         total=total_items,
         current_file=f"Batch {batch_num}/{total_batches}",
         phase="store",
-        batch_info={"current": batch_num, "total": total_batches, "items": items_in_batch},
+        batch_info={
+            "current": batch_num,
+            "total": total_batches,
+            "items": items_in_batch,
+        },
     )
     update_stats(items_stored=end_idx)
     logger.info(
@@ -925,20 +935,39 @@ async def _store_single_batch(
     recreating the collection reference (#1249).
     """
     slice_ids, slice_docs, slice_metas, slice_embeddings, end_idx = _slice_batch(
-        batch_ids, batch_documents, batch_metadatas, batch_embeddings, start_idx, batch_size
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        batch_embeddings,
+        start_idx,
+        batch_size,
     )
 
     # Use upsert so the preserved codebase_stats entry (#540) gets
     # updated with fresh values instead of being silently skipped by add().
     # Issue #1249: Retry once on stale collection reference.
     await _upsert_with_stale_retry(
-        code_collection, slice_ids, slice_docs, slice_metas, slice_embeddings, task_id, batch_num
+        code_collection,
+        slice_ids,
+        slice_docs,
+        slice_metas,
+        slice_embeddings,
+        task_id,
+        batch_num,
     )
     items_in_batch = len(slice_ids)
 
     await _record_batch_progress(
-        task_id, batch_num, total_batches, items_in_batch, end_idx, total_items,
-        update_progress, update_stats, tasks_lock, indexing_tasks,
+        task_id,
+        batch_num,
+        total_batches,
+        items_in_batch,
+        end_idx,
+        total_items,
+        update_progress,
+        update_stats,
+        tasks_lock,
+        indexing_tasks,
     )
     return items_in_batch
 

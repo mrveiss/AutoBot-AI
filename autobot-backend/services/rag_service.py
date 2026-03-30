@@ -459,7 +459,9 @@ class RAGService:
         )
         return results, metrics
 
-    async def _emit_ranked_feedback(self, query: str, results: List[SearchResult]) -> None:
+    async def _emit_ranked_feedback(
+        self, query: str, results: List[SearchResult]
+    ) -> None:
         """Classify query complexity and emit retrieval feedback to event + Redis stream.
 
         ranked_ids: results already sorted by rerank_score (post-rerank order).
@@ -470,7 +472,9 @@ class RAGService:
         complexity = classifier.classify(query)
         ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
         pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
+        retrieved_ids = [
+            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
+        ]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,

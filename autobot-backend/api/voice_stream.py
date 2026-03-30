@@ -129,7 +129,9 @@ async def _process_tts_chunk(
             await _cancel_pending_task(prefetch)
             return False, None
 
-        sent = await _send_json(ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total})
+        sent = await _send_json(
+            ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total}
+        )
         if not sent:
             await _cancel_pending_task(prefetch)
             return False, None
@@ -285,7 +287,9 @@ async def _drain_sentence_queue(queue: asyncio.Queue) -> None:
             break
 
 
-async def _handle_barge_in(ws: WebSocket, ctx: dict, tts_task: "asyncio.Task | None") -> None:
+async def _handle_barge_in(
+    ws: WebSocket, ctx: dict, tts_task: "asyncio.Task | None"
+) -> None:
     """Handle barge-in: cancel active TTS, drain queue, restart worker. Ref: #2735."""
     logger.debug("Barge-in received")
     await _cancel_active_tts(ctx["cancel_tts"], tts_task)
