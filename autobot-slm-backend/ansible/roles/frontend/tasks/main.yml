@@ -123,16 +123,17 @@
   tags: ['frontend', 'npm']
 
 - name: "Frontend | Install npm dependencies"
-  community.general.npm:
-    path: "{{ frontend_install_dir }}/autobot-frontend"
-    state: present
+  ansible.builtin.command:
+    cmd: npm install --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
   become: yes
   become_user: "{{ frontend_user }}"
   environment:
     CYPRESS_INSTALL_BINARY: "0"
   when: package_json_path.stat.exists
+  register: _npm_install
+  changed_when: _npm_install.rc == 0
   tags: ['frontend', 'npm']
-  ignore_errors: yes
 
 - name: "Frontend | Build production frontend"
   command: npx vite build
