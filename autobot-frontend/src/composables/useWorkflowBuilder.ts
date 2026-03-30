@@ -271,7 +271,7 @@ class WorkflowBuilderApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch((err) => { logger.warn('Failed to parse error response: %s', err); return {} });
         return {
           success: false,
           error: errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
