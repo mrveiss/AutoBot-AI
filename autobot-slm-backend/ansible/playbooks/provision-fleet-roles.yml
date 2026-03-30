@@ -14,6 +14,10 @@
 #
 # Limit to specific nodes:
 #   --limit "02-Frontend,04-Databases"
+#
+# Tag filtering (--tags) works correctly with include_role because
+# every include_role task carries an apply: block that propagates
+# the tag set into the included role's own tasks (#2827).
 ---
 
 # -------------------------------------------------------------------
@@ -29,18 +33,24 @@
     - name: "Deps | Install nginx"
       ansible.builtin.include_role:
         name: nginx
+        apply:
+          tags: ['deps', 'nginx']
       when: "'nginx' in (node_dependencies | default([]))"
       tags: ['deps', 'nginx']
 
     - name: "Deps | Install Python 3.12"
       ansible.builtin.include_role:
         name: python312
+        apply:
+          tags: ['deps', 'python312']
       when: "'python312' in (node_dependencies | default([]))"
       tags: ['deps', 'python312']
 
     - name: "Deps | Install Node.js"
       ansible.builtin.include_role:
         name: nodejs
+        apply:
+          tags: ['deps', 'nodejs']
       when: "'nodejs' in (node_dependencies | default([]))"
       tags: ['deps', 'nodejs']
 
@@ -85,6 +95,8 @@
     - name: "Common | Apply common role to all fleet nodes"
       ansible.builtin.include_role:
         name: common
+        apply:
+          tags: ['common', 'provision']
       tags: ['common', 'provision']
 
 # -------------------------------------------------------------------
@@ -131,6 +143,8 @@
     - name: "App | Deploy backend role"
       ansible.builtin.include_role:
         name: backend
+        apply:
+          tags: ['backend', 'provision']
       when: >-
         'backend' in (node_roles | default([])) or
         'autobot-backend' in (node_roles | default([])) or
@@ -162,6 +176,8 @@
     - name: "App | Deploy frontend role"
       ansible.builtin.include_role:
         name: frontend
+        apply:
+          tags: ['frontend', 'provision']
       when: >-
         'frontend' in (node_roles | default([])) or
         'autobot-frontend' in (node_roles | default([])) or
@@ -180,6 +196,8 @@
     - name: "AI | Deploy AI stack role"
       ansible.builtin.include_role:
         name: ai-stack
+        apply:
+          tags: ['ai-stack', 'provision']
       when: >-
         'ai-stack' in (node_roles | default([])) or
         'autobot-ai-stack' in (node_roles | default([])) or
@@ -190,6 +208,8 @@
     - name: "AI | Deploy LLM role"
       ansible.builtin.include_role:
         name: llm
+        apply:
+          tags: ['llm', 'provision']
       when: >-
         'llm' in (node_roles | default([])) or
         inventory_hostname in groups.get('ai_stack', []) or
@@ -208,6 +228,8 @@
     - name: "AI | Deploy NPU worker role"
       ansible.builtin.include_role:
         name: npu-worker
+        apply:
+          tags: ['npu-worker', 'provision']
       when: >-
         'npu-worker' in (node_roles | default([])) or
         'autobot-npu-worker' in (node_roles | default([])) or
@@ -227,6 +249,8 @@
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
       ansible.builtin.include_role:
         name: llm
+        apply:
+          tags: ['llm', 'provision']
       when: >-
         inventory_hostname in groups.get('llm_nodes', [])
       tags: ['llm', 'provision']
@@ -243,6 +267,8 @@
     - name: "Auto | Deploy browser role"
       ansible.builtin.include_role:
         name: browser
+        apply:
+          tags: ['browser', 'provision']
       when: >-
         'browser' in (node_roles | default([])) or
         'autobot-browser-worker' in (node_roles | default([])) or
