@@ -209,7 +209,7 @@ function resetSettings() {
             use_phi2: false,
             api_endpoint: 'http://localhost:8001',
             ollama_endpoint: 'http://localhost:11434',
-            ollama_model: 'deepseek-r1:14b',
+            ollama_model: 'qwen3.5:9b',
             streaming: false
         },
         ui: {

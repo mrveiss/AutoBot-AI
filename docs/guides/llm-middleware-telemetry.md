@@ -1054,7 +1054,7 @@ backend:
       # gpu_endpoint: http://172.16.168.20:11434
       # gpu_models:
       #   - "qwen3.5:9b"
-      #   - "deepseek-r1:14b"
+      #   - "mistral:7b-instruct"
 
 # Fallback path for _get_ollama_endpoint_fallback() via get_host("ollama")
 infrastructure:

@@ -248,7 +248,7 @@ class LLMModelOptimizer:
             }],
             "src/config.py": [
                 {
-                    "find": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:3b")',
+                    "find": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b")',
                     "replace": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "{_ROUTING_MODEL}")',
                     "line_context": "models configuration — orchestrator",
                 },
@@ -259,7 +259,7 @@ class LLMModelOptimizer:
                 },
             ],
             "backend/utils/connection_utils.py": [{
-                "find": '"deepseek-r1:14b"',
+                "find": '"qwen3.5:9b"',
                 "replace": f'"{_DEFAULT_MODEL}"',
                 "line_context": "AUTOBOT_DEFAULT_LLM_MODEL default",
             }],

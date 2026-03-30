@@ -192,18 +192,18 @@ def create_model_recommendations():
                 "orchestrator": "artifish/llama3.2-uncensored:latest",  # 2.2GB
                 "rag": "artifish/llama3.2-uncensored:latest",  # 2.2GB
                 "research": "artifish/llama3.2-uncensored:latest",  # 2.2GB
-                "chat": "llama3.2:3b-instruct-q4_K_M",  # 2GB
+                "chat": "mistral:7b-instruct",  # 4.1GB
                 "analysis": "artifish/llama3.2-uncensored:latest",  # 2.2GB
                 "planning": "artifish/llama3.2-uncensored:latest",  # 2.2GB
             }
             parallel_capacity = "2-3 concurrent models"
         elif total_memory >= 6000:  # 6GB GPU
             recommended_models = {
-                "orchestrator": "llama3.2:3b-instruct-q4_K_M",  # 2GB
+                "orchestrator": "llama3.2:1b-instruct-q4_K_M",  # 807MB
                 "rag": "artifish/llama3.2-uncensored:latest",  # 2.2GB
-                "research": "llama3.2:3b-instruct-q4_K_M",  # 2GB
+                "research": "mistral:7b-instruct",  # 4.1GB
                 "chat": "llama3.2:1b-instruct-q4_K_M",  # 807MB
-                "analysis": "llama3.2:3b-instruct-q4_K_M",  # 2GB
+                "analysis": "mistral:7b-instruct",  # 4.1GB
             }
             parallel_capacity = "2 concurrent models"
         else:  # 4GB GPU
