@@ -731,7 +731,7 @@ class ConfigManager:
             "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
             "host": os.getenv("AUTOBOT_REDIS_HOST", "localhost"),
             "port": int(os.getenv("AUTOBOT_REDIS_PORT", "6379")),
-            "db": int(os.getenv("AUTOBOT_REDIS_DB", "1")),
+            "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
         }
 
         return self._deep_merge(defaults, redis_config)
