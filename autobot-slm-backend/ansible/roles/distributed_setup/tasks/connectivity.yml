@@ -12,6 +12,8 @@
     state: started
   loop: "{{ fleet_nodes }}"
   register: connectivity_test
+  # (#2872) Intentional: diagnostic test — nodes may be unreachable during
+  # initial provisioning; results are counted and reported below.
   failed_when: false
   changed_when: false
 
@@ -33,6 +35,8 @@
   command: "ssh -o ConnectTimeout={{ connectivity_timeout }} -o BatchMode=yes {{ service_user }}@{{ item.host }} 'echo SSH OK'"
   loop: "{{ fleet_nodes }}"
   register: ssh_test
+  # (#2872) Intentional: SSH may not be configured yet on all nodes;
+  # results are displayed for operator review.
   failed_when: false
   changed_when: false
 

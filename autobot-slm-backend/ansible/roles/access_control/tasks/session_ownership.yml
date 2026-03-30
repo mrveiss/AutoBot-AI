@@ -16,7 +16,10 @@
   command: "{{ project_root }}/venv/bin/python -m autobot_user_backend.scripts.backfill_session_ownership"
   when: session_ownership_backfill
   register: backfill_result
-  failed_when: false
+  # (#2872) Backfill may fail on first deploy before DB is seeded; log
+  # warning but don't abort — the service handles missing ownership on
+  # startup.  Only truly unexpected exit codes (signal kills) abort.
+  failed_when: backfill_result.rc > 1
   changed_when: "'backfilled' in backfill_result.stdout"
 
 - name: Display backfill results

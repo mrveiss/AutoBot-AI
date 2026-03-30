@@ -40,6 +40,8 @@
   loop: "{{ fleet_nodes }}"
   register: final_connectivity_test
   changed_when: false
+  # (#2872) Intentional: diagnostic test — nodes may be unreachable during
+  # initial provisioning; results counted and displayed below.
   failed_when: false
 
 - name: Count accessible nodes
@@ -59,7 +61,7 @@
 
 - name: Verification status
   debug:
-    msg: "✅ Distributed setup verified successfully"
+    msg: "Distributed setup verified successfully"
   when:
     - accessible_nodes | int > 0
     - config_files_verify.results | selectattr('stat.exists') | list | length == config_files_verify.results | length

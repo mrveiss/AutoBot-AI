@@ -206,6 +206,8 @@
   shell: ls /usr/lib/python3*/EXTERNALLY-MANAGED 2>/dev/null
   register: _pep668
   changed_when: false
+  # (#2872) Intentional: EXTERNALLY-MANAGED marker may not exist; rc != 0
+  # means system pip is allowed and the pip install below should proceed.
   failed_when: false
   tags: ['common', 'python']
 
