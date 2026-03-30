@@ -91,13 +91,15 @@
   become: yes
   tags: ['common', 'directories']
 
+# Issue #2828: Use shared key path so any user in the autobot group can
+# run Ansible without needing the key in their own ~/.ssh/.
 - name: "Common | Configure SSH key authentication"
   authorized_key:
     user: autobot
-    key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
+    key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
     state: present
   become: yes
-  when: lookup('file', '~/.ssh/autobot_key.pub', errors='ignore') is not none
+  when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
 - name: "Common | Reset UFW to clean state (Issue #895)"

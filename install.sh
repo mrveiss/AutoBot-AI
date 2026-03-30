@@ -296,7 +296,8 @@ system_setup() {
             "${AUTOBOT_BASE}/nginx/certs" \
             "${AUTOBOT_BASE}/cache" \
             "${LOG_DIR}" \
-            /etc/autobot
+            /etc/autobot \
+            /etc/autobot/ssh
 
     chown -R autobot:autobot "${AUTOBOT_BASE}"
     success "  Directory ownership set"
@@ -307,6 +308,17 @@ system_setup() {
             sudo -u autobot bash -c "mkdir -p /home/autobot/.ssh && ssh-keygen -t ed25519 -f ${ssh_key} -N '' -C 'autobot@slm'"
     else
         success "  SSH key pair already exists"
+    fi
+
+    # Issue #2828: Copy SSH key to shared location so any user in the autobot
+    # group can run Ansible without needing the key in their own ~/.ssh/.
+    if [[ -f "${ssh_key}" ]]; then
+        cp "${ssh_key}" /etc/autobot/ssh/autobot_key
+        cp "${ssh_key}.pub" /etc/autobot/ssh/autobot_key.pub
+        chown root:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
+        chmod 0640 /etc/autobot/ssh/autobot_key
+        chmod 0644 /etc/autobot/ssh/autobot_key.pub
+        success "  SSH key published to /etc/autobot/ssh/ (group-readable)"
     fi
 }
 

@@ -283,7 +283,8 @@ async def _generate_dynamic_inventory(
     inventory = {
         "all": {
             "vars": {
-                "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
+                # Issue #2828: Use shared key path for any-operator access
+                "ansible_ssh_private_key_file": "/etc/autobot/ssh/autobot_key",
                 "ansible_python_interpreter": "/usr/bin/python3",
                 "slm_host": _slm_host,
                 **infra_vars,
@@ -345,13 +346,16 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
     Probes run in parallel; each probe has a 5-second ConnectTimeout plus a
     10-second asyncio timeout as a safety net.
 
-    Returns a dict mapping inventory hostname → reachable (bool).
+    Returns a dict mapping inventory hostname -> reachable (bool).
     """
     raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
     all_vars = raw.get("all", {}).get("vars", {})
     default_key = str(
         Path(
-            all_vars.get("ansible_ssh_private_key_file", "~/.ssh/autobot_key")
+            all_vars.get(
+                "ansible_ssh_private_key_file",
+                "/etc/autobot/ssh/autobot_key",  # Issue #2828
+            )
         ).expanduser()
     )
     default_user = all_vars.get("ansible_user", "autobot")

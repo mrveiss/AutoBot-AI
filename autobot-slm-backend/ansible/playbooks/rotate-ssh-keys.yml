@@ -59,7 +59,7 @@
           - "K2 - Stage new public key alongside old key"
           - "K3 - Verify connectivity with new key"
           - "K4 - Remove old key from authorized_keys"
-          - "K5 - Save new private key to ~/.ssh/autobot_key"
+          - "K5 - Save new private key to /etc/autobot/ssh/autobot_key"
           - "K6 - Remove temp safety-net key"
           - "=========================================================="
 
@@ -212,7 +212,8 @@
   gather_facts: false
 
   vars:
-    _old_key_path: "{{ lookup('env', 'HOME') }}/.ssh/autobot_key"
+    # Issue #2828: Read old key from shared location
+    _old_key_path: "/etc/autobot/ssh/autobot_key"
 
   tasks:
     - name: "SSH K4 | Read current old public key"
@@ -243,27 +244,52 @@
   vars:
     _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
     _new_key_path: "{{ _keys_dir }}/autobot_key_new"
-    _final_key_path: "{{ lookup('env', 'HOME') }}/.ssh/autobot_key"
+    # Issue #2828: Install to shared location accessible by any operator
+    _final_key_path: "/etc/autobot/ssh/autobot_key"
 
   tasks:
     - name: "SSH K5 | Back up old private key"
       ansible.builtin.copy:
         src: "{{ _final_key_path }}"
         dest: "{{ _final_key_path }}.bak"
-        mode: "0600"
+        mode: "0640"
       failed_when: false
 
     - name: "SSH K5 | Install new private key"
       ansible.builtin.copy:
         src: "{{ _new_key_path }}"
         dest: "{{ _final_key_path }}"
-        mode: "0600"
+        owner: root
+        group: autobot
+        mode: "0640"
+      become: true
 
     - name: "SSH K5 | Install new public key"
       ansible.builtin.copy:
         src: "{{ _new_key_path }}.pub"
         dest: "{{ _final_key_path }}.pub"
+        owner: root
+        group: autobot
         mode: "0644"
+      become: true
+
+    - name: "SSH K5 | Also update autobot user home copy"
+      ansible.builtin.copy:
+        src: "{{ _new_key_path }}"
+        dest: "/home/autobot/.ssh/autobot_key"
+        owner: autobot
+        group: autobot
+        mode: "0600"
+      become: true
+
+    - name: "SSH K5 | Also update autobot user home public key"
+      ansible.builtin.copy:
+        src: "{{ _new_key_path }}.pub"
+        dest: "/home/autobot/.ssh/autobot_key.pub"
+        owner: autobot
+        group: autobot
+        mode: "0644"
+      become: true
 
     - name: "SSH K5 | Confirm installed"
       ansible.builtin.debug:
@@ -315,8 +341,8 @@
           - "AutoBot SSH Key Rotation - COMPLETE"
           - "=========================================================="
           - "All 9 nodes updated with new ED25519 key."
-          - "New key installed at ~/.ssh/autobot_key"
-          - "Old key backed up at ~/.ssh/autobot_key.bak"
+          - "New key installed at /etc/autobot/ssh/autobot_key"
+          - "Old key backed up at /etc/autobot/ssh/autobot_key.bak"
           - ""
-          - "To verify: ssh -i ~/.ssh/autobot_key autobot@{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
+          - "To verify: ssh -i /etc/autobot/ssh/autobot_key autobot@{{ slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1')) }}"
           - "=========================================================="

@@ -17,7 +17,7 @@
     - name: Display VM information
       debug:
         msg:
-          - "🖥️  Configuring VM: {{ inventory_hostname }}"
+          - "Configuring VM: {{ inventory_hostname }}"
           - "IP Address: {{ ansible_default_ipv4.address }}"
           - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
           - "Role: {{ group_names | join(', ') }}"
@@ -162,10 +162,11 @@
         group: "{{ autobot_group }}"
         mode: '0700'
 
+    # Issue #2828: Use shared key path so any operator can run Ansible
     - name: Set up authorized_keys for autobot user (if public key provided)
       authorized_key:
         user: "{{ autobot_user }}"
-        key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
+        key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
         state: present
       ignore_errors: true  # In case key doesn't exist yet
 
@@ -449,12 +450,12 @@
     - name: Display base system deployment summary
       debug:
         msg:
-          - "✅ Base system configuration completed for {{ inventory_hostname }}"
-          - "🔐 Security: UFW firewall enabled, fail2ban configured"
-          - "👤 User: {{ autobot_user }} created with sudo access"
-          - "📊 Monitoring: {{ monitoring.enabled | ternary('Enabled', 'Disabled') }}"
-          - "💾 Backup: {{ backup.enabled | ternary('Enabled', 'Disabled') }}"
-          - "🌐 Network: Internal communication configured"
+          - "Base system configuration completed for {{ inventory_hostname }}"
+          - "Security: UFW firewall enabled, fail2ban configured"
+          - "User: {{ autobot_user }} created with sudo access"
+          - "Monitoring: {{ monitoring.enabled | ternary('Enabled', 'Disabled') }}"
+          - "Backup: {{ backup.enabled | ternary('Enabled', 'Disabled') }}"
+          - "Network: Internal communication configured"
 
     - name: Verify critical services are running
       systemd:
