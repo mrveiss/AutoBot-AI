@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["setup-wizard"])
 
-# ── Wizard Steps ────────────────────────────────────────────────────────────
+# -- Wizard Steps ------------------------------------------------------------
 
 WIZARD_STEPS = [
     "welcome",
@@ -45,7 +45,7 @@ WIZARD_STEPS = [
 ]
 
 
-# ── Schemas ─────────────────────────────────────────────────────────────────
+# -- Schemas -----------------------------------------------------------------
 
 
 class WizardStatus(BaseModel):
@@ -70,7 +70,7 @@ class ProvisionRequest(BaseModel):
     node_ids: Optional[list[str]] = None
 
 
-# ── Settings Helpers ────────────────────────────────────────────────────────
+# -- Settings Helpers --------------------------------------------------------
 
 
 async def _get_setting(key: str, default: str = "") -> str:
@@ -242,7 +242,11 @@ async def _generate_dynamic_inventory(
         # When a node on the SLM host also has the 'frontend' role,
         # set slm_colocated_frontend so the SLM nginx config serves
         # user frontend at / and SLM at /slm/ instead of redirecting.
+        # Also configure the backend upstream to proxy directly to
+        # uvicorn (HTTP on port 8001) instead of through the backend
+        # nginx (HTTPS on port 8443), eliminating the double-proxy.
         _frontend_roles = {"frontend", "autobot-frontend"}
+        _backend_roles = {"backend", "autobot-backend"}
         for node in db_nodes:
             inv_name = node.ansible_target
             if inv_name not in hosts:
@@ -250,6 +254,11 @@ async def _generate_dynamic_inventory(
             roles = set(hosts[inv_name].get("node_roles", []))
             if node.ip_address in local_ips and roles & _frontend_roles:
                 hosts[inv_name]["slm_colocated_frontend"] = True
+                # When backend is also co-located, proxy directly to
+                # uvicorn (HTTP) -- the backend nginx vhost is skipped.
+                if roles & _backend_roles:
+                    hosts[inv_name]["frontend_backend_port"] = 8001
+                    hosts[inv_name]["frontend_backend_protocol"] = "http"
 
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
@@ -272,7 +281,7 @@ async def _generate_dynamic_inventory(
     # the routable IP that remote nodes should use.  The slm_agent role's
     # default builds slm_admin_url from this value, and the template's
     # auto-detect logic then rewrites it to 127.0.0.1 when the agent is
-    # co-located — but only after slm_host contains the real local IP rather
+    # co-located -- but only after slm_host contains the real local IP rather
     # than the hardcoded multi-node default (172.16.168.19).
     from urllib.parse import urlparse
 
@@ -345,7 +354,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
     Probes run in parallel; each probe has a 5-second ConnectTimeout plus a
     10-second asyncio timeout as a safety net.
 
-    Returns a dict mapping inventory hostname → reachable (bool).
+    Returns a dict mapping inventory hostname -> reachable (bool).
     """
     raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
     all_vars = raw.get("all", {}).get("vars", {})
@@ -389,14 +398,14 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
                 else hostname
             )
             logger.warning(
-                "Node %s (%s) is unreachable — skipping (not enrolled?)",
+                "Node %s (%s) is unreachable -- skipping (not enrolled?)",
                 hostname,
                 ip,
             )
     return results
 
 
-# ── Provisioning State (#1384) ──────────────────────────────────────────────
+# -- Provisioning State (#1384) ----------------------------------------------
 
 async def _activate_provisioned_roles(
     node_ids: Optional[list[str]],
@@ -522,7 +531,8 @@ async def _run_provisioning_task(
                     else hostname
                 )
                 msg = (
-                    f"Node {hostname} ({ip}) is unreachable — skipping (not enrolled?)"
+                    f"Node {hostname} ({ip}) is unreachable"
+                    " -- skipping (not enrolled?)"
                 )
                 _write_provision_log(f"WARNING: {msg}")
                 await ws_manager.send_provision_log("warning", msg)
@@ -530,7 +540,8 @@ async def _run_provisioning_task(
         if not reachable:
             _provision_state["status"] = "failed"
             _provision_state["error"] = (
-                "All nodes are unreachable — ensure nodes are enrolled before provisioning"
+                "All nodes are unreachable"
+                " -- ensure nodes are enrolled before provisioning"
             )
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: All nodes are unreachable")
@@ -538,11 +549,17 @@ async def _run_provisioning_task(
                 "failed",
                 "",
                 0,
-                error="All nodes are unreachable — ensure nodes are enrolled before provisioning",
+                error=(
+                    "All nodes are unreachable"
+                    " -- ensure nodes are enrolled before provisioning"
+                ),
             )
             await ws_manager.send_provision_log(
                 "error",
-                "All nodes are unreachable — ensure nodes are enrolled before provisioning",
+                (
+                    "All nodes are unreachable"
+                    " -- ensure nodes are enrolled before provisioning"
+                ),
             )
             return
 
@@ -609,7 +626,7 @@ async def _run_provisioning_task(
         _write_provision_log(f"EXCEPTION: {exc}")
         logger.exception("Fleet provisioning error: %s", exc)
         elapsed = time.time() - (_provision_state.get("started_at") or time.time())
-        # Sanitize — Ansible exceptions may contain credentials (#2754)
+        # Sanitize -- Ansible exceptions may contain credentials (#2754)
         await ws_manager.send_provision_status(
             "failed", "", elapsed, error="internal error"
         )
@@ -622,7 +639,7 @@ async def _run_provisioning_task(
             temp_inventory_path.unlink(missing_ok=True)
 
 
-# ── Endpoints ───────────────────────────────────────────────────────────────
+# -- Endpoints ---------------------------------------------------------------
 
 
 @router.get("/status", response_model=WizardStatus)

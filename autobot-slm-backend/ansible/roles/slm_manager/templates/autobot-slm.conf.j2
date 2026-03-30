@@ -3,6 +3,7 @@
 
 {% if slm_colocated_frontend | default(false) | bool %}
 # Co-located user backend upstream (#2829)
+# Proxies directly to uvicorn (HTTP) — no intermediate backend nginx.
 upstream autobot_backend {
     server {{ frontend_backend_host }}:{{ frontend_backend_port }};
 }
@@ -56,6 +57,7 @@ server {
 {% if slm_colocated_frontend | default(false) | bool %}
     # ── Co-located mode (#2829) ───────────────────────────────
     # SLM API under /slm/api/, user backend at /api/, user frontend at /
+    # Backend upstream is plain HTTP to uvicorn — no double-proxy.
 
     # SLM Backend WebSocket (must be before /slm/api/ to take priority)
     location /slm/api/ws/ {
@@ -90,7 +92,7 @@ server {
         proxy_set_header Host $host;
     }
 
-    # User backend WebSocket proxies
+    # User backend WebSocket proxies (HTTP to uvicorn)
     location /api/ws {
         proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
         proxy_http_version 1.1;
@@ -99,7 +101,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
     }
 
     location /api/terminal/ws {
@@ -110,7 +114,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 300s;
+{% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
     }
 
     location /api/voice/stream {
@@ -121,7 +127,9 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
     }
 
     location /ws {
@@ -131,7 +139,9 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
     }
 
     # User backend API proxy
@@ -142,7 +152,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+{% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
+{% endif %}
         proxy_connect_timeout 60s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;

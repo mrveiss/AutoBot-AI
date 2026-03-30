@@ -44,12 +44,18 @@ slm_nginx_config: autobot-slm
 # When SLM and user frontend share the same host, the SLM
 # nginx config serves the user frontend at / and SLM at /slm/.
 # Set to true + provide paths when deploying single-host.
+#
+# In co-located mode the SLM nginx proxies directly to uvicorn
+# (HTTP on port 8001) instead of through the backend nginx
+# (HTTPS on port 8443), eliminating the double-proxy overhead.
+# The backend role skips its standalone nginx vhost when this
+# flag is true.
 # ==========================================================
 slm_colocated_frontend: false
 frontend_dist_dir: "{{ slm_base_dir }}/autobot-frontend/dist"
 frontend_backend_host: 127.0.0.1
-frontend_backend_port: 8443
-frontend_backend_protocol: https
+frontend_backend_port: 8001
+frontend_backend_protocol: http
 
 # ==========================================================
 # Frontend Build

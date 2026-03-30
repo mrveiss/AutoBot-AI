@@ -370,7 +370,22 @@
 # nginx reverse proxy (Issue #957)
 # Holds port backend_nginx_port (8443) permanently so WDF
 # rule is evaluated once for nginx, not on every uvicorn restart.
+#
+# Co-located mode (#2829): When SLM and backend share a host,
+# the SLM nginx proxies directly to uvicorn (port 8001, HTTP).
+# The standalone backend nginx vhost is skipped to avoid a
+# redundant double-proxy (SLM:443 -> backend:8443 -> uvicorn:8001).
 # ==========================================================
+
+# Cleanup: disable standalone backend nginx when co-located with SLM
+- name: "Backend nginx | Disable standalone vhost when co-located with SLM (#2829)"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+    state: absent
+  notify: reload nginx backend
+  when: slm_colocated_frontend | default(false) | bool
+  tags: ['backend', 'nginx']
+
 - name: "Backend nginx | Deploy reverse-proxy vhost config"
   ansible.builtin.template:
     src: nginx-backend.conf.j2
@@ -379,6 +394,7 @@
     owner: root
     group: root
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
 - name: "Backend nginx | Enable vhost (symlink)"
@@ -387,6 +403,7 @@
     dest: /etc/nginx/sites-enabled/autobot-backend.conf
     state: link
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
 - name: "Backend nginx | Disable default vhost"
