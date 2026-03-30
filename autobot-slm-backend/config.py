@@ -263,6 +263,16 @@ class Settings(BaseSettings):
         "SLM_EXTERNAL_URL", f"https://{_get_local_ip()}"
     )
 
+    # TLS verification for outbound HTTPS calls to internal nodes.
+    # Set SLM_VERIFY_SSL=false ONLY in dev/test environments that use
+    # self-signed certificates.  Production must leave this at the default
+    # True value (#2852).
+    verify_ssl: bool = os.getenv("SLM_VERIFY_SSL", "true").lower() not in (
+        "false",
+        "0",
+        "no",
+    )
+
     model_config = ConfigDict(
         env_prefix="SLM_",
         env_file=(".env", "/etc/autobot/db-credentials.env"),
