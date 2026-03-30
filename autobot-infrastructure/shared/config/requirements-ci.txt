@@ -68,9 +68,10 @@ pygetwindow>=0.0.9
 
 # ===== EXISTING INTEGRATIONS =====
 markdownify>=1.2.2              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r)
-langchain>=1.2.13
-langchain-community>=0.4.1
-langchain-experimental>=0.4.1
+langchain>=1.2.13,<2.0.0         # Issue #2808: upper bound unified with backend canonical
+langchain-core>=1.2.22,<2.0.0   # Issue #2808: added to match backend canonical
+langchain-community>=0.4.1,<0.5.0  # Issue #2808: upper bound unified with backend canonical
+langchain-experimental>=0.4.1,<0.5.0  # Issue #2808: upper bound added for consistency
 llama-index>=0.14.19,<0.15.0  # Unified across all components (#2669); upper bound added (#2822)
 llama-index-llms-ollama>=0.10.1,<1.0.0
 llama-index-embeddings-ollama>=0.9.0,<1.0.0
