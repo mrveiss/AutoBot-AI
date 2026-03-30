@@ -109,15 +109,15 @@ stages:
   cognify:
     tasks:
       - name: extract_entities
-        model: llama3.2:3b
+        model: llama3.2:1b
         batch_size: 50
         confidence_threshold: 0.7
       - name: extract_relationships
-        model: llama3.2:3b
+        model: llama3.2:1b
         batch_size: 50
       - name: extract_events
         enabled: true
-        model: llama3.2:3b
+        model: llama3.2:1b
       - name: generate_summaries
         enabled: true
         levels: [chunk, section, document]
@@ -451,7 +451,7 @@ class EntityExtractor(BaseCognifier):
     """LLM-powered entity extraction from text chunks."""
 
     def __init__(self, config: dict):
-        self.model = config.get('model', 'llama3.2:3b')
+        self.model = config.get('model', 'llama3.2:1b')
         self.confidence_threshold = config.get('confidence_threshold', 0.7)
         self.llm = LLMService(model=self.model)
 
@@ -565,7 +565,7 @@ class RelationshipExtractor(BaseCognifier):
     """LLM-powered relationship extraction."""
 
     def __init__(self, config: dict):
-        self.model = config.get('model', 'llama3.2:3b')
+        self.model = config.get('model', 'llama3.2:1b')
         self.llm = LLMService(model=self.model)
 
     async def process(
@@ -786,7 +786,7 @@ class EventExtractor(BaseCognifier):
     """LLM-powered event and temporal extraction."""
 
     def __init__(self, config: dict):
-        self.model = config.get('model', 'llama3.2:3b')
+        self.model = config.get('model', 'llama3.2:1b')
         self.llm = LLMService(model=self.model)
 
     async def process(
@@ -1036,7 +1036,7 @@ class HierarchicalSummarizer(BaseCognifier):
     """Generate multi-level summaries of documents."""
 
     def __init__(self, config: dict):
-        self.model = config.get('model', 'llama3.2:3b')
+        self.model = config.get('model', 'llama3.2:1b')
         self.levels = config.get('levels', ['chunk', 'section', 'document'])
         self.max_words = config.get('max_words', {
             'chunk': 50,
@@ -1449,7 +1449,7 @@ autobot-frontend/src/components/knowledge/
 # Add to config/ssot_config.py
 knowledge_graph:
   pipeline:
-    default_model: "llama3.2:3b"
+    default_model: "llama3.2:1b"
     batch_size: 50
     confidence_threshold: 0.7
   temporal:

@@ -179,7 +179,7 @@ backend:
       # gpu_endpoint: http://172.16.168.20:11434
       # gpu_models:
       #   - "qwen3.5:9b"
-      #   - "deepseek-r1:14b"
+      #   - "mistral:7b-instruct"
       #   - "codellama:13b"
 
 # Infrastructure host overrides
@@ -1018,7 +1018,7 @@ backend:
       gpu_endpoint: http://172.16.168.20:11434    # GPU-accelerated endpoint
       gpu_models:
         - "qwen3.5:9b"
-        - "deepseek-r1:14b"
+        - "mistral:7b-instruct"
         - "codellama:13b"
 ```
 

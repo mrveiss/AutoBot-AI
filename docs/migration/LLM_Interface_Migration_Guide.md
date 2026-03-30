@@ -93,7 +93,7 @@ llm:
   ollama:
     enabled: true
     base_url: "http://localhost:11434"
-    default_model: "deepseek-r1:14b"
+    default_model: "qwen3.5:9b"
   openai:
     enabled: false
     api_key: ""
