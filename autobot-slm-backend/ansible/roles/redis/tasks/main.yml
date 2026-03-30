@@ -144,7 +144,7 @@
 
 - name: "Redis | Test Redis connectivity"
   command: >
-    {{ redis_cli_path | default('redis-cli') }}
+    {{ redis_cli_path | default('/usr/bin/redis-cli') }}
     -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
     ping
