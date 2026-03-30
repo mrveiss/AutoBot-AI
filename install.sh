@@ -39,6 +39,7 @@ UNINSTALL=false
 CONFIRM_YES=false
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
+OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
 
 # Phase tracking
 TOTAL_PHASES=7
@@ -135,6 +136,7 @@ Options:
   --yes                 Skip confirmation prompts (use with --uninstall)
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
   --admin-pass=PASS     SLM admin password (auto-generated if not set)
+  --ip=IP               Override auto-detected IP address (#2832)
   --help                Show this help message
 
 Examples:
@@ -397,8 +399,8 @@ INVENTORY
         encryption_key=$(openssl rand -hex 32)
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
-        local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
-            || hostname -I | awk '{print $1}')
+        local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
+            || hostname -I | awk '{print $1}')}"
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
@@ -495,7 +497,7 @@ register_local_node() {
 
     local api_url="https://127.0.0.1"
     local local_ip
-    local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
+    local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
     local hostname_val
     hostname_val=$(hostname)
 
@@ -578,7 +580,7 @@ finalize() {
 
     local creds_file="/root/autobot-credentials.txt"
     local server_ip
-    server_ip=$(hostname -I | awk '{print $1}')
+    server_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
     cat > "${creds_file}" << EOF
 AutoBot SLM Credentials
 =======================
@@ -670,6 +672,7 @@ parse_args() {
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
+            --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
             --help|-h)        print_usage; exit 0 ;;
             *)                fatal "Unknown option: $1 (use --help for usage)" ;;
         esac
