@@ -47,6 +47,33 @@ router = APIRouter(
 # Issue #380: Module-level tuple for allowed DML operations
 _ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")
 
+# Issue #2845: Allowlist pattern for SQL identifiers (table and column names)
+_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
+    """Validate a SQL identifier (table or column name) against an allowlist pattern.
+
+    Only permits names composed of ASCII letters, digits, and underscores, starting
+    with a letter or underscore. This prevents SQL injection when user-supplied identifiers
+    are interpolated into query strings. (#2845)
+
+    Args:
+        name: The identifier to validate.
+        label: Human-readable label used in the error message.
+
+    Returns:
+        The validated name unchanged.
+
+    Raises:
+        ValueError: If the name contains characters outside the allowed set.
+    """
+    if not _SQL_IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
+        )
+    return name
+
 
 # Security Configuration
 
@@ -285,7 +312,8 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
         schemas = {}
 
         if table:
-            cursor.execute(f"PRAGMA table_info([{table}])")
+            _validate_sql_identifier(table, "table name")
+            cursor.execute(f"PRAGMA table_info([{table}])")  # nosec B608
             columns = cursor.fetchall()
             schemas[table] = [
                 {
@@ -926,6 +954,9 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
+    except ValueError as e:
+        logger.warning("Invalid table identifier in describe_schema request: %s", e)
+        raise HTTPException(status_code=400, detail=str(e))
     except sqlite3.Error as e:
         logger.error("SQLite error describing schema: %s", e)
         raise HTTPException(status_code=500, detail="Error describing schema")
