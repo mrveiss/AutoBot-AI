@@ -54,8 +54,6 @@ const emit = defineEmits<{
   (e: 'skip-step', index: number): void
   (e: 'take-manual-control'): void
   (e: 'execute-all'): void
-  (e: 'save-workflow', data: { name: string; steps: WorkflowStep[] }): void
-  (e: 'update-workflow', steps: WorkflowStep[]): void
   (e: 'close'): void
 }>()
 
