@@ -9,6 +9,7 @@ Final comprehensive analysis of Redis vector store integration options for AutoB
 import asyncio
 import json
 import logging
+import os
 import sys
 from typing import Any, Dict, List, Tuple
 
@@ -20,6 +21,9 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 
 def _build_fix_llamaindex_recommendation(data_analysis, llamaindex_fixes):
@@ -263,7 +267,7 @@ class AutoBotVectorStoreAnalysis:
             client = redis.Redis(
                 host=NetworkConstants.LOCALHOST_NAME,
                 port=NetworkConstants.REDIS_PORT,
-                db=2,
+                db=_DB_KNOWLEDGE,
                 decode_responses=True,
             )
 

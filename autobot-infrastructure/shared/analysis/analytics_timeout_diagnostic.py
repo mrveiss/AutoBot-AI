@@ -2,8 +2,9 @@
 """
 Fix Redis Timeout in Analytics Indexing
 
-This script addresses Redis timeout issues in the analytics database (DB 8)
-by implementing connection pooling, batch operations, and timeout protection.
+This script addresses Redis timeout issues in the analytics database (DB 11 per
+redis-databases.yaml SSOT — #2806) by implementing connection pooling, batch
+operations, and timeout protection.
 """
 
 import asyncio
@@ -22,6 +23,9 @@ from constants.network_constants import NetworkConstants
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): analytics = 11
+_DB_ANALYTICS = int(os.getenv("AUTOBOT_REDIS_DB_ANALYTICS", "11"))
 
 
 class AnalyticsRedisOptimizer:
@@ -44,7 +48,7 @@ class AnalyticsRedisOptimizer:
             self.connection_pool = redis.ConnectionPool(
                 host=redis_host,
                 port=redis_port,
-                db=8,
+                db=_DB_ANALYTICS,
                 max_connections=10,
                 socket_timeout=5,  # Reduced from default 30s
                 socket_connect_timeout=3,  # Reduced connection timeout

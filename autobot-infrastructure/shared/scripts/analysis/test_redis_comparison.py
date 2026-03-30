@@ -9,10 +9,14 @@ for the AutoBot project's existing Redis data.
 
 import asyncio
 import logging
+import os
 import sys
 import time
 
 from constants import ServiceURLs
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 # Add the project root to the Python path
 sys.path.insert(0, "/home/kali/Desktop/AutoBot")
@@ -30,7 +34,7 @@ async def test_redis_connection():
     try:
         import redis
 
-        client = redis.Redis(host="localhost", port=6379, db=2, decode_responses=True)
+        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
         client.ping()
         logger.info("✅ Redis connection successful")
 
@@ -288,7 +292,7 @@ async def analyze_existing_data():
     try:
         import redis
 
-        client = redis.Redis(host="localhost", port=6379, db=2, decode_responses=True)
+        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
 
         # Get sample documents
         sample_keys = list(client.scan_iter(match="llama_index/vector*", count=5))
