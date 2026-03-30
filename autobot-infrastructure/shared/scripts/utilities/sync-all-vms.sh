@@ -86,12 +86,12 @@ sync_to_vm() {
     log_info "Syncing $local_path -> $vm_name:$remote_path"
 
     # Ensure remote directory exists
-    ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=no \
+    ssh -i "$SSH_KEY" -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
         "$SSH_USER@$vm_ip" "mkdir -p $remote_path" 2>/dev/null || true
 
     # Sync
     rsync $rsync_opts \
-        -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+        -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
         "$PROJECT_ROOT/$local_path" "$SSH_USER@$vm_ip:$remote_path/" 2>/dev/null
 }
 
@@ -100,7 +100,7 @@ test_vm() {
     local vm_name=$1
     local vm_ip=$2
 
-    if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=no \
+    if ssh -i "$SSH_KEY" -o ConnectTimeout=3 -o StrictHostKeyChecking=accept-new \
         "$SSH_USER@$vm_ip" "echo ok" > /dev/null 2>&1; then
         echo -e "  ${GREEN}${NC} $vm_name ($vm_ip)"
         return 0

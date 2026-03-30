@@ -100,7 +100,7 @@ class SyncOrchestrator:
         Helper for sync_node_role (Issue #665).
         """
         ssh_opts = (
-            "ssh -o StrictHostKeyChecking=no "
+            "ssh -o StrictHostKeyChecking=accept-new "
             "-o UserKnownHostsFile=/dev/null "
             f"-o ConnectTimeout=30 "
             f"-p {port}"
@@ -118,9 +118,8 @@ class SyncOrchestrator:
         ssh_cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-p",
             str(port),
         ]
@@ -308,7 +307,7 @@ class SyncOrchestrator:
         Helper for pull_from_source (Issue #665).
         """
         ssh_opts = (
-            "ssh -o StrictHostKeyChecking=no "
+            "ssh -o StrictHostKeyChecking=accept-new "
             "-o UserKnownHostsFile=/dev/null "
             "-o ConnectTimeout=30"
         )
@@ -356,9 +355,8 @@ class SyncOrchestrator:
         ssh_cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
         ]

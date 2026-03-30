@@ -63,7 +63,7 @@ def _build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
     return [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -149,7 +149,7 @@ async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -202,7 +202,7 @@ async def _run_ansible_get_logs(
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",

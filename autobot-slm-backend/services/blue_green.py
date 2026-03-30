@@ -1241,7 +1241,7 @@ class BlueGreenService:
                 "-e",
                 f"ansible_port={node.ssh_port or 22}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -1295,9 +1295,8 @@ class BlueGreenService:
             cmd = [
                 "ssh",
                 "-o",
-                "StrictHostKeyChecking=no",
+                "StrictHostKeyChecking=accept-new",
                 "-o",
-                "UserKnownHostsFile=/dev/null",
                 "-o",
                 "ConnectTimeout=10",
                 "-o",
@@ -1394,7 +1393,7 @@ class BlueGreenService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(

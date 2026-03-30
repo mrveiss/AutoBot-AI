@@ -145,12 +145,12 @@ sync_dashboards() {
     # Sync using rsync
     if command -v rsync >/dev/null 2>&1; then
         rsync -avz --delete \
-            -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+            -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new" \
             "$LOCAL_DASHBOARDS/" "$TARGET_USER@$TARGET_HOST:$REMOTE_DASHBOARDS/" \
             ${QUIET:+--quiet}
     else
         # Fallback to scp
-        scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r \
+        scp -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -r \
             "$LOCAL_DASHBOARDS/"*.json "$TARGET_USER@$TARGET_HOST:$REMOTE_DASHBOARDS/" \
             ${QUIET:+2>/dev/null}
     fi

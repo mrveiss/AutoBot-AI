@@ -203,7 +203,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
         "-o",
         "ConnectTimeout=10",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         f"{node.ssh_user}@{node.ip_address}",
         f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true",
     ]
@@ -254,7 +254,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         "-o",
         "ConnectTimeout=10",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         f"{node.ssh_user}@{node.ip_address}",
         f"test -d {repo_path} && echo exists",
     ]

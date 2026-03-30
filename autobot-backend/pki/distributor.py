@@ -293,7 +293,6 @@ class CertificateDistributor:
                     vm_info.ip,
                     username=self.config.ssh_user,
                     client_keys=[str(self.config.ssh_key_path)],
-                    known_hosts=None,  # TODO: Use proper known_hosts in production
                     connect_timeout=10,
                 ) as conn:
                     return await self._execute_distribution(conn, vm_info, span)
@@ -349,7 +348,6 @@ class CertificateDistributor:
                     vm_ip,
                     username=self.config.ssh_user,
                     client_keys=[str(self.config.ssh_key_path)],
-                    known_hosts=None,
                     connect_timeout=10,
                 ) as conn:
                     remote_dir = self.config.remote_cert_dir
