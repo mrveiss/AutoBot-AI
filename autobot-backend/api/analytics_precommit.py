@@ -214,7 +214,7 @@ BUILTIN_CHECKS: dict[str, CheckDefinition] = {
         category=CheckCategory.QUALITY,
         severity=CheckSeverity.WARN,
         pattern=r"except\s*(?:\w+\s*)?:\s*(?:pass|\.\.\.)\s*$",
-        description="Empty exception handler found",
+        description="Empty exception handler found (note: may match inside multi-line strings #2911)",
         suggestion="Add proper error handling or logging",
         file_patterns=["*.py"],
     ),
