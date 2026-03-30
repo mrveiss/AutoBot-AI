@@ -216,6 +216,9 @@
     state: latest
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
 - name: Install autobot-shared as editable package
   ansible.builtin.pip:
@@ -223,6 +226,9 @@
     editable: true
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
 
 - name: Create filtered backend requirements file
@@ -236,7 +242,9 @@
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
   environment:
+    PIP_DEFAULT_TIMEOUT: "120"
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   register: pip_install_result
   failed_when: false  # Issue #892: pip module doesn't expose rc, rely on default error handling
   changed_when: pip_install_result.changed
@@ -257,6 +265,9 @@
     state: forcereinstall
     extra_args: "--no-deps"
   become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
 
 # ==========================================================

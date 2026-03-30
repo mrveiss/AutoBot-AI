@@ -216,6 +216,9 @@
     state: latest
     executable: pip3
   become: yes
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   when: _pep668.rc != 0
   tags: ['common', 'python']
 

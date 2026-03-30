@@ -286,9 +286,12 @@
       command:
         cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
              -r /opt/autobot/autobot-slm-backend/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when: hostvars['localhost']['python_deps_changed'] | bool
       register: slm_pip_install
       tags: [slm, slm-backend, deps]
@@ -503,9 +506,12 @@
       command:
         cmd: /opt/autobot/autobot-backend/venv/bin/pip install
              -r /opt/autobot/autobot-backend/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - "'01-Backend' in inventory_hostname"
         - hostvars['localhost']['python_deps_changed'] | bool
@@ -674,9 +680,12 @@
       command:
         cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
              -r /opt/autobot/autobot-npu-worker/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
           '03-NPU' in inventory_hostname or
@@ -747,9 +756,12 @@
       command:
         cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
              -r /opt/autobot/autobot-browser-worker/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
           '05-Browser' in inventory_hostname or

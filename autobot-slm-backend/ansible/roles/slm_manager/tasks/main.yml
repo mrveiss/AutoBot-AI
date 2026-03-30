@@ -222,6 +222,9 @@
   ansible.builtin.command:
     cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
   become_user: "{{ slm_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
   when: slm_requirements_stat.stat.exists
   changed_when: true
   tags: ['slm', 'backend']
@@ -232,6 +235,9 @@
     virtualenv: "{{ slm_backend_dir }}/venv"
     state: present
   become_user: "{{ slm_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 

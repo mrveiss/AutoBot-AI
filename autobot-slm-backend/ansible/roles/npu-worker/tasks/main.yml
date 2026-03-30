@@ -100,6 +100,9 @@
     virtualenv: "{{ npu_install_dir }}/venv"
     state: latest
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
 - name: Check if OpenVINO is already installed
   ansible.builtin.command:
@@ -117,6 +120,9 @@
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
 
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
@@ -131,6 +137,9 @@
     state: present
     extra_args: "--timeout 120"
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when:
     - npu_install_openvino | default(true)
     - _openvino_check.rc != 0
