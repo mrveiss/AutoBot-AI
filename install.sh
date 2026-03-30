@@ -91,6 +91,60 @@ run_ok() {
 }
 
 # =============================================================================
+# Network Interface Detection (#2832)
+# =============================================================================
+
+detect_local_ip() {
+    # If OVERRIDE_IP is set, use it directly
+    if [[ -n "${OVERRIDE_IP:-}" ]]; then
+        echo "${OVERRIDE_IP}"
+        return
+    fi
+
+    # Cached from previous call
+    if [[ -n "${_DETECTED_IP:-}" ]]; then
+        echo "${_DETECTED_IP}"
+        return
+    fi
+
+    # Gather all interfaces with IPv4 addresses (exclude loopback)
+    local -a ifaces=()
+    local -a ips=()
+    while IFS= read -r line; do
+        local iface ip
+        iface=$(echo "$line" | awk '{print $1}')
+        ip=$(echo "$line" | awk '{print $2}' | cut -d/ -f1)
+        [[ "$ip" == 127.* ]] && continue
+        ifaces+=("$iface")
+        ips+=("$ip")
+    done < <(ip -4 -o addr show | awk '{print $2, $4}')
+
+    if [[ ${#ips[@]} -eq 0 ]]; then
+        fatal "No network interfaces with IPv4 addresses found"
+    elif [[ ${#ips[@]} -eq 1 ]]; then
+        _DETECTED_IP="${ips[0]}"
+    else
+        # Multiple interfaces — ask user to select
+        echo -e "\n${YELLOW}  Multiple network interfaces detected:${NC}" >&2
+        for i in "${!ifaces[@]}"; do
+            echo -e "    ${CYAN}[$((i+1))]${NC} ${ifaces[$i]}: ${ips[$i]}" >&2
+        done
+        echo -ne "\n  ${YELLOW}Select interface for AutoBot [1-${#ips[@]}]:${NC} " >&2
+        local choice
+        read -r choice
+        choice=$((choice - 1))
+        if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
+            fatal "Invalid selection"
+        fi
+        _DETECTED_IP="${ips[$choice]}"
+        success "Using ${ifaces[$choice]}: ${_DETECTED_IP}"
+    fi
+
+    export _DETECTED_IP
+    echo "${_DETECTED_IP}"
+}
+
+# =============================================================================
 # Phase Progress
 # =============================================================================
 
@@ -400,8 +454,7 @@ INVENTORY
         encryption_key=$(openssl rand -hex 32)
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
-        local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' \
-            || hostname -I | awk '{print $1}')}"
+        local_ip="$(detect_local_ip)"
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
@@ -517,7 +570,7 @@ register_local_node() {
     success "HTTPS endpoint is ready"
 
     local local_ip
-    local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
+    local_ip="$(detect_local_ip)"
     local hostname_val
     hostname_val=$(hostname)
 
@@ -600,7 +653,7 @@ finalize() {
 
     local creds_file="/root/autobot-credentials.txt"
     local server_ip
-    server_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
+    server_ip="$(detect_local_ip)"
     cat > "${creds_file}" << EOF
 AutoBot SLM Credentials
 =======================
