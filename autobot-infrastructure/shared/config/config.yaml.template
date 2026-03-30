@@ -111,13 +111,13 @@ llm:
     - phi:latest
     - tinyllama:latest
     - llama2:latest
-    - llama3.2:3b
+    - llama3.2:1b
     - qwen3.5:9b
     - nomic-embed-text:latest
   classification_model: gemma2:2b
   vllm:
     enabled: false
-    default_model: meta-llama/Llama-3.2-3B-Instruct
+    default_model: meta-llama/Llama-3.2-1B-Instruct
     tensor_parallel_size: 1
     gpu_memory_utilization: 0.9
     max_model_len: 8192
