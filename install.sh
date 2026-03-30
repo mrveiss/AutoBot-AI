@@ -496,6 +496,25 @@ register_local_node() {
     phase "Register Local Node"
 
     local api_url="https://127.0.0.1"
+
+    # Wait for HTTPS to be ready before registering (#2830)
+    # After Ansible deployment, nginx may still be loading TLS certificates
+    # or the reverse-proxy upstream may not be connected yet.
+    info "Waiting for HTTPS endpoint to be ready..."
+    local max_wait=60
+    local waited=0
+    while ! curl -sk --max-time 3 "${api_url}/api/health" >/dev/null 2>&1; do
+        sleep 2
+        waited=$((waited + 2))
+        if [[ ${waited} -ge ${max_wait} ]]; then
+            warn "HTTPS not ready after ${max_wait}s — skipping node registration"
+            warn "Register manually once services are up: SLM UI > Fleet > Add Node"
+            return
+        fi
+        log "  Waiting for HTTPS (${waited}s / ${max_wait}s)..."
+    done
+    success "HTTPS endpoint is ready"
+
     local local_ip
     local_ip="${OVERRIDE_IP:-$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')}"
     local hostname_val
