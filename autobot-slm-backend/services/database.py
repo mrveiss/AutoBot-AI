@@ -201,6 +201,7 @@ class DatabaseService:
                 yield session
                 await session.commit()
             except Exception:
+                logger.exception("Database session error, rolling back")
                 await session.rollback()
                 raise
 
