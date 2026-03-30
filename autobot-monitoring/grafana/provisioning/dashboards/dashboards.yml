@@ -1,0 +1,20 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Grafana dashboard provider — scans /var/lib/grafana/dashboards for JSON files.
+# Place dashboard JSON exports in autobot-monitoring/grafana/dashboards/.
+---
+
+apiVersion: 1
+
+providers:
+  - name: "AutoBot Dashboards"
+    orgId: 1
+    folder: "AutoBot"
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

@@ -409,6 +409,12 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - prometheus_data:/prometheus
+      - ./autobot-monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
       interval: 30s
@@ -420,12 +426,10 @@ services:
           memory: 512M
           cpus: '0.5'
     logging: *default-logging
-    read_only: true
     cap_drop:
       - ALL
     tmpfs:
       - /tmp
-      - /var/run
     security_opt:
       - no-new-privileges:true
     networks:
@@ -441,11 +445,13 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./autobot-monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autobot}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
-      - autobot-prometheus
+      autobot-prometheus:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
