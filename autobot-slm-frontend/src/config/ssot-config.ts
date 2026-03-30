@@ -151,13 +151,12 @@ export function getHosts(): SLMConfig['hosts'] {
 }
 
 /**
- * Get VNC-enabled hosts with port configuration
- * Related to Issue #729 - SSOT for VNC endpoints
+ * Get VNC-enabled hosts with port configuration.
+ * Returns empty — VNC hosts are discovered dynamically via the SLM API
+ * from nodes that have the 'vnc' role active (#2900).
  */
 export function getVNCHosts(): Array<{ id: string; name: string; host: string; port: number; description: string }> {
-  return [
-    { id: 'main', name: 'Main WSL', host: config.vm.main, port: config.port.vnc, description: 'Main backend server VNC' },
-  ]
+  return []
 }
 
 /**
