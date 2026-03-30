@@ -24,6 +24,22 @@ AGENT_MEMORY_TTL_SECONDS = 86400  # 24 hours
 AGENT_MEMORY_PREFIX = "autobot:agent:memory:"
 
 
+def _resolve_ttl(ttl: Optional[int], key: str) -> Optional[int]:
+    """Return the effective TTL for a write operation.
+
+    Rules (Issue #2793):
+    - ttl=None  → apply AGENT_MEMORY_TTL_SECONDS for matching keys, else None
+    - ttl=0     → caller explicitly requested no expiry; return None (no expire call)
+    - ttl>0     → use caller-supplied value as-is
+    """
+    if ttl is not None:
+        # Explicit caller value: treat 0 as "no expiry" sentinel
+        return ttl if ttl > 0 else None
+    if key.startswith(AGENT_MEMORY_PREFIX):
+        return AGENT_MEMORY_TTL_SECONDS
+    return None
+
+
 def _decode(value):
     """Decode bytes to UTF-8 string, pass through other types."""
     return value.decode("utf-8") if isinstance(value, bytes) else value
@@ -60,12 +76,11 @@ async def handle_redis_set(
     """Set a string value with optional TTL.
 
     Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically when
-    no explicit TTL is provided (Issue #2646).
+    no explicit TTL is provided (Issue #2646).  Pass ttl=0 to explicitly
+    suppress the automatic TTL (i.e. store with no expiry).
     """
     client = await _get_client(database)
-    effective_ttl = ttl
-    if not effective_ttl and key.startswith(AGENT_MEMORY_PREFIX):
-        effective_ttl = AGENT_MEMORY_TTL_SECONDS
+    effective_ttl = _resolve_ttl(ttl, key)
     if effective_ttl and effective_ttl > 0:
         await client.setex(key, effective_ttl, value)
     else:
@@ -161,21 +176,43 @@ async def handle_redis_lrange(
 
 
 async def handle_redis_lpush(
-    key: str, values: List[str], database: str = "main"
+    key: str,
+    values: List[str],
+    ttl: Optional[int] = None,
+    database: str = "main",
 ) -> Metadata:
-    """Push values to the left of a list."""
+    """Push values to the left of a list.
+
+    Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically when
+    no explicit TTL is provided (Issue #2793).  Pass ttl=0 to suppress the
+    automatic TTL.
+    """
     client = await _get_client(database)
     length = await client.lpush(key, *values)
-    return {"status": "success", "key": key, "list_length": length}
+    effective_ttl = _resolve_ttl(ttl, key)
+    if effective_ttl:
+        await client.expire(key, effective_ttl)
+    return {"status": "success", "key": key, "list_length": length, "ttl": effective_ttl}
 
 
 async def handle_redis_rpush(
-    key: str, values: List[str], database: str = "main"
+    key: str,
+    values: List[str],
+    ttl: Optional[int] = None,
+    database: str = "main",
 ) -> Metadata:
-    """Push values to the right of a list."""
+    """Push values to the right of a list.
+
+    Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically when
+    no explicit TTL is provided (Issue #2793).  Pass ttl=0 to suppress the
+    automatic TTL.
+    """
     client = await _get_client(database)
     length = await client.rpush(key, *values)
-    return {"status": "success", "key": key, "list_length": length}
+    effective_ttl = _resolve_ttl(ttl, key)
+    if effective_ttl:
+        await client.expire(key, effective_ttl)
+    return {"status": "success", "key": key, "list_length": length, "ttl": effective_ttl}
 
 
 # ---------------------------------------------------------------------------
@@ -245,9 +282,15 @@ async def handle_redis_xadd(
     key: str,
     fields: Dict[str, str],
     maxlen: Optional[int] = None,
+    ttl: Optional[int] = None,
     database: str = "main",
 ) -> Metadata:
-    """Add an entry to a stream."""
+    """Add an entry to a stream.
+
+    Keys matching AGENT_MEMORY_PREFIX receive a 24h TTL automatically when
+    no explicit TTL is provided (Issue #2793).  Pass ttl=0 to suppress the
+    automatic TTL.
+    """
     client = await _get_client(database)
     kwargs: Dict[str, Any] = {}
     if maxlen is not None:
@@ -255,7 +298,10 @@ async def handle_redis_xadd(
         kwargs["approximate"] = True
     entry_id = await client.xadd(key, fields, **kwargs)
     decoded_id = entry_id.decode("utf-8") if isinstance(entry_id, bytes) else entry_id
-    return {"status": "success", "key": key, "entry_id": decoded_id}
+    effective_ttl = _resolve_ttl(ttl, key)
+    if effective_ttl:
+        await client.expire(key, effective_ttl)
+    return {"status": "success", "key": key, "entry_id": decoded_id, "ttl": effective_ttl}
 
 
 # ---------------------------------------------------------------------------

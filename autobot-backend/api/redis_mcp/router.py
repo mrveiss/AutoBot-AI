@@ -252,6 +252,7 @@ async def _wrap_data_lpush(args: dict) -> Metadata:
     return await handle_redis_lpush(
         key=args["key"],
         values=args["values"],
+        ttl=args.get("ttl"),
         database=args.get("database", "main"),
     )
 
@@ -260,6 +261,7 @@ async def _wrap_data_rpush(args: dict) -> Metadata:
     return await handle_redis_rpush(
         key=args["key"],
         values=args["values"],
+        ttl=args.get("ttl"),
         database=args.get("database", "main"),
     )
 
@@ -289,6 +291,7 @@ async def _wrap_data_xadd(args: dict) -> Metadata:
         key=args["key"],
         fields=args["fields"],
         maxlen=args.get("maxlen"),
+        ttl=args.get("ttl"),
         database=args.get("database", "main"),
     )
 

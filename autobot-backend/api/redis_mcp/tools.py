@@ -172,7 +172,10 @@ def _tool_redis_lrange() -> MCPTool:
 def _tool_redis_lpush() -> MCPTool:
     return MCPTool(
         name="redis_lpush",
-        description="Push values to the left of a Redis list. Users: autobot:agent:* only.",
+        description=(
+            "Push values to the left of a Redis list. Users: autobot:agent:* only. "
+            "autobot:agent:memory:* keys receive a 24h TTL automatically; pass ttl=0 to suppress."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -181,6 +184,10 @@ def _tool_redis_lpush() -> MCPTool:
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Values to push",
+                },
+                "ttl": {
+                    "type": "integer",
+                    "description": "Optional TTL in seconds (0 = no expiry)",
                 },
                 "database": {"type": "string", "default": "main"},
             },
@@ -192,7 +199,10 @@ def _tool_redis_lpush() -> MCPTool:
 def _tool_redis_rpush() -> MCPTool:
     return MCPTool(
         name="redis_rpush",
-        description="Push values to the right of a Redis list. Users: autobot:agent:* only.",
+        description=(
+            "Push values to the right of a Redis list. Users: autobot:agent:* only. "
+            "autobot:agent:memory:* keys receive a 24h TTL automatically; pass ttl=0 to suppress."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -201,6 +211,10 @@ def _tool_redis_rpush() -> MCPTool:
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Values to push",
+                },
+                "ttl": {
+                    "type": "integer",
+                    "description": "Optional TTL in seconds (0 = no expiry)",
                 },
                 "database": {"type": "string", "default": "main"},
             },
@@ -263,7 +277,10 @@ def _tool_redis_xrange() -> MCPTool:
 def _tool_redis_xadd() -> MCPTool:
     return MCPTool(
         name="redis_xadd",
-        description="Add an entry to a Redis stream. Users: autobot:agent:* only.",
+        description=(
+            "Add an entry to a Redis stream. Users: autobot:agent:* only. "
+            "autobot:agent:memory:* keys receive a 24h TTL automatically; pass ttl=0 to suppress."
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -275,6 +292,10 @@ def _tool_redis_xadd() -> MCPTool:
                 "maxlen": {
                     "type": "integer",
                     "description": "Optional max stream length (approximate trim)",
+                },
+                "ttl": {
+                    "type": "integer",
+                    "description": "Optional TTL in seconds (0 = no expiry)",
                 },
                 "database": {"type": "string", "default": "main"},
             },
