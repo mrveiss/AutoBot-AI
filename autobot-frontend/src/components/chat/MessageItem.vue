@@ -166,6 +166,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import ApprovalRequestCard from './ApprovalRequestCard.vue'
 import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 
 interface Props {
   message: ChatMessage
@@ -305,7 +306,7 @@ const formattedContent = computed(() => {
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
   )
 
-  return content
+  return sanitizeChatHtml(content)
 })
 </script>
 
