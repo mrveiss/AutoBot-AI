@@ -162,12 +162,136 @@ def _build_infra_vars(
     return infra_vars
 
 
-async def _generate_dynamic_inventory(
-    node_ids: Optional[list[str]] = None,
-) -> Optional[Path]:
-    """Build Ansible inventory with role-based groups (#1346)."""
+def _build_host_entries(
+    db_nodes: list,
+    local_ips: set,
+) -> tuple[dict[str, dict], dict[str, str], dict[str, str]]:
+    """Build per-host inventory entries from DB node records (#2823).
+
+    Returns (hosts, node_id_to_hostname, node_id_to_ip).
+    Sets ansible_connection=local for nodes whose IP is on this machine (#2722).
+    """
+    hosts: dict[str, dict] = {}
+    node_id_to_hostname: dict[str, str] = {}
+    node_id_to_ip: dict[str, str] = {}
+    for node in db_nodes:
+        host_vars: dict = {
+            "ansible_host": node.ip_address,
+            "ansible_user": node.ssh_user or "autobot",
+            "slm_node_id": node.node_id,
+        }
+        if node.ip_address in local_ips:
+            host_vars["ansible_connection"] = "local"
+        if node.ssh_port and node.ssh_port != 22:
+            host_vars["ansible_port"] = node.ssh_port
+        inventory_name = node.ansible_target  # #1814
+        hosts[inventory_name] = host_vars
+        node_id_to_hostname[node.node_id] = inventory_name
+        node_id_to_ip[node.node_id] = node.ip_address
+    return hosts, node_id_to_hostname, node_id_to_ip
+
+
+def _apply_role_host_vars(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    all_node_roles: list,
+) -> None:
+    """Stamp node_roles, node_dependencies, and pending_dep_removals onto hosts (#2823).
+
+    Sets node_roles so provision-fleet-roles.yml conditions work, resolves
+    shared-dependency names for Phase 0 (#2747), and propagates any pending
+    dependency removals recorded in node.extra_data.
+    """
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    node_id_to_roles: dict[str, list[str]] = {}
+    for nr in all_node_roles:
+        node_id_to_roles.setdefault(nr.node_id, []).append(nr.role_name)
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        if node.node_id in node_id_to_roles:
+            hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
+        roles = hosts[inv_name].get("node_roles", [])
+        deps: set[str] = set()
+        for role in roles:
+            deps.update(ROLE_DEPENDENCIES.get(role, []))
+        hosts[inv_name]["node_dependencies"] = sorted(deps)
+        pending = (node.extra_data or {}).get("pending_dep_removals", [])
+        if pending:
+            hosts[inv_name]["pending_dep_removals"] = pending
+
+
+def _apply_colocation_vars(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    local_ips: set,
+) -> None:
+    """Set co-location Ansible vars when frontend/backend share the SLM host (#2823).
+
+    When a node on the SLM host also carries the 'frontend' role, sets
+    slm_colocated_frontend=True so the SLM nginx config serves the user
+    frontend at / and SLM at /slm/ (#2829).  When backend is co-located too,
+    sets frontend_backend_port=8001 and frontend_backend_protocol=http so
+    templates proxy directly to uvicorn, eliminating the double-proxy.
+    """
+    _frontend_roles = {"frontend", "autobot-frontend"}
+    _backend_roles = {"backend", "autobot-backend"}
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        roles = set(hosts[inv_name].get("node_roles", []))
+        if node.ip_address in local_ips and roles & _frontend_roles:
+            hosts[inv_name]["slm_colocated_frontend"] = True
+            if roles & _backend_roles:
+                hosts[inv_name]["frontend_backend_port"] = 8001
+                hosts[inv_name]["frontend_backend_protocol"] = "http"
+
+
+def _build_inventory_dict(
+    hosts: dict[str, dict],
+    children: dict[str, dict],
+    infra_vars: dict,
+) -> dict:
+    """Assemble the top-level Ansible inventory structure (#2823).
+
+    Derives slm_host from external_url so the slm_agent role builds the
+    correct admin URL on single-host installs (#2747).  Merges infra service
+    discovery vars alongside fixed SSH key and interpreter paths (#2828).
+    """
+    from urllib.parse import urlparse
+
+    from config import settings as _slm_settings
+
+    slm_host = urlparse(_slm_settings.external_url).hostname or "127.0.0.1"
+    return {
+        "all": {
+            "vars": {
+                # Issue #2828: Use shared key path for any-operator access
+                "ansible_ssh_private_key_file": "/etc/autobot/ssh/autobot_key",
+                "ansible_python_interpreter": "/usr/bin/python3",
+                "slm_host": slm_host,
+                **infra_vars,
+            },
+            "hosts": hosts,
+            "children": children,
+        },
+    }
+
+
+async def _fetch_inventory_data(
+    node_ids: Optional[list[str]],
+) -> Optional[tuple[list, dict[str, dict], dict[str, str], dict[str, str], list, list, dict[str, str]]]:
+    """Load all DB data needed to build the Ansible inventory (#2823).
+
+    Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
+             all_node_roles, all_active, all_ip_map) or None when no nodes match.
+    """
     from sqlalchemy import select
 
+    from autobot_shared.network_utils import get_local_ips
     from models.database import Node, NodeRole
 
     async with db_service.session() as session:
@@ -178,87 +302,17 @@ async def _generate_dynamic_inventory(
         if not db_nodes:
             return None
 
-        from autobot_shared.network_utils import get_local_ips
-
-        hosts: dict[str, dict] = {}
-        node_id_to_hostname: dict[str, str] = {}
-        node_id_to_ip: dict[str, str] = {}
-        # Detect local IPs for ansible_connection: local (#2722)
         local_ips = get_local_ips()
+        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(db_nodes, local_ips)
 
-        for node in db_nodes:
-            host_vars = {
-                "ansible_host": node.ip_address,
-                "ansible_user": node.ssh_user or "autobot",
-                "slm_node_id": node.node_id,
-            }
-            if node.ip_address in local_ips:
-                host_vars["ansible_connection"] = "local"
-            if node.ssh_port and node.ssh_port != 22:
-                host_vars["ansible_port"] = node.ssh_port
-            inventory_name = node.ansible_target  # #1814
-            hosts[inventory_name] = host_vars
-            node_id_to_hostname[node.node_id] = inventory_name
-            node_id_to_ip[node.node_id] = node.ip_address
-
-        # Include all assigned roles for provisioning (active + inactive + not_installed)
-        # The wizard provisions roles that aren't yet active (#2747)
-        nr_query = select(NodeRole).where(
-            NodeRole.status.in_(["active", "inactive", "not_installed"])
-        )
+        # Include active + inactive + not_installed roles for provisioning (#2747)
+        nr_query = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
 
-        # Set node_roles per host so provision-fleet-roles.yml conditions work
-        node_id_to_roles: dict[str, list[str]] = {}
-        for nr in all_node_roles:
-            node_id_to_roles.setdefault(nr.node_id, []).append(nr.role_name)
-        for node in db_nodes:
-            inv_name = node.ansible_target
-            if inv_name in hosts and node.node_id in node_id_to_roles:
-                hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
-
-        # Resolve dependencies for Phase 0 (#2747)
-        from services.role_registry import ROLE_DEPENDENCIES
-
-        for node in db_nodes:
-            inv_name = node.ansible_target
-            if inv_name not in hosts:
-                continue
-            roles = hosts[inv_name].get("node_roles", [])
-            deps: set[str] = set()
-            for role in roles:
-                deps.update(ROLE_DEPENDENCIES.get(role, []))
-            hosts[inv_name]["node_dependencies"] = sorted(deps)
-
-            # Pending removals from extra_data
-            extra = node.extra_data or {}
-            pending = extra.get("pending_dep_removals", [])
-            if pending:
-                hosts[inv_name]["pending_dep_removals"] = pending
-
-        # Detect co-located frontend for SLM nginx routing (#2829)
-        # When a node on the SLM host also has the 'frontend' role,
-        # set slm_colocated_frontend so the SLM nginx config serves
-        # user frontend at / and SLM at /slm/ instead of redirecting.
-        # Also configure the backend upstream to proxy directly to
-        # uvicorn (HTTP on port 8001) instead of through the backend
-        # nginx (HTTPS on port 8443), eliminating the double-proxy.
-        _frontend_roles = {"frontend", "autobot-frontend"}
-        _backend_roles = {"backend", "autobot-backend"}
-        for node in db_nodes:
-            inv_name = node.ansible_target
-            if inv_name not in hosts:
-                continue
-            roles = set(hosts[inv_name].get("node_roles", []))
-            if node.ip_address in local_ips and roles & _frontend_roles:
-                hosts[inv_name]["slm_colocated_frontend"] = True
-                # When backend is also co-located, proxy directly to
-                # uvicorn (HTTP) -- the backend nginx vhost is skipped.
-                if roles & _backend_roles:
-                    hosts[inv_name]["frontend_backend_port"] = 8001
-                    hosts[inv_name]["frontend_backend_protocol"] = "http"
+        _apply_role_host_vars(hosts, db_nodes, all_node_roles)
+        _apply_colocation_vars(hosts, db_nodes, local_ips)
 
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
@@ -270,50 +324,33 @@ async def _generate_dynamic_inventory(
             all_ip_map = node_id_to_ip
             all_active = all_node_roles
 
-    children, ansible_groups = _build_inventory_children(
-        hosts, all_node_roles, node_id_to_hostname
-    )
+    return db_nodes, hosts, node_id_to_hostname, node_id_to_ip, all_node_roles, all_active, all_ip_map
+
+
+async def _generate_dynamic_inventory(
+    node_ids: Optional[list[str]] = None,
+) -> Optional[Path]:
+    """Build Ansible inventory with role-based groups (#1346, #2823).
+
+    Orchestrates focused helpers: _fetch_inventory_data, _build_inventory_children,
+    _build_infra_vars, and _build_inventory_dict, then writes the result to a
+    temporary YAML file for Ansible consumption.
+    """
+    result = await _fetch_inventory_data(node_ids)
+    if result is None:
+        return None
+
+    _db_nodes, hosts, node_id_to_hostname, _node_id_to_ip, all_node_roles, all_active, all_ip_map = result
+    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
     infra_vars = _build_infra_vars(all_active, all_ip_map)
-
-    # Derive slm_host from external_url so the slm_agent role resolves the
-    # correct admin URL on single-host installs (#2747).  On single-host the
-    # SLM Manager runs on the same machine as the backend; external_url holds
-    # the routable IP that remote nodes should use.  The slm_agent role's
-    # default builds slm_admin_url from this value, and the template's
-    # auto-detect logic then rewrites it to 127.0.0.1 when the agent is
-    # co-located -- but only after slm_host contains the real local IP rather
-    # than the hardcoded multi-node default (172.16.168.19).
-    from urllib.parse import urlparse
-
-    from config import settings as _slm_settings
-
-    _slm_host = urlparse(_slm_settings.external_url).hostname or "127.0.0.1"
-
-    inventory = {
-        "all": {
-            "vars": {
-                # Issue #2828: Use shared key path for any-operator access
-                "ansible_ssh_private_key_file": "/etc/autobot/ssh/autobot_key",
-                "ansible_python_interpreter": "/usr/bin/python3",
-                "slm_host": _slm_host,
-                **infra_vars,
-            },
-            "hosts": hosts,
-            "children": children,
-        },
-    }
+    inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
     with open(fd, "w", encoding="utf-8") as f:
         yaml.dump(inventory, f, default_flow_style=False)
 
     grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
-    logger.info(
-        "Generated inventory at %s: %d nodes, groups: %s",
-        path,
-        len(hosts),
-        grp or "(none)",
-    )
+    logger.info("Generated inventory at %s: %d nodes, groups: %s", path, len(hosts), grp or "(none)")
     return Path(path)
 
 
