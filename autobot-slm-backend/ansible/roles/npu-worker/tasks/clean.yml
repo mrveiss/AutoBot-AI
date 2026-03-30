@@ -4,6 +4,16 @@
 ---
 # NPU Worker role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes legacy and wrong-node directories from .22 (NPU node).
+#
+# LEGACY directory deletions (npu-worker, browser-service, ai-stack) run
+# unconditionally because NO current role deploys to those paths — they are
+# pre-rename leftovers.
+#
+# Wrong-node deletions of CURRENT canonical dirs (autobot-backend,
+# autobot-frontend, autobot-slm-backend) ONLY run when node_roles is defined
+# (dynamic inventory). When undefined (localhost self-deploy via install.sh),
+# skip ALL cross-role deletions to prevent wiping co-located services on
+# single-host (#2836).
 
 - name: "NPU Worker | Clean: legacy npu-worker dir (old name)"
   ansible.builtin.file:
