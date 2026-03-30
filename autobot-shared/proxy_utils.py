@@ -18,9 +18,9 @@ Two calling conventions are supported:
 
 1. Environment-driven (autobot-backend style):
    Set AUTOBOT_TRUSTED_PROXIES (comma-separated) to override the default
-   list.  Defaults include localhost addresses and the nginx frontend VM
-   (172.16.168.21).  The ``# noqa: ssot-proxy`` comment suppresses the
-   hardcoding pre-commit check for the fallback string only.
+   list.  Defaults include localhost addresses and the nginx frontend VM IP
+   derived from NetworkConstants (ConfigRegistry SSOT).
+   Issue #2862 — removed hardcoded IP fallback; values flow through SSOT.
 
        ip = get_client_ip(request)  # uses module-level default set
 
@@ -49,18 +49,42 @@ from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
+
+def _build_default_trusted_proxies() -> frozenset:
+    """Build the default trusted-proxy frozenset.
+
+    Priority:
+    1. AUTOBOT_TRUSTED_PROXIES environment variable (comma-separated IPs).
+    2. Localhost addresses plus the frontend VM IP from NetworkConstants
+       (backed by ConfigRegistry SSOT).
+
+    Issue #2862 — replaces the hardcoded IP string with SSOT-derived values.
+    The lazy import of NetworkConstants avoids circular import issues because
+    autobot-shared/network_constants.py itself depends on autobot-backend's
+    config.registry at runtime.
+    """
+    raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")
+    if raw:
+        return frozenset(ip.strip() for ip in raw.split(",") if ip.strip())
+
+    proxies = {"127.0.0.1", "::1"}
+    try:
+        from autobot_shared.network_constants import NetworkConstants  # lazy import
+
+        proxies.add(NetworkConstants.FRONTEND_VM_IP)
+    except Exception:  # pragma: no cover — ImportError or AttributeError at startup
+        logger.warning(
+            "NetworkConstants unavailable; AUTOBOT_TRUSTED_PROXIES limited to localhost. "
+            "Set AUTOBOT_TRUSTED_PROXIES explicitly to include nginx proxy IPs."
+        )
+    return frozenset(proxies)
+
+
 # ---------------------------------------------------------------------------
-# Default trusted-proxy list — read once at import time.
+# Default trusted-proxy set — built once at import time.
 # Override via AUTOBOT_TRUSTED_PROXIES env var (comma-separated IPs).
-# Defaults: localhost (IPv4 + IPv6) and the nginx frontend VM (.21).
 # ---------------------------------------------------------------------------
-_RAW_TRUSTED = os.getenv(
-    "AUTOBOT_TRUSTED_PROXIES",
-    "127.0.0.1,::1,172.16.168.21",  # noqa: ssot-proxy
-)
-_DEFAULT_TRUSTED_PROXIES: frozenset = frozenset(
-    ip.strip() for ip in _RAW_TRUSTED.split(",") if ip.strip()
-)
+_DEFAULT_TRUSTED_PROXIES: frozenset = _build_default_trusted_proxies()
 
 
 def _normalize_ip(ip_str: str) -> str:

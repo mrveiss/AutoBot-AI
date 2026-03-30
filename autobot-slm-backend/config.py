@@ -49,7 +49,11 @@ def _get_cors_origins() -> list:
     """Build CORS origins from env var or infrastructure SSOT.
 
     Override with SLM_CORS_ORIGINS (comma-separated).
-    Otherwise, generates origins from all known infrastructure VMs.
+    Otherwise, generates origins from all known infrastructure VMs via
+    NetworkConstants (backed by ConfigRegistry / redis-databases.yaml SSOT).
+
+    Issue #2862 — removed hardcoded fallback IPs; all values now flow through
+    NetworkConstants so ConfigRegistry overrides are respected.
     """
     env_origins = os.getenv("SLM_CORS_ORIGINS", "")
     if env_origins:
@@ -64,15 +68,38 @@ def _get_cors_origins() -> list:
             port = host["port"]
             origins.add(f"http://{ip}:{port}")
             origins.add(f"https://{ip}")
-        origins.add("https://172.16.168.19")  # noqa: ssot-cors
-        origins.add("https://172.16.168.21")  # noqa: ssot-cors
+        # Ensure the SLM VM and frontend VM are always included as HTTPS origins
+        # (they may only appear with their service port in get_host_configs()).
+        origins.add(f"https://{NetworkConstants.SLM_VM_IP}")
+        origins.add(f"https://{NetworkConstants.FRONTEND_VM_IP}")
         return sorted(origins)
     except ImportError:
-        logger.warning("autobot_shared not available; using SLM-only CORS")
-        return [
-            "https://172.16.168.19",  # noqa: ssot-cors
-            "https://172.16.168.21",  # noqa: ssot-cors
-        ]
+        logger.warning("autobot_shared not available; falling back to localhost CORS only")
+        return ["https://127.0.0.1", "http://127.0.0.1"]
+
+
+def _get_trusted_proxies() -> list:
+    """Build the trusted reverse-proxy list from env var or SSOT.
+
+    Override with SLM_TRUSTED_PROXIES (comma-separated IPs).
+    Otherwise, includes localhost addresses and the SLM/frontend VM IPs
+    read from NetworkConstants (backed by ConfigRegistry SSOT).
+
+    Issue #2862 — replaced hardcoded IP fallback with SSOT-derived values.
+    """
+    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "")
+    if env_proxies:
+        return [ip.strip() for ip in env_proxies.split(",") if ip.strip()]
+
+    proxies = ["127.0.0.1", "::1"]
+    try:
+        from autobot_shared.network_constants import NetworkConstants
+
+        proxies.append(NetworkConstants.SLM_VM_IP)
+        proxies.append(NetworkConstants.FRONTEND_VM_IP)
+    except ImportError:
+        logger.warning("autobot_shared not available; trusted_proxies limited to localhost")
+    return proxies
 
 
 class Settings(BaseSettings):
@@ -242,19 +269,12 @@ class Settings(BaseSettings):
     # CORS settings
     cors_origins: list = _get_cors_origins()
 
-    # Trusted reverse-proxy IPs (Issue #2239).
+    # Trusted reverse-proxy IPs (Issue #2239, #2862).
     # X-Forwarded-For is only honoured when the direct TCP connection comes
     # from one of these addresses.  Override with SLM_TRUSTED_PROXIES
-    # (comma-separated).  Defaults cover localhost and the two nginx nodes
-    # (.19 SLM VM, .21 Frontend VM).
-    trusted_proxies: list = [
-        ip.strip()
-        for ip in os.getenv(
-            "SLM_TRUSTED_PROXIES",
-            "127.0.0.1,::1,172.16.168.19,172.16.168.21",  # noqa: ssot-proxy
-        ).split(",")
-        if ip.strip()
-    ]
+    # (comma-separated).  The default is derived from NetworkConstants so the
+    # ConfigRegistry SSOT is respected; no IPs are hardcoded here.
+    trusted_proxies: list = _get_trusted_proxies()
 
     # External URL - remote nodes use nginx reverse proxy.
     # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
