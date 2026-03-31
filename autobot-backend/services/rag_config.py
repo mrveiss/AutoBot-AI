@@ -82,6 +82,11 @@ class RAGConfig:
     default_chat_categories: Optional[list] = None
     enable_smart_category_selection: bool = True
 
+    # Issue #1718: Agentic RAG — search exposed as LLM tool
+    enable_agentic_search: bool = True
+    rewrite_enabled: bool = True
+    max_search_iterations: int = 3
+
     def __post_init__(self):
         """Validate configuration values and propagate mmr_lambda to rerank_weights.
 
@@ -147,6 +152,12 @@ class RAGConfig:
         if not 0.0 <= self.mmr_lambda <= 1.0:
             raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
 
+        # Issue #1718: Agentic search iteration guard
+        if self.max_search_iterations < 1:
+            raise ValueError(
+                f"max_search_iterations must be >= 1, got {self.max_search_iterations}"
+            )
+
     @classmethod
     def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
         """
@@ -208,6 +219,10 @@ class RAGConfig:
             "fallback_to_basic_search": self.fallback_to_basic_search,
             "default_chat_categories": self.default_chat_categories,
             "enable_smart_category_selection": self.enable_smart_category_selection,
+            # Issue #1718: Agentic RAG feature flags
+            "enable_agentic_search": self.enable_agentic_search,
+            "rewrite_enabled": self.rewrite_enabled,
+            "max_search_iterations": self.max_search_iterations,
             # Neural Mesh RAG feature flags (Issue #2059)
             "mesh_retriever_enabled": self.mesh_retriever_enabled,
             "mesh_seed_edges": self.mesh_seed_edges,
