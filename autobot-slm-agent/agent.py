@@ -26,6 +26,11 @@ from typing import Optional
 import aiohttp
 from aiohttp import web
 
+from .health_collector import HealthCollector
+from .port_scanner import get_listening_ports
+from .role_detector import RoleDetector
+from .version import get_agent_version
+
 
 def sd_notify(state: str) -> bool:
     """
@@ -60,11 +65,6 @@ def sd_notify(state: str) -> bool:
         return False
 
 
-from .health_collector import HealthCollector
-from .port_scanner import get_listening_ports
-from .role_detector import RoleDetector
-from .version import get_agent_version
-
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
@@ -86,8 +86,12 @@ def _get_default_admin_url() -> str:
 
         return get_config().slm_url
     except Exception:
-        # Fallback for standalone deployments without full AutoBot
-        return "http://172.16.168.19:8000"
+        # Fallback for standalone deployments without full AutoBot.
+        # Use 127.0.0.1 rather than a hardcoded fleet IP so the agent fails
+        # clearly on a misconfigured node instead of routing to the wrong host
+        # (#2955).  Set SLM_ADMIN_URL or SLM_HOST env vars to override.
+        slm_host = os.getenv("SLM_HOST", "127.0.0.1")  # noqa: ssot-fallback
+        return f"http://{slm_host}:8000"
 
 
 DEFAULT_ADMIN_URL = _get_default_admin_url()
