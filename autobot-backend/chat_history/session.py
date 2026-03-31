@@ -12,7 +12,6 @@ Provides session management for chat history:
 - Session listing and updates
 """
 
-import functools
 import json
 import logging
 import os
@@ -448,7 +447,7 @@ class SessionMixin:
         """
         dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
         if not dir_exists:
-            await run_in_chat_io_executor(functools.partial(os.makedirs, chats_directory, exist_ok=True))
+            await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
 
     def _build_session_chat_data(
         self,
