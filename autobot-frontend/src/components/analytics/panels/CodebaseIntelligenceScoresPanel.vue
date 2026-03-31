@@ -3,6 +3,7 @@
 <!-- Author: mrveiss -->
 
 <!-- Issue #1469: Extracted from CodebaseAnalytics.vue — Code Intelligence Scores section (#538,#566) -->
+<!-- Issue #3073: Wired HealthScoreGauge, health/quality scores, suggestions, and analysis history -->
 <template>
   <div class="code-intelligence-scores-section analytics-section">
     <h3>
@@ -46,13 +47,12 @@
           <span>{{ securityError }}</span>
         </div>
         <div v-else-if="securityScore" class="score-content">
-          <div class="score-value" :class="getScoreClass(securityScore.security_score)">
-            {{ securityScore.security_score }}
-          </div>
-          <div class="score-grade" :class="getGradeClass(securityScore.grade)">
-            {{ securityScore.grade }}
-          </div>
-          <div class="score-status">{{ securityScore.status_message }}</div>
+          <HealthScoreGauge
+            :score="securityScore.security_score"
+            :grade="securityScore.grade"
+            :label="$t('analytics.codebase.intelligence.security')"
+            :status-message="securityScore.status_message"
+          />
           <div class="score-details">
             <span class="detail-item critical" v-if="securityScore.critical_issues > 0">
               <i class="fas fa-times-circle"></i> {{ securityScore.critical_issues }} critical
@@ -112,13 +112,12 @@
           <span>{{ performanceError }}</span>
         </div>
         <div v-else-if="performanceScore" class="score-content">
-          <div class="score-value" :class="getScoreClass(performanceScore.performance_score)">
-            {{ performanceScore.performance_score }}
-          </div>
-          <div class="score-grade" :class="getGradeClass(performanceScore.grade)">
-            {{ performanceScore.grade }}
-          </div>
-          <div class="score-status">{{ performanceScore.status_message }}</div>
+          <HealthScoreGauge
+            :score="performanceScore.performance_score"
+            :grade="performanceScore.grade"
+            :label="$t('analytics.codebase.intelligence.performanceLabel')"
+            :status-message="performanceScore.status_message"
+          />
           <div class="score-details">
             <span class="detail-item warning" v-if="performanceScore.total_issues > 0">
               <i class="fas fa-exclamation-triangle"></i> {{ performanceScore.total_issues }} issues
@@ -175,13 +174,12 @@
           <span>{{ redisError }}</span>
         </div>
         <div v-else-if="redisHealth" class="score-content">
-          <div class="score-value" :class="getScoreClass(redisHealth.redis_health_score)">
-            {{ redisHealth.redis_health_score }}
-          </div>
-          <div class="score-grade" :class="getGradeClass(redisHealth.grade)">
-            {{ redisHealth.grade }}
-          </div>
-          <div class="score-status">{{ redisHealth.status_message }}</div>
+          <HealthScoreGauge
+            :score="redisHealth.redis_health_score"
+            :grade="redisHealth.grade"
+            :label="$t('analytics.codebase.intelligence.redisUsage')"
+            :status-message="redisHealth.status_message"
+          />
           <div class="score-details">
             <span class="detail-item warning" v-if="redisHealth.total_issues > 0">
               <i class="fas fa-exclamation-triangle"></i> {{ redisHealth.total_issues }} issues
@@ -210,6 +208,139 @@
                 : $t('analytics.codebase.intelligence.viewDetails')
             }}
           </button>
+        </div>
+        <div v-else class="score-empty">
+          <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
+        </div>
+      </div>
+
+      <!-- Health Score Card (#3073) -->
+      <div class="score-card health-card">
+        <div class="score-header">
+          <i class="fas fa-heartbeat"></i>
+          <span>{{ $t('analytics.codebase.intelligence.healthScore') }}</span>
+          <button
+            @click="emit('load-health-score')"
+            class="card-refresh-btn"
+            :title="$t('analytics.codebase.intelligence.refreshHealthScore')"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+        <div v-if="healthScore" class="score-content">
+          <HealthScoreGauge
+            :score="healthScore.health_score"
+            :grade="getHealthGrade(healthScore.health_score)"
+            :label="$t('analytics.codebase.intelligence.healthScore')"
+          />
+          <div class="score-details">
+            <span class="detail-item critical" v-if="healthScore.issues_count.critical > 0">
+              <i class="fas fa-times-circle"></i> {{ healthScore.issues_count.critical }} critical
+            </span>
+            <span class="detail-item warning" v-if="healthScore.issues_count.high > 0">
+              <i class="fas fa-exclamation-circle"></i> {{ healthScore.issues_count.high }} high
+            </span>
+            <span class="detail-item info">
+              <i class="fas fa-file-code"></i> {{ healthScore.total_files }} files
+            </span>
+            <span class="detail-item info">
+              <i class="fas fa-clock"></i> {{ healthScore.technical_debt_hours }}h debt
+            </span>
+          </div>
+        </div>
+        <div v-else class="score-empty">
+          <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
+        </div>
+      </div>
+
+      <!-- Quality Score Card (#3073) -->
+      <div class="score-card quality-card">
+        <div class="score-header">
+          <i class="fas fa-gem"></i>
+          <span>{{ $t('analytics.codebase.intelligence.qualityScore') }}</span>
+          <button
+            @click="emit('load-quality-score')"
+            class="card-refresh-btn"
+            :title="$t('analytics.codebase.intelligence.refreshQualityScore')"
+          >
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+        <div v-if="qualityScore" class="score-content">
+          <HealthScoreGauge
+            :score="qualityScore.overall_score"
+            :grade="qualityScore.grade"
+            :label="$t('analytics.codebase.intelligence.qualityScore')"
+          />
+          <div class="quality-metrics">
+            <div class="quality-metric">
+              <span class="metric-label">Complexity</span>
+              <div class="metric-bar">
+                <div
+                  class="metric-fill"
+                  :style="{ width: qualityScore.metrics.complexity + '%' }"
+                  :class="getScoreClass(qualityScore.metrics.complexity)"
+                ></div>
+              </div>
+              <span class="metric-value">{{ qualityScore.metrics.complexity }}</span>
+            </div>
+            <div class="quality-metric">
+              <span class="metric-label">Maintainability</span>
+              <div class="metric-bar">
+                <div
+                  class="metric-fill"
+                  :style="{ width: qualityScore.metrics.maintainability + '%' }"
+                  :class="getScoreClass(qualityScore.metrics.maintainability)"
+                ></div>
+              </div>
+              <span class="metric-value">{{ qualityScore.metrics.maintainability }}</span>
+            </div>
+            <div class="quality-metric">
+              <span class="metric-label">Documentation</span>
+              <div class="metric-bar">
+                <div
+                  class="metric-fill"
+                  :style="{ width: qualityScore.metrics.documentation + '%' }"
+                  :class="getScoreClass(qualityScore.metrics.documentation)"
+                ></div>
+              </div>
+              <span class="metric-value">{{ qualityScore.metrics.documentation }}</span>
+            </div>
+            <div class="quality-metric">
+              <span class="metric-label">Testing</span>
+              <div class="metric-bar">
+                <div
+                  class="metric-fill"
+                  :style="{ width: qualityScore.metrics.testing + '%' }"
+                  :class="getScoreClass(qualityScore.metrics.testing)"
+                ></div>
+              </div>
+              <span class="metric-value">{{ qualityScore.metrics.testing }}</span>
+            </div>
+            <div class="quality-metric">
+              <span class="metric-label">Security</span>
+              <div class="metric-bar">
+                <div
+                  class="metric-fill"
+                  :style="{ width: qualityScore.metrics.security + '%' }"
+                  :class="getScoreClass(qualityScore.metrics.security)"
+                ></div>
+              </div>
+              <span class="metric-value">{{ qualityScore.metrics.security }}</span>
+            </div>
+          </div>
+          <div class="quality-trend" :class="'trend-' + qualityScore.trend">
+            <i
+              :class="
+                qualityScore.trend === 'improving'
+                  ? 'fas fa-arrow-up'
+                  : qualityScore.trend === 'declining'
+                  ? 'fas fa-arrow-down'
+                  : 'fas fa-minus'
+              "
+            ></i>
+            {{ qualityScore.trend }}
+          </div>
         </div>
         <div v-else class="score-empty">
           <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
@@ -353,6 +484,66 @@
       </div>
     </div>
 
+    <!-- Suggestions Section (#3073) -->
+    <div v-if="suggestions && suggestions.length > 0" class="suggestions-section">
+      <h4>
+        <i class="fas fa-lightbulb"></i>
+        {{ $t('analytics.codebase.intelligence.suggestionsTitle') }}
+        <span class="suggestions-count">{{ suggestions.length }}</span>
+      </h4>
+      <div class="suggestions-list">
+        <div
+          v-for="suggestion in suggestions"
+          :key="suggestion.id"
+          class="suggestion-item"
+          :class="'priority-' + suggestion.priority"
+        >
+          <div class="suggestion-header">
+            <span class="suggestion-type-badge">{{ suggestion.type }}</span>
+            <span class="suggestion-priority" :class="'priority-' + suggestion.priority">
+              {{ suggestion.priority }}
+            </span>
+          </div>
+          <div class="suggestion-title">{{ suggestion.title }}</div>
+          <div class="suggestion-description">{{ suggestion.description }}</div>
+          <div class="suggestion-impact">
+            <i class="fas fa-chart-line"></i> {{ suggestion.impact }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analysis History Section (#3073) -->
+    <div v-if="analysisHistory && analysisHistory.length > 0" class="analysis-history-section">
+      <h4>
+        <i class="fas fa-history"></i>
+        {{ $t('analytics.codebase.intelligence.analysisHistoryTitle') }}
+        <button
+          @click="emit('load-analysis-history')"
+          class="card-refresh-btn"
+          style="margin-left: 8px;"
+        >
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </h4>
+      <div class="history-list">
+        <div
+          v-for="entry in analysisHistory"
+          :key="entry.id"
+          class="history-item"
+        >
+          <div class="history-meta">
+            <span class="history-language">{{ entry.language }}</span>
+            <span v-if="entry.filename" class="history-filename">{{ entry.filename }}</span>
+          </div>
+          <div class="history-score" :class="getScoreClass(entry.quality_score)">
+            {{ entry.quality_score }}
+          </div>
+          <div class="history-time">{{ formatTimestamp(entry.timestamp) }}</div>
+        </div>
+      </div>
+    </div>
+
     <EmptyState
       v-if="!rootPath && !securityScore && !performanceScore && !redisHealth"
       icon="fas fa-shield-alt"
@@ -364,6 +555,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import HealthScoreGauge from '@/components/analytics/HealthScoreGauge.vue'
 
 interface SecurityScoreResult {
   security_score: number
@@ -418,11 +610,55 @@ interface PerformanceFindingDetail {
 interface RedisOptimization {
   severity: string
   optimization_type: string
-  category?: string
   description: string
   file_path: string
   line?: number
+  category?: string
   recommendation?: string
+}
+
+interface CodeHealthScore {
+  health_score: number
+  total_files: number
+  issues_count: {
+    critical: number
+    high: number
+    medium: number
+    low: number
+  }
+  coverage_percent: number
+  technical_debt_hours: number
+  timestamp: string
+}
+
+interface QualityScore {
+  overall_score: number
+  metrics: {
+    complexity: number
+    maintainability: number
+    documentation: number
+    testing: number
+    security: number
+  }
+  grade: string
+  trend: 'improving' | 'stable' | 'declining'
+}
+
+interface CodeSuggestion {
+  id: string
+  type: string
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  description: string
+  impact: string
+}
+
+interface CodeAnalysisResult {
+  id: string
+  language: string
+  filename?: string
+  quality_score: number
+  timestamp: string
 }
 
 const props = defineProps<{
@@ -442,6 +678,10 @@ const props = defineProps<{
   redisError: string
   redisOptimizations: RedisOptimization[] | null
   redisOptimizationsLoading: boolean
+  healthScore: CodeHealthScore | null
+  qualityScore: QualityScore | null
+  suggestions: CodeSuggestion[]
+  analysisHistory: CodeAnalysisResult[]
 }>()
 
 const emit = defineEmits<{
@@ -452,6 +692,9 @@ const emit = defineEmits<{
   'load-security-findings': []
   'load-performance-findings': []
   'load-redis-optimizations': []
+  'load-health-score': []
+  'load-quality-score': []
+  'load-analysis-history': []
 }>()
 
 const showSecurityDetails = ref(false)
@@ -502,6 +745,25 @@ function getSeverityClass(severity: string): string {
     case 'low': return 'severity-low'
     default: return 'severity-info'
   }
+}
+
+function getHealthGrade(score: number): string {
+  if (score >= 90) return 'A+'
+  if (score >= 80) return 'A'
+  if (score >= 70) return 'B'
+  if (score >= 60) return 'C'
+  if (score >= 50) return 'D'
+  return 'F'
+}
+
+function formatTimestamp(timestamp: string): string {
+  const date = new Date(timestamp)
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 </script>
 
@@ -581,17 +843,11 @@ function getSeverityClass(severity: string): string {
   cursor: not-allowed;
 }
 
-.score-card.security-card .score-header i {
-  color: var(--color-error);
-}
-
-.score-card.performance-card .score-header i {
-  color: var(--color-warning);
-}
-
-.score-card.redis-card .score-header i {
-  color: var(--chart-green);
-}
+.score-card.security-card .score-header i { color: var(--color-error); }
+.score-card.performance-card .score-header i { color: var(--color-warning); }
+.score-card.redis-card .score-header i { color: var(--chart-green); }
+.score-card.health-card .score-header i { color: var(--color-error-light); }
+.score-card.quality-card .score-header i { color: var(--chart-indigo); }
 
 .score-card .score-loading {
   display: flex;
@@ -612,73 +868,13 @@ function getSeverityClass(severity: string): string {
   font-size: 0.85em;
 }
 
-.score-card .score-error i {
-  color: var(--color-error);
-}
+.score-card .score-error i { color: var(--color-error); }
 
 .score-card .score-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-}
-
-.score-card .score-value {
-  font-size: 3em;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-
-.score-card .score-value.score-high {
-  color: var(--chart-green);
-}
-
-.score-card .score-value.score-medium {
-  color: var(--color-warning);
-}
-
-.score-card .score-value.score-low {
-  color: var(--color-error);
-}
-
-.score-card .score-grade {
-  font-size: 1.5em;
-  font-weight: 700;
-  padding: 4px 16px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
-.score-card .score-grade.grade-a {
-  background: rgba(34, 197, 94, 0.2);
-  color: var(--color-success-light);
-}
-
-.score-card .score-grade.grade-b {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--color-success-light);
-}
-
-.score-card .score-grade.grade-c {
-  background: rgba(245, 158, 11, 0.2);
-  color: var(--color-warning-light);
-}
-
-.score-card .score-grade.grade-d {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--color-error-light);
-}
-
-.score-card .score-grade.grade-f {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--color-error-light);
-}
-
-.score-card .score-status {
-  color: var(--text-muted);
-  font-size: 0.9em;
-  margin-bottom: 12px;
 }
 
 .score-card .score-details {
@@ -721,7 +917,267 @@ function getSeverityClass(severity: string): string {
   font-style: italic;
 }
 
-/* Issue #566: View Details Button */
+/* Quality Metrics (#3073) */
+.quality-metrics {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.quality-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.quality-metric .metric-label {
+  width: 110px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.quality-metric .metric-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quality-metric .metric-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.quality-metric .metric-fill.score-high { background: var(--chart-green); }
+.quality-metric .metric-fill.score-medium { background: var(--color-warning); }
+.quality-metric .metric-fill.score-low { background: var(--color-error); }
+
+.quality-metric .metric-value {
+  width: 30px;
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.quality-trend {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quality-trend.trend-improving {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success-light);
+}
+
+.quality-trend.trend-stable {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--color-info-light);
+}
+
+.quality-trend.trend-declining {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-error-light);
+}
+
+/* Suggestions Section (#3073) */
+.suggestions-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.suggestions-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.suggestions-section h4 i { color: var(--color-warning); }
+
+.suggestions-count {
+  padding: 2px 8px;
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  font-size: 0.75em;
+  color: var(--color-warning-light);
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.suggestion-item {
+  padding: 14px 16px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  border-left: 4px solid var(--text-tertiary);
+}
+
+.suggestion-item.priority-high { border-left-color: var(--color-error); }
+.suggestion-item.priority-medium { border-left-color: var(--color-warning); }
+.suggestion-item.priority-low { border-left-color: var(--chart-green); }
+
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.suggestion-type-badge {
+  padding: 2px 8px;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: var(--chart-indigo-light);
+  text-transform: capitalize;
+}
+
+.suggestion-priority {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.suggestion-priority.priority-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error-light);
+}
+
+.suggestion-priority.priority-medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning-light);
+}
+
+.suggestion-priority.priority-low {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-light);
+}
+
+.suggestion-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.95em;
+  margin-bottom: 4px;
+}
+
+.suggestion-description {
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.suggestion-impact {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.suggestion-impact i {
+  color: var(--chart-green);
+  margin-right: 4px;
+}
+
+/* Analysis History Section (#3073) */
+.analysis-history-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.analysis-history-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.analysis-history-section h4 i { color: var(--chart-blue); }
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.history-item:hover {
+  background: rgba(17, 24, 39, 0.8);
+}
+
+.history-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-language {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.history-filename {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.history-score {
+  font-size: 1.2em;
+  font-weight: 700;
+  min-width: 40px;
+  text-align: center;
+}
+
+.history-score.score-high { color: var(--chart-green); }
+.history-score.score-medium { color: var(--color-warning); }
+.history-score.score-low { color: var(--color-error); }
+
+.history-time {
+  font-size: 0.75em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* View Details Button */
 .view-details-btn {
   width: 100%;
   margin-top: 12px;
@@ -751,7 +1207,7 @@ function getSeverityClass(severity: string): string {
   cursor: not-allowed;
 }
 
-/* Issue #566: Findings Panel Styles */
+/* Findings Panel Styles */
 .findings-panel {
   margin-top: 16px;
   background: rgba(30, 41, 59, 0.6);
@@ -837,13 +1293,8 @@ function getSeverityClass(severity: string): string {
   transition: all 0.2s ease;
 }
 
-.finding-item:last-child {
-  margin-bottom: 0;
-}
-
-.finding-item:hover {
-  background: rgba(15, 23, 42, 0.8);
-}
+.finding-item:last-child { margin-bottom: 0; }
+.finding-item:hover { background: rgba(15, 23, 42, 0.8); }
 
 .finding-item.severity-critical {
   border-left-color: var(--color-error);
@@ -942,9 +1393,7 @@ function getSeverityClass(severity: string): string {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-.finding-location i {
-  color: var(--chart-indigo);
-}
+.finding-location i { color: var(--chart-indigo); }
 
 .finding-location .function-name {
   color: var(--chart-indigo-light);
@@ -977,7 +1426,4 @@ function getSeverityClass(severity: string): string {
   color: var(--chart-orange);
   margin-right: 4px;
 }
-
-/* Issue #538: Environment Analysis Section */
-
 </style>
