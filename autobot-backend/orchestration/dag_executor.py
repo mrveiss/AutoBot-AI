@@ -78,6 +78,10 @@ class DAGExecutionContext:
 
     Mirrors the shape of the execution_context dict used by
     WorkflowExecutor so results can be merged after DAG execution.
+
+    Issue #2141: ``step_outputs`` holds typed StepOutput objects populated by
+    WorkflowExecutor._execute_step_with_agent after each node completes.  They
+    are available to the VariableResolver before subsequent nodes execute.
     """
 
     workflow_id: str
@@ -86,6 +90,8 @@ class DAGExecutionContext:
     interactions: List[Any] = field(default_factory=list)
     branches_taken: Dict[str, bool] = field(default_factory=dict)
     skipped_nodes: Set[str] = field(default_factory=set)
+    # Issue #2141: typed step outputs for structured variable piping
+    step_outputs: Dict[str, Any] = field(default_factory=dict)
     status: str = "in_progress"
     error: Optional[str] = None
 
