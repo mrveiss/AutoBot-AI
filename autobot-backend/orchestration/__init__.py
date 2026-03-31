@@ -13,9 +13,11 @@ This package contains:
 - workflow_planner: Workflow step planning and estimation
 - workflow_executor: Workflow execution with agent coordination
 - workflow_documentation: Auto-documentation and knowledge extraction
+- dag_executor: DAG-based execution with condition/branch routing (#2140)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
+from .dag_executor import DAGExecutor, NodeType, WorkflowDAG, build_dag, workflow_has_condition_nodes
 from .types import (
     AgentCapability,
     AgentInteraction,
@@ -45,4 +47,10 @@ __all__ = [
     "WorkflowDocumenter",
     "WorkflowExecutor",
     "WorkflowPlanner",
+    # DAG execution (#2140)
+    "DAGExecutor",
+    "NodeType",
+    "WorkflowDAG",
+    "build_dag",
+    "workflow_has_condition_nodes",
 ]
