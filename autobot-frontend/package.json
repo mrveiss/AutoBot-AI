@@ -40,6 +40,7 @@
     "@heroicons/vue": "^2.2.0",
     "@ricky0123/vad-web": "^0.0.30",
     "@tanstack/vue-virtual": "^3.13.23",
+    "@testing-library/dom": "^10.4.1",
     "@tsconfig/node18": "^18.2.6",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",

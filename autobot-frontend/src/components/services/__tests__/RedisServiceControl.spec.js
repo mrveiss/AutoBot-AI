@@ -16,7 +16,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { createI18n } from 'vue-i18n';
 import RedisServiceControl from '@/components/services/RedisServiceControl.vue';
+
+// Create a minimal i18n instance for tests (vue-i18n 11 requires app.use)
+const createTestI18n = () =>
+  createI18n({
+    legacy: false,
+    locale: 'en',
+    fallbackLocale: 'en',
+    messages: { en: {} },
+    missingWarn: false,
+    fallbackWarn: false,
+  });
 
 // Mock composables
 vi.mock('@/composables/useServiceManagement', () => ({
@@ -58,6 +70,17 @@ vi.mock('@/composables/useServiceManagement', () => ({
   }))
 }));
 
+// Helper to mount RedisServiceControl with required plugins (#2641)
+const mountWithPlugins = (options = {}) => {
+  return mount(RedisServiceControl, {
+    global: {
+      plugins: [createTestI18n()],
+      ...(options.global || {}),
+    },
+    ...options,
+  });
+};
+
 describe('RedisServiceControl.vue', () => {
   let wrapper;
 
@@ -73,7 +96,7 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Component Rendering', () => {
     it('renders component with running status', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="redis-service-control"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="service-header"]').exists()).toBe(true);
@@ -81,7 +104,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('displays service details when running', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const details = wrapper.find('[data-testid="service-details"]');
       expect(details.exists()).toBe(true);
@@ -91,26 +114,26 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('shows correct uptime formatting', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       // 86400 seconds = 1 day
       expect(wrapper.text()).toMatch(/1d \d+h \d+m/);
     });
 
     it('displays memory usage in MB', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.text()).toContain('128.5 MB');
     });
 
     it('shows connection count', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.text()).toContain('42');
     });
 
     it('renders service status badge', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const badge = wrapper.findComponent({ name: 'ServiceStatusBadge' });
       expect(badge.exists()).toBe(true);
@@ -120,7 +143,7 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Control Buttons', () => {
     it('renders all control buttons', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="start-button"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="restart-button"]').exists()).toBe(true);
@@ -129,21 +152,21 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('start button disabled when service running', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const startButton = wrapper.find('[data-testid="start-button"]');
       expect(startButton.attributes('disabled')).toBeDefined();
     });
 
     it('restart button enabled when service running', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const restartButton = wrapper.find('[data-testid="restart-button"]');
       expect(restartButton.attributes('disabled')).toBeUndefined();
     });
 
     it('stop button enabled when service running', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const stopButton = wrapper.find('[data-testid="stop-button"]');
       expect(stopButton.attributes('disabled')).toBeUndefined();
@@ -156,7 +179,7 @@ describe('RedisServiceControl.vue', () => {
         loading: { value: true }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const buttons = wrapper.findAll('button');
       buttons.forEach(button => {
@@ -176,7 +199,7 @@ describe('RedisServiceControl.vue', () => {
         startService: mockStartService
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const startButton = wrapper.find('[data-testid="start-button"]');
       await startButton.trigger('click');
@@ -185,7 +208,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('shows confirmation dialog before restart', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const restartButton = wrapper.find('[data-testid="restart-button"]');
       await restartButton.trigger('click');
@@ -197,7 +220,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('shows confirmation dialog before stop', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const stopButton = wrapper.find('[data-testid="stop-button"]');
       await stopButton.trigger('click');
@@ -217,7 +240,7 @@ describe('RedisServiceControl.vue', () => {
         refreshStatus: mockRefreshStatus
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const refreshButton = wrapper.find('[data-testid="refresh-button"]');
       await refreshButton.trigger('click');
@@ -236,7 +259,7 @@ describe('RedisServiceControl.vue', () => {
         restartService: mockRestartService
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       // Click restart button
       await wrapper.find('[data-testid="restart-button"]').trigger('click');
@@ -258,7 +281,7 @@ describe('RedisServiceControl.vue', () => {
         restartService: mockRestartService
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       // Click restart button
       await wrapper.find('[data-testid="restart-button"]').trigger('click');
@@ -273,7 +296,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('shows warning message in stop confirmation', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       await wrapper.find('[data-testid="stop-button"]').trigger('click');
       await wrapper.vm.$nextTick();
@@ -292,7 +315,7 @@ describe('RedisServiceControl.vue', () => {
         loading: { value: true }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="loading-indicator"]').exists()).toBe(true);
     });
@@ -305,7 +328,7 @@ describe('RedisServiceControl.vue', () => {
         loading: { value: true }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const buttons = wrapper.findAll('button');
       buttons.forEach(button => {
@@ -316,7 +339,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('hides loading indicator when not loading', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="loading-indicator"]').exists()).toBe(false);
     });
@@ -324,14 +347,14 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Health Status Display', () => {
     it('displays health status section', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="health-status"]').exists()).toBe(true);
       expect(wrapper.text()).toContain('Health Status');
     });
 
     it('shows healthy status indicator', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const indicator = wrapper.find('[data-testid="health-indicator"]');
       expect(indicator.exists()).toBe(true);
@@ -340,14 +363,14 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('displays individual health checks', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const checks = wrapper.findAll('[data-testid^="health-check-"]');
       expect(checks.length).toBeGreaterThan(0);
     });
 
     it('shows health check status badges', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const connectivityCheck = wrapper.find('[data-testid="health-check-connectivity"]');
       expect(connectivityCheck.exists()).toBe(true);
@@ -355,7 +378,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('displays health check duration', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const connectivityCheck = wrapper.find('[data-testid="health-check-connectivity"]');
       expect(connectivityCheck.text()).toContain('2.5ms');
@@ -377,7 +400,7 @@ describe('RedisServiceControl.vue', () => {
         }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const recommendations = wrapper.find('[data-testid="recommendations"]');
       expect(recommendations.exists()).toBe(true);
@@ -385,7 +408,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('hides recommendations when empty', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="recommendations"]').exists()).toBe(false);
     });
@@ -393,14 +416,14 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Auto-Recovery Status', () => {
     it('displays auto-recovery section', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="auto-recovery"]').exists()).toBe(true);
       expect(wrapper.text()).toContain('Auto-Recovery');
     });
 
     it('shows auto-recovery enabled status', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.text()).toContain('Enabled: Yes');
     });
@@ -420,7 +443,7 @@ describe('RedisServiceControl.vue', () => {
         }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.text()).toContain('Recent Recoveries: 3');
     });
@@ -440,7 +463,7 @@ describe('RedisServiceControl.vue', () => {
         }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const alert = wrapper.find('[data-testid="manual-intervention-alert"]');
       expect(alert.exists()).toBe(true);
@@ -451,7 +474,7 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Service Logs Viewer', () => {
     it('renders logs toggle button', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const logsButton = wrapper.find('[data-testid="toggle-logs-button"]');
       expect(logsButton.exists()).toBe(true);
@@ -459,7 +482,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('shows logs viewer when toggled', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const logsButton = wrapper.find('[data-testid="toggle-logs-button"]');
       await logsButton.trigger('click');
@@ -470,7 +493,7 @@ describe('RedisServiceControl.vue', () => {
     });
 
     it('hides logs viewer when toggled off', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const logsButton = wrapper.find('[data-testid="toggle-logs-button"]');
 
@@ -496,7 +519,7 @@ describe('RedisServiceControl.vue', () => {
         subscribeToStatusUpdates: mockSubscribe
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(mockSubscribe).toHaveBeenCalledOnce();
     });
@@ -513,7 +536,7 @@ describe('RedisServiceControl.vue', () => {
         })
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
       await wrapper.vm.$nextTick();
 
       // Simulate WebSocket update
@@ -543,7 +566,7 @@ describe('RedisServiceControl.vue', () => {
         })
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
       await wrapper.vm.$nextTick();
 
       // Simulate service event (restart completed)
@@ -571,7 +594,7 @@ describe('RedisServiceControl.vue', () => {
         startService: vi.fn().mockRejectedValue(new Error('Start failed'))
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const startButton = wrapper.find('[data-testid="start-button"]');
       await startButton.trigger('click');
@@ -591,7 +614,7 @@ describe('RedisServiceControl.vue', () => {
         healthStatus: { value: null }
       });
 
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('[data-testid="error-state"]').exists()).toBe(true);
     });
@@ -599,21 +622,21 @@ describe('RedisServiceControl.vue', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels for buttons', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const startButton = wrapper.find('[data-testid="start-button"]');
       expect(startButton.attributes('aria-label')).toBeDefined();
     });
 
     it('uses semantic HTML elements', () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       expect(wrapper.find('button').exists()).toBe(true);
       expect(wrapper.find('section').exists()).toBe(true);
     });
 
     it('provides keyboard navigation support', async () => {
-      wrapper = mount(RedisServiceControl);
+      wrapper = mountWithPlugins();
 
       const startButton = wrapper.find('[data-testid="start-button"]');
 

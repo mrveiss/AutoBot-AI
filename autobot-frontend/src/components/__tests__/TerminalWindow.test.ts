@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
+import { ref, reactive } from 'vue'
 import TerminalWindow from '../terminal/TerminalWindow.vue'
 import {
   renderComponent,
@@ -10,7 +11,7 @@ import {
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 import { webSocketTestUtil, WebSocketMessageType } from '../../test/mocks/websocket-mock'
 
-// Mock dependencies — Vitest 4 hoists vi.mock factories above imports,
+// Mock dependencies -- Vitest 4 hoists vi.mock factories above imports,
 // so we cannot reference createMockApiService() here. Use inline vi.fn()
 // calls instead (same pattern as ChatInterface.test.ts). (#2676)
 vi.mock('@/utils/ApiClient', () => ({
@@ -38,6 +39,40 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
+// Mock TerminalService to prevent real WebSocket connections (#2641)
+vi.mock('@/services/TerminalService', () => ({
+  useTerminalService: vi.fn(() => ({
+    sendInput: vi.fn(),
+    sendStdin: vi.fn(),
+    sendTabCompletion: vi.fn(),
+    sendHistoryGet: vi.fn(),
+    sendHistorySearch: vi.fn(),
+    sendSignal: vi.fn(),
+    resize: vi.fn(),
+    isConnected: vi.fn(() => false),
+    sessions: reactive(new Map()),
+    connectionStatus: ref('disconnected'),
+    createSession: vi.fn().mockResolvedValue('test-session-id'),
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn(),
+    closeSession: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
+
+// Stub child components that use i18n or other plugins
+const renderTerminal = (options: Record<string, unknown> = {}) => {
+  return renderComponent(TerminalWindow, {
+    router: true,
+    global: {
+      stubs: {
+        AdvancedStepConfirmationModal: { template: '<div data-testid="step-modal-stub" />' },
+        CompletionSuggestions: { template: '<div data-testid="completion-stub" />' },
+      },
+    },
+    ...options,
+  })
+}
+
 describe('TerminalWindow', () => {
   let user: ReturnType<typeof userEvent.setup>
   let mockApi: ReturnType<typeof createMockApiService>
@@ -55,7 +90,7 @@ describe('TerminalWindow', () => {
 
   describe('Rendering', () => {
     it('renders the terminal window with header', () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       expect(screen.getByText(/Terminal -/)).toBeInTheDocument()
       expect(screen.getByText('🛑 KILL')).toBeInTheDocument()
@@ -69,9 +104,7 @@ describe('TerminalWindow', () => {
         title: 'My Custom Terminal Session'
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       expect(screen.getByText('Terminal - My Custom Terminal Session')).toBeInTheDocument()
     })
@@ -84,9 +117,7 @@ describe('TerminalWindow', () => {
         automationPaused: false,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const killButton = screen.getByText('🛑 KILL')
       const interruptButton = screen.getByText('⚡ INT')
@@ -104,9 +135,7 @@ describe('TerminalWindow', () => {
         hasAutomatedWorkflow: false,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const killButton = screen.getByText('🛑 KILL')
       const interruptButton = screen.getByText('⚡ INT')
@@ -120,7 +149,7 @@ describe('TerminalWindow', () => {
 
   describe('WebSocket Connection', () => {
     it('establishes WebSocket connection on mount', () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.getConnection()
       expect(ws).toBeDefined()
@@ -128,7 +157,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket connection status', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -142,7 +171,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles incoming terminal output', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -155,7 +184,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket disconnection', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       webSocketTestUtil.simulateClose(1000, 'Normal closure')
@@ -166,7 +195,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles WebSocket errors', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       webSocketTestUtil.simulateError('Connection failed')
@@ -184,9 +213,7 @@ describe('TerminalWindow', () => {
         hasRunningProcesses: true,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const killButton = screen.getByText('🛑 KILL')
       await user.click(killButton)
@@ -201,9 +228,7 @@ describe('TerminalWindow', () => {
         hasActiveProcess: true,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const interruptButton = screen.getByText('⚡ INT')
       await user.click(interruptButton)
@@ -219,9 +244,7 @@ describe('TerminalWindow', () => {
         automationPaused: false,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const pauseButton = screen.getByText('⏸️ PAUSE')
       await user.click(pauseButton)
@@ -235,7 +258,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles reconnect action', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const reconnectButton = screen.getByRole('button', { name: "🔄" })
       await user.click(reconnectButton)
@@ -248,7 +271,7 @@ describe('TerminalWindow', () => {
     })
 
     it('clears terminal output', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       // First add some output
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
@@ -270,7 +293,7 @@ describe('TerminalWindow', () => {
 
   describe('Command Input', () => {
     it('sends command through WebSocket', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -292,7 +315,7 @@ describe('TerminalWindow', () => {
     })
 
     it('sends command with Enter key', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -310,7 +333,7 @@ describe('TerminalWindow', () => {
     })
 
     it('prevents sending empty commands', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -322,7 +345,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles command history navigation', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
       const commandInput = screen.getByPlaceholderText(/enter command/i) as HTMLInputElement
@@ -348,7 +371,7 @@ describe('TerminalWindow', () => {
 
   describe('Terminal Output Display', () => {
     it('displays command output correctly', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -365,7 +388,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles colored terminal output', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -381,7 +404,7 @@ describe('TerminalWindow', () => {
     })
 
     it('auto-scrolls to bottom on new output', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -398,7 +421,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles large output efficiently', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -415,7 +438,7 @@ describe('TerminalWindow', () => {
 
   describe('Session Management', () => {
     it('updates session status from props', async () => {
-      const { rerender } = renderComponent(TerminalWindow, { router: true,
+      const { rerender } = renderTerminal({
         props: {
           sessionData: createMockTerminalSession({
             hasRunningProcesses: false
@@ -437,7 +460,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles session reconnection', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       // Simulate disconnect
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
@@ -463,9 +486,7 @@ describe('TerminalWindow', () => {
         hasRunningProcesses: true,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       const killButton = screen.getByText('🛑 KILL')
       await user.click(killButton)
@@ -477,7 +498,7 @@ describe('TerminalWindow', () => {
     })
 
     it('handles malformed WebSocket messages', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const ws = webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -497,9 +518,7 @@ describe('TerminalWindow', () => {
         hasAutomatedWorkflow: true,
       })
 
-      renderComponent(TerminalWindow, { router: true,
-        props: { sessionData }
-      })
+      renderTerminal({ props: { sessionData } })
 
       expect(screen.getByRole('button', { name: /emergency kill/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /interrupt/i })).toBeInTheDocument()
@@ -507,7 +526,7 @@ describe('TerminalWindow', () => {
     })
 
     it('supports keyboard navigation', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       const commandInput = screen.getByPlaceholderText(/enter command/i)
 
@@ -522,7 +541,7 @@ describe('TerminalWindow', () => {
 
   describe('Integration', () => {
     it('integrates with chat workflow notifications', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 
@@ -543,7 +562,7 @@ describe('TerminalWindow', () => {
 
   describe('Performance', () => {
     it('handles high-frequency output efficiently', async () => {
-      renderComponent(TerminalWindow, { router: true })
+      renderTerminal()
 
       webSocketTestUtil.connect('ws://localhost:8001/terminal/ws')
 

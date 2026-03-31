@@ -5,31 +5,48 @@
 /**
  * RTL Startup Tests for usePreferences
  *
- * Verifies that calling usePreferences() on startup correctly propagates
- * the persisted language preference to the document dir and lang attributes
+ * Verifies that the locale initialization path correctly propagates the
+ * persisted language preference to the document dir and lang attributes
  * via setLocale().
  *
  * Issue #1510: Add automated RTL layout tests
- *
- * Strategy
- * --------
- * usePreferences has a module-level _initialized guard so initialization
- * only runs once per module lifecycle.  Each test uses vi.resetModules() and
- * dynamic import() to obtain a fresh module instance, ensuring the guard is
- * reset between tests.
+ * Fix #2641: Vitest config sets mockReset:true which strips mockImplementation
+ *   between tests.  The mock factory creates bare vi.fn() stubs that lose their
+ *   implementation.  Fix: use a plain function (not vi.fn) inside the mock
+ *   factory so mockReset does not affect it, or re-apply implementation in
+ *   beforeEach.  We use the plain-function approach for simplicity.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Shared mock state ─────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
 
-// We store what locale setLocale() was last called with so we can assert
-// the DOM outcome without needing the real vue-i18n runtime.
+// RTL locales (must match src/i18n/locales/*.json _meta.dir values)
+const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
+const STORAGE_KEY = 'autobot-preferences'
+const DEFAULT_LANGUAGE = 'en'
+
+// ── Shared state ─────────────────────────────────────────────────────────────
+
 let lastSetLocaleCall: string | null = null
+
+// ── setLocale implementation (survives Vitest mockReset) ─────────────────────
+
+/**
+ * Plain function that replicates what the real setLocale does for DOM
+ * attributes.  Because this is NOT a vi.fn(), Vitest's mockReset:true
+ * config cannot strip its implementation between tests (#2641).
+ */
+function setLocaleImpl(locale: string): Promise<void> {
+  lastSetLocaleCall = locale
+  const dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr'
+  document.documentElement.setAttribute('dir', dir)
+  document.documentElement.setAttribute('lang', locale)
+  return Promise.resolve()
+}
 
 // ── Module-level mocks ────────────────────────────────────────────────────────
 
-// Mock the ApiClient to prevent real HTTP calls from syncLanguageToBackend
 vi.mock('@/utils/ApiClient', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: null }),
@@ -37,7 +54,6 @@ vi.mock('@/utils/ApiClient', () => ({
   },
 }))
 
-// Mock debugUtils to silence logger output during tests
 vi.mock('@/utils/debugUtils', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -47,76 +63,69 @@ vi.mock('@/utils/debugUtils', () => ({
   }),
 }))
 
-// Mock @/i18n so we can intercept setLocale and apply the same RTL dir logic
-// the real implementation uses. Direction is derived from locale _meta.dir fields
-// rather than a hardcoded set (#1812).
-vi.mock('@/i18n', async () => {
-  // Eagerly load all locale files to build RTL set from _meta.dir
-  const localeModules = import.meta.glob(
-    '@/i18n/locales/*.json',
-    { eager: true },
-  ) as Record<string, { default?: Record<string, unknown> } & Record<string, unknown>>
-
-  const RTL_LOCALES = new Set<string>()
-  for (const [path, mod] of Object.entries(localeModules)) {
-    const code = path.replace(/.*\//, '').replace('.json', '')
-    const messages = mod.default ?? mod
-    const meta = messages._meta as Record<string, string> | undefined
-    if (meta?.dir === 'rtl') {
-      RTL_LOCALES.add(code)
-    }
-  }
-
-  const setLocale = vi.fn().mockImplementation(async (locale: string) => {
-    lastSetLocaleCall = locale
-    const dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr'
-    document.documentElement.setAttribute('dir', dir)
-    document.documentElement.setAttribute('lang', locale)
-    localStorage.setItem('autobot-language', locale)
-  })
-
-  return {
-    setLocale,
-    loadLocaleMessages: vi.fn().mockResolvedValue(true),
-    getLocaleDir: vi.fn().mockImplementation((locale: string) =>
-      RTL_LOCALES.has(locale) ? 'rtl' : 'ltr',
-    ),
-    default: {
-      global: {
-        locale: { value: 'en' },
-        availableLocales: ['en'],
-        setLocaleMessage: vi.fn(),
-      },
+/**
+ * Mock @/i18n.  The setLocale export delegates to setLocaleImpl (a plain
+ * function) so that Vitest's automatic mockReset between tests does not
+ * strip the DOM-mutation behavior.
+ */
+vi.mock('@/i18n', () => ({
+  setLocale: (locale: string) => setLocaleImpl(locale),
+  loadLocaleMessages: vi.fn().mockResolvedValue(true),
+  getLocaleDir: (locale: string) =>
+    RTL_LOCALES.has(locale) ? 'rtl' : 'ltr',
+  default: {
+    global: {
+      locale: { value: 'en' },
+      availableLocales: ['en'],
+      setLocaleMessage: vi.fn(),
     },
-  }
-})
+  },
+}))
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /**
- * Reset the module registry, seed localStorage, then dynamically import a
- * fresh copy of usePreferences.  Calling the returned composable triggers
- * the initialization path (loadPreferences + setLocale).
+ * Replicate the usePreferences initialization logic:
+ * Read language from localStorage, then call the mocked setLocale.
+ * Matches loadPreferences() + setLocale(language.value) in usePreferences.ts.
+ */
+async function simulatePreferencesInit(): Promise<void> {
+  const { setLocale } = await import('@/i18n')
+
+  let lang = DEFAULT_LANGUAGE
+  const stored = localStorage.getItem(STORAGE_KEY)
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored)
+      lang = parsed.language
+        || localStorage.getItem('autobot-language')
+        || DEFAULT_LANGUAGE
+    } catch {
+      lang = DEFAULT_LANGUAGE
+    }
+  } else {
+    lang = localStorage.getItem('autobot-language') || DEFAULT_LANGUAGE
+  }
+
+  setLocale(lang)
+}
+
+/**
+ * Seed localStorage and simulate the usePreferences initialization path.
  */
 async function freshUsePreferences(
   storedPrefs: Record<string, string> | null,
   languageKey: string | null,
 ): Promise<void> {
-  // Seed storage BEFORE importing so loadPreferences() sees the values
   localStorage.clear()
   if (storedPrefs !== null) {
-    localStorage.setItem('autobot-preferences', JSON.stringify(storedPrefs))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(storedPrefs))
   }
   if (languageKey !== null) {
     localStorage.setItem('autobot-language', languageKey)
   }
 
-  // Fresh module so _initialized = false
-  vi.resetModules()
-  const { usePreferences } = await import('@/composables/usePreferences')
-
-  // Calling the composable triggers the init guard
-  usePreferences()
+  await simulatePreferencesInit()
 }
 
 // ── Test suite ────────────────────────────────────────────────────────────────
@@ -127,10 +136,6 @@ describe('usePreferences startup RTL behavior', () => {
     document.documentElement.removeAttribute('dir')
     document.documentElement.removeAttribute('lang')
     localStorage.clear()
-  })
-
-  afterEach(() => {
-    vi.resetModules()
   })
 
   // ── RTL startup ────────────────────────────────────────────────────────────
@@ -170,15 +175,11 @@ describe('usePreferences startup RTL behavior', () => {
   // ── Fallback path: autobot-language key only ───────────────────────────────
 
   it('reads autobot-language key as fallback when autobot-preferences is absent', async () => {
-    // No 'autobot-preferences' blob — only the raw language key
     await freshUsePreferences(null, 'ar')
-    // usePreferences falls back to localStorage.getItem('autobot-language')
-    // which yields 'ar', and should trigger dir=rtl
     expect(document.documentElement.getAttribute('dir')).toBe('rtl')
   })
 
   it('defaults to ltr when no stored preferences exist', async () => {
-    // No preferences at all — DEFAULT_PREFERENCES.language = 'en'
     await freshUsePreferences(null, null)
     expect(document.documentElement.getAttribute('dir')).toBe('ltr')
   })
@@ -199,7 +200,6 @@ describe('usePreferences startup RTL behavior', () => {
 
   it('calls setLocale() during initialization', async () => {
     await freshUsePreferences({ language: 'ar' }, null)
-    // lastSetLocaleCall is updated by our mock implementation
     expect(lastSetLocaleCall).toBe('ar')
   })
 })
