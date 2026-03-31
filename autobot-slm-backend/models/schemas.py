@@ -638,6 +638,7 @@ class UpdateDiscoverStatus(BaseModel):
     nodes_checked: int = 0
     total_nodes: int = 0
     packages_found: int = 0
+    unreachable_nodes: List[str] = []
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
