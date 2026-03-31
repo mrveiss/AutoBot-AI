@@ -78,6 +78,11 @@ from .attention_backend import (
     ModelConfig as AttentionModelConfig,
     get_attention_backend_selector,
 )
+from .layer_inference import (
+    LayerInferenceConfig,
+    LayerInferenceEngine,
+    LayerInferenceStats,
+)
 
 __all__ = [
     # Router
@@ -139,6 +144,7 @@ __all__ = [
     "LayerKVCache",
     "RTX_4070_KV_CACHE_FRACTION",
     "RTX_4070_VRAM_BYTES",
+<<<<<<< HEAD
     # Attention Backend Selector (Issue #1951)
     "ModelAttentionBackend",
     "AttentionBackendSelector",
@@ -150,4 +156,8 @@ __all__ = [
     "get_gpu_memory_allocated",
     "EvictionStats",
     "MetaDeviceEvictionManager",
+    # Layer-by-layer Inference (Issue #1946)
+    "LayerInferenceConfig",
+    "LayerInferenceEngine",
+    "LayerInferenceStats",
 ]
