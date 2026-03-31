@@ -185,6 +185,79 @@
       tags: ['frontend', 'provision']
 
 # -------------------------------------------------------------------
+# Phase 4c: Re-render SLM nginx for co-located frontend (#3012)
+#
+# When the frontend role deploys user frontend code onto a node
+# that also runs the SLM manager, the SLM nginx config must switch
+# to co-located mode (user frontend at /, SLM at /slm/).
+# The slm_manager role's own nginx task auto-detects this by
+# checking for the user frontend package.json, but it runs before
+# the frontend role syncs the code. This phase re-renders the
+# SLM nginx config after the frontend role has completed.
+# -------------------------------------------------------------------
+- name: "Provision Phase 4c: SLM Nginx Co-location Update"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "SLM | Check if node has both frontend and slm_manager roles"
+      ansible.builtin.set_fact:
+        _is_slm_frontend_colocated: >-
+          {{
+            (
+              'frontend' in (node_roles | default([])) or
+              'autobot-frontend' in (node_roles | default([])) or
+              inventory_hostname in groups.get('frontend', [])
+            ) and (
+              'slm_manager' in (node_roles | default([])) or
+              inventory_hostname in groups.get('slm', [])
+            )
+          }}
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Detect co-located user frontend after frontend deploy"
+      ansible.builtin.stat:
+        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+      register: _post_frontend_colocated_check
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Set co-located frontend flag"
+      ansible.builtin.set_fact:
+        slm_colocated_frontend: "{{ _post_frontend_colocated_check.stat.exists | default(false) }}"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
+      ansible.builtin.template:
+        src: "{{ role_path | default(playbook_dir + '/../roles/slm_manager') }}/templates/autobot-slm.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+        mode: "0644"
+        backup: true
+      when:
+        - _is_slm_frontend_colocated | bool
+        - slm_colocated_frontend | default(false) | bool
+      register: _slm_nginx_rerendered
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Test nginx config after co-location update"
+      ansible.builtin.command:
+        cmd: nginx -t
+      when:
+        - _slm_nginx_rerendered is changed
+      changed_when: false
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Reload nginx after co-location update"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when:
+        - _slm_nginx_rerendered is changed
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+# -------------------------------------------------------------------
 # Phase 5a: AI Stack
 # -------------------------------------------------------------------
 - name: "Provision Phase 5a: AI Stack"
@@ -314,6 +387,7 @@
           - "  Phase 1: Common baseline (SSH, packages, users)"
           - "  Phase 2: SLM Agent + Node Exporter"
           - "  Phase 3-6: Role-specific configuration (when matched)"
+          - "  Phase 4c: SLM nginx co-location update (when applicable)"
           - "  Phase 5c: TTS Worker (when tts-worker in node_roles)"
           - ""
           - "Roles deployed based on:"
