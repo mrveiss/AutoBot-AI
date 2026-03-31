@@ -11,6 +11,15 @@ Issue #2597: Standalone experiment runner + result store.
 Issue #2599: AutoBot-orchestrated loop + web search (M2).
 """
 
+from .auto_research_agent import (
+    ApprovalGate,
+    AutoResearchAgent,
+    ExperimentSession,
+    ImprovementMetrics,
+    ResearchHypothesis,
+    SearchResult,
+    SessionStatus,
+)
 from .config import AutoResearchConfig
 from .models import (
     Experiment,
@@ -30,15 +39,6 @@ from .osint_engine import (
     OSINTSource,
     SourceResult,
     build_default_engine,
-)
-from .auto_research_agent import (
-    ApprovalGate,
-    AutoResearchAgent,
-    ExperimentSession,
-    ImprovementMetrics,
-    ResearchHypothesis,
-    SearchResult,
-    SessionStatus,
 )
 from .parser import ExperimentOutputParser
 from .routes import router

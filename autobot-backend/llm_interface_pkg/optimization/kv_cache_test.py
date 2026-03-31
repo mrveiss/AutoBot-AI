@@ -11,11 +11,11 @@ import pytest
 import torch
 
 from llm_interface_pkg.optimization.kv_cache import (
+    RTX_4070_KV_CACHE_FRACTION,
+    RTX_4070_VRAM_BYTES,
     KVCacheConfig,
     KVCacheManager,
     LayerKVCache,
-    RTX_4070_KV_CACHE_FRACTION,
-    RTX_4070_VRAM_BYTES,
     _compute_cache_bytes,
     _max_seq_from_budget,
 )

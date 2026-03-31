@@ -46,7 +46,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
-
 from services.workflow_serializer import WorkflowSerializer
 
 logger = logging.getLogger(__name__)

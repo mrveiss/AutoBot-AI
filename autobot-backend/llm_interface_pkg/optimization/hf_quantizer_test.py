@@ -15,13 +15,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from llm_interface_pkg.optimization.hf_quantizer import (
-    HfQuantizerWrapper,
-    LayerLoadResult,
-    QuantizerConfig,
-    QuantizationType,
-    QuantizedLayerLoader,
     _AWQ_QUANTIZED_SUFFIXES,
     _GPTQ_QUANTIZED_SUFFIXES,
+    HfQuantizerWrapper,
+    LayerLoadResult,
+    QuantizationType,
+    QuantizedLayerLoader,
+    QuantizerConfig,
     detect_quantization,
 )
 

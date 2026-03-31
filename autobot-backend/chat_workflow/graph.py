@@ -508,11 +508,11 @@ async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> 
 
     # Respect the agentic search feature flag from RAGConfig
     try:
-        from services.rag_config import get_rag_config
         from knowledge.search_components.agentic_search import (
             AgenticSearchConfig,
             knowledge_search_tool,
         )
+        from services.rag_config import get_rag_config
 
         rag_cfg = get_rag_config()
         if not rag_cfg.enable_agentic_search:
