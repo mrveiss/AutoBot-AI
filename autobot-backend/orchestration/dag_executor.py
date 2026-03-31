@@ -275,7 +275,7 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     }
 
     try:
-        result = eval(expr, safe_globals, safe_locals)  # noqa: S307
+        result = eval(expr, safe_globals, safe_locals)  # noqa: S307  # nosec B307 — sandboxed eval with restricted globals/locals
         logger.debug(
             "Condition node %s: expr=%r → %s", node.node_id, expr, bool(result)
         )
