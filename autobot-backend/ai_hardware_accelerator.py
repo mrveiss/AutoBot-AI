@@ -34,8 +34,8 @@ from constants.threshold_constants import (
 )
 
 if TYPE_CHECKING:
-    import torch as _torch_type
-    from PIL import Image as _pil_type
+    import torch as _torch_type  # noqa: F401
+    from PIL import Image as _pil_type  # noqa: F401
 
 # Import transformers models for multi-modal embeddings
 try:

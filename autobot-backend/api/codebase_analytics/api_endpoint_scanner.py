@@ -333,7 +333,7 @@ class BackendEndpointScanner:
         """
         relative_modules: dict[str, str] = {}
         for match in _RELATIVE_IMPORT_RE.finditer(content):
-            sub_package = match.group(1).strip()  # e.g., "endpoints" or ""
+            match.group(1).strip()  # e.g., "endpoints" or "" (unused)
             names_str = match.group(2)
             # Parse comma-separated names, ignoring parenthesised continuations
             names = [n.strip().rstrip(")\\") for n in names_str.split(",")]

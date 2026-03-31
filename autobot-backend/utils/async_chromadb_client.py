@@ -34,10 +34,10 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-    import chromadb
+    import chromadb  # noqa: F401
 
 # Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
@@ -401,7 +401,7 @@ async def get_async_chromadb_client(
         AsyncChromaClient wrapper for async operations
     """
     # Issue #3016: lazy import — chromadb is heavy (~1s import)
-    import chromadb
+    import chromadb  # noqa: F811
     from chromadb.config import Settings as ChromaSettings
 
     cache_key = (

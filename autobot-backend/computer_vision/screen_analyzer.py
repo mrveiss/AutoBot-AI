@@ -34,8 +34,8 @@ from .collections import ProcessingResultExtractor, UIElementCollection
 from .types import ElementType, InteractionType, ScreenState, UIElement
 
 if TYPE_CHECKING:
-    import cv2 as _cv2_type
-    from PIL import Image as _pil_type
+    import cv2 as _cv2_type  # noqa: F401
+    from PIL import Image as _pil_type  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

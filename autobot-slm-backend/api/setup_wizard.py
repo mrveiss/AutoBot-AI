@@ -497,6 +497,8 @@ async def _activate_provisioned_roles(
     should reflect that.  Without this, roles stay 'inactive'/'not_installed'
     and infra-var derivation (backend_host, redis_host) breaks.
     """
+    from sqlalchemy import select
+
     from models.database import NodeRole
 
     try:
