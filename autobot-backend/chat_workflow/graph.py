@@ -74,6 +74,10 @@ class ChatState(TypedDict, total=False):
     used_knowledge: bool
     rag_citations: List[Dict[str, Any]]
 
+    # Agentic RAG search (#1718)
+    agentic_context: str
+    agentic_search_queries: List[str]
+
     # Command approval (interrupt-based)
     pending_approval: Optional[Dict[str, Any]]
     approval_decision: Optional[Dict[str, Any]]
@@ -476,6 +480,79 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     }
 
 
+async def perform_knowledge_search(state: ChatState, config: RunnableConfig) -> dict:
+    """Agentic RAG pre-fetch: run knowledge_search_tool before LLM generation.
+
+    Issue #1718: When agentic search is enabled (RAGConfig.enable_agentic_search),
+    this node calls the AgenticSearchTool with the user's message, obtaining
+    rewritten-query + iterative-retrieval context before the LLM sees the prompt.
+
+    The assembled context string is stored in state["agentic_context"] and
+    injected into the LLM prompt by prepare_llm (via the manager's context
+    population path).  When the RAGService is unavailable the node degrades
+    gracefully: agentic_context is set to "" and execution continues normally.
+
+    Args:
+        state:  Current ChatState.
+        config: LangGraph RunnableConfig; must contain "configurable.manager".
+
+    Returns:
+        Partial state update with agentic_context and agentic_search_queries.
+    """
+    if state.get("error"):
+        return {}
+
+    manager = config["configurable"].get("manager")
+    if manager is None:
+        return {"agentic_context": "", "agentic_search_queries": []}
+
+    # Respect the agentic search feature flag from RAGConfig
+    try:
+        from services.rag_config import get_rag_config
+        from knowledge.search_components.agentic_search import (
+            AgenticSearchConfig,
+            knowledge_search_tool,
+        )
+
+        rag_cfg = get_rag_config()
+        if not rag_cfg.enable_agentic_search:
+            return {"agentic_context": "", "agentic_search_queries": []}
+
+        agentic_cfg = AgenticSearchConfig(
+            enable_agentic_search=rag_cfg.enable_agentic_search,
+            rewrite_enabled=rag_cfg.rewrite_enabled,
+            max_search_iterations=rag_cfg.max_search_iterations,
+        )
+
+        rag_service = getattr(manager, "rag_service", None)
+        if rag_service is None:
+            logger.debug("Manager has no rag_service; skipping agentic search")
+            return {"agentic_context": "", "agentic_search_queries": []}
+
+        context_str = await knowledge_search_tool(
+            query=state["user_message"],
+            rag_service=rag_service,
+            context=None,
+            config=agentic_cfg,
+        )
+
+        # Track the original query; refined queries are recorded inside the tool
+        queries_used: List[str] = [state["user_message"]]
+
+        logger.info(
+            "Agentic search complete: context_len=%d",
+            len(context_str),
+        )
+        return {
+            "agentic_context": context_str,
+            "agentic_search_queries": queries_used,
+            "used_knowledge": bool(context_str),
+        }
+    except Exception as exc:
+        logger.warning("Agentic search failed (non-fatal): %s", exc)
+        return {"agentic_context": "", "agentic_search_queries": []}
+
+
 async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
     """Persist conversation to Redis and file storage."""
     if state.get("error"):
@@ -600,10 +677,11 @@ def route_after_execution(state: ChatState) -> str:
 def build_chat_graph() -> StateGraph:
     """Build the chat workflow StateGraph.
 
-    Graph topology (#1373 — RLM reflection loop added):
+    Graph topology (#1718 — agentic search node added between prepare_llm and
+    generate_response; #1373 — RLM reflection loop):
         START -> initialize_session -> detect_intent
             -> [END if special intent]
-            -> prepare_llm -> generate_response
+            -> prepare_llm -> perform_knowledge_search -> generate_response
                 -> [request_approval if needs approval] -> execute_tools
                 -> [execute_tools if has tools]
                 -> [reflect_on_response if no tools]
@@ -620,6 +698,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("initialize_session", initialize_session)
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
+    builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("request_approval", request_approval)
@@ -630,7 +709,8 @@ def build_chat_graph() -> StateGraph:
     builder.add_edge(START, "initialize_session")
     builder.add_edge("initialize_session", "detect_intent")
     builder.add_conditional_edges("detect_intent", route_after_intent)
-    builder.add_edge("prepare_llm", "generate_response")
+    builder.add_edge("prepare_llm", "perform_knowledge_search")  # Issue #1718
+    builder.add_edge("perform_knowledge_search", "generate_response")  # Issue #1718
     builder.add_conditional_edges("generate_response", route_after_generation)
     builder.add_conditional_edges("reflect_on_response", route_after_reflection)
     builder.add_edge("request_approval", "execute_tools")
