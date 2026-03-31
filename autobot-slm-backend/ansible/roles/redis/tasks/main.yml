@@ -128,13 +128,22 @@
   notify: reload firewall
   tags: ['redis', 'firewall']
 
-- name: "Redis | Ensure base systemd service file exists"
-  ansible.builtin.shell: |
-    if [ ! -f /etc/systemd/system/redis-stack-server.service ]; then
-      apt-get -o Dpkg::Options::="--force-confmiss" install --reinstall redis-stack-server -y
-    fi
+# Issue #3011: Defense-in-depth — restore dpkg conffile if it was deleted
+# by a prior decommission or remove-role run. Plain `apt reinstall` does
+# NOT restore deleted conffiles; --force-confmiss is required.
+- name: "Redis | Check if base systemd service file exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/redis-stack-server.service
+  register: _redis_service_file
   become: yes
-  changed_when: false
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Restore missing dpkg conffile (--force-confmiss)"
+  ansible.builtin.shell: >
+    apt-get -o Dpkg::Options::="--force-confmiss"
+    install --reinstall redis-stack-server -y
+  become: yes
+  when: not _redis_service_file.stat.exists
   tags: ['redis', 'systemd']
 
 - name: "Redis | Create systemd override directory"

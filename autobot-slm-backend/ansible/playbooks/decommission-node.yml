@@ -188,13 +188,16 @@
             state: absent
           loop: "{{ _unit_files.stdout_lines | default([]) }}"
 
-        - name: Remove additional managed service files
+        # Issue #3011: Only delete Ansible-managed service files here.
+        # dpkg conffiles (e.g. redis-stack-server.service) are removed by
+        # Phase 5 via 'apt purge' — deleting them manually breaks reinstall
+        # because apt does not restore deleted conffiles without --force-confmiss.
+        - name: Remove Ansible-managed service files (non-dpkg)
           ansible.builtin.file:
             path: "/etc/systemd/system/{{ item }}"
             state: absent
           loop:
             - slm-agent.service
-            - redis-stack-server.service
             - ollama.service
 
         - name: Reload systemd daemon
