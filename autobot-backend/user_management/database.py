@@ -68,7 +68,7 @@ def get_async_engine() -> AsyncEngine:
     if not config.postgres_enabled:
         raise RuntimeError(
             "PostgreSQL is not enabled for deployment mode: "
-            f"{config.mode.value}. Set AUTOBOT_DEPLOYMENT_MODE to "
+            f"{config.mode.value}. Set AUTOBOT_USER_MODE to "
             "single_company, multi_company, or provider."
         )
 

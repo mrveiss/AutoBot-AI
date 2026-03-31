@@ -101,15 +101,17 @@ class VMConfig(BaseSettings):
         extra="ignore",
     )
 
-    main: str = Field(default="172.16.168.20", alias="AUTOBOT_BACKEND_HOST")
-    frontend: str = Field(default="172.16.168.21", alias="AUTOBOT_FRONTEND_HOST")
-    npu: str = Field(default="172.16.168.22", alias="AUTOBOT_NPU_WORKER_HOST")
-    redis: str = Field(default="172.16.168.23", alias="AUTOBOT_REDIS_HOST")
-    aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
-    chromadb: str = Field(default="172.16.168.24", alias="AUTOBOT_CHROMADB_HOST")
-    browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
-    tts: str = Field(default="172.16.168.24", alias="AUTOBOT_TTS_WORKER_HOST")
-    slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
+    # Issue #2953: Defaults changed to 127.0.0.1 for single-host installs.
+    # Distributed installs override these via AUTOBOT_*_HOST env vars in .env.
+    main: str = Field(default="127.0.0.1", alias="AUTOBOT_BACKEND_HOST")
+    frontend: str = Field(default="127.0.0.1", alias="AUTOBOT_FRONTEND_HOST")
+    npu: str = Field(default="127.0.0.1", alias="AUTOBOT_NPU_WORKER_HOST")
+    redis: str = Field(default="127.0.0.1", alias="AUTOBOT_REDIS_HOST")
+    aistack: str = Field(default="127.0.0.1", alias="AUTOBOT_AI_STACK_HOST")
+    chromadb: str = Field(default="127.0.0.1", alias="AUTOBOT_CHROMADB_HOST")
+    browser: str = Field(default="127.0.0.1", alias="AUTOBOT_BROWSER_SERVICE_HOST")
+    tts: str = Field(default="127.0.0.1", alias="AUTOBOT_TTS_WORKER_HOST")
+    slm: str = Field(default="127.0.0.1", alias="AUTOBOT_SLM_HOST")  # Issue #768, #2953
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
 
