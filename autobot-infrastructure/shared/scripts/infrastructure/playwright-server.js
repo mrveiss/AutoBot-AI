@@ -7,6 +7,9 @@ const express = require('express');
 const winston = require('winston');
 const app = express();
 
+// Configuration from environment variables with safe localhost defaults
+const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://127.0.0.1:5173';
+
 // Configure Winston logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -315,7 +318,7 @@ app.post('/send-test-message', async (req, res) => {
     message: req.body.message
   });
   try {
-    const { frontend_url = 'http://172.16.168.21:5173', message = 'what network scanning tools do we have available?' } = req.body;
+    const { frontend_url = FRONTEND_URL, message = 'what network scanning tools do we have available?' } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
@@ -534,7 +537,7 @@ app.post('/test-frontend', async (req, res) => {
     frontend_url: req.body.frontend_url
   });
   try {
-    const { frontend_url = 'http://172.16.168.21:5173' } = req.body;
+    const { frontend_url = FRONTEND_URL } = req.body;
 
     const browser = await initBrowser();
     const page = await browser.newPage();
@@ -1016,7 +1019,7 @@ app.post('/reload', async (req, res) => {
 
 // Health check endpoint with frontend connectivity test
 app.get('/test-frontend-connectivity', async (req, res) => {
-  const frontendUrl = req.query.url || 'http://172.16.168.21:5173';
+  const frontendUrl = req.query.url || FRONTEND_URL;
 
   logger.info('Testing frontend connectivity', {
     endpoint: '/test-frontend-connectivity',
@@ -1060,7 +1063,7 @@ app.get('/test-frontend-connectivity', async (req, res) => {
       frontend_url: frontendUrl,
       error: error.message,
       navigation_config: NAVIGATION_CONFIG,
-      recommendation: 'Check if frontend is running on VM1 (172.16.168.21:5173)',
+      recommendation: `Check if frontend is running at ${FRONTEND_URL}`,
       timestamp: new Date().toISOString()
     });
   }

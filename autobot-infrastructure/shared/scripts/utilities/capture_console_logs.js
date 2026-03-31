@@ -1,9 +1,15 @@
 /**
  * Console log capture script for Browser VM
  * Captures browser console warnings and errors from chat view
+ *
+ * Environment variables:
+ *   AUTOBOT_FRONTEND_URL  - Frontend base URL (default: http://127.0.0.1:5173)
  */
 
 const puppeteer = require('puppeteer');
+
+// Configuration from environment variables with safe localhost defaults
+const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://127.0.0.1:5173';
 
 async function captureConsoleLogs() {
     let browser;
@@ -59,8 +65,9 @@ async function captureConsoleLogs() {
         });
 
         // Navigate to chat view
-        console.log('Navigating to chat view...');
-        await page.goto('http://172.16.168.21:5173/chat', {
+        const chatUrl = `${FRONTEND_URL}/chat`;
+        console.log(`Navigating to chat view at ${chatUrl}...`);
+        await page.goto(chatUrl, {
             waitUntil: 'networkidle2',
             timeout: 30000
         });
@@ -93,9 +100,9 @@ async function captureConsoleLogs() {
         // Output results
         console.log('\n=== CONSOLE ANALYSIS RESULTS ===');
         if (consoleMessages.length === 0) {
-            console.log('✅ No console warnings or errors detected');
+            console.log('No console warnings or errors detected');
         } else {
-            console.log(`❌ Found ${consoleMessages.length} console issues:`);
+            console.log(`Found ${consoleMessages.length} console issues:`);
             consoleMessages.forEach((msg, index) => {
                 console.log(`\n${index + 1}. [${msg.type.toUpperCase()}] ${msg.text}`);
                 if (msg.location && msg.location.url) {
@@ -112,7 +119,7 @@ async function captureConsoleLogs() {
         const resultsPath = '/tmp/console_analysis_results.json';
         fs.writeFileSync(resultsPath, JSON.stringify({
             timestamp: new Date().toISOString(),
-            url: 'http://172.16.168.21:5173/chat',
+            url: chatUrl,
             totalIssues: consoleMessages.length,
             messages: consoleMessages
         }, null, 2));
