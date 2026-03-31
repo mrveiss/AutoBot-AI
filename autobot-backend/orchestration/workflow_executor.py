@@ -9,6 +9,7 @@ Contains workflow execution, step coordination, and agent interaction handling.
 
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
+Issue #2140: DAG-based execution with condition evaluation and branch routing.
 """
 
 import asyncio
@@ -26,6 +27,7 @@ from constants.threshold_constants import (
 )
 from retry_mechanism import RetryStrategy, retry_async
 
+from .dag_executor import DAGExecutor, DAGExecutionContext, DAGNode, build_dag, workflow_has_condition_nodes
 from .types import AgentInteraction, AgentProfile
 
 logger = logging.getLogger(__name__)
@@ -172,18 +174,34 @@ class WorkflowExecutor:
         workflow_id: str,
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
+        edges: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
+
+        When the step list contains condition nodes (or explicit edges are
+        provided), delegates to DAGExecutor for branch-aware execution.
+        Plain linear workflows continue to use the existing dependency-group
+        path for full backward compatibility.  Issue #2140.
 
         Args:
             workflow_id: Workflow identifier
             steps: List of enhanced workflow steps
             context: Workflow context
+            edges: Optional list of DAG edge dicts.  When provided together
+                   with condition-type steps, DAG execution is used.
 
         Returns:
             Execution context with results
         """
+        effective_edges = edges or []
+        if workflow_has_condition_nodes(steps, effective_edges):
+            logger.info(
+                "Workflow %s: condition nodes detected — using DAG executor (#2140)",
+                workflow_id,
+            )
+            return await self._execute_dag_workflow(workflow_id, steps, effective_edges, context)
+
         execution_context = {
             "workflow_id": workflow_id,
             "agents_involved": set(),
@@ -213,6 +231,72 @@ class WorkflowExecutor:
             execution_context["status"] = "failed"
             execution_context["error"] = str(e)
             return execution_context
+
+    async def _execute_dag_workflow(
+        self,
+        workflow_id: str,
+        steps: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Execute a branching workflow via DAGExecutor.
+
+        Builds a WorkflowDAG from *steps* + *edges*, runs it, then
+        converts the DAGExecutionContext back into the legacy
+        execution_context dict shape so callers stay oblivious to the
+        execution path.  Issue #2140.
+        """
+        dag = build_dag(steps, edges)
+        executor = DAGExecutor(step_executor_callback=self._dag_step_adapter)
+        dag_ctx = await executor.execute(dag, workflow_id, context)
+        return self._dag_ctx_to_execution_context(dag_ctx)
+
+    async def _dag_step_adapter(
+        self,
+        node: DAGNode,
+        dag_ctx: DAGExecutionContext,
+    ) -> Dict[str, Any]:
+        """
+        Bridge between DAGExecutor and the existing _execute_coordinated_step path.
+
+        Converts a DAGNode back into the dict shape expected by
+        _execute_coordinated_step, runs it, and returns the result.
+        Issue #2140.
+        """
+        step = dict(node.data)
+        step.setdefault("id", node.node_id)
+
+        # Build a minimal execution_context that _execute_step_with_agent can update
+        local_ctx: Dict[str, Any] = {
+            "workflow_id": dag_ctx.workflow_id,
+            "agents_involved": dag_ctx.agents_involved,
+            "interactions": dag_ctx.interactions,
+            "step_results": dag_ctx.step_results,
+            "status": "in_progress",
+        }
+
+        await self._execute_step_with_agent(step, local_ctx, {})
+        return step.get("result", {"success": step.get("status") == "completed"})
+
+    @staticmethod
+    def _dag_ctx_to_execution_context(dag_ctx: DAGExecutionContext) -> Dict[str, Any]:
+        """
+        Convert a DAGExecutionContext into the legacy execution_context dict shape.
+
+        Issue #2140: Keeps the API surface of execute_coordinated_workflow
+        stable regardless of which executor ran.
+        """
+        return {
+            "workflow_id": dag_ctx.workflow_id,
+            "agents_involved": list(dag_ctx.agents_involved),
+            "interactions": dag_ctx.interactions,
+            "step_results": dag_ctx.step_results,
+            "status": dag_ctx.status,
+            "branches_taken": dag_ctx.branches_taken,
+            "skipped_nodes": list(dag_ctx.skipped_nodes),
+            **({"error": dag_ctx.error} if dag_ctx.error else {}),
+        }
 
     async def _execute_step_group(
         self,
