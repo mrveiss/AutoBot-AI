@@ -365,8 +365,8 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "browser-service": "browser-automation",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
-    # tts-worker has no dedicated phase in provision-fleet-roles.yml;
-    # it co-locates with npu-worker by convention.
+    # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
+    # it co-locates with npu-worker in the inventory group.
     "tts-worker": "npu-worker",
     # SLM roles run on the manager node (#1455)
     "slm-backend": "00-SLM-Manager",

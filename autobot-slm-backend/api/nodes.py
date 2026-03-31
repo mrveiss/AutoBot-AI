@@ -908,16 +908,25 @@ async def _execute_provision_playbook(
     roles: list,
     target_roles: list,
 ) -> dict:
-    """Helper for provision_node_roles. Ref: #1088, #2678.
+    """Helper for provision_node_roles. Ref: #1088, #2678, #2959.
 
-    Builds a temp single-host inventory from the node's IP and ssh_user
-    (same pattern as decommission) so provisioning works regardless of
-    whether the node appears in the static inventory.
+    Builds a temp single-host inventory from the node's IP, ssh_user, and
+    node_roles (same pattern as setup_wizard.py) so provision-fleet-roles.yml
+    phase conditions evaluate correctly for the target node.
     """
     from services.playbook_executor import get_playbook_executor
+    from services.role_registry import ROLE_DEPENDENCIES
 
     executor = get_playbook_executor()
     ssh_user = node.ssh_user or "autobot"
+
+    roles_yaml = "".join(f"        - {r}\n" for r in target_roles)
+
+    deps: set = set()
+    for r in target_roles:
+        deps.update(ROLE_DEPENDENCIES.get(r, []))
+    deps_yaml = "".join(f"        - {d}\n" for d in sorted(deps))
+
     inventory_content = (
         "all:\n"
         "  hosts:\n"
@@ -926,6 +935,9 @@ async def _execute_provision_playbook(
         f"      ansible_user: {ssh_user}\n"
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
+        "      node_roles:\n"
+        + roles_yaml
+        + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
     )
     tmp_inv = None
     try:
@@ -941,9 +953,8 @@ async def _execute_provision_playbook(
         tmp_inv.close()
 
         result = await executor.execute_playbook(
-            playbook_name="deploy.yml",
+            playbook_name="playbooks/provision-fleet-roles.yml",
             inventory_path=Path(tmp_inv.name),
-            extra_vars={"target_roles": ",".join(target_roles)},
         )
     finally:
         if tmp_inv and os.path.exists(tmp_inv.name):
@@ -983,7 +994,7 @@ async def provision_node_roles(
         node_id: Node to provision
         role_names: Specific roles to provision (if None, provisions all assigned roles)
 
-    Uses deploy.yml playbook with --limit and --tags for targeted provisioning.
+    Uses provision-fleet-roles.yml with node_roles set in inventory (#2959).
     """
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()

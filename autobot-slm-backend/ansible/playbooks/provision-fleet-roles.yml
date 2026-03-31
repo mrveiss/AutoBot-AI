@@ -238,9 +238,28 @@
       tags: ['npu-worker', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 5c: Standalone LLM nodes (GPU-aware — #1040)
+# Phase 5c: TTS Worker (co-located with NPU worker by convention)
 # -------------------------------------------------------------------
-- name: "Provision Phase 5c: LLM Nodes"
+- name: "Provision Phase 5c: TTS Worker"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "AI | Deploy TTS worker role"
+      ansible.builtin.include_role:
+        name: tts-worker
+        apply:
+          tags: ['tts-worker', 'provision']
+      when: >-
+        'tts-worker' in (node_roles | default([])) or
+        'autobot-tts-worker' in (node_roles | default([]))
+      tags: ['tts-worker', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5d: Standalone LLM nodes (GPU-aware — #1040)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5d: LLM Nodes"
   hosts: all
   become: true
   gather_facts: true
@@ -295,6 +314,7 @@
           - "  Phase 1: Common baseline (SSH, packages, users)"
           - "  Phase 2: SLM Agent + Node Exporter"
           - "  Phase 3-6: Role-specific configuration (when matched)"
+          - "  Phase 5c: TTS Worker (when tts-worker in node_roles)"
           - ""
           - "Roles deployed based on:"
           - "  - node_roles variable (from DB/API)"
