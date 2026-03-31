@@ -179,7 +179,10 @@ class DeltaEngine:
     # ------------------------------------------------------------------
 
     def compute_delta(
-        self, metric_name: str, current_value: float, threshold: Optional[MetricThreshold] = None
+        self,
+        metric_name: str,
+        current_value: float,
+        threshold: Optional[MetricThreshold] = None,
     ) -> DeltaResult:
         """Compare *current_value* against the most recent stored snapshot.
 
@@ -197,9 +200,15 @@ class DeltaEngine:
         Returns:
             A populated :class:`DeltaResult`.
         """
-        effective_threshold = threshold or self._thresholds.get(metric_name) or MetricThreshold(metric_name)
+        effective_threshold = (
+            threshold
+            or self._thresholds.get(metric_name)
+            or MetricThreshold(metric_name)
+        )
         previous = self._load_latest_snapshot(metric_name)
-        result = _compute_single_delta(metric_name, previous, current_value, effective_threshold)
+        result = _compute_single_delta(
+            metric_name, previous, current_value, effective_threshold
+        )
         self._persist_snapshot(metric_name, current_value)
         return result
 
@@ -290,7 +299,11 @@ class DeltaEngine:
             client.ltrim(key, 0, _MAX_HISTORY_SNAPSHOTS - 1)
             logger.debug("delta_engine: pruned history for '%s'", metric_name)
         except Exception as exc:
-            logger.error("delta_engine: prune_old_snapshots failed for '%s': %s", metric_name, exc)
+            logger.error(
+                "delta_engine: prune_old_snapshots failed for '%s': %s",
+                metric_name,
+                exc,
+            )
 
     # ------------------------------------------------------------------
     # Internal helpers — Redis I/O
@@ -308,7 +321,9 @@ class DeltaEngine:
                 return None
             return float(json.loads(raw))
         except Exception as exc:
-            logger.error("delta_engine: failed to load snapshot for '%s': %s", metric_name, exc)
+            logger.error(
+                "delta_engine: failed to load snapshot for '%s': %s", metric_name, exc
+            )
             return None
 
     def _persist_snapshot(self, metric_name: str, value: float) -> None:
@@ -324,7 +339,11 @@ class DeltaEngine:
             pipe.expire(key, self._snapshot_ttl)
             pipe.execute()
         except Exception as exc:
-            logger.error("delta_engine: failed to persist snapshot for '%s': %s", metric_name, exc)
+            logger.error(
+                "delta_engine: failed to persist snapshot for '%s': %s",
+                metric_name,
+                exc,
+            )
 
     def _get_client(self):
         """Return a synchronous Redis client, or ``None`` on failure."""
@@ -431,6 +450,8 @@ def _percentage_change(previous: float, current: float) -> float:
         ``0.0`` when *previous* is zero.
     """
     if previous == 0.0:
-        logger.debug("delta_engine: previous value is zero — change_pct returned as 0.0")
+        logger.debug(
+            "delta_engine: previous value is zero — change_pct returned as 0.0"
+        )
         return 0.0
     return ((current - previous) / abs(previous)) * 100.0

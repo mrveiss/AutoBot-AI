@@ -11,7 +11,14 @@ OpenAPI spec generation for every BaseTool subclass registered with it.
 import logging
 from typing import Dict, List, Optional, Type
 
-from tool_sdk.base import BaseTool, ToolInputError, ToolMetadata, ToolPermission, ToolResult, _timed_execute
+from tool_sdk.base import (
+    BaseTool,
+    ToolInputError,
+    ToolMetadata,
+    ToolPermission,
+    ToolResult,
+    _timed_execute,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +139,9 @@ class ToolSDKRegistry:
         results = []
         for tool_class in self._tools.values():
             meta = tool_class.metadata
-            if permission_filter is not None and not permission_filter.allows(meta.permission):
+            if permission_filter is not None and not permission_filter.allows(
+                meta.permission
+            ):
                 continue
             results.append(meta)
         return sorted(results, key=lambda m: m.name)
@@ -200,7 +209,11 @@ class ToolSDKRegistry:
             return ToolResult(success=False, error=str(exc))
 
         # Step 4: execute
-        logger.debug("Executing tool '%s' with caller_permission=%s", name, caller_permission.value)
+        logger.debug(
+            "Executing tool '%s' with caller_permission=%s",
+            name,
+            caller_permission.value,
+        )
         return await _timed_execute(tool, validated)
 
     # ------------------------------------------------------------------
@@ -229,7 +242,9 @@ class ToolSDKRegistry:
         tools = []
         for tool_class in sorted(self._tools.values(), key=lambda c: c.metadata.name):
             meta = tool_class.metadata
-            if permission_filter is not None and not permission_filter.allows(meta.permission):
+            if permission_filter is not None and not permission_filter.allows(
+                meta.permission
+            ):
                 continue
             instance = tool_class()
             tools.append(instance.to_openapi_schema())

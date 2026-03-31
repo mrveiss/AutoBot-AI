@@ -18,7 +18,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -172,33 +171,46 @@ class TestGetEnabledFeatures:
     """get_enabled_features returns a sorted list of enabled subsystem names."""
 
     def test_all_enabled_returns_all_names(self):
-        from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP, get_enabled_features
+        from autobot_shared.feature_flags import (
+            _SUBSYSTEM_FLAG_MAP,
+            get_enabled_features,
+        )
         from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
             setattr(feature_cfg, attr, True)
 
-        with patch("autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg):
+        with patch(
+            "autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg
+        ):
             result = get_enabled_features()
 
         assert result == sorted(_SUBSYSTEM_FLAG_MAP.keys())
 
     def test_none_enabled_returns_empty_list(self):
-        from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP, get_enabled_features
+        from autobot_shared.feature_flags import (
+            _SUBSYSTEM_FLAG_MAP,
+            get_enabled_features,
+        )
         from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
             setattr(feature_cfg, attr, False)
 
-        with patch("autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg):
+        with patch(
+            "autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg
+        ):
             result = get_enabled_features()
 
         assert result == []
 
     def test_partial_enabled_returns_subset(self):
-        from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP, get_enabled_features
+        from autobot_shared.feature_flags import (
+            _SUBSYSTEM_FLAG_MAP,
+            get_enabled_features,
+        )
         from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
@@ -208,20 +220,27 @@ class TestGetEnabledFeatures:
         feature_cfg.npu_enabled = True
         feature_cfg.voice_enabled = True
 
-        with patch("autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg):
+        with patch(
+            "autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg
+        ):
             result = get_enabled_features()
 
         assert result == sorted(["npu", "voice"])
 
     def test_result_is_sorted(self):
-        from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP, get_enabled_features
+        from autobot_shared.feature_flags import (
+            _SUBSYSTEM_FLAG_MAP,
+            get_enabled_features,
+        )
         from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
             setattr(feature_cfg, attr, True)
 
-        with patch("autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg):
+        with patch(
+            "autobot_shared.feature_flags._get_feature_config", return_value=feature_cfg
+        ):
             result = get_enabled_features()
 
         assert result == sorted(result)
@@ -242,7 +261,9 @@ class TestRequireFeatureDecorator:
         def _do_npu():
             return "npu_result"
 
-        with patch("autobot_shared.feature_flags.is_feature_enabled", return_value=True):
+        with patch(
+            "autobot_shared.feature_flags.is_feature_enabled", return_value=True
+        ):
             assert _do_npu() == "npu_result"
 
     def test_raises_feature_disabled_error_when_off(self):
@@ -252,7 +273,9 @@ class TestRequireFeatureDecorator:
         def _do_npu():
             return "npu_result"
 
-        with patch("autobot_shared.feature_flags.is_feature_enabled", return_value=False):
+        with patch(
+            "autobot_shared.feature_flags.is_feature_enabled", return_value=False
+        ):
             with pytest.raises(FeatureDisabledError) as exc_info:
                 _do_npu()
 
@@ -266,7 +289,9 @@ class TestRequireFeatureDecorator:
         def _speak():
             pass
 
-        with patch("autobot_shared.feature_flags.is_feature_enabled", return_value=False):
+        with patch(
+            "autobot_shared.feature_flags.is_feature_enabled", return_value=False
+        ):
             with pytest.raises(FeatureDisabledError) as exc_info:
                 _speak()
 
@@ -299,7 +324,9 @@ class TestRequireFeatureDecorator:
         def train_model(model_id: str, epochs: int = 5) -> dict:
             return {"model": model_id, "epochs": epochs}
 
-        with patch("autobot_shared.feature_flags.is_feature_enabled", return_value=True):
+        with patch(
+            "autobot_shared.feature_flags.is_feature_enabled", return_value=True
+        ):
             result = train_model("gpt2", epochs=10)
 
         assert result == {"model": "gpt2", "epochs": 10}

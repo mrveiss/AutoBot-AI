@@ -44,7 +44,9 @@ from autobot_shared.alert_cooldown import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-def _make_redis(*, rate_count: int = 0, cooldown_exists: bool = False, stored_recurrence: int = 0):
+def _make_redis(
+    *, rate_count: int = 0, cooldown_exists: bool = False, stored_recurrence: int = 0
+):
     """Return a mock synchronous Redis client with configurable state.
 
     Args:
@@ -216,19 +218,25 @@ class TestShouldSend:
 
     def test_suppressed_when_rate_limit_reached(self):
         """When the hourly counter equals max_per_hour, suppress the alert."""
-        client = _make_redis(rate_count=AlertTier.FLASH.max_per_hour, cooldown_exists=False)
+        client = _make_redis(
+            rate_count=AlertTier.FLASH.max_per_hour, cooldown_exists=False
+        )
         mgr = _make_manager(client)
         assert mgr.should_send("Any alert", AlertTier.FLASH) is False
 
     def test_passes_when_rate_below_limit(self):
         """Counter below max_per_hour and no cooldown — alert should pass."""
-        client = _make_redis(rate_count=AlertTier.FLASH.max_per_hour - 1, cooldown_exists=False)
+        client = _make_redis(
+            rate_count=AlertTier.FLASH.max_per_hour - 1, cooldown_exists=False
+        )
         mgr = _make_manager(client)
         assert mgr.should_send("Any alert", AlertTier.FLASH) is True
 
     def test_rate_limit_checked_before_cooldown(self):
         """Rate limit failure short-circuits before checking cooldown."""
-        client = _make_redis(rate_count=AlertTier.PRIORITY.max_per_hour, cooldown_exists=True)
+        client = _make_redis(
+            rate_count=AlertTier.PRIORITY.max_per_hour, cooldown_exists=True
+        )
         mgr = _make_manager(client)
         # Both limits are hit; rate must be checked first (exists should not be called).
         result = mgr.should_send("Alert text", AlertTier.PRIORITY)

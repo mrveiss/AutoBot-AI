@@ -25,7 +25,6 @@ from tool_sdk.registry import (
     get_tool_registry,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
@@ -427,7 +426,12 @@ class TestToolResult:
     def test_to_dict_success(self):
         r = ToolResult(success=True, data={"x": 1}, duration_ms=5.5)
         d = r.to_dict()
-        assert d == {"success": True, "data": {"x": 1}, "error": None, "duration_ms": 5.5}
+        assert d == {
+            "success": True,
+            "data": {"x": 1},
+            "error": None,
+            "duration_ms": 5.5,
+        }
 
     def test_to_dict_failure(self):
         r = ToolResult(success=False, error="oops")

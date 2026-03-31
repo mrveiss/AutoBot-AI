@@ -127,9 +127,7 @@ class TaskProgressTracker:
         self._start_time = time.monotonic()
         if self._progress_callback is not None:
             self._heartbeat_task = asyncio.ensure_future(self._heartbeat_loop())
-            logger.debug(
-                "TaskProgressTracker started for task: %s", self._task_name
-            )
+            logger.debug("TaskProgressTracker started for task: %s", self._task_name)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
