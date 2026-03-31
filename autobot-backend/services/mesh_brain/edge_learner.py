@@ -41,10 +41,18 @@ class EdgeLearner:
     retrieval feedback from overwriting high-confidence learned edge weights.
     Per-edge importance (Fisher proxy) grows with successful co-retrievals
     and dampens updates proportionally. Disabled when ewc_lambda=0.
+
+    EWC state persistence (#2546): reference weights and importance scores
+    are persisted to Redis hashes so that EWC protection survives restarts.
+    update_importance() is called automatically on every successful edge
+    reinforcement so that importance scores accumulate correctly over time.
     """
 
     # Redis hash key for persisting stream cursors across restarts (#2210).
     CURSOR_HASH_KEY = "rag:cursors:edge_learner"
+    # Redis hash keys for persisting EWC++ state across restarts (#2546).
+    EWC_REFERENCE_WEIGHTS_KEY = "mesh:ewc:reference_weights"
+    EWC_IMPORTANCE_KEY = "mesh:ewc:importance"
 
     def __init__(
         self,
@@ -74,6 +82,8 @@ class EdgeLearner:
         # Loaded from Redis on first access (#2210).
         self._cursors: dict[str, str] = {}
         self._cursors_loaded = False
+        # EWC++ state is loaded lazily from Redis on first consume call (#2546).
+        self._ewc_state_loaded = False
 
     async def _load_cursors(self) -> None:
         """Load persisted cursors from Redis hash on first call (#2210)."""
@@ -97,6 +107,51 @@ class EdgeLearner:
             await self.redis.hset(self.CURSOR_HASH_KEY, stream_key, cursor)
         except Exception:
             logger.warning("EdgeLearner: failed to persist cursor for %s", stream_key)
+
+    async def _load_ewc_state(self) -> None:
+        """Load persisted EWC++ reference weights and importance from Redis on first call (#2546)."""
+        if self._ewc_state_loaded:
+            return
+        try:
+            raw_weights = await self.redis.hgetall(self.EWC_REFERENCE_WEIGHTS_KEY)
+            if raw_weights:
+                self._reference_weights.update({k: float(v) for k, v in raw_weights.items()})
+                logger.info(
+                    "EdgeLearner: loaded %d persisted EWC reference weights from Redis",
+                    len(raw_weights),
+                )
+        except Exception:
+            logger.warning("EdgeLearner: failed to load EWC reference weights, starting empty")
+        try:
+            raw_importance = await self.redis.hgetall(self.EWC_IMPORTANCE_KEY)
+            if raw_importance:
+                self._importance.update({k: float(v) for k, v in raw_importance.items()})
+                logger.info(
+                    "EdgeLearner: loaded %d persisted EWC importance scores from Redis",
+                    len(raw_importance),
+                )
+        except Exception:
+            logger.warning("EdgeLearner: failed to load EWC importance scores, starting empty")
+        self._ewc_state_loaded = True
+
+    async def _save_ewc_state(self) -> None:
+        """Persist EWC++ reference weights and importance scores to Redis (#2546)."""
+        if self._reference_weights:
+            try:
+                await self.redis.hset(
+                    self.EWC_REFERENCE_WEIGHTS_KEY,
+                    mapping={k: str(v) for k, v in self._reference_weights.items()},
+                )
+            except Exception:
+                logger.warning("EdgeLearner: failed to persist EWC reference weights")
+        if self._importance:
+            try:
+                await self.redis.hset(
+                    self.EWC_IMPORTANCE_KEY,
+                    mapping={k: str(v) for k, v in self._importance.items()},
+                )
+            except Exception:
+                logger.warning("EdgeLearner: failed to persist EWC importance scores")
 
     async def on_retrieval(self, event: dict) -> None:
         """Process a single retrieval feedback event.
@@ -169,19 +224,21 @@ class EdgeLearner:
             self._importance[edge_id] = current * 0.95
 
     async def consolidate_weights(self) -> None:
-        """Snapshot current weights as EWC reference points (#2097).
+        """Snapshot current EWC state to Redis as reference points (#2097, #2546).
 
         Called automatically every ewc_consolidation_interval updates.
-        The reference dict is already kept current during _update_existing_edge,
-        so this method serves as a hook for logging and future persistence.
+        Persists both reference weights and importance scores so that EWC
+        protection survives EdgeLearner restarts.
         """
+        await self._save_ewc_state()
         logger.info(
-            "EdgeLearner: consolidated %d reference weights",
+            "EdgeLearner: consolidated %d reference weights and %d importance scores to Redis",
             len(self._reference_weights),
+            len(self._importance),
         )
 
     async def _update_existing_edge(self, edge: dict) -> None:
-        """Apply EMA weight update with EWC++ dampening and increment co_access_count (#2097)."""
+        """Apply EMA weight update with EWC++ dampening and increment co_access_count (#2097, #2546)."""
         proposed_weight = edge["weight"] * self.ema_decay + 1.0 * (1 - self.ema_decay)
         final_weight = self._apply_ewc_dampening(
             edge["id"], edge["weight"], proposed_weight
@@ -193,6 +250,8 @@ class EdgeLearner:
         )
         # Track reference weight for future EWC penalty computations.
         self._reference_weights[edge["id"]] = final_weight
+        # Record successful co-retrieval so importance accumulates over time (#2546).
+        self.update_importance(edge["id"], success=True)
         self._update_count += 1
         if self._update_count % self.ewc_consolidation_interval == 0:
             await self.consolidate_weights()
@@ -232,8 +291,9 @@ class EdgeLearner:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
         stream_key = f"rag:feedback:{date_key}"
-        # Load persisted cursors from Redis on first call (#2210).
+        # Load persisted cursors and EWC state from Redis on first call (#2210, #2546).
         await self._load_cursors()
+        await self._load_ewc_state()
         # Resume from exclusive lower bound. "0-0" reads from the start.
         # After processing entry "T-S", we store "T-(S+1)" so the next
         # xrange call excludes the already-processed entry.
