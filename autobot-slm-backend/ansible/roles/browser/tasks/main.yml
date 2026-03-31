@@ -51,6 +51,30 @@
   tags: ['browser', 'config']
 
 # ============================================================
+# Sync browser worker code from code_source
+# ============================================================
+- name: "Browser | Ensure worker directory exists"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-browser-worker
+    state: directory
+    owner: "{{ browser_user }}"
+    group: "{{ browser_group }}"
+    mode: '0755'
+  become: yes
+  tags: ['browser', 'deploy']
+
+- name: "Browser | Sync browser worker code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-browser-worker/"
+    dest: /opt/autobot/autobot-browser-worker/
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=__pycache__"
+      - "--exclude=.git"
+      - "--exclude=venv"
+  tags: ['browser', 'deploy']
+
+# ============================================================
 # VNC + desktop environment (opt-in, default false)  (#1363)
 # Guard: install_vnc must be true AND node must have 'vnc' in
 # node_roles (when defined).  Prevents VNC deployment on headless
