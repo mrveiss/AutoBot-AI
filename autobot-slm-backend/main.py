@@ -9,6 +9,7 @@ Main FastAPI application entry point.
 
 import asyncio
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -287,6 +288,7 @@ app = FastAPI(
     description="Service Lifecycle Manager for AutoBot",
     version="1.0.0",
     lifespan=lifespan,
+    root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
 )
