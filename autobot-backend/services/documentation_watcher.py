@@ -244,6 +244,8 @@ class DocumentationWatcherService:
         Handle a file creation or modification via DocIndexerService.
 
         Issue #1385: Uses ChromaDB-based DocIndexerService instead of Redis KB.
+        Issue #2547: After successful indexing, propagate staleness through the
+        mesh graph and enqueue affected nodes for re-embedding.
 
         Args:
             file_path: Path to the updated file
@@ -262,6 +264,8 @@ class DocumentationWatcherService:
 
             if result.success > 0:
                 logger.info("Reindexed documentation: %s", file_path.name)
+                doc_id = str(file_path.relative_to(PROJECT_ROOT))
+                await self._propagate_staleness_for_doc(doc_id)
             elif result.skipped > 0:
                 logger.debug("File unchanged, skipped: %s", file_path.name)
             else:
@@ -274,6 +278,40 @@ class DocumentationWatcherService:
         except Exception as e:
             logger.error("Error updating documentation %s: %s", file_path, e)
             raise
+
+    async def _propagate_staleness_for_doc(self, doc_id: str) -> None:
+        """Propagate staleness scores from a re-indexed document through the mesh graph.
+
+        Issue #2547: Reads mesh edges from Redis, runs BFS propagation, stores scores,
+        and enqueues strongly-affected nodes for re-embedding.
+
+        Args:
+            doc_id: Relative path used as the node identifier in the mesh graph.
+        """
+        try:
+            from autobot_shared.redis_client import get_redis_client
+            from services.mesh_brain.staleness_propagator import (
+                RedisGraphAdapter,
+                enqueue_for_reembedding,
+                propagate_staleness,
+                store_staleness_scores,
+            )
+
+            redis = get_redis_client(async_client=True, database="main")
+            graph = RedisGraphAdapter(redis)
+            staleness_result = await propagate_staleness(graph, doc_id)
+            stored = await store_staleness_scores(redis, staleness_result.scores)
+            flagged = staleness_result.flagged_for_reembedding()
+            enqueued = await enqueue_for_reembedding(redis, flagged)
+            logger.info(
+                "Staleness propagation for %s: %d scores stored, %d nodes enqueued for re-embedding",
+                doc_id,
+                stored,
+                enqueued,
+            )
+        except Exception as exc:
+            # Staleness propagation is best-effort; a failure must not break indexing.
+            logger.warning("Staleness propagation failed for %s: %s", doc_id, exc)
 
     async def _handle_deletion(self, file_path: Path) -> None:
         """
