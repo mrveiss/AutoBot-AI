@@ -97,6 +97,8 @@ class GPUCapabilities:
     memory_gb: float = 0
     max_threads_per_block: int = 0
     multiprocessor_count: int = 0
+    metal_supported: bool = False
+    unified_memory: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -110,6 +112,8 @@ class GPUCapabilities:
             "memory_gb": self.memory_gb,
             "max_threads_per_block": self.max_threads_per_block,
             "multiprocessor_count": self.multiprocessor_count,
+            "metal_supported": self.metal_supported,
+            "unified_memory": self.unified_memory,
         }
 
     @classmethod
@@ -125,6 +129,8 @@ class GPUCapabilities:
             memory_gb=data.get("memory_gb", 0),
             max_threads_per_block=data.get("max_threads_per_block", 0),
             multiprocessor_count=data.get("multiprocessor_count", 0),
+            metal_supported=data.get("metal_supported", False),
+            unified_memory=data.get("unified_memory", False),
         )
 
 
