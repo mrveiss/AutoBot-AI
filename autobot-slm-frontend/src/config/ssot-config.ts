@@ -6,6 +6,7 @@
  * Single Source of Truth Configuration for SLM Admin
  *
  * Centralized configuration for all infrastructure endpoints and settings.
+ * All VM IPs are overridable via VITE_* environment variables (#3049).
  */
 
 export interface SLMConfig {
@@ -44,6 +45,24 @@ export interface SLMConfig {
   }[]
 }
 
+// =============================================================================
+// Environment Variable Helpers (#3049)
+// =============================================================================
+
+/**
+ * Get string environment variable with fallback.
+ * Matches the pattern from the main frontend ssot-config.ts.
+ */
+function getEnv(key: string, fallback: string): string {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const value = import.meta.env[key] as string
+    if (value !== undefined && value !== null && value !== '') {
+      return value
+    }
+  }
+  return fallback
+}
+
 // Detect protocol from browser context
 const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
 
@@ -56,22 +75,39 @@ function getWsBaseUrl(): string {
   return `${wsProtocol}//${window.location.host}`
 }
 
+// =============================================================================
+// VM Configuration (env-overridable, #3049)
+// =============================================================================
+
+const vm: SLMConfig['vm'] = {
+  main: getEnv('VITE_MAIN_HOST', '172.16.168.20'),
+  frontend: getEnv('VITE_FRONTEND_HOST', '172.16.168.21'),
+  npu: getEnv('VITE_NPU_HOST', '172.16.168.22'),
+  redis: getEnv('VITE_REDIS_HOST', '172.16.168.23'),
+  ai: getEnv('VITE_AI_HOST', '172.16.168.24'),
+  browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
+  slm: getEnv('VITE_SLM_HOST', '172.16.168.19'),
+}
+
+// Host metadata — IPs derived from vm object to avoid duplication (#3049)
+const HOST_META: Array<{ id: keyof typeof vm; name: string; description: string }> = [
+  { id: 'main', name: 'Main Server', description: 'WSL Backend Server' },
+  { id: 'frontend', name: 'Frontend VM', description: 'Vue.js Frontend' },
+  { id: 'npu', name: 'NPU VM', description: 'NPU Acceleration' },
+  { id: 'redis', name: 'Redis VM', description: 'Redis Stack' },
+  { id: 'ai', name: 'AI VM', description: 'AI Processing' },
+  { id: 'browser', name: 'Browser VM', description: 'Playwright Automation' },
+  { id: 'slm', name: 'SLM Server', description: 'Service Lifecycle Manager' },
+]
+
 const config: SLMConfig = {
   httpProtocol: isSecure ? 'https' : 'http',
   // Use relative path - nginx proxies /api/ to backend
-  apiBaseUrl: import.meta.env.VITE_API_URL || '',
+  apiBaseUrl: getEnv('VITE_API_URL', ''),
   wsProtocol: isSecure ? 'wss' : 'ws',
   // Use current host - nginx proxies WebSocket connections
-  wsBaseUrl: import.meta.env.VITE_WS_URL || getWsBaseUrl(),
-  vm: {
-    main: '172.16.168.20',
-    frontend: '172.16.168.21',
-    npu: '172.16.168.22',
-    redis: '172.16.168.23',
-    ai: '172.16.168.24',
-    browser: '172.16.168.25',
-    slm: '172.16.168.19',
-  },
+  wsBaseUrl: getEnv('VITE_WS_URL', getWsBaseUrl()),
+  vm,
   port: {
     backend: 8001,
     frontend: 5173,
@@ -86,15 +122,13 @@ const config: SLMConfig = {
     tlsBackend: 8443,
     tlsRedis: 6380,
   },
-  hosts: [
-    { id: 'main', name: 'Main Server', ip: '172.16.168.20', description: 'WSL Backend Server' },
-    { id: 'frontend', name: 'Frontend VM', ip: '172.16.168.21', description: 'Vue.js Frontend' },
-    { id: 'npu', name: 'NPU VM', ip: '172.16.168.22', description: 'NPU Acceleration' },
-    { id: 'redis', name: 'Redis VM', ip: '172.16.168.23', description: 'Redis Stack' },
-    { id: 'ai', name: 'AI VM', ip: '172.16.168.24', description: 'AI Processing' },
-    { id: 'browser', name: 'Browser VM', ip: '172.16.168.25', description: 'Playwright Automation' },
-    { id: 'slm', name: 'SLM Server', ip: '172.16.168.19', description: 'Service Lifecycle Manager' },
-  ],
+  // Derive hosts from vm object — single source of truth for IPs (#3049)
+  hosts: HOST_META.map(({ id, name, description }) => ({
+    id,
+    name,
+    ip: vm[id],
+    description,
+  })),
 }
 
 export function getConfig(): SLMConfig {
@@ -104,8 +138,8 @@ export function getConfig(): SLMConfig {
 /**
  * Get the SLM API base path (#2829).
  *
- * Standalone SLM (separate host): VITE_API_URL is empty → returns '/api'
- * Co-located with user frontend:  VITE_API_URL='/slm'  → returns '/slm/api'
+ * Standalone SLM (separate host): VITE_API_URL is empty -> returns '/api'
+ * Co-located with user frontend:  VITE_API_URL='/slm'  -> returns '/slm/api'
  *
  * All SLM composables should use this instead of hardcoding '/api'.
  */
@@ -152,7 +186,7 @@ export function getHosts(): SLMConfig['hosts'] {
 
 /**
  * Get VNC-enabled hosts with port configuration.
- * Returns empty — VNC hosts are discovered dynamically via the SLM API
+ * Returns empty -- VNC hosts are discovered dynamically via the SLM API
  * from nodes that have the 'vnc' role active (#2900).
  */
 export function getVNCHosts(): Array<{ id: string; name: string; host: string; port: number; description: string }> {
