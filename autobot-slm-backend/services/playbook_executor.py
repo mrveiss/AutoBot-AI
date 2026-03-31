@@ -15,6 +15,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from services.provision_progress import TaskProgressTracker
+
 logger = logging.getLogger(__name__)
 
 
@@ -226,29 +228,60 @@ class PlaybookExecutor:
         progress_callback: Optional[callable],
     ) -> List[str]:
         """
-        Stream and parse playbook output for progress.
+        Stream and parse playbook output for progress (Issue #880, #3033).
 
-        Helper for execute_playbook (Issue #880).
+        Fires progress_callback for each recognized Ansible output line.
+        Between recognized lines — when Ansible is silent during long-running
+        tasks such as ``ollama pull`` or ``npm install`` — a TaskProgressTracker
+        sends periodic heartbeat messages so the UI does not appear stuck.
+
+        A new tracker is started each time a TASK line is detected and the
+        previous one is cancelled, so heartbeats are scoped per task.
         """
         output_lines = []
+        current_tracker: Optional[TaskProgressTracker] = None
+
+        async def _stop_current_tracker() -> None:
+            nonlocal current_tracker
+            if current_tracker is not None:
+                await current_tracker.__aexit__(None, None, None)
+                current_tracker = None
+
+        async def _start_tracker(task_name: str) -> None:
+            nonlocal current_tracker
+            await _stop_current_tracker()
+            if progress_callback is not None:
+                current_tracker = TaskProgressTracker(task_name, progress_callback)
+                await current_tracker.__aenter__()
+
         if process.stdout:
-            while True:
-                line = await process.stdout.readline()
-                if not line:
-                    break
+            try:
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
 
-                line_str = line.decode("utf-8", errors="replace").rstrip()
-                output_lines.append(line_str)
+                    line_str = line.decode("utf-8", errors="replace").rstrip()
+                    output_lines.append(line_str)
 
-                if progress_callback:
-                    progress = self._parse_progress(line_str)
-                    if progress:
-                        try:
-                            await progress_callback(progress)
-                        except Exception as e:
-                            logger.debug(
-                                f"Progress callback error: {e}", exc_info=False
-                            )
+                    if progress_callback:
+                        progress = self._parse_progress(line_str)
+                        if progress:
+                            stage = progress.get("stage", "")
+                            # Start a fresh tracker for every new task boundary
+                            # so heartbeats reflect the task currently executing.
+                            if stage in ("task", "heartbeat") or stage.endswith(
+                                ("_starting", "_syncing", "_restarting", "_waiting")
+                            ):
+                                await _start_tracker(progress.get("message", stage))
+                            try:
+                                await progress_callback(progress)
+                            except Exception as e:
+                                logger.debug(
+                                    "Progress callback error: %s", e, exc_info=False
+                                )
+            finally:
+                await _stop_current_tracker()
 
         return output_lines
 
