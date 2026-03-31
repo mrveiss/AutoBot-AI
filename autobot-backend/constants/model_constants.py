@@ -204,6 +204,10 @@ class ModelConfig:
     RAG_DEFAULT_CONTEXT_LENGTH: int = 2000
     RAG_MAX_CONTEXT_LENGTH: int = 5000
 
+    # MMR diversity scoring (Issue #2090)
+    # 0.0 = disabled (pure relevance); 1.0 = pure diversity; 0.5 = balanced
+    RAG_MMR_LAMBDA: float = 0.0
+
 
 # Singleton instances for easy access
 model_constants = ModelConstants()

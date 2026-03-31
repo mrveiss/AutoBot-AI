@@ -28,11 +28,15 @@ class RerankWeights:
     Weights do not need to sum to 1.0; compute_blended_score normalises them.
 
     Attributes:
-        reranker:  Weight for the cross-encoder reranker score.
-        vector:    Weight for the original vector-similarity score.
-        edge:      Weight for graph edge strength (Neural Mesh phase 3+).
-        recency:   Weight for time-based recency score (Neural Mesh phase 3+).
-        staleness: Weight for staleness penalty; 0 disables it (Issue #2111).
+        reranker:   Weight for the cross-encoder reranker score.
+        vector:     Weight for the original vector-similarity score.
+        edge:       Weight for graph edge strength (Neural Mesh phase 3+).
+        recency:    Weight for time-based recency score (Neural Mesh phase 3+).
+        staleness:  Weight for staleness penalty; 0 disables it (Issue #2111).
+        mmr_lambda: MMR diversity trade-off (Issue #2090).
+                    0.0 = disabled (pure relevance ordering, backward-compatible).
+                    Values in (0, 1] apply MMR after cross-encoder scoring:
+                    score = λ * relevance - (1-λ) * max_sim_to_selected.
     """
 
     reranker: float = 0.8
@@ -42,6 +46,7 @@ class RerankWeights:
     staleness: float = (
         0.0  # Issue #2111: penalty weight for stale documents (0 = disabled)
     )
+    mmr_lambda: float = 0.0  # Issue #2090: MMR diversity pass (0 = disabled)
 
 
 def recency_score(days_since_access: float) -> float:
@@ -73,6 +78,95 @@ def staleness_penalty(staleness_score: float) -> float:
         Penalty factor in range [0.0, 1.0].
     """
     return max(0.0, 1.0 - staleness_score)
+
+
+def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+    """Return cosine similarity between two equal-length float vectors.
+
+    Issue #2090: Used by apply_mmr_reorder to measure redundancy between results.
+    Returns 0.0 when either vector is all-zeros.
+    """
+    dot = sum(a * b for a, b in zip(vec_a, vec_b))
+    norm_a = math.sqrt(sum(a * a for a in vec_a))
+    norm_b = math.sqrt(sum(b * b for b in vec_b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def apply_mmr_reorder(
+    results: List[Dict[str, Any]],
+    mmr_lambda: float,
+    embedding_key: str = "embedding",
+    score_key: str = "rerank_score",
+) -> List[Dict[str, Any]]:
+    """Re-order results with Maximal Marginal Relevance (MMR) to reduce redundancy.
+
+    Issue #2090: Applied after cross-encoder reranking when mmr_lambda > 0.
+
+    MMR score formula:
+        mmr(doc) = λ * relevance(doc) - (1-λ) * max_sim(doc, already_selected)
+
+    Args:
+        results:       Reranked result dicts (sorted by score_key descending).
+        mmr_lambda:    Trade-off parameter in [0, 1].
+                       1.0 → pure relevance (identity permutation).
+                       0.0 → pure diversity (maximise minimum similarity distance).
+        embedding_key: Key under which each result dict stores its embedding vector.
+                       Results without this key fall back to using score_key only,
+                       treating all pairwise similarities as 0.
+        score_key:     Key holding the normalised relevance score (0–1).
+
+    Returns:
+        New list with the same results re-ordered for diversity.  When every
+        result lacks an embedding the function degrades gracefully and returns
+        the original order.
+    """
+    if not results or mmr_lambda >= 1.0:
+        return results
+
+    selected: List[Dict[str, Any]] = []
+    remaining = list(results)
+
+    # Pre-extract embeddings once to avoid repeated dict lookups
+    embeddings: List[Optional[List[float]]] = [r.get(embedding_key) for r in remaining]
+    has_embeddings = any(e is not None for e in embeddings)
+
+    while remaining:
+        best_idx = 0
+        best_mmr = float("-inf")
+
+        for i, candidate in enumerate(remaining):
+            relevance = candidate.get(score_key, 0.0)
+
+            if has_embeddings and embeddings[i] is not None:
+                # Max cosine similarity to any already-selected document
+                selected_with_emb = [s for s in selected if s.get(embedding_key) is not None]
+                if selected_with_emb:
+                    max_sim = max(
+                        _cosine_similarity(embeddings[i], sel[embedding_key])
+                        for sel in selected_with_emb
+                    )
+                else:
+                    max_sim = 0.0
+            else:
+                max_sim = 0.0
+
+            mmr_score = mmr_lambda * relevance - (1.0 - mmr_lambda) * max_sim
+            if mmr_score > best_mmr:
+                best_mmr = mmr_score
+                best_idx = i
+
+        selected.append(remaining.pop(best_idx))
+        if has_embeddings:
+            embeddings.pop(best_idx)
+
+    logger.debug(
+        "MMR reorder applied (lambda=%.2f): %d results reordered",
+        mmr_lambda,
+        len(selected),
+    )
+    return selected
 
 
 def compute_blended_score(
@@ -218,6 +312,11 @@ class ResultReranker:
             pairs = [(query, r.get("content", "")) for r in results]
             scores = await asyncio.to_thread(cross_encoder.predict, pairs)
             self._apply_rerank_scores(results, scores, weights=weights)
+
+            # Issue #2090: optional MMR diversity pass after cross-encoder scoring
+            effective_weights = weights if weights is not None else RerankWeights()
+            if effective_weights.mmr_lambda > 0.0:
+                results = apply_mmr_reorder(results, effective_weights.mmr_lambda)
 
             return results[:top_k] if top_k else results
 
