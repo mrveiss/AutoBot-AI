@@ -9,20 +9,47 @@ GPU-accelerated computer vision processing with CLIP and BLIP-2 models.
 Part of Issue #381 - God Class Refactoring
 """
 
+from __future__ import annotations
+
 import asyncio
 import io
 import logging
 import time
-from typing import Any, Dict
-
-import torch
-from PIL import Image
+from typing import TYPE_CHECKING, Any, Dict
 
 from config import get_config_section
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
 from ..types import ModalityType
+
+if TYPE_CHECKING:
+    from PIL import Image
+
+# Issue #3016: lazy module-level imports for torch and PIL
+_torch = None
+_PILImage = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
+
+
+def _get_pil_image():
+    """Lazy-load PIL.Image on first use. Issue #3016."""
+    global _PILImage  # noqa: PLW0603
+    if _PILImage is None:
+        from PIL import Image as _img
+
+        _PILImage = _img
+    return _PILImage
+
 
 # Import transformers models for vision processing
 try:
@@ -49,6 +76,8 @@ class VisionProcessor(BaseModalProcessor):
 
     def __init__(self):
         """Initialize vision processor with GPU device and model configuration."""
+        torch = _get_torch()
+
         super().__init__("vision")
         self.config = get_config_section("multimodal.vision")
         self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
@@ -70,6 +99,8 @@ class VisionProcessor(BaseModalProcessor):
 
     def _load_models(self):
         """Load CLIP and BLIP-2 models for vision processing."""
+        torch = _get_torch()
+
         try:
             # Load CLIP model for image embeddings and classification
             self.logger.info("Loading CLIP model...")
@@ -126,6 +157,7 @@ class VisionProcessor(BaseModalProcessor):
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
         try:
+            torch = _get_torch()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
@@ -176,18 +208,24 @@ class VisionProcessor(BaseModalProcessor):
 
     async def _load_image(self, data: Any) -> Image.Image:
         """Load image from various input types (Issue #315 - extracted method)"""
+        PILImage = _get_pil_image()
+
         if isinstance(data, bytes):
-            return Image.open(io.BytesIO(data)).convert("RGB")
-        elif isinstance(data, Image.Image):
+            return PILImage.open(io.BytesIO(data)).convert("RGB")
+        elif isinstance(data, PILImage.Image):
             return data.convert("RGB")
         elif isinstance(data, str):
             # File path - read asynchronously (Issue #291)
-            return await asyncio.to_thread(lambda p: Image.open(p).convert("RGB"), data)
+            return await asyncio.to_thread(
+                lambda p: PILImage.open(p).convert("RGB"), data
+            )
         else:
             raise ValueError(f"Unsupported image data type: {type(data)}")
 
     def _process_clip_features(self, image: Image.Image):
         """Process CLIP features (Issue #315 - extracted method to reduce nesting)"""
+        torch = _get_torch()
+
         if not self.clip_model or not self.clip_processor:
             return None
 
@@ -203,6 +241,8 @@ class VisionProcessor(BaseModalProcessor):
 
     def _generate_caption(self, image: Image.Image) -> str:
         """Generate image caption (Issue #315 - extracted method to reduce nesting)"""
+        torch = _get_torch()
+
         if not self.blip_model or not self.blip_processor:
             return ""
 
@@ -234,6 +274,8 @@ class VisionProcessor(BaseModalProcessor):
 
     def _answer_visual_question(self, image: Image.Image, question: str) -> str:
         """Answer visual question (Issue #315 - extracted method to reduce nesting)"""
+        torch = _get_torch()
+
         if not self.blip_model or not self.blip_processor:
             return ""
 
@@ -285,6 +327,8 @@ class VisionProcessor(BaseModalProcessor):
         Returns:
             Dictionary with analysis results
         """
+        torch = _get_torch()
+
         result = {
             "type": "image_analysis",
             "caption": caption,
@@ -313,6 +357,8 @@ class VisionProcessor(BaseModalProcessor):
 
         Issue #665: Refactored to use _build_image_result helper.
         """
+        torch = _get_torch()
+
         # Guard clause: Check if models are available
         if (
             not VISION_MODELS_AVAILABLE

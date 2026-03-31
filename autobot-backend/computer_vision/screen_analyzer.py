@@ -8,16 +8,16 @@ Issue #381: Extracted from computer_vision_system.py god class refactoring.
 Contains the main screen analysis and multimodal processing logic.
 """
 
+from __future__ import annotations
+
 import asyncio
 import base64
 import io
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-import cv2
 import numpy as np
-from PIL import Image
 
 from desktop_streaming_manager import desktop_streaming
 from memory import TaskPriority
@@ -33,7 +33,35 @@ from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEng
 from .collections import ProcessingResultExtractor, UIElementCollection
 from .types import ElementType, InteractionType, ScreenState, UIElement
 
+if TYPE_CHECKING:
+    import cv2 as _cv2_type
+    from PIL import Image as _pil_type
+
 logger = logging.getLogger(__name__)
+
+# Issue #3016: lazy module-level imports for cv2 and PIL to avoid startup cost
+_cv2 = None
+_PILImage = None
+
+
+def _get_cv2():
+    """Lazy-load cv2 on first use. Issue #3016."""
+    global _cv2  # noqa: PLW0603
+    if _cv2 is None:
+        import cv2
+
+        _cv2 = cv2
+    return _cv2
+
+
+def _get_pil_image():
+    """Lazy-load PIL.Image on first use. Issue #3016."""
+    global _PILImage  # noqa: PLW0603
+    if _PILImage is None:
+        from PIL import Image
+
+        _PILImage = Image
+    return _PILImage
 
 
 class ScreenAnalyzer:
@@ -272,6 +300,9 @@ class ScreenAnalyzer:
 
     async def _capture_from_session(self, session_id: str) -> Optional[np.ndarray]:
         """Capture screenshot from VNC session. Issue #620."""
+        cv2 = _get_cv2()
+        PILImage = _get_pil_image()
+
         session_info = desktop_streaming.vnc_manager.get_session_info(session_id)
         if not session_info:
             return None
@@ -279,11 +310,14 @@ class ScreenAnalyzer:
         if not screenshot_base64:
             return None
         screenshot_bytes = base64.b64decode(screenshot_base64)
-        image = Image.open(io.BytesIO(screenshot_bytes))
+        image = PILImage.open(io.BytesIO(screenshot_bytes))
         return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
     async def _capture_from_x11(self) -> Optional[np.ndarray]:
         """Capture screenshot using X11 import command. Issue #620."""
+        cv2 = _get_cv2()
+        PILImage = _get_pil_image()
+
         try:
             proc = await asyncio.create_subprocess_exec(
                 "import",
@@ -296,7 +330,7 @@ class ScreenAnalyzer:
             try:
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
                 if proc.returncode == 0:
-                    image = Image.open(io.BytesIO(stdout))
+                    image = PILImage.open(io.BytesIO(stdout))
                     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             except asyncio.TimeoutError:
                 proc.kill()
@@ -308,6 +342,8 @@ class ScreenAnalyzer:
 
     def _generate_test_pattern(self) -> np.ndarray:
         """Generate test pattern image when no screenshot available. Issue #620."""
+        cv2 = _get_cv2()
+
         logger.warning("Using test pattern instead of real screenshot")
         test_image = np.zeros((600, 800, 3), dtype=np.uint8)
         cv2.putText(
@@ -499,6 +535,8 @@ class ScreenAnalyzer:
 
     async def detect_screen_changes(self, threshold: float = 0.1) -> Dict[str, Any]:
         """Detect changes in screen since last analysis"""
+        cv2 = _get_cv2()
+
         if len(self.screenshot_cache) < 2:
             return {"changes_detected": False, "reason": "insufficient_cache"}
 
@@ -532,6 +570,8 @@ class ScreenAnalyzer:
         self, diff_image: np.ndarray
     ) -> List[Dict[str, Any]]:
         """Identify regions where changes occurred"""
+        cv2 = _get_cv2()
+
         try:
             # Convert to grayscale
             gray_diff = cv2.cvtColor(diff_image, cv2.COLOR_BGR2GRAY)

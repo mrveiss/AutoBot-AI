@@ -7,19 +7,18 @@ AutoBot AI Hardware Accelerator
 Intelligent routing and optimization for NPU/GPU/CPU semantic processing
 """
 
+from __future__ import annotations
+
 import asyncio
 import io
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import aiohttp
 import numpy as np
-import torch
-import torch.nn.functional as F
-from PIL import Image
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
@@ -34,6 +33,10 @@ from constants.threshold_constants import (
     TimingConstants,
 )
 
+if TYPE_CHECKING:
+    import torch as _torch_type
+    from PIL import Image as _pil_type
+
 # Import transformers models for multi-modal embeddings
 try:
     import librosa
@@ -44,6 +47,41 @@ except ImportError:
     MULTIMODAL_MODELS_AVAILABLE = False
 
 logger = get_llm_logger("ai_hardware_accelerator")
+
+# Issue #3016: lazy module-level imports for torch, torch.nn.functional, PIL
+_torch = None
+_torch_F = None
+_PILImage = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
+
+
+def _get_torch_F():
+    """Lazy-load torch.nn.functional on first use. Issue #3016."""
+    global _torch_F  # noqa: PLW0603
+    if _torch_F is None:
+        import torch.nn.functional as F
+
+        _torch_F = F
+    return _torch_F
+
+
+def _get_pil_image():
+    """Lazy-load PIL.Image on first use. Issue #3016."""
+    global _PILImage  # noqa: PLW0603
+    if _PILImage is None:
+        from PIL import Image
+
+        _PILImage = Image
+    return _PILImage
 
 
 def _get_gpu_metrics_with_pynvml() -> Optional[Dict[str, Any]]:
@@ -72,8 +110,8 @@ def _get_gpu_metrics_with_pynvml() -> Optional[Dict[str, Any]]:
 
 
 async def _try_fallback_processing(
-    task: "ProcessingTask",
-    fallback_device: "HardwareDevice",
+    task: ProcessingTask,
+    fallback_device: HardwareDevice,
     process_on_gpu: callable,
     process_on_cpu: callable,
 ) -> Optional[Dict[str, Any]]:
@@ -83,7 +121,7 @@ async def _try_fallback_processing(
             return await process_on_gpu(task)
         return await process_on_cpu(task)
     except Exception as fallback_error:
-        logger.error("❌ Fallback also failed: %s", fallback_error)
+        logger.error("Fallback also failed: %s", fallback_error)
         return None
 
 
@@ -197,15 +235,15 @@ class AIHardwareAccelerator:
 
     async def initialize(self):
         """Initialize the AI hardware accelerator."""
-        logger.info("🚀 Initializing AI Hardware Accelerator")
+        logger.info("Initializing AI Hardware Accelerator")
 
         # Initialize Redis client
         try:
             self.redis_client = get_redis_client("main")
             if self.redis_client:
-                logger.info("✅ Connected to Redis for task coordination")
+                logger.info("Connected to Redis for task coordination")
         except Exception as e:
-            logger.warning("⚠️ Redis connection failed: %s", e)
+            logger.warning("Redis connection failed: %s", e)
 
         # Check hardware availability
         await self._check_hardware_availability()
@@ -217,7 +255,7 @@ class AIHardwareAccelerator:
         # Start monitoring loop
         asyncio.create_task(self._hardware_monitoring_loop())
 
-        logger.info("✅ AI Hardware Accelerator initialized")
+        logger.info("AI Hardware Accelerator initialized")
 
     async def _check_hardware_availability(self):
         """Check availability of all hardware devices."""
@@ -249,23 +287,25 @@ class AIHardwareAccelerator:
                     ] = datetime.now()
 
                     if npu_available:
-                        logger.info("✅ NPU Worker available and ready")
+                        logger.info("NPU Worker available and ready")
                         await self._update_npu_metrics(health_data)
                     else:
                         logger.warning(
-                            "⚠️ NPU Worker connected but NPU hardware unavailable"
+                            "NPU Worker connected but NPU hardware unavailable"
                         )
                 else:
                     logger.warning(
-                        f"⚠️ NPU Worker health check failed: {response.status}"
+                        f"NPU Worker health check failed: {response.status}"
                     )
                     self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
-            logger.warning("⚠️ NPU Worker connection failed: %s", e)
+            logger.warning("NPU Worker connection failed: %s", e)
             self.device_status[HardwareDevice.NPU]["available"] = False
 
     async def _check_gpu_availability(self):
         """Check GPU availability (Issue #315 - refactored to reduce nesting)."""
+        torch = _get_torch()
+
         self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
 
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
@@ -284,14 +324,14 @@ class AIHardwareAccelerator:
                     available_memory_mb=gpu_metrics["available_memory_mb"],
                     last_updated=datetime.now(),
                 )
-                logger.info("✅ GPU available: %s", torch.cuda.get_device_name(0))
+                logger.info("GPU available: %s", torch.cuda.get_device_name(0))
             else:
                 # pynvml not available, assume GPU is available with basic detection
-                logger.info("✅ GPU available (basic detection)")
+                logger.info("GPU available (basic detection)")
 
             self.device_status[HardwareDevice.GPU]["available"] = True
         except Exception as e:
-            logger.warning("⚠️ GPU availability check failed: %s", e)
+            logger.warning("GPU availability check failed: %s", e)
             self.device_status[HardwareDevice.GPU]["available"] = False
 
     async def _update_npu_metrics(self, health_data: Dict[str, Any]):
@@ -326,7 +366,7 @@ class AIHardwareAccelerator:
                 await asyncio.sleep(HardwareAcceleratorConfig.HARDWARE_CHECK_INTERVAL_S)
                 await self._check_hardware_availability()
             except Exception as e:
-                logger.error("❌ Hardware monitoring error: %s", e)
+                logger.error("Hardware monitoring error: %s", e)
 
     def _classify_by_threshold(
         self, value: int, light_threshold: int, mod_threshold: int
@@ -339,7 +379,7 @@ class AIHardwareAccelerator:
         return TaskComplexity.HEAVY
 
     def _classify_task_complexity(self, task: ProcessingTask) -> TaskComplexity:
-        """Classify task complexity for optimal device routing (Issue #315 - refactored depth 5 to 2)."""
+        """Classify task complexity for optimal device routing (Issue #315 - refactored)."""
         task_type = task.task_type
         input_data = task.input_data
 
@@ -461,7 +501,7 @@ class AIHardwareAccelerator:
         """Process an AI task using optimal hardware (Issue #315 - refactored)."""
         start_time = time.time()
         selected_device = self._select_optimal_device(task)
-        logger.info("🎯 Processing task %s on %s", task.task_id, selected_device.value)
+        logger.info("Processing task %s on %s", task.task_id, selected_device.value)
 
         try:
             result = await self._route_to_processor(task, selected_device)
@@ -470,7 +510,7 @@ class AIHardwareAccelerator:
             )
         except Exception as e:
             logger.error(
-                "❌ Task %s failed on %s: %s", task.task_id, selected_device.value, e
+                "Task %s failed on %s: %s", task.task_id, selected_device.value, e
             )
             return await self._handle_task_failure(task, selected_device, e, start_time)
 
@@ -514,7 +554,7 @@ class AIHardwareAccelerator:
 
         if fallback_device and fallback_device != selected_device:
             logger.info(
-                "🔄 Retrying task %s on %s", task.task_id, fallback_device.value
+                "Retrying task %s on %s", task.task_id, fallback_device.value
             )
             fallback_result = await _try_fallback_processing(
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
@@ -600,12 +640,14 @@ class AIHardwareAccelerator:
             # Fallback to CPU for unsupported GPU tasks
             return await self._process_on_cpu(task)
 
-    def _initialize_clip_model(self, device: torch.device) -> None:
+    def _initialize_clip_model(self, device: Any) -> None:
         """
         Initialize CLIP model and processor for image embeddings.
 
         Loads openai/clip-vit-base-patch32 with appropriate dtype. Issue #620.
         """
+        torch = _get_torch()
+
         self.clip_processor = CLIPProcessor.from_pretrained(
             "openai/clip-vit-base-patch32"
         )
@@ -615,12 +657,14 @@ class AIHardwareAccelerator:
         ).to(device)
         self.clip_model.eval()
 
-    def _initialize_wav2vec_model(self, device: torch.device) -> None:
+    def _initialize_wav2vec_model(self, device: Any) -> None:
         """
         Initialize Wav2Vec2 model and processor for audio embeddings.
 
         Loads facebook/wav2vec2-base-960h with appropriate dtype. Issue #620.
         """
+        torch = _get_torch()
+
         self.wav2vec_processor = Wav2Vec2Processor.from_pretrained(
             "facebook/wav2vec2-base-960h"
         )
@@ -630,13 +674,15 @@ class AIHardwareAccelerator:
         ).to(device)
         self.wav2vec_model.eval()
 
-    def _initialize_projection_matrices(self, device: torch.device) -> None:
+    def _initialize_projection_matrices(self, device: Any) -> None:
         """
         Initialize projection matrices for unified embedding space.
 
         Creates linear projections for text (384), image (512), and audio (768)
         dimensions to unified space. Issue #620.
         """
+        torch = _get_torch()
+
         self.text_projection = torch.nn.Linear(
             HardwareAcceleratorConfig.MINILM_OUTPUT_DIM, self.unified_dim
         ).to(device)
@@ -649,6 +695,8 @@ class AIHardwareAccelerator:
 
     async def _initialize_multimodal_models(self):
         """Initialize multi-modal models for embeddings."""
+        torch = _get_torch()
+
         if not MULTIMODAL_MODELS_AVAILABLE:
             logger.warning(
                 "Multi-modal models not available. Install transformers library."
@@ -667,9 +715,12 @@ class AIHardwareAccelerator:
             logger.error("Failed to initialize multi-modal models: %s", e)
 
     async def _generate_text_embedding(
-        self, content: Any, device: torch.device
+        self, content: Any, device: Any
     ) -> np.ndarray:
         """Generate text embedding (Issue #315)."""
+        torch = _get_torch()
+        F = _get_torch_F()
+
         from utils.semantic_chunker import get_semantic_chunker
 
         chunker = get_semantic_chunker()
@@ -692,13 +743,17 @@ class AIHardwareAccelerator:
         return raw_embedding
 
     def _generate_image_embedding(
-        self, content: Any, device: torch.device
+        self, content: Any, device: Any
     ) -> np.ndarray:
         """Generate image embedding using CLIP (Issue #315)."""
+        torch = _get_torch()
+        F = _get_torch_F()
+        PILImage = _get_pil_image()
+
         if isinstance(content, bytes):
-            image = Image.open(io.BytesIO(content)).convert("RGB")
+            image = PILImage.open(io.BytesIO(content)).convert("RGB")
         elif isinstance(content, str):
-            image = Image.open(content).convert("RGB")
+            image = PILImage.open(content).convert("RGB")
         else:
             image = content
 
@@ -719,9 +774,12 @@ class AIHardwareAccelerator:
             return image_features.cpu().numpy().squeeze()
 
     def _generate_audio_embedding(
-        self, content: Any, device: torch.device
+        self, content: Any, device: Any
     ) -> np.ndarray:
         """Generate audio embedding using Wav2Vec2 (Issue #315)."""
+        torch = _get_torch()
+        F = _get_torch_F()
+
         if isinstance(content, bytes):
             audio_array = np.frombuffer(content, dtype=np.float32)
         elif isinstance(content, str):
@@ -753,6 +811,8 @@ class AIHardwareAccelerator:
         self, input_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate embeddings using GPU acceleration (Issue #315 - dispatch table)."""
+        torch = _get_torch()
+
         modality = input_data.get("modality", "text")
         content = input_data.get("content") or input_data.get("text", "")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

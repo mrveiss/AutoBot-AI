@@ -17,16 +17,15 @@ For async contexts (FastAPI endpoints, async functions), always use the
 async variants to prevent event loop blocking. See Issue #369.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
-
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+from typing import TYPE_CHECKING, Any, Union
 
 # Re-export async utilities for convenient imports
 from utils.async_chromadb_client import (
@@ -37,7 +36,7 @@ from utils.async_chromadb_client import (
 )
 
 if TYPE_CHECKING:
-    pass
+    import chromadb
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ __all__ = [
 ]
 
 
-def _read_hnsw_params(cursor: "sqlite3.Cursor", collection_id: str) -> dict:
+def _read_hnsw_params(cursor: sqlite3.Cursor, collection_id: str) -> dict:
     """Read HNSW metadata for one collection from collection_metadata table.
 
     Ref: #2735. Helper for _migrate_legacy_collection_configs.
@@ -269,6 +268,7 @@ def _fix_hnsw_pickle_format(chroma_path: Path) -> None:
     as None (HNSW init requires an int). This patches both.
     """
     try:
+        # Issue #3016: lazy import — chromadb is heavy
         from chromadb.segment.impl.vector.local_persistent_hnsw import PersistentData
     except ImportError:
         return
@@ -315,7 +315,7 @@ def get_chromadb_client(
     db_path: str = "",
     allow_reset: bool = False,
     anonymized_telemetry: bool = False,
-) -> Union[chromadb.HttpClient, chromadb.PersistentClient]:
+) -> Any:
     """
     Create a ChromaDB client with consistent configuration.
 
@@ -330,6 +330,10 @@ def get_chromadb_client(
     Returns:
         Configured ChromaDB client (Http or Persistent)
     """
+    # Issue #3016: lazy import — chromadb is heavy (~1s import)
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+
     try:
         if _CHROMADB_HOST:
             client = chromadb.HttpClient(

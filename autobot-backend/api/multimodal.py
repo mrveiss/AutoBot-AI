@@ -12,7 +12,6 @@ import time
 import uuid
 from typing import Dict, List, Optional, Union
 
-import torch
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -522,6 +521,8 @@ async def get_multimodal_stats(
 
 def _get_gpu_stats() -> tuple:
     """Helper for get_multimodal_stats. Ref: #1088."""
+    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
+
     gpu_available = torch.cuda.is_available()
     gpu_stats = {}
     if gpu_available:
@@ -865,6 +866,8 @@ async def health_check(
 
     Issue #744: Requires authenticated user.
     """
+    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
+
     return {
         "status": "healthy",
         "timestamp": time.time(),

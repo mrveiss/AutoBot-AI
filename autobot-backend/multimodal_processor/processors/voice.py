@@ -14,7 +14,6 @@ import time
 from typing import Any, Dict, Tuple
 
 import numpy as np
-import torch
 
 from config import get_config_section
 
@@ -31,6 +30,20 @@ from ..types import (
     TEXT_INPUT_COMMAND_WORDS,
     ModalityType,
 )
+
+# Issue #3016: lazy module-level import for torch
+_torch = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
+
 
 # Import models for audio processing
 try:
@@ -58,6 +71,8 @@ class VoiceProcessor(BaseModalProcessor):
 
     def __init__(self):
         """Initialize voice processor with GPU device and audio model configuration."""
+        torch = _get_torch()
+
         super().__init__("voice")
         self.config = get_config_section("multimodal.audio")
         self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
@@ -79,6 +94,8 @@ class VoiceProcessor(BaseModalProcessor):
 
     def _load_models(self):
         """Load Whisper and Wav2Vec2 models for audio processing."""
+        torch = _get_torch()
+
         try:
             # Load Whisper model for speech recognition
             self.logger.info("Loading Whisper model...")
@@ -119,6 +136,7 @@ class VoiceProcessor(BaseModalProcessor):
     def __del__(self):
         """Clean up GPU resources when processor is destroyed"""
         try:
+            torch = _get_torch()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 self.logger.info("GPU cache cleared")
@@ -192,6 +210,8 @@ class VoiceProcessor(BaseModalProcessor):
         self, audio_array: np.ndarray, sampling_rate: int
     ) -> str:
         """Transcribe audio with Whisper model (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         if not self.whisper_model or not self.whisper_processor:
             return ""
 
@@ -219,6 +239,8 @@ class VoiceProcessor(BaseModalProcessor):
         self, audio_array: np.ndarray, sampling_rate: int
     ) -> Tuple[Any, str]:
         """Process audio with Wav2Vec2 for embeddings (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         if not self.wav2vec_model or not self.wav2vec_processor:
             return None, ""
 
@@ -254,6 +276,8 @@ class VoiceProcessor(BaseModalProcessor):
 
     async def _process_audio(self, input_data: MultiModalInput) -> Dict[str, Any]:
         """Process audio input with GPU-accelerated Whisper and Wav2Vec2 models. Issue #620."""
+        torch = _get_torch()
+
         self._validate_audio_models_available()
 
         try:
@@ -317,6 +341,8 @@ class VoiceProcessor(BaseModalProcessor):
         audio_embedding: Any,
     ) -> Dict[str, Any]:
         """Build the voice processing result dictionary. Issue #620."""
+        torch = _get_torch()
+
         result = {
             "type": "voice_command",
             "transcribed_text": transcribed_text,
