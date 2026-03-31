@@ -59,6 +59,13 @@ from .hf_quantizer import (
     QuantizedLayerLoader,
     detect_quantization,
 )
+from .meta_eviction import (
+    EvictionStats,
+    MetaDeviceEvictionManager,
+    clean_memory,
+    evict_layer_to_meta,
+    get_gpu_memory_allocated,
+)
 from .token_optimizer import (
     TokenOptimizer,
     TokenOptimizerConfig,
@@ -137,4 +144,10 @@ __all__ = [
     "AttentionBackendSelector",
     "AttentionModelConfig",
     "get_attention_backend_selector",
+    # Meta Device Eviction (Issue #1952)
+    "clean_memory",
+    "evict_layer_to_meta",
+    "get_gpu_memory_allocated",
+    "EvictionStats",
+    "MetaDeviceEvictionManager",
 ]
