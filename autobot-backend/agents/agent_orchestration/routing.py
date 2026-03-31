@@ -6,12 +6,13 @@ Agent Routing Module
 
 Issue #381: Extracted from agent_orchestrator.py god class refactoring.
 Contains routing decision logic, quick route analysis, and LLM-based routing.
+Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 """
 
 import json
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import LLMDefaults
 
@@ -55,6 +56,9 @@ class AgentRouter:
         # Avoids Redis GET + TaskPatternLearner instantiation per routing call.
         self._strategy_cache: Dict[str, tuple] = {}  # task_type -> (strategy, expires)
         self._strategy_cache_ttl = 60  # seconds
+        # Issue #2092: Q-learning RL router (lazy-initialised on first use).
+        self._rl_router = None
+        self.rl_routing_enabled: bool = True
 
     async def _check_learned_strategy(
         self, request: str, context: Optional[Dict[str, Any]] = None
@@ -116,6 +120,56 @@ class AgentRouter:
             "source": "learned",
         }
 
+    def _get_rl_router(self):
+        """Lazily initialise and return the RLRouter singleton (Issue #2092)."""
+        if self._rl_router is None:
+            from .rl_router import RLRouter
+
+            self._rl_router = RLRouter()
+        return self._rl_router
+
+    def _available_agent_ids(self) -> List[str]:
+        """Return all known AgentType values as string IDs."""
+        return [at.value for at in self.agent_capabilities]
+
+    async def _check_rl_routing(
+        self, request: str
+    ) -> Optional[Dict[str, Any]]:
+        """Attempt Q-learning based routing for *request* (Issue #2092).
+
+        Returns a routing result dict when the RL router's confidence exceeds
+        the 0.6 threshold, or None to fall through to the LLM fallback.
+        """
+        if not self.rl_routing_enabled:
+            return None
+        available = self._available_agent_ids()
+        if not available:
+            return None
+        try:
+            rl = self._get_rl_router()
+            agent_id, confidence, state_key = await rl.select_agent(request, available)
+            if confidence <= 0.6:
+                logger.debug("RL confidence %.2f too low; falling back to LLM", confidence)
+                return None
+            agent_type = self._resolve_agent_type(agent_id)
+            logger.info(
+                "RL routing: agent=%s confidence=%.2f state=%s",
+                agent_id,
+                confidence,
+                state_key,
+            )
+            return {
+                "strategy": "single_agent",
+                "primary_agent": agent_type,
+                "confidence": confidence,
+                "reasoning": f"RL router selected {agent_id} (Q-learning, state={state_key})",
+                "source": "rl",
+                "rl_state_key": state_key,
+            }
+        except Exception as exc:
+            logger.warning("RL routing error: %s", exc)
+            return None
+
     def _resolve_agent_type(self, approach: str) -> AgentType:
         """Map a learned approach string to an AgentType enum (#2105)."""
         try:
@@ -152,6 +206,11 @@ class AgentRouter:
             learned = await self._check_learned_strategy(request, context)
             if learned:
                 return learned
+
+            # Q-learning RL router: sits between pattern-match and LLM (#2092)
+            rl_result = await self._check_rl_routing(request)
+            if rl_result:
+                return rl_result
 
             # Use LLM for complex routing decisions
             system_prompt = self._get_routing_system_prompt()
