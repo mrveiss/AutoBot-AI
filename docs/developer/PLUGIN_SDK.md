@@ -503,7 +503,7 @@ See `mcp-wrapper-plugin` for example.
 
 ## References
 
-- **Core SDK**: `autobot-shared/plugin_sdk/`
+- **Core SDK**: `autobot_shared/plugin_sdk/`
 - **Plugin Manager API**: `autobot-backend/plugin_manager.py`
 - **Example Plugins**: `plugins/core-plugins/`
 - **Issue #730**: Plugin SDK architecture discussion

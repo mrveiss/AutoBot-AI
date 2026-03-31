@@ -10,7 +10,7 @@ SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-backend"]="172.16.168.20:/opt/autob
 SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-frontend"]="172.16.168.21:/opt/autobot/autobot-frontend"
 SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-backend"]="172.16.168.19:/opt/autobot/autobot-slm-backend"
 SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-frontend"]="172.16.168.19:/opt/autobot/autobot-slm-frontend"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-shared"]="172.16.168.19,172.16.168.20,172.16.168.21,172.16.168.22,172.16.168.23,172.16.168.24,172.16.168.25:/opt/autobot/autobot-shared"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot_shared"]="172.16.168.19,172.16.168.20,172.16.168.21,172.16.168.22,172.16.168.23,172.16.168.24,172.16.168.25:/opt/autobot/autobot_shared"
 SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-npu-worker"]="172.16.168.22:/opt/autobot/autobot-npu-worker"
 SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-browser-worker"]="172.16.168.25:/opt/autobot/autobot-browser-worker"
 

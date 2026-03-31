@@ -29,7 +29,6 @@ from agents.browser.captcha_solver import (
     _image_hash,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -90,10 +89,7 @@ class TestCaptchaDetectorDetect:
 
     def test_recaptcha_takes_priority_over_hcaptcha(self):
         # Both patterns present — reCAPTCHA is checked first
-        html = (
-            '<div class="g-recaptcha"></div>'
-            '<div class="h-captcha"></div>'
-        )
+        html = '<div class="g-recaptcha"></div>' '<div class="h-captcha"></div>'
         assert self.detector.detect(html) == CaptchaType.RECAPTCHA
 
     def test_case_insensitive(self):
@@ -270,7 +266,9 @@ class TestLocalCaptchaSolverSolveTextImage:
         solver._provider_used = "NPUExecutionProvider"
 
         # Provide minimal valid PNG-like bytes; preprocessing is mocked via PIL stub
-        with patch("agents.browser.captcha_solver.LocalCaptchaSolver._preprocess_image") as pp:
+        with patch(
+            "agents.browser.captcha_solver.LocalCaptchaSolver._preprocess_image"
+        ) as pp:
             pp.return_value = np.zeros((1, 1, 64, 200), dtype=np.float32)
             result = await solver.solve_text_image(b"fake_image_bytes")
 
@@ -383,7 +381,9 @@ class TestCaptchaSolverPipeline:
     async def test_human_fallback_for_recaptcha(self):
         """reCAPTCHA is not solvable locally — pipeline skips to human fallback."""
         solver = MagicMock(spec=LocalCaptchaSolver)
-        solver.can_solve.return_value = False  # LocalCaptchaSolver can't handle reCAPTCHA
+        solver.can_solve.return_value = (
+            False  # LocalCaptchaSolver can't handle reCAPTCHA
+        )
 
         detector = MagicMock(spec=CaptchaDetector)
 
@@ -436,7 +436,9 @@ class TestCaptchaSolverPipeline:
         solver.can_solve.return_value = True
 
         detector = MagicMock(spec=CaptchaDetector)
-        detector.extract_captcha_image = AsyncMock(return_value=None)  # extraction fails
+        detector.extract_captcha_image = AsyncMock(
+            return_value=None
+        )  # extraction fails
 
         page = MagicMock()
         page.url = "https://example.com"

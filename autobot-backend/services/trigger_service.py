@@ -181,7 +181,9 @@ def _evaluate_conditions(
             if not evaluator(actual, expected):
                 return False
         except (TypeError, KeyError) as exc:
-            logger.debug("Condition evaluation error for field '%s': %s", field_path, exc)
+            logger.debug(
+                "Condition evaluation error for field '%s': %s", field_path, exc
+            )
             return False
 
     return True
@@ -276,12 +278,16 @@ def next_cron_run(expression: str, after: Optional[datetime] = None) -> datetime
             # Fast-forward to the first valid month in the next year if needed
             next_month = next((m for m in months if m > candidate.month), months[0])
             if next_month <= candidate.month:
-                candidate = candidate.replace(year=candidate.year + 1, month=next_month, day=1, hour=0, minute=0)
+                candidate = candidate.replace(
+                    year=candidate.year + 1, month=next_month, day=1, hour=0, minute=0
+                )
             else:
                 candidate = candidate.replace(month=next_month, day=1, hour=0, minute=0)
             continue
 
-        if candidate.day not in days or candidate.weekday() not in [w % 7 for w in weekdays]:
+        if candidate.day not in days or candidate.weekday() not in [
+            w % 7 for w in weekdays
+        ]:
             candidate += timedelta(days=1)
             candidate = candidate.replace(hour=0, minute=0)
             continue
@@ -571,7 +577,11 @@ class TriggerService:
 
         task = asyncio.create_task(coro, name=f"trigger-{trigger_id[:8]}")
         self._tasks[trigger_id] = task
-        logger.debug("Spawned background task for trigger %s (%s)", trigger_id, tdef.trigger_type.value)
+        logger.debug(
+            "Spawned background task for trigger %s (%s)",
+            trigger_id,
+            tdef.trigger_type.value,
+        )
 
     # ------------------------------------------------------------------
     # Background loops
@@ -602,13 +612,19 @@ class TriggerService:
                     return
 
                 fired_at = datetime.now(timezone.utc).isoformat()
-                await self._launch_workflow(current, {"trigger_type": "cron", "fired_at": fired_at})
+                await self._launch_workflow(
+                    current, {"trigger_type": "cron", "fired_at": fired_at}
+                )
 
             except asyncio.CancelledError:
                 logger.info("Cron loop cancelled: trigger=%s", tdef.id)
                 return
             except ValueError as exc:
-                logger.error("Invalid cron expression for trigger %s: %s — stopping loop", tdef.id, exc)
+                logger.error(
+                    "Invalid cron expression for trigger %s: %s — stopping loop",
+                    tdef.id,
+                    exc,
+                )
                 return
             except Exception:
                 logger.exception("Cron loop error for trigger %s (continuing)", tdef.id)
@@ -618,7 +634,9 @@ class TriggerService:
         """Subscribe to a Redis channel and fire on matching messages."""
         channel: str = tdef.config.get("channel", "")
         if not channel:
-            logger.error("PubSub trigger %s missing 'channel' config — stopping", tdef.id)
+            logger.error(
+                "PubSub trigger %s missing 'channel' config — stopping", tdef.id
+            )
             return
 
         logger.info("PubSub loop started: trigger=%s channel=%s", tdef.id, channel)
@@ -636,13 +654,19 @@ class TriggerService:
 
                     current = await self._load_trigger(tdef.id)
                     if current is None or not current.enabled:
-                        logger.info("PubSub trigger %s disabled — stopping loop", tdef.id)
+                        logger.info(
+                            "PubSub trigger %s disabled — stopping loop", tdef.id
+                        )
                         pubsub.unsubscribe(channel)
                         return
 
                     try:
                         raw_data = message["data"]
-                        payload = json.loads(raw_data) if isinstance(raw_data, (str, bytes)) else {"data": raw_data}
+                        payload = (
+                            json.loads(raw_data)
+                            if isinstance(raw_data, (str, bytes))
+                            else {"data": raw_data}
+                        )
                     except (json.JSONDecodeError, TypeError):
                         payload = {"raw": str(message["data"])}
 
@@ -666,7 +690,9 @@ class TriggerService:
         poll_interval: int = int(tdef.config.get("poll_interval_seconds", 10))
 
         if not redis_key:
-            logger.error("FileWatch trigger %s missing 'redis_key' config — stopping", tdef.id)
+            logger.error(
+                "FileWatch trigger %s missing 'redis_key' config — stopping", tdef.id
+            )
             return
 
         logger.info(
@@ -684,7 +710,9 @@ class TriggerService:
 
                 current = await self._load_trigger(tdef.id)
                 if current is None or not current.enabled:
-                    logger.info("FileWatch trigger %s disabled — stopping loop", tdef.id)
+                    logger.info(
+                        "FileWatch trigger %s disabled — stopping loop", tdef.id
+                    )
                     return
 
                 redis = get_redis_client(database="main")
@@ -721,7 +749,11 @@ class TriggerService:
     async def _agent_event_loop(self, tdef: TriggerDefinition) -> None:
         """Subscribe to agent-event Redis channel and fire on matching event_name."""
         event_name: str = tdef.config.get("event_name", "")
-        channel = f"autobot:agent_events:{event_name}" if event_name else "autobot:agent_events"
+        channel = (
+            f"autobot:agent_events:{event_name}"
+            if event_name
+            else "autobot:agent_events"
+        )
 
         logger.info(
             "AgentEvent loop started: trigger=%s event=%s channel=%s",
@@ -742,13 +774,19 @@ class TriggerService:
 
                     current = await self._load_trigger(tdef.id)
                     if current is None or not current.enabled:
-                        logger.info("AgentEvent trigger %s disabled — stopping", tdef.id)
+                        logger.info(
+                            "AgentEvent trigger %s disabled — stopping", tdef.id
+                        )
                         pubsub.unsubscribe(channel)
                         return
 
                     try:
                         raw_data = message["data"]
-                        payload = json.loads(raw_data) if isinstance(raw_data, (str, bytes)) else {"data": raw_data}
+                        payload = (
+                            json.loads(raw_data)
+                            if isinstance(raw_data, (str, bytes))
+                            else {"data": raw_data}
+                        )
                     except (json.JSONDecodeError, TypeError):
                         payload = {"raw": str(message["data"])}
 
@@ -762,7 +800,8 @@ class TriggerService:
                 return
             except Exception:
                 logger.exception(
-                    "AgentEvent loop error for trigger %s (will reconnect in 30s)", tdef.id
+                    "AgentEvent loop error for trigger %s (will reconnect in 30s)",
+                    tdef.id,
                 )
                 await asyncio.sleep(30)
 
@@ -775,7 +814,9 @@ class TriggerService:
     ) -> None:
         """Call the launcher callback and update last_fired / fire_count."""
         if self._launcher is None:
-            logger.warning("TriggerService: no launcher set — cannot fire trigger %s", tdef.id)
+            logger.warning(
+                "TriggerService: no launcher set — cannot fire trigger %s", tdef.id
+            )
             return
 
         logger.info(

@@ -71,7 +71,7 @@ coexistence:
   compatible_with:
     - autobot-ollama
     - autobot-slm-agent
-    - autobot-shared
+    - autobot_shared
   conflicts_with: []
   warns_with: []
 

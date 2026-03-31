@@ -18,7 +18,6 @@ import pytest
 from utils.model_optimization.system_resources import SystemResourceAnalyzer
 from utils.model_optimization.types import SystemResources
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -241,4 +240,7 @@ class TestSystemResourcesPerGpuField:
         )
         d = r.to_dict()
         d["per_gpu_vram_gb"].append(99.0)
-        assert r.per_gpu_vram_gb == [8.0, 16.0], "to_dict() must not expose internal list"
+        assert r.per_gpu_vram_gb == [
+            8.0,
+            16.0,
+        ], "to_dict() must not expose internal list"

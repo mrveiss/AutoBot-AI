@@ -218,7 +218,9 @@ class SessionListingMixin:
             # Ensure chats directory exists
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
-                await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+                await run_in_chat_io_executor(
+                    os.makedirs, chats_directory, exist_ok=True
+                )
                 return sessions
 
             # Process each chat file

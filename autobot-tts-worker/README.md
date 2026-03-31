@@ -37,6 +37,7 @@ ansible-playbook playbooks/deploy-full.yml --tags tts-worker
 | `TTS_MODEL_ID` | `liquid-ai/kani-tts-2` | HuggingFace model ID |
 | `TTS_DEVICE` | `cpu` | Inference device (`cpu`, `cuda`, `mps`) |
 | `TTS_MODELS_DIR` | `/var/lib/autobot/models/tts` | Model cache directory |
+| `HF_TOKEN` | *(unset)* | HuggingFace auth token — required for gated models. Set via `vault_hf_token` in Ansible vault. |
 
 ## Resource Requirements
 

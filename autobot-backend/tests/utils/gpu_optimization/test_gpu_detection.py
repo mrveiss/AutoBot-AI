@@ -627,7 +627,9 @@ class TestCheckAppleGpu:
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
+    @patch(
+        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
+    )
     def test_detects_apple_m2(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -643,7 +645,9 @@ class TestCheckAppleGpu:
         assert result["metal_supported"] is True
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
+    @patch(
+        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
+    )
     def test_returns_none_for_non_apple_gpu_on_mac(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -653,13 +657,17 @@ class TestCheckAppleGpu:
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
+    @patch(
+        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
+    )
     def test_returns_none_when_system_profiler_fails(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
+    @patch(
+        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
+    )
     def test_returns_none_on_timeout(self, _mock_sys, mock_run):
         mock_run.side_effect = subprocess.TimeoutExpired(
             cmd="system_profiler", timeout=10
@@ -667,7 +675,9 @@ class TestCheckAppleGpu:
         assert _check_apple_gpu() is None
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
-    @patch("utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin")
+    @patch(
+        "utils.gpu_optimization.gpu_detection.platform.system", return_value="Darwin"
+    )
     def test_handles_missing_cores_field(self, _mock_sys, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -686,7 +696,10 @@ class TestCheckAppleGpu:
 class TestDetectAppleCapabilities:
     """Tests for Apple Silicon capability population."""
 
-    @patch("utils.gpu_optimization.gpu_detection._get_macos_system_memory_gb", return_value=32.0)
+    @patch(
+        "utils.gpu_optimization.gpu_detection._get_macos_system_memory_gb",
+        return_value=32.0,
+    )
     def test_populates_from_stashed_info(self, _mock_mem):
         import utils.gpu_optimization.gpu_detection as mod
 
@@ -705,7 +718,10 @@ class TestDetectAppleCapabilities:
         assert result.multiprocessor_count == 38
         assert result.memory_gb == 32.0
 
-    @patch("utils.gpu_optimization.gpu_detection._get_macos_system_memory_gb", return_value=0.0)
+    @patch(
+        "utils.gpu_optimization.gpu_detection._get_macos_system_memory_gb",
+        return_value=0.0,
+    )
     def test_fallback_when_no_stashed_info(self, _mock_mem):
         import utils.gpu_optimization.gpu_detection as mod
 
@@ -725,9 +741,7 @@ class TestGetMacosSystemMemoryGb:
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
     def test_returns_memory_in_gb(self, mock_run):
         # 16 GB in bytes
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout="17179869184\n"
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout="17179869184\n")
         assert _get_macos_system_memory_gb() == 16.0
 
     @patch("utils.gpu_optimization.gpu_detection.subprocess.run")
@@ -768,7 +782,11 @@ class TestDetectVendorApple:
     @patch("utils.gpu_optimization.gpu_detection._check_amd_gpu", return_value=False)
     @patch("utils.gpu_optimization.gpu_detection._check_nvidia_gpu", return_value=None)
     def test_apple_detected(self, _nv, _amd, _intel, mock_apple):
-        mock_apple.return_value = {"name": "Apple M2", "gpu_cores": 10, "metal_supported": True}
+        mock_apple.return_value = {
+            "name": "Apple M2",
+            "gpu_cores": 10,
+            "metal_supported": True,
+        }
         assert _detect_vendor() == "apple"
 
     @patch("utils.gpu_optimization.gpu_detection._check_apple_gpu", return_value=None)

@@ -20,7 +20,6 @@ from llm_interface_pkg.optimization.kv_cache import (
     _max_seq_from_budget,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -432,7 +431,12 @@ class TestKVCacheManagerEstimateMemory:
     def test_estimate_formula_correctness(self):
         """Estimate should equal 2 * layers * batch * seq * heads * dim * dtype_bytes."""
         cfg = _make_config(
-            num_layers=8, batch_size=2, max_seq_len=512, num_heads=8, head_dim=64, dtype="fp16"
+            num_layers=8,
+            batch_size=2,
+            max_seq_len=512,
+            num_heads=8,
+            head_dim=64,
+            dtype="fp16",
         )
         manager = KVCacheManager()
         expected = 2 * 8 * 2 * 512 * 8 * 64 * 2
@@ -579,13 +583,20 @@ class TestInternalHelpers:
     def test_compute_cache_bytes_simple(self):
         """Manual computation: 2 * 2 * 1 * 4 * 2 * 8 * 2 = 512 bytes."""
         result = _compute_cache_bytes(
-            num_layers=2, batch_size=1, max_seq_len=4, num_heads=2, head_dim=8, dtype_bytes=2
+            num_layers=2,
+            batch_size=1,
+            max_seq_len=4,
+            num_heads=2,
+            head_dim=8,
+            dtype_bytes=2,
         )
         assert result == 2 * 2 * 1 * 4 * 2 * 8 * 2
 
     def test_max_seq_from_budget_inverse_of_compute(self):
         """max_seq from budget should invert compute_cache_bytes."""
-        kwargs = dict(num_layers=2, batch_size=1, num_heads=2, head_dim=8, dtype_bytes=2)
+        kwargs = dict(
+            num_layers=2, batch_size=1, num_heads=2, head_dim=8, dtype_bytes=2
+        )
         seq = 100
         budget = _compute_cache_bytes(max_seq_len=seq, **kwargs)
         recovered = _max_seq_from_budget(budget_bytes=budget, **kwargs)
@@ -594,6 +605,11 @@ class TestInternalHelpers:
     def test_max_seq_from_zero_budget_returns_one(self):
         """Budget of 0 should return 1 (minimum one position)."""
         result = _max_seq_from_budget(
-            budget_bytes=0, num_layers=1, batch_size=1, num_heads=1, head_dim=1, dtype_bytes=2
+            budget_bytes=0,
+            num_layers=1,
+            batch_size=1,
+            num_heads=1,
+            head_dim=1,
+            dtype_bytes=2,
         )
         assert result == 1

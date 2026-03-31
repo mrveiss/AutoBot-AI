@@ -130,12 +130,12 @@ class CaptchaDetector:
     # CSS selectors checked in priority order for each CAPTCHA type
     _RECAPTCHA_SELECTORS = (
         ".g-recaptcha",
-        '[data-sitekey]',
+        "[data-sitekey]",
         'iframe[src*="recaptcha"]',
     )
     _HCAPTCHA_SELECTORS = (
         ".h-captcha",
-        '[data-hcaptcha-widget-id]',
+        "[data-hcaptcha-widget-id]",
         'iframe[src*="hcaptcha"]',
     )
     _SLIDER_SELECTORS = (
@@ -512,7 +512,12 @@ class LocalCaptchaSolver:
         cleaned = expression.upper()
         cleaned = _TRAILING_EQUALS_RE.sub("", cleaned)
         # Normalise spelled-out operators
-        for old, new in [("PLUS", "+"), ("MINUS", "-"), ("TIMES", "*"), ("DIVIDED BY", "/")]:
+        for old, new in [
+            ("PLUS", "+"),
+            ("MINUS", "-"),
+            ("TIMES", "*"),
+            ("DIVIDED BY", "/"),
+        ]:
             cleaned = cleaned.replace(old, new)
         return cleaned
 

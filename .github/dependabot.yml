@@ -21,7 +21,7 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
-    directory: "/autobot-shared"
+    directory: "/autobot_shared"
     target-branch: "Dev_new_gui"
     schedule:
       interval: "weekly"

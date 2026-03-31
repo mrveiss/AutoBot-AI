@@ -50,7 +50,7 @@ ansible-playbook playbooks/update-all-nodes.yml \
 ```bash
 # Stage only changed files (avoid accidental large commits)
 git add autobot-backend/api/some_endpoint.py
-git add autobot-shared/utils/helper.py
+git add autobot_shared/utils/helper.py
 
 git commit -m "feat(backend): add new API endpoint (#926)"
 git push origin Dev_new_gui
@@ -122,17 +122,17 @@ curl -sk https://172.16.168.21/api/health
 
 ---
 
-## Updating Only autobot-shared
+## Updating Only autobot_shared
 
-`autobot-shared` is deployed to all backend nodes. When you change shared code:
+`autobot_shared` is deployed to all backend nodes. When you change shared code:
 
 ```bash
 # Push the change
-git add autobot-shared/
+git add autobot_shared/
 git commit -m "fix(shared): fix redis client (#issue)"
 git push
 
-# Hook detects autobot-shared change → marks ALL backend nodes OUTDATED
+# Hook detects autobot_shared change → marks ALL backend nodes OUTDATED
 # Then trigger update normally
 cd autobot-slm-backend/ansible
 ansible-playbook playbooks/update-all-nodes.yml -i inventory/slm-nodes.yml

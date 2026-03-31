@@ -16,10 +16,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Ensure autobot-backend and autobot-shared are importable
+# Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
 backend_root = Path(__file__).parent
-shared_root = project_root / "autobot-shared"
+shared_root = project_root / "autobot_shared"
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(shared_root))

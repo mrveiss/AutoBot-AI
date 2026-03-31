@@ -173,7 +173,9 @@ class AccessibilitySnapshot:
     # Search helpers
     # ------------------------------------------------------------------
 
-    def find_by_role(self, tree: AccessibilityTree, role: str) -> List[AccessibilityNode]:
+    def find_by_role(
+        self, tree: AccessibilityTree, role: str
+    ) -> List[AccessibilityNode]:
         """Return all nodes whose ``role`` matches (case-insensitive).
 
         Args:
@@ -189,7 +191,9 @@ class AccessibilitySnapshot:
         self._collect(tree, lambda n: n.role.lower() == role.lower(), results)
         return results
 
-    def find_by_name(self, tree: AccessibilityTree, name: str) -> List[AccessibilityNode]:
+    def find_by_name(
+        self, tree: AccessibilityTree, name: str
+    ) -> List[AccessibilityNode]:
         """Return all nodes whose accessible ``name`` contains *name* (case-insensitive).
 
         Args:

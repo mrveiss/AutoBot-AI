@@ -1,12 +1,12 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Setup script for autobot-shared package."""
+"""Setup script for autobot_shared package."""
 
 from setuptools import find_packages, setup
 
 setup(
-    name="autobot-shared",
+    name="autobot_shared",
     version="1.0.0",
     author="mrveiss",
     description="Shared utilities for AutoBot platform",

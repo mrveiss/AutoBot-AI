@@ -63,7 +63,7 @@ coexistence:
     - autobot-ai-stack
     - autobot-database
     - autobot-ollama
-    - autobot-shared
+    - autobot_shared
   conflicts_with: []
   warns_with: []
 

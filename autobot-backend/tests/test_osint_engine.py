@@ -31,7 +31,6 @@ from services.autoresearch.osint_engine import (
     build_default_engine,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -138,9 +137,7 @@ class TestCorrelationRule:
             threshold=2,
             description="Test rule",
         )
-        results = self._make_results(
-            [("nasa_firms_fire", "Major wildfire detected")]
-        )
+        results = self._make_results([("nasa_firms_fire", "Major wildfire detected")])
         signal = rule.evaluate(results)
         assert signal is None
 

@@ -122,7 +122,7 @@ _ROLE_UI_META: Dict[str, Dict] = {
         "category": "ai",
         "tools": ["ollama"],
     },
-    "autobot-shared": {
+    "autobot_shared": {
         "description": "Shared Python library (deployed to all nodes)",
         "category": "infrastructure",
         "tools": ["pip", "python3"],

@@ -512,7 +512,7 @@ _SLM_COMPONENTS = [
         ["node_modules", "dist", ".git"],
     ),
     (
-        "autobot-shared",
+        "autobot_shared",
         ["__pycache__", "*.pyc", ".git"],
     ),
 ]

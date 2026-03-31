@@ -420,7 +420,7 @@ git commit --no-verify -m "Emergency fix - see issue #123"
 - **SSOT Config Guide**: [SSOT_CONFIG_GUIDE.md](SSOT_CONFIG_GUIDE.md) - Complete SSOT configuration patterns
 - **Migration Checklist**: [CONFIG_MIGRATION_CHECKLIST.md](CONFIG_MIGRATION_CHECKLIST.md) - Migrating code to SSOT
 - **SSOT Architecture**: [../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md)
-- **Python SSOT Config**: `autobot-shared/ssot_config.py`
+- **Python SSOT Config**: `autobot_shared/ssot_config.py`
 - **TypeScript SSOT Config**: `autobot-frontend/src/config/ssot-config.ts`
 - **Environment Setup**: [PHASE_5_DEVELOPER_SETUP.md](PHASE_5_DEVELOPER_SETUP.md)
 - **Code Quality**: [CODE_QUALITY_ENFORCEMENT.md](CODE_QUALITY_ENFORCEMENT.md)

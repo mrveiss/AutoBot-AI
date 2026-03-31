@@ -963,7 +963,9 @@ class FeatureConfig(BaseSettings):
     npu_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU")
     voice_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE")
     browser_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER")
-    computer_vision_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION")
+    computer_vision_enabled: bool = Field(
+        default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION"
+    )
     training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
     osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
 

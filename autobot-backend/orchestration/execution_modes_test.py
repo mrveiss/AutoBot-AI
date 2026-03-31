@@ -17,7 +17,13 @@ Covers:
 import asyncio
 import logging
 
-from .execution_modes import DebugController, DryRunReport, DryRunValidator, ExecutionMode, StepPlan
+from .execution_modes import (
+    DebugController,
+    DryRunReport,
+    DryRunValidator,
+    ExecutionMode,
+    StepPlan,
+)
 from .workflow_executor import WorkflowExecutor
 
 logger = logging.getLogger(__name__)
@@ -90,7 +96,13 @@ class TestDryRunValidator:
 
     def test_broken_dependency_is_an_issue(self) -> None:
         steps = [
-            {"id": "a", "action": "do_a", "assigned_agent": "ag1", "inputs": {}, "dependencies": []},
+            {
+                "id": "a",
+                "action": "do_a",
+                "assigned_agent": "ag1",
+                "inputs": {},
+                "dependencies": [],
+            },
             {
                 "id": "b",
                 "action": "do_b",
@@ -106,8 +118,22 @@ class TestDryRunValidator:
 
     def test_cycle_detection_is_an_issue(self) -> None:
         steps = [
-            {"id": "a", "type": "step", "action": "a", "assigned_agent": "ag", "inputs": {}, "dependencies": []},
-            {"id": "b", "type": "step", "action": "b", "assigned_agent": "ag", "inputs": {}, "dependencies": []},
+            {
+                "id": "a",
+                "type": "step",
+                "action": "a",
+                "assigned_agent": "ag",
+                "inputs": {},
+                "dependencies": [],
+            },
+            {
+                "id": "b",
+                "type": "step",
+                "action": "b",
+                "assigned_agent": "ag",
+                "inputs": {},
+                "dependencies": [],
+            },
         ]
         edges = [
             {"source": "a", "target": "b"},
@@ -177,7 +203,9 @@ class TestDryRunValidator:
 class TestDryRunReport:
     def test_to_dict_shape(self) -> None:
         plan = [StepPlan("s1", "act", "ag", [], [])]
-        report = DryRunReport(valid=True, execution_plan=plan, issues=[], warnings=["w1"])
+        report = DryRunReport(
+            valid=True, execution_plan=plan, issues=[], warnings=["w1"]
+        )
 
         d = report.to_dict()
         assert d["valid"] is True
@@ -203,7 +231,9 @@ class TestDebugController:
     def test_resume_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.resume()))
+            asyncio.get_event_loop().call_soon(
+                lambda: asyncio.ensure_future(ctrl.resume())
+            )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RESUME
 
@@ -212,7 +242,9 @@ class TestDebugController:
     def test_skip_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.skip()))
+            asyncio.get_event_loop().call_soon(
+                lambda: asyncio.ensure_future(ctrl.skip())
+            )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.SKIP
 
@@ -221,7 +253,9 @@ class TestDebugController:
     def test_retry_signal(self) -> None:
         async def _run() -> None:
             ctrl = DebugController()
-            asyncio.get_event_loop().call_soon(lambda: asyncio.ensure_future(ctrl.retry()))
+            asyncio.get_event_loop().call_soon(
+                lambda: asyncio.ensure_future(ctrl.retry())
+            )
             signal = await ctrl.wait_for_resume("step_1")
             assert signal == DebugController.Signal.RETRY
 
@@ -300,7 +334,13 @@ class TestWorkflowExecutorDryRun:
     def test_dry_run_detects_broken_dependency(self) -> None:
         executor = _make_executor()
         steps = [
-            {"id": "x", "action": "a", "assigned_agent": "ag", "inputs": {}, "dependencies": ["missing"]},
+            {
+                "id": "x",
+                "action": "a",
+                "assigned_agent": "ag",
+                "inputs": {},
+                "dependencies": ["missing"],
+            },
         ]
 
         result = asyncio.get_event_loop().run_until_complete(
@@ -355,7 +395,9 @@ class TestWorkflowExecutorDebugMode:
         executor = _make_executor()
         steps = _make_steps(1)
 
-        with caplog.at_level(logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"):
+        with caplog.at_level(
+            logging.WARNING, logger="autobot-backend.orchestration.workflow_executor"
+        ):
             asyncio.get_event_loop().run_until_complete(
                 executor.execute_coordinated_workflow(
                     "wf_dbg_no_ctrl",

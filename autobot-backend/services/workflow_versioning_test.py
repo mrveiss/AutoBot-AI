@@ -27,7 +27,6 @@ from services.workflow_versioning import (
     _utc_now,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
@@ -38,7 +37,8 @@ def _make_data(steps=None) -> dict:
     return {
         "name": "Test Workflow",
         "description": "desc",
-        "steps": steps or [{"step_id": "s1", "command": "echo hello", "description": "step1"}],
+        "steps": steps
+        or [{"step_id": "s1", "command": "echo hello", "description": "step1"}],
     }
 
 
@@ -70,7 +70,9 @@ class TestSaveVersion:
         mock_redis = _make_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             version = await store.save_version("wf-1", _make_data())
 
         assert version == 1
@@ -81,7 +83,9 @@ class TestSaveVersion:
         mock_redis = _make_redis()
         mock_redis.zrevrange.return_value = ["3"]  # highest existing version
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             version = await store.save_version("wf-1", _make_data())
 
         assert version == 4
@@ -92,7 +96,9 @@ class TestSaveVersion:
         mock_redis = _make_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             await store.save_version("wf-2", _make_data(), notes="initial save")
 
         mock_redis.set.assert_called_once()
@@ -135,7 +141,9 @@ class TestSaveVersion:
         mock_redis.get.side_effect = fake_get
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             version = await store.save_version("wf-rt", data, notes="rt")
             assert version == 1
 
@@ -174,7 +182,9 @@ class TestListVersions:
 
         mock_redis.get.side_effect = lambda key: _record(int(key.split(":")[-1]))
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             summaries = await store.list_versions("wf-order")
 
         assert [s["version"] for s in summaries] == [3, 2, 1]
@@ -185,7 +195,9 @@ class TestListVersions:
         mock_redis = _make_redis()
         mock_redis.zrevrange.return_value = []
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             summaries = await store.list_versions("wf-unknown")
 
         assert summaries == []
@@ -198,11 +210,19 @@ class TestListVersions:
         mock_redis.zrevrange.return_value = ["2", "1"]
         # Version 2 record is missing; version 1 record exists.
         record_v1 = _encode(
-            {"workflow_id": "wf-gap", "version": 1, "data": {}, "created_at": "2026-01-01T00:00:00Z", "notes": ""}
+            {
+                "workflow_id": "wf-gap",
+                "version": 1,
+                "data": {},
+                "created_at": "2026-01-01T00:00:00Z",
+                "notes": "",
+            }
         )
         mock_redis.get.side_effect = lambda key: None if ":2" in key else record_v1
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             summaries = await store.list_versions("wf-gap")
 
         assert len(summaries) == 1
@@ -233,7 +253,9 @@ class TestListVersions:
         )
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             summaries = await store.list_versions("wf-sum")
 
         assert len(summaries) == 1
@@ -263,7 +285,9 @@ class TestGetVersion:
         mock_redis = _make_redis()
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             wv = await store.get_version("wf-get", 5)
 
         assert wv is not None
@@ -278,7 +302,9 @@ class TestGetVersion:
         mock_redis = _make_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             wv = await store.get_version("wf-miss", 99)
 
         assert wv is None
@@ -314,7 +340,9 @@ class TestRestoreVersion:
         mock_redis = _make_redis()
         mock_redis.get.return_value = record
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             restored = await store.restore_version("wf-restore", 2)
 
         assert restored == data
@@ -325,7 +353,9 @@ class TestRestoreVersion:
         mock_redis = _make_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             restored = await store.restore_version("wf-restore", 99)
 
         assert restored is None
@@ -361,7 +391,9 @@ class TestDiffVersions:
         mock_redis = _make_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -383,7 +415,9 @@ class TestDiffVersions:
         mock_redis = _make_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -402,7 +436,9 @@ class TestDiffVersions:
         mock_redis = _make_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is not None
@@ -421,7 +457,9 @@ class TestDiffVersions:
         mock_redis = _make_redis()
         mock_redis.get.return_value = None
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             diff = await store.diff_versions("wf-diff", v1=1, v2=2)
 
         assert diff is None
@@ -435,7 +473,9 @@ class TestDiffVersions:
         mock_redis = _make_redis()
         mock_redis.get.side_effect = lambda key: r1 if ":1" in key else r2
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             diff = await store.diff_versions("wf-same", v1=1, v2=2)
 
         assert diff == {"added": [], "removed": [], "modified": []}
@@ -453,7 +493,9 @@ class TestDeleteVersion:
         mock_redis = _make_redis()
         mock_redis.delete.return_value = 1
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             result = await store.delete_version("wf-del", 3)
 
         assert result is True
@@ -466,7 +508,9 @@ class TestDeleteVersion:
         mock_redis = _make_redis()
         mock_redis.delete.return_value = 0  # key did not exist
 
-        with patch("services.workflow_versioning.get_redis_client", return_value=mock_redis):
+        with patch(
+            "services.workflow_versioning.get_redis_client", return_value=mock_redis
+        ):
             result = await store.delete_version("wf-del", 99)
 
         assert result is False

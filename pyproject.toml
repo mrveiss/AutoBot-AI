@@ -1,5 +1,5 @@
 [tool.isort]
 profile = "black"
 line_length = 88
-src_paths = ["autobot-backend", "autobot-shared", "autobot-slm-backend"]
+src_paths = ["autobot-backend", "autobot_shared", "autobot-slm-backend"]
 known_first_party = ["autobot_shared"]

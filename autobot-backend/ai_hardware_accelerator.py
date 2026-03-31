@@ -294,9 +294,7 @@ class AIHardwareAccelerator:
                             "NPU Worker connected but NPU hardware unavailable"
                         )
                 else:
-                    logger.warning(
-                        f"NPU Worker health check failed: {response.status}"
-                    )
+                    logger.warning(f"NPU Worker health check failed: {response.status}")
                     self.device_status[HardwareDevice.NPU]["available"] = False
         except Exception as e:
             logger.warning("NPU Worker connection failed: %s", e)
@@ -553,9 +551,7 @@ class AIHardwareAccelerator:
         fallback_device = self._get_fallback_device(selected_device)
 
         if fallback_device and fallback_device != selected_device:
-            logger.info(
-                "Retrying task %s on %s", task.task_id, fallback_device.value
-            )
+            logger.info("Retrying task %s on %s", task.task_id, fallback_device.value)
             fallback_result = await _try_fallback_processing(
                 task, fallback_device, self._process_on_gpu, self._process_on_cpu
             )
@@ -714,9 +710,7 @@ class AIHardwareAccelerator:
         except Exception as e:
             logger.error("Failed to initialize multi-modal models: %s", e)
 
-    async def _generate_text_embedding(
-        self, content: Any, device: Any
-    ) -> np.ndarray:
+    async def _generate_text_embedding(self, content: Any, device: Any) -> np.ndarray:
         """Generate text embedding (Issue #315)."""
         torch = _get_torch()
         F = _get_torch_F()
@@ -742,9 +736,7 @@ class AIHardwareAccelerator:
                 return unified_embedding.cpu().numpy()
         return raw_embedding
 
-    def _generate_image_embedding(
-        self, content: Any, device: Any
-    ) -> np.ndarray:
+    def _generate_image_embedding(self, content: Any, device: Any) -> np.ndarray:
         """Generate image embedding using CLIP (Issue #315)."""
         torch = _get_torch()
         F = _get_torch_F()
@@ -773,9 +765,7 @@ class AIHardwareAccelerator:
                 return unified_embedding.cpu().numpy()
             return image_features.cpu().numpy().squeeze()
 
-    def _generate_audio_embedding(
-        self, content: Any, device: Any
-    ) -> np.ndarray:
+    def _generate_audio_embedding(self, content: Any, device: Any) -> np.ndarray:
         """Generate audio embedding using Wav2Vec2 (Issue #315)."""
         torch = _get_torch()
         F = _get_torch_F()

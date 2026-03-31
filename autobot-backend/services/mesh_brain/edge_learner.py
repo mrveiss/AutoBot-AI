@@ -115,23 +115,31 @@ class EdgeLearner:
         try:
             raw_weights = await self.redis.hgetall(self.EWC_REFERENCE_WEIGHTS_KEY)
             if raw_weights:
-                self._reference_weights.update({k: float(v) for k, v in raw_weights.items()})
+                self._reference_weights.update(
+                    {k: float(v) for k, v in raw_weights.items()}
+                )
                 logger.info(
                     "EdgeLearner: loaded %d persisted EWC reference weights from Redis",
                     len(raw_weights),
                 )
         except Exception:
-            logger.warning("EdgeLearner: failed to load EWC reference weights, starting empty")
+            logger.warning(
+                "EdgeLearner: failed to load EWC reference weights, starting empty"
+            )
         try:
             raw_importance = await self.redis.hgetall(self.EWC_IMPORTANCE_KEY)
             if raw_importance:
-                self._importance.update({k: float(v) for k, v in raw_importance.items()})
+                self._importance.update(
+                    {k: float(v) for k, v in raw_importance.items()}
+                )
                 logger.info(
                     "EdgeLearner: loaded %d persisted EWC importance scores from Redis",
                     len(raw_importance),
                 )
         except Exception:
-            logger.warning("EdgeLearner: failed to load EWC importance scores, starting empty")
+            logger.warning(
+                "EdgeLearner: failed to load EWC importance scores, starting empty"
+            )
         self._ewc_state_loaded = True
 
     async def _save_ewc_state(self) -> None:

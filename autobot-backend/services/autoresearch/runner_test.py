@@ -152,7 +152,9 @@ class TestValidateExtraParams:
     def test_all_reserved_keys_are_lowercase(self):
         """Sanity check: all reserved keys match the key pattern format."""
         for key in _RESERVED_KEYS:
-            assert _EXTRA_KEY_PATTERN.match(key), f"Reserved key '{key}' doesn't match pattern"
+            assert _EXTRA_KEY_PATTERN.match(
+                key
+            ), f"Reserved key '{key}' doesn't match pattern"
 
 
 # ---------------------------------------------------------------------------
@@ -199,14 +201,21 @@ class TestBuildCommand:
         cmd = runner._build_command(exp)
 
         expected_flags = [
-            "max_steps", "learning_rate", "batch_size", "block_size",
-            "n_layer", "n_head", "n_embd", "dropout",
-            "warmup_steps", "weight_decay",
+            "max_steps",
+            "learning_rate",
+            "batch_size",
+            "block_size",
+            "n_layer",
+            "n_head",
+            "n_embd",
+            "dropout",
+            "warmup_steps",
+            "weight_decay",
         ]
         for flag in expected_flags:
-            assert any(f"--{flag}=" in arg for arg in cmd), (
-                f"Missing --{flag} in command"
-            )
+            assert any(
+                f"--{flag}=" in arg for arg in cmd
+            ), f"Missing --{flag} in command"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +235,10 @@ class TestExecuteTraining:
 
         mock_process = AsyncMock()
         mock_process.communicate = AsyncMock(
-            return_value=(b"step 5000 | train loss 4.0 | val loss 4.1 | val_bpb 5.5\n", None)
+            return_value=(
+                b"step 5000 | train loss 4.0 | val loss 4.1 | val_bpb 5.5\n",
+                None,
+            )
         )
         mock_process.returncode = 0
 
@@ -242,9 +254,7 @@ class TestExecuteTraining:
         exp = _make_experiment()
 
         mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            return_value=(b"segfault", None)
-        )
+        mock_process.communicate = AsyncMock(return_value=(b"segfault", None))
         mock_process.returncode = 1
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
@@ -261,9 +271,7 @@ class TestExecuteTraining:
         exp = _make_experiment()
 
         mock_process = AsyncMock()
-        mock_process.communicate = AsyncMock(
-            side_effect=asyncio.TimeoutError()
-        )
+        mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
         mock_process.kill = AsyncMock()
         mock_process.wait = AsyncMock()
         mock_process.returncode = None
@@ -278,7 +286,9 @@ class TestExecuteTraining:
 
     @pytest.mark.asyncio
     async def test_empty_stdout_handled(self):
-        parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
+        parser = _make_parser(
+            result=ExperimentResult(error_message="Empty training output")
+        )
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
 
@@ -296,7 +306,9 @@ class TestExecuteTraining:
 
     @pytest.mark.asyncio
     async def test_none_stdout_handled(self):
-        parser = _make_parser(result=ExperimentResult(error_message="Empty training output"))
+        parser = _make_parser(
+            result=ExperimentResult(error_message="Empty training output")
+        )
         runner = _make_runner(parser=parser)
         exp = _make_experiment()
 

@@ -51,7 +51,7 @@ infrastructure/
 - Create: `autobot-slm-frontend/`
 - Create: `autobot-npu-worker/`
 - Create: `autobot-browser-worker/`
-- Create: `autobot-shared/`
+- Create: `autobot_shared/`
 - Create: `infrastructure/`
 
 **Step 1: Create all top-level directories**
@@ -63,7 +63,7 @@ mkdir -p autobot-slm-backend/{api,services,models,migrations,ansible}
 mkdir -p autobot-slm-frontend/{src,public}
 mkdir -p autobot-npu-worker/{workers,models}
 mkdir -p autobot-browser-worker/services
-mkdir -p autobot-shared
+mkdir -p autobot_shared
 mkdir -p infrastructure/{docker,scripts,config,certs,mcp,novnc,analysis,tests}
 ```
 
@@ -88,38 +88,38 @@ Phase 1, Task 1: Create base directories for reorganization.
 - autobot-slm-frontend/ for SLM frontend (→ .21)
 - autobot-npu-worker/ for NPU worker (→ .22)
 - autobot-browser-worker/ for browser worker (→ .25)
-- autobot-shared/ for shared utilities
+- autobot_shared/ for shared utilities
 - infrastructure/ for dev/ops tooling"
 ```
 
 ---
 
-## Task 2: Copy Shared Utilities to autobot-shared/
+## Task 2: Copy Shared Utilities to autobot_shared/
 
 **Files:**
 
-- Copy: `autobot-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `autobot-backend/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `autobot-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
-- Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
-- Create: `autobot-shared/__init__.py`
-- Create: `autobot-shared/requirements.txt`
-- Create: `autobot-shared/README.md`
+- Copy: `autobot-backend/utils/redis_client.py` to `autobot_shared/redis_client.py`
+- Copy: `autobot-backend/utils/http_client.py` to `autobot_shared/http_client.py`
+- Copy: `autobot-backend/utils/logging_manager.py` to `autobot_shared/logging_manager.py`
+- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot_shared/error_boundaries.py`
+- Copy: `src/config/ssot_config.py` to `autobot_shared/ssot_config.py`
+- Create: `autobot_shared/__init__.py`
+- Create: `autobot_shared/requirements.txt`
+- Create: `autobot_shared/README.md`
 
 **Step 1: Copy shared utility files**
 
 ```bash
-cp autobot-backend/utils/redis_client.py autobot-shared/
-cp autobot-backend/utils/http_client.py autobot-shared/
-cp autobot-backend/utils/logging_manager.py autobot-shared/
-cp autobot-backend/utils/error_boundaries.py autobot-shared/
-cp src/config/ssot_config.py autobot-shared/
+cp autobot-backend/utils/redis_client.py autobot_shared/
+cp autobot-backend/utils/http_client.py autobot_shared/
+cp autobot-backend/utils/logging_manager.py autobot_shared/
+cp autobot-backend/utils/error_boundaries.py autobot_shared/
+cp src/config/ssot_config.py autobot_shared/
 ```
 
 **Step 2: Create __init__.py**
 
-Create `autobot-shared/__init__.py`:
+Create `autobot_shared/__init__.py`:
 
 ```python
 # AutoBot - AI-Powered Automation Platform
@@ -135,7 +135,7 @@ __all__ = ["get_redis_client", "config"]
 
 **Step 3: Create requirements.txt**
 
-Create `autobot-shared/requirements.txt`:
+Create `autobot_shared/requirements.txt`:
 
 ```text
 redis>=4.0.0
@@ -146,7 +146,7 @@ python-dotenv>=1.0.0
 
 **Step 4: Create README.md**
 
-Create `autobot-shared/README.md`:
+Create `autobot_shared/README.md`:
 
 ```markdown
 # AutoBot Shared Utilities
@@ -181,10 +181,10 @@ from autobot_shared.ssot_config import config
 **Step 5: Commit**
 
 ```bash
-git add autobot-shared/
-git commit -m "chore(shared): copy shared utilities to autobot-shared/ (#781)
+git add autobot_shared/
+git commit -m "chore(shared): copy shared utilities to autobot_shared/ (#781)
 
-Phase 1, Task 2: Populate autobot-shared with common utilities.
+Phase 1, Task 2: Populate autobot_shared with common utilities.
 - redis_client.py, http_client.py, logging_manager.py
 - error_boundaries.py, ssot_config.py
 - Added __init__.py, requirements.txt, README.md"
@@ -379,7 +379,7 @@ rsync -av monitoring/ autobot-backend/monitoring/
 Create `autobot-backend/requirements.txt`:
 
 ```text
--e ../autobot-shared
+-e ../autobot_shared
 
 # Core
 fastapi>=0.100.0
@@ -534,7 +534,7 @@ if __name__ == "__main__":
 Create `autobot-npu-worker/requirements.txt`:
 
 ```text
--e ../autobot-shared
+-e ../autobot_shared
 
 # NPU/AI
 openvino>=2023.0
@@ -594,7 +594,7 @@ if __name__ == "__main__":
 Create `autobot-browser-worker/requirements.txt`:
 
 ```text
--e ../autobot-shared
+-e ../autobot_shared
 
 # Browser automation
 playwright>=1.40.0
@@ -652,7 +652,7 @@ echo "autobot-slm-backend: $(find autobot-slm-backend -type f | wc -l) files"
 echo "autobot-slm-frontend: $(find autobot-slm-frontend -type f | wc -l) files"
 echo "autobot-npu-worker: $(find autobot-npu-worker -type f | wc -l) files"
 echo "autobot-browser-worker: $(find autobot-browser-worker -type f | wc -l) files"
-echo "autobot-shared: $(find autobot-shared -type f | wc -l) files"
+echo "autobot_shared: $(find autobot_shared -type f | wc -l) files"
 echo "infrastructure: $(find infrastructure -type f | wc -l) files"
 ```
 
@@ -678,7 +678,7 @@ Created new folder structure:
 - [x] `autobot-slm-frontend/` - SLM admin dashboard
 - [x] `autobot-npu-worker/` - NPU worker stub
 - [x] `autobot-browser-worker/` - Browser worker stub
-- [x] `autobot-shared/` - Shared utilities
+- [x] `autobot_shared/` - Shared utilities
 - [x] `infrastructure/` - Dev/ops tooling
 
 Original directories preserved. Ready for Phase 2 (import updates).

@@ -57,9 +57,7 @@ def _make_store() -> AsyncMock:
     store.list_experiments = AsyncMock(return_value=[])
     store.get_baseline = AsyncMock(return_value=None)
     store.set_baseline = AsyncMock()
-    store.get_stats = AsyncMock(
-        return_value=ExperimentStats(total_experiments=0)
-    )
+    store.get_stats = AsyncMock(return_value=ExperimentStats(total_experiments=0))
     return store
 
 

@@ -116,7 +116,9 @@ class ImprovementMetrics:
 
     @property
     def improved(self) -> bool:
-        return self.improvement is not None and self.improvement > _PLATEAU_NO_IMPROVEMENT
+        return (
+            self.improvement is not None and self.improvement > _PLATEAU_NO_IMPROVEMENT
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
@@ -189,7 +191,9 @@ class ApprovalGate:
             )
         return self._redis
 
-    def check_approval_needed(self, improvement_pct: Optional[float], threshold: float) -> bool:
+    def check_approval_needed(
+        self, improvement_pct: Optional[float], threshold: float
+    ) -> bool:
         """Return True when improvement_pct meets or exceeds threshold.
 
         Args:
@@ -298,7 +302,9 @@ class ApprovalGate:
 # ---------------------------------------------------------------------------
 
 
-async def _search_arxiv(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
+async def _search_arxiv(
+    client: httpx.AsyncClient, query: str, max_results: int
+) -> List[SearchResult]:
     """Query the arXiv Atom API and return structured results.
 
     Args:
@@ -317,7 +323,9 @@ async def _search_arxiv(client: httpx.AsyncClient, query: str, max_results: int)
         "sortOrder": "descending",
     }
     try:
-        response = await client.get(_ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT)
+        response = await client.get(
+            _ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT
+        )
         response.raise_for_status()
         return _parse_arxiv_atom(response.text)
     except httpx.HTTPError as exc:
@@ -348,7 +356,9 @@ def _parse_arxiv_atom(xml_text: str) -> List[SearchResult]:
     return results
 
 
-async def _search_github(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
+async def _search_github(
+    client: httpx.AsyncClient, query: str, max_results: int
+) -> List[SearchResult]:
     """Query the GitHub repository search API and return structured results.
 
     Args:
@@ -467,7 +477,9 @@ class AutoResearchAgent:
         )
         self._cancel_event.clear()
 
-        logger.info("AutoResearchAgent: starting session %s for topic %r", session.id, topic)
+        logger.info(
+            "AutoResearchAgent: starting session %s for topic %r", session.id, topic
+        )
         await self._save_session(session)
 
         try:
@@ -513,7 +525,8 @@ class AutoResearchAgent:
             session.status = SessionStatus.FAILED
             session.error_message = str(exc)
             logger.exception(
-                "AutoResearchAgent: session %s failed with unhandled exception", session.id
+                "AutoResearchAgent: session %s failed with unhandled exception",
+                session.id,
             )
         finally:
             session.completed_at = time.time()
@@ -671,7 +684,9 @@ class AutoResearchAgent:
             Experiment ready to be passed to ExperimentRunner.
         """
         hp = HyperParams()
-        known_fields = {f.name for f in dataclasses.fields(HyperParams) if f.name != "extra"}
+        known_fields = {
+            f.name for f in dataclasses.fields(HyperParams) if f.name != "extra"
+        }
         extra: Dict[str, Any] = {}
         for key, value in hypothesis.suggested_hyperparams.items():
             if key in known_fields:
@@ -730,9 +745,7 @@ class AutoResearchAgent:
     # Private: plateau / stop guard
     # ------------------------------------------------------------------
 
-    def _should_continue(
-        self, session: ExperimentSession, plateau_window: int
-    ) -> bool:
+    def _should_continue(self, session: ExperimentSession, plateau_window: int) -> bool:
         """Return True if the loop should continue, False to stop early.
 
         Stops early when the last *plateau_window* iterations all failed to
@@ -782,7 +795,9 @@ class AutoResearchAgent:
             "topic": session.topic,
             "iteration": session.iterations_completed,
             "metrics": metrics.to_dict(),
-            "hypothesis": (session.hypotheses[-1].to_dict() if session.hypotheses else {}),
+            "hypothesis": (
+                session.hypotheses[-1].to_dict() if session.hypotheses else {}
+            ),
         }
         status_key = await self.approval_gate.request_approval(
             session_id=session.id,
@@ -902,9 +917,7 @@ def _extract_themes(search_results: List[SearchResult]) -> List[str]:
         Deduplicated list of theme names found in titles/summaries.
     """
     found: List[str] = []
-    combined_text = " ".join(
-        f"{r.title} {r.summary}" for r in search_results
-    ).lower()
+    combined_text = " ".join(f"{r.title} {r.summary}" for r in search_results).lower()
     for theme, keywords in _THEME_KEYWORDS.items():
         if any(kw in combined_text for kw in keywords):
             found.append(theme)

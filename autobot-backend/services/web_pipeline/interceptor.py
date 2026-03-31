@@ -212,7 +212,9 @@ class XHRInterceptor:
         results: List[InterceptedRequest] = []
         for item in raw_list:
             if not isinstance(item, dict):
-                logger.warning("XHRInterceptor: skipping non-dict capture entry: %r", item)
+                logger.warning(
+                    "XHRInterceptor: skipping non-dict capture entry: %r", item
+                )
                 continue
             req = InterceptedRequest(
                 url=item.get("url", ""),

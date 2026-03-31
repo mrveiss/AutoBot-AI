@@ -28,7 +28,6 @@ from knowledge.search_components.reranking import (
     _cosine_similarity,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -139,9 +138,7 @@ class TestMMRModerateDiversity(unittest.TestCase):
         result_b = _make_result("doc_b", 0.85, emb_b)
         result_c = _make_result("doc_c", 0.7, emb_c)
 
-        reordered = apply_mmr_reorder(
-            [result_a, result_b, result_c], mmr_lambda=0.5
-        )
+        reordered = apply_mmr_reorder([result_a, result_b, result_c], mmr_lambda=0.5)
 
         self.assertEqual(reordered[0]["content"], "doc_a")
         # After selecting doc_a, doc_c (diverse) should be ranked before doc_b (redundant)
@@ -201,8 +198,7 @@ class TestMMRNoEmbedding(unittest.TestCase):
     def test_no_embeddings_preserves_score_order(self):
         """Without embeddings, max_sim=0 for all → pure relevance ordering."""
         results = [
-            {"content": f"doc_{i}", "rerank_score": 1.0 - i * 0.1}
-            for i in range(4)
+            {"content": f"doc_{i}", "rerank_score": 1.0 - i * 0.1} for i in range(4)
         ]
         reordered = apply_mmr_reorder(results, mmr_lambda=0.5)
         scores = [r["rerank_score"] for r in reordered]

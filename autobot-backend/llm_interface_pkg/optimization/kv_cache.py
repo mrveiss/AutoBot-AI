@@ -253,7 +253,10 @@ class LayerKVCache:
             entry.filled_len,
         )
 
-        return entry.k[:, : entry.filled_len, :, :], entry.v[:, : entry.filled_len, :, :]
+        return (
+            entry.k[:, : entry.filled_len, :, :],
+            entry.v[:, : entry.filled_len, :, :],
+        )
 
     def trim_to_length(self, max_len: int) -> None:
         """Trim all layer caches to at most max_len filled positions.
@@ -524,7 +527,9 @@ def _compute_cache_bytes(
     Issue #1964: Extracted helper so both manager methods share the formula.
     """
     # 2 tensors (k and v) per layer
-    return 2 * num_layers * batch_size * max_seq_len * num_heads * head_dim * dtype_bytes
+    return (
+        2 * num_layers * batch_size * max_seq_len * num_heads * head_dim * dtype_bytes
+    )
 
 
 def _max_seq_from_budget(
@@ -541,7 +546,9 @@ def _max_seq_from_budget(
     Issue #1964.
     """
     # bytes_per_position = 2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
-    bytes_per_position = 2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
+    bytes_per_position = (
+        2 * num_layers * batch_size * num_heads * head_dim * dtype_bytes
+    )
     if bytes_per_position == 0:
         return 0
     return max(1, budget_bytes // bytes_per_position)

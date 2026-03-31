@@ -92,11 +92,11 @@ def is_feature_enabled(feature_name: str) -> bool:
     attr = _SUBSYSTEM_FLAG_MAP.get(feature_name)
     if attr is None:
         known = sorted(_SUBSYSTEM_FLAG_MAP)
-        raise ValueError(
-            f"Unknown feature flag '{feature_name}'. Known flags: {known}"
-        )
+        raise ValueError(f"Unknown feature flag '{feature_name}'. Known flags: {known}")
     enabled: bool = getattr(_get_feature_config(), attr)
-    logger.debug("Feature '%s' is %s", feature_name, "enabled" if enabled else "disabled")
+    logger.debug(
+        "Feature '%s' is %s", feature_name, "enabled" if enabled else "disabled"
+    )
     return enabled
 
 
@@ -108,9 +108,7 @@ def get_enabled_features() -> List[str]:
     """
     feature_cfg = _get_feature_config()
     enabled = [
-        name
-        for name, attr in _SUBSYSTEM_FLAG_MAP.items()
-        if getattr(feature_cfg, attr)
+        name for name, attr in _SUBSYSTEM_FLAG_MAP.items() if getattr(feature_cfg, attr)
     ]
     result = sorted(enabled)
     logger.debug("Enabled subsystem features: %s", result)
@@ -139,9 +137,7 @@ def require_feature(feature_name: str) -> Callable[[F], F]:
     # Validate the flag name eagerly so typos surface at import time.
     if feature_name not in _SUBSYSTEM_FLAG_MAP:
         known = sorted(_SUBSYSTEM_FLAG_MAP)
-        raise ValueError(
-            f"Unknown feature flag '{feature_name}'. Known flags: {known}"
-        )
+        raise ValueError(f"Unknown feature flag '{feature_name}'. Known flags: {known}")
 
     def decorator(func: F) -> F:
         @functools.wraps(func)

@@ -17,7 +17,6 @@ from orchestration.sub_workflow import (
 )
 from orchestration.variable_resolver import StepOutput
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -50,13 +49,20 @@ class TestIsSubWorkflowStep:
         assert is_sub_workflow_step(step) is True
 
     def test_regular_step_returns_false(self):
-        assert is_sub_workflow_step({"id": "s1", "type": "step", "action": "run"}) is False
+        assert (
+            is_sub_workflow_step({"id": "s1", "type": "step", "action": "run"}) is False
+        )
 
     def test_missing_type_returns_false(self):
         assert is_sub_workflow_step({"id": "s1", "workflow_id": "wf-child"}) is False
 
     def test_empty_workflow_id_returns_false(self):
-        assert is_sub_workflow_step({"id": "s1", "type": "sub_workflow", "workflow_id": ""}) is False
+        assert (
+            is_sub_workflow_step(
+                {"id": "s1", "type": "sub_workflow", "workflow_id": ""}
+            )
+            is False
+        )
 
     def test_missing_workflow_id_returns_false(self):
         assert is_sub_workflow_step({"id": "s1", "type": "sub_workflow"}) is False
@@ -86,7 +92,10 @@ class TestExtractSubWorkflowStep:
         }
         sub = extract_sub_workflow_step(step)
         assert sub.workflow_id == "wf-pipeline"
-        assert sub.input_mapping == {"path": "${steps.fetch.output.path}", "threshold": "0.8"}
+        assert sub.input_mapping == {
+            "path": "${steps.fetch.output.path}",
+            "threshold": "0.8",
+        }
         assert sub.output_key == "pipeline_result"
         assert sub.step_id == "run-child"
 
@@ -96,7 +105,9 @@ class TestExtractSubWorkflowStep:
 
     def test_empty_workflow_id_raises(self):
         with pytest.raises(ValueError, match="missing 'workflow_id'"):
-            extract_sub_workflow_step({"id": "bad", "type": "sub_workflow", "workflow_id": ""})
+            extract_sub_workflow_step(
+                {"id": "bad", "type": "sub_workflow", "workflow_id": ""}
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -105,10 +116,14 @@ class TestExtractSubWorkflowStep:
 
 
 class TestSubWorkflowExecutorBasic:
-    def _make_executor(self, workflow_def: Optional[Dict[str, Any]]) -> SubWorkflowExecutor:
+    def _make_executor(
+        self, workflow_def: Optional[Dict[str, Any]]
+    ) -> SubWorkflowExecutor:
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value=workflow_def)
-        return SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        return SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
 
     @pytest.mark.asyncio
     async def test_basic_execution_returns_success(self):
@@ -116,7 +131,9 @@ class TestSubWorkflowExecutorBasic:
         executor = self._make_executor(workflow_def)
         sub_step = SubWorkflowStep(workflow_id="wf-child", step_id="invoke")
 
-        result = await executor.execute(sub_step, parent_context={}, parent_step_outputs={})
+        result = await executor.execute(
+            sub_step, parent_context={}, parent_step_outputs={}
+        )
 
         assert result["success"] is True
         assert result["step_id"] == "invoke"
@@ -130,10 +147,14 @@ class TestSubWorkflowExecutorBasic:
             return_value={"status": "failed", "step_results": {}}
         )
         fetcher = MagicMock(return_value=workflow_def)
-        executor = SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        executor = SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
         sub_step = SubWorkflowStep(workflow_id="wf-fail", step_id="invoke")
 
-        result = await executor.execute(sub_step, parent_context={}, parent_step_outputs={})
+        result = await executor.execute(
+            sub_step, parent_context={}, parent_step_outputs={}
+        )
 
         assert result["success"] is False
 
@@ -150,7 +171,9 @@ class TestSubWorkflowExecutorBasic:
         workflow_def = {"steps": []}
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value=workflow_def)
-        executor = SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        executor = SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
         sub_step = SubWorkflowStep(workflow_id="wf-target", step_id="invoke")
 
         await executor.execute(sub_step, parent_context={}, parent_step_outputs={})
@@ -169,7 +192,9 @@ class TestSubWorkflowExecutorVariableMapping:
     def _make_executor(self, workflow_def: Dict[str, Any]) -> tuple:
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value=workflow_def)
-        executor = SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        executor = SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
         return executor, wf_executor
 
     @pytest.mark.asyncio
@@ -199,7 +224,9 @@ class TestSubWorkflowExecutorVariableMapping:
             input_mapping={"dataset_path": "${steps.fetch.output.path}"},
         )
 
-        await executor.execute(sub_step, parent_context={}, parent_step_outputs=parent_outputs)
+        await executor.execute(
+            sub_step, parent_context={}, parent_step_outputs=parent_outputs
+        )
 
         call_kwargs = wf_executor.execute_coordinated_workflow.call_args
         child_ctx = call_kwargs.kwargs["context"]
@@ -221,7 +248,10 @@ class TestSubWorkflowExecutorVariableMapping:
         call_kwargs = wf_executor.execute_coordinated_workflow.call_args
         child_ctx = call_kwargs.kwargs["context"]
         # Unresolvable token is left as-is
-        assert child_ctx["_sub_workflow_inputs"]["key"] == "${steps.missing_step.output.value}"
+        assert (
+            child_ctx["_sub_workflow_inputs"]["key"]
+            == "${steps.missing_step.output.value}"
+        )
 
     @pytest.mark.asyncio
     async def test_no_input_mapping_produces_empty_inputs(self):
@@ -245,7 +275,9 @@ class TestSubWorkflowExecutorVariableMapping:
             output_key="my_custom_key",
         )
 
-        result = await executor.execute(sub_step, parent_context={}, parent_step_outputs={})
+        result = await executor.execute(
+            sub_step, parent_context={}, parent_step_outputs={}
+        )
 
         assert result["output_key"] == "my_custom_key"
 
@@ -260,7 +292,9 @@ class TestSubWorkflowExecutorMaxDepth:
     async def test_max_depth_raises_recursion_error(self):
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value={"steps": []})
-        executor = SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        executor = SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
         sub_step = SubWorkflowStep(workflow_id="wf-deep", step_id="invoke")
 
         with pytest.raises(RecursionError, match="maximum nesting depth"):
@@ -276,7 +310,9 @@ class TestSubWorkflowExecutorMaxDepth:
         """Depth of MAX_NESTING_DEPTH - 1 should not raise."""
         wf_executor = _make_workflow_executor()
         fetcher = MagicMock(return_value={"steps": []})
-        executor = SubWorkflowExecutor(workflow_executor=wf_executor, workflow_fetcher=fetcher)
+        executor = SubWorkflowExecutor(
+            workflow_executor=wf_executor, workflow_fetcher=fetcher
+        )
         sub_step = SubWorkflowStep(workflow_id="wf-near-limit", step_id="invoke")
 
         result = await executor.execute(

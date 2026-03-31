@@ -360,7 +360,9 @@ class SystemMetricsCollector:
         Returns:
             Async Redis client or None if unavailable
         """
-        kb_redis_client = await get_redis_client(database="knowledge", async_client=True)
+        kb_redis_client = await get_redis_client(
+            database="knowledge", async_client=True
+        )
         return kb_redis_client
 
     async def _collect_kb_vector_metrics(

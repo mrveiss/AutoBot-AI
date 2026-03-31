@@ -5,9 +5,12 @@ const { chromium } = require('playwright');
  * Tests actual UI components and user interactions
  */
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://172.16.168.21:5173';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://172.16.168.20:8001';
+
 const CONFIG = {
-    frontendUrl: 'http://172.16.168.21:5173',
-    backendUrl: 'http://172.16.168.20:8001',
+    frontendUrl: FRONTEND_URL,
+    backendUrl: BACKEND_URL,
     timeout: 30000,
     screenshotDir: 'tests/screenshots'
 };

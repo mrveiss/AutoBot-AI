@@ -77,13 +77,11 @@ class StepOutput:
 
         status = "completed" if result.get("success") else "failed"
 
-        metadata = {
-            k: v
-            for k, v in result.items()
-            if k not in ("stdout", "success")
-        }
+        metadata = {k: v for k, v in result.items() if k not in ("stdout", "success")}
 
-        return cls(status=status, stdout=stdout, parsed_json=parsed_json, metadata=metadata)
+        return cls(
+            status=status, stdout=stdout, parsed_json=parsed_json, metadata=metadata
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +143,9 @@ class VariableResolver:
 
         def _replace(match: re.Match) -> str:
             step_id, accessor = match.group(1), match.group(2)
-            value = self._resolve_accessor(step_id, accessor, step_outputs, match.group(0))
+            value = self._resolve_accessor(
+                step_id, accessor, step_outputs, match.group(0)
+            )
             if value is _UNSET:
                 return match.group(0)
             if isinstance(value, (dict, list)):
@@ -194,7 +194,7 @@ class VariableResolver:
             return self._coerce_output(step_output)
 
         if accessor.startswith("output."):
-            path = accessor[len("output."):]
+            path = accessor[len("output.") :]
             root = step_output.parsed_json
             if root is None:
                 logger.warning(
@@ -207,7 +207,7 @@ class VariableResolver:
             return self._navigate(root, path, original_token)
 
         if accessor.startswith("metadata."):
-            path = accessor[len("metadata."):]
+            path = accessor[len("metadata.") :]
             return self._navigate(step_output.metadata, path, original_token)
 
         logger.warning(

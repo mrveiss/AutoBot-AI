@@ -64,7 +64,7 @@ Common stale patterns:
 | `from src.config` | `from config` |
 | `import src.api` | `import api` |
 
-**Shared code moved to `autobot-shared/`**:
+**Shared code moved to `autobot_shared/`**:
 - `src.utils.redis_client` → `autobot_shared.redis_client`
 - `src.utils.logging` → `autobot_shared.logging`
 - `src.config.ssot_config` → `autobot_shared.ssot_config`

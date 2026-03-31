@@ -439,7 +439,7 @@ async def _scan_filesystem_imports(
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
     # Prioritize source directories over infrastructure/tooling (#1197)
-    _priority = {"autobot-backend", "autobot-shared"}
+    _priority = {"autobot-backend", "autobot_shared"}
     python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)
     for py_file in python_files[:1500]:  # Cover all backend+shared files
         await _analyze_file_imports(

@@ -24,7 +24,7 @@
   vars:
     backend_install_dir: /opt/autobot
     backend_code_dir: "{{ backend_install_dir }}/autobot-backend"
-    backend_shared_dir: "{{ backend_install_dir }}/autobot-shared"
+    backend_shared_dir: "{{ backend_install_dir }}/autobot_shared"
     backend_user: autobot
     backend_group: autobot
     backend_port: 8001

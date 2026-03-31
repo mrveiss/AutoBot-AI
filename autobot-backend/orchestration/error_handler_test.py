@@ -23,7 +23,6 @@ from .error_handler import (
     WorkflowCheckpointManager,
 )
 
-
 # ---------------------------------------------------------------------------
 # StepErrorConfig tests
 # ---------------------------------------------------------------------------
@@ -119,7 +118,9 @@ class TestWorkflowCheckpointManager:
 
     def test_save_and_load(self) -> None:
         mgr = self._manager_with_fake_redis()
-        cp = StepCheckpoint(step_id="step1", status="completed", output={"success": True})
+        cp = StepCheckpoint(
+            step_id="step1", status="completed", output={"success": True}
+        )
         mgr.save("wf-1", cp)
 
         loaded = mgr.load_all("wf-1")
@@ -134,7 +135,9 @@ class TestWorkflowCheckpointManager:
     def test_save_multiple_steps(self) -> None:
         mgr = self._manager_with_fake_redis()
         for i in range(3):
-            mgr.save("wf-2", StepCheckpoint(step_id=f"s{i}", status="completed", output={}))
+            mgr.save(
+                "wf-2", StepCheckpoint(step_id=f"s{i}", status="completed", output={})
+            )
         loaded = mgr.load_all("wf-2")
         assert set(loaded.keys()) == {"s0", "s1", "s2"}
 
@@ -261,7 +264,11 @@ class TestStepErrorHandler:
 
     def test_invalid_error_config_falls_back_to_abort(self) -> None:
         handler = StepErrorHandler()
-        step = {"id": "s1", "action": "run", "error_config": {"action": "invalid_action"}}
+        step = {
+            "id": "s1",
+            "action": "run",
+            "error_config": {"action": "invalid_action"},
+        }
         outcome = self._run(
             handler.handle_error(step, ValueError("oops"), 1, {"workflow_id": "wf"})
         )

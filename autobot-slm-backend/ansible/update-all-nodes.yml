@@ -144,7 +144,7 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot-shared/ }
+        - { name: shared, path: autobot_shared/ }
         - { name: backend, path: autobot-backend/ }
         - { name: frontend, path: autobot-frontend/ }
         - { name: npu-worker, path: autobot-npu-worker/ }
@@ -239,7 +239,7 @@
     # =========================================================================
     # SHARED LIBRARY
     # =========================================================================
-    - name: "[PLAY 1] Shared | Deploy autobot-shared"
+    - name: "[PLAY 1] Shared | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"
@@ -479,7 +479,7 @@
     # =========================================================================
     # SHARED LIBRARY - All nodes with Python services
     # =========================================================================
-    - name: "[PLAY 2] Shared | Deploy autobot-shared"
+    - name: "[PLAY 2] Shared | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"

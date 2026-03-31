@@ -141,7 +141,9 @@ def apply_mmr_reorder(
 
             if has_embeddings and embeddings[i] is not None:
                 # Max cosine similarity to any already-selected document
-                selected_with_emb = [s for s in selected if s.get(embedding_key) is not None]
+                selected_with_emb = [
+                    s for s in selected if s.get(embedding_key) is not None
+                ]
                 if selected_with_emb:
                     max_sim = max(
                         _cosine_similarity(embeddings[i], sel[embedding_key])

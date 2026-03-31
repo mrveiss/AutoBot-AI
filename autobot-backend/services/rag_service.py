@@ -371,7 +371,9 @@ class RAGService:
             learner = get_retrieval_learner()
             await learner.record_pattern_outcome(pattern_hash, success)
         except Exception as exc:
-            logger.debug("RetrievalLearner outcome recording failed (non-fatal): %s", exc)
+            logger.debug(
+                "RetrievalLearner outcome recording failed (non-fatal): %s", exc
+            )
 
     async def _emit_retrieval_feedback(
         self,

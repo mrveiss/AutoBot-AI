@@ -3,6 +3,8 @@
  * Test the exact frontend workflow integration scenario
  */
 
+const BACKEND_URL = process.env.BACKEND_URL || 'https://172.16.168.20:8443';
+
 async function testFrontendWorkflowIntegration() {
     console.log('🧪 Testing Frontend Workflow Integration');
     console.log('=====================================');
@@ -20,7 +22,7 @@ async function testFrontendWorkflowIntegration() {
 
         try {
             // Exact same call as ChatInterface.vue makes
-            const workflowResponse = await fetch('https://172.16.168.20:8443/api/workflow/execute', {
+            const workflowResponse = await fetch(`${BACKEND_URL}/api/workflow/execute`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,7 +75,7 @@ async function testFrontendWorkflowIntegration() {
                     console.log(`   🔄 Checking workflow status...`);
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
 
-                    const statusResponse = await fetch(`https://172.16.168.20:8443/api/workflow/workflow/${workflowResult.workflow_id}/status`);
+                    const statusResponse = await fetch(`${BACKEND_URL}/api/workflow/workflow/${workflowResult.workflow_id}/status`);
                     if (statusResponse.ok) {
                         const statusData = await statusResponse.json();
                         console.log(`   ✅ Workflow status: ${statusData.status}`);

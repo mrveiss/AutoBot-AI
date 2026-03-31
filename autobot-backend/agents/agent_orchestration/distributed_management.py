@@ -424,7 +424,9 @@ class DistributedAgentManager:
                 reassigned += 1
 
         if reassigned:
-            logger.info("Work-stealing: reassigned %d stale task(s) this cycle", reassigned)
+            logger.info(
+                "Work-stealing: reassigned %d stale task(s) this cycle", reassigned
+            )
         return reassigned
 
     def get_statistics(self) -> Dict[str, Any]:

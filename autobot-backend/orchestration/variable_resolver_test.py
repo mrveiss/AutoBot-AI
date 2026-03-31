@@ -6,8 +6,11 @@
 import json
 from typing import Any, Dict
 
-from orchestration.variable_resolver import StepOutput, VariableResolver, resolve_variables
-
+from orchestration.variable_resolver import (
+    StepOutput,
+    VariableResolver,
+    resolve_variables,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -156,7 +159,12 @@ class TestVariableResolverNested:
         self.resolver = VariableResolver()
         self.outputs = {
             "fetch_data": _json_output(
-                {"items": [{"name": "alpha", "score": 10}, {"name": "beta", "score": 20}]}
+                {
+                    "items": [
+                        {"name": "alpha", "score": 10},
+                        {"name": "beta", "score": 20},
+                    ]
+                }
             )
         }
 
@@ -177,9 +185,7 @@ class TestVariableResolverNested:
         assert self.resolver.resolve("${steps.s.output.a.b.c}", outputs) == "deep"
 
     def test_nested_array_sub_object(self):
-        outputs = {
-            "s": _json_output({"results": [{"data": {"value": 99}}]})
-        }
+        outputs = {"s": _json_output({"results": [{"data": {"value": 99}}]})}
         result = self.resolver.resolve(
             "${steps.s.output.results[0].data.value}", outputs
         )

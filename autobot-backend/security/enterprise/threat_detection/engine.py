@@ -133,7 +133,10 @@ class ThreatDetectionEngine:
         try:
             self.learner: Optional[ThreatDetectionLearner] = ThreatDetectionLearner()
         except Exception as exc:
-            logger.error("Failed to initialise ThreatDetectionLearner (Redis unavailable?): %s", exc)
+            logger.error(
+                "Failed to initialise ThreatDetectionLearner (Redis unavailable?): %s",
+                exc,
+            )
             self.learner = None
 
     def _load_config(self) -> Dict:
@@ -370,7 +373,9 @@ class ThreatDetectionEngine:
                     TimingConstants.HOURLY_INTERVAL
                 )  # Cleanup every hour
                 await self._cleanup_old_data()
-                await asyncio.get_event_loop().run_in_executor(None, self._run_learner_consolidation)
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self._run_learner_consolidation
+                )
             except Exception as e:
                 logger.error("Error in periodic cleanup: %s", e)
 
@@ -415,7 +420,9 @@ class ThreatDetectionEngine:
 
         return detected_threats
 
-    def _apply_learner_confidence(self, threat: ThreatEvent, pattern_id: str) -> ThreatEvent:
+    def _apply_learner_confidence(
+        self, threat: ThreatEvent, pattern_id: str
+    ) -> ThreatEvent:
         """Adjust threat confidence using learner's historical precision. Issue #2110."""
         if self.learner is None:
             return threat
@@ -537,7 +544,9 @@ class ThreatDetectionEngine:
 
             self._record_mitigation(threat, action, success)
 
-    def _record_mitigation(self, threat: ThreatEvent, action: str, success: bool) -> None:
+    def _record_mitigation(
+        self, threat: ThreatEvent, action: str, success: bool
+    ) -> None:
         """Record mitigation outcome to the learner. Issue #2110."""
         if self.learner is None:
             return

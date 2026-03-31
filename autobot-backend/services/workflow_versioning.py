@@ -174,7 +174,9 @@ class WorkflowVersionStore:
         """
         redis = get_redis_client(async_client=True, database="workflows")
         if redis is None:
-            logger.error("delete_version: Redis unavailable for workflow %s", workflow_id)
+            logger.error(
+                "delete_version: Redis unavailable for workflow %s", workflow_id
+            )
             return False
 
         deleted = await redis.delete(_version_key(workflow_id, version))
@@ -183,7 +185,11 @@ class WorkflowVersionStore:
         if deleted:
             logger.info("Deleted version %d for workflow %s", version, workflow_id)
         else:
-            logger.warning("delete_version: version %d not found for workflow %s", version, workflow_id)
+            logger.warning(
+                "delete_version: version %d not found for workflow %s",
+                version,
+                workflow_id,
+            )
 
         return bool(deleted)
 
@@ -207,7 +213,9 @@ class WorkflowVersionStore:
         """
         redis = get_redis_client(async_client=True, database="workflows")
         if redis is None:
-            logger.error("list_versions: Redis unavailable for workflow %s", workflow_id)
+            logger.error(
+                "list_versions: Redis unavailable for workflow %s", workflow_id
+            )
             return []
 
         # zrevrange returns members ordered by score descending (newest version first)
@@ -231,7 +239,9 @@ class WorkflowVersionStore:
 
         return summaries
 
-    async def get_version(self, workflow_id: str, version: int) -> Optional[WorkflowVersion]:
+    async def get_version(
+        self, workflow_id: str, version: int
+    ) -> Optional[WorkflowVersion]:
         """
         Retrieve the full snapshot for *workflow_id* at *version* (#2145).
 
@@ -249,7 +259,11 @@ class WorkflowVersionStore:
 
         raw = await redis.get(_version_key(workflow_id, version))
         if raw is None:
-            logger.warning("get_version: version %d not found for workflow %s", version, workflow_id)
+            logger.warning(
+                "get_version: version %d not found for workflow %s",
+                version,
+                workflow_id,
+            )
             return None
 
         return WorkflowVersion.from_dict(json.loads(raw))
@@ -308,7 +322,9 @@ class WorkflowVersionStore:
         if wv1 is None or wv2 is None:
             missing = v1 if wv1 is None else v2
             logger.warning(
-                "diff_versions: version %d not found for workflow %s", missing, workflow_id
+                "diff_versions: version %d not found for workflow %s",
+                missing,
+                workflow_id,
             )
             return None
 

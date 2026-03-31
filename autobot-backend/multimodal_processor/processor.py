@@ -358,9 +358,7 @@ class UnifiedMultiModalProcessor:
 
         return embeddings, modalities, confidences, result_data
 
-    def _normalize_embeddings(
-        self, embeddings: list
-    ) -> list:
+    def _normalize_embeddings(self, embeddings: list) -> list:
         """Normalize embeddings to target dimension (Issue #315 - extracted method)"""
         torch = _get_torch()
 
@@ -391,9 +389,7 @@ class UnifiedMultiModalProcessor:
             )
         return attended_output, attention_weights
 
-    def _compute_fused_embedding(
-        self, weighted_embeddings: Any
-    ) -> Any:
+    def _compute_fused_embedding(self, weighted_embeddings: Any) -> Any:
         """Compute final fused embedding (Issue #315 - extracted method)"""
         torch = _get_torch()
 
