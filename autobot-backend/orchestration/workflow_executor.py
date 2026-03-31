@@ -10,6 +10,7 @@ Contains workflow execution, step coordination, and agent interaction handling.
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
 Issue #2140: DAG-based execution with condition evaluation and branch routing.
+Issue #2154: Resume-from-failure with per-step error configs and checkpoints.
 """
 
 import asyncio
@@ -28,6 +29,14 @@ from constants.threshold_constants import (
 from retry_mechanism import RetryStrategy, retry_async
 
 from .dag_executor import DAGExecutor, DAGExecutionContext, DAGNode, build_dag, workflow_has_condition_nodes
+from .error_handler import (
+    BackoffStrategy,
+    ErrorHandlerResult,
+    StepErrorAction,
+    StepErrorConfig,
+    StepErrorHandler,
+    WorkflowCheckpointManager,
+)
 from .types import AgentInteraction, AgentProfile
 
 logger = logging.getLogger(__name__)
@@ -42,6 +51,8 @@ class WorkflowExecutor:
     - Agent reservation and release
     - Performance metric updates
     - Agent interaction recording
+    - Per-step error handling (retry, skip, fallback, pause, abort) (#2154)
+    - Checkpoint-based resume from the last successful step (#2154)
     """
 
     def __init__(
@@ -51,6 +62,8 @@ class WorkflowExecutor:
         reserve_agent_callback: Callable[[str], None],
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
+        checkpoint_manager: Optional[WorkflowCheckpointManager] = None,
+        error_handler: Optional[StepErrorHandler] = None,
     ):
         """
         Initialize the workflow executor.
@@ -61,12 +74,18 @@ class WorkflowExecutor:
             reserve_agent_callback: Function to reserve an agent
             release_agent_callback: Function to release an agent
             update_performance_callback: Function to update agent performance
+            checkpoint_manager: Optional checkpoint manager for resume-from-failure.
+                Defaults to a new WorkflowCheckpointManager when not provided.
+            error_handler: Optional per-step error handler.
+                Defaults to a new StepErrorHandler when not provided.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
         self._reserve_agent = reserve_agent_callback
         self._release_agent = release_agent_callback
         self._update_performance = update_performance_callback
+        self._checkpoint_manager = checkpoint_manager or WorkflowCheckpointManager()
+        self._error_handler = error_handler or StepErrorHandler()
 
     def _group_steps_by_dependency(
         self, steps: List[Dict[str, Any]]
@@ -140,23 +159,54 @@ class WorkflowExecutor:
         step: Dict[str, Any],
         execution_context: Dict[str, Any],
         context: Dict[str, Any],
+        checkpoints: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Execute a single workflow step with agent management (Issue #398: extracted)."""
+        """Execute a single workflow step with agent management.
+
+        Issue #398: extracted.
+        Issue #2154: Added checkpoint skip, per-step error config, and retry loop.
+
+        Args:
+            step: Step definition dict.
+            execution_context: Shared mutable execution state.
+            context: Workflow-level context passed down from the caller.
+            checkpoints: Pre-loaded checkpoint map for this execution (step_id ->
+                StepCheckpoint).  When a step_id is present the step is skipped
+                and its previous output is replayed.
+        """
+        step_id = step["id"]
         step_start_time = time.time()
+
+        # --- Resume: skip already-completed steps (#2154) ---
+        if checkpoints and step_id in checkpoints:
+            cp = checkpoints[step_id]
+            logger.info("Step %s: replaying checkpoint (skipping re-execution)", step_id)
+            step["status"] = "completed"
+            step["result"] = cp.output
+            execution_context["step_results"][step_id] = cp.output
+            return
+
         agent_id = step.get("assigned_agent")
+        error_config: StepErrorConfig = step.get("error_config") or StepErrorConfig()
+        execution_id: str = execution_context.get("workflow_id", "unknown")
 
         if agent_id:
             self._reserve_agent(agent_id)
 
         try:
-            step_result = await self._execute_coordinated_step(
-                step, execution_context, context
+            step_result = await self._execute_step_with_error_handling(
+                step, execution_context, context, error_config, execution_id
             )
-
             step["status"] = "completed" if step_result.get("success") else "failed"
             step["execution_time"] = time.time() - step_start_time
             step["result"] = step_result
-            execution_context["step_results"][step["id"]] = step_result
+            execution_context["step_results"][step_id] = step_result
+
+            # Persist checkpoint on success (#2154)
+            if step_result.get("success"):
+                self._checkpoint_manager.save_checkpoint(
+                    execution_id, step_id, step_result
+                )
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
@@ -169,12 +219,97 @@ class WorkflowExecutor:
             if agent_id:
                 self._release_agent(agent_id)
 
+    async def _execute_step_with_error_handling(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+        error_config: StepErrorConfig,
+        execution_id: str,
+    ) -> Dict[str, Any]:
+        """Run one step, consulting the StepErrorConfig on each failure.
+
+        Implements the retry loop for RETRY action so that the circuit-breaker
+        decorator on _execute_coordinated_step can still fire on individual
+        attempts.  Non-retryable actions (SKIP, FALLBACK, PAUSE, ABORT) exit
+        after the first failure.
+
+        Issue #2154.
+
+        Args:
+            step: Step definition dict.
+            execution_context: Shared mutable execution state.
+            context: Workflow-level context.
+            error_config: Per-step error handling policy.
+            execution_id: Workflow execution id (used for pause/abort logging).
+
+        Returns:
+            Step result dict with at least a ``"success"`` key.
+        """
+        step_id = step["id"]
+        attempt = 0
+        last_error: Optional[Exception] = None
+
+        while True:
+            attempt += 1
+            try:
+                result = await self._execute_coordinated_step(
+                    step, execution_context, context
+                )
+                return result
+            except Exception as exc:
+                last_error = exc
+                handler_result: ErrorHandlerResult = await self._error_handler.handle_error(
+                    step_id, exc, error_config, attempt
+                )
+
+                if handler_result.action == StepErrorAction.SKIP:
+                    return {
+                        "success": False,
+                        "skipped": True,
+                        "error": str(exc),
+                        "step_id": step_id,
+                    }
+
+                if handler_result.action == StepErrorAction.FALLBACK:
+                    execution_context["fallback_step_id"] = handler_result.fallback_step_id
+                    return {
+                        "success": False,
+                        "fallback": handler_result.fallback_step_id,
+                        "error": str(exc),
+                        "step_id": step_id,
+                    }
+
+                if handler_result.action == StepErrorAction.PAUSE:
+                    execution_context["status"] = "paused"
+                    logger.warning(
+                        "Workflow %s paused at step %s", execution_id, step_id
+                    )
+                    return {
+                        "success": False,
+                        "paused": True,
+                        "error": str(exc),
+                        "step_id": step_id,
+                    }
+
+                if not handler_result.should_continue:
+                    # ABORT or RETRY exhausted
+                    return {
+                        "success": False,
+                        "error": handler_result.error_message or str(exc),
+                        "step_id": step_id,
+                    }
+
+                # RETRY: handler already slept; loop back for the next attempt
+
     async def execute_coordinated_workflow(
         self,
         workflow_id: str,
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
         edges: Optional[List[Dict[str, Any]]] = None,
+        execution_id: Optional[str] = None,
+        resume: bool = False,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -184,17 +319,38 @@ class WorkflowExecutor:
         Plain linear workflows continue to use the existing dependency-group
         path for full backward compatibility.  Issue #2140.
 
+        Issue #2154: Added ``resume`` and ``execution_id`` parameters.  When
+        ``resume=True`` the checkpoint manager is queried for already-completed
+        steps; those steps are replayed from their saved outputs without being
+        re-executed.  On successful completion all checkpoints are cleared.
+
         Args:
             workflow_id: Workflow identifier
             steps: List of enhanced workflow steps
             context: Workflow context
             edges: Optional list of DAG edge dicts.  When provided together
                    with condition-type steps, DAG execution is used.
+            execution_id: Stable identifier for this execution run.  Defaults
+                to ``workflow_id`` when not supplied.  Used as the checkpoint
+                namespace so retries share the same checkpoint bucket.
+            resume: When True, load existing checkpoints and skip completed steps.
 
         Returns:
             Execution context with results
         """
+        exec_id = execution_id or workflow_id
         effective_edges = edges or []
+
+        # Load checkpoints for resume (#2154)
+        checkpoints = self._checkpoint_manager.load_checkpoints(exec_id) if resume else {}
+        if checkpoints:
+            logger.info(
+                "Workflow %s: resuming from %d checkpoint(s): %s",
+                exec_id,
+                len(checkpoints),
+                sorted(checkpoints.keys()),
+            )
+
         if workflow_has_condition_nodes(steps, effective_edges):
             logger.info(
                 "Workflow %s: condition nodes detected — using DAG executor (#2140)",
@@ -203,7 +359,7 @@ class WorkflowExecutor:
             return await self._execute_dag_workflow(workflow_id, steps, effective_edges, context)
 
         execution_context = {
-            "workflow_id": workflow_id,
+            "workflow_id": exec_id,
             "agents_involved": set(),
             "interactions": [],
             "step_results": {},
@@ -221,9 +377,18 @@ class WorkflowExecutor:
             )
 
             for group in groups:
-                await self._execute_step_group(group, execution_context, context)
+                await self._execute_step_group(group, execution_context, context, checkpoints)
+
+                # Stop processing if a step paused or aborted the workflow (#2154)
+                if execution_context.get("status") in ("paused", "failed"):
+                    break
 
             self._determine_workflow_status(steps, execution_context)
+
+            # Clear checkpoints after a fully successful run (#2154)
+            if execution_context.get("status") == "completed":
+                self._checkpoint_manager.clear_checkpoints(exec_id)
+
             return execution_context
 
         except Exception as e:
@@ -303,15 +468,18 @@ class WorkflowExecutor:
         group: List[Dict[str, Any]],
         execution_context: Dict[str, Any],
         context: Dict[str, Any],
+        checkpoints: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Execute a group of steps concurrently using asyncio.gather.
 
         Steps within a group have no inter-dependencies and are safe to run
         in parallel.  Issue #2172.  Issue #2204: collect results per-step and
         merge after gather to avoid concurrent mutation of shared sets/lists.
+        Issue #2154: checkpoints forwarded to _execute_step_with_agent so that
+        already-completed steps are skipped.
         """
         if len(group) == 1:
-            await self._execute_step_with_agent(group[0], execution_context, context)
+            await self._execute_step_with_agent(group[0], execution_context, context, checkpoints)
             return
 
         logger.info(
@@ -325,12 +493,13 @@ class WorkflowExecutor:
                 "step_results": {},
                 "agents_involved": set(),
                 "interactions": [],
+                "workflow_id": execution_context.get("workflow_id", ""),
             }
             for _ in group
         ]
         await asyncio.gather(
             *(
-                self._execute_step_with_agent(step, iso_ctx, context)
+                self._execute_step_with_agent(step, iso_ctx, context, checkpoints)
                 for step, iso_ctx in zip(group, isolated_contexts)
             )
         )
@@ -338,6 +507,9 @@ class WorkflowExecutor:
             execution_context["step_results"].update(iso_ctx["step_results"])
             execution_context["agents_involved"].update(iso_ctx["agents_involved"])
             execution_context["interactions"].extend(iso_ctx["interactions"])
+            # Propagate pause/abort status from any parallel step (#2154)
+            if iso_ctx.get("status") in ("paused", "failed"):
+                execution_context["status"] = iso_ctx["status"]
 
     def _create_agent_interaction(
         self,
