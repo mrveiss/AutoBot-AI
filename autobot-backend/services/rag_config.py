@@ -46,6 +46,8 @@ class RAGConfig:
     reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
+    # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
+    mmr_lambda: float = model_config.RAG_MMR_LAMBDA
 
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
@@ -81,7 +83,14 @@ class RAGConfig:
     enable_smart_category_selection: bool = True
 
     def __post_init__(self):
-        """Validate configuration values."""
+        """Validate configuration values and propagate mmr_lambda to rerank_weights.
+
+        Issue #2090: top-level mmr_lambda is the canonical knob for the MMR pass.
+        When it differs from rerank_weights.mmr_lambda (i.e. user set it at the
+        top level only), propagate it into rerank_weights so ResultReranker sees it.
+        """
+        if self.mmr_lambda != 0.0 and self.rerank_weights.mmr_lambda == 0.0:
+            self.rerank_weights.mmr_lambda = self.mmr_lambda
         self._validate()
 
     def _validate(self):
@@ -135,6 +144,9 @@ class RAGConfig:
                 f"ewc_consolidation_interval must be >= 1, got {self.ewc_consolidation_interval}"
             )
 
+        if not 0.0 <= self.mmr_lambda <= 1.0:
+            raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
+
     @classmethod
     def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
         """
@@ -186,7 +198,10 @@ class RAGConfig:
                 "edge": self.rerank_weights.edge,
                 "recency": self.rerank_weights.recency,
                 "staleness": self.rerank_weights.staleness,
+                "mmr_lambda": self.rerank_weights.mmr_lambda,
             },
+            # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
+            "mmr_lambda": self.mmr_lambda,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
