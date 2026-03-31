@@ -52,6 +52,9 @@
 
 # ============================================================
 # VNC + desktop environment (opt-in, default false)  (#1363)
+# Guard: install_vnc must be true AND node must have 'vnc' in
+# node_roles (when defined).  Prevents VNC deployment on headless
+# Playwright workers like .25.  (#2989)
 # ============================================================
 - name: "Browser | Install desktop environment and VNC"
   apt:
@@ -64,7 +67,9 @@
       - xvfb
     state: present
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'packages', 'vnc']
 
 # ============================================================
@@ -120,7 +125,7 @@
   register: _browser_worker_dir
   tags: ['browser', 'packages']
 
-# (#2872) Replaced failed_when: false with a stat guard — npm install
+# (#2872) Replaced failed_when: false with a stat guard -- npm install
 # failures on a deployed worker directory must surface.
 - name: "Browser | Install Node.js dependencies for browser worker"
   npm:
@@ -138,7 +143,9 @@
     group: autobot
     mode: '0700'
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'directories', 'vnc']
 
 - name: "Browser | Check if VNC secrets file exists"
@@ -146,7 +153,9 @@
     path: /etc/autobot/vnc-secrets.env
   register: browser_vnc_secrets_stat
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'vnc']
 
 - name: "Browser | Generate secure VNC password"
@@ -160,6 +169,7 @@
   become: yes
   when:
     - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
     - not (browser_vnc_secrets_stat.stat.exists | default(false))
   tags: ['browser', 'vnc']
 
@@ -170,7 +180,9 @@
   register: browser_vnc_password
   changed_when: false
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'vnc']
 
 - name: "Browser | Set VNC password file"
@@ -182,6 +194,7 @@
   become: yes
   when:
     - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
     - browser_vnc_password.stdout | default('') | length > 0
   tags: ['browser', 'vnc']
 
@@ -191,7 +204,9 @@
     dest: /etc/systemd/system/autobot-vnc.service
     mode: '0644'
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   notify:
     - reload systemd
     - restart vnc
@@ -216,7 +231,9 @@
     from_ip: "{{ network_subnet }}"
     comment: "VNC Server"
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   notify: reload firewall
   tags: ['browser', 'firewall', 'vnc']
 
@@ -237,7 +254,9 @@
     enabled: yes
     daemon_reload: yes
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'service', 'vnc']
 
 - name: "Browser | Enable Playwright service"
