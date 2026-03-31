@@ -297,7 +297,7 @@ class TestExecuteTraining:
         mock_process.returncode = 0
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            result = await runner._execute_training(exp)
+            await runner._execute_training(exp)
 
         # Parser called with empty string
         parser.parse.assert_called_once()
@@ -317,7 +317,7 @@ class TestExecuteTraining:
         mock_process.returncode = 0
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            result = await runner._execute_training(exp)
+            await runner._execute_training(exp)
 
         parser.parse.assert_called_once()
         call_args = parser.parse.call_args

@@ -18,7 +18,6 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from autobot_shared.redis_client import get_redis_client
 from config import UnifiedConfig
 
 # Issue #394: Import from architectural_analysis package

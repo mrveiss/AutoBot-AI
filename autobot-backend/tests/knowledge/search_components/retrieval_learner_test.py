@@ -305,7 +305,7 @@ class TestGetMatchingPattern:
         """When no exact (complexity+categories) match, try complexity-only key."""
         redis = _make_redis_mock()
         # Exact match key returns empty; complexity-only returns valid pattern.
-        exact_hash = _compute_pattern_hash("moderate", ["sys"])
+        _compute_pattern_hash("moderate", ["sys"])
         fallback_hash = _compute_pattern_hash("moderate", [])
         pattern = RetrievalPattern(
             pattern_hash=fallback_hash,
