@@ -15,6 +15,7 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -837,7 +838,9 @@ async def send_message(
     llm_service = get_llm_service(request)
     memory_interface = get_memory_interface(request)
 
-    # Process the chat message with a 30-second timeout (Issue #1797)
+    # Process the chat message with a configurable timeout (Issue #1907).
+    # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
+    chat_timeout = float(os.getenv("AUTOBOT_CHAT_TIMEOUT", "30.0"))
     try:
         response_data = await asyncio.wait_for(
             process_chat_message(
@@ -849,10 +852,10 @@ async def send_message(
                 config,
                 request_id,
             ),
-            timeout=30.0,
+            timeout=chat_timeout,
         )
     except asyncio.TimeoutError:
-        logger.error("[%s] Chat message processing timed out after 30s", request_id)
+        logger.error("[%s] Chat message processing timed out after %.1fs", request_id, chat_timeout)
         (
             AutoBotError,
             InternalError,
