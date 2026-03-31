@@ -65,6 +65,12 @@ from .token_optimizer import (
     TokenSavingsRecord,
     get_token_optimizer,
 )
+from .attention_backend import (
+    AttentionBackend as ModelAttentionBackend,
+    AttentionBackendSelector,
+    ModelConfig as AttentionModelConfig,
+    get_attention_backend_selector,
+)
 
 __all__ = [
     # Router
@@ -126,4 +132,9 @@ __all__ = [
     "LayerKVCache",
     "RTX_4070_KV_CACHE_FRACTION",
     "RTX_4070_VRAM_BYTES",
+    # Attention Backend Selector (Issue #1951)
+    "ModelAttentionBackend",
+    "AttentionBackendSelector",
+    "AttentionModelConfig",
+    "get_attention_backend_selector",
 ]
