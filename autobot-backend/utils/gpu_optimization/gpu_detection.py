@@ -10,7 +10,9 @@ Contains GPU availability checking and capability detection.
 """
 
 import functools
+import json
 import logging
+import platform
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -21,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 # Stashed GPU name from initial nvidia-smi probe (#2222)
 _nvidia_gpu_name: Optional[str] = None
+
+# Stashed Apple GPU info from initial system_profiler probe (#2014)
+_apple_gpu_info: Optional[Dict[str, Any]] = None
 
 # NVIDIA GPU families known to have tensor cores
 _TENSOR_CORE_FAMILIES = {
@@ -88,6 +93,49 @@ def _check_intel_gpu() -> bool:
     return _check_sysfs_vendor("0x8086")
 
 
+def _check_apple_gpu() -> Optional[Dict[str, Any]]:
+    """Check for Apple Silicon GPU via system_profiler on macOS.
+
+    Issue #2014: Returns a dict with chip name, Metal support, and
+    GPU core count, or None if not on macOS / no Apple GPU found.
+    """
+    if platform.system() != "Darwin":
+        return None
+    try:
+        result = subprocess.run(
+            ["system_profiler", "SPDisplaysDataType", "-json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        displays = data.get("SPDisplaysDataType", [])
+        for gpu in displays:
+            vendor = gpu.get("sppci_vendor", "").lower()
+            chip = gpu.get("sppci_model", "")
+            if "apple" in vendor or chip.startswith("Apple"):
+                cores_str = gpu.get("sppci_cores", "")
+                try:
+                    gpu_cores = int(cores_str)
+                except (ValueError, TypeError):
+                    gpu_cores = 0
+                metal_support = gpu.get("spdisplays_metal", "")
+                return {
+                    "name": chip,
+                    "gpu_cores": gpu_cores,
+                    "metal_supported": "supported" in metal_support.lower()
+                    if metal_support
+                    else False,
+                }
+        return None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    except (json.JSONDecodeError, KeyError, Exception):
+        return None
+
+
 def _check_sysfs_vendor(vendor_id: str) -> bool:
     """Check sysfs DRM devices for a specific PCI vendor ID."""
     drm_path = Path("/sys/class/drm")
@@ -121,7 +169,7 @@ def _detect_vendor() -> Optional[str]:
     _detect_nvidia_capabilities() can skip its redundant nvidia-smi call.
     Use _detect_vendor.cache_clear() to reset (e.g. in tests).
     """
-    global _nvidia_gpu_name
+    global _nvidia_gpu_name, _apple_gpu_info
     nvidia_name = _check_nvidia_gpu()
     if nvidia_name:
         _nvidia_gpu_name = nvidia_name
@@ -130,13 +178,18 @@ def _detect_vendor() -> Optional[str]:
         return "amd"
     if _check_intel_gpu():
         return "intel"
+    apple_info = _check_apple_gpu()
+    if apple_info:
+        _apple_gpu_info = apple_info
+        return "apple"
     return None
 
 
 def _reset_detection_state() -> None:
     """Reset cached vendor and GPU name state (for test isolation)."""
-    global _nvidia_gpu_name
+    global _nvidia_gpu_name, _apple_gpu_info
     _nvidia_gpu_name = None
+    _apple_gpu_info = None
     _detect_vendor.cache_clear()
 
 
@@ -161,6 +214,8 @@ def detect_gpu_capabilities(gpu_available: bool) -> GPUCapabilities:
     elif vendor == "intel":
         capabilities.vendor = "intel"
         capabilities.name = "Intel GPU (detected via sysfs)"
+    elif vendor == "apple":
+        capabilities = _detect_apple_capabilities(capabilities)
 
     return capabilities
 
@@ -273,6 +328,51 @@ def _detect_detailed_capabilities(
         logger.debug("Failed to get detailed GPU capabilities: %s", e)
 
     return capabilities
+
+
+def _detect_apple_capabilities(
+    capabilities: GPUCapabilities,
+) -> GPUCapabilities:
+    """Detect Apple Silicon GPU capabilities from stashed system_profiler data.
+
+    Issue #2014: Apple Silicon uses unified memory — system RAM is shared
+    with the GPU, so we report total system memory as GPU memory.
+    """
+    capabilities.vendor = "apple"
+    info = _apple_gpu_info
+    if info:
+        capabilities.name = info.get("name", "Apple GPU")
+        capabilities.metal_supported = info.get("metal_supported", False)
+        capabilities.unified_memory = True
+        gpu_cores = info.get("gpu_cores", 0)
+        capabilities.multiprocessor_count = gpu_cores
+        capabilities.mixed_precision = True
+    else:
+        capabilities.name = "Apple GPU"
+    capabilities.memory_gb = _get_macos_system_memory_gb()
+    return capabilities
+
+
+def _get_macos_system_memory_gb() -> float:
+    """Get total system memory on macOS (unified memory = GPU memory).
+
+    Issue #2014: Apple Silicon shares system RAM with GPU.
+    """
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "hw.memsize"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            mem_bytes = int(result.stdout.strip())
+            return round(mem_bytes / (1024**3), 1)
+    except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+        pass
+    except Exception:
+        pass
+    return 0.0
 
 
 def get_gpu_capabilities_dict(
