@@ -444,6 +444,35 @@ class CategoryDefaults:
     MODE_TESTING: str = "testing"
 
 
+class WorkStealingConfig:
+    """
+    Work-stealing configuration for distributed agent task reassignment.
+
+    Issue #2109: Tasks stuck beyond the stale timeout are automatically
+    reassigned to available agents.  Three guard rails prevent pathological
+    reassignment:
+      - grace_period_seconds: newly assigned tasks are never stolen
+      - max_reassignments: cap on how many times a single task can be stolen
+      - progress_ttl_seconds: if an agent reported progress recently, the
+        task is considered alive and not eligible for stealing
+    """
+
+    # How long a running task may be silent before it is considered stale
+    STALE_TASK_TIMEOUT_SECONDS: int = 300  # 5 minutes
+
+    # Minimum age of a task assignment before it is eligible for stealing.
+    # Prevents stealing tasks that just started within the last N seconds.
+    GRACE_PERIOD_SECONDS: int = 300  # 5 minutes
+
+    # Maximum number of times a single task may be reassigned.
+    # Once exceeded, the task is left alone (considered permanently stuck).
+    MAX_REASSIGNMENTS: int = 3
+
+    # If an agent has reported task progress within this many seconds, the
+    # task is considered alive regardless of wall-clock age.
+    PROGRESS_TTL_SECONDS: int = 60  # 1 minute
+
+
 class ProtocolDefaults:
     """
     Default protocol and endpoint values.
