@@ -4,7 +4,7 @@
 """Unit test for SLM tablename collision check (#2226, #2413).
 
 Tests :func:`autobot_shared.tablename_validator.check_tablename_collisions` directly.
-The logic was extracted from ``main._check_tablename_collisions`` into autobot-shared
+The logic was extracted from ``main._check_tablename_collisions`` into autobot_shared
 (#2413) so tests can import and exercise the real function without pulling in the
 full SLM application stack (FastAPI routers, SQLAlchemy models, all services, etc.).
 """

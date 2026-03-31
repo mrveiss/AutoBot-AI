@@ -3,7 +3,7 @@
 **Issue:** #1600
 **Branch:** issue-1600
 **Date:** 2026-03-16
-**Scope:** All Python files in `autobot-backend/`, `autobot-shared/`, `autobot-npu-worker/`, `autobot-infrastructure/`
+**Scope:** All Python files in `autobot-backend/`, `autobot_shared/`, `autobot-npu-worker/`, `autobot-infrastructure/`
 
 ---
 
@@ -129,7 +129,7 @@ No action is required — the preferred `langchain_redis.RedisVectorStore` path 
 
 ## Files With No LangChain Imports (verified)
 
-- `autobot-shared/` — no LangChain imports anywhere
+- `autobot_shared/` — no LangChain imports anywhere
 - `autobot-slm-backend/` — no LangChain imports
 - `autobot-browser-worker/` — no LangChain imports
 - `autobot-tts-worker/` — no LangChain imports

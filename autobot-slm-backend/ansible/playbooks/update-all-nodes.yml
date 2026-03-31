@@ -20,7 +20,7 @@
 #   npu, npu-worker      - NPU worker deploy + restart tasks
 #   browser, browser-worker - browser worker deploy + restart tasks
 #   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
-#   shared               - autobot-shared deploy tasks (all nodes)
+#   shared               - autobot_shared deploy tasks (all nodes)
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -111,7 +111,7 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot-shared/ }
+        - { name: shared, path: autobot_shared/ }
         - { name: backend, path: autobot-backend/ }
         - { name: frontend, path: autobot-frontend/ }
         - { name: npu-worker, path: autobot-npu-worker/ }
@@ -136,7 +136,7 @@
       shell: >-
         git -C {{ git_repo_root }} diff --name-only
         {{ prev_commit.stdout | default('HEAD') }} HEAD
-        -- '*/requirements.txt' 'autobot-shared/setup.py' 'autobot-shared/pyproject.toml'
+        -- '*/requirements.txt' 'autobot_shared/setup.py' 'autobot_shared/pyproject.toml'
       register: python_deps_diff
       changed_when: false
       failed_when: false
@@ -222,7 +222,7 @@
       become: true
       tags: [slm, slm-frontend]
 
-    - name: "[PLAY 1] SLM | Deploy autobot-shared"
+    - name: "[PLAY 1] SLM | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -239,7 +239,7 @@
       loop:
         - autobot-slm-backend
         - autobot-slm-frontend
-        - autobot-shared
+        - autobot_shared
       tags: [slm]
 
     # --- SLM custom migrations (#1630) ---
@@ -446,7 +446,7 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend]
 
-    - name: "[PLAY 2] Backend | Deploy autobot-shared"
+    - name: "[PLAY 2] Backend | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -463,7 +463,7 @@
 
     - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
       file:
-        path: /opt/autobot/autobot-shared
+        path: /opt/autobot/autobot_shared
         owner: autobot
         group: autobot
         recurse: true
@@ -473,7 +473,7 @@
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink (#2517)"
       ansible.builtin.file:
-        src: /opt/autobot/autobot-shared
+        src: /opt/autobot/autobot_shared
         dest: /opt/autobot/autobot_shared
         state: link
         owner: autobot
@@ -484,7 +484,7 @@
 
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
       ansible.builtin.file:
-        src: /opt/autobot/autobot-shared
+        src: /opt/autobot/autobot_shared
         dest: /opt/autobot/autobot-backend/autobot_shared
         state: link
         force: true
@@ -795,7 +795,7 @@
       tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
-    - name: "[PLAY 2] Shared | Deploy autobot-shared"
+    - name: "[PLAY 2] Shared | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -805,7 +805,7 @@
 
     - name: "[PLAY 2] Shared | Fix ownership"
       file:
-        path: /opt/autobot/autobot-shared
+        path: /opt/autobot/autobot_shared
         owner: autobot
         group: autobot
         recurse: true
@@ -815,7 +815,7 @@
 
     - name: "[PLAY 2] Shared | Create autobot_shared symlink (#2517)"
       ansible.builtin.file:
-        src: /opt/autobot/autobot-shared
+        src: /opt/autobot/autobot_shared
         dest: /opt/autobot/autobot_shared
         state: link
         owner: autobot

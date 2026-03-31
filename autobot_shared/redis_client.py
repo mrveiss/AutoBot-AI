@@ -90,9 +90,9 @@ import redis.asyncio as async_redis
 # redis_management/ lives in autobot-backend/utils/ and depends on backend-only
 # modules (constants.network_constants, constants.redis_constants,
 # constants.threshold_constants, config, monitoring.prometheus_metrics).
-# Moving redis_management/ to autobot-shared would require pulling in those
+# Moving redis_management/ to autobot_shared would require pulling in those
 # backend modules too — the dependency chain is deep.
-# redis_management now lives in autobot-shared (Issue #2313).
+# redis_management now lives in autobot_shared (Issue #2313).
 from autobot_shared.redis_management.config import (
     PoolConfig,
     RedisConfig,

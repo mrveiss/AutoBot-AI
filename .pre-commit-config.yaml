@@ -93,7 +93,7 @@ repos:
     hooks:
       - id: bandit
         args: [-c, .bandit]
-        files: ^(autobot-backend/|autobot-slm-backend/|autobot-shared/)
+        files: ^(autobot-backend/|autobot-slm-backend/|autobot_shared/)
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 

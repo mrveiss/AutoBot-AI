@@ -45,18 +45,18 @@ infrastructure/
 
 ## Phase 1: Create Directory Structure (Safe - Additive Only)
 
-### Task 1: Create autobot-shared
+### Task 1: Create autobot_shared
 
 **Files:**
 
-- Create: `autobot-shared/__init__.py`
-- Create: `autobot-shared/README.md`
-- Create: `autobot-shared/requirements.txt`
-- Copy: `autobot-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `autobot-backend/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `autobot-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
-- Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
+- Create: `autobot_shared/__init__.py`
+- Create: `autobot_shared/README.md`
+- Create: `autobot_shared/requirements.txt`
+- Copy: `autobot-backend/utils/redis_client.py` to `autobot_shared/redis_client.py`
+- Copy: `autobot-backend/utils/http_client.py` to `autobot_shared/http_client.py`
+- Copy: `autobot-backend/utils/logging_manager.py` to `autobot_shared/logging_manager.py`
+- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot_shared/error_boundaries.py`
+- Copy: `src/config/ssot_config.py` to `autobot_shared/ssot_config.py`
 
 ### Task 2: Create infrastructure directory
 
@@ -165,7 +165,7 @@ Update sync commands to use new paths:
 After Phase 1:
 
 - [ ] All new directories exist with README.md
-- [ ] `autobot-shared/` contains utility files
+- [ ] `autobot_shared/` contains utility files
 - [ ] `infrastructure/` contains all tooling
 - [ ] `autobot-slm-backend/` and `autobot-slm-frontend/` renamed
 - [ ] `autobot-frontend/` renamed

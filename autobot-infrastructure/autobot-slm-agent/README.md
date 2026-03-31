@@ -8,7 +8,7 @@
 
 Per-node SLM agent. Sends heartbeats to the SLM backend, executes code sync tasks triggered by SLM, reports health and system metrics, and runs Ansible playbooks on the SLM server (.19).
 
-Deployed to every node. The only role with `deploy_to_all: true` besides `autobot-shared`.
+Deployed to every node. The only role with `deploy_to_all: true` besides `autobot_shared`.
 
 ---
 

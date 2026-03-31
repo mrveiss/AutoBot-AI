@@ -34,7 +34,7 @@ NO_CLEANUP=false
 REMOTE_BASE="/opt/autobot"
 REMOTE_BACKEND="${REMOTE_BASE}/autobot-slm-backend"
 REMOTE_FRONTEND="${REMOTE_BASE}/autobot-slm-frontend"
-REMOTE_SHARED="${REMOTE_BASE}/autobot-shared"
+REMOTE_SHARED="${REMOTE_BASE}/autobot_shared"
 REMOTE_CERTS="${REMOTE_BASE}/nginx/certs"
 REMOTE_LOGS="${REMOTE_BASE}/logs"
 
@@ -205,11 +205,11 @@ preflight_checks() {
     fi
     success "Found autobot-slm-frontend/"
 
-    if [[ ! -d "${PROJECT_ROOT}/autobot-shared" ]]; then
-        error "autobot-shared/ not found. Run from project root."
+    if [[ ! -d "${PROJECT_ROOT}/autobot_shared" ]]; then
+        error "autobot_shared/ not found. Run from project root."
         exit 1
     fi
-    success "Found autobot-shared/"
+    success "Found autobot_shared/"
 
     # Check SSH key
     if [[ -z "$SSH_KEY" ]] && [[ "$SSH_PASSWORD" != "prompt" ]]; then
@@ -358,10 +358,10 @@ code_deployment() {
         > /dev/null
     success "Frontend deployed"
 
-    info "Deploying autobot-shared..."
+    info "Deploying autobot_shared..."
     rsync -avz --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
-        "${PROJECT_ROOT}/autobot-shared/" \
+        "${PROJECT_ROOT}/autobot_shared/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_SHARED}/" \
         > /dev/null
     success "Shared utilities deployed"

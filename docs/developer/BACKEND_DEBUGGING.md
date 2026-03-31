@@ -56,7 +56,7 @@ Both should be symlinks pointing to valid targets. If they're plain text files c
 ```bash
 cd /opt/autobot/autobot-backend
 rm backend && ln -s autobot-backend backend 2>/dev/null || ln -s ../autobot-backend backend
-rm autobot_shared && ln -s ../autobot-shared autobot_shared
+rm autobot_shared && ln -s ../autobot_shared autobot_shared
 ```
 
 ### Step 5: Check Python interpreter and venv
@@ -348,7 +348,7 @@ file autobot-backend/backend
 ```bash
 cd /home/kali/Desktop/AutoBot/autobot-backend
 rm backend && ln -s ../autobot-backend backend
-rm autobot_shared && ln -s ../autobot-shared autobot_shared
+rm autobot_shared && ln -s ../autobot_shared autobot_shared
 ```
 
 ### Prevent recurrence

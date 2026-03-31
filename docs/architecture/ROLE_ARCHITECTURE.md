@@ -34,13 +34,13 @@ The `manifest.yml` in each infrastructure directory is the **single source of tr
 | `autobot-ai-stack` | `autobot-ai-stack/` | ai-stack (.24) | 172.16.168.24 |
 | `autobot-database` | `autobot-database/` | database (.23) | 172.16.168.23 |
 | `autobot-slm-agent` | `autobot-slm-agent/` | **all nodes** | all |
-| `autobot-shared` | `autobot-shared/` | all backend nodes | all |
+| `autobot_shared` | `autobot_shared/` | all backend nodes | all |
 
 ---
 
 ## Node Assignments
 
-Each node gets **only** its assigned role directories + `autobot-shared/` + `autobot-infrastructure/autobot-<its-roles>/`.
+Each node gets **only** its assigned role directories + `autobot_shared/` + `autobot-infrastructure/autobot-<its-roles>/`.
 
 | Node | IP | Roles |
 |------|----|-------|
@@ -59,7 +59,7 @@ Expected `/opt/autobot/` content on each node:
 ```
 /opt/autobot/
 ├── autobot-<role>/          # Role code (only that node's roles)
-├── autobot-shared/          # Shared Python utilities
+├── autobot_shared/          # Shared Python utilities
 ├── autobot-infrastructure/  # Ansible + manifests (role-scoped)
 │   └── autobot-<role>/
 ├── cache/                   # SLM code distribution cache (.19 only)
@@ -85,7 +85,7 @@ AutoBot/
 ├── autobot-ai-stack/         # ChromaDB + embeddings
 ├── autobot-database/         # Redis Stack + PostgreSQL config
 ├── autobot-slm-agent/        # Per-node SLM agent (all nodes)
-├── autobot-shared/           # Shared Python utilities
+├── autobot_shared/           # Shared Python utilities
 └── autobot-infrastructure/   # Per-role Ansible + manifests
     ├── autobot-backend/
     │   ├── manifest.yml      ← single source of truth
@@ -112,7 +112,7 @@ target_node: <node-name>      # null = all nodes
 deploy:
   source: autobot-<name>/     # Repo dir to rsync
   destination: /opt/autobot/autobot-<name>/
-  shared: true                # Also deploy autobot-shared/
+  shared: true                # Also deploy autobot_shared/
   infrastructure: true        # Also deploy autobot-infrastructure/<role>/
 
 system_dependencies: [...]    # apt packages

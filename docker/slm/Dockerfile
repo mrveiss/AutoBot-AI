@@ -23,15 +23,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install shared module
-COPY autobot-shared/requirements.txt /app/autobot-shared/requirements.txt
-COPY autobot-shared/setup.py /app/autobot-shared/setup.py
-COPY autobot-shared/ /app/autobot-shared/
-RUN python3.12 -m pip install --no-cache-dir -r /app/autobot-shared/requirements.txt \
-    && python3.12 -m pip install --no-cache-dir /app/autobot-shared
+COPY autobot_shared/requirements.txt /app/autobot_shared/requirements.txt
+COPY autobot_shared/setup.py /app/autobot_shared/setup.py
+COPY autobot_shared/ /app/autobot_shared/
+RUN python3.12 -m pip install --no-cache-dir -r /app/autobot_shared/requirements.txt \
+    && python3.12 -m pip install --no-cache-dir /app/autobot_shared
 
 # Install SLM dependencies
 COPY autobot-slm-backend/requirements.txt /tmp/requirements.txt
-RUN grep -v -E "(autobot-shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
+RUN grep -v -E "(autobot_shared|^-r )" /tmp/requirements.txt > /app/requirements-filtered.txt || true \
     && python3.12 -m pip install --no-cache-dir -r /app/requirements-filtered.txt
 
 
@@ -59,7 +59,7 @@ COPY --from=deps /usr/lib/python3/dist-packages/ /usr/lib/python3/dist-packages/
 COPY --from=deps /usr/local/bin/ /usr/local/bin/
 
 # Copy shared module
-COPY autobot-shared/ /app/autobot-shared/
+COPY autobot_shared/ /app/autobot_shared/
 
 # Copy SLM backend source
 COPY autobot-slm-backend/ /app/autobot-slm-backend/
@@ -71,16 +71,12 @@ COPY autobot-infrastructure/ /app/autobot-infrastructure/
 RUN mkdir -p /app/data /app/logs /app/autobot-slm-backend/data \
     && chown -R autobot:autobot /app
 
-# Symlink for import compatibility
-RUN ln -s /app/autobot-shared /app/autobot_shared \
-    && ln -s /app/autobot-shared /app/autobot-slm-backend/autobot_shared
-
 # Copy entrypoint script (runs migrations before app start)
 COPY docker/slm/entrypoint.sh /app/entrypoint.sh
 
 USER autobot
 
-ENV PYTHONPATH=/app:/app/autobot-slm-backend:/app/autobot-shared
+ENV PYTHONPATH=/app:/app/autobot-slm-backend:/app/autobot_shared
 ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
 

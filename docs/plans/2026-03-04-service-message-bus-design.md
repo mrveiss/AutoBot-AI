@@ -26,19 +26,19 @@ Layer 3: WorkflowStateMachine (autobot-backend)
          ├── route_next() routing
          └── publishes transitions to ↓
 
-Layer 2: ServiceMessageBus (autobot-shared)
+Layer 2: ServiceMessageBus (autobot_shared)
          ├── publish() → Redis Stream
          ├── subscribe() → async iterator
          ├── get_correlation_chain() → trace requests
          └── stores messages as ↓
 
-Layer 1: ServiceMessage (autobot-shared)
+Layer 1: ServiceMessage (autobot_shared)
          └── Pydantic model: msg_id, sender, receiver, msg_type, content, correlation_id, meta
 ```
 
 ## Layer 1: ServiceMessage Schema
 
-**File:** `autobot-shared/models/service_message.py`
+**File:** `autobot_shared/models/service_message.py`
 
 ```python
 from pydantic import BaseModel, Field
@@ -94,7 +94,7 @@ class ServiceMessage(BaseModel):
 
 ## Layer 2: ServiceMessageBus
 
-**File:** `autobot-shared/message_bus.py`
+**File:** `autobot_shared/message_bus.py`
 
 Wraps Redis Streams for cross-service publish/subscribe.
 
@@ -133,7 +133,7 @@ class ServiceMessageBus:
 | Stream | `autobot:events:stream` | `autobot:service:messages` |
 | Correlation | Optional field | First-class with index |
 | TTL | 7 days | 14 days |
-| Location | `autobot-backend/events/` | `autobot-shared/` |
+| Location | `autobot-backend/events/` | `autobot_shared/` |
 
 ### Redis Database Choice
 
@@ -217,12 +217,12 @@ The existing `event_manager.publish()` calls remain — they feed the frontend W
 ## File Plan
 
 ```
-NEW:  autobot-shared/models/__init__.py
-NEW:  autobot-shared/models/service_message.py     # ServiceMessage + types
-NEW:  autobot-shared/message_bus.py                 # ServiceMessageBus
+NEW:  autobot_shared/models/__init__.py
+NEW:  autobot_shared/models/service_message.py     # ServiceMessage + types
+NEW:  autobot_shared/message_bus.py                 # ServiceMessageBus
 NEW:  autobot-backend/api/workflow_state.py          # WorkflowState + WorkflowStateMachine + route_next
 EDIT: autobot-backend/api/workflow.py                # Replace in-memory dict with WorkflowStateMachine
-EDIT: autobot-shared/__init__.py                     # Export new models
+EDIT: autobot_shared/__init__.py                     # Export new models
 ```
 
 ## Future Integration Points (not in this PR)

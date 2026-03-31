@@ -64,7 +64,7 @@ coexistence:
     - autobot-slm-frontend   # nginx virtual hosts — different server_name on same port 443
     - autobot-slm-backend
     - autobot-slm-agent
-    - autobot-shared
+    - autobot_shared
   warns_with: []
 
 depends_on:

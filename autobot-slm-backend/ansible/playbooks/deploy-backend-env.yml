@@ -50,7 +50,7 @@
 
     - name: Ensure autobot_shared symlink exists
       ansible.builtin.file:
-        src: "{{ backend_install_dir }}/../autobot-shared"
+        src: "{{ backend_install_dir }}/../autobot_shared"
         dest: "{{ backend_code_dir }}/autobot_shared"
         state: link
         force: yes

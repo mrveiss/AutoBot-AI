@@ -811,7 +811,7 @@ md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 
 ## Related Documentation
 
-- **Network Constants**: `autobot-shared/network_constants.py`
+- **Network Constants**: `autobot_shared/network_constants.py`
 - **Setup Guide**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
 - **Hardcoding Prevention**: `docs/developer/HARDCODING_PREVENTION.md`
 - **Redis Client Usage**: `docs/developer/REDIS_CLIENT_USAGE.md`
