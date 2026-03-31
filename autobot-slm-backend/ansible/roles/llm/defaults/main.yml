@@ -9,7 +9,7 @@ llm_models_dir: /var/lib/ollama
 
 # Installation
 llm_install_ollama: true
-llm_pull_models: false
+llm_pull_models: true
 
 # GPU detection: "auto" runs nvidia-smi at deploy time.
 # Override with true/false to skip detection.
