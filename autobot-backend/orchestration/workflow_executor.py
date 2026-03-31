@@ -10,6 +10,8 @@ Contains workflow execution, step coordination, and agent interaction handling.
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
 Issue #2140: DAG-based execution with condition evaluation and branch routing.
+Issue #2141: Structured variable piping — ${steps.<id>.output} resolved before
+             each step executes; completed step results stored as StepOutput.
 """
 
 import asyncio
@@ -29,6 +31,7 @@ from retry_mechanism import RetryStrategy, retry_async
 
 from .dag_executor import DAGExecutor, DAGExecutionContext, DAGNode, build_dag, workflow_has_condition_nodes
 from .types import AgentInteraction, AgentProfile
+from .variable_resolver import StepOutput, VariableResolver
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +70,8 @@ class WorkflowExecutor:
         self._reserve_agent = reserve_agent_callback
         self._release_agent = release_agent_callback
         self._update_performance = update_performance_callback
+        # Issue #2141: variable resolver for ${steps…} piping between steps
+        self._variable_resolver = VariableResolver()
 
     def _group_steps_by_dependency(
         self, steps: List[Dict[str, Any]]
@@ -135,15 +140,58 @@ class WorkflowExecutor:
             execution_context["agents_involved"]
         )
 
+    def _resolve_step_variables(
+        self, step: Dict[str, Any], step_outputs: Dict[str, StepOutput]
+    ) -> None:
+        """
+        Resolve ``${steps.<id>.<accessor>}`` tokens in *step* in-place.
+
+        Mutates the step dict's ``command`` (str) and ``inputs`` (dict of str
+        values) fields so the step executes with fully-substituted values.
+        Fields that contain no variable tokens are left untouched.
+
+        Issue #2141.
+        """
+        command = step.get("command")
+        if isinstance(command, str):
+            resolved = self._variable_resolver.resolve(command, step_outputs)
+            if resolved != command:
+                logger.debug(
+                    "Step %s: resolved command variables (#2141)", step.get("id")
+                )
+                step["command"] = resolved
+
+        inputs = step.get("inputs")
+        if isinstance(inputs, dict):
+            for key, value in inputs.items():
+                if isinstance(value, str):
+                    resolved_value = self._variable_resolver.resolve(value, step_outputs)
+                    if resolved_value != value:
+                        logger.debug(
+                            "Step %s: resolved input '%s' variable (#2141)",
+                            step.get("id"),
+                            key,
+                        )
+                        inputs[key] = resolved_value
+
     async def _execute_step_with_agent(
         self,
         step: Dict[str, Any],
         execution_context: Dict[str, Any],
         context: Dict[str, Any],
     ) -> None:
-        """Execute a single workflow step with agent management (Issue #398: extracted)."""
+        """Execute a single workflow step with agent management.
+
+        Issue #398: extracted from execute_coordinated_workflow.
+        Issue #2141: resolves ${steps…} variables in step command/inputs before
+        execution, then stores a StepOutput for downstream steps to reference.
+        """
         step_start_time = time.time()
         agent_id = step.get("assigned_agent")
+
+        # Issue #2141: Resolve variable references using outputs from prior steps.
+        step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
+        self._resolve_step_variables(step, step_outputs)
 
         if agent_id:
             self._reserve_agent(agent_id)
@@ -157,6 +205,12 @@ class WorkflowExecutor:
             step["execution_time"] = time.time() - step_start_time
             step["result"] = step_result
             execution_context["step_results"][step["id"]] = step_result
+
+            # Issue #2141: Record typed StepOutput so later steps can reference it.
+            if "step_outputs" in execution_context:
+                execution_context["step_outputs"][step["id"]] = StepOutput.from_step_result(
+                    step_result
+                )
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
@@ -207,6 +261,8 @@ class WorkflowExecutor:
             "agents_involved": set(),
             "interactions": [],
             "step_results": {},
+            # Issue #2141: typed StepOutput objects for variable resolution
+            "step_outputs": {},
             "status": "in_progress",
         }
 
@@ -267,12 +323,15 @@ class WorkflowExecutor:
         step = dict(node.data)
         step.setdefault("id", node.node_id)
 
-        # Build a minimal execution_context that _execute_step_with_agent can update
+        # Build a minimal execution_context that _execute_step_with_agent can update.
+        # Issue #2141: share step_outputs from dag_ctx so variable references resolve
+        # across DAG branches that have already executed.
         local_ctx: Dict[str, Any] = {
             "workflow_id": dag_ctx.workflow_id,
             "agents_involved": dag_ctx.agents_involved,
             "interactions": dag_ctx.interactions,
             "step_results": dag_ctx.step_results,
+            "step_outputs": dag_ctx.step_outputs,
             "status": "in_progress",
         }
 
@@ -292,6 +351,8 @@ class WorkflowExecutor:
             "agents_involved": list(dag_ctx.agents_involved),
             "interactions": dag_ctx.interactions,
             "step_results": dag_ctx.step_results,
+            # Issue #2141: expose typed step outputs to callers
+            "step_outputs": dag_ctx.step_outputs,
             "status": dag_ctx.status,
             "branches_taken": dag_ctx.branches_taken,
             "skipped_nodes": list(dag_ctx.skipped_nodes),
@@ -320,11 +381,17 @@ class WorkflowExecutor:
             [s["id"] for s in group],
         )
         # Issue #2204: each step writes to its own isolated context, merged after.
+        # Issue #2141: share a snapshot of current step_outputs so parallel steps
+        # can resolve references from prior groups; each step writes its own
+        # StepOutput to a local dict that is merged back below.
+        shared_prior_outputs = dict(execution_context.get("step_outputs", {}))
         isolated_contexts = [
             {
                 "step_results": {},
                 "agents_involved": set(),
                 "interactions": [],
+                # Shallow copy: prior-group outputs are readable; writes are isolated.
+                "step_outputs": dict(shared_prior_outputs),
             }
             for _ in group
         ]
@@ -338,6 +405,14 @@ class WorkflowExecutor:
             execution_context["step_results"].update(iso_ctx["step_results"])
             execution_context["agents_involved"].update(iso_ctx["agents_involved"])
             execution_context["interactions"].extend(iso_ctx["interactions"])
+            # Merge new step outputs written during this group into the main context.
+            if "step_outputs" in execution_context:
+                new_outputs = {
+                    k: v
+                    for k, v in iso_ctx["step_outputs"].items()
+                    if k not in shared_prior_outputs
+                }
+                execution_context["step_outputs"].update(new_outputs)
 
     def _create_agent_interaction(
         self,

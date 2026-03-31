@@ -27,6 +27,7 @@ from .types import (
     WorkflowPlan,
     WorkflowStep,
 )
+from .variable_resolver import StepOutput, VariableResolver, resolve_variables
 from .workflow_documentation import WorkflowDocumenter
 from .workflow_executor import WorkflowExecutor
 from .workflow_planner import WorkflowPlanner
@@ -53,4 +54,8 @@ __all__ = [
     "WorkflowDAG",
     "build_dag",
     "workflow_has_condition_nodes",
+    # Variable piping (#2141)
+    "StepOutput",
+    "VariableResolver",
+    "resolve_variables",
 ]
