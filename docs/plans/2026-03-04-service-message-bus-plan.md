@@ -4,7 +4,7 @@
 
 **Goal:** Add a unified inter-service message envelope, cross-service audit trail via Redis Streams, and Redis-persisted workflow state machine with explicit routing.
 
-**Architecture:** Three layers — `ServiceMessage` Pydantic schema in `autobot-shared/`, `ServiceMessageBus` wrapping Redis Streams for cross-service pub/sub, and `WorkflowStateMachine` replacing in-memory workflow state with Redis persistence and `route_next()` routing. Extends existing `RedisEventStreamManager` pattern without modifying it.
+**Architecture:** Three layers — `ServiceMessage` Pydantic schema in `autobot_shared/`, `ServiceMessageBus` wrapping Redis Streams for cross-service pub/sub, and `WorkflowStateMachine` replacing in-memory workflow state with Redis persistence and `route_next()` routing. Extends existing `RedisEventStreamManager` pattern without modifying it.
 
 **Tech Stack:** Pydantic v2, Redis Streams (via existing `autobot_shared.redis_client`), FastAPI, asyncio
 
@@ -17,18 +17,18 @@
 ## Task 1: ServiceMessage Schema (#1377)
 
 **Files:**
-- Create: `autobot-shared/models/__init__.py`
-- Create: `autobot-shared/models/service_message.py`
-- Create: `autobot-shared/models/service_message_test.py`
-- Modify: `autobot-shared/__init__.py`
+- Create: `autobot_shared/models/__init__.py`
+- Create: `autobot_shared/models/service_message.py`
+- Create: `autobot_shared/models/service_message_test.py`
+- Modify: `autobot_shared/__init__.py`
 
 ### Step 1: Create models package
 
-Create `autobot-shared/models/__init__.py` exporting `ServiceMessage`, `ServiceName`, `MessageType`.
+Create `autobot_shared/models/__init__.py` exporting `ServiceMessage`, `ServiceName`, `MessageType`.
 
 ### Step 2: Write the failing test
 
-Create `autobot-shared/models/service_message_test.py` with 4 tests:
+Create `autobot_shared/models/service_message_test.py` with 4 tests:
 - `test_service_message_defaults` — msg_id, ts, correlation_id auto-generate
 - `test_service_message_explicit_correlation` — explicit correlation_id preserved
 - `test_service_message_json_roundtrip` — model_dump_json / model_validate_json
@@ -36,12 +36,12 @@ Create `autobot-shared/models/service_message_test.py` with 4 tests:
 
 ### Step 3: Run test to verify it fails
 
-Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot-shared/models/service_message_test.py -v`
+Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot_shared/models/service_message_test.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 ### Step 4: Write ServiceMessage implementation
 
-Create `autobot-shared/models/service_message.py` — Pydantic BaseModel with:
+Create `autobot_shared/models/service_message.py` — Pydantic BaseModel with:
 - `msg_id: str` (default: uuid4)
 - `ts: str` (default: UTC ISO 8601)
 - `sender: str` (ServiceName Literal for known services)
@@ -53,17 +53,17 @@ Create `autobot-shared/models/service_message.py` — Pydantic BaseModel with:
 
 ### Step 5: Run tests to verify they pass
 
-Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot-shared/models/service_message_test.py -v`
+Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot_shared/models/service_message_test.py -v`
 Expected: 4 passed
 
-### Step 6: Update autobot-shared exports
+### Step 6: Update autobot_shared exports
 
-Add `ServiceMessage` to `__all__` and `_LAZY_IMPORTS` in `autobot-shared/__init__.py`.
+Add `ServiceMessage` to `__all__` and `_LAZY_IMPORTS` in `autobot_shared/__init__.py`.
 
 ### Step 7: Commit
 
 ```bash
-git add autobot-shared/models/ autobot-shared/__init__.py
+git add autobot_shared/models/ autobot_shared/__init__.py
 git commit -m "feat(shared): add ServiceMessage schema for cross-service communication (#1377)"
 ```
 
@@ -72,12 +72,12 @@ git commit -m "feat(shared): add ServiceMessage schema for cross-service communi
 ## Task 2: ServiceMessageBus (#1379)
 
 **Files:**
-- Create: `autobot-shared/message_bus.py`
-- Create: `autobot-shared/message_bus_test.py`
+- Create: `autobot_shared/message_bus.py`
+- Create: `autobot_shared/message_bus_test.py`
 
 ### Step 1: Write the failing test
 
-Create `autobot-shared/message_bus_test.py` with mock Redis tests:
+Create `autobot_shared/message_bus_test.py` with mock Redis tests:
 - `test_publish_stores_message` — hset + xadd + sadd + publish called
 - `test_publish_sets_ttl` — expire called for hash + correlation
 - `test_get_message` — retrieves and deserializes
@@ -86,12 +86,12 @@ Create `autobot-shared/message_bus_test.py` with mock Redis tests:
 
 ### Step 2: Run test to verify it fails
 
-Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot-shared/message_bus_test.py -v`
+Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot_shared/message_bus_test.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
 ### Step 3: Write ServiceMessageBus implementation
 
-Create `autobot-shared/message_bus.py`:
+Create `autobot_shared/message_bus.py`:
 - `ServiceMessageBusConfig` dataclass (stream keys, TTLs)
 - `ServiceMessageBus` class:
   - `publish(msg)` — hash + stream + correlation set + pub/sub
@@ -107,13 +107,13 @@ Create `autobot-shared/message_bus.py`:
 
 ### Step 4: Run tests to verify they pass
 
-Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot-shared/message_bus_test.py -v`
+Run: `cd /home/kali/Desktop/AutoBot && python -m pytest autobot_shared/message_bus_test.py -v`
 Expected: All passed
 
 ### Step 5: Commit
 
 ```bash
-git add autobot-shared/message_bus.py autobot-shared/message_bus_test.py
+git add autobot_shared/message_bus.py autobot_shared/message_bus_test.py
 git commit -m "feat(shared): add ServiceMessageBus for cross-service audit trail (#1379)"
 ```
 
@@ -201,7 +201,7 @@ git commit -m "feat(workflow): integrate WorkflowStateMachine into workflow list
 
 ```bash
 cd /home/kali/Desktop/AutoBot
-python -m pytest autobot-shared/models/service_message_test.py autobot-shared/message_bus_test.py -v
+python -m pytest autobot_shared/models/service_message_test.py autobot_shared/message_bus_test.py -v
 cd autobot-backend && python -m pytest api/workflow_state_test.py -v
 ```
 

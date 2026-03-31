@@ -56,7 +56,7 @@ See `autobot-infrastructure/autobot-monitoring/` for the infrastructure manifest
 The Python `PrometheusMetricsManager` and domain-specific recorder classes live in:
 
 ```
-autobot-shared/monitoring/
+autobot_shared/monitoring/
   prometheus_metrics.py          # Core metrics manager + singleton
   metrics/                       # Domain-specific recorder classes
     workflow.py, github.py, ...

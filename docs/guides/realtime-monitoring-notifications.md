@@ -186,8 +186,8 @@ cooperating subsystems:
 |-----------|----------|---------|
 | `SystemMonitor` | `autobot-infrastructure/shared/scripts/monitoring_system.py` | Collects CPU, memory, disk, network metrics via `psutil`. Runs HTTP health checks against backend and Redis. Stores all data in a local SQLite database. |
 | `HealthCollector` | `autobot-slm-backend/slm/agent/health_collector.py` | Runs on each fleet node as part of the SLM agent. Checks systemd service status via `systemctl`, discovers all services, collects system metrics, checks port connectivity. Reports failed/crash-looping services with journalctl error context. |
-| `PrometheusMetricsManager` | `autobot-shared/monitoring/prometheus_metrics.py` | Thread-safe singleton that defines and records all Prometheus metrics. Delegates to domain-specific recorders (ServiceHealth, System, Redis, WebSocket, etc.). |
-| `ServiceHealthMetricsRecorder` | `autobot-shared/monitoring/metrics/service_health.py` | Records service health scores, response times, and status (offline=0, healthy=1, degraded=2) as Prometheus gauges and histograms. |
+| `PrometheusMetricsManager` | `autobot_shared/monitoring/prometheus_metrics.py` | Thread-safe singleton that defines and records all Prometheus metrics. Delegates to domain-specific recorders (ServiceHealth, System, Redis, WebSocket, etc.). |
+| `ServiceHealthMetricsRecorder` | `autobot_shared/monitoring/metrics/service_health.py` | Records service health scores, response times, and status (offline=0, healthy=1, degraded=2) as Prometheus gauges and histograms. |
 | `MonitoringWebSocketManager` | `autobot-backend/api/monitoring.py` | Manages real-time WebSocket connections for the monitoring dashboard. Broadcasts performance metrics, alerts, and GPU/NPU utilization to connected clients. |
 | `LiveEventManager` | `autobot-backend/live_event_manager.py` | Channel-based pub/sub for scoped WebSocket events. Supports channels: `agent:{id}`, `task:{id}`, `workflow:{id}`, `global`. |
 | AlertManager Webhook | `autobot-backend/api/alertmanager_webhook.py` | Receives fired/resolved alerts from Prometheus AlertManager and broadcasts them to WebSocket clients. |
@@ -1532,7 +1532,7 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot
-Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot-shared:/opt/autobot
+Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot_shared:/opt/autobot
 ExecStart=/opt/autobot/venv/bin/python3 \
     /opt/autobot/scripts/service_failure_monitor.py \
     --service autobot-backend \
@@ -1582,7 +1582,7 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot
-Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot-shared:/opt/autobot
+Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot_shared:/opt/autobot
 ExecStart=/opt/autobot/venv/bin/python3 \
     /opt/autobot/scripts/service_failure_monitor.py \
     --service %i \
@@ -2199,7 +2199,7 @@ journalctl -u autobot-service-monitor --since "10 minutes ago" --no-pager
 
 **Common causes and fixes:**
 - `ImportError: autobot_shared not found` -- Ensure `PYTHONPATH` in the unit
-  file includes `/opt/autobot/autobot-shared`
+  file includes `/opt/autobot/autobot_shared`
 - `ConnectionRefusedError` -- Redis on .23 not reachable; the monitor will retry
   on next interval automatically
 - `PermissionError` -- Ensure `ReadWritePaths` includes the reports directory
@@ -2283,8 +2283,8 @@ sqlite3 /opt/autobot/reports/monitoring/metrics.db \
 |------|---------|
 | `autobot-infrastructure/shared/scripts/monitoring_system.py` | `SystemMonitor` class |
 | `autobot-slm-backend/slm/agent/health_collector.py` | `HealthCollector` for systemd service monitoring |
-| `autobot-shared/monitoring/prometheus_metrics.py` | `PrometheusMetricsManager` singleton |
-| `autobot-shared/monitoring/metrics/service_health.py` | `ServiceHealthMetricsRecorder` |
+| `autobot_shared/monitoring/prometheus_metrics.py` | `PrometheusMetricsManager` singleton |
+| `autobot_shared/monitoring/metrics/service_health.py` | `ServiceHealthMetricsRecorder` |
 | `autobot-backend/api/system.py` | `/api/system/health` and `/api/system/metrics` endpoints |
 | `autobot-backend/api/error_monitoring.py` | Error monitoring REST API |
 | `autobot-backend/api/monitoring.py` | `MonitoringWebSocketManager` and dashboard endpoints |

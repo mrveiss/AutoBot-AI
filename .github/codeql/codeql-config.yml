@@ -17,7 +17,7 @@ packs:
 # Paths to scan
 paths:
   - autobot-backend
-  - autobot-shared
+  - autobot_shared
   - autobot-slm-backend
 
 # Paths to ignore

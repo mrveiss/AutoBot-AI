@@ -84,7 +84,7 @@ def _check_tablename_collisions() -> None:
 
     Delegates to :func:`autobot_shared.tablename_validator.check_tablename_collisions`
     after resolving the two application-specific ``MetaData`` objects.  The heavy
-    detection + logging logic lives in autobot-shared so it can be tested in
+    detection + logging logic lives in autobot_shared so it can be tested in
     isolation without importing this module's full dependency tree (#2413).
     """
     # Import after path is set up so this function is safe to call early in lifespan.

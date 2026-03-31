@@ -5,7 +5,7 @@
 AutoBot Shared Monitoring Package
 
 Single implementation of Prometheus metrics shared by all AutoBot backends.
-Moved to autobot-shared in Issue #937 to replace the no-op stub in autobot-backend.
+Moved to autobot_shared in Issue #937 to replace the no-op stub in autobot-backend.
 """
 
 from autobot_shared.monitoring.prometheus_metrics import (

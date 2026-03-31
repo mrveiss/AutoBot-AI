@@ -21,7 +21,7 @@ from pathlib import Path
 # Set up sys.path before importing project modules.
 # Required because subprocess env may not have PYTHONPATH set identically.
 _BACKEND_ROOT = Path(__file__).parent.parent.parent  # .../autobot-backend/
-_SHARED_ROOT = _BACKEND_ROOT.parent / "autobot-shared"
+_SHARED_ROOT = _BACKEND_ROOT.parent / "autobot_shared"
 for _p in [str(_BACKEND_ROOT.parent), str(_SHARED_ROOT), str(_BACKEND_ROOT)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)

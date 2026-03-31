@@ -226,7 +226,7 @@
 | `autobot-frontend/` | User chat interface |
 | `autobot-slm-backend/` | SLM backend |
 | `autobot-slm-frontend/` | SLM dashboard |
-| `autobot-shared/` | Shared utilities |
+| `autobot_shared/` | Shared utilities |
 | `autobot-infrastructure/` | Deployment infrastructure |
 
 ---

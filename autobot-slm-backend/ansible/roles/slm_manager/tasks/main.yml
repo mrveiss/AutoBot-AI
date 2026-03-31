@@ -200,11 +200,11 @@
   changed_when: true
   tags: ['slm', 'backend']
 
-# Issue #937: Sync and install autobot-shared before requirements (prometheus metrics)
-- name: "SLM | Sync autobot-shared to SLM server"
+# Issue #937: Sync and install autobot_shared before requirements (prometheus metrics)
+- name: "SLM | Sync autobot_shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../../autobot-shared/"
-    dest: "{{ slm_base_dir }}/autobot-shared/"
+    src: "{{ playbook_dir }}/../../../autobot_shared/"
+    dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -213,18 +213,9 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Create autobot_shared symlink for Python import"
-  ansible.builtin.file:
-    src: "{{ slm_shared_dir }}"
-    dest: "{{ slm_base_dir }}/autobot_shared"
-    state: link
-    owner: "{{ slm_user }}"
-    group: "{{ slm_group }}"
-  tags: ['slm', 'backend']
-
-- name: "SLM | Install autobot-shared in venv (editable)"
+- name: "SLM | Install autobot_shared in venv (editable)"
   ansible.builtin.command:
-    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
+    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot_shared"
   become_user: "{{ slm_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"

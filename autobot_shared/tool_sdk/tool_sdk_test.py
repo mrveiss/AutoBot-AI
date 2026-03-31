@@ -5,7 +5,7 @@
 Tests for the Tool SDK — BaseTool, ToolSDKRegistry, and validation (#3018).
 
 Run with:
-    pytest autobot-shared/tool_sdk/tool_sdk_test.py -v
+    pytest autobot_shared/tool_sdk/tool_sdk_test.py -v
 """
 
 import pytest

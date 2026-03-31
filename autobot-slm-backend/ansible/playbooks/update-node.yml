@@ -18,7 +18,7 @@
 #   ansible-playbook playbooks/update-node.yml \
 #     -i inventory/slm-nodes.yml \
 #     -e "node_id=02-Frontend" \
-#     -e "role_names=autobot-frontend,autobot-shared"
+#     -e "role_names=autobot-frontend,autobot_shared"
 #
 # Variables:
 #   node_id       (required) Inventory hostname / SLM node ID (e.g. 01-Backend)
@@ -111,7 +111,7 @@
       autobot-browser-worker: autobot-playwright
       autobot-ai-stack: autobot-ai-stack
       autobot-slm-agent: slm-agent
-      autobot-shared: ""
+      autobot_shared: ""
       autobot-infrastructure: ""
 
   pre_tasks:

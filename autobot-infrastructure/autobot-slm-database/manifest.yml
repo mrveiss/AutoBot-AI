@@ -54,7 +54,7 @@ coexistence:
     - autobot-slm-frontend
     - autobot-monitoring
     - autobot-slm-agent
-    - autobot-shared
+    - autobot_shared
   conflicts_with: []
   warns_with: []
 

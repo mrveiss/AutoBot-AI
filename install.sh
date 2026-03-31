@@ -304,7 +304,7 @@ system_setup() {
             locale-gen en_US.UTF-8
     fi
 
-    # Issue #2705: Python 3.12 required by autobot-shared
+    # Issue #2705: Python 3.12 required by autobot_shared
     if ! command -v python3.12 &>/dev/null; then
         run_ok "Adding deadsnakes PPA for Python 3.12" \
             apt-add-repository -y ppa:deadsnakes/ppa
@@ -401,17 +401,12 @@ code_deployment() {
             sudo -u autobot git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
     fi
 
-    if [[ ! -L "${CODE_SOURCE}/autobot_shared" ]]; then
-        run_ok "Creating autobot_shared symlink" \
-            sudo -u autobot ln -sf autobot-shared "${CODE_SOURCE}/autobot_shared"
-    fi
-
     # Copy code from code_source to service directories where Ansible expects them
     info "Distributing code to service directories..."
     local dirs_to_copy=(
         "autobot-slm-backend"
         "autobot-slm-frontend"
-        "autobot-shared"
+        "autobot_shared"
         "autobot-infrastructure"
     )
     for dir in "${dirs_to_copy[@]}"; do
@@ -422,12 +417,6 @@ code_deployment() {
             warn "${dir} not found in code source — skipping"
         fi
     done
-
-    # Ensure autobot_shared symlink exists in backend dir
-    if [[ ! -L "${AUTOBOT_BASE}/autobot-slm-backend/autobot_shared" ]]; then
-        run_ok "Creating autobot_shared symlink in backend" \
-            sudo -u autobot ln -sf ../autobot-shared "${AUTOBOT_BASE}/autobot-slm-backend/autobot_shared"
-    fi
 
     success "Codebase ready at ${CODE_SOURCE}"
 }

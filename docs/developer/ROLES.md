@@ -411,7 +411,7 @@ These conflicts drive the default fleet layout:
 
 ---
 
-### `autobot-shared`
+### `autobot_shared`
 
 | Field | Value |
 |-------|-------|
@@ -420,13 +420,13 @@ These conflicts drive the default fleet layout:
 | **Required** | yes |
 | **Systemd service** | — (library, no service) |
 | **Port** | — |
-| **Install dir** | `/opt/autobot/autobot-shared` |
+| **Install dir** | `/opt/autobot/autobot_shared` |
 | **Python** | 3.12 (editable install into each service's venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv` |
 | **External deps** | — |
 | **Ansible playbook** | `deploy-shared.yml` |
-| **Source path** | `autobot-shared/` |
+| **Source path** | `autobot_shared/` |
 | **Post-sync** | `pip install -e .` |
 | **Notes** | Must be deployed before any other Python service. Provides `get_redis_client()`, `ssot_config`, and shared utilities. |
 
@@ -471,7 +471,7 @@ These conflicts drive the default fleet layout:
 | `.27` | `06-Node-27` | reserved | — | — |
 
 > `slm-agent` + `prometheus-node-exporter` run on **every node**.
-> `autobot-shared` deployed to every node running a Python service.
+> `autobot_shared` deployed to every node running a Python service.
 > `tts-worker` is portable — currently on `.22`, can move to `.21` or any available node.
 > `chromadb` is portable — currently on `.24`, can co-locate with Redis on `.23` or backend on `.20`.
 

@@ -151,10 +151,10 @@
       - "--exclude=*.pyc"
   tags: ['backend', 'deploy']
 
-- name: Sync autobot-shared to backend install dir
+- name: Sync autobot_shared to backend install dir
   ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-shared/"
-    dest: "{{ backend_install_dir }}/autobot-shared/"
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_install_dir }}/autobot_shared/"
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -168,14 +168,6 @@
     dest: "{{ backend_install_dir }}/backend"
     state: link
     force: true
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-
-- name: Create autobot_shared symlink (underscore) so Python can import it
-  ansible.builtin.file:
-    src: "{{ backend_install_dir }}/autobot-shared"
-    dest: "{{ backend_install_dir }}/autobot_shared"
-    state: link
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
@@ -250,9 +242,9 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
-- name: Install autobot-shared as editable package
+- name: Install autobot_shared as editable package
   ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot-shared"
+    name: "{{ backend_install_dir }}/autobot_shared"
     editable: true
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
@@ -263,7 +255,7 @@
 
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
-    cmd: "grep -Ev '^-e.*autobot-shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+    cmd: "grep -Ev '^-e.*autobot_shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
   become_user: "{{ backend_user }}"
 
 # (#2872) Removed failed_when: false — pip install failures must surface.
@@ -288,9 +280,9 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
-- name: Reinstall autobot-shared to pick up ssot_config fixes
+- name: Reinstall autobot_shared to pick up ssot_config fixes
   ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot-shared"
+    name: "{{ backend_install_dir }}/autobot_shared"
     editable: true
     virtualenv: "{{ backend_code_dir }}/venv"
     state: forcereinstall

@@ -1,6 +1,6 @@
 ---
 # Sync User Backend Code to Main Server
-# Syncs autobot-backend and autobot-shared from local machine to /opt/autobot
+# Syncs autobot-backend and autobot_shared from local machine to /opt/autobot
 # This playbook runs locally on the WSL machine (backend host)
 
 - name: Sync User Backend Code
@@ -48,8 +48,8 @@
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \
-          {{ local_autobot_root }}/autobot-shared/ \
-          {{ backend_install_dir }}/autobot-shared/
+          {{ local_autobot_root }}/autobot_shared/ \
+          {{ backend_install_dir }}/autobot_shared/
       register: sync_result
       changed_when: true
 
@@ -61,7 +61,7 @@
         recurse: yes
       loop:
         - "{{ backend_install_dir }}/autobot-backend"
-        - "{{ backend_install_dir }}/autobot-shared"
+        - "{{ backend_install_dir }}/autobot_shared"
       become: yes
 
     - name: Start backend service

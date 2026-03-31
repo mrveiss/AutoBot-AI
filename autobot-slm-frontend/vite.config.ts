@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@shared': fileURLToPath(new URL('../autobot-shared', import.meta.url))
+        '@shared': fileURLToPath(new URL('../autobot_shared', import.meta.url))
       }
     },
     server: {

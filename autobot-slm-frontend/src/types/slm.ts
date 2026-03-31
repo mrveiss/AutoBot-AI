@@ -24,7 +24,7 @@ export type NodeRole =
   | 'browser-service'
   | 'autobot-llm-cpu'
   | 'autobot-llm-gpu'
-  | 'autobot-shared'
+  | 'autobot_shared'
   | 'slm-agent'
   | 'vnc'
 

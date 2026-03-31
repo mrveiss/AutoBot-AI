@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 def _resolve_yaml_path() -> Optional[str]:
     """Find redis-databases.yaml in known locations."""
     possible_paths = [
-        # Relative to this file: autobot-shared/redis_management/ → ../../
+        # Relative to this file: autobot_shared/redis_management/ → ../../
         os.path.join(
             os.path.dirname(__file__),
             "..",

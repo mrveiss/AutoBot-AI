@@ -56,7 +56,7 @@ These six rules override convenience, speed, and assumptions. No exceptions.
 
 If you find existing work, USE IT — don't reimplement from scratch.
 
-> Violation: Writing a utility that already exists in `autobot-shared/`, or starting implementation without checking for an existing PR.
+> Violation: Writing a utility that already exists in `autobot_shared/`, or starting implementation without checking for an existing PR.
 
 ---
 
@@ -66,7 +66,7 @@ If you find existing work, USE IT — don't reimplement from scratch.
 
 - Import and call existing utilities, helpers, and services
 - Extend existing classes/functions rather than duplicating logic
-- Use `autobot-shared/` utilities before writing custom implementations
+- Use `autobot_shared/` utilities before writing custom implementations
 - If similar code exists elsewhere, refactor to share it — never copy-paste
 
 **Redis Client — always use canonical utility:**
@@ -104,7 +104,7 @@ Always check existing config files for correct network ranges. Use environment v
 
 **Write code that others can reuse:**
 
-- Place shared logic in `autobot-shared/` or the appropriate shared module
+- Place shared logic in `autobot_shared/` or the appropriate shared module
 - Match existing naming, signatures, and patterns in the codebase
 - Generalize implementations when the cost is low (no over-engineering)
 - Avoid one-off implementations that can't be called from elsewhere

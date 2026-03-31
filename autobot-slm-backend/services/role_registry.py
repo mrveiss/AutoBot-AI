@@ -310,13 +310,13 @@ _OPTIONAL_ROLES = [
 # ---------------------------------------------------------------------------
 _INFRA_ROLES = [
     {
-        "name": "autobot-shared",
+        "name": "autobot_shared",
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot-shared/"],
-        "target_path": f"{_BASE_DIR}/autobot-shared",
+        "source_paths": ["autobot_shared/"],
+        "target_path": f"{_BASE_DIR}/autobot_shared",
         "auto_restart": False,
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-shared && pip install -e ."),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-shared.yml",
@@ -429,7 +429,7 @@ async def list_roles(db: AsyncSession) -> List[Role]:
 
 
 # Infra roles allowed on multiple nodes simultaneously (#1389)
-MULTI_NODE_ROLES = {"autobot-shared", "slm-agent"}
+MULTI_NODE_ROLES = {"autobot_shared", "slm-agent"}
 
 
 async def check_role_uniqueness(
@@ -440,7 +440,7 @@ async def check_role_uniqueness(
     """Check if a role is already assigned to another node (#1389).
 
     Returns the node_id that currently owns the role, or None if available.
-    Infra roles (autobot-shared, slm-agent) are exempt.
+    Infra roles (autobot_shared, slm-agent) are exempt.
     """
     if role_name in MULTI_NODE_ROLES:
         return None

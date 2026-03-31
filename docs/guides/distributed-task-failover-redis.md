@@ -2265,8 +2265,8 @@ redis-cli -h 172.16.168.23 -n 0 LPUSH queue:<task_type> "<task_id>"
 
 ## Related Documentation
 
-- [SSOT Configuration](../../autobot-shared/ssot_config.py) -- VM IPs and port configuration
-- [Redis Client Module](../../autobot-shared/redis_client.py) -- canonical Redis access
+- [SSOT Configuration](../../autobot_shared/ssot_config.py) -- VM IPs and port configuration
+- [Redis Client Module](../../autobot_shared/redis_client.py) -- canonical Redis access
 - [NPU Worker API](../../autobot-backend/api/npu_workers.py) -- NPU endpoint reference
 - [Scheduler API](../../autobot-backend/api/scheduler.py) -- workflow scheduling
 - [Long-Running Operations](../../autobot-backend/api/long_running_operations.py) -- checkpoint/resume

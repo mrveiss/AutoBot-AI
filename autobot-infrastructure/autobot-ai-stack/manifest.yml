@@ -50,7 +50,7 @@ system_updates:
 coexistence:
   compatible_with:
     - autobot-slm-agent
-    - autobot-shared
+    - autobot_shared
   conflicts_with: []
   warns_with: []
 

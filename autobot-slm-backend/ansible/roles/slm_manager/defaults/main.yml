@@ -13,7 +13,7 @@ slm_group: autobot
 slm_base_dir: /opt/autobot
 slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
-slm_shared_dir: "{{ slm_base_dir }}/autobot-shared"
+slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
 slm_certs_dir: "{{ slm_base_dir }}/nginx/certs"
 slm_credentials_dir: /etc/autobot

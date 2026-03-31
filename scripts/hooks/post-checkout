@@ -39,17 +39,6 @@ if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SY
     fi
 fi
 
-SHARED_SYMLINK="$GIT_ROOT/autobot_shared"
-
-if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
-    if cd "$GIT_ROOT" 2>/dev/null; then
-        echo "🔧 Fixing autobot_shared symlink..."
-        rm -f autobot_shared
-        ln -s autobot-shared autobot_shared
-        echo "✅ autobot_shared symlink restored: $SHARED_SYMLINK -> autobot-shared"
-    fi
-fi
-
 # ---------------------------------------------------------------------------
 # 2. Fix hook script permissions (Issue #1683)
 # ---------------------------------------------------------------------------
