@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
 from config import UnifiedConfig
 
 # Initialize unified config

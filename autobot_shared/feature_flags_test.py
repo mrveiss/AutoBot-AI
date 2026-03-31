@@ -316,7 +316,6 @@ class TestRequireFeatureDecorator:
         @require_feature("osint")
         def run_osint_sweep():
             """Perform an OSINT sweep."""
-            pass
 
         assert run_osint_sweep.__name__ == "run_osint_sweep"
         assert run_osint_sweep.__doc__ == "Perform an OSINT sweep."
