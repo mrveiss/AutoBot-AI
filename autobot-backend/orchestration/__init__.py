@@ -16,9 +16,17 @@ This package contains:
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
 - error_handler: Step-level error handling and workflow checkpointing (#2154)
 - execution_modes: Dry-run validation and step-by-step debug mode (#2148)
+- sub_workflow: Sub-workflow composition — workflows as reusable building blocks (#2143)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
+from .sub_workflow import (
+    MAX_NESTING_DEPTH,
+    SubWorkflowExecutor,
+    SubWorkflowStep,
+    extract_sub_workflow_step,
+    is_sub_workflow_step,
+)
 from .dag_executor import DAGExecutor, NodeType, WorkflowDAG, build_dag, workflow_has_condition_nodes
 from .error_handler import (
     BackoffStrategy,
@@ -61,6 +69,12 @@ __all__ = [
     "WorkflowExecutor",
     "WorkflowMemory",
     "WorkflowPlanner",
+    # Sub-workflow composition (#2143)
+    "MAX_NESTING_DEPTH",
+    "SubWorkflowExecutor",
+    "SubWorkflowStep",
+    "extract_sub_workflow_step",
+    "is_sub_workflow_step",
     # DAG execution (#2140)
     "DAGExecutor",
     "NodeType",

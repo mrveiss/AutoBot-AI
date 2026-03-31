@@ -14,6 +14,9 @@ Issue #2141: Structured variable piping — ${steps.<id>.output} resolved before
              each step executes; completed step results stored as StepOutput.
 Issue #2154: Step-level error handlers (retry/skip/fallback/pause/abort) and
              workflow resume-from-checkpoint via Redis.
+Issue #2143: Sub-workflow composition — a step with type="sub_workflow" delegates
+             to SubWorkflowExecutor, which executes the child workflow and stores
+             its result as a StepOutput under the caller's step_outputs registry.
 """
 
 import asyncio
@@ -39,6 +42,7 @@ from .error_handler import (
     WorkflowCheckpointManager,
 )
 from .execution_modes import DebugController, DryRunValidator, ExecutionMode
+from .sub_workflow import SubWorkflowExecutor, extract_sub_workflow_step, is_sub_workflow_step
 from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
@@ -64,16 +68,21 @@ class WorkflowExecutor:
         reserve_agent_callback: Callable[[str], None],
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
+        workflow_fetcher: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
     ):
         """
         Initialize the workflow executor.
 
         Args:
-            agent_registry: Registry of available agents
-            agent_interactions: List to track agent interactions
-            reserve_agent_callback: Function to reserve an agent
-            release_agent_callback: Function to release an agent
-            update_performance_callback: Function to update agent performance
+            agent_registry:              Registry of available agents.
+            agent_interactions:          List to track agent interactions.
+            reserve_agent_callback:      Function to reserve an agent.
+            release_agent_callback:      Function to release an agent.
+            update_performance_callback: Function to update agent performance.
+            workflow_fetcher:            Optional callable ``(workflow_id) → workflow_dict``
+                                         used to load child workflows for sub-workflow
+                                         composition (Issue #2143).  When None, sub-workflow
+                                         steps raise ``ValueError`` at execution time.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
@@ -85,6 +94,12 @@ class WorkflowExecutor:
         # Issue #2154: checkpoint manager and error handler
         self._checkpoint_manager = WorkflowCheckpointManager()
         self._error_handler = StepErrorHandler()
+        # Issue #2143: sub-workflow executor (None when fetcher not provided)
+        self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
+            SubWorkflowExecutor(workflow_executor=self, workflow_fetcher=workflow_fetcher)
+            if workflow_fetcher is not None
+            else None
+        )
 
     def _group_steps_by_dependency(
         self, steps: List[Dict[str, Any]]
@@ -208,6 +223,11 @@ class WorkflowExecutor:
         step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
         self._resolve_step_variables(step, step_outputs)
 
+        # Issue #2143: sub-workflow steps are handled before agent reservation.
+        if is_sub_workflow_step(step):
+            await self._execute_sub_workflow_step(step, execution_context, context)
+            return
+
         if agent_id:
             self._reserve_agent(agent_id)
 
@@ -242,6 +262,88 @@ class WorkflowExecutor:
         finally:
             if agent_id:
                 self._release_agent(agent_id)
+
+    async def _execute_sub_workflow_step(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> None:
+        """
+        Execute a sub-workflow invocation step and store its result.
+
+        Delegates to SubWorkflowExecutor, then stores the child execution
+        context as a StepOutput in ``execution_context["step_outputs"]`` under
+        the step's ID, so parent steps can reference child results via the
+        standard ``${steps.<id>.output.*}`` variable syntax.
+
+        Issue #2143.
+
+        Args:
+            step:              The sub-workflow step dict (type="sub_workflow").
+            execution_context: Parent workflow's execution context (mutated in-place).
+            context:           Parent workflow's input context forwarded to the child.
+        """
+        step_id = step["id"]
+        step_start_time = time.time()
+
+        if self._sub_workflow_executor is None:
+            logger.error(
+                "Sub-workflow step %s: no workflow_fetcher configured — cannot execute", step_id
+            )
+            step["status"] = "failed"
+            step["result"] = {
+                "success": False,
+                "step_id": step_id,
+                "error": "WorkflowExecutor was not initialised with a workflow_fetcher; "
+                "sub-workflow steps cannot be executed.",
+            }
+            execution_context["step_results"][step_id] = step["result"]
+            return
+
+        sub_step = extract_sub_workflow_step(step)
+        parent_step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
+
+        try:
+            step_result = await self._sub_workflow_executor.execute(
+                sub_step=sub_step,
+                parent_context=context,
+                parent_step_outputs=parent_step_outputs,
+            )
+        except Exception as exc:
+            elapsed = time.time() - step_start_time
+            logger.error("Sub-workflow step %s failed: %s", step_id, exc)
+            step["status"] = "failed"
+            step["execution_time"] = elapsed
+            step["result"] = {"success": False, "step_id": step_id, "error": str(exc)}
+            execution_context["step_results"][step_id] = step["result"]
+            return
+
+        elapsed = time.time() - step_start_time
+        step["status"] = "completed" if step_result.get("success") else "failed"
+        step["execution_time"] = elapsed
+        step["result"] = step_result
+        execution_context["step_results"][step_id] = step_result
+
+        # Store the child's execution context as a StepOutput for variable piping.
+        if "step_outputs" in execution_context:
+            child_ctx = step_result.get("sub_workflow_result", {})
+            stdout = ""
+            execution_context["step_outputs"][step_id] = StepOutput(
+                status="completed" if step_result.get("success") else "failed",
+                stdout=stdout,
+                parsed_json=child_ctx if isinstance(child_ctx, dict) else None,
+                metadata={"output_key": sub_step.output_key, "execution_time": elapsed},
+            )
+            logger.debug(
+                "Sub-workflow step %s: stored child result under step_outputs[%s]",
+                step_id,
+                step_id,
+            )
+
+        # Issue #2154: checkpoint after successful completion.
+        if step_result.get("success"):
+            self._save_checkpoint(execution_context.get("workflow_id", ""), step_id, step_result)
 
     async def _execute_step_with_retry(
         self,
