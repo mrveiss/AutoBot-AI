@@ -126,7 +126,9 @@ class WorkflowDAG:
     and one with ``label=False``.
     """
 
-    def __init__(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
+    def __init__(
+        self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+    ) -> None:
         self._nodes: Dict[str, DAGNode] = {}
         self._successors: Dict[str, List[DAGEdge]] = {}
         self._predecessors: Dict[str, List[str]] = {}
@@ -255,7 +257,9 @@ def _evaluate_condition(node: DAGNode, ctx: DAGExecutionContext) -> bool:
     """
     expr: str = node.data.get("condition", "")
     if not expr:
-        logger.warning("Condition node %s has empty expression; defaulting False", node.node_id)
+        logger.warning(
+            "Condition node %s has empty expression; defaulting False", node.node_id
+        )
         return False
 
     safe_globals: Dict[str, Any] = {"__builtins__": {}}
@@ -366,7 +370,9 @@ class DAGExecutor:
 
         visited: Set[str] = set()
         try:
-            await self._visit_nodes([r.node_id for r in roots], dag, ctx, visited, context or {})
+            await self._visit_nodes(
+                [r.node_id for r in roots], dag, ctx, visited, context or {}
+            )
         except Exception as exc:
             logger.error("Workflow %s DAG execution raised: %s", workflow_id, exc)
             ctx.status = "failed"
@@ -374,7 +380,9 @@ class DAGExecutor:
             return ctx
 
         ctx.status = "completed" if ctx.error is None else "partially_completed"
-        logger.info("Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status)
+        logger.info(
+            "Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status
+        )
         return ctx
 
     # ------------------------------------------------------------------
@@ -429,7 +437,9 @@ class DAGExecutor:
 
         if node_id in ctx.skipped_nodes:
             logger.debug("Skipping node %s (marked skipped by branch pruning)", node_id)
-            next_ids = self._get_next_node_ids(node, dag, condition_result=None, skipped=True)
+            next_ids = self._get_next_node_ids(
+                node, dag, condition_result=None, skipped=True
+            )
             await self._visit_nodes(next_ids, dag, ctx, visited, context)
             return
 
@@ -489,9 +499,7 @@ class DAGExecutor:
             "node_id": node.node_id,
         }
 
-        logger.info(
-            "Condition node %s evaluated to %s", node.node_id, condition_result
-        )
+        logger.info("Condition node %s evaluated to %s", node.node_id, condition_result)
 
         true_targets: List[str] = []
         false_targets: List[str] = []
@@ -550,7 +558,9 @@ class DAGExecutor:
 # ---------------------------------------------------------------------------
 
 
-def workflow_has_condition_nodes(steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> bool:
+def workflow_has_condition_nodes(
+    steps: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+) -> bool:
     """
     Return True when the step/edge list describes a branching workflow.
 

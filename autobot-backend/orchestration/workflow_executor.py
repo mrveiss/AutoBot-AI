@@ -34,7 +34,13 @@ from constants.threshold_constants import (
 )
 from retry_mechanism import RetryStrategy, retry_async
 
-from .dag_executor import DAGExecutor, DAGExecutionContext, DAGNode, build_dag, workflow_has_condition_nodes
+from .dag_executor import (
+    DAGExecutor,
+    DAGExecutionContext,
+    DAGNode,
+    build_dag,
+    workflow_has_condition_nodes,
+)
 from .error_handler import (
     StepCheckpoint,
     StepErrorAction,
@@ -42,7 +48,11 @@ from .error_handler import (
     WorkflowCheckpointManager,
 )
 from .execution_modes import DebugController, DryRunValidator, ExecutionMode
-from .sub_workflow import SubWorkflowExecutor, extract_sub_workflow_step, is_sub_workflow_step
+from .sub_workflow import (
+    SubWorkflowExecutor,
+    extract_sub_workflow_step,
+    is_sub_workflow_step,
+)
 from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
@@ -96,7 +106,9 @@ class WorkflowExecutor:
         self._error_handler = StepErrorHandler()
         # Issue #2143: sub-workflow executor (None when fetcher not provided)
         self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
-            SubWorkflowExecutor(workflow_executor=self, workflow_fetcher=workflow_fetcher)
+            SubWorkflowExecutor(
+                workflow_executor=self, workflow_fetcher=workflow_fetcher
+            )
             if workflow_fetcher is not None
             else None
         )
@@ -193,7 +205,9 @@ class WorkflowExecutor:
         if isinstance(inputs, dict):
             for key, value in inputs.items():
                 if isinstance(value, str):
-                    resolved_value = self._variable_resolver.resolve(value, step_outputs)
+                    resolved_value = self._variable_resolver.resolve(
+                        value, step_outputs
+                    )
                     if resolved_value != value:
                         logger.debug(
                             "Step %s: resolved input '%s' variable (#2141)",
@@ -244,13 +258,15 @@ class WorkflowExecutor:
 
             # Issue #2141: Record typed StepOutput so later steps can reference it.
             if "step_outputs" in execution_context:
-                execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
-                    step_result
+                execution_context["step_outputs"][step_id] = (
+                    StepOutput.from_step_result(step_result)
                 )
 
             # Issue #2154: Checkpoint after successful completion.
             if step_result.get("success"):
-                self._save_checkpoint(execution_context.get("workflow_id", ""), step_id, step_result)
+                self._save_checkpoint(
+                    execution_context.get("workflow_id", ""), step_id, step_result
+                )
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
@@ -289,7 +305,8 @@ class WorkflowExecutor:
 
         if self._sub_workflow_executor is None:
             logger.error(
-                "Sub-workflow step %s: no workflow_fetcher configured — cannot execute", step_id
+                "Sub-workflow step %s: no workflow_fetcher configured — cannot execute",
+                step_id,
             )
             step["status"] = "failed"
             step["result"] = {
@@ -302,7 +319,9 @@ class WorkflowExecutor:
             return
 
         sub_step = extract_sub_workflow_step(step)
-        parent_step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
+        parent_step_outputs: Dict[str, StepOutput] = execution_context.get(
+            "step_outputs", {}
+        )
 
         try:
             step_result = await self._sub_workflow_executor.execute(
@@ -343,7 +362,9 @@ class WorkflowExecutor:
 
         # Issue #2154: checkpoint after successful completion.
         if step_result.get("success"):
-            self._save_checkpoint(execution_context.get("workflow_id", ""), step_id, step_result)
+            self._save_checkpoint(
+                execution_context.get("workflow_id", ""), step_id, step_result
+            )
 
     async def _execute_step_with_retry(
         self,
@@ -362,7 +383,9 @@ class WorkflowExecutor:
         attempt = 1
         while True:
             try:
-                return await self._execute_coordinated_step(step, execution_context, context)
+                return await self._execute_coordinated_step(
+                    step, execution_context, context
+                )
             except Exception as exc:
                 outcome = await self._error_handler.handle_error(
                     step, exc, attempt, execution_context
@@ -411,7 +434,9 @@ class WorkflowExecutor:
 
         Issue #2154.
         """
-        step_registry: Dict[str, Dict[str, Any]] = execution_context.get("step_registry", {})
+        step_registry: Dict[str, Dict[str, Any]] = execution_context.get(
+            "step_registry", {}
+        )
         fallback_step = step_registry.get(fallback_step_id)
 
         if fallback_step is None:
@@ -437,12 +462,12 @@ class WorkflowExecutor:
             result["fallback_for"] = original_step.get("id")
             return result
         except Exception as exc:
-            logger.error(
-                "Fallback step %s also failed: %s", fallback_step_id, exc
-            )
+            logger.error("Fallback step %s also failed: %s", fallback_step_id, exc)
             raise
 
-    def _save_checkpoint(self, workflow_id: str, step_id: str, step_result: Dict[str, Any]) -> None:
+    def _save_checkpoint(
+        self, workflow_id: str, step_id: str, step_result: Dict[str, Any]
+    ) -> None:
         """
         Persist a checkpoint for *step_id* after successful execution.
 
@@ -496,7 +521,11 @@ class WorkflowExecutor:
         if mode == ExecutionMode.DRY_RUN:
             validator = DryRunValidator()
             report = validator.validate(workflow_id, steps, edges)
-            return {"status": "dry_run_complete", "mode": "dry_run", "dry_run_report": report.to_dict()}
+            return {
+                "status": "dry_run_complete",
+                "mode": "dry_run",
+                "dry_run_report": report.to_dict(),
+            }
 
         effective_edges = edges or []
         if workflow_has_condition_nodes(steps, effective_edges):
@@ -504,7 +533,9 @@ class WorkflowExecutor:
                 "Workflow %s: condition nodes detected — using DAG executor (#2140)",
                 workflow_id,
             )
-            return await self._execute_dag_workflow(workflow_id, steps, effective_edges, context)
+            return await self._execute_dag_workflow(
+                workflow_id, steps, effective_edges, context
+            )
 
         # Issue #2154: build a step registry so fallback resolution works.
         step_registry = {s["id"]: s for s in steps}
@@ -614,7 +645,9 @@ class WorkflowExecutor:
                 continue
             step["status"] = "completed"
             execution_context["step_results"][step_id] = cp.output
-            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(cp.output)
+            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
+                cp.output
+            )
 
     async def _execute_dag_workflow(
         self,

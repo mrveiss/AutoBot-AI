@@ -76,7 +76,10 @@ class TestGenerateInterceptScript:
     def test_two_calls_return_same_script(self):
         """Repeated calls must return identical strings."""
         interceptor = XHRInterceptor()
-        assert interceptor.generate_intercept_script() == interceptor.generate_intercept_script()
+        assert (
+            interceptor.generate_intercept_script()
+            == interceptor.generate_intercept_script()
+        )
 
 
 class TestCollectResults:
@@ -185,7 +188,9 @@ class TestInterceptedRequest:
         assert req.succeeded is True
 
     def test_succeeded_false_when_error_present(self):
-        req = InterceptedRequest(url="https://x.com", method="GET", error="network error")
+        req = InterceptedRequest(
+            url="https://x.com", method="GET", error="network error"
+        )
         assert req.succeeded is False
 
     def test_succeeded_false_when_no_status(self):
@@ -422,7 +427,9 @@ class TestAccessibilityNodeToDict:
         assert "checked" not in d
 
     def test_optional_fields_included_when_set(self):
-        node = AccessibilityNode(role="checkbox", name="Accept", checked=True, required=True)
+        node = AccessibilityNode(
+            role="checkbox", name="Accept", checked=True, required=True
+        )
         d = node.to_dict()
         assert d["checked"] is True
         assert d["required"] is True
@@ -440,7 +447,9 @@ class TestAccessibilityNodeToDict:
         assert "children" not in d
 
     def test_properties_included_when_non_empty(self):
-        node = AccessibilityNode(role="generic", name="", properties={"aria-live": "polite"})
+        node = AccessibilityNode(
+            role="generic", name="", properties={"aria-live": "polite"}
+        )
         d = node.to_dict()
         assert d["properties"] == {"aria-live": "polite"}
 

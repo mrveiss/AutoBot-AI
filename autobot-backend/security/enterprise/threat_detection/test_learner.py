@@ -24,7 +24,6 @@ from security.enterprise.threat_detection.learner import (
     ThreatDetectionLearner,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -301,9 +300,9 @@ class TestConsolidate:
 
         # p1 → inactive (prune); p2 → high FP (flag); p3 → healthy
         mock_redis.hmget.side_effect = [
-            [b"5", b"0", old_ts.encode()],           # p1 pruned
-            [b"2", b"8", recent_ts.encode()],         # p2 flagged
-            [b"9", b"1", recent_ts.encode()],         # p3 healthy
+            [b"5", b"0", old_ts.encode()],  # p1 pruned
+            [b"2", b"8", recent_ts.encode()],  # p2 flagged
+            [b"9", b"1", recent_ts.encode()],  # p3 healthy
         ]
 
         summary = learner.consolidate()

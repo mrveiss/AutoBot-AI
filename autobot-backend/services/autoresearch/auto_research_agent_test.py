@@ -89,7 +89,9 @@ def _make_metrics(improved: bool = True) -> ImprovementMetrics:
         result_val_bpb=4.5 if improved else 5.1,
         improvement=0.5 if improved else -0.1,
         improvement_pct=10.0 if improved else -2.0,
-        state=ExperimentState.KEPT.value if improved else ExperimentState.DISCARDED.value,
+        state=(
+            ExperimentState.KEPT.value if improved else ExperimentState.DISCARDED.value
+        ),
     )
 
 
@@ -137,7 +139,15 @@ class TestParseGitHubResults:
         assert _parse_github_results({"items": []}) == []
 
     def test_missing_description_defaults_to_empty_string(self):
-        data = {"items": [{"full_name": "x/y", "html_url": "https://example.com", "description": None}]}
+        data = {
+            "items": [
+                {
+                    "full_name": "x/y",
+                    "html_url": "https://example.com",
+                    "description": None,
+                }
+            ]
+        }
         results = _parse_github_results(data)
         assert results[0].summary == ""
 
@@ -146,23 +156,49 @@ class TestExtractThemes:
     """_extract_themes maps search result text to theme names."""
 
     def test_detects_attention_theme(self):
-        results = [SearchResult(title="Multi-head Attention", url="u", summary="transformer block", source="arxiv")]
+        results = [
+            SearchResult(
+                title="Multi-head Attention",
+                url="u",
+                summary="transformer block",
+                source="arxiv",
+            )
+        ]
         assert "attention" in _extract_themes(results)
 
     def test_detects_regularisation_theme(self):
-        results = [SearchResult(title="Dropout", url="u", summary="weight decay regularization", source="arxiv")]
+        results = [
+            SearchResult(
+                title="Dropout",
+                url="u",
+                summary="weight decay regularization",
+                source="arxiv",
+            )
+        ]
         assert "regularisation" in _extract_themes(results)
 
     def test_empty_results_return_empty_list(self):
         assert _extract_themes([]) == []
 
     def test_no_match_returns_empty_list(self):
-        results = [SearchResult(title="Unrelated paper", url="u", summary="nothing relevant", source="arxiv")]
+        results = [
+            SearchResult(
+                title="Unrelated paper",
+                url="u",
+                summary="nothing relevant",
+                source="arxiv",
+            )
+        ]
         assert _extract_themes(results) == []
 
     def test_multiple_themes_detected(self):
         results = [
-            SearchResult(title="Attention and Dropout", url="u", summary="learning rate warmup", source="arxiv"),
+            SearchResult(
+                title="Attention and Dropout",
+                url="u",
+                summary="learning rate warmup",
+                source="arxiv",
+            ),
         ]
         themes = _extract_themes(results)
         assert "attention" in themes
@@ -219,9 +255,12 @@ class TestImprovementMetrics:
 
     def test_none_improvement_is_not_improved(self):
         m = ImprovementMetrics(
-            experiment_id="x", baseline_val_bpb=None,
-            result_val_bpb=None, improvement=None,
-            improvement_pct=None, state="failed",
+            experiment_id="x",
+            baseline_val_bpb=None,
+            result_val_bpb=None,
+            improvement=None,
+            improvement_pct=None,
+            state="failed",
         )
         assert m.improved is False
 
@@ -371,7 +410,9 @@ class TestAutoResearchAgentLoop:
         runner.run_experiment = AsyncMock(side_effect=lambda e: _make_experiment())
         agent = _make_agent(runner_mock=runner)
 
-        session = await agent.run_experiment_loop(topic="attention mechanisms", max_iterations=2)
+        session = await agent.run_experiment_loop(
+            topic="attention mechanisms", max_iterations=2
+        )
 
         assert session.iterations_completed == 2
         assert session.status == SessionStatus.COMPLETED
@@ -430,12 +471,16 @@ class TestAutoResearchAgentLoop:
         """ApprovalGate.request_approval is called when improvement exceeds threshold."""
         runner = AsyncMock()
         # 20% improvement — above the 5% default threshold
-        improved_exp = _make_experiment(state=ExperimentState.KEPT, val_bpb=4.0, baseline=5.0)
+        improved_exp = _make_experiment(
+            state=ExperimentState.KEPT, val_bpb=4.0, baseline=5.0
+        )
         runner.run_experiment = AsyncMock(return_value=improved_exp)
 
         approval_gate = MagicMock(spec=ApprovalGate)
         approval_gate.check_approval_needed = MagicMock(return_value=True)
-        approval_gate.request_approval = AsyncMock(return_value="autoresearch:approval:status:s:e")
+        approval_gate.request_approval = AsyncMock(
+            return_value="autoresearch:approval:status:s:e"
+        )
         approval_gate.wait_for_approval = AsyncMock(return_value="approved")
 
         import httpx

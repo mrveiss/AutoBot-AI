@@ -150,7 +150,10 @@ class RedisGraphAdapter:
         raw: list[tuple[bytes, float]] = await self._redis.zrangebyscore(
             key, min=0.0, max="+inf", withscores=True
         )
-        return [(member.decode() if isinstance(member, bytes) else member, score) for member, score in raw]
+        return [
+            (member.decode() if isinstance(member, bytes) else member, score)
+            for member, score in raw
+        ]
 
 
 async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:
@@ -169,5 +172,7 @@ async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:
     if not node_ids:
         return 0
     await redis.rpush(_REEMBED_QUEUE_KEY, *node_ids)
-    logger.info("Enqueued %d nodes for re-embedding (key=%s)", len(node_ids), _REEMBED_QUEUE_KEY)
+    logger.info(
+        "Enqueued %d nodes for re-embedding (key=%s)", len(node_ids), _REEMBED_QUEUE_KEY
+    )
     return len(node_ids)
