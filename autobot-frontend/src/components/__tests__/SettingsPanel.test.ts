@@ -1,21 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/vue'
+import { screen, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import SettingsPanel from '../settings/SettingsPanel.vue'
-import {
-  renderComponent,
-  createMockSettings,
-  waitForUpdate,
-} from '../../test/utils/test-utils'
-import { createMockApiService } from '../../test/mocks/api-client-mock'
+import { renderComponent } from '../../test/utils/test-utils'
+import axios from 'axios'
 
-// Mock dependencies — SettingsPanel imports axios directly
+// ── Mock dependencies ──────────────────────────────────────────────────
+// SettingsPanel imports axios directly for all API calls.
+// The global vitest-setup.ts runs vi.clearAllMocks() in beforeEach,
+// which wipes mockResolvedValue set in vi.mock factories.
+// We must re-configure return values in our own beforeEach using
+// the imported (mocked) axios instance.
+
 vi.mock('axios', () => ({
   default: {
-    get: vi.fn().mockResolvedValue({ data: {} }),
-    post: vi.fn().mockResolvedValue({ data: {} }),
-    put: vi.fn().mockResolvedValue({ data: {} }),
-    delete: vi.fn().mockResolvedValue({ data: {} }),
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
     create: vi.fn().mockReturnThis(),
     interceptors: {
       request: { use: vi.fn(), eject: vi.fn() },
@@ -44,646 +46,392 @@ vi.mock('@/services/api', () => ({
   },
 }))
 
-const mockSettings = createMockSettings({
+// Mock CacheService used by the component for cached settings fallback
+vi.mock('@/services/CacheService', () => ({
+  default: {
+    get: vi.fn().mockReturnValue(null),
+    set: vi.fn(),
+    clear: vi.fn(),
+  },
+}))
+
+// ── Mock settings response matching backend shape ──────────────────────
+const mockSettingsResponse = {
   chat: {
     auto_scroll: true,
     max_messages: 100,
     message_retention_days: 30,
   },
   backend: {
-    general: {
-      host: 'localhost',
-      port: 8001,
-      timeout: 30000,
-      debug: false,
-    },
     llm: {
-      provider: 'openai',
-      model: 'gpt-4',
-      temperature: 0.7,
-      max_tokens: 2000,
+      provider_type: 'local',
+      local: { provider: 'ollama' },
     },
-    embedding: {
-      provider: 'openai',
-      model: 'text-embedding-ada-002',
-      dimensions: 1536,
-    }
   },
   ui: {
     theme: 'light',
-    sidebar_collapsed: false,
-    auto_save: true,
-  }
-})
+    language: 'en',
+    show_timestamps: true,
+    show_status_bar: true,
+    auto_refresh_interval: 30,
+  },
+}
+
+const mockHealthResponse = {
+  status: 'healthy',
+  services: {},
+}
+
+/**
+ * Configure axios mock return values for all endpoints SettingsPanel
+ * calls on mount:
+ *   GET /api/settings/           -> loadSettings
+ *   GET /api/cache/stats         -> checkCacheApiAvailability + refreshCacheStats
+ *   GET /api/system/health/detailed -> loadHealthStatus
+ *   GET /api/system/health       -> loadHealthStatus fallback
+ */
+function setupAxiosMocks() {
+  vi.mocked(axios.get).mockImplementation((url: string, ...args: any[]) => {
+    if (url === '/api/settings/') {
+      return Promise.resolve({ data: mockSettingsResponse })
+    }
+    if (url === '/api/cache/stats') {
+      return Promise.resolve({ data: { hits: 0, misses: 0 } })
+    }
+    if (url === '/api/system/health/detailed') {
+      return Promise.resolve({ data: mockHealthResponse })
+    }
+    if (url === '/api/system/health') {
+      return Promise.resolve({ data: { status: 'healthy' } })
+    }
+    if (url === '/api/prompts') {
+      return Promise.resolve({ data: [] })
+    }
+    // Default: resolve with empty data to prevent undefined crashes
+    return Promise.resolve({ data: {} })
+  })
+
+  vi.mocked(axios.post).mockResolvedValue({ data: { success: true } })
+  vi.mocked(axios.put).mockResolvedValue({ data: { success: true } })
+  vi.mocked(axios.delete).mockResolvedValue({ data: { success: true } })
+}
 
 describe('SettingsPanel', () => {
   let user: ReturnType<typeof userEvent.setup>
-  let mockApi: ReturnType<typeof createMockApiService>
 
   beforeEach(() => {
     user = userEvent.setup()
-    mockApi = createMockApiService()
-
-    // Mock settings API response
-    mockApi.client.mockGet('/api/settings', {
-      success: true,
-      data: { settings: mockSettings }
-    })
+    // Re-configure axios mocks after global vi.clearAllMocks() wipes them
+    setupAxiosMocks()
   })
 
   afterEach(() => {
     vi.clearAllMocks()
   })
 
+  // Helper to render SettingsPanel with all required plugins
+  function renderSettings() {
+    return renderComponent(SettingsPanel, {
+      router: true,
+    })
+  }
+
   describe('Rendering', () => {
-    it('renders the settings panel with tabs', async () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('renders the settings panel layout', async () => {
+      renderSettings()
 
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /backend/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /ui/i })).toBeInTheDocument()
+      // Component always renders the layout container
+      const layout = document.querySelector('.settings-panel-layout')
+      expect(layout).not.toBeNull()
     })
 
-    it('loads settings on mount', async () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('shows loading state initially', () => {
+      renderSettings()
+
+      // While settings are being fetched, loading indicator is shown
+      // i18n returns the key path when no messages are provided in test i18n
+      expect(screen.getByText('settings.loadingSettings')).toBeInTheDocument()
+    })
+
+    it('calls settings API on mount', async () => {
+      renderSettings()
 
       await waitFor(() => {
-        expect(mockApi.client.get).toHaveBeenCalledWith('/api/settings')
+        expect(axios.get).toHaveBeenCalledWith('/api/settings/')
       })
     })
 
-    it('shows loading state while fetching settings', () => {
-      // Mock delayed response
-      mockApi.client.get.mockImplementation(() =>
-        new Promise(resolve => setTimeout(resolve, 1000))
-      )
-
-      renderComponent(SettingsPanel, { router: true })
-
-      // Should show loading indication
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-    })
-
-    it('handles settings loading error', async () => {
-      mockApi.client.get.mockRejectedValue(new Error('Failed to load settings'))
-
-      renderComponent(SettingsPanel, { router: true })
+    it('calls health API on mount', async () => {
+      renderSettings()
 
       await waitFor(() => {
-        // Should show error state or fallback content
-        expect(screen.getByText('Settings')).toBeInTheDocument()
-      })
-    })
-  })
-
-  describe('Tab Navigation', () => {
-    it('switches between tabs correctly', async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
-      })
-
-      // Start on chat tab (default)
-      expect(screen.getByText('Chat Settings')).toBeInTheDocument()
-
-      // Switch to backend tab
-      const backendTab = screen.getByRole('button', { name: /backend/i })
-      await user.click(backendTab)
-
-      await waitFor(() => {
-        expect(screen.getByText('General')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /llm/i })).toBeInTheDocument()
-      })
-
-      // Switch to UI tab
-      const uiTab = screen.getByRole('button', { name: /ui/i })
-      await user.click(uiTab)
-
-      await waitFor(() => {
-        expect(screen.getByText('UI Settings')).toBeInTheDocument()
+        expect(axios.get).toHaveBeenCalledWith('/api/system/health/detailed')
       })
     })
 
-    it('shows active tab correctly', async () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('calls cache availability check on mount', async () => {
+      renderSettings()
 
       await waitFor(() => {
-        const chatTab = screen.getByRole('button', { name: /chat/i })
-        expect(chatTab).toHaveClass('active')
-      })
-
-      const backendTab = screen.getByRole('button', { name: /backend/i })
-      await user.click(backendTab)
-
-      await waitFor(() => {
-        expect(backendTab).toHaveClass('active')
-        expect(screen.getByRole('button', { name: /chat/i })).not.toHaveClass('active')
-      })
-    })
-  })
-
-  describe('Chat Settings', () => {
-    beforeEach(async () => {
-      renderComponent(SettingsPanel, { router: true })
-      await waitFor(() => {
-        expect(screen.getByText('Chat Settings')).toBeInTheDocument()
-      })
-    })
-
-    it('displays chat settings correctly', () => {
-      expect(screen.getByLabelText(/auto scroll/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/max messages/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/message retention/i)).toBeInTheDocument()
-    })
-
-    it('updates auto scroll setting', async () => {
-      const autoScrollCheckbox = screen.getByLabelText(/auto scroll/i) as HTMLInputElement
-      expect(autoScrollCheckbox.checked).toBe(true)
-
-      await user.click(autoScrollCheckbox)
-      expect(autoScrollCheckbox.checked).toBe(false)
-
-      // Should trigger save if auto-save is enabled
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            chat: expect.objectContaining({
-              auto_scroll: false
-            })
-          })
+        expect(axios.get).toHaveBeenCalledWith(
+          '/api/cache/stats',
+          expect.objectContaining({ timeout: 3000 })
         )
       })
     })
 
-    it('updates max messages setting', async () => {
-      const maxMessagesInput = screen.getByLabelText(/max messages/i) as HTMLInputElement
-      expect(maxMessagesInput.value).toBe('100')
-
-      await user.clear(maxMessagesInput)
-      await user.type(maxMessagesInput, '200')
+    it('transitions from loading to loaded after successful fetch', async () => {
+      renderSettings()
 
       await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            chat: expect.objectContaining({
-              max_messages: 200
-            })
-          })
-        )
+        // Loading indicator should be gone
+        const loadingEl = document.querySelector('.settings-loading')
+        expect(loadingEl).toBeNull()
       })
+
+      // router-view container should exist (content-inner always renders)
+      const contentInner = document.querySelector('.settings-content-inner')
+      expect(contentInner).not.toBeNull()
     })
 
-    it('validates max messages range', async () => {
-      const maxMessagesInput = screen.getByLabelText(/max messages/i) as HTMLInputElement
-
-      await user.clear(maxMessagesInput)
-      await user.type(maxMessagesInput, '5') // Below minimum
-
-      // Should show validation error or reset to minimum
-      expect(maxMessagesInput.min).toBe('10')
-    })
-
-    it('updates message retention days', async () => {
-      const retentionInput = screen.getByLabelText(/message retention/i) as HTMLInputElement
-      expect(retentionInput.value).toBe('30')
-
-      await user.clear(retentionInput)
-      await user.type(retentionInput, '60')
-
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            chat: expect.objectContaining({
-              message_retention_days: 60
-            })
-          })
-        )
-      })
-    })
-  })
-
-  describe('Backend Settings', () => {
-    beforeEach(async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      await waitFor(() => {
-        const backendTab = screen.getByRole('button', { name: /backend/i })
-        return user.click(backendTab)
-      })
-
-      await waitFor(() => {
-        expect(screen.getByText('General')).toBeInTheDocument()
-      })
-    })
-
-    it('displays backend sub-tabs', () => {
-      expect(screen.getByRole('button', { name: /general/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /llm/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /embedding/i })).toBeInTheDocument()
-    })
-
-    it('switches between backend sub-tabs', async () => {
-      // Start on General tab
-      expect(screen.getByLabelText(/host/i)).toBeInTheDocument()
-
-      // Switch to LLM tab
-      const llmSubTab = screen.getByRole('button', { name: /llm/i })
-      await user.click(llmSubTab)
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/provider/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/model/i)).toBeInTheDocument()
-      })
-
-      // Switch to Embedding tab
-      const embeddingSubTab = screen.getByRole('button', { name: /embedding/i })
-      await user.click(embeddingSubTab)
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/dimensions/i)).toBeInTheDocument()
-      })
-    })
-
-    describe('General Settings', () => {
-      it('displays and updates host setting', async () => {
-        const hostInput = screen.getByLabelText(/host/i) as HTMLInputElement
-        expect(hostInput.value).toBe('localhost')
-
-        await user.clear(hostInput)
-        await user.type(hostInput, '192.168.1.100')
-
-        await waitFor(() => {
-          expect(mockApi.client.post).toHaveBeenCalledWith(
-            '/api/settings',
-            expect.objectContaining({
-              backend: expect.objectContaining({
-                general: expect.objectContaining({
-                  host: '192.168.1.100'
-                })
-              })
-            })
-          )
-        })
-      })
-
-      it('displays and updates port setting', async () => {
-        const portInput = screen.getByLabelText(/port/i) as HTMLInputElement
-        expect(portInput.value).toBe('8001')
-
-        await user.clear(portInput)
-        await user.type(portInput, '8002')
-
-        await waitFor(() => {
-          expect(mockApi.client.post).toHaveBeenCalledWith(
-            '/api/settings',
-            expect.objectContaining({
-              backend: expect.objectContaining({
-                general: expect.objectContaining({
-                  port: 8002
-                })
-              })
-            })
-          )
-        })
-      })
-    })
-
-    describe('LLM Settings', () => {
-      beforeEach(async () => {
-        const llmSubTab = screen.getByRole('button', { name: /llm/i })
-        await user.click(llmSubTab)
-
-        await waitFor(() => {
-          expect(screen.getByLabelText(/provider/i)).toBeInTheDocument()
-        })
-      })
-
-      it('displays and updates LLM provider', async () => {
-        const providerSelect = screen.getByLabelText(/provider/i) as HTMLSelectElement
-        expect(providerSelect.value).toBe('openai')
-
-        await user.selectOptions(providerSelect, 'anthropic')
-
-        await waitFor(() => {
-          expect(mockApi.client.post).toHaveBeenCalledWith(
-            '/api/settings',
-            expect.objectContaining({
-              backend: expect.objectContaining({
-                llm: expect.objectContaining({
-                  provider: 'anthropic'
-                })
-              })
-            })
-          )
-        })
-      })
-
-      it('displays and updates model', async () => {
-        const modelInput = screen.getByLabelText(/model/i) as HTMLInputElement
-        expect(modelInput.value).toBe('gpt-4')
-
-        await user.clear(modelInput)
-        await user.type(modelInput, 'gpt-4-turbo')
-
-        await waitFor(() => {
-          expect(mockApi.client.post).toHaveBeenCalledWith(
-            '/api/settings',
-            expect.objectContaining({
-              backend: expect.objectContaining({
-                llm: expect.objectContaining({
-                  model: 'gpt-4-turbo'
-                })
-              })
-            })
-          )
-        })
-      })
-
-      it('displays and updates temperature', async () => {
-        const tempInput = screen.getByLabelText(/temperature/i) as HTMLInputElement
-        expect(tempInput.value).toBe('0.7')
-
-        await user.clear(tempInput)
-        await user.type(tempInput, '0.9')
-
-        await waitFor(() => {
-          expect(mockApi.client.post).toHaveBeenCalledWith(
-            '/api/settings',
-            expect.objectContaining({
-              backend: expect.objectContaining({
-                llm: expect.objectContaining({
-                  temperature: 0.9
-                })
-              })
-            })
-          )
-        })
-      })
-
-      it('validates temperature range', async () => {
-        const tempInput = screen.getByLabelText(/temperature/i) as HTMLInputElement
-
-        await user.clear(tempInput)
-        await user.type(tempInput, '1.5') // Above maximum
-
-        // Should enforce maximum value
-        expect(tempInput.max).toBe('1')
-      })
-    })
-  })
-
-  describe('UI Settings', () => {
-    beforeEach(async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      const uiTab = screen.getByRole('button', { name: /ui/i })
-      await user.click(uiTab)
-
-      await waitFor(() => {
-        expect(screen.getByText('UI Settings')).toBeInTheDocument()
-      })
-    })
-
-    it('displays UI settings', () => {
-      expect(screen.getByLabelText(/theme/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/sidebar collapsed/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/auto save/i)).toBeInTheDocument()
-    })
-
-    it('updates theme setting', async () => {
-      const themeSelect = screen.getByLabelText(/theme/i) as HTMLSelectElement
-      expect(themeSelect.value).toBe('light')
-
-      await user.selectOptions(themeSelect, 'dark')
-
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            ui: expect.objectContaining({
-              theme: 'dark'
-            })
-          })
-        )
-      })
-    })
-
-    it('updates sidebar collapsed setting', async () => {
-      const sidebarCheckbox = screen.getByLabelText(/sidebar collapsed/i) as HTMLInputElement
-      expect(sidebarCheckbox.checked).toBe(false)
-
-      await user.click(sidebarCheckbox)
-
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            ui: expect.objectContaining({
-              sidebar_collapsed: true
-            })
-          })
-        )
-      })
-    })
-
-    it('updates auto save setting', async () => {
-      const autoSaveCheckbox = screen.getByLabelText(/auto save/i) as HTMLInputElement
-      expect(autoSaveCheckbox.checked).toBe(true)
-
-      await user.click(autoSaveCheckbox)
-
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            ui: expect.objectContaining({
-              auto_save: false
-            })
-          })
-        )
-      })
-    })
-  })
-
-  describe('Settings Persistence', () => {
-    it('saves settings automatically when auto_save is enabled', async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      await waitFor(() => {
-        expect(screen.getByText('Chat Settings')).toBeInTheDocument()
-      })
-
-      const autoScrollCheckbox = screen.getByLabelText(/auto scroll/i)
-      await user.click(autoScrollCheckbox)
-
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith('/api/settings', expect.any(Object))
-      })
-    })
-
-    it('shows save button when auto_save is disabled', async () => {
-      // Mock settings with auto_save disabled
-      mockApi.client.mockGet('/api/settings', {
-        success: true,
-        data: {
-          settings: {
-            ...mockSettings,
-            ui: { ...mockSettings.ui, auto_save: false }
-          }
+    it('shows offline status when settings API fails', async () => {
+      vi.mocked(axios.get).mockImplementation((url: string) => {
+        if (url === '/api/settings/') {
+          return Promise.reject(new Error('Network error'))
         }
+        // Other endpoints still resolve to prevent cascading errors
+        return Promise.resolve({ data: {} })
       })
 
-      renderComponent(SettingsPanel, { router: true })
+      renderSettings()
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
-      })
-    })
-
-    it('handles save errors gracefully', async () => {
-      mockApi.client.post.mockRejectedValue(new Error('Save failed'))
-
-      renderComponent(SettingsPanel, { router: true })
-
-      await waitFor(() => {
-        expect(screen.getByText('Chat Settings')).toBeInTheDocument()
-      })
-
-      const autoScrollCheckbox = screen.getByLabelText(/auto scroll/i)
-      await user.click(autoScrollCheckbox)
-
-      // Should handle error without crashing
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalled()
-      })
-    })
-
-    it('shows save confirmation', async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      await waitFor(() => {
-        expect(screen.getByText('Chat Settings')).toBeInTheDocument()
-      })
-
-      const autoScrollCheckbox = screen.getByLabelText(/auto scroll/i)
-      await user.click(autoScrollCheckbox)
-
-      // Should show save confirmation (toast or similar)
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalled()
+        const offlineEl = document.querySelector('.settings-status.offline')
+        expect(offlineEl).not.toBeNull()
       })
     })
   })
 
-  describe('Form Validation', () => {
-    it('validates numeric inputs', async () => {
-      renderComponent(SettingsPanel, { router: true })
+  describe('Settings Loading', () => {
+    it('loads settings data from API response', async () => {
+      renderSettings()
 
-      await waitFor(async () => {
-        const maxMessagesInput = screen.getByLabelText(/max messages/i) as HTMLInputElement
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledWith('/api/settings/')
+      })
 
-        await user.clear(maxMessagesInput)
-        await user.type(maxMessagesInput, 'abc')
-
-        // Should not accept non-numeric input
-        expect(maxMessagesInput.validity.valid).toBe(false)
+      // After loading, the component should no longer show loading state
+      await waitFor(() => {
+        const loadingEl = document.querySelector('.settings-loading')
+        expect(loadingEl).toBeNull()
       })
     })
 
-    it('validates required fields', async () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('handles concurrent load prevention', async () => {
+      renderSettings()
 
-      const backendTab = screen.getByRole('button', { name: /backend/i })
-      await user.click(backendTab)
+      // First call should go through
+      await waitFor(() => {
+        const settingsCalls = vi.mocked(axios.get).mock.calls.filter(
+          (call) => call[0] === '/api/settings/'
+        )
+        // Should only call settings endpoint once (guard prevents concurrent)
+        expect(settingsCalls.length).toBe(1)
+      })
+    })
 
-      await waitFor(async () => {
-        const hostInput = screen.getByLabelText(/host/i) as HTMLInputElement
+    it('falls back to cache when API fails', async () => {
+      const CacheService = await import('@/services/CacheService')
+      const mockCacheGet = vi.mocked(CacheService.default.get)
+      mockCacheGet.mockReturnValue({
+        chat: { auto_scroll: false, max_messages: 50, message_retention_days: 7 },
+      })
 
-        await user.clear(hostInput)
-        await user.tab() // Trigger validation
+      vi.mocked(axios.get).mockImplementation((url: string) => {
+        if (url === '/api/settings/') {
+          return Promise.reject(new Error('Network error'))
+        }
+        return Promise.resolve({ data: {} })
+      })
 
-        // Should show required field validation
-        expect(hostInput.validity.valid).toBe(false)
+      renderSettings()
+
+      await waitFor(() => {
+        expect(mockCacheGet).toHaveBeenCalledWith('settings')
+      })
+    })
+  })
+
+  describe('Save and Discard', () => {
+    it('does not show save button when there are no unsaved changes', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        const loadingEl = document.querySelector('.settings-loading')
+        expect(loadingEl).toBeNull()
+      })
+
+      // Save button should not be visible when no changes made
+      const saveBtn = document.querySelector('.save-settings-btn')
+      expect(saveBtn).toBeNull()
+    })
+
+    it('does not show actions section when no changes are pending', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        const loadingEl = document.querySelector('.settings-loading')
+        expect(loadingEl).toBeNull()
+      })
+
+      // Without changes, no actions section
+      const actionsEl = document.querySelector('.settings-actions')
+      expect(actionsEl).toBeNull()
+    })
+  })
+
+  describe('Health Status', () => {
+    it('loads detailed health status on mount', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledWith('/api/system/health/detailed')
+      })
+    })
+
+    it('falls back to basic health when detailed fails', async () => {
+      vi.mocked(axios.get).mockImplementation((url: string) => {
+        if (url === '/api/settings/') {
+          return Promise.resolve({ data: mockSettingsResponse })
+        }
+        if (url === '/api/system/health/detailed') {
+          return Promise.reject(new Error('Not found'))
+        }
+        if (url === '/api/system/health') {
+          return Promise.resolve({ data: { status: 'healthy' } })
+        }
+        return Promise.resolve({ data: {} })
+      })
+
+      renderSettings()
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledWith('/api/system/health')
+      })
+    })
+  })
+
+  describe('Cache API', () => {
+    it('checks cache API availability on mount', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        expect(axios.get).toHaveBeenCalledWith(
+          '/api/cache/stats',
+          expect.objectContaining({ timeout: 3000 })
+        )
+      })
+    })
+
+    it('loads cache stats when cache API is available', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        // Should have at least the availability check call
+        const cacheCalls = vi.mocked(axios.get).mock.calls.filter(
+          (call) => call[0] === '/api/cache/stats'
+        )
+        expect(cacheCalls.length).toBeGreaterThanOrEqual(1)
+      })
+    })
+
+    it('handles cache API unavailability gracefully', async () => {
+      vi.mocked(axios.get).mockImplementation((url: string) => {
+        if (url === '/api/settings/') {
+          return Promise.resolve({ data: mockSettingsResponse })
+        }
+        if (url === '/api/cache/stats') {
+          return Promise.reject(new Error('Cache unavailable'))
+        }
+        if (url === '/api/system/health/detailed') {
+          return Promise.resolve({ data: mockHealthResponse })
+        }
+        return Promise.resolve({ data: {} })
+      })
+
+      renderSettings()
+
+      // Should not crash; component handles error gracefully
+      await waitFor(() => {
+        const layout = document.querySelector('.settings-panel-layout')
+        expect(layout).not.toBeNull()
+      })
+    })
+  })
+
+  describe('Error Handling', () => {
+    it('handles all API failures without crashing', async () => {
+      vi.mocked(axios.get).mockRejectedValue(new Error('All APIs down'))
+
+      renderSettings()
+
+      // Component should still render (error boundary catches)
+      await waitFor(() => {
+        const layout = document.querySelector('.settings-panel-layout')
+        expect(layout).not.toBeNull()
+      })
+    })
+
+    it('shows offline state when settings fail to load', async () => {
+      vi.mocked(axios.get).mockImplementation((url: string) => {
+        if (url === '/api/settings/') {
+          return Promise.reject(new Error('Offline'))
+        }
+        return Promise.resolve({ data: {} })
+      })
+
+      renderSettings()
+
+      await waitFor(() => {
+        const offlineEl = document.querySelector('.settings-status.offline')
+        expect(offlineEl).not.toBeNull()
+      })
+    })
+  })
+
+  describe('Multiple API Calls on Mount', () => {
+    it('makes all expected API calls on mount', async () => {
+      renderSettings()
+
+      await waitFor(() => {
+        const calledUrls = vi.mocked(axios.get).mock.calls.map((call) => call[0])
+        expect(calledUrls).toContain('/api/settings/')
+        expect(calledUrls).toContain('/api/system/health/detailed')
+        // Cache stats called with timeout option for availability check
+        const cacheCall = vi.mocked(axios.get).mock.calls.find(
+          (call) => call[0] === '/api/cache/stats'
+        )
+        expect(cacheCall).toBeDefined()
       })
     })
   })
 
   describe('Accessibility', () => {
-    it('has proper ARIA labels', () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('renders main landmark element', async () => {
+      renderSettings()
 
-      expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /backend/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /ui/i })).toBeInTheDocument()
+      const main = document.querySelector('main.settings-content')
+      expect(main).not.toBeNull()
     })
 
-    it('supports keyboard navigation', async () => {
-      renderComponent(SettingsPanel, { router: true })
+    it('renders loading spinner with descriptive text', () => {
+      renderSettings()
 
-      await waitFor(() => {
-        const chatTab = screen.getByRole('button', { name: /chat/i })
-        chatTab.focus()
-        expect(document.activeElement).toBe(chatTab)
-      })
+      const spinner = document.querySelector('.loading-spinner')
+      expect(spinner).not.toBeNull()
 
-      // Tab navigation through settings
-      await user.tab()
-      await user.tab()
-
-      // Should navigate through form elements
-      const autoScrollCheckbox = screen.getByLabelText(/auto scroll/i)
-      expect(document.activeElement).toBe(autoScrollCheckbox)
-    })
-
-    it('has proper form labels', () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      expect(screen.getByLabelText(/auto scroll/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/max messages/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/message retention/i)).toBeInTheDocument()
-    })
-  })
-
-  describe('Responsive Design', () => {
-    it('adapts to different screen sizes', () => {
-      // Mock different viewport sizes
-      Object.defineProperty(window, 'innerWidth', { value: 768 })
-
-      renderComponent(SettingsPanel, { router: true })
-
-      // Should render appropriately for tablet/mobile
-      expect(screen.getByText('Settings')).toBeInTheDocument()
-    })
-  })
-
-  describe('Integration', () => {
-    it('integrates with theme changes', async () => {
-      renderComponent(SettingsPanel, { router: true })
-
-      const uiTab = screen.getByRole('button', { name: /ui/i })
-      await user.click(uiTab)
-
-      await waitFor(async () => {
-        const themeSelect = screen.getByLabelText(/theme/i) as HTMLSelectElement
-        await user.selectOptions(themeSelect, 'dark')
-      })
-
-      // Should apply theme change to UI
-      await waitFor(() => {
-        expect(mockApi.client.post).toHaveBeenCalledWith(
-          '/api/settings',
-          expect.objectContaining({
-            ui: expect.objectContaining({
-              theme: 'dark'
-            })
-          })
-        )
-      })
+      // Loading text is present (i18n key in test environment)
+      expect(screen.getByText('settings.loadingSettings')).toBeInTheDocument()
     })
   })
 })
