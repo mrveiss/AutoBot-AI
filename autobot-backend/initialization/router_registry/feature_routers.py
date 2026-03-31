@@ -416,6 +416,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["workflow-export"],
         "workflow_export",
     ),
+    # Issue #2139: Event-driven trigger system for workflows
+    (
+        "api.triggers",
+        "",
+        ["triggers", "workflow"],
+        "triggers",
+    ),
 ]
 
 
