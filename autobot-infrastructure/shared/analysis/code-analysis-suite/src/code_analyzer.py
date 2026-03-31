@@ -54,7 +54,7 @@ class CodeAnalyzer:
     """Analyzes code for duplicates using Redis caching and NPU acceleration"""
 
     def __init__(self, redis_client=None, use_npu: bool = True):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2984)
         self.use_npu = use_npu
         self.config = config
 
@@ -517,8 +517,14 @@ from utils.{module_name}_utils import {func.name}
             ],
         }
 
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2984)."""
+        if self.redis_client is None:
+            self.redis_client = await get_redis_client(async_client=True)
+
     async def _cache_function(self, func: CodeFunction):
         """Cache function information in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.FUNCTION_KEY.format(func.ast_hash)
@@ -538,6 +544,7 @@ from utils.{module_name}_utils import {func.name}
 
     async def _cache_embedding(self, ast_hash: str, embedding: np.ndarray):
         """Cache function embedding in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.EMBEDDING_KEY.format(ast_hash)
@@ -549,6 +556,7 @@ from utils.{module_name}_utils import {func.name}
 
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.DUPLICATE_KEY
@@ -559,6 +567,7 @@ from utils.{module_name}_utils import {func.name}
 
     async def _clear_cache(self):
         """Clear analysis cache"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 # Clear all analysis keys
@@ -576,6 +585,7 @@ from utils.{module_name}_utils import {func.name}
 
     async def get_cached_results(self) -> Optional[Dict[str, Any]]:
         """Get cached analysis results"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 value = await self.redis_client.get(self.DUPLICATE_KEY)

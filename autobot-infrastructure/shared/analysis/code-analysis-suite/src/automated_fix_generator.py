@@ -193,7 +193,7 @@ class AutomatedFixGenerator:
     """Generates automated code fixes based on analysis results"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2984)
         self.config = config
 
         # Caching key
@@ -692,8 +692,14 @@ class AutomatedFixGenerator:
             "validation_tests": fix.validation_tests,
         }
 
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2984)."""
+        if self.redis_client is None:
+            self.redis_client = await get_redis_client(async_client=True)
+
     async def _cache_fixes(self, results: Dict[str, Any]):
         """Cache generated fixes"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 await self.redis_client.setex(

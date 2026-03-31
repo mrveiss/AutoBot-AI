@@ -170,12 +170,10 @@ class ModelOptimizer:
                 # Double-check after acquiring lock
                 if self._redis_client is None:
                     try:
-                        self._redis_client = get_redis_client(
+                        self._redis_client = await get_redis_client(
                             async_client=True,
-                            db=config.get("redis.databases.llm_cache.db", 5),
+                            database="analytics",
                         )
-                        if asyncio.iscoroutine(self._redis_client):
-                            self._redis_client = await self._redis_client
 
                         # Initialize performance tracker once Redis is ready
                         if self._redis_client and self._performance_tracker is None:
