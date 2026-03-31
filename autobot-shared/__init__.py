@@ -28,6 +28,11 @@ __all__ = [
     "deserialize_message",
     "create_reply",
     "get_client_ip",
+    # Feature flags — issue #3017
+    "is_feature_enabled",
+    "get_enabled_features",
+    "require_feature",
+    "FeatureDisabledError",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -43,6 +48,11 @@ _LAZY_IMPORTS = {
     "deserialize_message": (".models.service_message", "deserialize_message"),
     "create_reply": (".models.service_message", "create_reply"),
     "get_client_ip": (".proxy_utils", "get_client_ip"),
+    # Feature flags — issue #3017
+    "is_feature_enabled": (".feature_flags", "is_feature_enabled"),
+    "get_enabled_features": (".feature_flags", "get_enabled_features"),
+    "require_feature": (".feature_flags", "require_feature"),
+    "FeatureDisabledError": (".feature_flags", "FeatureDisabledError"),
 }
 
 

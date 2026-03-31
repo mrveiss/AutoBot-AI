@@ -958,6 +958,15 @@ class FeatureConfig(BaseSettings):
         default=False, alias="AUTOBOT_PERMISSION_SYSTEM_V2"
     )
 
+    # Subsystem feature flags — issue #3017
+    # Set AUTOBOT_FEATURE_<NAME>=false to disable a subsystem on a given node.
+    npu_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU")
+    voice_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE")
+    browser_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_BROWSER")
+    computer_vision_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_COMPUTER_VISION")
+    training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
+    osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
+
 
 class AutoBotConfig(BaseSettings):
     """
