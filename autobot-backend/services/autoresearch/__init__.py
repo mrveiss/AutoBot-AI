@@ -18,6 +18,18 @@ from .models import (
     ExperimentStats,
     HyperParams,
 )
+from .osint_engine import (
+    CorrelatedSignal,
+    CorrelationRule,
+    FREDSource,
+    GDELTSource,
+    NASAFIRMSSource,
+    NOAASource,
+    OSINTEngine,
+    OSINTSource,
+    SourceResult,
+    build_default_engine,
+)
 from .parser import ExperimentOutputParser
 from .routes import router
 from .runner import ExperimentRunner
@@ -38,4 +50,15 @@ __all__ = [
     "ExperimentStore",
     # Routes
     "router",
+    # OSINT Engine (Issue #1949)
+    "OSINTSource",
+    "OSINTEngine",
+    "SourceResult",
+    "CorrelatedSignal",
+    "CorrelationRule",
+    "FREDSource",
+    "GDELTSource",
+    "NASAFIRMSSource",
+    "NOAASource",
+    "build_default_engine",
 ]
