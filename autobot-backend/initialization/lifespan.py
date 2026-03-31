@@ -333,6 +333,8 @@ async def initialize_critical_services(app: FastAPI):
 
     Issue #665: Refactored to use extracted helper methods for each service.
     Issue #1088: Further extracted inline blocks into private helpers.
+    Issue #3015: Grouped independent steps into dependency tiers and run each
+    tier concurrently with asyncio.gather() to reduce startup latency.
 
     These services MUST be operational before serving requests.
     Failure in this phase will prevent app startup.
@@ -350,23 +352,44 @@ async def initialize_critical_services(app: FastAPI):
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
     try:
+        # Issue #3015: Group init steps into dependency tiers and run each
+        # tier concurrently with asyncio.gather() to reduce startup latency.
+        #
+        # Tier 0 (sequential): env drift check + config — must complete before
+        #         anything else since all services may read global config.
+        # Tier 1 (parallel): security, database, telemetry — independent of
+        #         each other, only need the module-level global config manager.
+        # Tier 2 (parallel): chat managers — independent of each other; benefit
+        #         from telemetry instrumentation being in place for tracing.
+        # Tier 3 (parallel): cache coordinator + skills — non-critical,
+        #         independent of each other and of the chat managers.
+
+        # --- Tier 0: config foundation (sequential) ---
         # Issue #2650: check .env drift before any service initialisation
         await _check_env_drift()
-
         await _init_config(app)
-        await _init_security_layer(app)
-        await _init_database()
-        await _init_telemetry_and_redis()
 
+        # --- Tier 1: independent infrastructure (parallel) ---
+        await asyncio.gather(
+            _init_security_layer(app),
+            _init_database(),
+            _init_telemetry_and_redis(),
+        )
+
+        # --- Tier 2: chat service managers (parallel) ---
         # Issue #665: uses helpers
-        await _init_chat_history_manager(app)
-        await _init_conversation_file_manager(app)
-        await _init_chat_workflow_manager(app)
+        await asyncio.gather(
+            _init_chat_history_manager(app),
+            _init_conversation_file_manager(app),
+            _init_chat_workflow_manager(app),
+        )
 
+        # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
-        await _init_cache_coordinator()
-
-        await _init_skills(app)
+        await asyncio.gather(
+            _init_cache_coordinator(),
+            _init_skills(app),
+        )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 
