@@ -1,24 +1,25 @@
 <template>
-  <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden">
+  <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden" data-testid="redis-service-container">
     <!-- Service Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-red-50 to-red-100">
+    <div class="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-red-50 to-red-100" data-testid="redis-service-header">
       <div class="flex items-center space-x-3">
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
-          <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('redis.title') }}</h3>
-          <p class="text-sm text-autobot-text-secondary">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary" data-testid="redis-service-title">{{ $t('redis.title') }}</h3>
+          <p class="text-sm text-autobot-text-secondary" data-testid="redis-service-vm-info">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
         </div>
       </div>
 
       <!-- Status Badge -->
-      <div class="flex items-center space-x-3">
-        <span class="text-xs text-autobot-text-muted">
+      <div class="flex items-center space-x-3" data-testid="redis-service-status-area">
+        <span class="text-xs text-autobot-text-muted" data-testid="redis-service-last-check">
           {{ $t('redis.lastCheck') }} {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
-        <StatusBadge :variant="statusVariant" class="inline-flex items-center">
+        <StatusBadge :variant="statusVariant" class="inline-flex items-center" data-testid="redis-service-status-badge">
           <span
             class="w-2 h-2 rounded-full mr-2 animate-pulse"
             :class="getStatusDotClass(serviceStatus.status)"
+            data-testid="redis-service-status-dot"
           ></span>
           {{ (serviceStatus.status || 'unknown').toUpperCase() }}
         </StatusBadge>
@@ -29,27 +30,28 @@
     <div
       v-if="serviceStatus.status === 'running'"
       class="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-4 bg-autobot-bg-secondary border-b"
+      data-testid="redis-service-details"
     >
-      <div class="detail-item">
+      <div class="detail-item" data-testid="redis-service-uptime">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.uptime') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ formatUptime(serviceStatus.uptime_seconds) }}</span>
       </div>
-      <div class="detail-item">
+      <div class="detail-item" data-testid="redis-service-memory">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.memory') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.memory_mb || 0 }} MB</span>
       </div>
-      <div class="detail-item">
+      <div class="detail-item" data-testid="redis-service-connections">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.connections') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.connections || 0 }}</span>
       </div>
-      <div class="detail-item">
+      <div class="detail-item" data-testid="redis-service-pid">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.pid') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.pid || 'N/A' }}</span>
       </div>
     </div>
 
     <!-- Control Buttons -->
-    <div class="px-6 py-4 border-b">
+    <div class="px-6 py-4 border-b" data-testid="redis-service-controls">
       <div class="flex items-center justify-between">
         <div class="flex space-x-3">
           <BaseButton
@@ -57,6 +59,7 @@
             @click="handleStartService"
             :disabled="serviceStatus.status === 'running' || loading"
             class="flex items-center space-x-2 px-4 py-2"
+            data-testid="redis-service-start-btn"
           >
             <i class="fas fa-play"></i>
             <span>{{ $t('redis.start') }}</span>
@@ -67,6 +70,7 @@
             @click="handleRestartService"
             :disabled="serviceStatus.status !== 'running' || loading"
             class="flex items-center space-x-2 px-4 py-2"
+            data-testid="redis-service-restart-btn"
           >
             <i class="fas fa-sync"></i>
             <span>{{ $t('redis.restart') }}</span>
@@ -77,6 +81,7 @@
             @click="handleStopService"
             :disabled="serviceStatus.status !== 'running' || loading"
             class="flex items-center space-x-2 px-4 py-2"
+            data-testid="redis-service-stop-btn"
           >
             <i class="fas fa-stop"></i>
             <span>{{ $t('redis.stop') }}</span>
@@ -88,6 +93,7 @@
           @click="refreshStatus"
           :loading="loading"
           class="flex items-center space-x-2 px-4 py-2"
+          data-testid="redis-service-refresh-btn"
         >
           <i class="fas fa-sync-alt"></i>
           <span>{{ $t('common.refresh') }}</span>
@@ -96,21 +102,22 @@
     </div>
 
     <!-- Health Status Section -->
-    <div v-if="healthStatus" class="px-6 py-4">
+    <div v-if="healthStatus" class="px-6 py-4" data-testid="redis-service-health-section">
       <h4 class="text-md font-semibold text-autobot-text-primary mb-3">{{ $t('redis.healthStatus') }}</h4>
 
       <!-- Overall Health Indicator -->
-      <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4">
+      <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4" data-testid="redis-service-health-badge">
         {{ (healthStatus?.overall_status || 'unknown').toUpperCase() }}
       </StatusBadge>
 
       <!-- Health Checks -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" data-testid="redis-service-health-checks">
         <div
           v-for="(check, name) in healthStatus.health_checks"
           :key="name"
           class="health-check-card p-4 rounded-lg border"
           :class="getHealthCheckCardClass(check.status)"
+          :data-testid="`redis-service-health-check-${name}`"
         >
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-medium text-autobot-text-secondary capitalize">{{ name }}</span>
@@ -127,6 +134,7 @@
       <div
         v-if="healthStatus.recommendations && healthStatus.recommendations.length > 0"
         class="recommendations p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded"
+        data-testid="redis-service-recommendations"
       >
         <h5 class="text-sm font-semibold text-yellow-800 mb-2">
           <i class="fas fa-lightbulb mr-1"></i>
@@ -147,21 +155,23 @@
       <div
         v-if="healthStatus.auto_recovery"
         class="auto-recovery mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg"
+        data-testid="redis-service-auto-recovery"
       >
         <h5 class="text-sm font-semibold text-blue-900 mb-2">{{ $t('redis.autoRecoveryStatus') }}</h5>
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div>
             <span class="text-blue-700">{{ $t('redis.enabled') }}</span>
-            <span class="ml-2 font-medium">{{ healthStatus.auto_recovery.enabled ? $t('common.yes') : $t('common.no') }}</span>
+            <span class="ml-2 font-medium" data-testid="redis-service-auto-recovery-enabled">{{ healthStatus.auto_recovery.enabled ? $t('common.yes') : $t('common.no') }}</span>
           </div>
           <div v-if="healthStatus.auto_recovery.recent_recoveries > 0">
             <span class="text-blue-700">{{ $t('redis.recentRecoveries') }}</span>
-            <span class="ml-2 font-medium text-yellow-600">{{ healthStatus.auto_recovery.recent_recoveries }}</span>
+            <span class="ml-2 font-medium text-yellow-600" data-testid="redis-service-recent-recoveries">{{ healthStatus.auto_recovery.recent_recoveries }}</span>
           </div>
         </div>
         <div
           v-if="healthStatus.auto_recovery.requires_manual_intervention"
           class="mt-3 p-3 bg-red-100 border border-red-300 rounded text-sm text-red-800"
+          data-testid="redis-service-manual-intervention"
         >
           <i class="fas fa-exclamation-triangle mr-1"></i>
           <strong>{{ $t('redis.manualInterventionTitle') }}</strong> {{ $t('redis.manualInterventionMsg') }}
@@ -170,7 +180,7 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card bg-opacity-75 flex items-center justify-center">
+    <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card bg-opacity-75 flex items-center justify-center" data-testid="redis-service-loading-overlay">
       <div class="text-center">
         <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
         <p class="text-sm text-autobot-text-secondary">{{ $t('redis.processing') }}</p>
@@ -182,6 +192,7 @@
       v-model="showConfirmDialog"
       :title="confirmDialog.title"
       size="medium"
+      data-testid="redis-service-confirm-dialog"
     >
       <p class="text-sm text-autobot-text-secondary mb-4">{{ confirmDialog.message }}</p>
       <div
@@ -198,12 +209,14 @@
         <BaseButton
           variant="secondary"
           @click="showConfirmDialog = false"
+          data-testid="redis-service-confirm-cancel-btn"
         >
           {{ $t('common.cancel') }}
         </BaseButton>
         <BaseButton
           :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
           @click="confirmDialog.onConfirm"
+          data-testid="redis-service-confirm-ok-btn"
         >
           {{ $t('common.confirm') }}
         </BaseButton>
