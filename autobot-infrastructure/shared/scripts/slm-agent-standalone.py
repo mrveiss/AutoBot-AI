@@ -50,7 +50,7 @@ class SLMAgent:
                 return yaml.safe_load(f)
         return {
             "node_id": os.environ.get("SLM_NODE_ID", "unknown"),
-            "admin_url": os.environ.get("SLM_ADMIN_URL", "http://172.16.168.19:8000"),
+            "admin_url": os.environ.get("SLM_ADMIN_URL", f"http://{os.environ.get('SLM_HOST', '127.0.0.1')}:8000"),
             "heartbeat_interval": int(os.environ.get("SLM_HEARTBEAT_INTERVAL", "30")),
         }
 

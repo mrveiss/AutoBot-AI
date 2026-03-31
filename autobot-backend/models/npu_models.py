@@ -334,7 +334,7 @@ class WorkerHeartbeat(BaseModel):
                 "worker_id": "windows_npu_worker_abc123",
                 "status": "online",
                 "platform": "windows",
-                "url": "http://192.168.168.21:8082",
+                "url": "http://127.0.0.1:8082",
                 "current_load": 1,
                 "total_tasks_completed": 42,
                 "total_tasks_failed": 2,
