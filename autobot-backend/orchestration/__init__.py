@@ -15,6 +15,7 @@ This package contains:
 - workflow_documentation: Auto-documentation and knowledge extraction
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
 - error_handler: Step-level error handling and workflow checkpointing (#2154)
+- execution_modes: Dry-run validation and step-by-step debug mode (#2148)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
@@ -27,6 +28,7 @@ from .error_handler import (
     StepErrorHandler,
     WorkflowCheckpointManager,
 )
+from .execution_modes import DebugController, DryRunReport, DryRunValidator, ExecutionMode, StepPlan
 from .types import (
     AgentCapability,
     AgentInteraction,
@@ -74,4 +76,10 @@ __all__ = [
     "StepErrorConfig",
     "StepErrorHandler",
     "WorkflowCheckpointManager",
+    # Execution modes: dry-run + debug (#2148)
+    "DebugController",
+    "DryRunReport",
+    "DryRunValidator",
+    "ExecutionMode",
+    "StepPlan",
 ]

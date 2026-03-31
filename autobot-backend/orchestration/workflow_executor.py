@@ -38,6 +38,7 @@ from .error_handler import (
     StepErrorHandler,
     WorkflowCheckpointManager,
 )
+from .execution_modes import DebugController, DryRunValidator, ExecutionMode
 from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 
@@ -362,6 +363,8 @@ class WorkflowExecutor:
         context: Dict[str, Any],
         edges: Optional[List[Dict[str, Any]]] = None,
         resume_from_checkpoint: bool = False,
+        mode: ExecutionMode = ExecutionMode.NORMAL,
+        debug_controller: Optional[DebugController] = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -386,6 +389,12 @@ class WorkflowExecutor:
         Returns:
             Execution context with results.
         """
+        # Issue #2148: dry-run returns a validation report without executing.
+        if mode == ExecutionMode.DRY_RUN:
+            validator = DryRunValidator()
+            report = validator.validate(workflow_id, steps, edges)
+            return {"status": "dry_run_complete", "mode": "dry_run", "dry_run_report": report.to_dict()}
+
         effective_edges = edges or []
         if workflow_has_condition_nodes(steps, effective_edges):
             logger.info(
