@@ -74,6 +74,26 @@
   become: yes
   tags: ['redis', 'directories']
 
+- name: "Redis | Fix Redis Stack data directory permissions"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: redis
+    group: redis
+    mode: '0750'
+  become: yes
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Set vm.overcommit_memory for background saves"
+  ansible.builtin.sysctl:
+    name: vm.overcommit_memory
+    value: '1'
+    state: present
+    sysctl_set: true
+    reload: true
+  become: yes
+  tags: ['redis', 'configuration']
+
 - name: "Redis | Configure Redis Stack"
   template:
     src: redis-stack.conf.j2
