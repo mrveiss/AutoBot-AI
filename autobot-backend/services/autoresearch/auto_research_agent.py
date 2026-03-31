@@ -1,0 +1,953 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+AutoResearch M2: AutoBot-Orchestrated Loop + Web Search
+
+Issue #2599: Implements the main research orchestration loop.  AutoResearchAgent
+drives an iterative cycle of:
+
+  web_search → generate_hypothesis → run_experiment → evaluate → store
+
+The loop runs up to *max_iterations* times and stops early when improvement
+plateaus (no gain over the last *plateau_window* iterations) or the
+caller requests cancellation.
+
+An ApprovalGate is consulted before applying any improvement that exceeds the
+*significant_improvement_threshold* — keeping a human in the loop for large
+model changes.
+
+Architecture:
+  AutoResearchAgent.run_experiment_loop()
+      │
+      ├─ _web_search()         ─► arxiv / GitHub via httpx
+      ├─ _generate_hypothesis()─► structured ResearchHypothesis
+      ├─ _run_experiment()     ─► delegates to ExperimentRunner (M1)
+      ├─ _evaluate_results()   ─► ImprovementMetrics
+      └─ _should_continue()    ─► bool (plateau / cancellation guard)
+
+ApprovalGate is a lightweight Redis-backed gate; it does NOT replace the
+full ApprovalGateService (SQL-backed) — it is intentionally scoped to
+autoresearch sessions only.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import dataclasses
+import json
+import logging
+import time
+import uuid
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+from .config import AutoResearchConfig
+from .models import Experiment, ExperimentResult, HyperParams
+from .runner import ExperimentRunner
+from .store import ExperimentStore
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_ARXIV_SEARCH_URL = "https://export.arxiv.org/api/query"
+_GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
+_DEFAULT_HTTP_TIMEOUT = 15.0  # seconds per HTTP request
+_PLATEAU_NO_IMPROVEMENT = 0.0  # improvement must be strictly positive to break plateau
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+class SessionStatus(str, Enum):
+    """Lifecycle status of an ExperimentSession."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+@dataclass
+class SearchResult:
+    """A single result returned by the web-search step."""
+
+    title: str
+    url: str
+    summary: str
+    source: str  # "arxiv" | "github"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclass
+class ResearchHypothesis:
+    """Structured hypothesis produced from search results."""
+
+    statement: str
+    rationale: str
+    suggested_hyperparams: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclass
+class ImprovementMetrics:
+    """Metrics describing improvement of one iteration over the baseline."""
+
+    experiment_id: str
+    baseline_val_bpb: Optional[float]
+    result_val_bpb: Optional[float]
+    improvement: Optional[float]  # positive = better (lower bpb)
+    improvement_pct: Optional[float]
+    state: str
+
+    @property
+    def improved(self) -> bool:
+        return self.improvement is not None and self.improvement > _PLATEAU_NO_IMPROVEMENT
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclass
+class ExperimentSession:
+    """Top-level record for a single run of AutoResearchAgent."""
+
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    topic: str = ""
+    max_iterations: int = 5
+    status: SessionStatus = SessionStatus.PENDING
+    iterations_completed: int = 0
+    results: List[ImprovementMetrics] = field(default_factory=list)
+    hypotheses: List[ResearchHypothesis] = field(default_factory=list)
+    search_results: List[List[SearchResult]] = field(default_factory=list)
+    started_at: Optional[float] = None
+    completed_at: Optional[float] = None
+    error_message: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "topic": self.topic,
+            "max_iterations": self.max_iterations,
+            "status": self.status.value,
+            "iterations_completed": self.iterations_completed,
+            "results": [r.to_dict() for r in self.results],
+            "hypotheses": [h.to_dict() for h in self.hypotheses],
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "error_message": self.error_message,
+        }
+
+
+# ---------------------------------------------------------------------------
+# ApprovalGate
+# ---------------------------------------------------------------------------
+
+
+class ApprovalGate:
+    """
+    Lightweight Redis-backed gate for autoresearch significant improvements.
+
+    Significant improvements (above *threshold*) are held in a Redis key and
+    require the human operator to explicitly approve them before the improvement
+    is applied to the live baseline.
+
+    Issue #2599: This is intentionally NOT a full DB-backed approval; it is a
+    scoped, in-session gate.  Full workflow approvals continue to go through
+    ApprovalGateService.
+    """
+
+    _PENDING_KEY_TEMPLATE = "autoresearch:approval:pending:{session_id}:{exp_id}"
+    _STATUS_KEY_TEMPLATE = "autoresearch:approval:status:{session_id}:{exp_id}"
+    _TTL_SECONDS = 86400  # 24 hours
+
+    def __init__(self, config: Optional[AutoResearchConfig] = None):
+        self.config = config or AutoResearchConfig()
+        self._redis = None
+
+    async def _get_redis(self):
+        if self._redis is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self._redis = get_redis_client(
+                async_client=True,
+                database=self.config.redis_database,
+            )
+        return self._redis
+
+    def check_approval_needed(self, improvement_pct: Optional[float], threshold: float) -> bool:
+        """Return True when improvement_pct meets or exceeds threshold.
+
+        Args:
+            improvement_pct: Percentage improvement over baseline (positive = better).
+            threshold: Minimum percentage to require approval.
+
+        Returns:
+            True if human approval is required before accepting the improvement.
+        """
+        if improvement_pct is None:
+            return False
+        return improvement_pct >= threshold
+
+    async def request_approval(
+        self,
+        session_id: str,
+        experiment_id: str,
+        details: Dict[str, Any],
+    ) -> str:
+        """Persist a pending approval record to Redis and return its status key.
+
+        The approval starts in "pending" state.  External callers (e.g. a UI or
+        operator CLI) can write "approved" or "rejected" to the status key.
+
+        Args:
+            session_id: ID of the owning ExperimentSession.
+            experiment_id: ID of the experiment requiring approval.
+            details: Arbitrary context dict stored alongside the request.
+
+        Returns:
+            The Redis status key so callers can poll for a decision.
+        """
+        redis = await self._get_redis()
+        pending_key = self._PENDING_KEY_TEMPLATE.format(
+            session_id=session_id, exp_id=experiment_id
+        )
+        status_key = self._STATUS_KEY_TEMPLATE.format(
+            session_id=session_id, exp_id=experiment_id
+        )
+        payload = json.dumps(
+            {
+                "session_id": session_id,
+                "experiment_id": experiment_id,
+                "details": details,
+                "requested_at": time.time(),
+            }
+        )
+        await redis.set(pending_key, payload, ex=self._TTL_SECONDS)
+        await redis.set(status_key, "pending", ex=self._TTL_SECONDS)
+        logger.info(
+            "ApprovalGate: approval requested for experiment %s (session %s)",
+            experiment_id,
+            session_id,
+        )
+        return status_key
+
+    async def get_approval_status(self, session_id: str, experiment_id: str) -> str:
+        """Return current approval status: 'pending', 'approved', or 'rejected'."""
+        redis = await self._get_redis()
+        status_key = self._STATUS_KEY_TEMPLATE.format(
+            session_id=session_id, exp_id=experiment_id
+        )
+        raw = await redis.get(status_key)
+        if raw is None:
+            return "unknown"
+        return raw if isinstance(raw, str) else raw.decode("utf-8")
+
+    async def wait_for_approval(
+        self,
+        session_id: str,
+        experiment_id: str,
+        poll_interval: float = 5.0,
+        timeout: float = 300.0,
+    ) -> str:
+        """Poll until approval is granted/rejected or timeout is reached.
+
+        Args:
+            session_id: Session ID.
+            experiment_id: Experiment ID.
+            poll_interval: Seconds between polls.
+            timeout: Maximum seconds to wait before returning 'timeout'.
+
+        Returns:
+            Final status string: 'approved', 'rejected', or 'timeout'.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            status = await self.get_approval_status(session_id, experiment_id)
+            if status in ("approved", "rejected"):
+                logger.info(
+                    "ApprovalGate: experiment %s received status=%s",
+                    experiment_id,
+                    status,
+                )
+                return status
+            await asyncio.sleep(poll_interval)
+        logger.warning(
+            "ApprovalGate: timed out waiting for experiment %s approval",
+            experiment_id,
+        )
+        return "timeout"
+
+
+# ---------------------------------------------------------------------------
+# Web search helpers
+# ---------------------------------------------------------------------------
+
+
+async def _search_arxiv(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
+    """Query the arXiv Atom API and return structured results.
+
+    Args:
+        client: Shared httpx.AsyncClient.
+        query: Free-text search query.
+        max_results: Maximum number of entries to return.
+
+    Returns:
+        List of SearchResult from arXiv, empty on any error.
+    """
+    params = {
+        "search_query": f"all:{query}",
+        "start": 0,
+        "max_results": max_results,
+        "sortBy": "relevance",
+        "sortOrder": "descending",
+    }
+    try:
+        response = await client.get(_ARXIV_SEARCH_URL, params=params, timeout=_DEFAULT_HTTP_TIMEOUT)
+        response.raise_for_status()
+        return _parse_arxiv_atom(response.text)
+    except httpx.HTTPError as exc:
+        logger.warning("arXiv search failed for query %r: %s", query, exc)
+        return []
+
+
+def _parse_arxiv_atom(xml_text: str) -> List[SearchResult]:
+    """Extract title/id/summary from an arXiv Atom response without external XML libs."""
+    import re
+
+    results: List[SearchResult] = []
+    entries = re.findall(r"<entry>(.*?)</entry>", xml_text, re.DOTALL)
+    for entry in entries:
+        title_match = re.search(r"<title>(.*?)</title>", entry, re.DOTALL)
+        id_match = re.search(r"<id>(.*?)</id>", entry, re.DOTALL)
+        summary_match = re.search(r"<summary>(.*?)</summary>", entry, re.DOTALL)
+        if not (title_match and id_match):
+            continue
+        results.append(
+            SearchResult(
+                title=title_match.group(1).strip(),
+                url=id_match.group(1).strip(),
+                summary=(summary_match.group(1).strip() if summary_match else ""),
+                source="arxiv",
+            )
+        )
+    return results
+
+
+async def _search_github(client: httpx.AsyncClient, query: str, max_results: int) -> List[SearchResult]:
+    """Query the GitHub repository search API and return structured results.
+
+    Args:
+        client: Shared httpx.AsyncClient.
+        query: Free-text search query.
+        max_results: Maximum number of repositories to return.
+
+    Returns:
+        List of SearchResult from GitHub, empty on any error.
+    """
+    params = {
+        "q": f"{query} language:python",
+        "sort": "stars",
+        "order": "desc",
+        "per_page": max_results,
+    }
+    headers = {"Accept": "application/vnd.github+json"}
+    try:
+        response = await client.get(
+            _GITHUB_SEARCH_URL,
+            params=params,
+            headers=headers,
+            timeout=_DEFAULT_HTTP_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return _parse_github_results(data)
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("GitHub search failed for query %r: %s", query, exc)
+        return []
+
+
+def _parse_github_results(data: Dict[str, Any]) -> List[SearchResult]:
+    """Extract repo name/url/description from GitHub search JSON."""
+    results: List[SearchResult] = []
+    for item in data.get("items", []):
+        results.append(
+            SearchResult(
+                title=item.get("full_name", ""),
+                url=item.get("html_url", ""),
+                summary=item.get("description") or "",
+                source="github",
+            )
+        )
+    return results
+
+
+# ---------------------------------------------------------------------------
+# AutoResearchAgent
+# ---------------------------------------------------------------------------
+
+
+class AutoResearchAgent:
+    """
+    Orchestrator for the AutoResearch M2 loop.
+
+    The agent iteratively:
+      1. Searches arXiv and GitHub for the current topic
+      2. Generates a structured hypothesis from the search results + prior results
+      3. Runs a training experiment via ExperimentRunner
+      4. Evaluates improvement vs the current baseline
+      5. Requests approval when improvement is significant
+      6. Stops when improvement plateaus or max_iterations is reached
+
+    All sessions and per-iteration state are persisted to Redis via
+    ExperimentStore (M1 infrastructure).
+
+    Issue #2599.
+    """
+
+    def __init__(
+        self,
+        config: Optional[AutoResearchConfig] = None,
+        store: Optional[ExperimentStore] = None,
+        runner: Optional[ExperimentRunner] = None,
+        approval_gate: Optional[ApprovalGate] = None,
+        http_client: Optional[httpx.AsyncClient] = None,
+    ):
+        self.config = config or AutoResearchConfig()
+        self.store = store or ExperimentStore(self.config)
+        self.runner = runner or ExperimentRunner(config=self.config, store=self.store)
+        self.approval_gate = approval_gate or ApprovalGate(self.config)
+        self._http_client = http_client
+        self._cancel_event: asyncio.Event = asyncio.Event()
+        self._redis = None
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def run_experiment_loop(
+        self,
+        topic: str,
+        max_iterations: int = 5,
+        search_results_per_source: int = 3,
+        approval_threshold_pct: float = 5.0,
+        plateau_window: int = 3,
+    ) -> ExperimentSession:
+        """Drive the full research loop for *topic*.
+
+        Args:
+            topic: Research topic; used as a search query.
+            max_iterations: Maximum number of search→hypothesis→experiment cycles.
+            search_results_per_source: How many results to fetch per source per iter.
+            approval_threshold_pct: Improvement % above which human approval is needed.
+            plateau_window: Stop early after this many consecutive non-improving iters.
+
+        Returns:
+            Completed ExperimentSession with all iteration results.
+        """
+        session = ExperimentSession(
+            topic=topic,
+            max_iterations=max_iterations,
+            status=SessionStatus.RUNNING,
+            started_at=time.time(),
+        )
+        self._cancel_event.clear()
+
+        logger.info("AutoResearchAgent: starting session %s for topic %r", session.id, topic)
+        await self._save_session(session)
+
+        try:
+            async with self._build_http_client() as client:
+                for iteration in range(1, max_iterations + 1):
+                    if self._cancel_event.is_set():
+                        logger.info(
+                            "AutoResearchAgent: session %s cancelled before iteration %d",
+                            session.id,
+                            iteration,
+                        )
+                        session.status = SessionStatus.CANCELLED
+                        break
+
+                    logger.info(
+                        "AutoResearchAgent: session %s — iteration %d/%d",
+                        session.id,
+                        iteration,
+                        max_iterations,
+                    )
+                    await self._run_single_iteration(
+                        session=session,
+                        client=client,
+                        iteration=iteration,
+                        search_results_per_source=search_results_per_source,
+                        approval_threshold_pct=approval_threshold_pct,
+                    )
+                    session.iterations_completed = iteration
+                    await self._save_session(session)
+
+                    if not self._should_continue(session, plateau_window):
+                        logger.info(
+                            "AutoResearchAgent: session %s stopping early at iteration %d "
+                            "(plateau detected)",
+                            session.id,
+                            iteration,
+                        )
+                        break
+
+            if session.status == SessionStatus.RUNNING:
+                session.status = SessionStatus.COMPLETED
+        except Exception as exc:
+            session.status = SessionStatus.FAILED
+            session.error_message = str(exc)
+            logger.exception(
+                "AutoResearchAgent: session %s failed with unhandled exception", session.id
+            )
+        finally:
+            session.completed_at = time.time()
+            await self._save_session(session)
+
+        logger.info(
+            "AutoResearchAgent: session %s finished — status=%s, iterations=%d",
+            session.id,
+            session.status.value,
+            session.iterations_completed,
+        )
+        return session
+
+    def cancel(self) -> None:
+        """Signal the running loop to stop after the current iteration."""
+        self._cancel_event.set()
+
+    # ------------------------------------------------------------------
+    # Private: per-iteration pipeline
+    # ------------------------------------------------------------------
+
+    async def _run_single_iteration(
+        self,
+        session: ExperimentSession,
+        client: httpx.AsyncClient,
+        iteration: int,
+        search_results_per_source: int,
+        approval_threshold_pct: float,
+    ) -> None:
+        """Execute one full search→hypothesis→experiment→evaluate cycle.
+
+        Mutates *session* in place by appending to results/hypotheses/search_results.
+        """
+        # 1. Web search
+        search_hits = await self._web_search(
+            client=client,
+            query=session.topic,
+            max_results_per_source=search_results_per_source,
+        )
+        session.search_results.append(search_hits)
+
+        # 2. Generate hypothesis
+        hypothesis = self._generate_hypothesis(
+            search_results=search_hits,
+            prior_results=session.results,
+            iteration=iteration,
+        )
+        session.hypotheses.append(hypothesis)
+
+        # 3. Run experiment
+        experiment = self._build_experiment(hypothesis, session)
+        experiment = await self._run_experiment(experiment)
+
+        # 4. Evaluate
+        metrics = self._evaluate_results(experiment)
+        session.results.append(metrics)
+
+        # 5. Approval gate for significant improvements
+        if metrics.improved and self.approval_gate.check_approval_needed(
+            metrics.improvement_pct, approval_threshold_pct
+        ):
+            await self._handle_approval_gate(session, experiment, metrics)
+
+    # ------------------------------------------------------------------
+    # Private: web search
+    # ------------------------------------------------------------------
+
+    async def _web_search(
+        self,
+        client: httpx.AsyncClient,
+        query: str,
+        max_results_per_source: int = 3,
+    ) -> List[SearchResult]:
+        """Fetch results from arXiv and GitHub in parallel.
+
+        Args:
+            client: Shared httpx.AsyncClient.
+            query: Search query derived from the session topic.
+            max_results_per_source: Max results per individual source.
+
+        Returns:
+            Combined list of SearchResult objects.
+        """
+        arxiv_task = _search_arxiv(client, query, max_results_per_source)
+        github_task = _search_github(client, query, max_results_per_source)
+        arxiv_results, github_results = await asyncio.gather(arxiv_task, github_task)
+        combined = arxiv_results + github_results
+        logger.info(
+            "_web_search: query=%r returned %d results (%d arxiv, %d github)",
+            query,
+            len(combined),
+            len(arxiv_results),
+            len(github_results),
+        )
+        return combined
+
+    # ------------------------------------------------------------------
+    # Private: hypothesis generation
+    # ------------------------------------------------------------------
+
+    def _generate_hypothesis(
+        self,
+        search_results: List[SearchResult],
+        prior_results: List[ImprovementMetrics],
+        iteration: int,
+    ) -> ResearchHypothesis:
+        """Synthesise a hypothesis from search results and prior experiment outcomes.
+
+        The synthesis is rule-based (no LLM call) to keep the loop self-contained.
+        A keyword-driven heuristic extracts themes from search summaries and maps
+        them to hyperparameter adjustments known to help training quality.
+
+        Args:
+            search_results: Results from the current web_search step.
+            prior_results: Improvement metrics from previous iterations.
+            iteration: Current iteration number (1-based).
+
+        Returns:
+            ResearchHypothesis with a statement, rationale, and suggested hyperparams.
+        """
+        themes = _extract_themes(search_results)
+        adjustments = _themes_to_hyperparams(themes, iteration)
+        prior_context = _summarise_prior_results(prior_results)
+
+        statement = (
+            f"Iteration {iteration}: based on {len(search_results)} search results "
+            f"covering themes [{', '.join(themes) or 'general'}], "
+            f"adjust hyperparameters to improve val_bpb. {prior_context}"
+        )
+        rationale = (
+            f"Search themes suggest: {', '.join(themes) or 'no specific theme detected'}. "
+            f"Applied adjustments: {json.dumps(adjustments)}."
+        )
+        return ResearchHypothesis(
+            statement=statement,
+            rationale=rationale,
+            suggested_hyperparams=adjustments,
+            tags=themes[:5],
+        )
+
+    # ------------------------------------------------------------------
+    # Private: experiment execution
+    # ------------------------------------------------------------------
+
+    def _build_experiment(
+        self, hypothesis: ResearchHypothesis, session: ExperimentSession
+    ) -> Experiment:
+        """Construct an Experiment from a hypothesis.
+
+        Args:
+            hypothesis: The research hypothesis to test.
+            session: Parent session (used for tagging).
+
+        Returns:
+            Experiment ready to be passed to ExperimentRunner.
+        """
+        hp = HyperParams()
+        known_fields = {f.name for f in dataclasses.fields(HyperParams) if f.name != "extra"}
+        extra: Dict[str, Any] = {}
+        for key, value in hypothesis.suggested_hyperparams.items():
+            if key in known_fields:
+                setattr(hp, key, value)
+            else:
+                extra[key] = value
+        hp.extra = extra
+
+        return Experiment(
+            hypothesis=hypothesis.statement,
+            description=hypothesis.rationale,
+            hyperparams=hp,
+            tags=hypothesis.tags + [f"session:{session.id}"],
+        )
+
+    async def _run_experiment(self, experiment: Experiment) -> Experiment:
+        """Delegate to ExperimentRunner (M1) and return the completed experiment.
+
+        Args:
+            experiment: Experiment to execute.
+
+        Returns:
+            Experiment with result populated.
+        """
+        logger.info(
+            "_run_experiment: launching experiment %s — hypothesis: %s",
+            experiment.id,
+            experiment.hypothesis[:80],
+        )
+        return await self.runner.run_experiment(experiment)
+
+    # ------------------------------------------------------------------
+    # Private: evaluation
+    # ------------------------------------------------------------------
+
+    def _evaluate_results(self, experiment: Experiment) -> ImprovementMetrics:
+        """Extract improvement metrics from a completed experiment.
+
+        Args:
+            experiment: Completed (or failed) experiment.
+
+        Returns:
+            ImprovementMetrics comparing the experiment to baseline.
+        """
+        result: Optional[ExperimentResult] = experiment.result
+        return ImprovementMetrics(
+            experiment_id=experiment.id,
+            baseline_val_bpb=experiment.baseline_val_bpb,
+            result_val_bpb=(result.val_bpb if result else None),
+            improvement=experiment.improvement,
+            improvement_pct=experiment.improvement_pct,
+            state=experiment.state.value,
+        )
+
+    # ------------------------------------------------------------------
+    # Private: plateau / stop guard
+    # ------------------------------------------------------------------
+
+    def _should_continue(
+        self, session: ExperimentSession, plateau_window: int
+    ) -> bool:
+        """Return True if the loop should continue, False to stop early.
+
+        Stops early when the last *plateau_window* iterations all failed to
+        improve over baseline — indicating the search space is exhausted.
+
+        Args:
+            session: Current session with results so far.
+            plateau_window: Number of consecutive non-improving iterations to trigger stop.
+
+        Returns:
+            True if more iterations should run, False if plateau detected.
+        """
+        results = session.results
+        if len(results) < plateau_window:
+            return True
+        recent = results[-plateau_window:]
+        if all(not m.improved for m in recent):
+            logger.info(
+                "_should_continue: plateau detected — last %d iterations showed no improvement",
+                plateau_window,
+            )
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # Private: approval gate handler
+    # ------------------------------------------------------------------
+
+    async def _handle_approval_gate(
+        self,
+        session: ExperimentSession,
+        experiment: Experiment,
+        metrics: ImprovementMetrics,
+    ) -> None:
+        """Request and await human approval for a significant improvement.
+
+        Does NOT block the loop indefinitely — uses the configured timeout in
+        ApprovalGate.wait_for_approval.  If timeout or rejection occurs, the
+        baseline is NOT updated (which the ExperimentRunner already handles).
+
+        Args:
+            session: Parent session.
+            experiment: Completed experiment with significant improvement.
+            metrics: Improvement metrics for the approval request.
+        """
+        details: Dict[str, Any] = {
+            "topic": session.topic,
+            "iteration": session.iterations_completed,
+            "metrics": metrics.to_dict(),
+            "hypothesis": (session.hypotheses[-1].to_dict() if session.hypotheses else {}),
+        }
+        status_key = await self.approval_gate.request_approval(
+            session_id=session.id,
+            experiment_id=experiment.id,
+            details=details,
+        )
+        logger.info(
+            "_handle_approval_gate: significant improvement %.2f%% — awaiting approval at %s",
+            metrics.improvement_pct,
+            status_key,
+        )
+        # Non-blocking poll with short timeout so we don't freeze the loop
+        decision = await self.approval_gate.wait_for_approval(
+            session_id=session.id,
+            experiment_id=experiment.id,
+            timeout=60.0,
+        )
+        if decision != "approved":
+            logger.info(
+                "_handle_approval_gate: experiment %s not approved (decision=%s) — skipping",
+                experiment.id,
+                decision,
+            )
+
+    # ------------------------------------------------------------------
+    # Private: session persistence
+    # ------------------------------------------------------------------
+
+    async def _get_redis(self):
+        if self._redis is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self._redis = get_redis_client(
+                async_client=True,
+                database=self.config.redis_database,
+            )
+        return self._redis
+
+    async def _save_session(self, session: ExperimentSession) -> None:
+        """Persist an ExperimentSession to Redis.
+
+        Args:
+            session: Session to persist.
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"autoresearch:session:{session.id}"
+            await redis.set(key, json.dumps(session.to_dict()), ex=86400 * 7)
+            await redis.zadd(
+                "autoresearch:sessions:timeline",
+                {session.id: session.started_at or time.time()},
+            )
+        except Exception:
+            logger.exception("_save_session: failed to persist session %s", session.id)
+
+    # ------------------------------------------------------------------
+    # Private: HTTP client lifecycle
+    # ------------------------------------------------------------------
+
+    def _build_http_client(self) -> httpx.AsyncClient:
+        """Return the injected client or create a temporary one for the loop."""
+        if self._http_client is not None:
+            # Caller owns lifecycle — wrap in a no-op context manager
+            return _NullContextClient(self._http_client)
+        return httpx.AsyncClient(timeout=_DEFAULT_HTTP_TIMEOUT)
+
+
+# ---------------------------------------------------------------------------
+# Internal context-manager shim for injected clients
+# ---------------------------------------------------------------------------
+
+
+class _NullContextClient:
+    """Wraps an existing httpx.AsyncClient so it can be used as an async context manager
+    without closing it — the injecting caller retains ownership."""
+
+    def __init__(self, client: httpx.AsyncClient):
+        self._client = client
+
+    async def __aenter__(self) -> httpx.AsyncClient:
+        return self._client
+
+    async def __aexit__(self, *_) -> None:
+        pass  # do not close — caller owns the client
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis helpers (pure functions, testable in isolation)
+# ---------------------------------------------------------------------------
+
+_THEME_KEYWORDS: Dict[str, List[str]] = {
+    "attention": ["attention", "transformer", "self-attention", "multi-head"],
+    "regularisation": ["dropout", "regularization", "weight decay", "l2"],
+    "learning_rate": ["learning rate", "lr schedule", "warmup", "cosine annealing"],
+    "architecture": ["layer", "depth", "width", "embedding", "hidden"],
+    "data": ["data augmentation", "tokenization", "dataset", "preprocessing"],
+    "batch": ["batch size", "gradient accumulation", "micro-batch"],
+}
+
+_THEME_TO_HP_ADJUSTMENTS: Dict[str, Dict[str, Any]] = {
+    "attention": {"n_head": 8, "n_embd": 512},
+    "regularisation": {"dropout": 0.1, "weight_decay": 0.05},
+    "learning_rate": {"learning_rate": 1e-4, "warmup_steps": 200},
+    "architecture": {"n_layer": 8, "block_size": 512},
+    "data": {"batch_size": 128},
+    "batch": {"batch_size": 32},
+}
+
+
+def _extract_themes(search_results: List[SearchResult]) -> List[str]:
+    """Identify high-level research themes from a list of search results.
+
+    Args:
+        search_results: Web search results for the current iteration.
+
+    Returns:
+        Deduplicated list of theme names found in titles/summaries.
+    """
+    found: List[str] = []
+    combined_text = " ".join(
+        f"{r.title} {r.summary}" for r in search_results
+    ).lower()
+    for theme, keywords in _THEME_KEYWORDS.items():
+        if any(kw in combined_text for kw in keywords):
+            found.append(theme)
+    return found
+
+
+def _themes_to_hyperparams(themes: List[str], iteration: int) -> Dict[str, Any]:
+    """Map detected themes to concrete hyperparameter adjustments.
+
+    Uses modular iteration cycling so successive iterations with the same themes
+    still explore a varied parameter space.
+
+    Args:
+        themes: Theme names from _extract_themes().
+        iteration: Current iteration index (1-based, used for cycling).
+
+    Returns:
+        Dict of hyperparameter overrides to apply for the next experiment.
+    """
+    if not themes:
+        # Fallback: cycle through all theme adjustments based on iteration
+        all_themes = list(_THEME_TO_HP_ADJUSTMENTS.keys())
+        selected_theme = all_themes[(iteration - 1) % len(all_themes)]
+        return dict(_THEME_TO_HP_ADJUSTMENTS[selected_theme])
+
+    # Pick the theme that appears earliest (most prominent in search results)
+    # and rotate through themes across iterations to avoid repetition
+    selected_theme = themes[(iteration - 1) % len(themes)]
+    return dict(_THEME_TO_HP_ADJUSTMENTS.get(selected_theme, {}))
+
+
+def _summarise_prior_results(prior_results: List[ImprovementMetrics]) -> str:
+    """Build a short text summary of prior iteration results.
+
+    Args:
+        prior_results: List of ImprovementMetrics from previous iterations.
+
+    Returns:
+        Human-readable summary string, empty if no prior results.
+    """
+    if not prior_results:
+        return ""
+    last = prior_results[-1]
+    if last.improved and last.improvement_pct is not None:
+        return f"Last iteration improved by {last.improvement_pct:.2f}%."
+    return "Last iteration did not improve over baseline."
