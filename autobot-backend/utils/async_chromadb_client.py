@@ -28,14 +28,16 @@ Usage:
     results = await collection.query(query_embeddings=[[0.1, 0.2]], n_results=5)
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+if TYPE_CHECKING:
+    import chromadb
 
 # Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
@@ -58,7 +60,7 @@ class AsyncChromaCollection:
     All methods mirror the synchronous ChromaDB Collection API but are async.
     """
 
-    def __init__(self, collection: chromadb.Collection):
+    def __init__(self, collection: Any):
         """Initialize async wrapper around a ChromaDB collection."""
         self._collection = collection
 
@@ -265,7 +267,7 @@ class AsyncChromaClient:
     Provides async methods for collection management operations.
     """
 
-    def __init__(self, client: Union[chromadb.HttpClient, chromadb.PersistentClient]):
+    def __init__(self, client: Any):
         """Initialize async wrapper around a ChromaDB client."""
         self._client = client
         self._collection_cache: Dict[str, AsyncChromaCollection] = {}
@@ -398,6 +400,10 @@ async def get_async_chromadb_client(
     Returns:
         AsyncChromaClient wrapper for async operations
     """
+    # Issue #3016: lazy import — chromadb is heavy (~1s import)
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+
     cache_key = (
         f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
     )
@@ -444,7 +450,7 @@ async def get_async_chromadb_client(
         raise
 
 
-def wrap_collection_async(collection: chromadb.Collection) -> AsyncChromaCollection:
+def wrap_collection_async(collection: Any) -> AsyncChromaCollection:
     """
     Wrap an existing synchronous collection for async use.
 

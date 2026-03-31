@@ -11,8 +11,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-import torch
-import torch.optim as optim
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,6 +19,19 @@ from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
 
 logger = logging.getLogger(__name__)
+
+# Issue #3016: lazy module-level import for torch
+_torch = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
 
 
 class IncrementalTrainer:
@@ -61,6 +72,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        torch = _get_torch()
+
         contexts = []
         targets = []
 
@@ -86,6 +99,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        torch = _get_torch()
+
         # Forward pass
         logits, _ = self.trainer.model(batch_contexts)
 
@@ -108,6 +123,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        import torch.optim as optim  # Issue #3016: lazy import
+
         self.trainer.model.train()
         optimizer = optim.AdamW(self.trainer.model.parameters(), lr=self.learning_rate)
 
