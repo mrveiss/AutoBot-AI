@@ -128,7 +128,8 @@
         state: stopped
         enabled: false
       when: _service_file.stat.exists
-      ignore_errors: true
+      # Service may already be stopped or in a failed state during removal (#2950)
+      failed_when: false
 
     - name: "Remove {{ systemd_service }} service file"
       ansible.builtin.file:
