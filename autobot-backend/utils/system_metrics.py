@@ -177,9 +177,7 @@ class SystemMetricsCollector:
             1.0 if healthy, 0.0 if unhealthy
         """
         try:
-            redis_client = get_redis_client(database="main", async_client=True)
-            if asyncio.iscoroutine(redis_client):
-                redis_client = await redis_client
+            redis_client = await get_redis_client(database="main", async_client=True)
 
             if not redis_client or not hasattr(redis_client, "ping"):
                 return 0.0
@@ -362,9 +360,7 @@ class SystemMetricsCollector:
         Returns:
             Async Redis client or None if unavailable
         """
-        kb_redis_client = get_redis_client(database="knowledge", async_client=True)
-        if asyncio.iscoroutine(kb_redis_client):
-            kb_redis_client = await kb_redis_client
+        kb_redis_client = await get_redis_client(database="knowledge", async_client=True)
         return kb_redis_client
 
     async def _collect_kb_vector_metrics(

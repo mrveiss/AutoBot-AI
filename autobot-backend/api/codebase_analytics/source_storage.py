@@ -24,7 +24,7 @@ async def _get_redis():
     """Return an async Redis client for the analytics database."""
     from autobot_shared.redis_client import get_redis_client
 
-    return get_redis_client(database="analytics", async_client=True)
+    return await get_redis_client(database="analytics", async_client=True)
 
 
 async def save_source(source: CodeSource) -> bool:

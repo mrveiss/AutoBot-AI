@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def reset_knowledge_base_index():
     """Reset the knowledge base Redis index to use correct embedding dimensions."""
 
-    redis_client = get_redis_client(async_client=True)
+    redis_client = await get_redis_client(async_client=True)
     if not redis_client:
         logger.error("Redis client not available")
         return
