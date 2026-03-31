@@ -55,7 +55,6 @@
       loop:
         - /var/run/autobot-backend.pid
         - /tmp/uvicorn.pid
-      ignore_errors: yes
 
     - name: Clear Python bytecode cache
       shell: |
@@ -71,7 +70,8 @@
         if [ -f {{ backend_log_dir }}/backend-error.log ] && [ $(stat -f%z {{ backend_log_dir }}/backend-error.log 2>/dev/null || stat -c%s {{ backend_log_dir }}/backend-error.log) -gt 104857600 ]; then
           mv {{ backend_log_dir }}/backend-error.log {{ backend_log_dir }}/backend-error.log.old
         fi
-      ignore_errors: yes
+      # Log rotation is best-effort; failure must not block restart (#2950)
+      failed_when: false
 
     # ============================================================
     # Phase 3: Verify Configuration
@@ -144,8 +144,8 @@
         url: http://localhost:8443/api/health
         timeout: 5
       register: health_check
+      # Service may still be initializing; result is used in the report below
       failed_when: false
-      ignore_errors: yes
 
     # ============================================================
     # Phase 6: Report Results
