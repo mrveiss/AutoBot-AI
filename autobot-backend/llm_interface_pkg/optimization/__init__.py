@@ -51,6 +51,14 @@ from .kv_cache import (
     RTX_4070_KV_CACHE_FRACTION,
     RTX_4070_VRAM_BYTES,
 )
+from .hf_quantizer import (
+    HfQuantizerWrapper,
+    LayerLoadResult,
+    QuantizerConfig,
+    QuantizationType,
+    QuantizedLayerLoader,
+    detect_quantization,
+)
 from .token_optimizer import (
     TokenOptimizer,
     TokenOptimizerConfig,
@@ -105,6 +113,13 @@ __all__ = [
     # Profiler (Issue #1956)
     "LayeredProfiler",
     "INFERENCE_STAGES",
+    # HF Quantizer (Issue #1954)
+    "QuantizationType",
+    "detect_quantization",
+    "HfQuantizerWrapper",
+    "QuantizerConfig",
+    "QuantizedLayerLoader",
+    "LayerLoadResult",
     # KV Cache Manager (Issue #1964)
     "KVCacheConfig",
     "KVCacheManager",
