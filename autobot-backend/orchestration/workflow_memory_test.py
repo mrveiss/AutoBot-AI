@@ -14,7 +14,6 @@ from orchestration.workflow_memory import (
     WorkflowMemory,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -94,7 +93,9 @@ class TestWorkflowMemorySet:
             _, _, stored = redis_mock.hset.call_args[0]
             assert json.loads(stored) == value
 
-    def test_set_propagates_redis_error(self, memory: WorkflowMemory, redis_mock: MagicMock):
+    def test_set_propagates_redis_error(
+        self, memory: WorkflowMemory, redis_mock: MagicMock
+    ):
         redis_mock.hset.side_effect = ConnectionError("Redis down")
         with pytest.raises(ConnectionError):
             memory.set("k", "v")
@@ -106,11 +107,15 @@ class TestWorkflowMemorySet:
 
 
 class TestWorkflowMemoryGet:
-    def test_get_returns_deserialised_value(self, memory: WorkflowMemory, redis_mock: MagicMock):
+    def test_get_returns_deserialised_value(
+        self, memory: WorkflowMemory, redis_mock: MagicMock
+    ):
         redis_mock.hget.return_value = json.dumps({"result": "ok"}).encode()
         assert memory.get("k") == {"result": "ok"}
 
-    def test_get_returns_default_when_absent(self, memory: WorkflowMemory, redis_mock: MagicMock):
+    def test_get_returns_default_when_absent(
+        self, memory: WorkflowMemory, redis_mock: MagicMock
+    ):
         redis_mock.hget.return_value = None
         assert memory.get("missing") is None
 
@@ -243,8 +248,12 @@ class TestWorkflowMemoryIsolation:
         wm_b.set("shared_key", "from_b")
 
         # Each mock was called with its own workflow key, not the other's.
-        mock_a.hset.assert_called_with(wm_a._redis_key, "shared_key", json.dumps("from_a"))
-        mock_b.hset.assert_called_with(wm_b._redis_key, "shared_key", json.dumps("from_b"))
+        mock_a.hset.assert_called_with(
+            wm_a._redis_key, "shared_key", json.dumps("from_a")
+        )
+        mock_b.hset.assert_called_with(
+            wm_b._redis_key, "shared_key", json.dumps("from_b")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -305,4 +314,6 @@ class TestWorkflowMemoryLazyRedis:
             wm.set("k", "v")
             wm.get("k")
             wm.get_all()
-            mock_factory.assert_called_once_with(async_client=False, database="workflows")
+            mock_factory.assert_called_once_with(
+                async_client=False, database="workflows"
+            )

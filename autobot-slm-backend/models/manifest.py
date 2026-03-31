@@ -64,7 +64,7 @@ class ManifestDeploy(BaseModel):
         description="Target path on node (e.g. /opt/autobot/autobot-backend/)"
     )
     shared: bool = Field(
-        default=True, description="Also deploy autobot-shared/ to node"
+        default=True, description="Also deploy autobot_shared/ to node"
     )
     infrastructure: bool = Field(
         default=True,

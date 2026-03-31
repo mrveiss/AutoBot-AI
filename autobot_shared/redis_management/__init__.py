@@ -5,7 +5,7 @@
 Redis Management Package (#2313).
 
 Canonical location for Redis connection management. Moved from
-autobot-backend/utils/redis_management/ to autobot-shared/ so all
+autobot-backend/utils/redis_management/ to autobot_shared/ so all
 components (backend, SLM backend, standalone scripts) share the same code.
 
 Package Structure:

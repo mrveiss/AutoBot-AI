@@ -31,7 +31,6 @@ from services.workflow_io import (
     WorkflowOutputFormatter,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -150,11 +149,15 @@ class TestValidation:
 
     # SELECT
     def test_select_valid_option(self):
-        f = InputFieldSchema(name="env", field_type=FieldType.SELECT, options=["dev", "prod"])
+        f = InputFieldSchema(
+            name="env", field_type=FieldType.SELECT, options=["dev", "prod"]
+        )
         assert f.validate("dev") == []
 
     def test_select_invalid_option(self):
-        f = InputFieldSchema(name="env", field_type=FieldType.SELECT, options=["dev", "prod"])
+        f = InputFieldSchema(
+            name="env", field_type=FieldType.SELECT, options=["dev", "prod"]
+        )
         errors = f.validate("staging")
         assert errors
         assert "staging" in errors[0]
@@ -219,7 +222,9 @@ class TestValidation:
         assert "maximum" in errors[0]
 
     def test_float_within_range(self):
-        f = InputFieldSchema(name="ratio", field_type=FieldType.FLOAT, min_value=0.0, max_value=1.0)
+        f = InputFieldSchema(
+            name="ratio", field_type=FieldType.FLOAT, min_value=0.0, max_value=1.0
+        )
         assert f.validate(0.5) == []
 
     # String length
@@ -236,16 +241,22 @@ class TestValidation:
         assert "maximum" in errors[0]
 
     def test_string_within_length(self):
-        f = InputFieldSchema(name="name", field_type=FieldType.STRING, min_length=2, max_length=10)
+        f = InputFieldSchema(
+            name="name", field_type=FieldType.STRING, min_length=2, max_length=10
+        )
         assert f.validate("hello") == []
 
     # Pattern
     def test_pattern_match(self):
-        f = InputFieldSchema(name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]{3}$")
+        f = InputFieldSchema(
+            name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]{3}$"
+        )
         assert f.validate("ABC") == []
 
     def test_pattern_mismatch(self):
-        f = InputFieldSchema(name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]{3}$")
+        f = InputFieldSchema(
+            name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]{3}$"
+        )
         errors = f.validate("abc")
         assert errors
         assert "pattern" in errors[0]
@@ -342,7 +353,9 @@ class TestWorkflowInputSchema:
 
 class TestInputFieldJsonSchema:
     def test_integer_type(self):
-        f = InputFieldSchema(name="port", field_type=FieldType.INTEGER, min_value=1, max_value=65535)
+        f = InputFieldSchema(
+            name="port", field_type=FieldType.INTEGER, min_value=1, max_value=65535
+        )
         schema = f.to_json_schema()
         assert schema["type"] == "integer"
         assert schema["minimum"] == 1
@@ -357,7 +370,9 @@ class TestInputFieldJsonSchema:
         assert f.to_json_schema()["type"] == "boolean"
 
     def test_select_enum(self):
-        f = InputFieldSchema(name="env", field_type=FieldType.SELECT, options=["dev", "prod"])
+        f = InputFieldSchema(
+            name="env", field_type=FieldType.SELECT, options=["dev", "prod"]
+        )
         schema = f.to_json_schema()
         assert schema["type"] == "string"
         assert schema["enum"] == ["dev", "prod"]
@@ -376,13 +391,17 @@ class TestInputFieldJsonSchema:
         assert isinstance(schema["type"], list)
 
     def test_string_length_constraints(self):
-        f = InputFieldSchema(name="label", field_type=FieldType.STRING, min_length=2, max_length=50)
+        f = InputFieldSchema(
+            name="label", field_type=FieldType.STRING, min_length=2, max_length=50
+        )
         schema = f.to_json_schema()
         assert schema["minLength"] == 2
         assert schema["maxLength"] == 50
 
     def test_pattern_in_schema(self):
-        f = InputFieldSchema(name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]+$")
+        f = InputFieldSchema(
+            name="code", field_type=FieldType.STRING, pattern=r"^[A-Z]+$"
+        )
         schema = f.to_json_schema()
         assert schema["pattern"] == r"^[A-Z]+$"
 
@@ -472,7 +491,9 @@ class TestToMarkdown:
         assert result.startswith("# Workflow Report")
 
     def test_status_in_output(self):
-        result = WorkflowOutputFormatter().to_markdown(_make_ctx(status="partially_completed"))
+        result = WorkflowOutputFormatter().to_markdown(
+            _make_ctx(status="partially_completed")
+        )
         assert "partially_completed" in result
 
     def test_success_rate_formatted(self):
@@ -492,7 +513,9 @@ class TestToMarkdown:
         assert "timeout" in result
 
     def test_agents_listed(self):
-        result = WorkflowOutputFormatter().to_markdown(_make_ctx(agents_involved=["agent-x"]))
+        result = WorkflowOutputFormatter().to_markdown(
+            _make_ctx(agents_involved=["agent-x"])
+        )
         assert "agent-x" in result
 
 
@@ -515,9 +538,7 @@ class TestToHtml:
 
     def test_error_text_escaped(self):
         ctx = _make_ctx(
-            step_results={
-                "s1": {"success": False, "error": "<xss>", "agent_id": "a"}
-            }
+            step_results={"s1": {"success": False, "error": "<xss>", "agent_id": "a"}}
         )
         result = WorkflowOutputFormatter().to_html(ctx)
         assert "<xss>" not in result

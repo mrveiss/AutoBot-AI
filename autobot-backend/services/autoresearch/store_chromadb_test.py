@@ -249,9 +249,7 @@ class TestIndexInChromadb:
     async def test_chromadb_error_logged_not_raised(self):
         """ChromaDB failures should be logged but not propagate."""
         collection = AsyncMock()
-        collection.upsert = AsyncMock(
-            side_effect=RuntimeError("ChromaDB down")
-        )
+        collection.upsert = AsyncMock(side_effect=RuntimeError("ChromaDB down"))
         store = _make_store(mock_collection=collection)
         exp = _make_experiment()
 
@@ -267,9 +265,7 @@ class TestIndexInChromadb:
         mock_collection = AsyncMock()
         mock_collection.upsert = AsyncMock()
         mock_client = AsyncMock()
-        mock_client.get_or_create_collection = AsyncMock(
-            return_value=mock_collection
-        )
+        mock_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
 
         with patch(
             "utils.chromadb_client.get_async_chromadb_client",

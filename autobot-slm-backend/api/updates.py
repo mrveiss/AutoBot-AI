@@ -586,7 +586,9 @@ async def _run_discover_job(
         job["progress"] = 70
         job["message"] = "Parsing discovered packages..."
         host_results = _parse_discover_output(result["output"])
-        unreachable = _parse_unreachable_hosts(result["output"]) if not result["success"] else []
+        unreachable = (
+            _parse_unreachable_hosts(result["output"]) if not result["success"] else []
+        )
 
         if not result["success"] and not host_results:
             job["status"] = "failed"

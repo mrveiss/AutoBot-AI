@@ -4,7 +4,7 @@
 """
 Prometheus Metrics for AutoBot user backend.
 
-Re-exports the shared implementation from autobot-shared.
+Re-exports the shared implementation from autobot_shared.
 Issue #937: Replaced the no-op stub with the real Prometheus implementation.
 """
 

@@ -180,19 +180,25 @@ class TestComputeSingleDelta:
 
     def test_exactly_moderate_threshold(self):
         """Exactly at moderate boundary → severity moderate."""
-        result = _compute_single_delta("cpu", 100.0, 110.0, self._threshold(moderate=10.0))
+        result = _compute_single_delta(
+            "cpu", 100.0, 110.0, self._threshold(moderate=10.0)
+        )
         assert result.severity == "moderate"
         assert result.direction == "up"
 
     def test_between_moderate_and_critical(self):
         """Between moderate and critical → severity moderate."""
-        result = _compute_single_delta("cpu", 100.0, 120.0, self._threshold(moderate=10.0, critical=30.0))
+        result = _compute_single_delta(
+            "cpu", 100.0, 120.0, self._threshold(moderate=10.0, critical=30.0)
+        )
         assert result.severity == "moderate"
         assert result.direction == "up"
 
     def test_exactly_critical_threshold(self):
         """Exactly at critical boundary → severity critical."""
-        result = _compute_single_delta("cpu", 100.0, 130.0, self._threshold(moderate=10.0, critical=30.0))
+        result = _compute_single_delta(
+            "cpu", 100.0, 130.0, self._threshold(moderate=10.0, critical=30.0)
+        )
         assert result.severity == "critical"
         assert result.direction == "up"
 
@@ -203,12 +209,16 @@ class TestComputeSingleDelta:
         assert result.direction == "up"
 
     def test_direction_down_on_decrease(self):
-        result = _compute_single_delta("cpu", 100.0, 60.0, self._threshold(moderate=10.0, critical=30.0))
+        result = _compute_single_delta(
+            "cpu", 100.0, 60.0, self._threshold(moderate=10.0, critical=30.0)
+        )
         assert result.severity == "critical"
         assert result.direction == "down"
 
     def test_direction_down_moderate(self):
-        result = _compute_single_delta("mem", 200.0, 178.0, self._threshold(moderate=10.0, critical=30.0))
+        result = _compute_single_delta(
+            "mem", 200.0, 178.0, self._threshold(moderate=10.0, critical=30.0)
+        )
         assert result.severity == "moderate"
         assert result.direction == "down"
 
@@ -253,7 +263,12 @@ class TestDeltaEngineComputeDelta:
     def test_stored_value_becomes_previous(self):
         """The value from lindex(0) must be used as previous_value."""
         client = _make_redis_client(stored_value=70.0)
-        engine = _make_engine(client, thresholds={"cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=20.0)})
+        engine = _make_engine(
+            client,
+            thresholds={
+                "cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=20.0)
+            },
+        )
         result = engine.compute_delta("cpu", 77.0)
 
         assert result.previous_value == 70.0
@@ -265,7 +280,12 @@ class TestDeltaEngineComputeDelta:
     def test_threshold_override_at_call_level(self):
         """Explicit threshold argument overrides engine-level thresholds."""
         client = _make_redis_client(stored_value=100.0)
-        engine = _make_engine(client, thresholds={"cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=10.0)})
+        engine = _make_engine(
+            client,
+            thresholds={
+                "cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=10.0)
+            },
+        )
         # Use a stricter override
         override = MetricThreshold("cpu", moderate_pct=50.0, critical_pct=80.0)
         result = engine.compute_delta("cpu", 110.0, threshold=override)
@@ -322,11 +342,15 @@ class TestDeltaEngineComputeBatch:
     def test_call_level_thresholds_override_engine_thresholds(self):
         """Thresholds passed to compute_batch take precedence."""
         client = _make_redis_client(stored_value=100.0)
-        engine_thresholds = {"cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=15.0)}
+        engine_thresholds = {
+            "cpu": MetricThreshold("cpu", moderate_pct=5.0, critical_pct=15.0)
+        }
         engine = _make_engine(client, thresholds=engine_thresholds)
 
         # A very high threshold means 20 % change is not significant
-        call_thresholds = {"cpu": MetricThreshold("cpu", moderate_pct=50.0, critical_pct=80.0)}
+        call_thresholds = {
+            "cpu": MetricThreshold("cpu", moderate_pct=50.0, critical_pct=80.0)
+        }
         results = engine.compute_batch({"cpu": 120.0}, thresholds=call_thresholds)
 
         assert results[0].severity == "none"

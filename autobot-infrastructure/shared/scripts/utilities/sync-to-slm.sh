@@ -26,7 +26,7 @@ SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
 # Local paths
 SLM_BACKEND_LOCAL="$PROJECT_ROOT/autobot-slm-backend"
 SLM_FRONTEND_LOCAL="$PROJECT_ROOT/autobot-slm-frontend"
-SHARED_LIB_LOCAL="$PROJECT_ROOT/autobot-shared"
+SHARED_LIB_LOCAL="$PROJECT_ROOT/autobot_shared"
 
 # Ansible paths
 ANSIBLE_DIR="$SLM_BACKEND_LOCAL/ansible"
@@ -37,7 +37,7 @@ ANSIBLE_PLAYBOOK="$ANSIBLE_DIR/playbooks/deploy-slm-manager.yml"
 REMOTE_BASE="/opt/autobot"
 SLM_BACKEND_REMOTE="$REMOTE_BASE/autobot-slm-backend"
 SLM_FRONTEND_REMOTE="$REMOTE_BASE/autobot-slm-frontend"
-SHARED_LIB_REMOTE="$REMOTE_BASE/autobot-shared"
+SHARED_LIB_REMOTE="$REMOTE_BASE/autobot_shared"
 
 # Colors
 RED='\033[0;31m'
@@ -107,7 +107,7 @@ echo -e "${BLUE}     SLM Management Plane Deployment        ${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 echo "Target:     $REMOTE_USER@$REMOTE_HOST"
-echo "Components: autobot-slm-backend, autobot-slm-frontend, autobot-shared"
+echo "Components: autobot-slm-backend, autobot-slm-frontend, autobot_shared"
 echo "Remote:     $REMOTE_BASE/"
 echo "Action:     $ACTION"
 [ -n "$ANSIBLE_TAGS" ] && echo "Tags:       $ANSIBLE_TAGS"
@@ -122,9 +122,9 @@ if ! ping -c 1 -W 2 "$REMOTE_HOST" > /dev/null 2>&1; then
 fi
 log_info "Host reachable"
 
-# Sync autobot-shared (backend dependency)
+# Sync autobot_shared (backend dependency)
 echo ""
-log_step "Syncing autobot-shared..."
+log_step "Syncing autobot_shared..."
 rsync_cmd \
     --exclude '__pycache__/' \
     --exclude '*.pyc' \

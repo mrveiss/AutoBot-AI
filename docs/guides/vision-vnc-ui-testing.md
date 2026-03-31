@@ -131,7 +131,7 @@ see [Section 5](#5-playwright-integration).
 | VNC MCP Bridge | `autobot-backend/api/vnc_mcp.py` |
 | VNC Humanization | `autobot-backend/api/vnc_humanization.py` |
 | Playwright API | `autobot-backend/api/playwright.py` |
-| Network Constants | `autobot-shared/network_constants.py` |
+| Network Constants | `autobot_shared/network_constants.py` |
 | Screen Analyzer | `autobot-backend/computer_vision/screen_analyzer.py` |
 | CV Types | `autobot-backend/computer_vision/types.py` |
 

@@ -231,8 +231,14 @@ class WorkflowCheckpointManager:
 
         result: Dict[str, StepCheckpoint] = {}
         for step_id_bytes, value_bytes in raw_map.items():
-            step_id = step_id_bytes.decode() if isinstance(step_id_bytes, bytes) else step_id_bytes
-            raw = value_bytes.decode() if isinstance(value_bytes, bytes) else value_bytes
+            step_id = (
+                step_id_bytes.decode()
+                if isinstance(step_id_bytes, bytes)
+                else step_id_bytes
+            )
+            raw = (
+                value_bytes.decode() if isinstance(value_bytes, bytes) else value_bytes
+            )
             try:
                 result[step_id] = StepCheckpoint.from_dict(json.loads(raw))
             except (json.JSONDecodeError, KeyError) as exc:

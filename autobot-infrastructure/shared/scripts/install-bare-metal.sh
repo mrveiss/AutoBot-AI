@@ -322,9 +322,6 @@ install_backend() {
 
     local code_dir="${INSTALL_DIR}/code"
 
-    # Symlink autobot-shared into backend
-    ln -sfn "${code_dir}/autobot-shared" "${code_dir}/autobot-backend/autobot-shared"
-
     setup_venv "backend" "${code_dir}/autobot-backend/requirements.txt"
 }
 
@@ -332,9 +329,6 @@ install_slm() {
     log_step "Installing autobot-slm (port ${SLM_PORT})"
 
     local code_dir="${INSTALL_DIR}/code"
-
-    # Symlink autobot-shared into slm
-    ln -sfn "${code_dir}/autobot-shared" "${code_dir}/autobot-slm-backend/autobot-shared"
 
     setup_venv "slm" "${code_dir}/autobot-slm-backend/requirements.txt"
 }

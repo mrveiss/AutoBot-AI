@@ -10,7 +10,7 @@ Contains configuration classes for Redis connection management:
 - PoolConfig: Connection pool configuration
 
 Extracted from redis_client.py (Issue #381).
-Moved from autobot-backend/utils/ to autobot-shared/ (Issue #2313).
+Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 
 Backend-specific constant imports (REDIS_CONFIG, RetryConfig) have been replaced
 with their literal values so this module has no backend dependencies.
@@ -278,7 +278,7 @@ class PoolConfig:
     timeouts, retry logic, and circuit breaker settings.
 
     Issue #611: Values previously referenced REDIS_CONFIG constants,
-    now inlined after move to autobot-shared (#2313).
+    now inlined after move to autobot_shared (#2313).
     """
 
     max_connections: int = _MAX_CONNECTIONS_POOL

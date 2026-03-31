@@ -56,7 +56,14 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
     "data": ["data", "analysis", "statistics", "dataset", "correlation", "metrics"],
     "research": ["research", "search", "find", "latest", "current", "online"],
     "knowledge": ["document", "according", "summarize", "analyze", "knowledge"],
-    "translate": ["translate", "translation", "spanish", "french", "german", "language"],
+    "translate": [
+        "translate",
+        "translation",
+        "spanish",
+        "french",
+        "german",
+        "language",
+    ],
     "summarize": ["summarize", "summary", "brief", "overview", "tldr"],
     "sentiment": ["sentiment", "opinion", "feeling", "emotion", "tone"],
     "image": ["image", "picture", "photo", "visual", "diagram"],
@@ -116,10 +123,14 @@ class RLRouter:
 
         if random.random() < epsilon:
             agent_id = random.choice(available_agents)
-            logger.debug("RL explore: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon)
+            logger.debug(
+                "RL explore: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon
+            )
         else:
             agent_id = await self._greedy_select(state_key, available_agents)
-            logger.debug("RL exploit: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon)
+            logger.debug(
+                "RL exploit: state=%s agent=%s eps=%.3f", state_key, agent_id, epsilon
+            )
 
         confidence = await self._agent_confidence(state_key, agent_id)
         await self._decay_epsilon()
@@ -156,7 +167,11 @@ class RLRouter:
         """
         query_lower = query.lower()
         domains = sorted(
-            {domain for domain, kws in _DOMAIN_KEYWORDS.items() if any(kw in query_lower for kw in kws)}
+            {
+                domain
+                for domain, kws in _DOMAIN_KEYWORDS.items()
+                if any(kw in query_lower for kw in kws)
+            }
         )
         length_label = "xlong"
         word_count = len(query.split())
@@ -223,7 +238,10 @@ class RLRouter:
             redis = await self._get_redis()
             key = _KEY_QTABLE.format(state=state_key)
             raw_all = await redis.hgetall(key)
-            q_map = {k.decode() if isinstance(k, bytes) else k: float(v) for k, v in raw_all.items()}
+            q_map = {
+                k.decode() if isinstance(k, bytes) else k: float(v)
+                for k, v in raw_all.items()
+            }
         except Exception as exc:
             logger.debug("RL greedy-select Redis error: %s", exc)
             q_map = {}
@@ -335,7 +353,10 @@ class RLRouter:
             redis = await self._get_redis()
             key = _KEY_QTABLE.format(state=state_key)
             raw = await redis.hgetall(key)
-            return {k.decode() if isinstance(k, bytes) else k: float(v) for k, v in raw.items()}
+            return {
+                k.decode() if isinstance(k, bytes) else k: float(v)
+                for k, v in raw.items()
+            }
         except Exception as exc:
             logger.warning("RL q-table-snapshot failed: %s", exc)
             return {}

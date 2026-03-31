@@ -93,7 +93,7 @@
       lineinfile:
         path: /etc/systemd/system/autobot-backend.service
         regexp: '^Environment="PYTHONPATH='
-        line: 'Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared"'
+        line: 'Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared"'
         state: present
       notify: reload systemd
 
@@ -126,7 +126,7 @@
     - name: Test Python can import main module
       shell: |
         cd {{ backend_code_dir }}
-        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
+        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared
         {{ backend_code_dir }}/venv/bin/python -c "
         import sys
         print('PYTHONPATH:', sys.path[:5])
@@ -179,7 +179,7 @@
 
           Changes applied:
           - .env path: {{ backend_install_dir }}/.env
-          - PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
+          - PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot_shared
           - Python venv: {{ backend_code_dir }}/venv (deadsnakes python3.12)
 
           Next steps:

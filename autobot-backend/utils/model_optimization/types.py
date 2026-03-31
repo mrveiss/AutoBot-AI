@@ -115,7 +115,9 @@ class SystemResources:
     memory_percent: float
     available_memory_gb: float
     gpu_vram_gb: float = 0.0  # Total free VRAM across all GPUs in GB (#1966, #2032)
-    per_gpu_vram_gb: List[float] = field(default_factory=list)  # Per-GPU free VRAM (#2032)
+    per_gpu_vram_gb: List[float] = field(
+        default_factory=list
+    )  # Per-GPU free VRAM (#2032)
 
     def allows_large_models(self) -> bool:
         """Tell if system can handle large models."""

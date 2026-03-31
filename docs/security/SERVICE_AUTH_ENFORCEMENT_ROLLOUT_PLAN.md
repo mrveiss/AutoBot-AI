@@ -378,7 +378,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 
    Option B: Create shared library package (better long-term)
    ```bash
-   # Create autobot-shared package with ServiceHTTPClient
+   # Create autobot_shared package with ServiceHTTPClient
    # Deploy to all VMs via pip install
    ```
 

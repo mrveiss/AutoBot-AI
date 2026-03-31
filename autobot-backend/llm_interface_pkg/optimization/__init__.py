@@ -51,11 +51,37 @@ from .kv_cache import (
     RTX_4070_KV_CACHE_FRACTION,
     RTX_4070_VRAM_BYTES,
 )
+from .hf_quantizer import (
+    HfQuantizerWrapper,
+    LayerLoadResult,
+    QuantizerConfig,
+    QuantizationType,
+    QuantizedLayerLoader,
+    detect_quantization,
+)
+from .meta_eviction import (
+    EvictionStats,
+    MetaDeviceEvictionManager,
+    clean_memory,
+    evict_layer_to_meta,
+    get_gpu_memory_allocated,
+)
 from .token_optimizer import (
     TokenOptimizer,
     TokenOptimizerConfig,
     TokenSavingsRecord,
     get_token_optimizer,
+)
+from .attention_backend import (
+    AttentionBackend as ModelAttentionBackend,
+    AttentionBackendSelector,
+    ModelConfig as AttentionModelConfig,
+    get_attention_backend_selector,
+)
+from .layer_inference import (
+    LayerInferenceConfig,
+    LayerInferenceEngine,
+    LayerInferenceStats,
 )
 
 __all__ = [
@@ -105,10 +131,32 @@ __all__ = [
     # Profiler (Issue #1956)
     "LayeredProfiler",
     "INFERENCE_STAGES",
+    # HF Quantizer (Issue #1954)
+    "QuantizationType",
+    "detect_quantization",
+    "HfQuantizerWrapper",
+    "QuantizerConfig",
+    "QuantizedLayerLoader",
+    "LayerLoadResult",
     # KV Cache Manager (Issue #1964)
     "KVCacheConfig",
     "KVCacheManager",
     "LayerKVCache",
     "RTX_4070_KV_CACHE_FRACTION",
     "RTX_4070_VRAM_BYTES",
+    # Attention Backend Selector (Issue #1951)
+    "ModelAttentionBackend",
+    "AttentionBackendSelector",
+    "AttentionModelConfig",
+    "get_attention_backend_selector",
+    # Meta Device Eviction (Issue #1952)
+    "clean_memory",
+    "evict_layer_to_meta",
+    "get_gpu_memory_allocated",
+    "EvictionStats",
+    "MetaDeviceEvictionManager",
+    # Layer-by-layer Inference (Issue #1946)
+    "LayerInferenceConfig",
+    "LayerInferenceEngine",
+    "LayerInferenceStats",
 ]

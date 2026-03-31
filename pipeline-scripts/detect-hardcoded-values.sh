@@ -40,7 +40,7 @@ VIOLATION_DETAILS=""
 SCAN_DIRS=(
     "autobot-backend"
     "autobot-frontend/src"
-    "autobot-shared"
+    "autobot_shared"
     "autobot-slm-backend"
     "autobot-slm-frontend/src"
 )

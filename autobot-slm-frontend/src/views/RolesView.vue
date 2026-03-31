@@ -352,7 +352,7 @@ onMounted(() => {
           <div class="col-span-2">
             <label class="block text-sm font-medium text-gray-700 mb-1">Source Paths (comma-separated)</label>
             <input v-model="formData.source_paths"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm-backend/, autobot-shared/" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm-backend/, autobot_shared/" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Systemd Service</label>

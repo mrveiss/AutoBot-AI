@@ -43,7 +43,7 @@ const slmApi = useSlmApi()
 
 // Role ownership map: role_name -> node_id (#1389)
 const roleOwners = ref<Record<string, string>>({})
-const ORCH_INFRA_ROLES = ['autobot-shared', 'slm-agent']
+const ORCH_INFRA_ROLES = ['autobot_shared', 'slm-agent']
 
 async function fetchRoleOwners(): Promise<void> {
   try {
@@ -1487,7 +1487,7 @@ onUnmounted(() => {
                 <input
                   v-model="roleFormData.source_paths"
                   class="w-full px-3 py-2 border rounded-lg text-sm"
-                  placeholder="autobot-slm-backend/, autobot-shared/"
+                  placeholder="autobot-slm-backend/, autobot_shared/"
                 />
               </div>
               <div>

@@ -280,7 +280,7 @@
               :key="infra"
               class="role-chip infra-chip"
             >
-              {{ infra === 'autobot-shared' ? 'Shared Library' : 'SLM Agent' }}
+              {{ infra === 'autobot_shared' ? 'Shared Library' : 'SLM Agent' }}
             </span>
           </div>
         </div>
@@ -491,7 +491,7 @@ interface RoleInfo {
   degraded_without: string[]
 }
 
-const INFRA_ROLES = ['autobot-shared', 'slm-agent']
+const INFRA_ROLES = ['autobot_shared', 'slm-agent']
 const SLM_ROLES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
 
 const availableRoles = ref<RoleInfo[]>([])

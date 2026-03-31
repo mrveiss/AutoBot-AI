@@ -15,7 +15,7 @@ Features:
 - Async and sync support
 
 Extracted from redis_client.py as part of Issue #381 refactoring.
-Moved from autobot-backend/utils/ to autobot-shared/ (Issue #2313).
+Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 """
 
 import asyncio

@@ -189,7 +189,9 @@ class BaseTool(ABC):
         # Skip abstract classes — they still have unresolved abstract methods.
         if getattr(cls, "__abstractmethods__", None):
             return
-        missing = [attr for attr in ("metadata", "input_schema") if not hasattr(cls, attr)]
+        missing = [
+            attr for attr in ("metadata", "input_schema") if not hasattr(cls, attr)
+        ]
         if missing:
             raise TypeError(
                 f"BaseTool subclass '{cls.__name__}' must define: {', '.join(missing)}"

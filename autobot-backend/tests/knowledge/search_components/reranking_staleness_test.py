@@ -22,7 +22,6 @@ from knowledge.search_components.reranking import (
     staleness_penalty,
 )
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -66,7 +65,9 @@ class TestStalenessPenalty:
 class TestApplyRerankScoresStaleness:
     """_apply_rerank_scores applies staleness penalty when weight > 0."""
 
-    def _score_with_map(self, staleness_score: float, staleness_weight: float = 0.5) -> float:
+    def _score_with_map(
+        self, staleness_score: float, staleness_weight: float = 0.5
+    ) -> float:
         """Return rerank_score for a single result with the given staleness."""
         reranker = ResultReranker()
         result = _make_result("doc-A", score=0.6)
@@ -74,7 +75,9 @@ class TestApplyRerankScoresStaleness:
         weights = RerankWeights(reranker=0.5, vector=0.0, staleness=staleness_weight)
         staleness_map = {"doc-A": staleness_score}
 
-        reranker._apply_rerank_scores([result], [raw_logit], weights=weights, staleness_map=staleness_map)
+        reranker._apply_rerank_scores(
+            [result], [raw_logit], weights=weights, staleness_map=staleness_map
+        )
         return result["rerank_score"]
 
     def test_fresh_doc_gets_full_penalty_factor(self):
@@ -91,7 +94,9 @@ class TestApplyRerankScoresStaleness:
         weights = RerankWeights(reranker=0.5, vector=0.0, staleness=0.5)
         staleness_map = {"doc-A": 1.0}
 
-        reranker._apply_rerank_scores([result], [raw_logit], weights=weights, staleness_map=staleness_map)
+        reranker._apply_rerank_scores(
+            [result], [raw_logit], weights=weights, staleness_map=staleness_map
+        )
 
         normalized = _sigmoid(raw_logit)
         # penalty factor = staleness_penalty(1.0) = 0.0
@@ -111,7 +116,9 @@ class TestApplyRerankScoresStaleness:
         weights = RerankWeights(reranker=0.5, vector=0.5, staleness=0.3)
         staleness_map = {}  # empty — no entry for unknown-id
 
-        reranker._apply_rerank_scores([result], [raw_logit], weights=weights, staleness_map=staleness_map)
+        reranker._apply_rerank_scores(
+            [result], [raw_logit], weights=weights, staleness_map=staleness_map
+        )
 
         # Default staleness=0 → penalty factor=1.0
         normalized = _sigmoid(raw_logit)
@@ -131,7 +138,9 @@ class TestApplyRerankScoresStaleness:
         weights = RerankWeights(reranker=0.8, vector=0.2, staleness=0.0)
 
         # No staleness_map — should not raise
-        reranker._apply_rerank_scores([result], [raw_logit], weights=weights, staleness_map=None)
+        reranker._apply_rerank_scores(
+            [result], [raw_logit], weights=weights, staleness_map=None
+        )
 
         assert "rerank_score" in result
 
@@ -145,7 +154,9 @@ class TestApplyRerankScoresStaleness:
         staleness_map = {"fresh": 0.0, "stale": 0.9}
 
         results = [stale, fresh]
-        reranker._apply_rerank_scores(results, raw_logits, weights=weights, staleness_map=staleness_map)
+        reranker._apply_rerank_scores(
+            results, raw_logits, weights=weights, staleness_map=staleness_map
+        )
 
         # fresh should be first after sorting
         assert results[0]["chunk_id"] == "fresh"
@@ -182,10 +193,14 @@ class TestFetchStalenessMap:
 
         # Patch at the source modules because _fetch_staleness_map uses lazy imports
         with (
-            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
+            patch(
+                "autobot_shared.redis_client.get_redis_client", return_value=mock_redis
+            ),
             patch(
                 "services.mesh_brain.staleness_propagator.get_staleness_score",
-                new=AsyncMock(side_effect=lambda r, doc_id: 0.7 if doc_id == "doc-A" else 0.0),
+                new=AsyncMock(
+                    side_effect=lambda r, doc_id: 0.7 if doc_id == "doc-A" else 0.0
+                ),
             ),
         ):
             staleness_map = await reranker._fetch_staleness_map(results, weights)
@@ -226,7 +241,9 @@ class TestFetchStalenessMap:
         mock_redis = MagicMock()
 
         with (
-            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
+            patch(
+                "autobot_shared.redis_client.get_redis_client", return_value=mock_redis
+            ),
             patch(
                 "services.mesh_brain.staleness_propagator.get_staleness_score",
                 side_effect=_fake_get_staleness,

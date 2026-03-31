@@ -25,7 +25,7 @@ from typing import Dict, List, Optional
 
 # Add autobot modules to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-shared"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from encryption_service import encrypt_data, is_encryption_enabled
 

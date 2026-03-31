@@ -47,15 +47,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _URL_RE = re.compile(
-    r"^https?://"
-    r"(?:[a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}"
-    r"(?::\d+)?"
-    r"(?:/[^\s]*)?$"
+    r"^https?://" r"(?:[a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,}" r"(?::\d+)?" r"(?:/[^\s]*)?$"
 )
 
 _IPV4_RE = re.compile(
-    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}"
-    r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
+    r"^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}" r"(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$"
 )
 
 _IPV6_RE = re.compile(r"^[0-9a-fA-F:]+$")
@@ -183,9 +179,7 @@ class InputFieldSchema:
 
         elif self.field_type == FieldType.URL:
             if not _URL_RE.match(str(value)):
-                errors.append(
-                    f"Field '{self.name}': '{value}' is not a valid URL."
-                )
+                errors.append(f"Field '{self.name}': '{value}' is not a valid URL.")
 
         elif self.field_type == FieldType.JSON:
             errors.extend(self._validate_json(value))
@@ -220,7 +214,11 @@ class InputFieldSchema:
     def _validate_length(self, value: Any) -> List[str]:
         """Validate string length constraints (helper for validate)."""
         errors: List[str] = []
-        if self.field_type not in (FieldType.STRING, FieldType.URL, FieldType.IP_ADDRESS):
+        if self.field_type not in (
+            FieldType.STRING,
+            FieldType.URL,
+            FieldType.IP_ADDRESS,
+        ):
             return errors
         str_value = str(value)
         if self.min_length is not None and len(str_value) < self.min_length:
@@ -238,7 +236,9 @@ class InputFieldSchema:
         if self.field_type != FieldType.STRING or not self.pattern:
             return []
         if not re.match(self.pattern, str(value)):
-            return [f"Field '{self.name}': '{value}' does not match pattern '{self.pattern}'."]
+            return [
+                f"Field '{self.name}': '{value}' does not match pattern '{self.pattern}'."
+            ]
         return []
 
     # ------------------------------------------------------------------
@@ -312,9 +312,7 @@ class WorkflowInputSchema:
         return validated, errors
 
     @staticmethod
-    def _coerce_field(
-        f: InputFieldSchema, raw: Any
-    ) -> Tuple[List[str], Any]:
+    def _coerce_field(f: InputFieldSchema, raw: Any) -> Tuple[List[str], Any]:
         """
         Attempt to coerce *raw* for field *f*.
 

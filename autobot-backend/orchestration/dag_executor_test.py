@@ -18,7 +18,6 @@ from orchestration.dag_executor import (
     workflow_has_condition_nodes,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -143,12 +142,16 @@ class TestEvaluateCondition:
 
     def test_result_lookup(self):
         ctx = self._ctx({"step1": {"exit_code": 0}})
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        node = DAGNode(
+            "c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"}
+        )
         assert _evaluate_condition(node, ctx) is True
 
     def test_result_lookup_false_branch(self):
         ctx = self._ctx({"step1": {"exit_code": 1}})
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"})
+        node = DAGNode(
+            "c", NodeType.CONDITION, {"condition": "results['step1']['exit_code'] == 0"}
+        )
         assert _evaluate_condition(node, ctx) is False
 
     def test_empty_expression_defaults_false(self):
@@ -160,7 +163,9 @@ class TestEvaluateCondition:
         assert _evaluate_condition(node, self._ctx()) is False
 
     def test_import_blocked(self):
-        node = DAGNode("c", NodeType.CONDITION, {"condition": "__import__('os').getcwd()"})
+        node = DAGNode(
+            "c", NodeType.CONDITION, {"condition": "__import__('os').getcwd()"}
+        )
         # Should not raise; eval with no builtins will raise NameError → False
         assert _evaluate_condition(node, self._ctx()) is False
 
@@ -224,10 +229,9 @@ class TestDAGExecutorLinear:
 class TestDAGExecutorBranching:
     def _branch_dag(self, condition_expr: str) -> WorkflowDAG:
         """Build a diamond: start → cond → (true_branch | false_branch) → end."""
-        nodes = (
-            _make_step_nodes("start", "true_branch", "false_branch", "end")
-            + [_make_condition_node("cond", condition_expr)]
-        )
+        nodes = _make_step_nodes("start", "true_branch", "false_branch", "end") + [
+            _make_condition_node("cond", condition_expr)
+        ]
         edges = [
             {"source": "start", "target": "cond"},
             {"source": "cond", "target": "true_branch", "label": True},
@@ -242,7 +246,9 @@ class TestDAGExecutorBranching:
         dag = self._branch_dag("True")
         executed: List[str] = []
 
-        async def recording_executor(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+        async def recording_executor(
+            node: DAGNode, ctx: DAGExecutionContext
+        ) -> Dict[str, Any]:
             executed.append(node.node_id)
             return {"success": True}
 
@@ -259,7 +265,9 @@ class TestDAGExecutorBranching:
         dag = self._branch_dag("False")
         executed: List[str] = []
 
-        async def recording_executor(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+        async def recording_executor(
+            node: DAGNode, ctx: DAGExecutionContext
+        ) -> Dict[str, Any]:
             executed.append(node.node_id)
             return {"success": True}
 
@@ -305,7 +313,9 @@ class TestDAGExecutorForkJoin:
         dag = WorkflowDAG(nodes, edges)
         executed: List[str] = []
 
-        async def recording_executor(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+        async def recording_executor(
+            node: DAGNode, ctx: DAGExecutionContext
+        ) -> Dict[str, Any]:
             executed.append(node.node_id)
             return {"success": True}
 
@@ -325,7 +335,9 @@ class TestDAGExecutorForkJoin:
         dag = WorkflowDAG(nodes, edges)
         call_count: Dict[str, int] = {}
 
-        async def counting_executor(node: DAGNode, ctx: DAGExecutionContext) -> Dict[str, Any]:
+        async def counting_executor(
+            node: DAGNode, ctx: DAGExecutionContext
+        ) -> Dict[str, Any]:
             call_count[node.node_id] = call_count.get(node.node_id, 0) + 1
             return {"success": True}
 

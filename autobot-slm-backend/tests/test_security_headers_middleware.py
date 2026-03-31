@@ -26,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from middleware.security_headers import SecurityHeadersMiddleware  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Minimal test application
 # ---------------------------------------------------------------------------
@@ -123,9 +122,9 @@ class TestSecurityHeaders:
     def test_security_header_present(self, header: str, expected: str):
         headers = self._get_headers()
         assert header in headers, f"Missing header: {header}"
-        assert headers[header] == expected, (
-            f"Header {header!r}: expected {expected!r}, got {headers[header]!r}"
-        )
+        assert (
+            headers[header] == expected
+        ), f"Header {header!r}: expected {expected!r}, got {headers[header]!r}"
 
     def test_hsts_header_present(self):
         headers = self._get_headers()

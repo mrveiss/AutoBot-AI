@@ -24,7 +24,6 @@ from knowledge.search_components.agentic_search import (
     knowledge_search_tool,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -68,7 +67,9 @@ class TestRewriteQuery:
         svc = _make_rag_service()
         tool = AgenticSearchTool(svc, AgenticSearchConfig(rewrite_enabled=True))
 
-        with patch.object(tool, "_call_llm", AsyncMock(side_effect=RuntimeError("timeout"))):
+        with patch.object(
+            tool, "_call_llm", AsyncMock(side_effect=RuntimeError("timeout"))
+        ):
             result = await tool.rewrite_query("original query")
 
         assert result == "original query"
@@ -187,7 +188,9 @@ class TestKnowledgeSearch:
 
         context = await tool.knowledge_search("query")
 
-        svc.advanced_search.assert_called_once_with("query", max_results=5, categories=None)
+        svc.advanced_search.assert_called_once_with(
+            "query", max_results=5, categories=None
+        )
         assert "direct result" in context
 
     @pytest.mark.asyncio

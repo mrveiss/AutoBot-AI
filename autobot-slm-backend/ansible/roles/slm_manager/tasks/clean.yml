@@ -5,7 +5,7 @@
 # SLM Manager role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes non-SLM directories from .19 (SLM server).
 # The SLM server should only have: autobot-slm-backend, autobot-slm-frontend,
-# autobot-slm-database, autobot-monitoring, autobot-shared, autobot-infrastructure.
+# autobot-slm-database, autobot-monitoring, autobot_shared, autobot-infrastructure.
 
 # Wrong-node clean tasks ONLY run when node_roles is defined (dynamic inventory).
 # When undefined (localhost self-deploy via install.sh), skip ALL cross-role

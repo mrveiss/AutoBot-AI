@@ -67,8 +67,8 @@ _RATE_WINDOW_SECONDS = 3600  # 1-hour sliding window for rate limits
 # Progressive suppression cooldown schedule (in seconds).
 # Index = recurrence count (0-based); last entry is the cap.
 _PROGRESSIVE_COOLDOWNS = [
-    0,          # 0 h — first recurrence: use tier base cooldown only
-    6 * 3600,   # 6 h
+    0,  # 0 h — first recurrence: use tier base cooldown only
+    6 * 3600,  # 6 h
     12 * 3600,  # 12 h
     24 * 3600,  # 24 h — cap
 ]
@@ -87,9 +87,9 @@ class AlertTier(Enum):
         base_cooldown_seconds: Minimum quiet period after the first send.
     """
 
-    FLASH = ("flash", 6, 5 * 60)       # critical — 6/hr, 5 min cooldown
+    FLASH = ("flash", 6, 5 * 60)  # critical — 6/hr, 5 min cooldown
     PRIORITY = ("priority", 4, 30 * 60)  # warning  — 4/hr, 30 min cooldown
-    ROUTINE = ("routine", 2, 60 * 60)   # info     — 2/hr, 60 min cooldown
+    ROUTINE = ("routine", 2, 60 * 60)  # info     — 2/hr, 60 min cooldown
 
     def __init__(self, tier_name: str, max_per_hour: int, base_cooldown_seconds: int):
         self.tier_name = tier_name
@@ -281,7 +281,11 @@ def _normalise(text: str) -> str:
         Normalised string suitable for hashing.
     """
     # Remove ISO-8601-like timestamps (e.g. 2025-03-31T12:00:00, 2025-03-31 12:00:00)
-    text = re.sub(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?", "", text)
+    text = re.sub(
+        r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?",
+        "",
+        text,
+    )
     # Replace remaining numeric tokens with a placeholder
     text = re.sub(r"\b\d+(?:\.\d+)?\b", "<N>", text)
     # Collapse whitespace

@@ -15,7 +15,6 @@ import pytest
 from .distributed_management import DistributedAgentManager
 from .types import DistributedAgentInfo
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -52,7 +51,9 @@ def _make_agent_info() -> DistributedAgentInfo:
     )
 
 
-def _register_agent(mgr: DistributedAgentManager, agent_id: str) -> DistributedAgentInfo:
+def _register_agent(
+    mgr: DistributedAgentManager, agent_id: str
+) -> DistributedAgentInfo:
     """Register a stub agent directly into the manager's dict."""
     info = _make_agent_info()
     mgr.distributed_agents[agent_id] = info
@@ -122,7 +123,9 @@ class TestIsTaskStale:
         _register_agent(mgr, "a1")
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)
         # Backdate last progress to 60 s ago (older than progress_ttl_seconds=30)
-        mgr._task_last_progress["t1"] = datetime.now(timezone.utc) - timedelta(seconds=60)
+        mgr._task_last_progress["t1"] = datetime.now(timezone.utc) - timedelta(
+            seconds=60
+        )
         assert mgr._is_task_stale("t1", datetime.now(timezone.utc)) is True
 
     def test_max_reassignments_exceeded_prevents_stealing(self):
@@ -163,7 +166,7 @@ class TestCollectStaleTasks:
         for aid in ("a1", "a2"):
             _register_agent(mgr, aid)
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)  # stale
-        _assign_task(mgr, "a1", "t2", assigned_seconds_ago=5)   # fresh
+        _assign_task(mgr, "a1", "t2", assigned_seconds_ago=5)  # fresh
         _assign_task(mgr, "a2", "t3", assigned_seconds_ago=200)  # stale
         pairs = mgr._collect_stale_tasks(datetime.now(timezone.utc))
         assert ("a1", "t1") in pairs
@@ -200,7 +203,9 @@ class TestReassignTask:
         assert mgr._task_reassignment_count["t1"] == 1
         # Simulate re-assignment by manually adding task back + calling again
         mgr.distributed_agents["a1"].active_tasks.add("t1")
-        mgr._task_assigned_at["t1"] = datetime.now(timezone.utc) - timedelta(seconds=400)
+        mgr._task_assigned_at["t1"] = datetime.now(timezone.utc) - timedelta(
+            seconds=400
+        )
         await mgr._reassign_task("a1", "t1")
         assert mgr._task_reassignment_count["t1"] == 2
 

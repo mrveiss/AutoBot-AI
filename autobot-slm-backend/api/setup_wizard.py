@@ -285,7 +285,17 @@ def _build_inventory_dict(
 
 async def _fetch_inventory_data(
     node_ids: Optional[list[str]],
-) -> Optional[tuple[list, dict[str, dict], dict[str, str], dict[str, str], list, list, dict[str, str]]]:
+) -> Optional[
+    tuple[
+        list,
+        dict[str, dict],
+        dict[str, str],
+        dict[str, str],
+        list,
+        list,
+        dict[str, str],
+    ]
+]:
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
@@ -305,10 +315,14 @@ async def _fetch_inventory_data(
             return None
 
         local_ips = get_local_ips()
-        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(db_nodes, local_ips)
+        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(
+            db_nodes, local_ips
+        )
 
         # Include active + inactive + not_installed roles for provisioning (#2747)
-        nr_query = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
+        nr_query = select(NodeRole).where(
+            NodeRole.status.in_(["active", "inactive", "not_installed"])
+        )
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
@@ -326,7 +340,15 @@ async def _fetch_inventory_data(
             all_ip_map = node_id_to_ip
             all_active = all_node_roles
 
-    return db_nodes, hosts, node_id_to_hostname, node_id_to_ip, all_node_roles, all_active, all_ip_map
+    return (
+        db_nodes,
+        hosts,
+        node_id_to_hostname,
+        node_id_to_ip,
+        all_node_roles,
+        all_active,
+        all_ip_map,
+    )
 
 
 async def _generate_dynamic_inventory(
@@ -342,8 +364,18 @@ async def _generate_dynamic_inventory(
     if result is None:
         return None
 
-    _db_nodes, hosts, node_id_to_hostname, _node_id_to_ip, all_node_roles, all_active, all_ip_map = result
-    children, ansible_groups = _build_inventory_children(hosts, all_node_roles, node_id_to_hostname)
+    (
+        _db_nodes,
+        hosts,
+        node_id_to_hostname,
+        _node_id_to_ip,
+        all_node_roles,
+        all_active,
+        all_ip_map,
+    ) = result
+    children, ansible_groups = _build_inventory_children(
+        hosts, all_node_roles, node_id_to_hostname
+    )
     infra_vars = _build_infra_vars(all_active, all_ip_map)
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
@@ -352,7 +384,12 @@ async def _generate_dynamic_inventory(
         yaml.dump(inventory, f, default_flow_style=False)
 
     grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
-    logger.info("Generated inventory at %s: %d nodes, groups: %s", path, len(hosts), grp or "(none)")
+    logger.info(
+        "Generated inventory at %s: %d nodes, groups: %s",
+        path,
+        len(hosts),
+        grp or "(none)",
+    )
     return Path(path)
 
 
@@ -546,7 +583,9 @@ async def _create_wizard_deployments(
                 q = q.where(Node.node_id.in_(node_ids))
             db_nodes = (await session.execute(q)).scalars().all()
 
-            nr_q = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
+            nr_q = select(NodeRole).where(
+                NodeRole.status.in_(["active", "inactive", "not_installed"])
+            )
             if node_ids:
                 nr_q = nr_q.where(NodeRole.node_id.in_(node_ids))
             node_roles = (await session.execute(nr_q)).scalars().all()
@@ -767,7 +806,11 @@ async def _run_provisioning_task(
             node_to_deployment,
             success=bool(result.get("success")),
             output=result.get("output", ""),
-            error=None if result.get("success") else f"Ansible exited with code {result.get('returncode', -1)}",
+            error=(
+                None
+                if result.get("success")
+                else f"Ansible exited with code {result.get('returncode', -1)}"
+            ),
             reachable_nodes=None,
         )
 

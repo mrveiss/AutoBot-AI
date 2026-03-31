@@ -161,7 +161,9 @@ class WorkflowSharingService:
 
         redis = get_redis_client(async_client=True, database="workflows")
         if redis is None:
-            logger.error("share_workflow: Redis unavailable for workflow %s", workflow_id)
+            logger.error(
+                "share_workflow: Redis unavailable for workflow %s", workflow_id
+            )
             return None
 
         key = _share_key(share_id)
@@ -270,7 +272,9 @@ class WorkflowSharingService:
             if cursor == 0:
                 break
 
-        logger.debug("list_shared: found %s visible shares for user=%s", len(visible), user_id)
+        logger.debug(
+            "list_shared: found %s visible shares for user=%s", len(visible), user_id
+        )
         return visible
 
     # ------------------------------------------------------------------
@@ -323,11 +327,16 @@ class WorkflowSharingService:
 
         if new_id:
             logger.info(
-                "Cloned share %s as workflow %s for owner=%s", share_id, new_id, new_owner_id
+                "Cloned share %s as workflow %s for owner=%s",
+                share_id,
+                new_id,
+                new_owner_id,
             )
         else:
             logger.warning(
-                "clone_workflow: import failed for share %s owner=%s", share_id, new_owner_id
+                "clone_workflow: import failed for share %s owner=%s",
+                share_id,
+                new_owner_id,
             )
 
         return new_id
@@ -343,7 +352,9 @@ class WorkflowSharingService:
             return True
         if user_id is None:
             return False
-        return record.get("owner_id") == user_id or record.get("target_user_id") == user_id
+        return (
+            record.get("owner_id") == user_id or record.get("target_user_id") == user_id
+        )
 
 
 def _strip_workflow_payload(record: Dict[str, Any]) -> Dict[str, Any]:

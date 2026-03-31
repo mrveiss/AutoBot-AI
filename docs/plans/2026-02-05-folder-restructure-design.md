@@ -66,7 +66,7 @@
 │   ├── requirements.txt            # Playwright, etc.
 │   └── README.md
 │
-├── autobot-shared/                 # Deployed with each backend
+├── autobot_shared/                 # Deployed with each backend
 │   ├── redis_client.py             # Redis connection
 │   ├── http_client.py              # HTTP utilities
 │   ├── logging_manager.py          # Centralized logging
@@ -130,11 +130,11 @@
 
 | Current | New |
 |---------|-----|
-| `autobot-backend/utils/redis_client.py` | `autobot-shared/redis_client.py` |
-| `autobot-backend/utils/http_client.py` | `autobot-shared/http_client.py` |
-| `autobot-backend/utils/logging_manager.py` | `autobot-shared/logging_manager.py` |
-| `autobot-backend/utils/error_boundaries.py` | `autobot-shared/error_boundaries.py` |
-| `src/config/ssot_config.py` | `autobot-shared/ssot_config.py` |
+| `autobot-backend/utils/redis_client.py` | `autobot_shared/redis_client.py` |
+| `autobot-backend/utils/http_client.py` | `autobot_shared/http_client.py` |
+| `autobot-backend/utils/logging_manager.py` | `autobot_shared/logging_manager.py` |
+| `autobot-backend/utils/error_boundaries.py` | `autobot_shared/error_boundaries.py` |
+| `src/config/ssot_config.py` | `autobot_shared/ssot_config.py` |
 
 ### Infrastructure (Current Per-Role Structure)
 
@@ -225,7 +225,7 @@ Root-level data folders to migrate:
 | `autobot-slm-frontend/` | Frontend VM | 172.16.168.21 | `sync-to-vm.sh frontend autobot-slm-frontend/` |
 | `autobot-npu-worker/` | NPU | 172.16.168.22 | `sync-to-vm.sh npu autobot-npu-worker/` |
 | `autobot-browser-worker/` | Browser | 172.16.168.25 | `sync-to-vm.sh browser autobot-browser-worker/` |
-| `autobot-shared/` | (all backends) | - | Deployed with each backend |
+| `autobot_shared/` | (all backends) | - | Deployed with each backend |
 
 **Sync script location:** `infrastructure/shared/scripts/sync-to-vm.sh`
 
@@ -248,10 +248,10 @@ from autobot_shared.ssot_config import config
 Each component's `requirements.txt` includes:
 
 ```text
--e ../autobot-shared
+-e ../autobot_shared
 ```
 
-Or `autobot-shared` is copied into each component during deploy.
+Or `autobot_shared` is copied into each component during deploy.
 
 ---
 

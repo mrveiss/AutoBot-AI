@@ -60,7 +60,7 @@ def _build_default_trusted_proxies() -> frozenset:
 
     Issue #2862 — replaces the hardcoded IP string with SSOT-derived values.
     The lazy import of NetworkConstants avoids circular import issues because
-    autobot-shared/network_constants.py itself depends on autobot-backend's
+    autobot_shared/network_constants.py itself depends on autobot-backend's
     config.registry at runtime.
     """
     raw = os.getenv("AUTOBOT_TRUSTED_PROXIES", "")

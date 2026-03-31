@@ -855,7 +855,11 @@ async def send_message(
             timeout=chat_timeout,
         )
     except asyncio.TimeoutError:
-        logger.error("[%s] Chat message processing timed out after %.1fs", request_id, chat_timeout)
+        logger.error(
+            "[%s] Chat message processing timed out after %.1fs",
+            request_id,
+            chat_timeout,
+        )
         (
             AutoBotError,
             InternalError,

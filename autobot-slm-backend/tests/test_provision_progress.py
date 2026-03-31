@@ -27,7 +27,6 @@ from services.provision_progress import (
     format_elapsed,
 )
 
-
 # ---------------------------------------------------------------------------
 # format_elapsed
 # ---------------------------------------------------------------------------
@@ -125,9 +124,7 @@ class TestTaskProgressTracker:
         async def callback(progress: dict) -> None:
             received.append(progress)
 
-        tracker = TaskProgressTracker(
-            "npm install", callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("npm install", callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(1.5)  # Wait slightly longer than interval
 
@@ -143,9 +140,7 @@ class TestTaskProgressTracker:
         async def callback(progress: dict) -> None:
             received.append(progress)
 
-        tracker = TaskProgressTracker(
-            "pip install", callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("pip install", callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(1.5)
 
@@ -179,9 +174,7 @@ class TestTaskProgressTracker:
         async def callback(progress: dict) -> None:
             received.append(progress)
 
-        tracker = TaskProgressTracker(
-            "Restart nginx", callback, heartbeat_interval=1
-        )
+        tracker = TaskProgressTracker("Restart nginx", callback, heartbeat_interval=1)
         async with tracker:
             await asyncio.sleep(1.5)
 
@@ -222,9 +215,9 @@ class TestTaskProgressTracker:
         count_on_exit = len(received)
         await asyncio.sleep(1.5)  # Wait another interval after exit
 
-        assert len(received) == count_on_exit, (
-            "Heartbeats continued after context manager exited"
-        )
+        assert (
+            len(received) == count_on_exit
+        ), "Heartbeats continued after context manager exited"
 
     @pytest.mark.asyncio
     async def test_callback_exception_does_not_crash_tracker(self):
@@ -259,6 +252,6 @@ class TestTaskProgressTracker:
         async with tracker:
             await asyncio.sleep(3.5)
 
-        assert len(received) >= 3, (
-            f"Expected at least 3 heartbeats, got {len(received)}"
-        )
+        assert (
+            len(received) >= 3
+        ), f"Expected at least 3 heartbeats, got {len(received)}"

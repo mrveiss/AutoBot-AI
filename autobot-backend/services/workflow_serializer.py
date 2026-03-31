@@ -341,5 +341,7 @@ def _parse_automation_mode(value: str) -> AutomationMode:
     try:
         return AutomationMode(value)
     except ValueError:
-        logger.warning("Unknown automation_mode '%s'; defaulting to semi_automatic", value)
+        logger.warning(
+            "Unknown automation_mode '%s'; defaulting to semi_automatic", value
+        )
         return AutomationMode.SEMI_AUTOMATIC
