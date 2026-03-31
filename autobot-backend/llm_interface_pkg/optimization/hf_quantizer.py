@@ -113,7 +113,12 @@ def detect_quantization(model_config: Dict[str, Any]) -> QuantizationType:
     bits: int = int(quant_cfg.get("bits", 0))
 
     detected = _detect_from_quant_config(quant_cfg, quant_type, bits)
-    logger.info("Detected quantization type: %s (bits=%d, quant_type=%r)", detected, bits, quant_type)
+    logger.info(
+        "Detected quantization type: %s (bits=%d, quant_type=%r)",
+        detected,
+        bits,
+        quant_type,
+    )
     return detected
 
 
@@ -198,7 +203,9 @@ class HfQuantizerWrapper:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_config(cls, model_config: Dict[str, Any], **overrides: Any) -> "HfQuantizerWrapper":
+    def from_config(
+        cls, model_config: Dict[str, Any], **overrides: Any
+    ) -> "HfQuantizerWrapper":
         """Build a wrapper by auto-detecting quantization from model_config.
 
         Args:
@@ -269,12 +276,13 @@ class HfQuantizerWrapper:
         suffixes = checkers.get(self._config.quantization_type, set())
         for suffix in suffixes:
             if param_name.endswith(suffix):
-                return True, f"param matches quantized suffix '{suffix}' for {self._config.quantization_type}"
+                return (
+                    True,
+                    f"param matches quantized suffix '{suffix}' for {self._config.quantization_type}",
+                )
         return False, "param does not match any quantized suffix"
 
-    def create_quantized_param(
-        self, param_name: str, param_data: Any
-    ) -> Any:
+    def create_quantized_param(self, param_name: str, param_data: Any) -> Any:
         """Wrap or convert a raw parameter for use in a quantized layer.
 
         For GPTQ/AWQ this is typically a no-op because the loaders handle
@@ -290,7 +298,9 @@ class HfQuantizerWrapper:
         """
         is_quantized, reason = self.check_quantized_param(param_name, param_data)
         if not is_quantized:
-            logger.debug("create_quantized_param: %s — passing through (%s)", param_name, reason)
+            logger.debug(
+                "create_quantized_param: %s — passing through (%s)", param_name, reason
+            )
             return param_data
 
         creator = {
@@ -303,7 +313,11 @@ class HfQuantizerWrapper:
             return param_data
 
         result = creator(param_name, param_data)
-        logger.debug("create_quantized_param: %s processed for %s", param_name, self._config.quantization_type)
+        logger.debug(
+            "create_quantized_param: %s processed for %s",
+            param_name,
+            self._config.quantization_type,
+        )
         return result
 
     # ------------------------------------------------------------------
@@ -366,14 +380,10 @@ _GPTQ_QUANTIZED_SUFFIXES = frozenset(
 )
 
 # AWQ uses similar packed representation
-_AWQ_QUANTIZED_SUFFIXES = frozenset(
-    {".qweight", ".qzeros", ".scales", ".bias"}
-)
+_AWQ_QUANTIZED_SUFFIXES = frozenset({".qweight", ".qzeros", ".scales", ".bias"})
 
 # BitsAndBytes stores quantization state in these sub-tensors
-_BNB_QUANTIZED_SUFFIXES = frozenset(
-    {".weight", ".bias", ".SCB", ".weight_format"}
-)
+_BNB_QUANTIZED_SUFFIXES = frozenset({".weight", ".bias", ".SCB", ".weight_format"})
 
 
 # ---------------------------------------------------------------------------
@@ -490,10 +500,14 @@ class QuantizedLayerLoader:
         quantized_count = 0
 
         for param_name, param_data in named_params:
-            is_quantized, _ = self._wrapper.check_quantized_param(param_name, param_data)
+            is_quantized, _ = self._wrapper.check_quantized_param(
+                param_name, param_data
+            )
             if is_quantized:
                 quantized_count += 1
-            processed[param_name] = self._wrapper.create_quantized_param(param_name, param_data)
+            processed[param_name] = self._wrapper.create_quantized_param(
+                param_name, param_data
+            )
 
         result = LayerLoadResult(
             layer_name=layer_name,

@@ -132,7 +132,9 @@ class RetrievalLearner:
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis = await get_redis_client(async_client=True, database="analytics")
+            self._redis = await get_redis_client(
+                async_client=True, database="analytics"
+            )
         return self._redis
 
     # ------------------------------------------------------------------
@@ -205,9 +207,13 @@ class RetrievalLearner:
 
         while True:
             try:
-                entries = await redis.xrange(stream_key, min=resume_id, count=_XRANGE_BATCH)
+                entries = await redis.xrange(
+                    stream_key, min=resume_id, count=_XRANGE_BATCH
+                )
             except Exception as exc:
-                logger.warning("RetrievalLearner: xrange failed for %s: %s", stream_key, exc)
+                logger.warning(
+                    "RetrievalLearner: xrange failed for %s: %s", stream_key, exc
+                )
                 break
 
             if not entries:
@@ -215,9 +221,9 @@ class RetrievalLearner:
 
             for entry_id, fields in entries:
                 await self._process_feedback_event(fields)
-                ts, seq = (entry_id.decode() if isinstance(entry_id, bytes) else entry_id).split(
-                    "-"
-                )
+                ts, seq = (
+                    entry_id.decode() if isinstance(entry_id, bytes) else entry_id
+                ).split("-")
                 resume_id = f"{ts}-{int(seq) + 1}"
                 processed += 1
 
@@ -228,7 +234,9 @@ class RetrievalLearner:
             self._cursors[stream_key] = resume_id
             await self._save_cursor(stream_key, resume_id)
             logger.info(
-                "RetrievalLearner: consumed %d new events from %s", processed, stream_key
+                "RetrievalLearner: consumed %d new events from %s",
+                processed,
+                stream_key,
             )
         else:
             logger.debug("RetrievalLearner: no new events in %s", stream_key)
@@ -328,7 +336,9 @@ class RetrievalLearner:
 
             await redis.hset(redis_key, mapping=pattern.to_redis_mapping())
             await redis.expire(redis_key, _PATTERN_TTL_SECONDS)
-            logger.debug("RetrievalLearner: upserted pattern %s (%s)", pattern_hash, query_type)
+            logger.debug(
+                "RetrievalLearner: upserted pattern %s (%s)", pattern_hash, query_type
+            )
 
         except Exception as exc:
             logger.warning("RetrievalLearner: failed to distil pattern: %s", exc)
@@ -421,7 +431,9 @@ class RetrievalLearner:
             )
         except Exception as exc:
             logger.warning(
-                "RetrievalLearner: record_pattern_outcome failed for %s: %s", pattern_hash, exc
+                "RetrievalLearner: record_pattern_outcome failed for %s: %s",
+                pattern_hash,
+                exc,
             )
 
     # ------------------------------------------------------------------
@@ -481,13 +493,19 @@ class RetrievalLearner:
                     continue
                 if pat_a.query_type != pat_b.query_type:
                     continue
-                sim = _jaccard_similarity(pat_a.chunk_categories, pat_b.chunk_categories)
+                sim = _jaccard_similarity(
+                    pat_a.chunk_categories, pat_b.chunk_categories
+                )
                 if sim >= _DEDUP_SIMILARITY_THRESHOLD:
                     # Keep the one with more usage evidence.
-                    to_delete = pat_b if pat_a.usage_count >= pat_b.usage_count else pat_a
+                    to_delete = (
+                        pat_b if pat_a.usage_count >= pat_b.usage_count else pat_a
+                    )
                     deleted_hashes.add(to_delete.pattern_hash)
                     try:
-                        await redis.delete(f"{_PATTERN_KEY_PREFIX}{to_delete.pattern_hash}")
+                        await redis.delete(
+                            f"{_PATTERN_KEY_PREFIX}{to_delete.pattern_hash}"
+                        )
                         removed += 1
                         logger.debug(
                             "RetrievalLearner: dedup removed pattern %s",
@@ -512,7 +530,8 @@ class RetrievalLearner:
                     await redis.delete(f"{_PATTERN_KEY_PREFIX}{pattern.pattern_hash}")
                     pruned += 1
                     logger.debug(
-                        "RetrievalLearner: pruned stale pattern %s", pattern.pattern_hash
+                        "RetrievalLearner: pruned stale pattern %s",
+                        pattern.pattern_hash,
                     )
                 except Exception as exc:
                     logger.warning(

@@ -144,7 +144,6 @@ __all__ = [
     "LayerKVCache",
     "RTX_4070_KV_CACHE_FRACTION",
     "RTX_4070_VRAM_BYTES",
-<<<<<<< HEAD
     # Attention Backend Selector (Issue #1951)
     "ModelAttentionBackend",
     "AttentionBackendSelector",

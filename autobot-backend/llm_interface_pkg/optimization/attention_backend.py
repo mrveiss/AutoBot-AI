@@ -188,9 +188,7 @@ class AttentionBackendSelector:
             result = self._try_apply_better_transformer(model)
             if result is not None:
                 return result
-            logger.warning(
-                "BetterTransformer application failed; falling back to SDPA"
-            )
+            logger.warning("BetterTransformer application failed; falling back to SDPA")
 
         if backend in (AttentionBackend.BETTER_TRANSFORMER, AttentionBackend.SDPA):
             result = self._try_apply_sdpa(model)
@@ -280,7 +278,9 @@ class AttentionBackendSelector:
                 return None
             if hasattr(model, "to"):
                 # Trigger SDPA path via model config when available
-                if hasattr(model, "config") and hasattr(model.config, "attn_implementation"):
+                if hasattr(model, "config") and hasattr(
+                    model.config, "attn_implementation"
+                ):
                     model.config.attn_implementation = "sdpa"
                 logger.info("SDPA attention implementation selected")
                 return model

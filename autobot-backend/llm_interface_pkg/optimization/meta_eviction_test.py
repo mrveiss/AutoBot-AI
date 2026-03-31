@@ -23,7 +23,6 @@ from llm_interface_pkg.optimization.meta_eviction import (
     get_gpu_memory_allocated,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -76,7 +75,10 @@ class TestCleanMemory:
         """clean_memory calls torch.cuda.empty_cache when CUDA is present."""
         mock_torch = _make_torch_mock(cuda_available=True)
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch("gc.collect", return_value=0),
         ):
             clean_memory()
@@ -86,7 +88,10 @@ class TestCleanMemory:
         """clean_memory does not call empty_cache when CUDA is absent."""
         mock_torch = _make_torch_mock(cuda_available=False)
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch("gc.collect", return_value=0),
         ):
             clean_memory()
@@ -96,7 +101,10 @@ class TestCleanMemory:
         """clean_memory always calls gc.collect regardless of CUDA state."""
         mock_torch = _make_torch_mock(cuda_available=False)
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch("gc.collect", return_value=5) as mock_gc,
         ):
             clean_memory()
@@ -126,14 +134,20 @@ class TestGetGpuMemoryAllocated:
     def test_returns_allocated_bytes_when_cuda_available(self):
         """Returns memory_allocated() value when CUDA is present."""
         mock_torch = _make_torch_mock(cuda_available=True, allocated=4096)
-        with patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch):
+        with patch(
+            "llm_interface_pkg.optimization.meta_eviction._import_torch",
+            return_value=mock_torch,
+        ):
             result = get_gpu_memory_allocated()
         assert result == 4096
 
     def test_returns_zero_when_cuda_unavailable(self):
         """Returns 0 when CUDA is absent."""
         mock_torch = _make_torch_mock(cuda_available=False)
-        with patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch):
+        with patch(
+            "llm_interface_pkg.optimization.meta_eviction._import_torch",
+            return_value=mock_torch,
+        ):
             result = get_gpu_memory_allocated()
         assert result == 0
 
@@ -159,7 +173,10 @@ class TestEvictLayerToMetaStandard:
         """Standard eviction calls layer.to('meta')."""
         layer = _make_layer_mock()
         mock_torch = _make_torch_mock()
-        with patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch):
+        with patch(
+            "llm_interface_pkg.optimization.meta_eviction._import_torch",
+            return_value=mock_torch,
+        ):
             evict_layer_to_meta(layer)
         layer.to.assert_called_once_with("meta")
 
@@ -168,7 +185,10 @@ class TestEvictLayerToMetaStandard:
         layer = _make_layer_mock()
         mock_torch = _make_torch_mock()
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch(
                 "llm_interface_pkg.optimization.meta_eviction._import_accelerate"
             ) as mock_acc,
@@ -195,7 +215,9 @@ class TestEvictLayerToMetaStandard:
 class TestEvictLayerToMetaQuantized:
     """Tests for evict_layer_to_meta() with quantizer (per-param path)."""
 
-    def _run_quantized_eviction(self, layer, param_names=("weight", "bias"), buffer_names=()):
+    def _run_quantized_eviction(
+        self, layer, param_names=("weight", "bias"), buffer_names=()
+    ):
         """Helper: run quantized eviction with mocked torch + accelerate."""
         layer.named_parameters.return_value = [(n, MagicMock()) for n in param_names]
         layer.named_buffers.return_value = [(n, MagicMock()) for n in buffer_names]
@@ -207,7 +229,10 @@ class TestEvictLayerToMetaQuantized:
         quantizer_stub = MagicMock(name="quantizer")
 
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch(
                 "llm_interface_pkg.optimization.meta_eviction._import_accelerate",
                 return_value=mock_acc,
@@ -243,7 +268,10 @@ class TestEvictLayerToMetaQuantized:
         quantizer_stub = MagicMock()
 
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch(
                 "llm_interface_pkg.optimization.meta_eviction._import_accelerate",
                 return_value=mock_acc,
@@ -260,7 +288,10 @@ class TestEvictLayerToMetaQuantized:
         quantizer_stub = MagicMock()
 
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch(
                 "llm_interface_pkg.optimization.meta_eviction._import_accelerate",
                 side_effect=ImportError("accelerate not installed"),
@@ -295,7 +326,10 @@ class TestMetaDeviceEvictionManager:
         mock_torch = _make_torch_mock(allocated=0)
 
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction._import_torch", return_value=mock_torch),
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction._import_torch",
+                return_value=mock_torch,
+            ),
             patch("llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta"),
             patch(
                 "llm_interface_pkg.optimization.meta_eviction.get_gpu_memory_allocated",
@@ -336,7 +370,9 @@ class TestMetaDeviceEvictionManager:
         layer = _make_layer_mock()
 
         with (
-            patch("llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta") as mock_evict,
+            patch(
+                "llm_interface_pkg.optimization.meta_eviction.evict_layer_to_meta"
+            ) as mock_evict,
             patch(
                 "llm_interface_pkg.optimization.meta_eviction.get_gpu_memory_allocated",
                 return_value=0,

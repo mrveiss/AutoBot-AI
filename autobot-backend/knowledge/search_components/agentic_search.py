@@ -32,7 +32,10 @@ from typing import Any, List, Optional, Tuple
 
 import httpx
 
-from services.context_sufficiency import SufficiencyVerdict, get_context_sufficiency_evaluator
+from services.context_sufficiency import (
+    SufficiencyVerdict,
+    get_context_sufficiency_evaluator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +189,9 @@ class AgenticSearchTool:
             if not rewritten:
                 logger.warning("LLM returned empty rewrite; using original query")
                 return original_query
-            logger.debug("Query rewritten: %r -> %r", original_query[:80], rewritten[:80])
+            logger.debug(
+                "Query rewritten: %r -> %r", original_query[:80], rewritten[:80]
+            )
             return rewritten
         except Exception as exc:
             logger.warning("Query rewrite failed (%s); using original query", exc)
@@ -261,7 +266,9 @@ class AgenticSearchTool:
                 }
 
             if iteration < max_iter:
-                current_query = await self._refine_query(query, current_query, context_text)
+                current_query = await self._refine_query(
+                    query, current_query, context_text
+                )
                 queries_used.append(current_query)
 
         logger.info(
@@ -380,7 +387,9 @@ class AgenticSearchTool:
             if hasattr(r, "source_path") and r.source_path:
                 source = f" [{r.source_path}]"
             elif hasattr(r, "metadata") and isinstance(r.metadata, dict):
-                source = f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
+                source = (
+                    f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
+                )
             content = r.content if hasattr(r, "content") else str(r)
             parts.append(f"[{i}]{source}\n{content}")
 
@@ -419,7 +428,10 @@ def get_agentic_search_tool(
         with _agentic_tool_lock:
             if _agentic_tool is None or (_agentic_tool.rag_service is not rag_service):
                 _agentic_tool = AgenticSearchTool(rag_service, config)
-                logger.info("AgenticSearchTool initialised (agentic=%s)", config or AgenticSearchConfig())
+                logger.info(
+                    "AgenticSearchTool initialised (agentic=%s)",
+                    config or AgenticSearchConfig(),
+                )
     return _agentic_tool
 
 

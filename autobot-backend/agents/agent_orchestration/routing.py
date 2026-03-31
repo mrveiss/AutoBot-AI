@@ -132,9 +132,7 @@ class AgentRouter:
         """Return all known AgentType values as string IDs."""
         return [at.value for at in self.agent_capabilities]
 
-    async def _check_rl_routing(
-        self, request: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _check_rl_routing(self, request: str) -> Optional[Dict[str, Any]]:
         """Attempt Q-learning based routing for *request* (Issue #2092).
 
         Returns a routing result dict when the RL router's confidence exceeds
@@ -149,7 +147,9 @@ class AgentRouter:
             rl = self._get_rl_router()
             agent_id, confidence, state_key = await rl.select_agent(request, available)
             if confidence <= 0.6:
-                logger.debug("RL confidence %.2f too low; falling back to LLM", confidence)
+                logger.debug(
+                    "RL confidence %.2f too low; falling back to LLM", confidence
+                )
                 return None
             agent_type = self._resolve_agent_type(agent_id)
             logger.info(

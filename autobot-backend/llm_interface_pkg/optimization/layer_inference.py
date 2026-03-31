@@ -195,7 +195,11 @@ class LayerInferenceEngine:
         logger.debug("Loading model config for %s", model_name)
         auto_cfg = AutoConfig.from_pretrained(model_name, **kwargs)
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
-        logger.info("Loaded model config for %s: arch=%s", model_name, cfg_dict.get("model_type"))
+        logger.info(
+            "Loaded model config for %s: arch=%s",
+            model_name,
+            cfg_dict.get("model_type"),
+        )
         return cfg_dict
 
     def get_layer_names(self, config: Dict[str, Any]) -> List[str]:
@@ -216,16 +220,27 @@ class LayerInferenceEngine:
         Returns:
             Ordered list of transformer layer name strings.
         """
-        num_layers = config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
+        num_layers = (
+            config.get("num_hidden_layers")
+            or config.get("n_layer")
+            or config.get("num_layers")
+        )
 
         if num_layers is None:
-            logger.warning("Could not determine num_hidden_layers from config — returning ['model']")
+            logger.warning(
+                "Could not determine num_hidden_layers from config — returning ['model']"
+            )
             return ["model"]
 
         model_type: str = str(config.get("model_type", "")).lower()
         prefix = _layer_prefix_for_arch(model_type)
         names = [f"{prefix}{i}" for i in range(int(num_layers))]
-        logger.debug("get_layer_names: model_type=%s num_layers=%d prefix=%s", model_type, num_layers, prefix)
+        logger.debug(
+            "get_layer_names: model_type=%s num_layers=%d prefix=%s",
+            model_type,
+            num_layers,
+            prefix,
+        )
         return names
 
     # ------------------------------------------------------------------
@@ -260,9 +275,13 @@ class LayerInferenceEngine:
         logger.debug("Loading layer '%s' from %s", layer_name, state_dict_path)
         t0 = time.monotonic()
 
-        full_sd: Dict[str, Any] = torch.load(state_dict_path, map_location="cpu", weights_only=True)
+        full_sd: Dict[str, Any] = torch.load(
+            state_dict_path, map_location="cpu", weights_only=True
+        )
         prefix = layer_name + "."
-        layer_sd = {k[len(prefix):]: v for k, v in full_sd.items() if k.startswith(prefix)}
+        layer_sd = {
+            k[len(prefix) :]: v for k, v in full_sd.items() if k.startswith(prefix)
+        }
 
         if not layer_sd:
             raise KeyError(
@@ -345,7 +364,11 @@ class LayerInferenceEngine:
         if not layers:
             raise ValueError("layers must not be empty")
 
-        hidden = input_ids.float() if input_ids.dtype not in (torch.float16, torch.float32) else input_ids
+        hidden = (
+            input_ids.float()
+            if input_ids.dtype not in (torch.float16, torch.float32)
+            else input_ids
+        )
 
         for layer in layers:
             out = layer(hidden)
@@ -411,7 +434,9 @@ class LayerInferenceEngine:
         layer_names = self.get_layer_names(model_cfg)
         state_dict_path = self._resolve_checkpoint_path()
 
-        input_ids = tokeniser(prompt, return_tensors="pt").input_ids.to(self._config.device)
+        input_ids = tokeniser(prompt, return_tensors="pt").input_ids.to(
+            self._config.device
+        )
         generated_ids: List[int] = []
 
         logger.info(
@@ -422,11 +447,17 @@ class LayerInferenceEngine:
         _reset_peak_memory(torch, self._config.device)
 
         for _step in range(max_new_tokens):
-            hidden = self._run_layer_loop(input_ids, layer_names, state_dict_path, stats)
+            hidden = self._run_layer_loop(
+                input_ids, layer_names, state_dict_path, stats
+            )
             next_token_id = _greedy_sample(torch, hidden)
             generated_ids.append(next_token_id)
             input_ids = torch.cat(
-                [input_ids, torch.tensor([[next_token_id]], device=self._config.device)], dim=1
+                [
+                    input_ids,
+                    torch.tensor([[next_token_id]], device=self._config.device),
+                ],
+                dim=1,
             )
             if _is_eos(tokeniser, next_token_id):
                 logger.debug("generate: EOS token reached at step %d", _step)
@@ -564,7 +595,9 @@ def _set_nested_param(module: Any, torch: Any, key: str, tensor: Any) -> None:
         container = getattr(container, part)
     leaf = parts[-1]
     if isinstance(tensor, torch.Tensor):
-        container.register_parameter(leaf, torch.nn.Parameter(tensor, requires_grad=False))
+        container.register_parameter(
+            leaf, torch.nn.Parameter(tensor, requires_grad=False)
+        )
     else:
         container.register_buffer(leaf, tensor)
 
@@ -592,7 +625,9 @@ def _set_buffer(module: Any, torch: Any, name: str, device: Any, buf: Any) -> No
     for part in parts[:-1]:
         container = getattr(container, part)
     leaf = parts[-1]
-    container.register_buffer(leaf, torch.empty(buf.shape, dtype=buf.dtype, device=device))
+    container.register_buffer(
+        leaf, torch.empty(buf.shape, dtype=buf.dtype, device=device)
+    )
 
 
 def _greedy_sample(torch: Any, hidden: "torch.Tensor") -> int:

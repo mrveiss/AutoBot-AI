@@ -18,7 +18,6 @@ from llm_interface_pkg.optimization.attention_backend import (
     get_attention_backend_selector,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -95,7 +94,9 @@ class TestBlocklist:
     def test_blocklist_matches_model_name(self):
         """Blocklist should match on model_name as well as model_type."""
         sel = _make_selector()
-        cfg = ModelConfig(model_name="mistralai/Mixtral-8x7B-Instruct-v0.1", model_type="")
+        cfg = ModelConfig(
+            model_name="mistralai/Mixtral-8x7B-Instruct-v0.1", model_type=""
+        )
         assert sel._is_blocklisted(cfg)
 
     def test_blocklist_is_case_insensitive(self):
@@ -186,7 +187,9 @@ class TestSelectBackend:
         "llm_interface_pkg.optimization.attention_backend.AttentionBackendSelector._can_use_sdpa",
         return_value=False,
     )
-    def test_blocklisted_model_falls_to_vanilla_without_sdpa(self, _mock_sdpa, _mock_bt):
+    def test_blocklisted_model_falls_to_vanilla_without_sdpa(
+        self, _mock_sdpa, _mock_bt
+    ):
         """Blocklisted model without SDPA must still get Vanilla."""
         sel = _make_selector()
         result = sel.select_backend(ModelConfig(model_type="mistral"))

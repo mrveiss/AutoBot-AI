@@ -25,7 +25,6 @@ from llm_interface_pkg.optimization.hf_quantizer import (
     detect_quantization,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -132,7 +131,9 @@ class TestHfQuantizerWrapperFromConfig:
     def test_from_config_accepts_overrides(self):
         """from_config passes extra kwargs to QuantizerConfig."""
         model_config = {"quantization_config": {"quant_type": "gptq"}}
-        wrapper = HfQuantizerWrapper.from_config(model_config, device_map="cpu", trust_remote_code=True)
+        wrapper = HfQuantizerWrapper.from_config(
+            model_config, device_map="cpu", trust_remote_code=True
+        )
         assert wrapper._config.device_map == "cpu"
         assert wrapper._config.trust_remote_code is True
 
@@ -158,7 +159,9 @@ class TestPreprocessModel:
         return HfQuantizerWrapper(cfg)
 
     def _none_wrapper(self) -> HfQuantizerWrapper:
-        cfg = QuantizerConfig(quantization_type=QuantizationType.NONE, torch_dtype="float16")
+        cfg = QuantizerConfig(
+            quantization_type=QuantizationType.NONE, torch_dtype="float16"
+        )
         return HfQuantizerWrapper(cfg)
 
     # ---- GPTQ ----
@@ -166,7 +169,10 @@ class TestPreprocessModel:
     def test_gptq_preprocess_returns_quantization_config(self):
         """GPTQ preprocessing must include quantization_config key."""
         mock_tf = _make_transformers_mock()
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
             kwargs = self._gptq_wrapper().preprocess_model()
         assert "quantization_config" in kwargs
         assert "device_map" in kwargs
@@ -174,7 +180,10 @@ class TestPreprocessModel:
     def test_gptq_preprocess_constructs_gptq_config(self):
         """GPTQ preprocessing calls GPTQConfig with bits=4."""
         mock_tf = _make_transformers_mock()
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
             self._gptq_wrapper().preprocess_model()
         mock_tf.GPTQConfig.assert_called_once_with(bits=4, disable_exllama=False)
 
@@ -185,8 +194,14 @@ class TestPreprocessModel:
         mock_tf = _make_transformers_mock()
         mock_awq = MagicMock(name="awq")
         with (
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf),
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_autoawq", return_value=mock_awq),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+                return_value=mock_tf,
+            ),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_autoawq",
+                return_value=mock_awq,
+            ),
         ):
             kwargs = self._awq_wrapper().preprocess_model()
         assert "quantization_config" in kwargs
@@ -196,8 +211,14 @@ class TestPreprocessModel:
         mock_tf = _make_transformers_mock()
         mock_awq = MagicMock(name="awq")
         with (
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf),
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_autoawq", return_value=mock_awq),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+                return_value=mock_tf,
+            ),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_autoawq",
+                return_value=mock_awq,
+            ),
         ):
             self._awq_wrapper().preprocess_model()
         mock_tf.AwqConfig.assert_called_once_with(version="gemm")
@@ -207,14 +228,20 @@ class TestPreprocessModel:
     def test_bnb_preprocess_returns_quantization_config(self):
         """BitsAndBytes preprocessing must include quantization_config key."""
         mock_tf = _make_transformers_mock()
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
             kwargs = self._bnb_wrapper().preprocess_model()
         assert "quantization_config" in kwargs
 
     def test_bnb_preprocess_constructs_bnb_config(self):
         """BitsAndBytes preprocessing calls BitsAndBytesConfig(load_in_4bit=True)."""
         mock_tf = _make_transformers_mock()
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
             self._bnb_wrapper().preprocess_model()
         mock_tf.BitsAndBytesConfig.assert_called_once_with(load_in_4bit=True)
 
@@ -261,7 +288,9 @@ class TestCheckQuantizedParam:
     def test_gptq_recognises_quantized_suffixes(self, suffix: str):
         """GPTQ wrapper must identify known quantized-parameter suffixes."""
         wrapper = self._wrapper(QuantizationType.GPTQ)
-        is_q, reason = wrapper.check_quantized_param(f"model.layers.0.self_attn.q_proj{suffix}", None)
+        is_q, reason = wrapper.check_quantized_param(
+            f"model.layers.0.self_attn.q_proj{suffix}", None
+        )
         assert is_q is True
         assert suffix in reason
 
@@ -277,7 +306,9 @@ class TestCheckQuantizedParam:
     def test_awq_recognises_quantized_suffixes(self, suffix: str):
         """AWQ wrapper must identify known quantized-parameter suffixes."""
         wrapper = self._wrapper(QuantizationType.AWQ)
-        is_q, _ = wrapper.check_quantized_param(f"model.layers.0.mlp.gate_proj{suffix}", None)
+        is_q, _ = wrapper.check_quantized_param(
+            f"model.layers.0.mlp.gate_proj{suffix}", None
+        )
         assert is_q is True
 
     # ---- NONE ----
@@ -286,7 +317,9 @@ class TestCheckQuantizedParam:
         """NONE wrapper must return is_quantized=False for all params."""
         wrapper = self._wrapper(QuantizationType.NONE)
         for suffix in (".qweight", ".scales", ".weight", ".bias"):
-            is_q, _ = wrapper.check_quantized_param(f"model.layers.0.weight{suffix}", None)
+            is_q, _ = wrapper.check_quantized_param(
+                f"model.layers.0.weight{suffix}", None
+            )
             assert is_q is False
 
 
@@ -300,21 +333,31 @@ class TestCreateQuantizedParam:
 
     def test_gptq_quantized_param_passthrough(self):
         """GPTQ create_quantized_param returns original data unchanged."""
-        wrapper = HfQuantizerWrapper(QuantizerConfig(quantization_type=QuantizationType.GPTQ))
+        wrapper = HfQuantizerWrapper(
+            QuantizerConfig(quantization_type=QuantizationType.GPTQ)
+        )
         sentinel = object()
-        result = wrapper.create_quantized_param("model.layers.0.q_proj.qweight", sentinel)
+        result = wrapper.create_quantized_param(
+            "model.layers.0.q_proj.qweight", sentinel
+        )
         assert result is sentinel
 
     def test_awq_quantized_param_passthrough(self):
         """AWQ create_quantized_param returns original data unchanged."""
-        wrapper = HfQuantizerWrapper(QuantizerConfig(quantization_type=QuantizationType.AWQ))
+        wrapper = HfQuantizerWrapper(
+            QuantizerConfig(quantization_type=QuantizationType.AWQ)
+        )
         sentinel = object()
-        result = wrapper.create_quantized_param("model.layers.0.q_proj.qweight", sentinel)
+        result = wrapper.create_quantized_param(
+            "model.layers.0.q_proj.qweight", sentinel
+        )
         assert result is sentinel
 
     def test_non_quantized_param_passthrough(self):
         """Non-quantized params are always returned unchanged regardless of type."""
-        wrapper = HfQuantizerWrapper(QuantizerConfig(quantization_type=QuantizationType.GPTQ))
+        wrapper = HfQuantizerWrapper(
+            QuantizerConfig(quantization_type=QuantizationType.GPTQ)
+        )
         sentinel = object()
         result = wrapper.create_quantized_param("model.embed_tokens.weight", sentinel)
         assert result is sentinel
@@ -341,7 +384,9 @@ class TestQuantizedLayerLoader:
             ("model.layers.0.q_proj.scales", object()),
             ("model.layers.0.q_proj.bias", object()),
         ]
-        processed, result = loader.load_layer_with_quantization("model.layers.0", params)
+        processed, result = loader.load_layer_with_quantization(
+            "model.layers.0", params
+        )
         assert set(processed.keys()) == {p[0] for p in params}
 
     def test_quantized_count_correct_for_gptq(self):
@@ -349,7 +394,7 @@ class TestQuantizedLayerLoader:
         loader = self._loader(QuantizationType.GPTQ)
         params = [
             ("model.layers.0.q_proj.qweight", None),  # quantized
-            ("model.layers.0.q_proj.scales", None),   # quantized
+            ("model.layers.0.q_proj.scales", None),  # quantized
             ("model.layers.0.q_proj.other_field", None),  # NOT quantized
         ]
         _, result = loader.load_layer_with_quantization("model.layers.0", params)
@@ -376,7 +421,10 @@ class TestQuantizedLayerLoader:
     def test_none_type_no_quantized_params(self):
         """NONE quantization type: no params classified as quantized."""
         loader = self._loader(QuantizationType.NONE)
-        params = [("model.layers.0.weight", object()), ("model.layers.0.bias", object())]
+        params = [
+            ("model.layers.0.weight", object()),
+            ("model.layers.0.bias", object()),
+        ]
         _, result = loader.load_layer_with_quantization("model.layers.0", params)
         assert result.quantized_count == 0
 
@@ -397,7 +445,10 @@ class TestMissingLibraryFallback:
         def _raise(*_a, **_kw):
             raise ImportError("transformers not installed")
 
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", side_effect=_raise):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            side_effect=_raise,
+        ):
             with pytest.raises(ImportError, match="transformers"):
                 wrapper.preprocess_model()
 
@@ -411,8 +462,14 @@ class TestMissingLibraryFallback:
             raise ImportError("autoawq not installed")
 
         with (
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", return_value=mock_tf),
-            patch("llm_interface_pkg.optimization.hf_quantizer._import_autoawq", side_effect=_raise),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+                return_value=mock_tf,
+            ),
+            patch(
+                "llm_interface_pkg.optimization.hf_quantizer._import_autoawq",
+                side_effect=_raise,
+            ),
         ):
             with pytest.raises(ImportError, match="autoawq"):
                 wrapper.preprocess_model()
@@ -425,6 +482,9 @@ class TestMissingLibraryFallback:
         def _raise(*_a, **_kw):
             raise ImportError("transformers not installed")
 
-        with patch("llm_interface_pkg.optimization.hf_quantizer._import_transformers", side_effect=_raise):
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            side_effect=_raise,
+        ):
             with pytest.raises(ImportError, match="transformers"):
                 wrapper.preprocess_model()

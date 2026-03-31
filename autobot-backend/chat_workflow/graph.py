@@ -698,7 +698,9 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("initialize_session", initialize_session)
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
-    builder.add_node("perform_knowledge_search", perform_knowledge_search)  # Issue #1718
+    builder.add_node(
+        "perform_knowledge_search", perform_knowledge_search
+    )  # Issue #1718
     builder.add_node("generate_response", generate_response)
     builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("request_approval", request_approval)
