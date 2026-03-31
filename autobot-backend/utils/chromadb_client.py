@@ -25,7 +25,7 @@ import os
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 # Re-export async utilities for convenient imports
 from utils.async_chromadb_client import (
@@ -36,7 +36,7 @@ from utils.async_chromadb_client import (
 )
 
 if TYPE_CHECKING:
-    import chromadb
+    import chromadb  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +331,7 @@ def get_chromadb_client(
         Configured ChromaDB client (Http or Persistent)
     """
     # Issue #3016: lazy import — chromadb is heavy (~1s import)
-    import chromadb
+    import chromadb  # noqa: F811
     from chromadb.config import Settings as ChromaSettings
 
     try:

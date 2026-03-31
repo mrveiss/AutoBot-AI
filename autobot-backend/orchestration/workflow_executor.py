@@ -30,7 +30,6 @@ from circuit_breaker import circuit_breaker_async
 from constants.threshold_constants import (
     CircuitBreakerDefaults,
     RetryConfig,
-    TimingConstants,
 )
 from retry_mechanism import RetryStrategy, retry_async
 
