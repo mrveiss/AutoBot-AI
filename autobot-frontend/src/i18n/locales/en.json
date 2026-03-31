@@ -1134,7 +1134,17 @@
         "businessIntelligence": "Business Intelligence",
         "businessIntelligenceAria": "Business intelligence analytics",
         "security": "Security",
-        "securityAria": "Security analytics"
+        "securityAria": "Security analytics",
+        "codeQuality": "Code Quality",
+        "codeQualityAria": "Code quality analytics",
+        "codeReview": "Code Review",
+        "codeReviewAria": "Code review analytics",
+        "codeGeneration": "Code Generation",
+        "codeGenerationAria": "Code generation analytics",
+        "evolution": "Evolution",
+        "evolutionAria": "Evolution analytics",
+        "audit": "Audit",
+        "auditAria": "Audit logs"
       }
     },
     "header": {
@@ -3345,7 +3355,7 @@
       "noModel": "no model",
       "defaultModel": "default",
       "moreCount": "+{count} more",
-      "summaryStats": "{backend} backend \u2022 {specialized} specialized agents"
+      "summaryStats": "{backend} backend • {specialized} specialized agents"
     }
   },
   "errors": {
