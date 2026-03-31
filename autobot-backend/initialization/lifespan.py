@@ -937,6 +937,33 @@ async def _init_orchestrator(app: FastAPI) -> None:
         app.state.orchestrator = None
 
 
+async def _wire_npu_task_queue() -> None:
+    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+
+    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
+    never set to an actual instance — making all tracking code dead (#2944).  This helper
+    runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
+    """
+    logger.info("[ 98%%] NPU Task Queue: Wiring NPUWorkerManager into TaskQueue...")
+    try:
+        from autobot_shared.redis_client import get_redis_client
+        from services.npu_worker_manager import get_worker_manager
+        from utils.task_queue import get_task_queue
+
+        redis_client = get_redis_client(async_client=True, database="main")
+        worker_manager = await get_worker_manager(redis_client=redis_client)
+        task_queue = get_task_queue()
+        task_queue.npu_worker_manager = worker_manager
+        logger.info(
+            "[ 98%%] NPU Task Queue: NPUWorkerManager wired — per-worker task tracking active"
+        )
+    except Exception as e:
+        logger.warning(
+            "NPU task queue wiring failed (per-worker tracking disabled): %s", e
+        )
+
+
 async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
@@ -1028,6 +1055,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_process_adapter(app)
         await _init_orchestrator(app)
         await _seed_agent_registry()
+        await _wire_npu_task_queue()
         await _wire_scheduler_executor()
 
         await update_app_state_multi(

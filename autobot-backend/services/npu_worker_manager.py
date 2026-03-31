@@ -782,6 +782,10 @@ class NPUWorkerManager:
             logger.error(
                 "Failed to assign task %s to worker %s: %s", task_id, worker_id, e
             )
+            # Re-raise so the caller (_worker_loop) does not process the task
+            # without tracking.  An untracked task would be invisible to failover
+            # and could be silently lost on worker failure (#2985).
+            raise
 
     async def release_worker_task(
         self, queue_name: str, worker_id: str, task_id: str
@@ -834,19 +838,18 @@ class NPUWorkerManager:
 
         task_ids = await self.redis_client.smembers(worker_tasks_key)
         if not task_ids:
-            # Fallback: per-worker SET is empty (callers not yet wired or new
-            # deployment).  Conservatively migrate all tasks still in the global
-            # running ZSET so failover never silently skips migration (#2944).
-            task_ids = await self.redis_client.zrange(running_key, 0, -1)
-            if task_ids:
-                logger.warning(
-                    "Failover: per-worker SET empty for %s; falling back to "
-                    "global running ZSET (%d tasks)",
-                    worker_id,
-                    len(task_ids),
-                )
-            else:
-                logger.info("Failover: dead worker %s had no running tasks", worker_id)
+            # Per-worker SET is empty.  In a multi-worker deployment the global
+            # running ZSET contains tasks from ALL live workers, so migrating it
+            # would incorrectly steal work from healthy workers (#2985).  Instead,
+            # log a WARNING and skip migration — stale running tasks will be
+            # reclaimed by the global retry/timeout mechanism.
+            logger.warning(
+                "Failover: per-worker SET empty for %s — skipping migration to "
+                "avoid stealing tasks from other workers. Stale tasks will be "
+                "reclaimed by the global retry mechanism (#2985).",
+                worker_id,
+            )
+            task_ids = set()
         else:
             logger.info(
                 "Failover: migrating %d tasks from per-worker SET for worker %s",

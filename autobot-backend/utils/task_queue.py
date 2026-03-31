@@ -413,11 +413,31 @@ class TaskQueue:
                     continue
 
                 # Record task assignment in per-worker SET so failover monitor
-                # can migrate only this worker's tasks if it dies (#2944).
+                # can migrate only this worker's tasks if it dies (#2944, #2985).
                 if self.npu_worker_manager is not None:
-                    await self.npu_worker_manager.assign_task_to_worker(
-                        self.queue_name, worker_name, task_id
-                    )
+                    try:
+                        await self.npu_worker_manager.assign_task_to_worker(
+                            self.queue_name, worker_name, task_id
+                        )
+                    except Exception as assign_err:
+                        # Tracking failed: move the task back to pending so
+                        # another worker can pick it up with tracking intact.
+                        # Processing without tracking would make this task
+                        # invisible to failover and silently lost on crash (#2985).
+                        self.logger.error(
+                            "Worker %s: task tracking failed for %s, "
+                            "returning task to pending queue: %s",
+                            worker_name,
+                            task_id,
+                            assign_err,
+                        )
+                        if self.redis:
+                            await self.redis.zrem(self.running_key, task_id)
+                            await self.redis.zadd(
+                                self.pending_key, {task_id: time.time()}
+                            )
+                        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+                        continue
 
                 try:
                     # Process task
