@@ -379,15 +379,7 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
-      {
-        path: 'bug-prediction',
-        name: 'analytics-bug-prediction',
-        component: () => import('@/components/analytics/BugPredictionDashboard.vue'),
-        meta: {
-          title: 'Bug Prediction',
-          parent: 'analytics'
-        }
-      },
+      // bug-prediction route removed — functionality in CodebaseBugPredictionPanel
       {
         path: 'code-generation',
         name: 'analytics-code-generation',
@@ -397,15 +389,7 @@ const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
-      {
-        path: 'code-intelligence',
-        name: 'analytics-code-intelligence',
-        component: () => import('@/components/analytics/CodeIntelligenceDashboard.vue'),
-        meta: {
-          title: 'Code Intelligence',
-          parent: 'analytics'
-        }
-      },
+      // code-intelligence route removed — functionality in CodebaseIntelligenceScoresPanel
       {
         path: 'code-quality',
         name: 'analytics-code-quality',
@@ -537,17 +521,10 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
-  // Issue #899: Code Intelligence Tools
+  // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
     path: '/code-intelligence',
-    name: 'code-intelligence',
-    component: () => import('@/views/CodeIntelligenceView.vue'),
-    meta: {
-      title: 'Code Intelligence',
-      icon: 'fas fa-code',
-      description: 'Code analysis, quality monitoring, and suggestions',
-      requiresAuth: true
-    }
+    redirect: '/analytics/codebase'
   },
   // Issue #902: Developer Speedup Tools
   {
