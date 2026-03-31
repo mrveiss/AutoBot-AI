@@ -409,6 +409,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["autoresearch"],
         "autoresearch",
     ),
+    # Issue #2165: Workflow export/import/sharing
+    (
+        "api.workflow_export",
+        "/workflow-export",
+        ["workflow-export"],
+        "workflow_export",
+    ),
 ]
 
 
