@@ -192,6 +192,10 @@ class TaskQueue:
         self.is_running = False
         self.logger = logging.getLogger(__name__)
 
+        # Optional NPUWorkerManager reference for per-worker task tracking (#2944).
+        # Set externally after construction: queue.npu_worker_manager = manager
+        self.npu_worker_manager = None
+
         # Lock for thread-safe stats access
         self._stats_lock = asyncio.Lock()
 
@@ -408,8 +412,22 @@ class TaskQueue:
                     await asyncio.sleep(TimingConstants.STANDARD_DELAY)
                     continue
 
-                # Process task
-                await self._process_task(task_id, worker_name)
+                # Record task assignment in per-worker SET so failover monitor
+                # can migrate only this worker's tasks if it dies (#2944).
+                if self.npu_worker_manager is not None:
+                    await self.npu_worker_manager.assign_task_to_worker(
+                        self.queue_name, worker_name, task_id
+                    )
+
+                try:
+                    # Process task
+                    await self._process_task(task_id, worker_name)
+                finally:
+                    # Always release regardless of success or exception (#2944).
+                    if self.npu_worker_manager is not None:
+                        await self.npu_worker_manager.release_worker_task(
+                            self.queue_name, worker_name, task_id
+                        )
 
             except asyncio.CancelledError:
                 break
