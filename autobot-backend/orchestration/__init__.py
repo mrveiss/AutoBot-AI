@@ -14,10 +14,21 @@ This package contains:
 - workflow_executor: Workflow execution with agent coordination
 - workflow_documentation: Auto-documentation and knowledge extraction
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
+- execution_modes: Dry-run validation and step-by-step debug mode (#2148)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
 from .dag_executor import DAGExecutor, NodeType, WorkflowDAG, build_dag, workflow_has_condition_nodes
+from .execution_modes import (
+    DebugController,
+    DebugSession,
+    DebugSessionState,
+    DebugStepResult,
+    DryRunReport,
+    DryRunValidator,
+    ExecutionMode,
+    StepPlan,
+)
 from .types import (
     AgentCapability,
     AgentInteraction,
@@ -53,4 +64,13 @@ __all__ = [
     "WorkflowDAG",
     "build_dag",
     "workflow_has_condition_nodes",
+    # Execution modes — dry-run and debug (#2148)
+    "ExecutionMode",
+    "DryRunReport",
+    "DryRunValidator",
+    "StepPlan",
+    "DebugController",
+    "DebugSession",
+    "DebugSessionState",
+    "DebugStepResult",
 ]

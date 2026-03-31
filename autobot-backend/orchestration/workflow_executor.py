@@ -10,6 +10,7 @@ Contains workflow execution, step coordination, and agent interaction handling.
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
 Issue #2140: DAG-based execution with condition evaluation and branch routing.
+Issue #2148: Dry-run validation and step-by-step debug mode.
 """
 
 import asyncio
@@ -28,6 +29,7 @@ from constants.threshold_constants import (
 from retry_mechanism import RetryStrategy, retry_async
 
 from .dag_executor import DAGExecutor, DAGExecutionContext, DAGNode, build_dag, workflow_has_condition_nodes
+from .execution_modes import DebugController, DebugStepResult, DryRunValidator, ExecutionMode
 from .types import AgentInteraction, AgentProfile
 
 logger = logging.getLogger(__name__)
@@ -175,6 +177,10 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
         edges: Optional[List[Dict[str, Any]]] = None,
+        mode: ExecutionMode = ExecutionMode.NORMAL,
+        debug_controller: Optional[DebugController] = None,
+        debug_session_id: Optional[str] = None,
+        dry_run_validator: Optional[DryRunValidator] = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -184,16 +190,39 @@ class WorkflowExecutor:
         Plain linear workflows continue to use the existing dependency-group
         path for full backward compatibility.  Issue #2140.
 
+        Issue #2148: Added ``mode``, ``debug_controller``,
+        ``debug_session_id``, and ``dry_run_validator`` parameters.
+
         Args:
-            workflow_id: Workflow identifier
-            steps: List of enhanced workflow steps
-            context: Workflow context
+            workflow_id: Workflow identifier.
+            steps: List of enhanced workflow steps.
+            context: Workflow context.
             edges: Optional list of DAG edge dicts.  When provided together
                    with condition-type steps, DAG execution is used.
+            mode: Execution mode — NORMAL (default), DRY_RUN, or DEBUG.
+            debug_controller: Required when mode=DEBUG.  Manages pause/resume
+                per-step signalling.
+            debug_session_id: Active debug session ID from
+                ``debug_controller.start_debug_session()``.  Required when
+                mode=DEBUG.
+            dry_run_validator: Optional pre-constructed DryRunValidator.
+                When mode=DRY_RUN and this is None, a default instance is
+                created automatically.
 
         Returns:
-            Execution context with results
+            Execution context dict with results.  For DRY_RUN the dict
+            contains ``dry_run_report`` instead of live step results.
         """
+        if mode == ExecutionMode.DRY_RUN:
+            return self._run_dry_run(workflow_id, steps, edges, dry_run_validator)
+
+        if mode == ExecutionMode.DEBUG:
+            if debug_controller is None or debug_session_id is None:
+                raise ValueError(
+                    "execute_coordinated_workflow: mode=DEBUG requires "
+                    "both debug_controller and debug_session_id"
+                )
+
         effective_edges = edges or []
         if workflow_has_condition_nodes(steps, effective_edges):
             logger.info(
@@ -222,6 +251,12 @@ class WorkflowExecutor:
 
             for group in groups:
                 await self._execute_step_group(group, execution_context, context)
+                if mode == ExecutionMode.DEBUG:
+                    # Pause after each group so the client can inspect results
+                    # before execution continues to the next dependency level.
+                    await self._debug_pause_after_group(
+                        group, execution_context, debug_controller, debug_session_id  # type: ignore[arg-type]
+                    )
 
             self._determine_workflow_status(steps, execution_context)
             return execution_context
@@ -231,6 +266,87 @@ class WorkflowExecutor:
             execution_context["status"] = "failed"
             execution_context["error"] = str(e)
             return execution_context
+
+    # ------------------------------------------------------------------
+    # Dry-run helper (Issue #2148)
+    # ------------------------------------------------------------------
+
+    def _run_dry_run(
+        self,
+        workflow_id: str,
+        steps: List[Dict[str, Any]],
+        edges: Optional[List[Dict[str, Any]]],
+        validator: Optional[DryRunValidator],
+    ) -> Dict[str, Any]:
+        """
+        Validate the workflow and return a dry-run report without executing.
+
+        Returns an execution_context-shaped dict with ``dry_run_report``
+        key carrying the DryRunReport so callers can inspect it uniformly.
+        Issue #2148.
+        """
+        effective_validator = validator or DryRunValidator()
+        report = effective_validator.validate_workflow(steps, edges)
+        logger.info(
+            "Workflow %s dry-run: valid=%s, %d issue(s), %d warning(s)",
+            workflow_id,
+            report.valid,
+            len(report.issues),
+            len(report.warnings),
+        )
+        return {
+            "workflow_id": workflow_id,
+            "status": "dry_run_complete",
+            "dry_run_report": report,
+            "agents_involved": [],
+            "interactions": [],
+            "step_results": {},
+        }
+
+    # ------------------------------------------------------------------
+    # Debug-mode helper (Issue #2148)
+    # ------------------------------------------------------------------
+
+    async def _debug_pause_after_group(
+        self,
+        group: List[Dict[str, Any]],
+        execution_context: Dict[str, Any],
+        debug_controller: DebugController,
+        debug_session_id: str,
+    ) -> None:
+        """
+        Pause after a completed step group and wait for the client signal.
+
+        For each step in the group a DebugStepResult is built from the
+        execution_context step_results and forwarded to
+        ``DebugController.pause_after_step()``.  If the client responds with
+        ``"skip"`` the next steps are *not* skipped here (the caller loop
+        does not iterate yet); for ``"retry"`` no automatic re-execution is
+        performed — the signal is advisory and the step result is already
+        recorded.  Callers are responsible for acting on the returned action
+        if they need re-execution semantics.
+
+        Issue #2148.
+        """
+        for step in group:
+            step_id = step.get("id", "<unknown>")
+            raw_result = execution_context["step_results"].get(step_id)
+            if raw_result is None:
+                continue
+
+            debug_result = DebugStepResult(
+                step_id=step_id,
+                status=step.get("status", "unknown"),
+                result=raw_result if raw_result.get("success") else None,
+                error=raw_result.get("error") if not raw_result.get("success") else None,
+            )
+            action = await debug_controller.pause_after_step(debug_session_id, debug_result)
+            logger.info(
+                "Debug session %s: step %s — client action='%s'",
+                debug_session_id,
+                step_id,
+                action,
+            )
 
     async def _execute_dag_workflow(
         self,
