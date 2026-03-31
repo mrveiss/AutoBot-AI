@@ -13,6 +13,7 @@ Issue #718: Uses dedicated thread pool for file I/O to prevent blocking
 when the main asyncio thread pool is saturated by indexing operations.
 """
 
+import functools
 import json
 import logging
 import os
@@ -79,7 +80,7 @@ class SessionListingMixin:
         """
         dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
         if not dir_exists:
-            await run_in_chat_io_executor(os.makedirs, chats_directory, exist_ok=True)
+            await run_in_chat_io_executor(functools.partial(os.makedirs, chats_directory, exist_ok=True))
             return False
         return True
 
@@ -219,7 +220,7 @@ class SessionListingMixin:
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
                 await run_in_chat_io_executor(
-                    os.makedirs, chats_directory, exist_ok=True
+                    functools.partial(os.makedirs, chats_directory, exist_ok=True)
                 )
                 return sessions
 
