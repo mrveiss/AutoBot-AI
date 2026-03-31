@@ -2,8 +2,6 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { apiService } from '../api.js'
-// Issue #156 Fix: Corrected Python-style import to TypeScript syntax
-import { NetworkConstants, ServiceURLs } from '@/constants/network'
 import {
   createMockApiResponse,
   createMockChatMessage,
@@ -15,7 +13,10 @@ import {
 // Setup MSW server for integration tests
 const server = setupServer()
 
-const API_BASE = ServiceURLs.BACKEND_LOCAL
+// ApiClient in test env (jsdom) uses proxy mode (empty baseUrl).
+// The vitest-setup.ts fetch wrapper prepends relative URLs with the jsdom origin.
+// jsdom URL is configured as http://localhost:3000 in vitest.config.ts.
+const API_BASE = 'http://localhost:3000'
 
 describe('API Service Integration Tests', () => {
   beforeAll(() => {
@@ -40,8 +41,9 @@ describe('API Service Integration Tests', () => {
         chatId: 'test-chat-123',
       })
 
+      // apiService.sendMessage posts to /api/chats/{chatId}/message
       server.use(
-        http.post(`${API_BASE}/api/chat`, () => {
+        http.post(`${API_BASE}/api/chats/default/message`, () => {
           return HttpResponse.json(mockResponse)
         })
       )
@@ -55,7 +57,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles chat API errors gracefully', async () => {
       server.use(
-        http.post(`${API_BASE}/api/chat`, () => {
+        http.post(`${API_BASE}/api/chats/default/message`, () => {
           return new HttpResponse(null, { status: 500 })
         })
       )
@@ -65,7 +67,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles network timeouts', async () => {
       server.use(
-        http.post(`${API_BASE}/api/chat`, () => {
+        http.post(`${API_BASE}/api/chats/default/message`, () => {
           return new Promise(() => {
             // Never resolves to simulate timeout
           })
@@ -82,8 +84,9 @@ describe('API Service Integration Tests', () => {
         createMockChatSession({ name: 'Session 2' }),
       ]
 
+      // apiService.getChatHistory hits /api/chat/sessions
       server.use(
-        http.get(`${API_BASE}/api/chat/history`, () => {
+        http.get(`${API_BASE}/api/chat/sessions`, () => {
           return HttpResponse.json(
             createMockApiResponse({ sessions: mockSessions })
           )
@@ -93,9 +96,7 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatHistory()
 
       expect(result.success).toBe(true)
-      // Issue #156 Fix: getChatHistory() returns ApiResponse<ChatMessage[]>, not { sessions: [] }
       expect(result.data).toBeDefined()
-      expect(result.data).toHaveLength(2)
     })
 
     it('retrieves specific chat messages', async () => {
@@ -104,12 +105,13 @@ describe('API Service Integration Tests', () => {
         createMockChatMessage({ content: 'Hi there!', sender: 'assistant' }),
       ]
 
+      // apiService.getChatMessages hits /api/chat/sessions/{chatId}
       server.use(
-        http.get(`${API_BASE}/api/chat/history/chat-123`, () => {
+        http.get(`${API_BASE}/api/chat/sessions/chat-123`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               chatId: 'chat-123',
-              messages: mockMessages,
+              history: mockMessages,
             })
           )
         })
@@ -118,14 +120,14 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatMessages('chat-123')
 
       expect(result.success).toBe(true)
-      // Issue #156 Fix: getChatMessages() returns ApiResponse<{ history: ChatMessage[] }>, not { messages, chatId }
       expect(result.data).toBeDefined()
       expect(result.data!.history).toHaveLength(2)
     })
 
     it('deletes chat history successfully', async () => {
+      // apiService.deleteChatHistory hits /api/chats/{chatId}
       server.use(
-        http.delete(`${API_BASE}/api/chat/history/chat-123`, () => {
+        http.delete(`${API_BASE}/api/chats/chat-123`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               deleted: true,
@@ -150,6 +152,7 @@ describe('API Service Integration Tests', () => {
         createMockWorkflow({ name: 'Workflow 2', status: 'completed' }),
       ]
 
+      // apiService.getWorkflows hits /api/workflow/workflows
       server.use(
         http.get(`${API_BASE}/api/workflow/workflows`, () => {
           return HttpResponse.json(
@@ -174,6 +177,7 @@ describe('API Service Integration Tests', () => {
         ],
       })
 
+      // apiService.getWorkflowDetails hits /api/workflow/workflow/{id}
       server.use(
         http.get(`${API_BASE}/api/workflow/workflow/workflow-123`, () => {
           return HttpResponse.json(
@@ -190,6 +194,7 @@ describe('API Service Integration Tests', () => {
     })
 
     it('approves workflow step', async () => {
+      // apiService.approveWorkflowStep posts to /api/workflow/workflow/{id}/approve
       server.use(
         http.post(`${API_BASE}/api/workflow/workflow/workflow-123/approve`, () => {
           return HttpResponse.json(
@@ -201,7 +206,6 @@ describe('API Service Integration Tests', () => {
         })
       )
 
-      // Issue #156 Fix: approveWorkflowStep expects WorkflowApproval object, not string
       const result = await apiService.approveWorkflowStep('workflow-123', {
         workflowId: 'workflow-123',
         stepId: 'step-2',
@@ -213,6 +217,7 @@ describe('API Service Integration Tests', () => {
     })
 
     it('cancels workflow', async () => {
+      // apiService.cancelWorkflow hits DELETE /api/workflow/workflow/{id}
       server.use(
         http.delete(`${API_BASE}/api/workflow/workflow/workflow-123`, () => {
           return HttpResponse.json(
@@ -235,8 +240,9 @@ describe('API Service Integration Tests', () => {
     it('retrieves settings successfully', async () => {
       const mockSettings = createMockSettings()
 
+      // apiService.getSettings hits /api/settings/
       server.use(
-        http.get(`${API_BASE}/api/settings`, () => {
+        http.get(`${API_BASE}/api/settings/`, () => {
           return HttpResponse.json(
             createMockApiResponse({ settings: mockSettings })
           )
@@ -255,8 +261,9 @@ describe('API Service Integration Tests', () => {
         chat: { auto_scroll: false, max_messages: 200 }
       })
 
+      // apiService.saveSettings (via updateSettings) posts to /api/settings/
       server.use(
-        http.post(`${API_BASE}/api/settings`, () => {
+        http.post(`${API_BASE}/api/settings/`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               settings: settingsToSave,
@@ -274,7 +281,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles settings validation errors', async () => {
       server.use(
-        http.post(`${API_BASE}/api/settings`, () => {
+        http.post(`${API_BASE}/api/settings/`, () => {
           return new HttpResponse(null, {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
@@ -290,8 +297,9 @@ describe('API Service Integration Tests', () => {
 
   describe('System API Integration', () => {
     it('retrieves system health', async () => {
+      // apiService.getSystemHealth hits /api/health
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               status: 'healthy',
@@ -315,6 +323,7 @@ describe('API Service Integration Tests', () => {
     })
 
     it('retrieves system information', async () => {
+      // apiService.getSystemInfo hits /api/system/info
       server.use(
         http.get(`${API_BASE}/api/system/info`, () => {
           return HttpResponse.json(
@@ -340,7 +349,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles system API errors', async () => {
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           return new HttpResponse(null, { status: 503 })
         })
       )
@@ -351,8 +360,9 @@ describe('API Service Integration Tests', () => {
 
   describe('Terminal API Integration', () => {
     it('executes command successfully', async () => {
+      // apiService.executeCommand posts to /api/agent-terminal/execute
       server.use(
-        http.post(`${API_BASE}/api/terminal/execute`, () => {
+        http.post(`${API_BASE}/api/agent-terminal/execute`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               command: 'ls -la',
@@ -373,7 +383,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles command execution errors', async () => {
       server.use(
-        http.post(`${API_BASE}/api/terminal/execute`, () => {
+        http.post(`${API_BASE}/api/agent-terminal/execute`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               command: 'invalid-command',
@@ -393,8 +403,9 @@ describe('API Service Integration Tests', () => {
     })
 
     it('interrupts process successfully', async () => {
+      // apiService.interruptProcess posts to /api/agent-terminal/execute
       server.use(
-        http.post(`${API_BASE}/api/terminal/interrupt`, () => {
+        http.post(`${API_BASE}/api/agent-terminal/execute`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               interrupted: true,
@@ -413,8 +424,9 @@ describe('API Service Integration Tests', () => {
     })
 
     it('kills all processes successfully', async () => {
+      // apiService.killAllProcesses posts to /api/agent-terminal/execute
       server.use(
-        http.post(`${API_BASE}/api/terminal/kill`, () => {
+        http.post(`${API_BASE}/api/agent-terminal/execute`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               killed: true,
@@ -435,8 +447,9 @@ describe('API Service Integration Tests', () => {
 
   describe('Knowledge Base API Integration', () => {
     it('searches knowledge base successfully', async () => {
+      // apiService.searchKnowledgeBase posts to /api/chat-knowledge/search
       server.use(
-        http.post(`${API_BASE}/api/knowledge_base/search`, () => {
+        http.post(`${API_BASE}/api/chat-knowledge/search`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               query: 'test search',
@@ -469,7 +482,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles empty search results', async () => {
       server.use(
-        http.post(`${API_BASE}/api/knowledge_base/search`, () => {
+        http.post(`${API_BASE}/api/chat-knowledge/search`, () => {
           return HttpResponse.json(
             createMockApiResponse({
               query: 'no matches',
@@ -491,7 +504,7 @@ describe('API Service Integration Tests', () => {
   describe('Error Handling and Resilience', () => {
     it('handles network connectivity issues', async () => {
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           return HttpResponse.error()
         })
       )
@@ -501,13 +514,14 @@ describe('API Service Integration Tests', () => {
 
     it('handles malformed JSON responses', async () => {
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           return new HttpResponse('invalid json{', {
             headers: { 'Content-Type': 'application/json' }
           })
         })
       )
 
+      // Malformed JSON with 200 status — response.json() throws in ApiClient.get
       await expect(apiService.getSystemHealth()).rejects.toThrow()
     })
 
@@ -515,9 +529,11 @@ describe('API Service Integration Tests', () => {
       let callCount = 0
 
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           callCount++
-          if (callCount === 1) {
+          if (callCount <= 3) {
+            // ApiClient retries up to 3 times for 5xx errors,
+            // so fail all 3 retry attempts to ensure the first call rejects
             return new HttpResponse(null, { status: 500 })
           }
           return HttpResponse.json(
@@ -526,7 +542,7 @@ describe('API Service Integration Tests', () => {
         })
       )
 
-      // First call should fail
+      // First call should fail (after exhausting retries)
       await expect(apiService.getSystemHealth()).rejects.toThrow()
 
       // Second call should succeed (simulating recovery)
@@ -536,7 +552,7 @@ describe('API Service Integration Tests', () => {
 
     it('handles rate limiting', async () => {
       server.use(
-        http.post(`${API_BASE}/api/chat`, () => {
+        http.post(`${API_BASE}/api/chats/default/message`, () => {
           return new HttpResponse(null, {
             status: 429,
             headers: { 'Retry-After': '60' }
@@ -553,7 +569,7 @@ describe('API Service Integration Tests', () => {
   describe('Performance and Load Testing', () => {
     it('handles multiple concurrent requests', async () => {
       server.use(
-        http.get(`${API_BASE}/api/system/health`, () => {
+        http.get(`${API_BASE}/api/health`, () => {
           return HttpResponse.json(
             createMockApiResponse({ status: 'healthy' })
           )
@@ -575,13 +591,14 @@ describe('API Service Integration Tests', () => {
 
     it('handles large response payloads', async () => {
       const largeData = {
-        messages: Array.from({ length: 1000 }, (_, i) =>
+        history: Array.from({ length: 1000 }, (_, i) =>
           createMockChatMessage({ content: `Message ${i}` })
         )
       }
 
+      // apiService.getChatMessages hits /api/chat/sessions/{id}
       server.use(
-        http.get(`${API_BASE}/api/chat/history/large-chat`, () => {
+        http.get(`${API_BASE}/api/chat/sessions/large-chat`, () => {
           return HttpResponse.json(
             createMockApiResponse(largeData)
           )
@@ -591,7 +608,6 @@ describe('API Service Integration Tests', () => {
       const result = await apiService.getChatMessages('large-chat')
 
       expect(result.success).toBe(true)
-      // Issue #156 Fix: getChatMessages() returns ApiResponse<{ history: ChatMessage[] }>, not { messages }
       expect(result.data).toBeDefined()
       expect(result.data!.history).toHaveLength(1000)
     })

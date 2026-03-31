@@ -390,22 +390,20 @@ describe('useKnowledgeVectorization', () => {
     it('should vectorize batch of documents', async () => {
       const apiClient = await import('@/utils/ApiClient')
 
-      const mockStartResponse = {
+      // Fix (#2641): vectorizeBatch first calls _tryBatchEndpoint which expects
+      // data.results array from POST /api/knowledge_base/vectorize_documents.
+      // Mock the batch endpoint response format correctly.
+      const mockBatchResponse = {
         json: vi.fn().mockResolvedValue({
-          status: 'success',
-          job_id: 'job_123'
+          results: [
+            { id: 'doc_1', status: 'success' },
+            { id: 'doc_2', status: 'success' },
+            { id: 'doc_3', status: 'success' }
+          ]
         })
       }
 
-      const mockJobResponse = {
-        json: vi.fn().mockResolvedValue({
-          status: 'success',
-          job: { status: 'completed', error: null }
-        })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
-      apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
+      apiClient.default.post = vi.fn().mockResolvedValue(mockBatchResponse)
 
       const result = await composable.vectorizeBatch(['doc_1', 'doc_2', 'doc_3'])
 
@@ -416,15 +414,18 @@ describe('useKnowledgeVectorization', () => {
       composable.selectAll(['doc_1', 'doc_2'])
 
       const apiClient = await import('@/utils/ApiClient')
-      const mockStartResponse = {
-        json: vi.fn().mockResolvedValue({ status: 'success', job_id: 'job_123' })
-      }
-      const mockJobResponse = {
-        json: vi.fn().mockResolvedValue({ status: 'success', job: { status: 'completed' } })
+
+      // Mock batch endpoint response for vectorizeSelected -> vectorizeBatch
+      const mockBatchResponse = {
+        json: vi.fn().mockResolvedValue({
+          results: [
+            { id: 'doc_1', status: 'success' },
+            { id: 'doc_2', status: 'success' }
+          ]
+        })
       }
 
-      apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
-      apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
+      apiClient.default.post = vi.fn().mockResolvedValue(mockBatchResponse)
 
       await composable.vectorizeSelected()
 
@@ -489,28 +490,41 @@ describe('useKnowledgeVectorization', () => {
     })
 
     it('should handle timeout in job polling', async () => {
-      const apiClient = await import('@/utils/ApiClient')
+      // Fix (#2641): vectorizeDocument polls with setTimeout(1000) in a while
+      // loop up to maxAttempts times.  Use fake timers to avoid real-time waits.
+      vi.useFakeTimers()
 
-      const mockStartResponse = {
-        json: vi.fn().mockResolvedValue({ status: 'success', job_id: 'job_timeout' })
+      try {
+        const apiClient = await import('@/utils/ApiClient')
+
+        const mockStartResponse = {
+          json: vi.fn().mockResolvedValue({ status: 'success', job_id: 'job_timeout' })
+        }
+
+        // Mock job that never completes
+        const mockJobResponse = {
+          json: vi.fn().mockResolvedValue({
+            status: 'success',
+            job: { status: 'in_progress', error: null }
+          })
+        }
+
+        apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
+        apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
+
+        // Start vectorization (will enter polling loop)
+        const promise = composable.vectorizeDocument('doc_timeout')
+
+        // Advance all timers to exhaust the polling loop
+        await vi.runAllTimersAsync()
+
+        const success = await promise
+
+        expect(success).toBe(false)
+        expect(composable.getDocumentStatus('doc_timeout')).toBe('failed')
+      } finally {
+        vi.useRealTimers()
       }
-
-      // Mock job that never completes
-      const mockJobResponse = {
-        json: vi.fn().mockResolvedValue({
-          status: 'success',
-          job: { status: 'in_progress', error: null }
-        })
-      }
-
-      apiClient.default.post = vi.fn().mockResolvedValue(mockStartResponse)
-      apiClient.default.get = vi.fn().mockResolvedValue(mockJobResponse)
-
-      // Should timeout after max attempts
-      const success = await composable.vectorizeDocument('doc_timeout')
-
-      expect(success).toBe(false)
-      expect(composable.getDocumentStatus('doc_timeout')).toBe('failed')
     })
   })
 

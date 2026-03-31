@@ -71,7 +71,7 @@ describe('ChatInterface', () => {
 
   describe('Rendering', () => {
     it('renders the main chat interface', () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       expect(screen.getByText('Chat History')).toBeInTheDocument()
       expect(screen.getByLabelText('Add')).toBeInTheDocument()
@@ -81,7 +81,7 @@ describe('ChatInterface', () => {
     })
 
     it('renders with collapsed sidebar when sidebarCollapsed is true', async () => {
-      const { container } = renderComponent(ChatInterface)
+      const { container } = renderComponent(ChatInterface, { pinia: true })
 
       const collapseButton = screen.getByLabelText('Collapse')
       await user.click(collapseButton)
@@ -98,7 +98,7 @@ describe('ChatInterface', () => {
         data: { sessions: mockChatSessions }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
         expect(screen.getByText('Test Chat 1')).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('ChatInterface', () => {
         new Promise(resolve => setTimeout(resolve, 1000))
       )
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       // Should show some loading indication
       expect(screen.getByLabelText('Refresh')).toBeInTheDocument()
@@ -123,7 +123,7 @@ describe('ChatInterface', () => {
   describe('Chat Management', () => {
     it('creates a new chat session', async () => {
       const mockApi = createMockApiService()
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const newChatButton = screen.getByLabelText('Add')
       await user.click(newChatButton)
@@ -141,7 +141,7 @@ describe('ChatInterface', () => {
         data: { sessions: mockChatSessions }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
         expect(screen.getByText('Test Chat 1')).toBeInTheDocument()
@@ -163,7 +163,7 @@ describe('ChatInterface', () => {
         data: { sessions: mockChatSessions }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
         expect(screen.getByText('Test Chat 1')).toBeInTheDocument()
@@ -179,7 +179,7 @@ describe('ChatInterface', () => {
     })
 
     it('resets current chat session', async () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const resetButton = screen.getByLabelText('Reset')
       await user.click(resetButton)
@@ -190,7 +190,7 @@ describe('ChatInterface', () => {
 
     it('refreshes chat list', async () => {
       const mockApi = createMockApiService()
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const refreshButton = screen.getByLabelText('Refresh')
       await user.click(refreshButton)
@@ -204,7 +204,7 @@ describe('ChatInterface', () => {
   describe('Message Handling', () => {
     it('sends a message to the chat', async () => {
       const mockApi = createMockApiService()
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       // Find the message input and send button
       const messageInput = screen.getByPlaceholderText(/type your message/i) as HTMLTextAreaElement
@@ -227,7 +227,7 @@ describe('ChatInterface', () => {
 
     it('handles message input with keyboard shortcuts', async () => {
       const mockApi = createMockApiService()
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const messageInput = screen.getByPlaceholderText(/type your message/i)
       await user.type(messageInput, 'Test message')
@@ -246,7 +246,7 @@ describe('ChatInterface', () => {
 
     it('prevents sending empty messages', async () => {
       const mockApi = createMockApiService()
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const sendButton = screen.getByRole('button', { name: /send/i })
       await user.click(sendButton)
@@ -268,10 +268,10 @@ describe('ChatInterface', () => {
         }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       // Simulate selecting a chat
-      const { container } = renderComponent(ChatInterface)
+      const { container } = renderComponent(ChatInterface, { pinia: true })
       const component = container.querySelector('div') as any
 
       // Trigger message loading
@@ -283,7 +283,7 @@ describe('ChatInterface', () => {
 
   describe('WebSocket Integration', () => {
     it('handles incoming WebSocket messages', async () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       // Simulate WebSocket connection
       const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
@@ -297,7 +297,7 @@ describe('ChatInterface', () => {
     })
 
     it('handles WebSocket connection errors', async () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const ws = webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateError('Connection failed')
@@ -307,7 +307,7 @@ describe('ChatInterface', () => {
     })
 
     it('handles workflow notifications via WebSocket', async () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       webSocketTestUtil.connect(ServiceURLs.WEBSOCKET_LOCAL)
       webSocketTestUtil.simulateWorkflowUpdate('workflow-123', 'running', 2)
@@ -320,11 +320,11 @@ describe('ChatInterface', () => {
 
   describe('Knowledge Persistence Dialog', () => {
     it('opens knowledge persistence dialog when triggered', async () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       // This would typically be triggered by some chat action
       // Simulate the condition that opens the dialog
-      const { container } = renderComponent(ChatInterface)
+      const { container } = renderComponent(ChatInterface, { pinia: true })
 
       // Check if dialog can be opened (implementation depends on your logic)
       expect(container).toBeInTheDocument()
@@ -336,7 +336,7 @@ describe('ChatInterface', () => {
       const mockApi = createMockApiService()
       mockApi.client.post.mockRejectedValue(new Error('Network error'))
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       const messageInput = screen.getByPlaceholderText(/type your message/i)
       const sendButton = screen.getByRole('button', { name: /send/i })
@@ -357,7 +357,7 @@ describe('ChatInterface', () => {
         data: { sessions: [] }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
         // Should handle empty state gracefully
@@ -368,7 +368,7 @@ describe('ChatInterface', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels', () => {
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       expect(screen.getByLabelText('Add')).toBeInTheDocument()
       expect(screen.getByLabelText('Reset')).toBeInTheDocument()
@@ -384,7 +384,7 @@ describe('ChatInterface', () => {
         data: { sessions: mockChatSessions }
       })
 
-      renderComponent(ChatInterface)
+      renderComponent(ChatInterface, { pinia: true })
 
       await waitFor(() => {
         expect(screen.getByText('Test Chat 1')).toBeInTheDocument()
@@ -421,7 +421,7 @@ describe('ChatInterface', () => {
         }
       })
 
-      const { container } = renderComponent(ChatInterface)
+      const { container } = renderComponent(ChatInterface, { pinia: true })
 
       // Component should render without performance issues
       expect(container).toBeInTheDocument()

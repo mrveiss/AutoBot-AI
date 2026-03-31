@@ -1874,13 +1874,12 @@ describe('useErrorHandler Composable', () => {
       }
 
       const promise = retryOperation(operation, 3, 100)
+      // Attach no-op handler before running timers to prevent
+      // unhandled rejection during fake timer advancement (#2641)
+      promise.catch(() => {})
       await vi.runAllTimersAsync()
 
-      try {
-        await promise
-      } catch {
-        // Expected to fail
-      }
+      await expect(promise).rejects.toThrow('Retry')
 
       expect(attempts).toBe(3)
     })
@@ -1893,6 +1892,9 @@ describe('useErrorHandler Composable', () => {
       }
 
       const promise = retryOperation(operation, 2, 100)
+      // Attach no-op handler before running timers to prevent
+      // unhandled rejection during fake timer advancement (#2641)
+      promise.catch(() => {})
       await vi.runAllTimersAsync()
 
       await expect(promise).rejects.toThrow('Always fail')
@@ -1916,6 +1918,9 @@ describe('useErrorHandler Composable', () => {
       }
 
       const promise = retryOperation(operation, 2, 100)
+      // Attach no-op handler before running timers to prevent
+      // unhandled rejection during fake timer advancement (#2641)
+      promise.catch(() => {})
       await vi.runAllTimersAsync()
 
       await expect(promise).rejects.toThrow('Final error')

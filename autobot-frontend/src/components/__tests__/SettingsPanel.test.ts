@@ -9,7 +9,21 @@ import {
 } from '../../test/utils/test-utils'
 import { createMockApiService } from '../../test/mocks/api-client-mock'
 
-// Mock dependencies
+// Mock dependencies — SettingsPanel imports axios directly
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({ data: {} }),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+    put: vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
+    create: vi.fn().mockReturnThis(),
+    interceptors: {
+      request: { use: vi.fn(), eject: vi.fn() },
+      response: { use: vi.fn(), eject: vi.fn() },
+    },
+  },
+}))
+
 vi.mock('@/utils/ApiClient', () => ({
   default: {
     get: vi.fn(),
@@ -83,7 +97,7 @@ describe('SettingsPanel', () => {
 
   describe('Rendering', () => {
     it('renders the settings panel with tabs', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       expect(screen.getByText('Settings')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
@@ -92,7 +106,7 @@ describe('SettingsPanel', () => {
     })
 
     it('loads settings on mount', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(mockApi.client.get).toHaveBeenCalledWith('/api/settings')
@@ -105,7 +119,7 @@ describe('SettingsPanel', () => {
         new Promise(resolve => setTimeout(resolve, 1000))
       )
 
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       // Should show loading indication
       expect(screen.getByText('Settings')).toBeInTheDocument()
@@ -114,7 +128,7 @@ describe('SettingsPanel', () => {
     it('handles settings loading error', async () => {
       mockApi.client.get.mockRejectedValue(new Error('Failed to load settings'))
 
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         // Should show error state or fallback content
@@ -125,7 +139,7 @@ describe('SettingsPanel', () => {
 
   describe('Tab Navigation', () => {
     it('switches between tabs correctly', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
@@ -153,7 +167,7 @@ describe('SettingsPanel', () => {
     })
 
     it('shows active tab correctly', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         const chatTab = screen.getByRole('button', { name: /chat/i })
@@ -172,7 +186,7 @@ describe('SettingsPanel', () => {
 
   describe('Chat Settings', () => {
     beforeEach(async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
       await waitFor(() => {
         expect(screen.getByText('Chat Settings')).toBeInTheDocument()
       })
@@ -255,7 +269,7 @@ describe('SettingsPanel', () => {
 
   describe('Backend Settings', () => {
     beforeEach(async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         const backendTab = screen.getByRole('button', { name: /backend/i })
@@ -425,7 +439,7 @@ describe('SettingsPanel', () => {
 
   describe('UI Settings', () => {
     beforeEach(async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       const uiTab = screen.getByRole('button', { name: /ui/i })
       await user.click(uiTab)
@@ -498,7 +512,7 @@ describe('SettingsPanel', () => {
 
   describe('Settings Persistence', () => {
     it('saves settings automatically when auto_save is enabled', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(screen.getByText('Chat Settings')).toBeInTheDocument()
@@ -524,7 +538,7 @@ describe('SettingsPanel', () => {
         }
       })
 
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
@@ -534,7 +548,7 @@ describe('SettingsPanel', () => {
     it('handles save errors gracefully', async () => {
       mockApi.client.post.mockRejectedValue(new Error('Save failed'))
 
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(screen.getByText('Chat Settings')).toBeInTheDocument()
@@ -550,7 +564,7 @@ describe('SettingsPanel', () => {
     })
 
     it('shows save confirmation', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         expect(screen.getByText('Chat Settings')).toBeInTheDocument()
@@ -568,7 +582,7 @@ describe('SettingsPanel', () => {
 
   describe('Form Validation', () => {
     it('validates numeric inputs', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(async () => {
         const maxMessagesInput = screen.getByLabelText(/max messages/i) as HTMLInputElement
@@ -582,7 +596,7 @@ describe('SettingsPanel', () => {
     })
 
     it('validates required fields', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       const backendTab = screen.getByRole('button', { name: /backend/i })
       await user.click(backendTab)
@@ -601,7 +615,7 @@ describe('SettingsPanel', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels', () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /backend/i })).toBeInTheDocument()
@@ -609,7 +623,7 @@ describe('SettingsPanel', () => {
     })
 
     it('supports keyboard navigation', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       await waitFor(() => {
         const chatTab = screen.getByRole('button', { name: /chat/i })
@@ -627,7 +641,7 @@ describe('SettingsPanel', () => {
     })
 
     it('has proper form labels', () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       expect(screen.getByLabelText(/auto scroll/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/max messages/i)).toBeInTheDocument()
@@ -640,7 +654,7 @@ describe('SettingsPanel', () => {
       // Mock different viewport sizes
       Object.defineProperty(window, 'innerWidth', { value: 768 })
 
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       // Should render appropriately for tablet/mobile
       expect(screen.getByText('Settings')).toBeInTheDocument()
@@ -649,7 +663,7 @@ describe('SettingsPanel', () => {
 
   describe('Integration', () => {
     it('integrates with theme changes', async () => {
-      renderComponent(SettingsPanel)
+      renderComponent(SettingsPanel, { router: true })
 
       const uiTab = screen.getByRole('button', { name: /ui/i })
       await user.click(uiTab)
