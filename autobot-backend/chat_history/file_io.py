@@ -70,13 +70,13 @@ class FileIOMixin:
     - self._periodic_memory_check(): method
     """
 
-    async def _run_in_io_executor(self, func, *args):
+    async def _run_in_io_executor(self, func, *args, **kwargs):
         """Run a function in the dedicated chat I/O thread pool.
 
         Issue #718: Uses dedicated thread pool to prevent blocking when the
         main asyncio thread pool is saturated by indexing operations.
         """
-        return await run_in_chat_io_executor(func, *args)
+        return await run_in_chat_io_executor(func, *args, **kwargs)
 
     async def _atomic_write(self, file_path: str, content: str) -> None:
         """
