@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from .rl_router import (
-    RLRouter,
     _CONFIDENCE_BASE,
     _CONFIDENCE_SCALE,
     _EPSILON_MIN,
     _EPSILON_START,
+    RLRouter,
 )
 from .routing import AgentRouter
 from .types import AgentType

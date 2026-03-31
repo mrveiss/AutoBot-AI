@@ -25,9 +25,9 @@ from services.autoresearch.models import (
     HyperParams,
 )
 from services.autoresearch.runner import (
-    ExperimentRunner,
     _EXTRA_KEY_PATTERN,
     _RESERVED_KEYS,
+    ExperimentRunner,
 )
 
 logger = logging.getLogger(__name__)

@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-
 from services.workflow_automation.routes import get_workflow_manager
 from services.workflow_serializer import WorkflowSerializer
 from services.workflow_sharing_service import WorkflowSharingService

@@ -171,11 +171,12 @@ class TestGetEnabledFeatures:
     """get_enabled_features returns a sorted list of enabled subsystem names."""
 
     def test_all_enabled_returns_all_names(self):
+        from unittest.mock import MagicMock
+
         from autobot_shared.feature_flags import (
             _SUBSYSTEM_FLAG_MAP,
             get_enabled_features,
         )
-        from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
@@ -189,11 +190,12 @@ class TestGetEnabledFeatures:
         assert result == sorted(_SUBSYSTEM_FLAG_MAP.keys())
 
     def test_none_enabled_returns_empty_list(self):
+        from unittest.mock import MagicMock
+
         from autobot_shared.feature_flags import (
             _SUBSYSTEM_FLAG_MAP,
             get_enabled_features,
         )
-        from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
@@ -207,11 +209,12 @@ class TestGetEnabledFeatures:
         assert result == []
 
     def test_partial_enabled_returns_subset(self):
+        from unittest.mock import MagicMock
+
         from autobot_shared.feature_flags import (
             _SUBSYSTEM_FLAG_MAP,
             get_enabled_features,
         )
-        from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
@@ -228,11 +231,12 @@ class TestGetEnabledFeatures:
         assert result == sorted(["npu", "voice"])
 
     def test_result_is_sorted(self):
+        from unittest.mock import MagicMock
+
         from autobot_shared.feature_flags import (
             _SUBSYSTEM_FLAG_MAP,
             get_enabled_features,
         )
-        from unittest.mock import MagicMock
 
         feature_cfg = MagicMock()
         for attr in _SUBSYSTEM_FLAG_MAP.values():
