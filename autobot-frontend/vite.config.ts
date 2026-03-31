@@ -42,9 +42,9 @@ function vadAssetsPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const config = {
-    backend: { host: env.VITE_BACKEND_HOST || '172.16.168.20', port: env.VITE_BACKEND_PORT || '8001' },
-    browser: { host: env.VITE_BROWSER_HOST || '172.16.168.25', port: env.VITE_BROWSER_PORT || '3000' },
-    vnc: { host: env.VITE_DESKTOP_VNC_HOST || env.VITE_BACKEND_HOST || '172.16.168.20', port: env.VITE_DESKTOP_VNC_PORT || '6080' },
+    backend: { host: env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_BACKEND_PORT || '8001' },
+    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '3000' },
+    vnc: { host: env.VITE_DESKTOP_VNC_HOST || env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_DESKTOP_VNC_PORT || '6080' },
     protocol: env.VITE_HTTP_PROTOCOL || 'http'
   }
 

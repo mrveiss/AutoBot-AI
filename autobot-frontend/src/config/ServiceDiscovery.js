@@ -25,7 +25,31 @@ export default class ServiceDiscovery {
     this.config = getConfig();
     this.debugMode = import.meta.env.DEV || this.config.feature.debug;
 
+    // Derive VM subnet prefixes from SSOT config VM IPs (#3052)
+    // instead of hardcoding subnet strings like '172.16.168.'
+    this.vmSubnetPrefixes = this._deriveVmSubnetPrefixes();
+
     this.log('ServiceDiscovery initialized with SSOT config');
+  }
+
+  /**
+   * Derive unique subnet prefixes (first 3 octets) from configured VM IPs.
+   * Returns an array like ['172.16.168.'] derived from actual SSOT VM addresses.
+   */
+  _deriveVmSubnetPrefixes() {
+    const vmIps = Object.values(this.config.vm).filter(
+      (ip) => typeof ip === 'string' && ip.length > 0 && ip !== '127.0.0.1' && ip !== 'localhost'
+    );
+
+    const prefixes = new Set();
+    for (const ip of vmIps) {
+      const parts = ip.split('.');
+      if (parts.length === 4) {
+        prefixes.add(`${parts[0]}.${parts[1]}.${parts[2]}.`);
+      }
+    }
+
+    return Array.from(prefixes);
   }
 
   /**
@@ -232,7 +256,8 @@ export default class ServiceDiscovery {
   }
 
   /**
-   * Detect current deployment environment
+   * Detect current deployment environment.
+   * VM subnet detection uses prefixes derived from SSOT config (#3052).
    */
   _detectEnvironment() {
     const hostname = window.location.hostname;
@@ -243,8 +268,8 @@ export default class ServiceDiscovery {
       return 'development';
     }
 
-    // VM environment (specific IP ranges)
-    if (hostname.startsWith('172.16.168.') || hostname.startsWith('192.168.')) {
+    // VM environment - match subnets derived from SSOT VM IPs
+    if (this.vmSubnetPrefixes.some((prefix) => hostname.startsWith(prefix))) {
       return 'vm';
     }
 
