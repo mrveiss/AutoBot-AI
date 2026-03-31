@@ -1639,6 +1639,7 @@ class FleetSyncJobStatus(BaseModel):
     total_nodes: int
     completed_nodes: int
     failed_nodes: int
+    failure_reason: Optional[str] = None
     nodes: List[FleetSyncNodeStatus]
     created_at: datetime
     completed_at: Optional[datetime] = None
