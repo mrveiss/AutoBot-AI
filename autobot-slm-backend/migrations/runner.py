@@ -58,6 +58,8 @@ MIGRATIONS = [
     "add_node_ansible_name",
     # Issue #2011: add unique constraint on ansible_name
     "add_ansible_name_unique_constraint",
+    # Issue #1980: add failure_reason column to fleet_sync_jobs
+    "add_failure_reason_to_fleet_sync_jobs",
 ]
 
 

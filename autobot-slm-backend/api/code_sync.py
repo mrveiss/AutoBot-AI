@@ -118,6 +118,7 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
         for job in stale_jobs:
             job.status = "failed"
             job.completed_at = datetime.utcnow()
+            job.failure_reason = "reconciled: server restarted while job was running"
             logger.warning(
                 "Reconciled stale fleet sync job %s "
                 "(was 'running', marked 'failed')",
@@ -169,8 +170,9 @@ async def _update_job_status_db(
     *,
     status: Optional[str] = None,
     completed_at: Optional[datetime] = None,
+    failure_reason: Optional[str] = None,
 ) -> None:
-    """Update fleet sync job status in DB (#1707)."""
+    """Update fleet sync job status in DB (#1707, #1980)."""
     from services.database import db_service
 
     async with db_service.session() as db:
@@ -185,6 +187,8 @@ async def _update_job_status_db(
             db_job.status = status
         if completed_at is not None:
             db_job.completed_at = completed_at
+        if failure_reason is not None:
+            db_job.failure_reason = failure_reason[:500]
 
         # Recalculate node counts from node_states
         ns_result = await db.execute(
@@ -262,6 +266,7 @@ async def _load_job_status_from_db(
             total_nodes=db_job.total_nodes,
             completed_nodes=db_job.completed_nodes,
             failed_nodes=db_job.failed_nodes,
+            failure_reason=db_job.failure_reason,
             nodes=[
                 FleetSyncNodeStatus(
                     node_id=ns.node_id,
@@ -1099,6 +1104,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
             slm_self_node.node_id,
         )
 
+    failure_reason: Optional[str] = None
     try:
         await _sync_regular_nodes(executor, job, regular_nodes)
 
@@ -1111,10 +1117,14 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     except Exception as e:
         logger.error("Fleet sync job %s failed: %s", job.job_id, e)
         job.status = "failed"
+        failure_reason = str(e)
 
     job.completed_at = datetime.utcnow()
     await _update_job_status_db(
-        job.job_id, status=job.status, completed_at=job.completed_at
+        job.job_id,
+        status=job.status,
+        completed_at=job.completed_at,
+        failure_reason=failure_reason,
     )
     _running_tasks.pop(job.job_id, None)  # Prevent memory leak (#1928)
     logger.info(
