@@ -44,6 +44,13 @@ from .router import (
     OptimizationRouter,
     get_optimization_router,
 )
+from .kv_cache import (
+    KVCacheConfig,
+    KVCacheManager,
+    LayerKVCache,
+    RTX_4070_KV_CACHE_FRACTION,
+    RTX_4070_VRAM_BYTES,
+)
 from .token_optimizer import (
     TokenOptimizer,
     TokenOptimizerConfig,
@@ -98,4 +105,10 @@ __all__ = [
     # Profiler (Issue #1956)
     "LayeredProfiler",
     "INFERENCE_STAGES",
+    # KV Cache Manager (Issue #1964)
+    "KVCacheConfig",
+    "KVCacheManager",
+    "LayerKVCache",
+    "RTX_4070_KV_CACHE_FRACTION",
+    "RTX_4070_VRAM_BYTES",
 ]
