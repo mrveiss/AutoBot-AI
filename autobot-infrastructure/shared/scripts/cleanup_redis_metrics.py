@@ -74,9 +74,7 @@ async def _connect_redis_clients(results: dict) -> tuple:
 
     # Connect to Redis (main database)
     try:
-        redis_client = get_redis_client(database="main", async_client=True)
-        if asyncio.iscoroutine(redis_client):
-            redis_client = await redis_client
+        redis_client = await get_redis_client(database="main", async_client=True)
 
         if not redis_client:
             logger.error("Failed to connect to Redis")
@@ -87,9 +85,7 @@ async def _connect_redis_clients(results: dict) -> tuple:
 
     # Also check knowledge database
     try:
-        kb_redis_client = get_redis_client(database="knowledge", async_client=True)
-        if asyncio.iscoroutine(kb_redis_client):
-            kb_redis_client = await kb_redis_client
+        kb_redis_client = await get_redis_client(database="knowledge", async_client=True)
     except Exception:
         kb_redis_client = None
         logger.warning("Knowledge database not available, skipping")

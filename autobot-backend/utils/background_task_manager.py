@@ -69,7 +69,7 @@ class BackgroundTaskManager:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            return get_redis_client(database="analytics", async_client=True)
+            return await get_redis_client(database="analytics", async_client=True)
         except Exception as exc:
             logger.debug("Redis unavailable (non-fatal): %s", exc)
             return None

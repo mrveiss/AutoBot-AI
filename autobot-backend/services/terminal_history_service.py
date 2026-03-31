@@ -23,8 +23,19 @@ class TerminalHistoryService:
         Args:
             max_entries: Maximum commands to store per user
         """
-        self.redis = get_redis_client(database="main", async_client=True)
+        self._redis = None
         self.max_entries = max_entries
+
+    async def _get_redis(self):
+        """Get async Redis client, initializing lazily on first use.
+
+        Issue #2956: get_async_client is a coroutine so it cannot be called
+        from __init__. Lazy initialization ensures the client is awaited
+        correctly in an async context.
+        """
+        if self._redis is None:
+            self._redis = await get_redis_client(database="main", async_client=True)
+        return self._redis
 
     async def add_command(self, user_id: str, command: str) -> None:
         """Add command to history with current timestamp.
@@ -44,11 +55,15 @@ class TerminalHistoryService:
         timestamp = time.time()
 
         try:
-            await self.redis.zadd(key, {command: timestamp})
+            redis = await self._get_redis()
+            if not redis:
+                logger.error("Redis unavailable; cannot add command to history")
+                return
+            await redis.zadd(key, {command: timestamp})
 
-            count = await self.redis.zcard(key)
+            count = await redis.zcard(key)
             if count > self.max_entries:
-                await self.redis.zremrangebyrank(key, 0, count - self.max_entries - 1)
+                await redis.zremrangebyrank(key, 0, count - self.max_entries - 1)
         except Exception as e:
             logger.error("Failed to add command to history: %s", e)
 
@@ -71,7 +86,10 @@ class TerminalHistoryService:
 
         key = f"terminal:history:{user_id}"
         try:
-            return await self.redis.zrevrange(key, offset, offset + limit - 1)
+            redis = await self._get_redis()
+            if not redis:
+                return []
+            return await redis.zrevrange(key, offset, offset + limit - 1)
         except Exception as e:
             logger.error("Failed to get history: %s", e)
             return []
@@ -113,6 +131,9 @@ class TerminalHistoryService:
 
         key = f"terminal:history:{user_id}"
         try:
-            await self.redis.delete(key)
+            redis = await self._get_redis()
+            if not redis:
+                return
+            await redis.delete(key)
         except Exception as e:
             logger.error("Failed to clear history: %s", e)
