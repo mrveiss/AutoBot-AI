@@ -10,12 +10,44 @@ Provides real-time updates for deployments and system events.
 import asyncio
 import logging
 import time
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from services.auth import auth_service
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
+
+
+async def _authenticate_websocket_token(websocket: WebSocket) -> Optional[dict]:
+    """Authenticate a WebSocket connection via the ``token`` query parameter.
+
+    Reads the ``token`` query parameter, validates it as a JWT using the
+    existing auth service, and returns the decoded payload on success.
+    On failure the socket is closed with code 4001 before it is accepted,
+    and ``None`` is returned.  Callers must return immediately when ``None``
+    is received.
+
+    Args:
+        websocket: The incoming WebSocket connection (not yet accepted).
+
+    Returns:
+        Decoded JWT payload dict, or ``None`` if authentication failed.
+    """
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        logger.warning("WebSocket connection rejected: missing token")
+        return None
+
+    payload = auth_service.decode_token(token)
+    if not payload:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        logger.warning("WebSocket connection rejected: invalid token")
+        return None
+
+    return payload
 
 
 class ConnectionManager:
@@ -241,6 +273,9 @@ ws_manager = ConnectionManager()
 @router.websocket("/deployments/{deployment_id}")
 async def deployment_websocket(websocket: WebSocket, deployment_id: str):
     """WebSocket endpoint for watching deployment progress."""
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = f"deployment:{deployment_id}"
     await ws_manager.connect(websocket, channel)
 
@@ -279,6 +314,9 @@ async def deployment_websocket(websocket: WebSocket, deployment_id: str):
 @router.websocket("/events")
 async def events_websocket(websocket: WebSocket):
     """WebSocket endpoint for global system events."""
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = "events:global"
     await ws_manager.connect(websocket, channel)
 
@@ -320,6 +358,9 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
 
     Clients receive only events for the specified node_id.
     """
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = f"node:{node_id}"
     await ws_manager.connect(websocket, channel)
 
@@ -353,11 +394,10 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
 
 @router.websocket("/provision")
 async def provision_websocket(websocket: WebSocket):
-    """WebSocket endpoint for watching provisioning progress (#2754).
+    """WebSocket endpoint for watching provisioning progress (#2754)."""
+    if not await _authenticate_websocket_token(websocket):
+        return
 
-    NOTE: No authentication — consistent with other WS endpoints.
-    See follow-up issue for adding token-based auth to all WS routes.
-    """
     channel = "provision"
     await ws_manager.connect(websocket, channel)
 
