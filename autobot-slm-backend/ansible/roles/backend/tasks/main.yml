@@ -49,6 +49,27 @@
   notify: restart backend
   tags: ['backend', 'config']
 
+# Issue #2953: Write deployment.mode into config/config.yaml so the backend
+# config loader can read it without relying on env alone.
+- name: "Backend | Ensure config directory exists"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
+
+- name: "Backend | Write deployment section to config/config.yaml (#2953)"
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ backend_code_dir }}/config/config.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    force: false  # Never overwrite an existing config.yaml — it may have user customisations
+  tags: ['backend', 'config']
+
 # ============================================================
 # Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
 # ============================================================
@@ -279,6 +300,24 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+
+# ==========================================================
+# PostgreSQL for User Management (Issue #2953)
+# Included only when backend_user_mode is not single_user.
+# Re-uses the shared postgresql role with autobot_users DB.
+# ==========================================================
+- name: "Backend | Configure PostgreSQL for user management (#2953)"
+  ansible.builtin.include_role:
+    name: postgresql
+  vars:
+    db_user: "{{ backend_postgres_user | default('autobot_app') }}"
+    db_env_prefix: "AUTOBOT"
+    db_host: "127.0.0.1"
+    databases:
+      - "{{ backend_postgres_db | default('autobot_users') }}"
+    postgresql_listen_addresses: "localhost"
+  when: (backend_user_mode | default('single_user')) != 'single_user'
+  tags: ['backend', 'postgresql']
 
 # ==========================================================
 # TLS Certificate Generation (Issue #892)
