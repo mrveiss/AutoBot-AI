@@ -59,9 +59,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh",
+            "timeout": 5000,
+            "statusMessage": "Checking file protections..."
+          },
+          {
+            "type": "command",
             "command": "echo 'GITHUB ISSUE REMINDER: Ensure this edit is linked to a GitHub issue. If no issue confirmed yet, search with gh issue list or create with gh issue create before proceeding.'",
             "statusMessage": "Issue link check...",
-            "timeout": 2
+            "timeout": 2000
           }
         ]
       }
