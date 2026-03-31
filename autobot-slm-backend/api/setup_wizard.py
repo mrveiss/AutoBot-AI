@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["setup-wizard"])
 
-# -- Wizard Steps ------------------------------------------------------------
+# -- Wizard Steps ────────────────────────────────────────────────────────────
 
 WIZARD_STEPS = [
     "welcome",
@@ -45,7 +45,7 @@ WIZARD_STEPS = [
 ]
 
 
-# -- Schemas -----------------------------------------------------------------
+# -- Schemas ─────────────────────────────────────────────────────────────────
 
 
 class WizardStatus(BaseModel):
@@ -70,7 +70,7 @@ class ProvisionRequest(BaseModel):
     node_ids: Optional[list[str]] = None
 
 
-# -- Settings Helpers --------------------------------------------------------
+# -- Settings Helpers ─────────────────────────────────────────────────────────
 
 
 async def _get_setting(key: str, default: str = "") -> str:
@@ -446,7 +446,7 @@ async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
     return results
 
 
-# -- Provisioning State (#1384) ----------------------------------------------
+# -- Provisioning State (#1384) ───────────────────────────────────────────────
 
 
 async def _activate_provisioned_roles(
@@ -681,7 +681,7 @@ async def _run_provisioning_task(
             temp_inventory_path.unlink(missing_ok=True)
 
 
-# -- Endpoints ---------------------------------------------------------------
+# -- Endpoints ────────────────────────────────────────────────────────────────
 
 
 @router.get("/status", response_model=WizardStatus)
