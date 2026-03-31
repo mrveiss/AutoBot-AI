@@ -471,17 +471,6 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, shared]
 
-    - name: "[PLAY 2] Backend | Ensure autobot_shared symlink (#2517)"
-      ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
-        dest: /opt/autobot/autobot_shared
-        state: link
-        owner: autobot
-        group: autobot
-      become: true
-      when: "'01-Backend' in inventory_hostname"
-      tags: [backend, shared, symlink]
-
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
       ansible.builtin.file:
         src: /opt/autobot/autobot_shared
@@ -812,17 +801,6 @@
       become: true
       when: "'01-Backend' not in inventory_hostname"
       tags: [shared]
-
-    - name: "[PLAY 2] Shared | Create autobot_shared symlink (#2517)"
-      ansible.builtin.file:
-        src: /opt/autobot/autobot_shared
-        dest: /opt/autobot/autobot_shared
-        state: link
-        owner: autobot
-        group: autobot
-      become: true
-      when: "'01-Backend' not in inventory_hostname"
-      tags: [shared, symlink]
 
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
