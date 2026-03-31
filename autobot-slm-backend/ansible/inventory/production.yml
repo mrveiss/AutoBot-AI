@@ -194,7 +194,7 @@ all:
         # AI/ML-specific configuration
         ai_stack_port: 8080
         ollama_port: 11434
-        # TTS Worker (#928, migrated from .22 — #1394)
+        # TTS Worker (#928, migrated from .22 -- #1394)
         tts_worker_port: 8082
         model_cache_size: "10gb"
         inference_threads: 4
@@ -202,7 +202,7 @@ all:
     browser:
       hosts:
         autobot-browser:
-          ansible_host: 172.16.168.25  # Browser VM
+          ansible_host: 172.16.168.25  # Browser VM - headless Playwright worker
           vm_id: "autobot-browser-vm"
           vm_role: "browser"
           vm_hostname: "autobot-browser"
@@ -210,26 +210,23 @@ all:
             ram_mb: 4096     # Test config - dynamic memory
             cpu_cores: 2
             disk_gb: 50      # LVM expansion target
+          # (#2989) .25 is a headless Playwright worker, not a VNC host.
+          # VNC desktop is on .26 (llm node with vnc role).
+          node_roles:
+            - browser
           services:
             - playwright
-            - vnc-server
-            - desktop-environment
             - browser-automation
-          desktop_features:
-            vnc_enabled: true
-            desktop_environment: "xfce4"
       vars:
         # Browser-specific configuration
         playwright_port: 3000
-        vnc_port: 5901
-        vnc_display: ":1"
         browser_timeout: 30
-        headless_mode: false
+        headless_mode: true
 
     llm:
       hosts:
         autobot-llm:
-          ansible_host: 172.16.168.26  # LLM CPU node (#1040) — also VNC desktop (#1525)
+          ansible_host: 172.16.168.26  # LLM CPU node (#1040) -- also VNC desktop (#1525)
           vm_id: "autobot-llm-vm"
           vm_role: "llm"
           vm_hostname: "autobot-llm"
@@ -346,12 +343,12 @@ ai_stack:
   children:
     aiml:
 
-# LLM inference nodes alias — used by provision-fleet-roles.yml (#1040)
+# LLM inference nodes alias -- used by provision-fleet-roles.yml (#1040)
 llm_nodes:
   children:
     llm:
 
-# VNC desktop nodes (#1525, #2407) — nodes with VNC remote desktop access
+# VNC desktop nodes (#1525, #2407) -- nodes with VNC remote desktop access
 vnc_nodes:
   children:
     llm:
