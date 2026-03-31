@@ -102,7 +102,7 @@ def is_local_host(hostname_or_url: str) -> bool:
 
     Args:
         hostname_or_url: A bare IP / hostname, or a URL such as
-            ``https://172.16.168.19:8443``.
+            ``https://<slm-host>:8443``.
 
     Returns:
         True when the extracted host is one of the local addresses.
