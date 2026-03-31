@@ -11,6 +11,14 @@ on provider type.
 Issue #717: Efficient Inference Design implementation.
 """
 
+from .attention_backend import AttentionBackend as ModelAttentionBackend
+from .attention_backend import (
+    AttentionBackendSelector,
+)
+from .attention_backend import ModelConfig as AttentionModelConfig
+from .attention_backend import (
+    get_attention_backend_selector,
+)
 from .cloud_batcher import BatchResult, CloudRequestBatcher
 from .connection_pool import ConnectionPoolManager, PoolConfig
 from .flash_attention import (
@@ -21,6 +29,14 @@ from .flash_attention import (
     GrowingKVCache,
     create_flash_attention,
     detect_backend,
+)
+from .hf_quantizer import (
+    HfQuantizerWrapper,
+    LayerLoadResult,
+    QuantizationType,
+    QuantizedLayerLoader,
+    QuantizerConfig,
+    detect_quantization,
 )
 from .inference_utils import (
     InferenceConfig,
@@ -35,6 +51,25 @@ from .integration import (
     OptimizedLLMMiddleware,
     get_optimization_middleware,
 )
+from .kv_cache import (
+    RTX_4070_KV_CACHE_FRACTION,
+    RTX_4070_VRAM_BYTES,
+    KVCacheConfig,
+    KVCacheManager,
+    LayerKVCache,
+)
+from .layer_inference import (
+    LayerInferenceConfig,
+    LayerInferenceEngine,
+    LayerInferenceStats,
+)
+from .meta_eviction import (
+    EvictionStats,
+    MetaDeviceEvictionManager,
+    clean_memory,
+    evict_layer_to_meta,
+    get_gpu_memory_allocated,
+)
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
@@ -44,44 +79,11 @@ from .router import (
     OptimizationRouter,
     get_optimization_router,
 )
-from .kv_cache import (
-    KVCacheConfig,
-    KVCacheManager,
-    LayerKVCache,
-    RTX_4070_KV_CACHE_FRACTION,
-    RTX_4070_VRAM_BYTES,
-)
-from .hf_quantizer import (
-    HfQuantizerWrapper,
-    LayerLoadResult,
-    QuantizerConfig,
-    QuantizationType,
-    QuantizedLayerLoader,
-    detect_quantization,
-)
-from .meta_eviction import (
-    EvictionStats,
-    MetaDeviceEvictionManager,
-    clean_memory,
-    evict_layer_to_meta,
-    get_gpu_memory_allocated,
-)
 from .token_optimizer import (
     TokenOptimizer,
     TokenOptimizerConfig,
     TokenSavingsRecord,
     get_token_optimizer,
-)
-from .attention_backend import (
-    AttentionBackend as ModelAttentionBackend,
-    AttentionBackendSelector,
-    ModelConfig as AttentionModelConfig,
-    get_attention_backend_selector,
-)
-from .layer_inference import (
-    LayerInferenceConfig,
-    LayerInferenceEngine,
-    LayerInferenceStats,
 )
 
 __all__ = [

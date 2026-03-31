@@ -16,7 +16,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from middleware import SecurityHeadersMiddleware
 from api import (
     agents_router,
     api_keys_router,
@@ -65,6 +64,7 @@ from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from config import settings
+from middleware import SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.database import db_service
 from services.git_tracker import start_version_checker

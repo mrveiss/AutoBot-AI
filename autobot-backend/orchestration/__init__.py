@@ -20,13 +20,6 @@ This package contains:
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
-from .sub_workflow import (
-    MAX_NESTING_DEPTH,
-    SubWorkflowExecutor,
-    SubWorkflowStep,
-    extract_sub_workflow_step,
-    is_sub_workflow_step,
-)
 from .dag_executor import (
     DAGExecutor,
     NodeType,
@@ -48,6 +41,13 @@ from .execution_modes import (
     DryRunValidator,
     ExecutionMode,
     StepPlan,
+)
+from .sub_workflow import (
+    MAX_NESTING_DEPTH,
+    SubWorkflowExecutor,
+    SubWorkflowStep,
+    extract_sub_workflow_step,
+    is_sub_workflow_step,
 )
 from .types import (
     AgentCapability,

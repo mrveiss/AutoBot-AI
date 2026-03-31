@@ -54,6 +54,7 @@ import logging
 import re
 import time
 from enum import Enum
+
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

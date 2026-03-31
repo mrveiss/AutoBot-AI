@@ -24,8 +24,8 @@ from unittest.mock import MagicMock, patch
 
 from knowledge.search_components.reranking import (
     RerankWeights,
-    apply_mmr_reorder,
     _cosine_similarity,
+    apply_mmr_reorder,
 )
 
 # ---------------------------------------------------------------------------
