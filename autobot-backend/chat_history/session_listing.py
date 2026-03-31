@@ -219,7 +219,7 @@ class SessionListingMixin:
             dir_exists = await run_in_chat_io_executor(os.path.exists, chats_directory)
             if not dir_exists:
                 await run_in_chat_io_executor(
-                    os.makedirs, chats_directory, exist_ok=True
+                    functools.partial(os.makedirs, chats_directory, exist_ok=True)
                 )
                 return sessions
 
