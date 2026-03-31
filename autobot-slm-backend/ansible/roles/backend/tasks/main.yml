@@ -121,6 +121,15 @@
       - "--exclude=venv"
   tags: ['backend', 'deploy']
 
+- name: Sync backend config directory from code_source
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+    dest: "{{ backend_code_dir }}/config/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  tags: ['backend', 'deploy']
+
 - name: Sync autobot-shared to backend install dir
   ansible.posix.synchronize:
     src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-shared/"
