@@ -118,3 +118,56 @@ async def get_staleness_score(redis, doc_id: str) -> float:
     """
     value = await redis.get(f"mesh:staleness:{doc_id}")
     return float(value) if value else 0.0
+
+
+# ---------------------------------------------------------------------------
+# Redis-backed MeshGraph adapter
+# ---------------------------------------------------------------------------
+
+_REEMBED_QUEUE_KEY = "mesh:reembed_queue"
+
+
+class RedisGraphAdapter:
+    """MeshGraph adapter that reads edges from the Redis sorted sets written by MeshEdgeSync.
+
+    Issue #2547: Wires propagate_staleness() to the live mesh edge data so that
+    staleness BFS uses the same graph that PPR and retrieval see.
+
+    The Redis key layout mirrors MeshEdgeSync: ``mesh:edges:{node_id}`` is a
+    sorted set where members are neighbour node-IDs and scores are edge weights.
+    """
+
+    def __init__(self, redis) -> None:
+        self._redis = redis
+
+    async def get_neighbors(self, node_id: str) -> list[tuple[str, float]]:
+        """Return [(neighbor_id, edge_weight)] from the Redis sorted set.
+
+        Uses ``zrangebyscore`` with the full weight range and returns results
+        in the same format expected by ``propagate_staleness()``.
+        """
+        key = f"mesh:edges:{node_id}"
+        raw: list[tuple[bytes, float]] = await self._redis.zrangebyscore(
+            key, min=0.0, max="+inf", withscores=True
+        )
+        return [(member.decode() if isinstance(member, bytes) else member, score) for member, score in raw]
+
+
+async def enqueue_for_reembedding(redis, node_ids: list[str]) -> int:
+    """Push node IDs flagged for re-embedding onto the Redis work queue.
+
+    Issue #2547: Background scheduler picks up ``mesh:reembed_queue`` to
+    trigger fresh embeddings for stale nodes.
+
+    Args:
+        redis: Async Redis client.
+        node_ids: Node IDs returned by ``StalenessResult.flagged_for_reembedding()``.
+
+    Returns:
+        Number of IDs enqueued.
+    """
+    if not node_ids:
+        return 0
+    await redis.rpush(_REEMBED_QUEUE_KEY, *node_ids)
+    logger.info("Enqueued %d nodes for re-embedding (key=%s)", len(node_ids), _REEMBED_QUEUE_KEY)
+    return len(node_ids)

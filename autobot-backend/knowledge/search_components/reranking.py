@@ -250,6 +250,7 @@ class ResultReranker:
         results: List[Dict[str, Any]],
         scores: list,
         weights: Optional[RerankWeights] = None,
+        staleness_map: Optional[Dict[str, float]] = None,
     ) -> None:
         """Apply rerank scores to results.
 
@@ -259,21 +260,75 @@ class ResultReranker:
         similarity score instead of overwriting it.
         Issue #2004: Blend is now driven by compute_blended_score() so
         caller-supplied weights replace the former hardcoded 0.8/0.2 split.
+        Issue #2547: staleness_map supplies pre-fetched per-result staleness
+        scores so the penalty is applied without blocking the event loop.
+
+        Args:
+            results:       Result dicts to score in-place.
+            scores:        Raw cross-encoder logits aligned with results.
+            weights:       Optional blend weights (defaults to RerankWeights()).
+            staleness_map: Optional {chunk_id: staleness_score} pre-fetched by
+                           the async caller.  When None or staleness weight is 0,
+                           the penalty term is skipped.
         """
         effective_weights = weights if weights is not None else RerankWeights()
+        use_staleness = effective_weights.staleness > 0.0 and staleness_map is not None
         for i, result in enumerate(results):
             # Sigmoid: raw logits → 0-1 probability
             normalized = 1.0 / (1.0 + math.exp(-float(scores[i])))
             original_score = result.get("score", 0)
             result["original_score"] = original_score
+
+            penalty = 1.0  # default: no penalty (fresh document)
+            if use_staleness:
+                chunk_id = result.get("chunk_id") or result.get("id", "")
+                raw_staleness = staleness_map.get(chunk_id, 0.0)  # type: ignore[union-attr]
+                penalty = staleness_penalty(raw_staleness)
+
             result["rerank_score"] = compute_blended_score(
                 reranker_score=normalized,
                 vector_score=original_score,
+                staleness_penalty_value=penalty,
                 weights=effective_weights,
             )
         results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
         for result in results:
             result["score"] = result.get("rerank_score", 0)
+
+    async def _fetch_staleness_map(
+        self,
+        results: List[Dict[str, Any]],
+        weights: RerankWeights,
+    ) -> Optional[Dict[str, float]]:
+        """Fetch staleness scores from Redis for all result chunk IDs.
+
+        Issue #2547: Pre-fetches scores asynchronously so _apply_rerank_scores()
+        can remain synchronous.  Returns None when staleness weight is disabled
+        (0.0) or when the Redis client is unavailable.
+
+        Args:
+            results: Result dicts; each should have a ``chunk_id`` or ``id`` key.
+            weights: Blend weights; staleness lookup is skipped when weight == 0.
+
+        Returns:
+            Dict mapping chunk_id -> staleness_score, or None.
+        """
+        if weights.staleness == 0.0:
+            return None
+        try:
+            from autobot_shared.redis_client import get_redis_client
+            from services.mesh_brain.staleness_propagator import get_staleness_score
+
+            redis = get_redis_client(async_client=True, database="main")
+            staleness_map: Dict[str, float] = {}
+            for result in results:
+                chunk_id = result.get("chunk_id") or result.get("id", "")
+                if chunk_id and chunk_id not in staleness_map:
+                    staleness_map[chunk_id] = await get_staleness_score(redis, chunk_id)
+            return staleness_map
+        except Exception as exc:
+            logger.warning("Could not fetch staleness scores: %s", exc)
+            return None
 
     async def rerank(
         self,
@@ -288,6 +343,8 @@ class ResultReranker:
         Issue #281 refactor.
         Issue #2004: Optional weights parameter forwards blend configuration
         to _apply_rerank_scores(); defaults to RerankWeights() (0.8/0.2).
+        Issue #2547: When RerankWeights.staleness > 0 a Redis lookup populates
+        the staleness penalty for each result before blending.
 
         Args:
             query:   Search query.
@@ -308,13 +365,20 @@ class ResultReranker:
             if not results:
                 return results
 
+            effective_weights = weights if weights is not None else RerankWeights()
+
+            # Issue #2547: pre-fetch staleness scores asynchronously before the
+            # synchronous scoring loop runs.
+            staleness_map = await self._fetch_staleness_map(results, effective_weights)
+
             cross_encoder = await self._ensure_cross_encoder()
             pairs = [(query, r.get("content", "")) for r in results]
             scores = await asyncio.to_thread(cross_encoder.predict, pairs)
-            self._apply_rerank_scores(results, scores, weights=weights)
+            self._apply_rerank_scores(
+                results, scores, weights=effective_weights, staleness_map=staleness_map
+            )
 
             # Issue #2090: optional MMR diversity pass after cross-encoder scoring
-            effective_weights = weights if weights is not None else RerankWeights()
             if effective_weights.mmr_lambda > 0.0:
                 results = apply_mmr_reorder(results, effective_weights.mmr_lambda)
 
