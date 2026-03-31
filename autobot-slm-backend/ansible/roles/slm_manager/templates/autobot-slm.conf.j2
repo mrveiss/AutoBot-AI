@@ -292,6 +292,10 @@ server {
     }
 
     # SLM Frontend SPA at /slm/ subroute (#2716)
+    location = /slm {
+        return 301 /slm/;
+    }
+
     location /slm/ {
         alias {{ slm_frontend_dir }}/dist/;
         try_files $uri $uri/ /slm/index.html;
