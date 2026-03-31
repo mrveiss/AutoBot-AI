@@ -20,6 +20,17 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+# Strip commit message content before pattern checking (#3041).
+# Without this, git commit -m "docs: describe how we block resets"
+# would be falsely blocked because the message contains "reset".
+COMMAND_TO_CHECK="$COMMAND"
+if [[ "$COMMAND" =~ git[[:space:]]+commit ]]; then
+  # Remove -m "..." / -m '...' / -m $'...' message arguments
+  COMMAND_TO_CHECK=$(echo "$COMMAND" | sed -E "s/-m[[:space:]]+['\"][^'\"]*['\"]//g" | sed -E "s/-m[[:space:]]+[^[:space:]]+//g")
+  # Remove HEREDOC-style messages: -m "$(cat <<'EOF' ... EOF )"
+  COMMAND_TO_CHECK=$(echo "$COMMAND_TO_CHECK" | sed -E 's/\$\(cat <<[^)]*\)//g')
+fi
+
 deny() {
   echo "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"$1\"}}"
   exit 2
@@ -29,15 +40,15 @@ deny() {
 # Git push protections
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; then
 
   # Block push to main, master, or Dev_new_gui directly
-  if echo "$COMMAND" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(origin[[:space:]]+|:)(main|master|Dev_new_gui)\b'; then
     deny "Blocked: cannot push directly to main/master/Dev_new_gui. Use a feature branch and create a PR."
   fi
 
   # Block bare git push when on protected branches
-  if echo "$COMMAND" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push[[:space:]]*($|[;&|])'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
     if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "Dev_new_gui" ]; then
       deny "Blocked: you are on $CURRENT_BRANCH. Use a feature branch and create a PR."
@@ -45,7 +56,7 @@ if echo "$COMMAND" | grep -qE '(^|[;&|()]+[[:space:]]*)git[[:space:]]+push'; the
   fi
 
   # Block force push (allow --force-with-lease)
-  if echo "$COMMAND" | grep -qE 'git[[:space:]]+push.*(-[a-zA-Z]*f|--force)([[:space:]]|$)' && ! echo "$COMMAND" | grep -q '\-\-force-with-lease'; then
+  if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+push.*(-[a-zA-Z]*f|--force)([[:space:]]|$)' && ! echo "$COMMAND_TO_CHECK" | grep -q '\-\-force-with-lease'; then
     deny "Blocked: force push is not allowed. Use --force-with-lease if you need to overwrite remote."
   fi
 fi
@@ -54,7 +65,7 @@ fi
 # Git commit protections
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit.*--no-verify'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+commit.*--no-verify'; then
   deny "Blocked: --no-verify bypasses pre-commit hooks. Fix the underlying hook failure instead."
 fi
 
@@ -62,11 +73,11 @@ fi
 # Destructive git operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE 'git[[:space:]]+reset[[:space:]]+--hard'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+reset[[:space:]]+--hard'; then
   deny "Blocked: git reset --hard discards uncommitted changes permanently. Use git stash or git reset --soft instead."
 fi
 
-if echo "$COMMAND" | grep -qE 'git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'git[[:space:]]+clean[[:space:]]+-[a-zA-Z]*f'; then
   deny "Blocked: git clean -f permanently deletes untracked files. Review with git clean -n first, then run manually if intended."
 fi
 
@@ -74,11 +85,11 @@ fi
 # Destructive filesystem operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r[a-zA-Z]*f[[:space:]]+(\/|~|\$HOME|\.\.\/\.\.)'; then
   deny "Blocked: recursive force-delete on root/home/parent paths. Specify a safe target directory."
 fi
 
-if echo "$COMMAND" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*r.*[[:space:]]+(\/[[:space:]]|\/\*|\/$|~\/?\*?[[:space:]]|~\/?\*?$)'; then
   deny "Blocked: recursive delete targeting root or home directory."
 fi
 
@@ -86,15 +97,15 @@ fi
 # Dangerous database operations
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qiE 'DROP[[:space:]]+(TABLE|DATABASE|SCHEMA)[[:space:]]'; then
+if echo "$COMMAND_TO_CHECK" | grep -qiE 'DROP[[:space:]]+(TABLE|DATABASE|SCHEMA)[[:space:]]'; then
   deny "Blocked: DROP TABLE/DATABASE/SCHEMA detected. This is destructive and irreversible. Run manually if intended."
 fi
 
-if echo "$COMMAND" | grep -qiE 'DELETE[[:space:]]+FROM[[:space:]]+[a-zA-Z_]+[[:space:]]*($|;)' && ! echo "$COMMAND" | grep -qiE 'WHERE'; then
+if echo "$COMMAND_TO_CHECK" | grep -qiE 'DELETE[[:space:]]+FROM[[:space:]]+[a-zA-Z_]+[[:space:]]*($|;)' && ! echo "$COMMAND_TO_CHECK" | grep -qiE 'WHERE'; then
   deny "Blocked: DELETE FROM without WHERE clause would delete all rows. Add a WHERE clause."
 fi
 
-if echo "$COMMAND" | grep -qiE 'TRUNCATE[[:space:]]+TABLE'; then
+if echo "$COMMAND_TO_CHECK" | grep -qiE 'TRUNCATE[[:space:]]+TABLE'; then
   deny "Blocked: TRUNCATE TABLE detected. This is destructive and irreversible. Run manually if intended."
 fi
 
@@ -102,15 +113,15 @@ fi
 # Dangerous system commands
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE 'chmod[[:space:]]+777'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'chmod[[:space:]]+777'; then
   deny "Blocked: chmod 777 gives everyone read/write/execute. Use more restrictive permissions (e.g., 755 or 644)."
 fi
 
-if echo "$COMMAND" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(curl|wget)[[:space:]].*\|[[:space:]]*(bash|sh|zsh|sudo)'; then
   deny "Blocked: piping downloaded content directly to a shell is dangerous. Download first, inspect, then execute."
 fi
 
-if echo "$COMMAND" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/)'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(mkfs|dd[[:space:]]+if=|>[[:space:]]*/dev/)'; then
   deny "Blocked: destructive disk operation detected. This can cause irreversible data loss."
 fi
 
@@ -118,11 +129,11 @@ fi
 # Accidental package publishing
 # ──────────────────────────────────────────────
 
-if echo "$COMMAND" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE '(npm|yarn|pnpm|bun)[[:space:]]+publish'; then
   deny "Blocked: publishing npm packages should be done manually or via CI, not through Claude Code."
 fi
 
-if echo "$COMMAND" | grep -qE 'twine[[:space:]]+upload'; then
+if echo "$COMMAND_TO_CHECK" | grep -qE 'twine[[:space:]]+upload'; then
   deny "Blocked: publishing Python packages should be done manually or via CI, not through Claude Code."
 fi
 
