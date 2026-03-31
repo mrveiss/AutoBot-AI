@@ -125,9 +125,9 @@ def _check_apple_gpu() -> Optional[Dict[str, Any]]:
                 return {
                     "name": chip,
                     "gpu_cores": gpu_cores,
-                    "metal_supported": "supported" in metal_support.lower()
-                    if metal_support
-                    else False,
+                    "metal_supported": (
+                        "supported" in metal_support.lower() if metal_support else False
+                    ),
                 }
         return None
     except (FileNotFoundError, subprocess.TimeoutExpired):

@@ -16,7 +16,6 @@ from services.notification_service import (
     NotificationStore,
 )
 
-
 # ===========================================================================
 # Helpers
 # ===========================================================================
@@ -167,7 +166,11 @@ class TestSendDispatch:
     async def test_email_channel_calls_send_email(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.EMAIL.value]},
+            channels={
+                NotificationEvent.WORKFLOW_COMPLETED.value: [
+                    NotificationChannel.EMAIL.value
+                ]
+            },
             email_recipients=["user@example.com"],
         )
         with patch.object(svc, "_send_email", new_callable=AsyncMock) as mock_email:
@@ -185,7 +188,11 @@ class TestSendDispatch:
     async def test_slack_channel_calls_send_slack(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.WORKFLOW_FAILED.value: [NotificationChannel.SLACK.value]},
+            channels={
+                NotificationEvent.WORKFLOW_FAILED.value: [
+                    NotificationChannel.SLACK.value
+                ]
+            },
             slack_webhook_url="https://hooks.slack.com/T123",
         )
         with patch.object(svc, "_send_slack", new_callable=AsyncMock) as mock_slack:
@@ -203,7 +210,9 @@ class TestSendDispatch:
     async def test_webhook_channel_calls_send_webhook(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.STEP_FAILED.value: [NotificationChannel.WEBHOOK.value]},
+            channels={
+                NotificationEvent.STEP_FAILED.value: [NotificationChannel.WEBHOOK.value]
+            },
             webhook_url="https://myapp.example.com/notify",
         )
         with patch.object(svc, "_send_webhook", new_callable=AsyncMock) as mock_wh:
@@ -222,7 +231,9 @@ class TestSendDispatch:
         svc = self._svc()
         config = _make_config(
             channels={
-                NotificationEvent.APPROVAL_NEEDED.value: [NotificationChannel.IN_APP.value]
+                NotificationEvent.APPROVAL_NEEDED.value: [
+                    NotificationChannel.IN_APP.value
+                ]
             },
             user_id="user-007",
         )
@@ -241,7 +252,11 @@ class TestSendDispatch:
     async def test_multiple_email_recipients_each_get_email(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.EMAIL.value]},
+            channels={
+                NotificationEvent.WORKFLOW_COMPLETED.value: [
+                    NotificationChannel.EMAIL.value
+                ]
+            },
             email_recipients=["a@x.com", "b@x.com"],
         )
         with patch.object(svc, "_send_email", new_callable=AsyncMock) as mock_email:
@@ -280,7 +295,9 @@ class TestSendDispatch:
             email_recipients=["err@x.com"],
             user_id="user-fallback",
         )
-        with patch.object(svc, "_send_email", new_callable=AsyncMock, side_effect=OSError("SMTP down")):
+        with patch.object(
+            svc, "_send_email", new_callable=AsyncMock, side_effect=OSError("SMTP down")
+        ):
             with patch.object(svc, "_send_in_app", new_callable=AsyncMock) as mock_ia:
                 await svc.send(
                     event=NotificationEvent.WORKFLOW_FAILED,
@@ -294,7 +311,11 @@ class TestSendDispatch:
     async def test_slack_missing_webhook_url_skips_silently(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.SLACK.value]},
+            channels={
+                NotificationEvent.WORKFLOW_COMPLETED.value: [
+                    NotificationChannel.SLACK.value
+                ]
+            },
             slack_webhook_url=None,
         )
         with patch.object(svc, "_send_slack", new_callable=AsyncMock) as mock_slack:
@@ -310,7 +331,11 @@ class TestSendDispatch:
     async def test_webhook_missing_url_skips_silently(self):
         svc = self._svc()
         config = _make_config(
-            channels={NotificationEvent.WORKFLOW_COMPLETED.value: [NotificationChannel.WEBHOOK.value]},
+            channels={
+                NotificationEvent.WORKFLOW_COMPLETED.value: [
+                    NotificationChannel.WEBHOOK.value
+                ]
+            },
             webhook_url=None,
         )
         with patch.object(svc, "_send_webhook", new_callable=AsyncMock) as mock_wh:
@@ -327,7 +352,9 @@ class TestSendDispatch:
         svc = self._svc()
         config = _make_config(
             channels={
-                NotificationEvent.APPROVAL_NEEDED.value: [NotificationChannel.IN_APP.value]
+                NotificationEvent.APPROVAL_NEEDED.value: [
+                    NotificationChannel.IN_APP.value
+                ]
             },
             user_id=None,
         )
@@ -363,7 +390,10 @@ class TestSendWebhook:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.notification_service.aiohttp.ClientSession", return_value=mock_session):
+        with patch(
+            "services.notification_service.aiohttp.ClientSession",
+            return_value=mock_session,
+        ):
             await svc._send_webhook("https://example.com/hook", {"key": "val"})
 
         mock_session.post.assert_called_once()
@@ -389,7 +419,10 @@ class TestSendWebhook:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("services.notification_service.aiohttp.ClientSession", return_value=mock_session):
+        with patch(
+            "services.notification_service.aiohttp.ClientSession",
+            return_value=mock_session,
+        ):
             with pytest.raises(_aiohttp.ClientResponseError):
                 await svc._send_webhook("https://example.com/hook", {})
 
@@ -426,7 +459,10 @@ class TestNotificationStoreStore:
             return_value=mock_redis,
         ):
             result = await store.store(
-                user_id="u1", event="workflow_completed", workflow_id="wf-1", message="Done"
+                user_id="u1",
+                event="workflow_completed",
+                workflow_id="wf-1",
+                message="Done",
             )
         assert result is not None
         assert isinstance(result, str)
@@ -441,7 +477,10 @@ class TestNotificationStoreStore:
             return_value=mock_redis,
         ):
             await store.store(
-                user_id="u2", event="workflow_completed", workflow_id="wf-2", message="Done"
+                user_id="u2",
+                event="workflow_completed",
+                workflow_id="wf-2",
+                message="Done",
             )
         assert mock_redis.lpush.called
         key_arg = mock_redis.lpush.call_args[0][0]
@@ -456,7 +495,10 @@ class TestNotificationStoreStore:
             return_value=None,
         ):
             result = await store.store(
-                user_id="u3", event="workflow_failed", workflow_id="wf-3", message="Fail"
+                user_id="u3",
+                event="workflow_failed",
+                workflow_id="wf-3",
+                message="Fail",
             )
         assert result is None
 
@@ -494,7 +536,10 @@ class TestNotificationStoreStore:
             return_value=mock_redis,
         ):
             await store.store(
-                user_id="u5", event="approval_needed", workflow_id="wf-5", message="Approve"
+                user_id="u5",
+                event="approval_needed",
+                workflow_id="wf-5",
+                message="Approve",
             )
 
         assert len(stored_records) == 1

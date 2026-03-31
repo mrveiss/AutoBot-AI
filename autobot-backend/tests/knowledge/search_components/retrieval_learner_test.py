@@ -41,7 +41,9 @@ def _make_learner(redis: AsyncMock) -> RetrievalLearner:
     return learner
 
 
-def _make_feedback_fields(retrieved: list, ranked: list, complexity: str = "simple") -> dict:
+def _make_feedback_fields(
+    retrieved: list, ranked: list, complexity: str = "simple"
+) -> dict:
     return {
         "retrieved_chunk_ids": json.dumps(retrieved),
         "final_ranked_ids": json.dumps(ranked),
@@ -135,7 +137,7 @@ class TestRetrievalPatternRoundTrip:
             b"pattern_hash": b"deadbeef1234",
             b"query_type": b"simple",
             b"chunk_categories": b'["x"]',
-            b"strategy_hints": b'{}',
+            b"strategy_hints": b"{}",
             b"success_rate": b"0.5",
             b"usage_count": b"2",
             b"last_seen": b"0.0",
@@ -255,7 +257,9 @@ class TestGetMatchingPattern:
         redis = _make_redis_mock()
         redis.hgetall = AsyncMock(return_value={})
         learner = _make_learner(redis)
-        result = await learner.get_matching_pattern("how does X work?", complexity="moderate")
+        result = await learner.get_matching_pattern(
+            "how does X work?", complexity="moderate"
+        )
         assert result is None
 
     @pytest.mark.asyncio
@@ -272,7 +276,9 @@ class TestGetMatchingPattern:
         redis.hgetall = AsyncMock(return_value=pattern.to_redis_mapping())
         learner = _make_learner(redis)
 
-        result = await learner.get_matching_pattern("", complexity="complex", categories=["sys"])
+        result = await learner.get_matching_pattern(
+            "", complexity="complex", categories=["sys"]
+        )
         assert result is not None
         assert result.success_rate == 0.8
 
