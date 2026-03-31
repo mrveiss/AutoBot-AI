@@ -41,6 +41,7 @@ from .types import (
 from .variable_resolver import StepOutput, VariableResolver, resolve_variables
 from .workflow_documentation import WorkflowDocumenter
 from .workflow_executor import WorkflowExecutor
+from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     # Workflow components
     "WorkflowDocumenter",
     "WorkflowExecutor",
+    "WorkflowMemory",
     "WorkflowPlanner",
     # DAG execution (#2140)
     "DAGExecutor",

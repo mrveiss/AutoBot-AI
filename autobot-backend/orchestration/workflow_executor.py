@@ -41,6 +41,7 @@ from .error_handler import (
 from .execution_modes import DebugController, DryRunValidator, ExecutionMode
 from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
+from .workflow_memory import WorkflowMemory
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +407,11 @@ class WorkflowExecutor:
         # Issue #2154: build a step registry so fallback resolution works.
         step_registry = {s["id"]: s for s in steps}
 
+        # Issue #3019: shared KV store for in-flight collaboration between
+        # parallel steps.  Exposed via execution_context["shared_memory"] so
+        # step executors can read/write without knowing workflow internals.
+        shared_memory = WorkflowMemory(workflow_id=workflow_id)
+
         execution_context = {
             "workflow_id": workflow_id,
             "agents_involved": set(),
@@ -416,6 +422,8 @@ class WorkflowExecutor:
             "status": "in_progress",
             # Issue #2154: registry for fallback step lookup
             "step_registry": step_registry,
+            # Issue #3019: shared memory for parallel-step collaboration
+            "shared_memory": shared_memory,
         }
 
         # Issue #2154: pre-populate results from persisted checkpoints.
@@ -457,8 +465,11 @@ class WorkflowExecutor:
             self._determine_workflow_status(steps, execution_context)
 
             # Issue #2154: clear checkpoints on full success.
+            # Issue #3019: also clear shared memory — no longer needed once the
+            # workflow reaches a terminal state.
             if execution_context.get("status") == "completed":
                 self._checkpoint_manager.clear(workflow_id)
+                shared_memory.clear()
 
             return execution_context
 
