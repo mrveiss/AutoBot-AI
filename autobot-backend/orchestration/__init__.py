@@ -14,10 +14,19 @@ This package contains:
 - workflow_executor: Workflow execution with agent coordination
 - workflow_documentation: Auto-documentation and knowledge extraction
 - dag_executor: DAG-based execution with condition/branch routing (#2140)
+- error_handler: Step-level error handling and workflow checkpointing (#2154)
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
 from .dag_executor import DAGExecutor, NodeType, WorkflowDAG, build_dag, workflow_has_condition_nodes
+from .error_handler import (
+    BackoffStrategy,
+    StepCheckpoint,
+    StepErrorAction,
+    StepErrorConfig,
+    StepErrorHandler,
+    WorkflowCheckpointManager,
+)
 from .types import (
     AgentCapability,
     AgentInteraction,
@@ -58,4 +67,11 @@ __all__ = [
     "StepOutput",
     "VariableResolver",
     "resolve_variables",
+    # Error handling and checkpointing (#2154)
+    "BackoffStrategy",
+    "StepCheckpoint",
+    "StepErrorAction",
+    "StepErrorConfig",
+    "StepErrorHandler",
+    "WorkflowCheckpointManager",
 ]
