@@ -101,9 +101,13 @@ detect_local_ip() {
         return
     fi
 
-    # Cached from previous call
-    if [[ -n "${_DETECTED_IP:-}" ]]; then
-        echo "${_DETECTED_IP}"
+    # Cache to a file so the result persists across $() subshell boundaries
+    # (#3010). Shell variables set inside $() are lost when the subshell exits,
+    # so every $(detect_local_ip) call would re-run the interactive prompt and
+    # garble any curl command that interpolates the result.
+    local cache_file="/tmp/.autobot_detected_ip"
+    if [[ -f "${cache_file}" ]]; then
+        cat "${cache_file}"
         return
     fi
 
@@ -119,10 +123,11 @@ detect_local_ip() {
         ips+=("$ip")
     done < <(ip -4 -o addr show | awk '{print $2, $4}')
 
+    local detected_ip=""
     if [[ ${#ips[@]} -eq 0 ]]; then
         fatal "No network interfaces with IPv4 addresses found"
     elif [[ ${#ips[@]} -eq 1 ]]; then
-        _DETECTED_IP="${ips[0]}"
+        detected_ip="${ips[0]}"
     else
         # Multiple interfaces — ask user to select
         echo -e "\n${YELLOW}  Multiple network interfaces detected:${NC}" >&2
@@ -136,12 +141,12 @@ detect_local_ip() {
         if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
             fatal "Invalid selection"
         fi
-        _DETECTED_IP="${ips[$choice]}"
-        success "Using ${ifaces[$choice]}: ${_DETECTED_IP}"
+        detected_ip="${ips[$choice]}"
+        success "Using ${ifaces[$choice]}: ${detected_ip}"
     fi
 
-    export _DETECTED_IP
-    echo "${_DETECTED_IP}"
+    echo "${detected_ip}" > "${cache_file}"
+    echo "${detected_ip}"
 }
 
 # =============================================================================
@@ -710,6 +715,9 @@ EOF
     echo -e "  Credentials saved to: ${creds_file}"
     echo -e "  Install log: ${LOG_FILE}"
     echo
+
+    # Clean up IP detection cache file (#3010)
+    rm -f /tmp/.autobot_detected_ip 2>/dev/null || true
 }
 
 # =============================================================================
@@ -923,6 +931,7 @@ uninstall() {
     # Remove credential and config files
     rm -f /root/autobot-credentials.txt 2>/dev/null || true
     rm -f /etc/sudoers.d/autobot 2>/dev/null || true
+    rm -f /tmp/.autobot_detected_ip 2>/dev/null || true
 
     # Remove nginx site config (but leave nginx installed)
     rm -f /etc/nginx/sites-available/autobot-slm 2>/dev/null || true
