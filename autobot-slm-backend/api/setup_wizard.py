@@ -13,6 +13,8 @@ import asyncio
 import logging
 import tempfile
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -523,6 +525,111 @@ def _handle_provision_result(result: dict) -> None:
         logger.error("Fleet provisioning failed (rc=%s)", rc)
 
 
+async def _create_wizard_deployments(
+    node_ids: Optional[list[str]],
+) -> dict[str, str]:
+    """Create one Deployment record per provisioned node before playbook runs (#3032).
+
+    Returns a mapping of node_id -> deployment_id so the caller can update
+    records after provisioning completes.  Roles are derived from the
+    NodeRole assignments already stored for each node.
+    """
+    from sqlalchemy import select
+
+    from models.database import Deployment, DeploymentStatus, Node, NodeRole
+
+    node_to_deployment: dict[str, str] = {}
+    try:
+        async with db_service.session() as session:
+            q = select(Node)
+            if node_ids:
+                q = q.where(Node.node_id.in_(node_ids))
+            db_nodes = (await session.execute(q)).scalars().all()
+
+            nr_q = select(NodeRole).where(NodeRole.status.in_(["active", "inactive", "not_installed"]))
+            if node_ids:
+                nr_q = nr_q.where(NodeRole.node_id.in_(node_ids))
+            node_roles = (await session.execute(nr_q)).scalars().all()
+
+            roles_by_node: dict[str, list[str]] = {}
+            for nr in node_roles:
+                roles_by_node.setdefault(nr.node_id, []).append(nr.role_name)
+
+            for node in db_nodes:
+                dep_id = str(uuid.uuid4())[:8]
+                roles = roles_by_node.get(node.node_id, [])
+                session.add(
+                    Deployment(
+                        deployment_id=dep_id,
+                        node_id=node.node_id,
+                        roles=roles,
+                        status=DeploymentStatus.IN_PROGRESS.value,
+                        started_at=datetime.utcnow(),
+                        triggered_by="setup-wizard",
+                        extra_data={"source": "setup_wizard"},
+                    )
+                )
+                node_to_deployment[node.node_id] = dep_id
+
+            await session.commit()
+            logger.info(
+                "Created %d wizard deployment records: %s",
+                len(node_to_deployment),
+                list(node_to_deployment.values()),
+            )
+    except Exception as exc:
+        logger.warning("Failed to create wizard deployment records: %s", exc)
+    return node_to_deployment
+
+
+async def _complete_wizard_deployments(
+    node_to_deployment: dict[str, str],
+    success: bool,
+    output: str,
+    error: Optional[str],
+    reachable_nodes: Optional[list[str]],
+) -> None:
+    """Update Deployment records after wizard provisioning finishes (#3032).
+
+    Nodes that were not reachable keep IN_PROGRESS and are marked failed.
+    """
+    from sqlalchemy import select
+
+    from models.database import Deployment, DeploymentStatus
+
+    if not node_to_deployment:
+        return
+    try:
+        async with db_service.session() as session:
+            for node_id, dep_id in node_to_deployment.items():
+                result = await session.execute(
+                    select(Deployment).where(Deployment.deployment_id == dep_id)
+                )
+                dep = result.scalar_one_or_none()
+                if not dep:
+                    continue
+                node_succeeded = success and (
+                    reachable_nodes is None or node_id in reachable_nodes
+                )
+                dep.status = (
+                    DeploymentStatus.COMPLETED.value
+                    if node_succeeded
+                    else DeploymentStatus.FAILED.value
+                )
+                dep.completed_at = datetime.utcnow()
+                dep.playbook_output = output
+                if not node_succeeded:
+                    dep.error = error or "Provisioning failed or node unreachable"
+            await session.commit()
+            logger.info(
+                "Updated %d wizard deployment records (success=%s)",
+                len(node_to_deployment),
+                success,
+            )
+    except Exception as exc:
+        logger.warning("Failed to update wizard deployment records: %s", exc)
+
+
 async def _run_provisioning_task(
     node_ids: Optional[list[str]],
 ) -> None:
@@ -537,6 +644,7 @@ async def _run_provisioning_task(
     await ws_manager.send_provision_log("info", "Provisioning started")
 
     temp_inventory_path = None
+    node_to_deployment: dict[str, str] = {}
     try:
         temp_inventory_path = await _generate_dynamic_inventory(node_ids)
         if not temp_inventory_path:
@@ -556,6 +664,9 @@ async def _run_provisioning_task(
             f"Inventory: {temp_inventory_path}\n"
             f"{temp_inventory_path.read_text(encoding='utf-8')}"
         )
+
+        # Create Deployment records before running the playbook (#3032)
+        node_to_deployment = await _create_wizard_deployments(node_ids)
 
         # Pre-check SSH reachability before running Ansible (#2897)
         reachability = await _check_node_reachability(temp_inventory_path)
@@ -603,6 +714,13 @@ async def _run_provisioning_task(
                     " -- ensure nodes are enrolled before provisioning"
                 ),
             )
+            await _complete_wizard_deployments(
+                node_to_deployment,
+                success=False,
+                output="",
+                error="All nodes are unreachable -- ensure nodes are enrolled before provisioning",
+                reachable_nodes=None,
+            )
             return
 
         # Build --limit to include only reachable nodes (#2897)
@@ -644,6 +762,15 @@ async def _run_provisioning_task(
         )
         _handle_provision_result(result)
 
+        # Update Deployment records with playbook outcome (#3032)
+        await _complete_wizard_deployments(
+            node_to_deployment,
+            success=bool(result.get("success")),
+            output=result.get("output", ""),
+            error=None if result.get("success") else f"Ansible exited with code {result.get('returncode', -1)}",
+            reachable_nodes=None,
+        )
+
         # Activate roles on provisioned nodes (#2836, #2900)
         # Even with partial failures, roles on reachable nodes were deployed.
         await _activate_provisioned_roles(reachable or node_ids)
@@ -674,6 +801,13 @@ async def _run_provisioning_task(
         )
         await ws_manager.send_provision_log(
             "error", "Provisioning error: internal error (see server logs)"
+        )
+        await _complete_wizard_deployments(
+            node_to_deployment,
+            success=False,
+            output="",
+            error="internal error",
+            reachable_nodes=None,
         )
     finally:
         _provision_state["finished_at"] = time.time()
