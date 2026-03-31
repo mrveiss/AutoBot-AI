@@ -815,9 +815,11 @@ class NPUWorkerManager:
     ) -> None:
         """Re-queue only the dead worker's tasks and remove it from the registry (#1769, #2496).
 
-        Uses the per-worker task SET ({queue}:worker:{worker_id}:tasks) so that
-        tasks belonging to healthy workers sharing the same queue are never
-        incorrectly re-queued.
+        Primary source: per-worker task SET ({queue}:worker:{worker_id}:tasks),
+        populated by assign_task_to_worker() callers (#2944).  When the SET is
+        empty (e.g. on existing deployments before callers were wired) the method
+        falls back to the global {queue}:running ZSET so that task migration is
+        never silently skipped.
 
         Args:
             worker_id: ID of the dead worker
@@ -832,17 +834,35 @@ class NPUWorkerManager:
 
         task_ids = await self.redis_client.smembers(worker_tasks_key)
         if not task_ids:
-            logger.info("Failover: dead worker %s had no running tasks", worker_id)
-        else:
-            for task_id in task_ids:
-                await self._migrate_running_task(
-                    task_id,
-                    running_key,
-                    pending_key,
-                    failed_key,
-                    tasks_hash,
-                    max_retries,
+            # Fallback: per-worker SET is empty (callers not yet wired or new
+            # deployment).  Conservatively migrate all tasks still in the global
+            # running ZSET so failover never silently skips migration (#2944).
+            task_ids = await self.redis_client.zrange(running_key, 0, -1)
+            if task_ids:
+                logger.warning(
+                    "Failover: per-worker SET empty for %s; falling back to "
+                    "global running ZSET (%d tasks)",
+                    worker_id,
+                    len(task_ids),
                 )
+            else:
+                logger.info("Failover: dead worker %s had no running tasks", worker_id)
+        else:
+            logger.info(
+                "Failover: migrating %d tasks from per-worker SET for worker %s",
+                len(task_ids),
+                worker_id,
+            )
+
+        for task_id in task_ids:
+            await self._migrate_running_task(
+                task_id,
+                running_key,
+                pending_key,
+                failed_key,
+                tasks_hash,
+                max_retries,
+            )
 
         # Remove per-worker task set and worker status/registry
         await self.redis_client.delete(worker_tasks_key)
