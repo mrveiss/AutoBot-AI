@@ -135,6 +135,16 @@
   changed_when: _npm_install.rc == 0
   tags: ['frontend', 'npm']
 
+- name: "Frontend | Install esbuild (required by vite/rolldown)"
+  ansible.builtin.command:
+    cmd: npm install esbuild --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
+  changed_when: true
+  tags: ['frontend', 'npm']
+
 - name: "Frontend | Build production frontend"
   command: npx vite build
   args:
