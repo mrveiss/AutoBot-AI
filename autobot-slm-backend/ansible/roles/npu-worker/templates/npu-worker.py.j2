@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("npu-worker")
 
 DEVICE = os.getenv("NPU_DEVICE", "NPU")
-MODELS_DIR = Path(os.getenv("NPU_MODELS_DIR", "/var/lib/autobot/models"))
+MODELS_DIR = Path(os.getenv("NPU_MODELS_DIR", "/var/lib/autobot-npu/models"))
 HOST = os.getenv("NPU_HOST", "0.0.0.0")
 PORT = int(os.getenv("NPU_PORT", "8081"))
 
