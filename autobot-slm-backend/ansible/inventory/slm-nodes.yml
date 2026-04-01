@@ -11,8 +11,8 @@ all:
     ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     ansible_python_interpreter: /usr/bin/python3
 
-    # Service discovery — must match production.yml (#799)
-    slm_host: "{{ hostvars['00-SLM-Manager']['ansible_host'] }}"
+    # Service discovery — explicit IP, not hostvars (gathered facts override ansible_host)
+    slm_host: "172.16.168.19"
 
   children:
     slm_nodes:
