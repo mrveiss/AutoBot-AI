@@ -10,6 +10,7 @@ Mount point: /api/analytics/codebase/sources (via router.py)
 
 import asyncio
 import logging
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -68,6 +69,12 @@ def _build_clone_url(repo: str, token: Optional[str]) -> str:
 
 
 _GIT_TIMEOUT_SECONDS = 120
+_CREDENTIAL_URL_RE = re.compile(r"https?://[^@\s]+@", re.IGNORECASE)
+
+
+def _sanitize_git_error(message: str) -> str:
+    """Strip credential tokens from git error messages before storing (#3095)."""
+    return _CREDENTIAL_URL_RE.sub("https://***@", message)
 
 
 async def _run_git_clone(url: str, dest: str, branch: str) -> str:
@@ -147,7 +154,7 @@ async def _do_sync(source: CodeSource) -> None:
 
         if err:
             source.status = SourceStatus.ERROR
-            source.error_message = err[:500]
+            source.error_message = _sanitize_git_error(err)[:500]
         else:
             source.status = SourceStatus.READY
             source.last_synced = datetime.now().isoformat()
@@ -157,7 +164,7 @@ async def _do_sync(source: CodeSource) -> None:
     except Exception as exc:
         logger.error("Sync failed for source %s: %s", source.id, exc)
         source.status = SourceStatus.ERROR
-        source.error_message = str(exc)[:500]
+        source.error_message = _sanitize_git_error(str(exc))[:500]
 
     await save_source(source)
 
