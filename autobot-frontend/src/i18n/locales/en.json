@@ -3170,7 +3170,11 @@
       "sectionTitleMediaGallery": "Media Gallery",
       "sectionDescScreenAnalysis": "Capture and analyze screen content",
       "sectionDescVideoProcessing": "Process and analyze video frames",
-      "sectionDescMediaGallery": "Browse captured media and analysis results"
+      "sectionDescMediaGallery": "Browse captured media and analysis results",
+      "liveDashboard": "Live Dashboard",
+      "liveDashboardAriaLabel": "View live workflow execution dashboard",
+      "sectionTitleLiveDashboard": "Live Execution Dashboard",
+      "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -3391,6 +3395,29 @@
       "save": "Save",
       "saving": "Saving...",
       "saved": "Saved successfully"
+    },
+    "liveDashboard": {
+      "reconnect": "Reconnect",
+      "running": "Running",
+      "paused": "Paused",
+      "completedRecent": "Completed",
+      "failed": "Failed",
+      "activeExecutions": "Active Executions",
+      "noActiveWorkflows": "No Active Workflows",
+      "noActiveDescription": "Start a workflow to see live execution progress here.",
+      "loading": "Loading workflows...",
+      "stepOf": "Step {current} of {total}",
+      "stepN": "Step {n}"
+    },
+    "agentObservability": {
+      "title": "Agent Observability",
+      "loading": "Loading agent metrics...",
+      "noAgents": "No Agent Data",
+      "noAgentsDescription": "Agent performance metrics will appear once workflows are executed.",
+      "tasksCompleted": "{count} tasks completed",
+      "success": "Success",
+      "failed": "Failed",
+      "avgTime": "Avg Time"
     }
   },
   "agent": {
