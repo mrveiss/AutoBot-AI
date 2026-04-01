@@ -40,7 +40,8 @@
         - /var/lib/postgresql
       ai-stack:
         - /var/lib/chromadb
-        - /var/lib/autobot/ai-stack
+        # Issue #3097: ai-stack data moved to /var/lib/autobot-ai
+        - /var/lib/autobot-ai
       llm:
         - /usr/share/ollama/.ollama
         - /var/lib/ollama
