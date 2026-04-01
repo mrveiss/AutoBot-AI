@@ -4,15 +4,16 @@
 // Author: mrveiss
 
 /**
- * AgentRegistryView — Agent Registry dashboard (#1794)
+ * AgentRegistryView — Agent Registry dashboard (#1794, #1822)
  *
- * Two-tab view: Backend Agents (AutoBot workers) and Specialized Agents
- * (parsed from .claude/agents/*.md files).
+ * Three-tab view: Backend Agents (AutoBot workers), Specialized Agents
+ * (parsed from .claude/agents/*.md files), and Settings (runtime config).
  */
 
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentRegistry, type SpecializedAgent, type BackendAgent } from '@/composables/useAgentRegistry'
+import AgentSettingsPanel from '@/components/agents/AgentSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -31,7 +32,7 @@ const {
   fetchAgentDetail,
 } = useAgentRegistry()
 
-const activeTab = ref<'backend' | 'specialized'>('backend')
+const activeTab = ref<'backend' | 'specialized' | 'settings'>('backend')
 const showDetailModal = ref(false)
 const categoryFilter = ref<string | null>(null)
 
@@ -97,6 +98,7 @@ onMounted(async () => {
         </p>
       </div>
       <button
+        v-if="activeTab !== 'settings'"
         @click="fetchAllAgents"
         :disabled="isLoading"
         class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -153,13 +155,24 @@ onMounted(async () => {
           {{ $t('agent.registry.specializedAgents') }}
           <span v-if="summary" class="ml-1 text-xs text-tertiary">({{ summary.total_specialized }})</span>
         </button>
+        <button
+          @click="activeTab = 'settings'"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'settings'
+              ? 'border-autobot-info text-autobot-info'
+              : 'border-transparent text-secondary hover:text-primary hover:border-default'
+          ]"
+        >
+          {{ $t('agent.settings.tabTitle') }}
+        </button>
       </nav>
     </div>
 
     <!-- Tab Content -->
     <div class="mt-6">
       <!-- Loading State -->
-      <div v-if="isLoading && backendAgents.length === 0" class="flex items-center justify-center py-12">
+      <div v-if="isLoading && backendAgents.length === 0 && activeTab !== 'settings'" class="flex items-center justify-center py-12">
         <div class="text-center">
           <div class="animate-spin rounded-sm h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <p class="text-secondary mt-4">{{ $t('agent.registry.loading') }}</p>
@@ -302,6 +315,11 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div v-show="activeTab === 'settings'">
+        <AgentSettingsPanel />
       </div>
     </div>
 
