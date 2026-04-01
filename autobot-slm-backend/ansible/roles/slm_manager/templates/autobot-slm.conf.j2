@@ -92,7 +92,24 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority
+    location /api/ws/ {
+        proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+{% if frontend_backend_protocol == 'https' %}
+        proxy_ssl_verify off;
+{% endif %}
+    }
+
     # User backend WebSocket proxies (HTTP to uvicorn)
+    # Issue #3108: include X-Forwarded-* proxy headers
     location /api/ws {
         proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
         proxy_http_version 1.1;
@@ -100,6 +117,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
 {% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
@@ -113,6 +132,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
 {% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
@@ -126,6 +147,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
 {% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
@@ -138,6 +161,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
 {% if frontend_backend_protocol == 'https' %}
         proxy_ssl_verify off;
