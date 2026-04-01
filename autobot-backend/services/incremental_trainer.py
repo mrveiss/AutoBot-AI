@@ -213,7 +213,7 @@ class IncrementalTrainer:
                 logger.error("Incremental training failed: %s", e, exc_info=True)
                 return {
                     "status": "error",
-                    "error": str(e),
+                    "error": "Incremental training failed",
                     "timestamp": datetime.utcnow().isoformat(),
                 }
 
@@ -264,9 +264,9 @@ class IncrementalTrainer:
             }
 
         except Exception as e:
-            logger.error(f"Full retrain failed: {e}", exc_info=True)
+            logger.error("Full retrain failed: %s", e, exc_info=True)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Full retraining failed",
                 "timestamp": datetime.utcnow().isoformat(),
             }

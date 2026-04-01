@@ -236,7 +236,7 @@ class KnowledgeRetrievalAgent:
 
         except Exception as e:
             logger.error("Similar document search error: %s", e)
-            return {"status": "error", "documents": [], "error": str(e)}
+            return {"status": "error", "documents": [], "error": "Document search failed"}
 
     async def quick_fact_lookup(
         self, fact_query: str, max_docs: int = 3

@@ -88,7 +88,7 @@ class TagFilter:
 
         except Exception as e:
             logger.error("Failed to get fact IDs by tags: %s", e)
-            return {"success": False, "fact_ids": set(), "error": str(e)}
+            return {"success": False, "fact_ids": set(), "error": "Tag filter failed"}
 
     async def get_tag_filtered_ids(
         self,

@@ -646,7 +646,7 @@ class AgentAnalytics:
             }
         except Exception as e:
             logger.error("Failed to get performance trends: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve performance trends"}
 
 
 # Singleton instance (thread-safe)

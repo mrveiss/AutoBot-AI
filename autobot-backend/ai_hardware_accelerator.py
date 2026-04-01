@@ -837,7 +837,7 @@ class AIHardwareAccelerator:
                 "modality": modality,
                 "device": "GPU",
                 "dimension": self.unified_dim,
-                "error": str(e),
+                "error": "GPU embedding generation failed",
             }
 
     async def _gpu_semantic_search(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

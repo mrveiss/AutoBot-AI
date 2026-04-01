@@ -464,7 +464,7 @@ class CaptchaHumanLoop:
 
         except Exception as e:
             logger.error("Error requesting CAPTCHA intervention: %s", e)
-            return self._build_error_result(captcha_id, url, start_time, str(e))
+            return self._build_error_result(captcha_id, url, start_time, "CAPTCHA intervention request failed")
 
         finally:
             self._cleanup_captcha_tracking(captcha_id)

@@ -321,7 +321,7 @@ class Conversation:
                 suggested_agents=["chat_responder"],
                 estimated_steps=1,
                 user_approval_needed=False,
-                context_analysis={"error": str(e)},
+                context_analysis={"error": "Classification failed"},
             )
 
     def _process_kb_results(self, results: List[Dict[str, Any]]) -> None:
@@ -744,10 +744,8 @@ class Conversation:
 
         except Exception as e:
             logger.error("Research failed: %s", e)
-            self._add_system_message(
-                f"External research failed: {str(e)}", "debug", {"error": True}
-            )
-            return {"success": False, "error": str(e)}
+            self._add_system_message("External research failed", "debug", {"error": True})
+            return {"success": False, "error": "External research failed"}
 
     def _generate_search_queries(self, user_message: str) -> List[str]:
         """Generate search queries based on user message"""

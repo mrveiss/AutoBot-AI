@@ -537,7 +537,7 @@ class WebResearcher:
             return {
                 "status": "error",
                 "query": query,
-                "error": str(e),
+                "error": "Web search failed",
                 "results": [],
                 "timestamp": datetime.now().isoformat(),
             }
@@ -1349,7 +1349,7 @@ class WebResearcher:
             return result
         except Exception as e:
             logger.error("Research failed for %s: %s", query, e)
-            return self._build_rq_error(query, str(e))
+            return self._build_rq_error(query, "Research query failed")
 
     def _build_rq_error(self, query: str, error: str) -> Dict[str, Any]:
         """Build error response for research_query."""

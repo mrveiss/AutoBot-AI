@@ -324,7 +324,7 @@ class FeatureFlags:
 
         except Exception as e:
             logger.error("Failed to get rollout statistics: %s", e)
-            return {"error": str(e), "current_mode": "unknown"}
+            return {"error": "Failed to retrieve rollout statistics", "current_mode": "unknown"}
 
     async def clear_all_flags(self) -> bool:
         """

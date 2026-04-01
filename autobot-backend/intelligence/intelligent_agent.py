@@ -226,7 +226,7 @@ class IntelligentAgent:
             logger.error("Agent initialization failed: %s", e)
             return {
                 "status": "initialization_failed",
-                "error": str(e),
+                "error": "Agent initialization failed",
                 "initialization_time": time.time() - start_time,
             }
 

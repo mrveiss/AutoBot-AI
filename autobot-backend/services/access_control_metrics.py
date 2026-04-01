@@ -273,7 +273,7 @@ class AccessControlMetrics:
 
         except Exception as e:
             logger.error("Failed to get statistics: %s", e)
-            return {"error": str(e), "total_violations": 0}
+            return {"error": "Failed to retrieve access control statistics", "total_violations": 0}
 
     def _parse_json_violation_data(
         self,
@@ -404,7 +404,7 @@ class AccessControlMetrics:
 
         except Exception as e:
             logger.error("Failed to get endpoint statistics: %s", e)
-            return {"endpoint": endpoint, "error": str(e)}
+            return {"endpoint": endpoint, "error": "Failed to retrieve endpoint statistics"}
 
     async def get_user_statistics(self, username: str, days: int = 7) -> Metadata:
         """
@@ -453,7 +453,7 @@ class AccessControlMetrics:
 
         except Exception as e:
             logger.error("Failed to get user statistics: %s", e)
-            return {"username": username, "error": str(e)}
+            return {"username": username, "error": "Failed to retrieve user statistics"}
 
     async def cleanup_old_metrics(self):
         """

@@ -275,7 +275,7 @@ async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
 
     except Exception as e:
         logger.error("Schedule %s execution failed: %s", schedule.name, e)
-        return False, str(e)
+        return False, "Schedule execution failed"
 
 
 async def check_and_execute_schedules() -> int:

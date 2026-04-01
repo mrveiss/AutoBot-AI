@@ -522,7 +522,7 @@ You should be aware of your current capabilities and limitations based on the sy
 
         except Exception as e:
             logger.error("Error creating capability summary: %s", e)
-            return f"Error creating capability summary: {str(e)}"
+            return "Error creating capability summary"
 
     def _find_relevant_capabilities(
         self, query_lower: str, categories: Dict[str, List[str]]

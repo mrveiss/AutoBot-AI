@@ -548,7 +548,7 @@ class NPULoadBalancer:
                 self._circuit_breaker_threshold, self._circuit_breaker_timeout
             )
             await self._emit_worker_status_change(worker, "task_error")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Task execution failed"}
         finally:
             await client.close()
 

@@ -289,7 +289,7 @@ class CommandValidator:
         try:
             command_parts = shlex.split(command_string.strip())
         except ValueError as e:
-            return [], self._invalid_result(f"Command parsing failed: {str(e)}")
+            return [], self._invalid_result("Command parsing failed")
         if not command_parts:
             return [], self._invalid_result("Empty command")
         return command_parts, None
@@ -358,7 +358,7 @@ class CommandValidator:
 
         except Exception as e:
             self.logger.error("Command validation error: %s", str(e))
-            return self._invalid_result(f"Validation error: {str(e)}")
+            return self._invalid_result("Command validation error")
 
     def _check_dangerous_patterns(self, command: str) -> Dict[str, Union[bool, str]]:
         """Check if command contains dangerous patterns."""

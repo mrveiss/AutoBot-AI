@@ -112,11 +112,12 @@ class SystemIntegration:
                 "error": "",
             }
         except Exception as e:
+            logger.error("System integration error: %s", e)
             return {
                 "status": "error",
-                "message": f"An unexpected error occurred: {e}",
+                "message": "An unexpected error occurred",
                 "output": "",
-                "error": str(e),
+                "error": "Internal error",
             }
 
     def query_system_info(self) -> Dict[str, Any]:

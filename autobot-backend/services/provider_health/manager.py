@@ -131,10 +131,10 @@ class ProviderHealthManager:
             return ProviderHealthResult(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check failed: {str(e)}",
+                message="Health check failed",
                 response_time=0.0,
                 provider=provider,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
     @classmethod

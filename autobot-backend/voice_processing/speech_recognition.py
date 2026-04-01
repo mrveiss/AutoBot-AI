@@ -181,7 +181,7 @@ class SpeechRecognitionEngine:
                 return result
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Speech recognition failed"})
                 logger.error("Speech recognition failed: %s", e)
                 raise
 

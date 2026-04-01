@@ -151,7 +151,7 @@ async def _check_redis_db(db) -> Tuple[str, str]:
             return db.name, "connected"
         return db.name, "failed"
     except Exception as e:
-        return db.name, f"error: {str(e)}"
+        return db.name, "connection error"
 
 
 async def _check_service(

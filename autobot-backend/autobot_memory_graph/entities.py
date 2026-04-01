@@ -302,7 +302,7 @@ class EntityOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to add observations: %s", e)
-            raise RuntimeError(f"Add observations failed: {str(e)}")
+            raise RuntimeError("Add observations failed") from e
 
     async def delete_entity(
         self: AutoBotMemoryGraphCore,

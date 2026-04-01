@@ -203,7 +203,7 @@ class MultiAgentWorkflowValidator:
                     "success": 200 <= response.status_code < 400,
                 }
             except Exception as e:
-                return {"endpoint": endpoint, "error": str(e), "success": False}
+                return {"endpoint": endpoint, "error": "Request failed", "success": False}
 
         # Run parallel requests
         async def run_parallel_tests():

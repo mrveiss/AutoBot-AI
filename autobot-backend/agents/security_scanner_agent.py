@@ -92,7 +92,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("Security scan failed: %s", e)
-            return {"status": "error", "message": f"Security scan failed: {str(e)}"}
+            return {"status": "error", "message": "Security scan failed"}
 
     def _validate_target(self, target: str) -> bool:
         """Validate target is appropriate for scanning"""
@@ -169,7 +169,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("Port scan failed: %s", e)
-            return {"status": "error", "message": f"Port scan failed: {str(e)}"}
+            return {"status": "error", "message": "Port scan failed"}
 
     async def _service_detection(
         self, target: str, context: Dict[str, Any]
@@ -198,7 +198,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("Service detection failed: %s", e)
-            return {"status": "error", "message": f"Service detection failed: {str(e)}"}
+            return {"status": "error", "message": "Service detection failed"}
 
     async def _vulnerability_scan(
         self, target: str, context: Dict[str, Any]
@@ -235,7 +235,7 @@ class SecurityScannerAgent:
             logger.error("Vulnerability scan failed: %s", e)
             return {
                 "status": "error",
-                "message": f"Vulnerability scan failed: {str(e)}",
+                "message": "Vulnerability scan failed",
             }
 
     async def _ssl_scan(self, target: str, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -265,7 +265,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("SSL scan failed: %s", e)
-            return {"status": "error", "message": f"SSL scan failed: {str(e)}"}
+            return {"status": "error", "message": "SSL scan failed"}
 
     async def _dns_enumeration(
         self, target: str, context: Dict[str, Any]
@@ -303,7 +303,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("DNS enumeration failed: %s", e)
-            return {"status": "error", "message": f"DNS enumeration failed: {str(e)}"}
+            return {"status": "error", "message": "DNS enumeration failed"}
 
     async def _check_robots_txt(
         self, http_client, target: str, findings: List[Dict]
@@ -363,7 +363,7 @@ class SecurityScannerAgent:
 
         except Exception as e:
             logger.error("Web scan failed: %s", e)
-            return {"status": "error", "message": f"Web scan failed: {str(e)}"}
+            return {"status": "error", "message": "Web scan failed"}
 
     # _run_command moved to src/utils/agent_command_helpers.py (Issue #292)
     # Use run_agent_command() directly

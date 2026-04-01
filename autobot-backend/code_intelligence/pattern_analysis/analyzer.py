@@ -594,7 +594,7 @@ class CodePatternAnalyzer:
 
         except Exception as e:
             logger.error("Clone detection failed: %s", e)
-            return {"type": "clone_detection", "patterns": [], "error": str(e)}
+            return {"type": "clone_detection", "patterns": [], "error": "Clone detection failed"}
 
     async def _run_regex_detection(self, directory: str) -> Dict[str, Any]:
         """Run regex optimization detection.
@@ -620,7 +620,7 @@ class CodePatternAnalyzer:
 
         except Exception as e:
             logger.error("Regex detection failed: %s", e)
-            return {"type": "regex_detection", "patterns": [], "error": str(e)}
+            return {"type": "regex_detection", "patterns": [], "error": "Regex detection failed"}
 
     async def _run_complexity_analysis(self, directory: str) -> Dict[str, Any]:
         """Run complexity analysis.
@@ -657,7 +657,7 @@ class CodePatternAnalyzer:
                 "type": "complexity_analysis",
                 "patterns": [],
                 "modules": [],
-                "error": str(e),
+                "error": "Complexity analysis failed",
             }
 
     async def _run_anti_pattern_detection(self, directory: str) -> Dict[str, Any]:
@@ -709,7 +709,7 @@ class CodePatternAnalyzer:
                 "type": "anti_pattern_detection",
                 "modularization": [],
                 "other_patterns": [],
-                "error": str(e),
+                "error": "Anti-pattern detection failed",
             }
 
     def _merge_results(
