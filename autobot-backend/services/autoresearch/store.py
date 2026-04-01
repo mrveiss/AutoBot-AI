@@ -140,11 +140,14 @@ class ExperimentStore:
 
         if experiment.result:
             parts.append(f"val_bpb: {experiment.result.val_bpb}")
-            if experiment.baseline_val_bpb is not None:
-                improvement = experiment.baseline_val_bpb - (experiment.result.val_bpb or 0)
+            if (
+                experiment.baseline_val_bpb is not None
+                and experiment.result.val_bpb is not None
+            ):
+                improvement = experiment.baseline_val_bpb - experiment.result.val_bpb
                 pct = (
                     (improvement / experiment.baseline_val_bpb * 100)
-                    if experiment.baseline_val_bpb
+                    if experiment.baseline_val_bpb != 0
                     else 0
                 )
                 parts.append(

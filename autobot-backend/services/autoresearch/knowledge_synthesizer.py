@@ -98,9 +98,11 @@ class KnowledgeSynthesizer:
         Returns:
             List of generated ExperimentInsight objects.
         """
-        experiments = await self._store.list_experiments(limit=100)
+        # Query experiments tagged with this session — use a large limit
+        # to avoid silently missing experiments beyond the default page size
+        all_experiments = await self._store.list_experiments(limit=500)
         session_experiments = [
-            e for e in experiments if f"session:{session_id}" in e.tags
+            e for e in all_experiments if f"session:{session_id}" in e.tags
         ]
 
         if not session_experiments:
@@ -119,8 +121,11 @@ class KnowledgeSynthesizer:
                 max_tokens=2000,
             )
             raw_insights = json.loads(response.content)
-        except (json.JSONDecodeError, Exception) as exc:
-            logger.warning("KnowledgeSynthesizer: LLM synthesis failed: %s", exc)
+        except json.JSONDecodeError as exc:
+            logger.warning("KnowledgeSynthesizer: failed to parse LLM response: %s", exc)
+            return []
+        except Exception as exc:
+            logger.exception("KnowledgeSynthesizer: LLM call failed: %s", exc)
             return []
 
         insights = []
@@ -166,10 +171,16 @@ class KnowledgeSynthesizer:
                     id=doc_id,
                     statement=document,
                     confidence=float(meta.get("confidence", 0.0)),
-                    supporting_experiments=meta.get(
-                        "supporting_experiments", ""
-                    ).split(","),
-                    related_hyperparams=meta.get("related_hyperparams", "").split(","),
+                    supporting_experiments=(
+                        meta.get("supporting_experiments", "").split(",")
+                        if meta.get("supporting_experiments")
+                        else []
+                    ),
+                    related_hyperparams=(
+                        meta.get("related_hyperparams", "").split(",")
+                        if meta.get("related_hyperparams")
+                        else []
+                    ),
                     session_id=meta.get("session_id"),
                 )
                 insights.append(insight)
