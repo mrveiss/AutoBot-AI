@@ -11,6 +11,22 @@ Issue #2597: Standalone experiment runner + result store.
 Issue #2599: AutoBot-orchestrated loop + web search (M2).
 """
 
+from .knowledge_synthesizer import ExperimentInsight, KnowledgeSynthesizer
+from .prompt_optimizer import (
+    BenchmarkFn,
+    OptimizationSession,
+    OptimizationStatus,
+    PromptOptimizer,
+    PromptOptTarget,
+    PromptVariant,
+)
+from .scorers import (
+    HumanReviewScorer,
+    LLMJudgeScorer,
+    PromptScorer,
+    ScorerResult,
+    ValBpbScorer,
+)
 from .auto_research_agent import (
     ApprovalGate,
     AutoResearchAgent,
@@ -66,6 +82,20 @@ __all__ = [
     "ResearchHypothesis",
     "SearchResult",
     "SessionStatus",
+    # M3: Self-improvement (Issue #2600)
+    "PromptOptimizer",
+    "PromptOptTarget",
+    "PromptVariant",
+    "OptimizationSession",
+    "OptimizationStatus",
+    "BenchmarkFn",
+    "PromptScorer",
+    "ScorerResult",
+    "ValBpbScorer",
+    "LLMJudgeScorer",
+    "HumanReviewScorer",
+    "KnowledgeSynthesizer",
+    "ExperimentInsight",
     # Routes
     "router",
     # OSINT Engine (Issue #1949)

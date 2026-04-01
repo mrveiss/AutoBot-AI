@@ -809,6 +809,33 @@ class AutoResearchAgent:
             metrics.improvement_pct,
             status_key,
         )
+
+        # Dispatch notification for approval_needed event
+        try:
+            from services.notification_service import (
+                NotificationEvent,
+                NotificationService,
+            )
+
+            notification_service = NotificationService()
+            await notification_service.send(
+                event=NotificationEvent.APPROVAL_NEEDED,
+                workflow_id=f"autoresearch:{session.id}",
+                payload={
+                    "experiment_id": experiment.id,
+                    "topic": session.topic,
+                    "improvement_pct": metrics.improvement_pct,
+                    "val_bpb": metrics.result_val_bpb,
+                    "baseline_val_bpb": metrics.baseline_val_bpb,
+                },
+                config=self._get_notification_config(session.id),
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send approval notification for experiment %s",
+                experiment.id,
+            )
+
         # Non-blocking poll with short timeout so we don't freeze the loop
         decision = await self.approval_gate.wait_for_approval(
             session_id=session.id,
@@ -821,6 +848,22 @@ class AutoResearchAgent:
                 experiment.id,
                 decision,
             )
+
+    def _get_notification_config(self, session_id: str):
+        """Return a default notification config for autoresearch approval events.
+
+        Args:
+            session_id: The autoresearch session ID used as the workflow ID.
+
+        Returns:
+            NotificationConfig scoped to the autoresearch session.
+        """
+        from services.notification_service import NotificationConfig
+
+        return NotificationConfig(
+            workflow_id=f"autoresearch:{session_id}",
+            channels={"approval_needed": ["in_app"]},
+        )
 
     # ------------------------------------------------------------------
     # Private: session persistence
