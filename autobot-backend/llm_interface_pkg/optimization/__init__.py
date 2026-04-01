@@ -63,6 +63,7 @@ from .layer_inference import (
     LayerInferenceEngine,
     LayerInferenceStats,
 )
+from .model_inspector import ModelInfo, clear_cache, inspect_model
 from .meta_eviction import (
     EvictionStats,
     MetaDeviceEvictionManager,
@@ -161,4 +162,8 @@ __all__ = [
     "LayerInferenceConfig",
     "LayerInferenceEngine",
     "LayerInferenceStats",
+    # Empty-weight Model Inspector (Issue #1945)
+    "ModelInfo",
+    "inspect_model",
+    "clear_cache",
 ]
