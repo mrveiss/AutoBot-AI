@@ -54,7 +54,7 @@ export interface SecuritySettings {
   enable_auth: boolean
   audit_log_file: string
   allowed_users: Record<string, string>
-  roles: Record<string, Record<string, any>>
+  roles: Record<string, Record<string, unknown>>
 }
 
 export interface DiagnosticsSettings {
@@ -94,7 +94,8 @@ export interface AutoBotSettings {
 // Re-exported here for backward compatibility.
 // ============================================================================
 
-export type { ChatMessage, MessageSender, ChatMessageDisplayType } from '@/types/api'
+import type { ChatMessage, MessageSender, ChatMessageDisplayType } from '@/types/api'
+export type { ChatMessage, MessageSender, ChatMessageDisplayType }
 
 export interface ChatSession {
   id: string
@@ -117,7 +118,7 @@ export interface ChatHistory {
 
 export interface WebSocketEvent {
   type: string
-  payload: Record<string, any>
+  payload: Record<string, unknown>
   timestamp?: string
 }
 
@@ -140,7 +141,7 @@ export interface PlanReadyEvent extends WebSocketEvent {
 export interface GoalCompletedEvent extends WebSocketEvent {
   type: 'goal_completed'
   payload: {
-    results: Record<string, any>
+    results: Record<string, unknown>
     success: boolean
     execution_time?: number
   }
@@ -242,7 +243,7 @@ export interface DiagnosticIssue {
 // API Response Models
 // ============================================================================
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T
   ok: boolean
   status: number
@@ -257,10 +258,10 @@ export interface RequestOptions {
   signal?: AbortSignal
   timeout?: number
   skipCache?: boolean
-  params?: Record<string, any>
+  params?: Record<string, string | number | boolean>
 }
 
-export interface LegacyApiResponse<T = any> {
+export interface LegacyApiResponse<T = unknown> {
   success: boolean
   data?: T
   message?: string
@@ -268,7 +269,7 @@ export interface LegacyApiResponse<T = any> {
   timestamp: string
 }
 
-export interface PaginatedResponse<T = any> {
+export interface PaginatedResponse<T = unknown> {
   items: T[]
   total: number
   page: number
@@ -397,7 +398,7 @@ export interface AgentTask {
   completed_at?: string
   estimated_duration?: number
   actual_duration?: number
-  result?: Record<string, any>
+  result?: Record<string, unknown>
   error_message?: string
 }
 
@@ -429,7 +430,7 @@ export interface WorkflowStep {
   description?: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'requires_approval'
   type?: string
-  data?: Record<string, any>
+  data?: Record<string, unknown>
   approval_status?: 'pending' | 'approved' | 'rejected'
 }
 
@@ -441,7 +442,7 @@ export interface Workflow {
   steps: WorkflowStep[]
   created_at: string
   updated_at?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface WorkflowResponse {
@@ -470,30 +471,34 @@ export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 // Type Guards and Validators
 // ============================================================================
 
-export function isChatMessage(obj: any): obj is import('@/types/api').ChatMessage {
-  return obj &&
-    typeof obj.id === 'string' &&
+function isRecord(obj: unknown): obj is Record<string, unknown> {
+  return typeof obj === 'object' && obj !== null
+}
+
+export function isChatMessage(obj: unknown): obj is import('@/types/api').ChatMessage {
+  if (!isRecord(obj)) return false
+  return typeof obj.id === 'string' &&
     typeof obj.sender === 'string' &&
     typeof obj.content === 'string' &&
     (typeof obj.timestamp === 'string' || obj.timestamp instanceof Date)
 }
 
-export function isWebSocketEvent(obj: any): obj is WebSocketEvent {
-  return obj &&
-    typeof obj.type === 'string' &&
-    obj.payload &&
-    typeof obj.payload === 'object'
+export function isWebSocketEvent(obj: unknown): obj is WebSocketEvent {
+  if (!isRecord(obj)) return false
+  return typeof obj.type === 'string' &&
+    typeof obj.payload === 'object' &&
+    obj.payload !== null
 }
 
-export function isApiResponse<T>(obj: any): obj is ApiResponse<T> {
-  return obj &&
-    typeof obj.success === 'boolean' &&
+export function isApiResponse<T>(obj: unknown): obj is ApiResponse<T> {
+  if (!isRecord(obj)) return false
+  return typeof obj.success === 'boolean' &&
     typeof obj.timestamp === 'string'
 }
 
-export function isApiError(obj: any): obj is ApiError {
-  return obj &&
-    typeof obj.message === 'string'
+export function isApiError(obj: unknown): obj is ApiError {
+  if (!isRecord(obj)) return false
+  return typeof obj.message === 'string'
 }
 
 // ============================================================================

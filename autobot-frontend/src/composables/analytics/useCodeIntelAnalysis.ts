@@ -52,11 +52,16 @@ export function useCodeIntelAnalysis(
   const {
     isLoading: codeIntelLoading,
     suggestions: codeIntelSuggestions,
+    healthScore: codeIntelHealthScore,
+    qualityScore: codeIntelQualityScore,
+    analysisHistory: codeIntelAnalysisHistory,
     analyzeCode: codeIntelAnalyzeCode,
     getSuggestions: codeIntelGetSuggestions,
+    getHealthScore: codeIntelGetHealthScore,
+    getQualityScore: codeIntelGetQualityScore,
+    getAnalysisHistory: codeIntelGetAnalysisHistory,
     batchAnalyze: codeIntelBatchAnalyze,
   } = useCodeIntelligence()
-
   const codeIntelSecurityFindings = ref<SecurityFinding[]>([])
   const codeIntelPerformanceFindings = ref<PerformanceFinding[]>([])
   const codeIntelRedisFindings = ref<RedisOptimizationFinding[]>([])
@@ -216,6 +221,12 @@ export function useCodeIntelAnalysis(
     codeIntelFindingsLoading,
     codeIntelFindingsFetched,
     codeIntelTotalFindings,
+    codeIntelHealthScore,
+    codeIntelQualityScore,
+    codeIntelAnalysisHistory,
+    codeIntelGetHealthScore,
+    codeIntelGetQualityScore,
+    codeIntelGetAnalysisHistory,
     runCodeIntelligenceAnalysis,
     handleFileScan,
     // Cache (facade-owned)

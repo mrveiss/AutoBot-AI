@@ -23,14 +23,13 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from services.agent_analytics import AgentAnalytics, get_agent_analytics
 from services.llm_cost_tracker import LLMCostTracker, get_cost_tracker
 from services.user_behavior_analytics import (
     UserBehaviorAnalytics,
     get_behavior_analytics,
 )
-
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +169,7 @@ class AnalyticsService:
     async def get_redis(self):
         """Get Redis client for analytics database."""
         if self._redis is None:
-            self._redis = await get_redis_client(
+            self._redis = get_redis_client(
                 async_client=True, database=RedisDatabase.ANALYTICS
             )
         return self._redis

@@ -330,7 +330,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col max-h-[700px]">
+  <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col max-h-[700px]">
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
       <div class="flex items-center gap-3">
@@ -338,7 +338,7 @@ onUnmounted(() => {
         <!-- WebSocket Status -->
         <span
           :class="[
-            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs',
+            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-xs',
             connected ? 'text-green-600' : 'text-gray-400'
           ]"
           :title="connected ? 'Live updates active' : 'Live updates offline'"
@@ -347,15 +347,15 @@ onUnmounted(() => {
           {{ connected ? 'Live' : 'Offline' }}
         </span>
         <div class="flex items-center gap-2 text-sm">
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-100 text-green-700">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-green-100 text-green-700">
             <span class="w-2 h-2 rounded-full bg-green-500"></span>
             {{ statusCounts.running }}
           </span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-gray-100 text-gray-600">
             <span class="w-2 h-2 rounded-full bg-gray-400"></span>
             {{ statusCounts.stopped }}
           </span>
-          <span v-if="statusCounts.failed > 0" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100 text-red-700">
+          <span v-if="statusCounts.failed > 0" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-red-100 text-red-700">
             <span class="w-2 h-2 rounded-full bg-red-500"></span>
             {{ statusCounts.failed }}
           </span>
@@ -469,7 +469,7 @@ onUnmounted(() => {
             <td class="px-4 py-3">
               <div
                 :class="[
-                  'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium',
+                  'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-xs font-medium',
                   getStatusClasses(service.status).bg,
                   getStatusClasses(service.status).text,
                 ]"
@@ -497,7 +497,7 @@ onUnmounted(() => {
                 </button>
                 <pre
                   v-if="expandedErrors.has(service.service_name)"
-                  class="mt-1 p-2 bg-red-50 border border-red-200 rounded text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
+                  class="mt-1 p-2 bg-red-50 border border-red-200 rounded-sm text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
                 >{{ service.extra_data.error_message }}</pre>
               </div>
             </td>
@@ -532,7 +532,7 @@ onUnmounted(() => {
                   v-if="service.status !== 'running'"
                   @click="handleAction(service.service_name, 'start')"
                   :disabled="isActionInProgress"
-                  class="p-1.5 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                  class="p-1.5 text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50"
                   title="Start"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -549,7 +549,7 @@ onUnmounted(() => {
                   v-if="service.status === 'running'"
                   @click="handleAction(service.service_name, 'stop')"
                   :disabled="isActionInProgress"
-                  class="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                  class="p-1.5 text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50"
                   title="Stop"
                 >
                   <svg v-if="actionService === service.service_name" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -565,7 +565,7 @@ onUnmounted(() => {
                 <button
                   @click="handleAction(service.service_name, 'restart')"
                   :disabled="isActionInProgress"
-                  class="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                  class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50"
                   title="Restart"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -576,7 +576,7 @@ onUnmounted(() => {
                 <!-- Logs -->
                 <button
                   @click="viewLogs(service.service_name)"
-                  class="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                  class="p-1.5 text-gray-500 hover:bg-gray-100 rounded-sm"
                   title="View Logs"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,7 +596,7 @@ onUnmounted(() => {
         <input
           type="checkbox"
           v-model="autoRefresh"
-          class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+          class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />
         Auto-refresh (every {{ Math.round(autoRefreshInterval / 1000) }}s)
       </label>

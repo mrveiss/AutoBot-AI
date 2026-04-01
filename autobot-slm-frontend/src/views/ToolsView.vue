@@ -18,6 +18,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
@@ -112,7 +113,7 @@ async function runNetworkTest(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/test-connection`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/test-connection`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -153,7 +154,7 @@ async function runHealthCheck(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/health`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/health`, {
       headers: authStore.getAuthHeaders(),
     })
 
@@ -168,7 +169,7 @@ async function runHealthCheck(): Promise<void> {
       `Memory: ${data.memory_percent?.toFixed(1) || 'N/A'}%\n` +
       `Disk: ${data.disk_percent?.toFixed(1) || 'N/A'}%\n` +
       `Last Heartbeat: ${data.last_heartbeat || 'N/A'}\n\n` +
-      `Services:\n${(data.services || []).map((s: any) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
+      `Services:\n${(data.services || []).map((s: { name: string; status: string }) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Health check failed'
   } finally {
@@ -188,7 +189,7 @@ async function getServiceLogs(): Promise<void> {
 
   try {
     const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
+      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
       { headers: authStore.getAuthHeaders() }
     )
 
@@ -218,7 +219,7 @@ async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void
 
   try {
     const response = await fetch(
-      `/api/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
+      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
       {
         method: 'POST',
         headers: authStore.getAuthHeaders(),
@@ -261,7 +262,7 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via ansible ad-hoc
-    const response = await fetch(`/api/nodes/${targetNode.node_id}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -297,7 +298,7 @@ async function runAnsibleCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/exec`, {
+    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -350,7 +351,7 @@ onMounted(async () => {
           :aria-label="`${tool.name}: ${tool.description}`"
           :aria-pressed="activeTool === tool.id"
           :class="[
-            'bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-left transition-all',
+            'bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-left transition-all',
             tool.available
               ? 'hover:shadow-md hover:border-primary-300 cursor-pointer'
               : 'opacity-50 cursor-not-allowed',
@@ -393,7 +394,7 @@ onMounted(async () => {
       </div>
 
       <!-- Tool Interface Panel -->
-      <div v-if="activeTool" class="bg-white rounded-lg shadow-sm border border-gray-200" role="region" :aria-label="tools.find(t => t.id === activeTool)?.name || 'Tool panel'">
+      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200" role="region" :aria-label="tools.find(t => t.id === activeTool)?.name || 'Tool panel'">
         <!-- Panel Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900">

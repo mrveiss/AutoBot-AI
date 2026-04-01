@@ -15,18 +15,21 @@ Consolidated from chat.py and chat_enhanced.py per Issue #708.
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
 from dependencies import get_config, get_knowledge_base
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
@@ -47,8 +50,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -84,6 +85,7 @@ def get_memory_interface(request: Request) -> Optional[Any]:
 def get_llm_service(request: Request) -> Any:
     """Get LLM service from app state, with lazy initialization"""
     from llm_service import LLMService
+
     from utils.lazy_singleton import lazy_init_singleton
 
     return lazy_init_singleton(request.app.state, "llm_service", LLMService)
@@ -836,7 +838,9 @@ async def send_message(
     llm_service = get_llm_service(request)
     memory_interface = get_memory_interface(request)
 
-    # Process the chat message with a 30-second timeout (Issue #1797)
+    # Process the chat message with a configurable timeout (Issue #1907).
+    # Override via AUTOBOT_CHAT_TIMEOUT env var (seconds, float). Default: 30.0.
+    chat_timeout = float(os.getenv("AUTOBOT_CHAT_TIMEOUT", "30.0"))
     try:
         response_data = await asyncio.wait_for(
             process_chat_message(
@@ -848,10 +852,14 @@ async def send_message(
                 config,
                 request_id,
             ),
-            timeout=30.0,
+            timeout=chat_timeout,
         )
     except asyncio.TimeoutError:
-        logger.error("[%s] Chat message processing timed out after 30s", request_id)
+        logger.error(
+            "[%s] Chat message processing timed out after %.1fs",
+            request_id,
+            chat_timeout,
+        )
         (
             AutoBotError,
             InternalError,

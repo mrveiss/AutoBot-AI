@@ -15,6 +15,9 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+from autobot_shared.logging_manager import get_llm_logger
 from config import config_manager
 from models.atomic_fact import AtomicFact
 from models.entity_mapping import (
@@ -23,10 +26,6 @@ from models.entity_mapping import (
     EntityType,
     SimilarityMethod,
 )
-from sklearn.metrics.pairwise import cosine_similarity
-
-from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("entity_resolver")
 
@@ -105,7 +104,7 @@ class EntityResolver:
 
         # Models and clients
         self.embedding_model = None
-        self.redis_client = get_redis_client(async_client=True)
+        self.redis_client = None  # Lazy init (#2725)
 
         # Storage keys
         self.entity_mappings_key = "entity_mappings"
@@ -113,6 +112,13 @@ class EntityResolver:
         self.resolution_history_key = "entity_resolution_history"
 
         logger.info("Entity Resolver initialized")
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     def _get_embedding_model(self):
         """Lazy load the sentence transformer model."""
@@ -378,6 +384,7 @@ class EntityResolver:
 
     async def _load_entity_mappings(self) -> Dict[str, EntityMapping]:
         """Load existing entity mappings from Redis."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {}
@@ -404,6 +411,7 @@ class EntityResolver:
 
     async def _store_entity_mappings(self, mappings: List[EntityMapping]):
         """Store entity mappings to Redis."""
+        await self._ensure_redis()
         try:
             if not self.redis_client or not mappings:
                 return
@@ -620,6 +628,7 @@ class EntityResolver:
 
     async def get_resolution_statistics(self) -> Dict[str, Any]:
         """Get entity resolution statistics."""
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}

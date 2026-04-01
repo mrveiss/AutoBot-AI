@@ -1,81 +1,82 @@
 # CI-specific requirements - excludes packages that are problematic to build in CI
 # ===== CORE FRAMEWORK DEPENDENCIES =====
-fastapi>=0.115.0
-starlette>=0.49.1                 # SECURITY UPDATE - CVE fix (GHSA-7f5h-v6xp-fcq8)
-python-multipart>=0.0.9           # Required for FastAPI form data handling
-uvicorn>=0.30.0
+fastapi>=0.135.2
+starlette>=1.0.0                 # SECURITY UPDATE - CVE fix (GHSA-7f5h-v6xp-fcq8)
+python-multipart>=0.0.22           # Required for FastAPI form data handling
+uvicorn>=0.42.0
 requests==2.33.1
 aiohttp==3.13.4
-aiofiles>=23.0.0
-aiosqlite>=0.17.0
-beautifulsoup4>=4.12.0
-pyyaml==6.0.1
-pydantic>=2.8.0
-websockets>=11.0.0
+aiofiles>=25.1.0
+aiosqlite>=0.22.1
+beautifulsoup4>=4.14.3
+pyyaml==6.0.3
+pydantic>=2.12.5
+websockets>=16.0
 
 # ===== MULTI-AGENT ARCHITECTURE DEPENDENCIES =====
 # LLM & AI Framework Support
-openai>=1.0.0
-anthropic>=0.7.0
-tiktoken>=0.5.0
-transformers>=4.55.2             # HuggingFace transformers for model utils - SECURITY UPDATE
-sentence-transformers>=2.2.0
+openai>=2.30.0
+anthropic>=0.86.0
+tiktoken>=0.12.0
+transformers>=5.4.0             # HuggingFace transformers for model utils - SECURITY UPDATE
+sentence-transformers>=5.3.0
 # Note: torch will be installed separately with CPU-only wheels
 
 # Agent Communication & Coordination
-asyncio-mqtt>=0.16.0
-celery>=5.3.0
-kombu>=5.3.0
+asyncio-mqtt>=0.16.2
+celery>=5.6.3
+kombu>=5.6.2
 
 # Memory & Storage
-redis>=5.0,<6.0
-chromadb>=0.4.0
-sqlalchemy>=2.0.0
+redis>=7.4.0
+chromadb>=1.5.5
+sqlalchemy>=2.0.48
 
 # ===== SPECIALIZED AGENT DEPENDENCIES =====
 # System Commands Agent
-psutil>=5.9.0
-sh>=2.0.0
+psutil>=7.2.2
+sh>=2.2.2
 
 # Research Agent & Web Integration
-selenium>=4.15.0
-playwright>=1.40.0
-httpx>=0.25.0
+selenium>=4.41.0
+playwright>=1.58.0
+httpx>=0.28.1
 newspaper3k>=0.2.8
-readability>=0.3.1
+readability>=0.3.2
 python-magic>=0.4.27
 
 # RAG Agent & Knowledge Processing
-python-docx>=1.1.0
-pypdf>=6.4.0                     # PDF processing - SECURITY UPDATE (4 CVE fixes)
-python-pptx>=0.6.23
-openpyxl>=3.1.0
-markdown>=3.5.0
+python-docx>=1.2.0
+pypdf>=6.9.2                     # PDF processing - SECURITY UPDATE (improved permission checks)
+python-pptx>=1.0.2
+openpyxl>=3.1.5
+markdown>=3.10.2
 # Note: pytesseract excluded for CI
 
 # Chat Agent & NLP
-nltk>=3.8.0
-spacy>=3.7.0
-textstat>=0.7.3
+nltk>=3.9.4
+spacy>=3.8.13
+textstat>=0.7.13
 
 # ===== GUI & AUTOMATION (CI-SAFE VERSIONS) =====
 pyautogui==0.9.54
 mouseinfo==0.1.3
-pillow>=10.0.0
-numpy>=1.21.0,<3.0.0
-opencv-python>=4.8.0             # Computer vision for GUI automation
+pillow>=12.1.1
+numpy>=2.4.3,<3.0.0
+opencv-python>=4.13.0.92             # Computer vision for GUI automation
 pygetwindow>=0.0.9
 
 # ===== EXISTING INTEGRATIONS =====
-markdownify>=0.14.1              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r)
-langchain>=1.2.0
-langchain-community>=0.4.0
-langchain-experimental>=0.4.0
-llama-index
-llama-index-llms-ollama
-llama-index-embeddings-ollama
-llama-index-vector-stores-redis
-llama-index-readers-file>=0.5.6  # Pin to v0.5.6+ for pypdf>=6.1.3 compatibility (Issue #888)
+markdownify>=1.2.2              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r)
+langchain>=1.2.13,<2.0.0         # Issue #2808: upper bound unified with backend canonical
+langchain-core>=1.2.22,<2.0.0   # Issue #2808: added to match backend canonical
+langchain-community>=0.4.1,<0.5.0  # Issue #2808: upper bound unified with backend canonical
+langchain-experimental>=0.4.1,<0.5.0  # Issue #2808: upper bound added for consistency
+llama-index>=0.14.19,<0.15.0  # Unified across all components (#2669); upper bound added (#2822)
+llama-index-llms-ollama>=0.10.1,<1.0.0
+llama-index-embeddings-ollama>=0.9.0,<1.0.0
+llama-index-vector-stores-redis>=0.8.0,<1.0.0
+llama-index-readers-file>=0.6.0,<1.0.0
 
 # ===== VOICE INTERFACE DEPENDENCIES (EXCLUDED FOR CI) =====
 # speechrecognition==3.10.0
@@ -84,20 +85,20 @@ llama-index-readers-file>=0.5.6  # Pin to v0.5.6+ for pypdf>=6.1.3 compatibility
 # gtts==2.3.1
 
 # ===== SECURITY & DEVELOPMENT TOOLS =====
-pre-commit>=3.6.0
-detect-secrets>=1.4.0
-pycryptodome>=3.19.0
-cryptography>=45.0.6             # Additional crypto support - SECURITY UPDATE
+pre-commit>=4.5.1
+detect-secrets>=1.5.0
+pycryptodome>=3.23.0
+cryptography>=46.0.6             # Additional crypto support - SECURITY UPDATE
 
 # ===== MONITORING & OBSERVABILITY =====
-prometheus-client>=0.19.0
-structlog>=23.2.0
-rich>=13.7.0
-tqdm==4.67.1
+prometheus-client>=0.24.1
+structlog>=25.5.0
+rich>=14.3.3
+tqdm==4.67.3
 
 # ===== CONFIGURATION & UTILITIES =====
-python-dotenv>=1.0.0
-click>=8.1.0
-jsonschema>=4.20.0
-validators>=0.22.0
+python-dotenv>=1.2.2
+click>=8.3.1
+jsonschema>=4.26.0
+validators>=0.35.0
 python-json-logger

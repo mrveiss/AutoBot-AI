@@ -325,8 +325,9 @@ class TestNoDataResponse:
 
     def test_returns_json_response(self):
         """Should return JSONResponse with correct structure."""
-        from api.codebase_analytics.endpoints.stats import _no_data_response
         from fastapi.responses import JSONResponse
+
+        from api.codebase_analytics.endpoints.stats import _no_data_response
 
         result = _no_data_response()
 

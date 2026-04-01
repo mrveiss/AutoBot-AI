@@ -12,9 +12,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from config import settings
 from models.database import Base, Setting
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ class DatabaseService:
             return {"status": "healthy", "database": "postgresql"}
         except Exception as e:
             logger.error("Database health check failed: %s", e)
-            return {"status": "unhealthy", "error": str(e)}
+            return {"status": "unhealthy", "error": "Health check failed"}
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
@@ -200,6 +201,7 @@ class DatabaseService:
                 yield session
                 await session.commit()
             except Exception:
+                logger.exception("Database session error, rolling back")
                 await session.rollback()
                 raise
 

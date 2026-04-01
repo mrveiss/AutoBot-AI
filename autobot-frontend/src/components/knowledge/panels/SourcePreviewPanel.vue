@@ -16,7 +16,7 @@
  * - Slide animation
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -159,12 +159,18 @@ function getTypeIcon(type?: string): string {
   return icons[type || 'document'] || 'fas fa-file'
 }
 
-// Cleanup on unmount
+// Cleanup on close
 watch(() => props.modelValue, (isOpen) => {
   if (!isOpen) {
     document.removeEventListener('mousemove', handleResize)
     document.removeEventListener('mouseup', stopResize)
   }
+})
+
+// #2849: Ensure resize listeners are removed if component unmounts mid-resize
+onUnmounted(() => {
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
 })
 </script>
 

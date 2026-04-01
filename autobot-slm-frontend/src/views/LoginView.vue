@@ -13,14 +13,13 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import type { ActiveProvider } from '@/composables/useSsoApi'
+import type { ActiveProvider, useSsoApi } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // Issue #1016: SSO module lazy-loaded only when providers exist
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let ssoApi: Record<string, any> | null = null
+let ssoApi: ReturnType<typeof useSsoApi> | null = null
 
 const username = ref('')
 const password = ref('')
@@ -56,7 +55,7 @@ async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
   try {
     if (provider.provider_type === 'ldap' || provider.provider_type === 'active_directory') {
       const response = await ssoApi.loginWithLDAP(provider.id, username.value, password.value)
-      localStorage.setItem('slm_access_token', response.access_token)
+      sessionStorage.setItem('slm_access_token', response.access_token)
       await authStore.checkAuth()
       router.push('/')
     } else {
@@ -85,14 +84,14 @@ onMounted(async () => {
 <template>
   <main
     id="main-content"
-    class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
+    class="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
     aria-label="Login page"
   >
     <div class="w-full max-w-md">
       <!-- Logo/Header -->
       <div class="text-center mb-8">
         <div
-          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg mb-4"
+          class="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-linear-to-br from-primary-500 to-primary-600 shadow-lg mb-4"
           aria-hidden="true"
         >
           <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +129,7 @@ onMounted(async () => {
                 required
                 autocomplete="username"
                 aria-required="true"
-                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your username"
               />
             </div>
@@ -154,7 +153,7 @@ onMounted(async () => {
                 required
                 autocomplete="current-password"
                 aria-required="true"
-                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
+                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your password"
               />
               <button
@@ -189,7 +188,7 @@ onMounted(async () => {
           <button
             type="submit"
             :disabled="authStore.loading"
-            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 focus:ring-4 focus:ring-primary-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 focus:ring-4 focus:ring-primary-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg v-if="authStore.loading" class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -219,7 +218,7 @@ onMounted(async () => {
               maxlength="8"
               autocomplete="one-time-code"
               aria-label="6-digit authentication code"
-              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               placeholder="000000"
               @keyup.enter="handleMFAVerify"
             />
@@ -232,7 +231,7 @@ onMounted(async () => {
           <button
             @click="handleMFAVerify"
             :disabled="authStore.loading || mfaCode.length < 6"
-            class="w-full py-2.5 px-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50"
+            class="w-full py-2.5 px-4 bg-linear-to-r from-primary-600 to-primary-700 text-white font-medium rounded-lg hover:from-primary-700 hover:to-primary-800 disabled:opacity-50"
           >
             {{ authStore.loading ? 'Verifying...' : 'Verify' }}
           </button>
@@ -283,7 +282,7 @@ onMounted(async () => {
             AutoBot Service Lifecycle Manager
           </p>
           <p class="text-center text-xs text-gray-400">
-            Locked out? Run <code class="bg-gray-100 px-1 py-0.5 rounded text-gray-500">autobot-admin reset-password</code> on the server or contact your system administrator.
+            Locked out? Run <code class="bg-gray-100 px-1 py-0.5 rounded-sm text-gray-500">autobot-admin reset-password</code> on the server or contact your system administrator.
           </p>
         </div>
       </div>

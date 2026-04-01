@@ -7,10 +7,12 @@
 # Node: {{ slm_node_id }}
 # Generated: {{ ansible_date_time.iso8601 }}
 #
-# Auto-detect if agent runs on same host as SLM backend - use localhost if so
+# Auto-detect if agent runs on same host as SLM backend - use localhost if so (#2955)
 {% set admin_host = slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') %}
-{% if admin_host == ansible_host or admin_host == inventory_hostname %}
-{% set effective_admin_url = slm_admin_url | regex_replace(admin_host, '127.0.0.1') %}
+{% if admin_host == ansible_host or admin_host == inventory_hostname or (ansible_connection | default('')) == 'local' %}
+{# Co-located: nginx /api/ routes to SLM backend on port 8000.
+   No /slm prefix needed — /slm/ only serves static frontend files. #}
+{% set effective_admin_url = 'https://127.0.0.1' %}
 {% else %}
 {% set effective_admin_url = slm_admin_url %}
 {% endif %}

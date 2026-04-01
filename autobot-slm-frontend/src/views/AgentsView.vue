@@ -6,13 +6,14 @@
  * Agent Management View (Issue #760 Phase 4, #942)
  *
  * Provides UI for viewing and managing agent LLM configurations.
- * Endpoint is selected by fleet node (auto-constructs http://ip:11434)
+ * Endpoint is selected by fleet node (auto-constructs http://ip:<ollama-port>)
  * or entered manually via the Custom option.
  */
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import config, { getSlmApiBase } from '@/config/ssot-config'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -39,7 +40,7 @@ interface FleetNode {
   roles: string[]
 }
 
-const OLLAMA_PORT = 11434
+const OLLAMA_PORT = config.port.ollama
 const CUSTOM_VALUE = '__custom__'
 
 const route = useRoute()
@@ -99,7 +100,7 @@ async function fetchAgents() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/agents', {
+    const response = await fetch(`${getSlmApiBase()}/agents`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
     if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`)
@@ -114,7 +115,7 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    const response = await fetch('/api/nodes', {
+    const response = await fetch(`${getSlmApiBase()}/nodes`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
     if (!response.ok) return
@@ -375,7 +376,7 @@ onMounted(() => {
                 v-if="isCustomEndpoint"
                 v-model="editForm.llm_endpoint"
                 class="custom-endpoint-input"
-                placeholder="http://host:11434"
+                :placeholder="`http://host:${config.port.ollama}`"
               />
 
               <span v-else class="endpoint-hint">

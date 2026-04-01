@@ -44,6 +44,7 @@ const preflight = ref<DecommissionPreflight | null>(null)
 const backupEnabled = ref(true)
 const confirmInput = ref('')
 const errorMessage = ref('')
+const ansibleOutput = ref('')
 
 const canDecommission = computed(() => {
   return (
@@ -91,6 +92,8 @@ async function handleDecommission() {
     backupEnabled.value,
     confirmInput.value
   )
+
+  ansibleOutput.value = result.output || ''
 
   if (result.success) {
     state.value = 'complete'
@@ -304,6 +307,20 @@ function handleMigrateClick() {
           role="alert"
         >
           {{ errorMessage }}
+        </div>
+
+        <!-- Ansible log output -->
+        <div
+          v-if="ansibleOutput && (state === 'complete' || state === 'failed')"
+          class="log-section"
+        >
+          <button
+            class="log-toggle"
+            @click="($event.target as HTMLElement)?.closest('.log-section')?.classList.toggle('log-expanded')"
+          >
+            Show Ansible Log
+          </button>
+          <pre class="log-output">{{ ansibleOutput }}</pre>
         </div>
       </div>
 
@@ -646,5 +663,52 @@ function handleMigrateClick() {
 .btn-migrate {
   background: var(--primary-color, #3b82f6);
   color: white;
+}
+
+/* Log output (#2678) */
+.log-section {
+  margin-top: 16px;
+}
+
+.log-toggle {
+  background: none;
+  border: 1px solid var(--border-color, #333);
+  color: var(--text-muted, #888);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.log-toggle:hover {
+  color: var(--text-primary, #fff);
+  border-color: var(--text-muted, #888);
+}
+
+.log-output {
+  display: none;
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-primary, #121220);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted, #888);
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: monospace;
+}
+
+.log-expanded .log-output {
+  display: block;
+}
+
+.log-expanded .log-toggle {
+  color: var(--text-primary, #fff);
 }
 </style>

@@ -113,7 +113,7 @@ class GovernanceEngine:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             await redis.publish(
                 REDIS_APPROVAL_CHANNEL,
                 json.dumps(
@@ -137,9 +137,10 @@ async def _persist_approval(
     Helper for GovernanceEngine._create_pending_approval (Issue #951).
     """
     try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
         from skills.db import get_skills_engine
         from skills.models import SkillApproval
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         engine = get_skills_engine()
         async with AsyncSession(engine) as session:

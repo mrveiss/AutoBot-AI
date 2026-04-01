@@ -102,7 +102,7 @@ class UserBehaviorAnalytics:
     async def get_redis(self):
         """Get Redis client for analytics database"""
         if self._redis is None:
-            self._redis = await get_redis_client(
+            self._redis = get_redis_client(
                 async_client=True, database=RedisDatabase.ANALYTICS
             )
         return self._redis
@@ -231,7 +231,7 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get feature metrics: %s", e)
-            return {"error": str(e), "features": {}}
+            return {"error": "Failed to retrieve feature metrics", "features": {}}
 
     async def get_user_journey(self, session_id: str) -> dict:
         """
@@ -271,7 +271,7 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get user journey: %s", e)
-            return {"session_id": session_id, "error": str(e), "steps": []}
+            return {"session_id": session_id, "error": "Failed to retrieve user journey", "steps": []}
 
     async def get_daily_stats(self, days: int = 30) -> dict:
         """
@@ -325,7 +325,7 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get daily stats: %s", e)
-            return {"error": str(e), "daily_stats": {}}
+            return {"error": "Failed to retrieve daily stats", "daily_stats": {}}
 
     def _process_feature_stats(
         self, stats: dict, unique_users: int, unique_sessions: int, feat: str
@@ -424,7 +424,7 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get usage heatmap: %s", e)
-            return {"error": str(e), "heatmap": {}}
+            return {"error": "Failed to retrieve usage heatmap", "heatmap": {}}
 
     def _find_peak_hours(self, heatmap: dict) -> list:
         """Find peak usage hours from heatmap data"""
@@ -489,7 +489,7 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get engagement metrics: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve engagement metrics"}
 
     async def get_recent_events(self, limit: int = 100) -> list:
         """

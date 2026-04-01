@@ -6,6 +6,7 @@
 import time
 
 import pytest
+
 from circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,

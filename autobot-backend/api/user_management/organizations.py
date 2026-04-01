@@ -12,13 +12,14 @@ import logging
 import uuid
 from typing import List, Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+
 from api.user_management.dependencies import (
     get_organization_service,
     require_platform_admin,
     require_user_management_enabled,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 from user_management.services import OrganizationService
 from user_management.services.organization_service import (
     DuplicateOrganizationError,

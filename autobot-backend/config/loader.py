@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
+
 from config.defaults import get_default_config
 from constants.threshold_constants import StringParsingConstants
 
@@ -51,7 +52,7 @@ ENV_VAR_MAPPINGS = {
     # Redis configuration
     "AUTOBOT_REDIS_HOST": ["memory", "redis", "host"],
     "AUTOBOT_REDIS_PORT": ["memory", "redis", "port"],
-    "AUTOBOT_REDIS_DB": ["memory", "redis", "db"],
+    "AUTOBOT_REDIS_DB_MAIN": ["memory", "redis", "db"],
     "AUTOBOT_REDIS_PASSWORD": ["memory", "redis", "password"],
     "AUTOBOT_REDIS_ENABLED": ["memory", "redis", "enabled"],
     # UI configuration

@@ -19,14 +19,13 @@ from typing import Any, Dict, List, Optional
 import psutil
 
 try:
+    from autobot_shared.redis_client import get_redis_client
     from constants.threshold_constants import (
         ResourceThresholds,
         RetryConfig,
         TimingConstants,
     )
     from event_manager import event_manager
-
-    from autobot_shared.redis_client import get_redis_client
 except ImportError as e:
     logging.warning(f"Import error in diagnostics: {e}")
 
@@ -97,7 +96,7 @@ class PerformanceOptimizedDiagnostics:
             }
         except Exception as e:
             logger.error("Error gathering system info: %s", e)
-            return {"error": str(e), "timestamp": datetime.now().isoformat()}
+            return {"error": "Failed to gather system info", "timestamp": datetime.now().isoformat()}
 
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information for performance monitoring"""
@@ -127,7 +126,7 @@ class PerformanceOptimizedDiagnostics:
                     }
             return {"status": "nvidia-smi not available or no GPU detected"}
         except Exception as e:
-            return {"status": f"GPU detection error: {str(e)}"}
+            return {"status": "GPU detection error"}
 
     async def _publish_permission_request(
         self, task_id: str, report: Dict[str, Any], attempt: int
@@ -275,7 +274,7 @@ class PerformanceOptimizedDiagnostics:
             }
         except Exception as e:
             logger.error("Error checking system resources: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to check system resources"}
 
     def _analyze_cpu_bottleneck(self, analysis: Dict[str, Any]) -> None:
         """Analyze CPU usage for bottlenecks (Issue #665: extracted helper)."""
@@ -367,7 +366,7 @@ class PerformanceOptimizedDiagnostics:
 
         except Exception as e:
             logger.error("Performance analysis error: %s", e)
-            return {"error": str(e)}
+            return {"error": "Performance analysis failed"}
 
     def _get_memory_recommendation(self) -> Optional[Dict[str, str]]:
         """
@@ -451,7 +450,7 @@ class PerformanceOptimizedDiagnostics:
 
         except Exception as e:
             logger.error("Error generating recommendations: %s", e)
-            return [{"category": "error", "recommendation": f"Error: {str(e)}"}]
+            return [{"category": "error", "recommendation": "Error generating recommendations"}]
 
     def cleanup_and_optimize_memory(self):
         """Force memory cleanup and optimization"""
@@ -486,7 +485,7 @@ class PerformanceOptimizedDiagnostics:
 
         except Exception as e:
             logger.error("Memory cleanup error: %s", e)
-            return {"error": str(e)}
+            return {"error": "Memory cleanup failed"}
 
 
 # Global instance with performance optimization

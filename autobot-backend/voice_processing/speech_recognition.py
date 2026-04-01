@@ -14,6 +14,7 @@ import time
 from typing import Any, Dict, List
 
 import numpy as np
+
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import task_tracker
 from voice_processing.models import AudioInput, SpeechRecognitionResult
@@ -180,7 +181,7 @@ class SpeechRecognitionEngine:
                 return result
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Speech recognition failed"})
                 logger.error("Speech recognition failed: %s", e)
                 raise
 

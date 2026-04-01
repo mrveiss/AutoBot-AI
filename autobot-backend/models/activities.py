@@ -21,8 +21,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -40,14 +42,14 @@ class TerminalActivityModel(Base, TimestampMixin):
     __tablename__ = "terminal_activities"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # User attribution (REQUIRED)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -74,7 +76,7 @@ class TerminalActivityModel(Base, TimestampMixin):
 
     # Secret usage tracking
     secrets_used: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)),
+        ARRAY(Uuid(as_uuid=True)),
         nullable=False,
         default=list,
     )
@@ -115,14 +117,14 @@ class FileActivityModel(Base, TimestampMixin):
     __tablename__ = "file_activities"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # User attribution (REQUIRED)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -192,14 +194,14 @@ class BrowserActivityModel(Base, TimestampMixin):
     __tablename__ = "browser_activities"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # User attribution (REQUIRED)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -230,7 +232,7 @@ class BrowserActivityModel(Base, TimestampMixin):
 
     # Secret usage tracking
     secrets_used: Mapped[list[uuid.UUID]] = mapped_column(
-        ARRAY(UUID(as_uuid=True)),
+        ARRAY(Uuid(as_uuid=True)),
         nullable=False,
         default=list,
     )
@@ -271,14 +273,14 @@ class DesktopActivityModel(Base, TimestampMixin):
     __tablename__ = "desktop_activities"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # User attribution (REQUIRED)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -351,20 +353,20 @@ class SecretUsageModel(Base, TimestampMixin):
     __tablename__ = "secret_usage"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Secret and user (REQUIRED)
     secret_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         nullable=False,
         index=True,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -378,7 +380,7 @@ class SecretUsageModel(Base, TimestampMixin):
     )
 
     activity_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         nullable=False,
         index=True,
     )

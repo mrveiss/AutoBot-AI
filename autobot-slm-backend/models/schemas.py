@@ -638,6 +638,7 @@ class UpdateDiscoverStatus(BaseModel):
     nodes_checked: int = 0
     total_nodes: int = 0
     packages_found: int = 0
+    unreachable_nodes: List[str] = []
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -1639,6 +1640,7 @@ class FleetSyncJobStatus(BaseModel):
     total_nodes: int
     completed_nodes: int
     failed_nodes: int
+    failure_reason: Optional[str] = None
     nodes: List[FleetSyncNodeStatus]
     created_at: datetime
     completed_at: Optional[datetime] = None

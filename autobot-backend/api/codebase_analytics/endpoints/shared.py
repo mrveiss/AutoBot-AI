@@ -147,6 +147,32 @@ COMMON_THIRD_PARTY = {
 }
 
 
+async def resolve_source_root(source_id: "str | None") -> "Path | None":
+    """Resolve the filesystem root for a given source ID.
+
+    Issue #2760: Extracted from duplicated blocks in report.py and stats.py.
+    Both endpoints contained identical 10-line blocks; this single helper
+    replaces both.
+
+    Args:
+        source_id: The source identifier to look up, or None.
+
+    Returns:
+        Path to the source clone directory, or None if unresolvable.
+    """
+    if not source_id:
+        return None
+    try:
+        from api.codebase_analytics.source_storage import get_source
+
+        source = await get_source(source_id)
+        if source and source.clone_path:
+            return Path(source.clone_path)
+    except Exception as exc:
+        logger.debug("Could not resolve source root for %s: %s", source_id, exc)
+    return None
+
+
 # Project root helper
 def get_project_root() -> Path:
     """
@@ -156,6 +182,75 @@ def get_project_root() -> Path:
         Path: Project root directory
     """
     return Path(__file__).resolve().parents[4]
+
+
+def filter_problems_by_file_existence(
+    problems: list[dict],
+    root_path: "Path | str | None" = None,
+) -> list[dict]:
+    """
+    Filter LLM-indexed problems to only those whose file_path exists on disk.
+
+    Issue #2724: The analytics problems scanner can produce findings that
+    reference file paths that do not exist in the indexed repository (hallucinated
+    paths from LLM analysis).  This validator resolves each relative file_path
+    against root_path and drops any finding whose path cannot be confirmed on
+    disk.  Validated findings receive ``file_verified: True`` so callers can
+    distinguish them from raw, unvalidated data.
+
+    Args:
+        problems: List of problem dicts as returned by ChromaDB queries.
+                  Each dict may contain a ``file_path`` key with a relative
+                  path string.
+        root_path: Absolute base directory to resolve relative paths against.
+                   Defaults to the project root when None or empty.
+
+    Returns:
+        Filtered list containing only problems whose file_path exists.
+        Each retained problem gains ``file_verified: True``.
+    """
+    if not problems:
+        return problems
+
+    base = Path(root_path) if root_path else get_project_root()
+
+    validated: list[dict] = []
+    dropped = 0
+
+    for problem in problems:
+        fp = problem.get("file_path", "")
+        if not fp:
+            # No file_path — keep as-is (cannot validate)
+            validated.append({**problem, "file_verified": False})
+            continue
+
+        full_path = (base / fp).resolve()
+        if not full_path.is_relative_to(base.resolve()):
+            dropped += 1
+            logger.debug(
+                "Dropping problem with path traversal outside root: %s (resolved: %s)",
+                fp,
+                full_path,
+            )
+            continue
+        if full_path.exists():
+            validated.append({**problem, "file_verified": True})
+        else:
+            dropped += 1
+            logger.debug(
+                "Dropping problem with non-existent file path: %s (resolved: %s)",
+                fp,
+                full_path,
+            )
+
+    if dropped:
+        logger.info(
+            "File path validation: dropped %d/%d problems with non-existent paths (#2724)",
+            dropped,
+            len(problems),
+        )
+
+    return validated
 
 
 # =============================================================================

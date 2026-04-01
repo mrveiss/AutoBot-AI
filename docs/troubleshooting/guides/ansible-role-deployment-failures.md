@@ -21,7 +21,7 @@
 1. **Duplicate roles**: Same role in multiple paths
 2. **Missing `ansible.cfg`**: Roles not in search path
 3. **Stale fact cache**: Old OS info after upgrade
-4. **Venv Python mismatch**: System Python changed (3.8→3.10)
+4. **Venv Python mismatch**: System Python changed (3.8→3.12)
 5. **Missing role defaults**: Variables undefined
 6. **Internet idempotency**: Fleet VMs offline, downloads fail
 

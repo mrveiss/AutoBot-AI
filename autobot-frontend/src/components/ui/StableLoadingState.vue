@@ -77,6 +77,7 @@ const placeholderStyle = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .stable-loading-container {
   @apply relative w-full;
   transition: all 0.2s ease-in-out;

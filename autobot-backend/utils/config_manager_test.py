@@ -8,6 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+
 from config import get_config, get_config_section, is_feature_enabled
 from config.manager import ConfigManager as ConfigManager
 

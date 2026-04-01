@@ -11,9 +11,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field, validator
+
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
-from pydantic import BaseModel, Field, validator
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")
@@ -333,7 +334,7 @@ class WorkerHeartbeat(BaseModel):
                 "worker_id": "windows_npu_worker_abc123",
                 "status": "online",
                 "platform": "windows",
-                "url": "http://192.168.168.21:8082",
+                "url": "http://127.0.0.1:8082",
                 "current_load": 1,
                 "total_tasks_completed": 42,
                 "total_tasks_failed": 2,

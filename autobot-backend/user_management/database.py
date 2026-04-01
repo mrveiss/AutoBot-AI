@@ -6,6 +6,7 @@ PostgreSQL Database Connection Utilities
 
 Provides async SQLAlchemy session management with connection pooling.
 Follows the canonical client pattern established by Redis utilities.
+Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import logging
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
 from user_management.config import get_deployment_config
 
 logger = logging.getLogger(__name__)
@@ -27,12 +29,34 @@ _async_engine: Optional[AsyncEngine] = None
 _async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
 
+def _get_pool_config() -> dict:
+    """Get database pool settings from SSOT config (#2860)."""
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        pool_cfg = get_config().database_pool
+        return {
+            "pool_size": pool_cfg.pool_size,
+            "max_overflow": pool_cfg.max_overflow,
+            "pool_recycle": pool_cfg.pool_recycle,
+            "pool_timeout": pool_cfg.pool_timeout,
+        }
+    except Exception:
+        logger.warning("Could not load SSOT database pool config, using defaults")
+        return {
+            "pool_size": 10,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+        }
+
+
 def get_async_engine() -> AsyncEngine:
     """
     Get the async SQLAlchemy engine singleton.
 
     Creates the engine on first call with connection pooling configured
-    to match the Redis pool size (20 connections).
+    from SSOT config (#2860).
     """
     global _async_engine
 
@@ -44,16 +68,20 @@ def get_async_engine() -> AsyncEngine:
     if not config.postgres_enabled:
         raise RuntimeError(
             "PostgreSQL is not enabled for deployment mode: "
-            f"{config.mode.value}. Set AUTOBOT_DEPLOYMENT_MODE to "
+            f"{config.mode.value}. Set AUTOBOT_USER_MODE to "
             "single_company, multi_company, or provider."
         )
 
+    pool = _get_pool_config()
+
     _async_engine = create_async_engine(
         config.postgres_url,
-        pool_size=5,  # Number of connections to maintain
-        max_overflow=10,  # Max additional connections under load
-        pool_pre_ping=True,  # Verify connections before use
-        echo=False,  # Set to True for SQL debugging
+        pool_size=pool["pool_size"],
+        max_overflow=pool["max_overflow"],
+        pool_recycle=pool["pool_recycle"],
+        pool_timeout=pool["pool_timeout"],
+        pool_pre_ping=True,
+        echo=False,
         future=True,
     )
 
@@ -136,10 +164,11 @@ async def init_database() -> None:
 
     Call this during application startup.
     """
-    logger.info("🔍 DEBUG: init_database() called")
+    logger.info("init_database() called")
     config = get_deployment_config()
     logger.info(
-        f"🔍 DEBUG: Got deployment config - postgres_enabled={config.postgres_enabled}"
+        "Got deployment config - postgres_enabled=%s",
+        config.postgres_enabled,
     )
 
     if not config.postgres_enabled:
@@ -149,34 +178,18 @@ async def init_database() -> None:
         )
         return
 
-    logger.info("🔍 DEBUG: PostgreSQL enabled, proceeding with initialization")
-    logger.info(
-        "🔍 DEBUG: Connection string: postgresql+asyncpg://"
-        f"{config.postgres_user}@{config.postgres_host}:"
-        f"{config.postgres_port}/{config.postgres_db}"
-    )
+    logger.info("PostgreSQL enabled, proceeding with initialization")
 
     try:
         from sqlalchemy import text
 
-        logger.info("🔍 DEBUG: About to call get_async_engine()")
         engine = get_async_engine()
-        logger.info(f"🔍 DEBUG: Engine created: {engine}")
 
-        logger.info(
-            "🔍 DEBUG: About to begin connection (this may hang if DB unreachable)"
-        )
         async with engine.begin() as conn:
-            logger.info("🔍 DEBUG: Connection established, executing SELECT 1")
-            # Simple connectivity check
             await conn.execute(text("SELECT 1"))
-            logger.info("🔍 DEBUG: SELECT 1 executed successfully")
         logger.info("PostgreSQL connection verified successfully")
     except Exception as e:
         logger.error("Failed to connect to PostgreSQL: %s", e)
-        import traceback
-
-        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
 
@@ -236,5 +249,5 @@ async def check_database_health() -> dict:
         return {
             "status": "unhealthy",
             "mode": config.mode.value,
-            "error": str(e),
+            "error": "Database health check failed",
         }

@@ -25,7 +25,6 @@
       - python3
       - python3-pip
       - python3-venv
-      - nginx
       - openssl
       - software-properties-common
       - build-essential
@@ -48,25 +47,6 @@
     name: ansible
     state: present
   tags: ['slm', 'packages', 'ansible']
-
-- name: "SLM | Check if NodeSource repo exists"
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/nodesource.list
-  register: slm_nodesource_repo
-  tags: ['slm', 'packages']
-
-- name: "SLM | Add NodeSource repository for Node.js 20.x"
-  ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  when: not slm_nodesource_repo.stat.exists
-  tags: ['slm', 'packages']
-
-- name: "SLM | Install Node.js (includes npm)"
-  ansible.builtin.apt:
-    name: nodejs
-    state: present
-    update_cache: true
-  tags: ['slm', 'packages']
 
 # ==========================================================
 # User and directories
@@ -93,6 +73,7 @@
     - "{{ slm_shared_dir }}"
     - "{{ slm_log_dir }}"
     - "{{ slm_certs_dir }}"
+    - /var/lib/slm
   tags: ['slm', 'directories']
 
 # ==========================================================
@@ -109,6 +90,8 @@
     cmd: openssl x509 -checkend 604800 -noout -in {{ slm_tls_cert }}
   register: slm_cert_valid
   changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
   failed_when: false
   when: slm_cert_stat.stat.exists
   tags: ['slm', 'tls']
@@ -153,6 +136,24 @@
   tags: ['slm', 'nginx', 'tls']
 
 # ==========================================================
+# Sync SLM backend code from code_source (#2747)
+# ==========================================================
+- name: "SLM | Sync SLM backend code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/"
+    dest: "{{ slm_backend_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--exclude=venv"
+      - "--exclude=data"
+    delete: true
+  notify: restart slm backend
+  tags: ['slm', 'backend', 'deploy']
+
+# ==========================================================
 # Backend Python venv and dependencies
 # ==========================================================
 - name: "SLM | Check if requirements.txt exists"
@@ -161,37 +162,31 @@
   register: slm_requirements_stat
   tags: ['slm', 'backend']
 
-- name: "SLM | Check venv Python version matches system"
+- name: "SLM | Check venv Python version matches target"
   ansible.builtin.shell:
     cmd: >-
       {{ slm_backend_dir }}/venv/bin/python3 --version 2>/dev/null
       | grep -oP '\d+\.\d+'
   register: _venv_py_version
   changed_when: false
+  # (#2872) Intentional: venv may not exist yet on fresh install;
+  # rc != 0 triggers venv recreation below.
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Get system Python version"
-  ansible.builtin.shell:
-    cmd: python3 --version | grep -oP '\d+\.\d+'
-  register: _sys_py_version
-  changed_when: false
-  when: slm_requirements_stat.stat.exists
-  tags: ['slm', 'backend']
-
-- name: "SLM | Remove stale venv after OS/Python upgrade"
+- name: "SLM | Remove stale venv if not Python 3.12"
   ansible.builtin.file:
     path: "{{ slm_backend_dir }}/venv"
     state: absent
   when:
     - slm_requirements_stat.stat.exists
-    - _venv_py_version.rc != 0 or _venv_py_version.stdout != _sys_py_version.stdout
+    - _venv_py_version.rc != 0 or _venv_py_version.stdout != '3.12'
   tags: ['slm', 'backend']
 
-- name: "SLM | Create Python virtual environment"
+- name: "SLM | Create Python 3.12 virtual environment"
   ansible.builtin.command:
-    cmd: python3 -m venv {{ slm_backend_dir }}/venv
+    cmd: python3.12 -m venv {{ slm_backend_dir }}/venv
     creates: "{{ slm_backend_dir }}/venv/bin/python"
   become_user: "{{ slm_user }}"
   when: slm_requirements_stat.stat.exists
@@ -205,11 +200,11 @@
   changed_when: true
   tags: ['slm', 'backend']
 
-# Issue #937: Sync and install autobot-shared before requirements (prometheus metrics)
-- name: "SLM | Sync autobot-shared to SLM server"
+# Issue #937: Sync and install autobot_shared before requirements (prometheus metrics)
+- name: "SLM | Sync autobot_shared to SLM server"
   ansible.posix.synchronize:
-    src: "{{ playbook_dir }}/../../autobot-shared/"
-    dest: "{{ slm_base_dir }}/autobot-shared/"
+    src: "{{ playbook_dir }}/../../../autobot_shared/"
+    dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -218,10 +213,13 @@
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
-- name: "SLM | Install autobot-shared in venv (editable)"
+- name: "SLM | Install autobot_shared in venv (editable)"
   ansible.builtin.command:
-    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
+    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot_shared"
   become_user: "{{ slm_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
   when: slm_requirements_stat.stat.exists
   changed_when: true
   tags: ['slm', 'backend']
@@ -232,6 +230,9 @@
     virtualenv: "{{ slm_backend_dir }}/venv"
     state: present
   become_user: "{{ slm_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
 
@@ -288,6 +289,23 @@
   tags: ['slm', 'backend', 'systemd']
 
 # ==========================================================
+# Co-located frontend detection (#3013)
+# Must run BEFORE frontend builds so VITE_API_URL is correct.
+# Auto-detect: if the user frontend code exists on this host,
+# enable co-located mode (SLM at /slm, user frontend at /).
+# ==========================================================
+- name: "SLM | Detect co-located user frontend (#3013)"
+  ansible.builtin.stat:
+    path: "{{ frontend_dist_dir | dirname }}/package.json"
+  register: _colocated_frontend_check
+  tags: ['slm', 'frontend', 'nginx']
+
+- name: "SLM | Set co-located frontend flag (#3013)"
+  ansible.builtin.set_fact:
+    slm_colocated_frontend: "{{ _colocated_frontend_check.stat.exists | default(false) }}"
+  tags: ['slm', 'frontend', 'nginx']
+
+# ==========================================================
 # Frontend build
 # ==========================================================
 - name: "SLM | Check if package.json exists"
@@ -312,7 +330,40 @@
   when: slm_frontend_build and slm_package_json.stat.exists
   register: slm_frontend_build_result
   changed_when: slm_frontend_build_result.rc == 0
+  environment:
+    VITE_API_URL: "{{ '/slm' if (slm_colocated_frontend | default(false) | bool) else '' }}"
   tags: ['slm', 'frontend']
+
+# ==========================================================
+# Co-located User Frontend build (#2829)
+# When SLM and user frontend share the same host, build both.
+# Auto-detect: check if the user frontend code exists.
+# ==========================================================
+- name: "SLM | Check if user frontend package.json exists"
+  ansible.builtin.stat:
+    path: "{{ frontend_dist_dir | dirname }}/package.json"
+  register: user_frontend_package_json
+  tags: ['slm', 'frontend', 'colocated']
+
+- name: "SLM | Install user frontend npm dependencies"
+  community.general.npm:
+    path: "{{ frontend_dist_dir | dirname }}"
+    state: present
+  become_user: "{{ slm_user }}"
+  when:
+    - user_frontend_package_json.stat.exists | default(false)
+  tags: ['slm', 'frontend', 'colocated']
+
+- name: "SLM | Build user frontend for production"
+  ansible.builtin.command:
+    cmd: npx vite build
+    chdir: "{{ frontend_dist_dir | dirname }}"
+  become_user: "{{ slm_user }}"
+  when:
+    - user_frontend_package_json.stat.exists | default(false)
+  register: user_frontend_build_result
+  changed_when: user_frontend_build_result.rc == 0
+  tags: ['slm', 'frontend', 'colocated']
 
 # ==========================================================
 # Grafana monitoring (Issue #853)
@@ -378,13 +429,21 @@
 # ==========================================================
 # Firewall
 # ==========================================================
+- name: "SLM | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _slm_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['slm', 'firewall']
+
 - name: "SLM | Allow HTTP"
   community.general.ufw:
     rule: allow
     port: "80"
     proto: tcp
     comment: "HTTP - AutoBot SLM"
-  ignore_errors: true
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 - name: "SLM | Allow HTTPS"
@@ -393,17 +452,18 @@
     port: "443"
     proto: tcp
     comment: "HTTPS - AutoBot SLM"
-  ignore_errors: true
+  when: _slm_ufw_check.rc == 0
   tags: ['slm', 'firewall']
 
 # ==========================================================
 # Start services
 # ==========================================================
+# (#2872) Removed ignore_errors — service start failures must surface.
+# If the service fails to start, deployment should report the real state.
 - name: "SLM | Start backend service"
   ansible.builtin.systemd:
     name: "{{ slm_backend_service }}"
     state: started
-  ignore_errors: true
   tags: ['slm', 'service']
 
 - name: "SLM | Flush handlers to apply pending restarts"

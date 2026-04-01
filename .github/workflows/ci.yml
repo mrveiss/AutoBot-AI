@@ -48,7 +48,6 @@ jobs:
 
         echo "Installing CI-safe requirements..."
         python -m pip install -r requirements-ci.txt --prefer-binary
-        python -m pip install --no-deps llama-index==0.13.0
 
         echo "Installing testing dependencies..."
         python -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
@@ -98,15 +97,15 @@ jobs:
 
         # Code formatting check (matches pre-commit black config)
         echo "Checking code formatting with black..."
-        black --check autobot-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88
+        black --check autobot-backend/ autobot-slm-backend/ autobot_shared/ --line-length=88
 
-        # Import sorting check (matches pre-commit isort config)
+        # Import sorting check — reads pyproject.toml for profile, src_paths, known_first_party (#2679)
         echo "Checking import sorting with isort..."
-        isort --check-only --profile=black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/
+        isort --check-only --settings-path=. autobot-backend/ autobot-slm-backend/ autobot_shared/
 
         # Linting (uses project .flake8 config — same as pre-commit)
         echo "Running flake8 linter..."
-        flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/
+        flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/
 
     - name: Run security analysis
       run: |
@@ -114,7 +113,7 @@ jobs:
         echo "🔒 Running security analysis..."
 
         # Security vulnerability scan — fail on medium+ severity/confidence
-        bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ \
+        bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ \
           --severity-level medium --confidence-level medium \
           -f json -o bandit-report.json
         if [ -f bandit-report.json ]; then
@@ -153,7 +152,7 @@ jobs:
         fi
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v6
       with:
         files: ./coverage.xml
         flags: unittests
@@ -235,7 +234,6 @@ jobs:
         source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install -r requirements-ci.txt --prefer-binary
-        python -m pip install --no-deps llama-index==0.13.0
 
     - name: Create necessary directories and config files
       run: |
@@ -287,11 +285,11 @@ jobs:
         echo "✅ All required files present"
 
         # Test configuration loading (PYTHONPATH includes backend for imports)
-        PYTHONPATH="autobot-backend:autobot-shared:$PYTHONPATH" \
+        PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
           python3 -c 'from config import config; print("Configuration system working")'
 
         # Test core imports
-        PYTHONPATH="autobot-backend:autobot-shared:$PYTHONPATH" \
+        PYTHONPATH="autobot-backend:autobot_shared:$PYTHONPATH" \
           python3 -c 'from security.enhanced_security_layer import EnhancedSecurityLayer; from security.secure_command_executor import SecureCommandExecutor; from app_factory import create_app; print("Core imports working")'
 
     - name: Generate deployment artifact

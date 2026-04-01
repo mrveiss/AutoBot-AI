@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import task_tracker
 
@@ -109,7 +110,7 @@ class ComputerVisionSystem:
                 return results
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Computer vision analysis failed"})
                 logger.error("Computer vision analysis failed: %s", e)
                 raise
 

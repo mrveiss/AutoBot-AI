@@ -14,6 +14,8 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from chat_workflow.tool_handler import BROWSER_TOOL_NAMES
+
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
@@ -82,7 +84,7 @@ class ToolRegistry:
             return result
         except Exception as e:
             self.logger.error("Error executing task %s: %s", task.get("task_id"), e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Task execution failed"}
 
     # System Integration Tools
 
@@ -528,8 +530,14 @@ class ToolRegistry:
         }
 
     def get_available_tools(self) -> List[str]:
-        """Get list of available tool names."""
-        return [
+        """Get list of available tool names.
+
+        Browser tool names are derived from BROWSER_TOOL_NAMES in
+        chat_workflow.tool_handler (Issue #2609) so both layers share a single
+        source of truth. Issue #2594: also includes web_search (Issue #2306).
+        """
+        # Registry-owned tools (system, knowledge-base, GUI, conversation)
+        registry_tools = [
             "execute_system_command",
             "query_system_information",
             "list_system_services",
@@ -537,6 +545,7 @@ class ToolRegistry:
             "get_process_info",
             "terminate_process",
             "web_fetch",
+            "web_search",
             "search_knowledge_base",
             "add_file_to_knowledge_base",
             "store_fact",
@@ -547,3 +556,6 @@ class ToolRegistry:
             "ask_user_for_manual",
             "respond_conversationally",
         ]
+        # Issue #1368/#2609: Browser tools are defined once in BROWSER_TOOL_NAMES
+        # and imported here so the two lists cannot drift independently.
+        return registry_tools + sorted(BROWSER_TOOL_NAMES)

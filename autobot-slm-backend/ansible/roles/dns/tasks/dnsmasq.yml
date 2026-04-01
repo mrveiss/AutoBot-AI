@@ -37,6 +37,8 @@
   command: systemctl is-active dnsmasq
   register: dnsmasq_status
   changed_when: false
+  # (#2872) Intentional: status check for display only; non-zero rc
+  # just means the service is inactive, reported below.
   failed_when: false
 
 - name: Display dnsmasq status

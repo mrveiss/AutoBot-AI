@@ -1,5 +1,98 @@
 # Real-Time Monitoring and Notification System
 
+
+## Quick Answer
+
+**How do you set up real-time monitoring with failure detection and notifications in AutoBot?**
+
+Use the `HealthCollector` to poll service status, publish alerts via Redis pub/sub,
+and deliver real-time notifications to the frontend via WebSocket. Here is a
+complete, self-contained script that monitors a service, detects failure, and sends
+a notification through all channels:
+
+```python
+#!/usr/bin/env python3
+"""Monitor a service, detect failure, send notification -- single cohesive flow."""
+
+import asyncio
+import json
+import logging
+import subprocess  # nosec B404
+
+from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import get_config
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+_config = get_config()
+BACKEND_URL = f"https://{_config.vm.main}:{_config.port.backend}"
+
+
+async def monitor_and_notify(service_name: str = "nginx", interval: int = 30):
+    """Monitor a systemd service and send alerts on failure.
+
+    1. Checks service status via systemctl
+    2. On failure: stores alert in Redis, publishes to pub/sub channel
+    3. Publishes a WebSocket live event for real-time frontend notification
+    4. Loops every `interval` seconds
+    """
+    redis = await get_redis_client(async_client=True, database="main")
+    last_status = "unknown"
+
+    while True:
+        proc = subprocess.run(
+            ["systemctl", "is-active", service_name],
+            capture_output=True, text=True, timeout=5,
+        )
+        current = proc.stdout.strip()
+        is_active = proc.returncode == 0
+
+        if not is_active and current != last_status:
+            severity = "CRITICAL" if current == "failed" else "WARNING"
+            alert = {
+                "type": "service_failure",
+                "service": service_name,
+                "status": current,
+                "severity": severity,
+                "message": f"Service {service_name} is {current}",
+            }
+
+            # Publish to Redis pub/sub for cross-service alerting
+            await redis.publish("system_alerts", json.dumps(alert))
+
+            # Publish to WebSocket live events channel for frontend delivery
+            live_event = {"event": "service_failure", "channel": "global", "data": alert}
+            await redis.publish("autobot:live_events", json.dumps(live_event))
+
+            logger.warning("ALERT [%s]: %s is %s", severity, service_name, current)
+
+        elif is_active and last_status in ("failed", "inactive"):
+            recovery = {"type": "service_recovery", "service": service_name, "status": "active"}
+            await redis.publish("system_alerts", json.dumps(recovery))
+            logger.info("RECOVERED: %s is active", service_name)
+
+        last_status = current
+        await asyncio.sleep(interval)
+
+
+if __name__ == "__main__":
+    asyncio.run(monitor_and_notify("autobot-backend", interval=15))
+```
+
+**Verify it works:**
+
+```bash
+curl -sk https://172.16.168.20:8443/api/system/health | python3 -m json.tool
+redis-cli -h 172.16.168.23 subscribe system_alerts
+```
+
+For the full implementation with SQLite storage, Prometheus metrics, auto-recovery,
+and systemd unit setup, see [Section 6](#6-complete-implementation-example).
+
+---
+
+
 AutoBot provides a comprehensive real-time monitoring, alerting, and notification
 system that spans the entire 6-VM distributed fleet. This guide covers every layer
 of the stack -- from the low-level `SystemMonitor` class that polls hardware metrics
@@ -93,8 +186,8 @@ cooperating subsystems:
 |-----------|----------|---------|
 | `SystemMonitor` | `autobot-infrastructure/shared/scripts/monitoring_system.py` | Collects CPU, memory, disk, network metrics via `psutil`. Runs HTTP health checks against backend and Redis. Stores all data in a local SQLite database. |
 | `HealthCollector` | `autobot-slm-backend/slm/agent/health_collector.py` | Runs on each fleet node as part of the SLM agent. Checks systemd service status via `systemctl`, discovers all services, collects system metrics, checks port connectivity. Reports failed/crash-looping services with journalctl error context. |
-| `PrometheusMetricsManager` | `autobot-shared/monitoring/prometheus_metrics.py` | Thread-safe singleton that defines and records all Prometheus metrics. Delegates to domain-specific recorders (ServiceHealth, System, Redis, WebSocket, etc.). |
-| `ServiceHealthMetricsRecorder` | `autobot-shared/monitoring/metrics/service_health.py` | Records service health scores, response times, and status (offline=0, healthy=1, degraded=2) as Prometheus gauges and histograms. |
+| `PrometheusMetricsManager` | `autobot_shared/monitoring/prometheus_metrics.py` | Thread-safe singleton that defines and records all Prometheus metrics. Delegates to domain-specific recorders (ServiceHealth, System, Redis, WebSocket, etc.). |
+| `ServiceHealthMetricsRecorder` | `autobot_shared/monitoring/metrics/service_health.py` | Records service health scores, response times, and status (offline=0, healthy=1, degraded=2) as Prometheus gauges and histograms. |
 | `MonitoringWebSocketManager` | `autobot-backend/api/monitoring.py` | Manages real-time WebSocket connections for the monitoring dashboard. Broadcasts performance metrics, alerts, and GPU/NPU utilization to connected clients. |
 | `LiveEventManager` | `autobot-backend/live_event_manager.py` | Channel-based pub/sub for scoped WebSocket events. Supports channels: `agent:{id}`, `task:{id}`, `workflow:{id}`, `global`. |
 | AlertManager Webhook | `autobot-backend/api/alertmanager_webhook.py` | Receives fired/resolved alerts from Prometheus AlertManager and broadcasts them to WebSocket clients. |
@@ -1439,7 +1532,7 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot
-Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot-shared:/opt/autobot
+Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot_shared:/opt/autobot
 ExecStart=/opt/autobot/venv/bin/python3 \
     /opt/autobot/scripts/service_failure_monitor.py \
     --service autobot-backend \
@@ -1489,7 +1582,7 @@ Type=simple
 User=autobot
 Group=autobot
 WorkingDirectory=/opt/autobot
-Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot-shared:/opt/autobot
+Environment=PYTHONPATH=/opt/autobot/autobot-backend:/opt/autobot/autobot_shared:/opt/autobot
 ExecStart=/opt/autobot/venv/bin/python3 \
     /opt/autobot/scripts/service_failure_monitor.py \
     --service %i \
@@ -2106,7 +2199,7 @@ journalctl -u autobot-service-monitor --since "10 minutes ago" --no-pager
 
 **Common causes and fixes:**
 - `ImportError: autobot_shared not found` -- Ensure `PYTHONPATH` in the unit
-  file includes `/opt/autobot/autobot-shared`
+  file includes `/opt/autobot/autobot_shared`
 - `ConnectionRefusedError` -- Redis on .23 not reachable; the monitor will retry
   on next interval automatically
 - `PermissionError` -- Ensure `ReadWritePaths` includes the reports directory
@@ -2190,8 +2283,8 @@ sqlite3 /opt/autobot/reports/monitoring/metrics.db \
 |------|---------|
 | `autobot-infrastructure/shared/scripts/monitoring_system.py` | `SystemMonitor` class |
 | `autobot-slm-backend/slm/agent/health_collector.py` | `HealthCollector` for systemd service monitoring |
-| `autobot-shared/monitoring/prometheus_metrics.py` | `PrometheusMetricsManager` singleton |
-| `autobot-shared/monitoring/metrics/service_health.py` | `ServiceHealthMetricsRecorder` |
+| `autobot_shared/monitoring/prometheus_metrics.py` | `PrometheusMetricsManager` singleton |
+| `autobot_shared/monitoring/metrics/service_health.py` | `ServiceHealthMetricsRecorder` |
 | `autobot-backend/api/system.py` | `/api/system/health` and `/api/system/metrics` endpoints |
 | `autobot-backend/api/error_monitoring.py` | Error monitoring REST API |
 | `autobot-backend/api/monitoring.py` | `MonitoringWebSocketManager` and dashboard endpoints |

@@ -6,14 +6,19 @@
     name: autobot-vnc
     state: restarted
   become: yes
-  ignore_errors: yes
+  # (#2872) Intentional: VNC service may not be deployed on all browser
+  # nodes (install_vnc flag).  Handler is notified from tasks that are
+  # conditionally included, so it must tolerate the unit being absent.
+  failed_when: false
 
 - name: restart playwright
   systemd:
     name: autobot-playwright
     state: restarted
   become: yes
-  ignore_errors: yes
+  # (#2872) Intentional: Playwright service may not be deployed yet when
+  # the handler fires during initial provisioning.
+  failed_when: false
 
 - name: reload systemd
   systemd:

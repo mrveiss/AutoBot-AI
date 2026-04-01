@@ -17,11 +17,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import numpy as np
+
 from ai_hardware_accelerator import (
     HardwareDevice,
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
 from config import cfg
 
 # Import existing AutoBot components
@@ -38,9 +41,6 @@ from utils.gpu_vector_search import (
     VectorSearchConfig,
     get_hybrid_vector_search,
 )
-
-from autobot_shared.http_client import get_http_client
-from autobot_shared.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage
 try:
@@ -860,7 +860,7 @@ class NPUSemanticSearch:
                 except Exception as e:
                     logger.error("❌ Benchmark failed for %s: %s", device.value, e)
                     device_results.append(
-                        {"query": query, "iteration": iteration, "error": str(e)}
+                        {"query": query, "iteration": iteration, "error": "Benchmark failed"}
                     )
 
         return device_results
@@ -1344,7 +1344,7 @@ class NPUSemanticSearch:
             }
         except Exception as e:
             logger.error("Failed to get code collection stats: %s", e)
-            return {"available": False, "error": str(e)}
+            return {"available": False, "error": "Failed to retrieve code collection stats"}
 
     def _search_single_modality(
         self,

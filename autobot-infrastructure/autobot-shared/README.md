@@ -1,6 +1,6 @@
-# autobot-shared Infrastructure
+# autobot_shared Infrastructure
 
-> Role: `autobot-shared` | Node: **All backend nodes** | Ansible role: `common`
+> Role: `autobot_shared` | Node: **All backend nodes** | Ansible role: `common`
 
 ---
 
@@ -47,7 +47,7 @@ Not applicable.
 ansible-playbook playbooks/deploy-full.yml --tags common
 
 # Manual sync
-rsync -avz autobot-shared/ autobot@172.16.168.20:/opt/autobot/autobot-shared/
+rsync -avz autobot_shared/ autobot@172.16.168.20:/opt/autobot/autobot_shared/
 ```
 
 ---
@@ -55,7 +55,7 @@ rsync -avz autobot-shared/ autobot@172.16.168.20:/opt/autobot/autobot-shared/
 ## Import Path
 
 ```python
-# Correct import path (deployed to /opt/autobot/autobot-shared/)
+# Correct import path (deployed to /opt/autobot/autobot_shared/)
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
 
@@ -68,11 +68,11 @@ backend_url = config.backend.url # Not: "https://172.16.168.20:8443"
 
 ## WSL2 Symlink Note
 
-At the repo root, `autobot_shared` is a symlink → `autobot-shared/` for WSL2 Python import compatibility. If git `core.symlinks=false`, this symlink is stored as a plain text file containing the target path.
+At the repo root, `autobot_shared` is a symlink → `autobot_shared/` for WSL2 Python import compatibility. If git `core.symlinks=false`, this symlink is stored as a plain text file containing the target path.
 
 After checkout:
 ```bash
-rm autobot_shared && ln -s autobot-shared autobot_shared
+rm autobot_shared && ln -s autobot_shared autobot_shared
 ```
 
 ---
@@ -82,7 +82,7 @@ rm autobot_shared && ln -s autobot-shared autobot_shared
 - **Redis client is canonical**: NEVER use `redis.Redis(host="172.16.168.23", ...)` directly. Always use `get_redis_client()`. Pre-commit hook enforces this.
 - **aioredis compatibility**: Python 3.13 merged aioredis into redis. Use `from redis import asyncio as aioredis` or the compatibility shim at `<venv>/lib/python3.13/site-packages/aioredis.py`.
 - **PYTHONPATH**: Deploying nodes must have `/opt/autobot` in `PYTHONPATH` so `import autobot_shared` resolves. Set in systemd unit `Environment=PYTHONPATH=/opt/autobot`.
-- **No recursion**: `autobot-shared` manifest sets `deploy.shared: false` — it IS the shared component, not a consumer of it.
+- **No recursion**: `autobot_shared` manifest sets `deploy.shared: false` — it IS the shared component, not a consumer of it.
 
 ---
 
@@ -91,6 +91,6 @@ rm autobot_shared && ln -s autobot-shared autobot_shared
 Role: `common` in `autobot-slm-backend/ansible/roles/common/`
 
 Key tasks:
-- Rsync `autobot-shared/` to `/opt/autobot/autobot-shared/`
+- Rsync `autobot_shared/` to `/opt/autobot/autobot_shared/`
 - Ensure `PYTHONPATH=/opt/autobot` in each role's systemd unit
 - No pip install needed (pure Python library)

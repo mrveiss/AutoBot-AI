@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiosqlite
+
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.registry import TaskRegistry
 

@@ -15,16 +15,17 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from api.websocket import ws_manager
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.database import Node, Service, ServiceStatus
 from pydantic import BaseModel, Field
-from services.auth import get_current_user
-from services.database import get_db
-from services.service_orchestrator import service_orchestrator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from api.websocket import ws_manager
+from models.database import Node, Service, ServiceStatus
+from services.auth import get_current_user
+from services.database import get_db
+from services.service_orchestrator import service_orchestrator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orchestration", tags=["orchestration"])
@@ -630,7 +631,7 @@ async def _run_ssh_service_action(
             action,
             str(e),
         )
-        return False, f"Error: {str(e)[:200]}"
+        return False, "Service action failed"
 
 
 @fleet_router.get("/services", response_model=FleetServicesResponse)

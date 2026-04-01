@@ -16,6 +16,7 @@ from typing import Any, Dict, List
 from urllib.parse import quote
 
 import aiohttp
+
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

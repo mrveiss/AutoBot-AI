@@ -27,10 +27,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # LLM Interface for real code generation
@@ -510,12 +510,12 @@ class CodeValidator:
         elif language in (CodeLanguage.TYPESCRIPT, CodeLanguage.JAVASCRIPT):
             return cls.validate_typescript(code)
         elif language == CodeLanguage.VUE:
-            # Extract script section and validate (#1721: use [^<] to avoid
-            # bad-tag-filter / ReDoS on nested angle brackets)
+            # Extract script section and validate (#1721, #1733: ReDoS fix -
+            # replaced nested quantifier with [\s\S]*? for linear-time matching)
             script_match = re.search(
-                r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+                r"<script[^>]*>([\s\S]*?)</script>",
                 code,
-                re.DOTALL | re.IGNORECASE,
+                re.IGNORECASE,
             )
             if script_match:
                 return cls.validate_typescript(script_match.group(1))
@@ -542,7 +542,7 @@ class CodeGenerationEngine:
     async def _get_redis(self):
         """Get Redis client lazily"""
         if self._redis is None:
-            self._redis = await get_redis_client(
+            self._redis = get_redis_client(
                 async_client=True, database=RedisDatabase.MAIN
             )
         return self._redis
@@ -662,7 +662,7 @@ class CodeGenerationEngine:
 
         except Exception as e:
             logger.error("LLM call failed: %s", str(e))
-            raise RuntimeError(f"LLM code generation failed: {str(e)}")
+            raise RuntimeError("LLM code generation failed") from e
 
     async def generate_code(
         self, request: CodeGenerationRequest

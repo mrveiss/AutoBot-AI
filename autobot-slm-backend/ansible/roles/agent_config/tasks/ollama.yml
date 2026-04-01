@@ -7,6 +7,8 @@
 - name: Check if Ollama is installed
   command: which ollama
   register: ollama_check
+  # (#2872) Intentional: `which` exits rc=1 when binary is absent;
+  # the result gates conditional installation below.
   failed_when: false
   changed_when: false
 

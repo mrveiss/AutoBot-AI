@@ -28,6 +28,9 @@
     name: playwright
     virtualenv: "{{ venv_dir }}"
   become_user: "{{ service_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
 
 - name: Check if Playwright browsers are installed
   stat:

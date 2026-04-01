@@ -16,11 +16,17 @@ Parent Epic: #217 - Advanced Code Intelligence
 
 import asyncio
 import logging
-import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
     ConflictParser,
@@ -29,11 +35,6 @@ from code_intelligence.merge_conflict_resolver import (
     ResolutionStrategy,
     analyze_repository,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -187,19 +188,43 @@ def _parse_resolution_strategy(
         )
 
 
-async def _validate_conflict_file(file_path: str) -> None:
-    """Helper for analyze_conflicts. Ref: #1088."""
-    file_exists = await asyncio.to_thread(os.path.exists, file_path)
+_CONFLICT_ALLOWED_EXTENSIONS = (".py", ".js", ".ts", ".java", ".cpp", ".c")
+
+
+def _assert_safe_path(user_path: str) -> Path:
+    """Resolve and validate *user_path* against allowed roots.
+
+    Raises HTTPException(400) when the path escapes the allowed
+    directories, contains null bytes, or is otherwise invalid.
+    Prevents path traversal attacks on all merge-conflict endpoints.
+
+    Issue #2848.
+    """
+    try:
+        return validate_path(user_path, must_exist=False)
+    except ValueError as exc:
+        logger.warning("Path traversal attempt blocked: %s — %s", user_path, exc)
+        raise HTTPException(status_code=400, detail="Invalid or disallowed path")
+
+
+async def _validate_conflict_file(file_path: str) -> Path:
+    """Validate *file_path* is safe, exists, and is a supported source file.
+
+    Helper for analyze_conflicts. Ref: #1088, #2848.
+    """
+    safe = _assert_safe_path(file_path)
+    file_exists = await asyncio.to_thread(safe.exists)
     if not file_exists:
         raise HTTPException(
             status_code=400,
             detail=f"File does not exist: {file_path}",
         )
-    if not file_path.endswith((".py", ".js", ".ts", ".java", ".cpp", ".c")):
+    if not file_path.endswith(_CONFLICT_ALLOWED_EXTENSIONS):
         raise HTTPException(
             status_code=400,
             detail="Only source code files are supported",
         )
+    return safe
 
 
 def _build_no_conflicts_response(file_path: str) -> JSONResponse:
@@ -242,15 +267,16 @@ async def analyze_conflicts(
 
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
+    Issue #2848: Path traversal prevention
     """
-    await _validate_conflict_file(request.file_path)
+    safe_path = await _validate_conflict_file(request.file_path)
 
     try:
         parser = ConflictParser()
-        conflicts = await asyncio.to_thread(parser.parse_file, request.file_path)
+        conflicts = await asyncio.to_thread(parser.parse_file, str(safe_path))
 
         if not conflicts:
-            return _build_no_conflicts_response(request.file_path)
+            return _build_no_conflicts_response(str(safe_path))
 
         conflicts_data = [_build_conflict_data(c) for c in conflicts]
         severity_counts = _calculate_severity_distribution(conflicts)
@@ -259,7 +285,7 @@ async def analyze_conflicts(
             status_code=200,
             content={
                 "status": "success",
-                "file_path": request.file_path,
+                "file_path": str(safe_path),
                 "conflict_count": len(conflicts),
                 "conflicts": conflicts_data,
                 "severity_distribution": severity_counts,
@@ -298,9 +324,10 @@ async def resolve_conflicts(
 
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
+    Issue #2848: Path traversal prevention
     """
-    # Validate file exists
-    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    safe_path = _assert_safe_path(request.file_path)
+    file_exists = await asyncio.to_thread(safe_path.exists)
     if not file_exists:
         raise HTTPException(
             status_code=400,
@@ -317,7 +344,7 @@ async def resolve_conflicts(
 
         results = await asyncio.to_thread(
             resolver.resolve_file,
-            request.file_path,
+            str(safe_path),
             strategy,
         )
 
@@ -363,16 +390,17 @@ async def analyze_repository_conflicts(
 
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
+    Issue #2848: Path traversal prevention
     """
-    # Validate repository path
-    repo_exists = await asyncio.to_thread(os.path.exists, request.repo_path)
+    safe_repo = _assert_safe_path(request.repo_path)
+    repo_exists = await asyncio.to_thread(safe_repo.exists)
     if not repo_exists:
         raise HTTPException(
             status_code=400,
             detail=f"Repository path does not exist: {request.repo_path}",
         )
 
-    repo_is_dir = await asyncio.to_thread(os.path.isdir, request.repo_path)
+    repo_is_dir = await asyncio.to_thread(safe_repo.is_dir)
     if not repo_is_dir:
         raise HTTPException(
             status_code=400,
@@ -381,7 +409,7 @@ async def analyze_repository_conflicts(
 
     try:
         # Analyze repository
-        analysis = await asyncio.to_thread(analyze_repository, request.repo_path)
+        analysis = await asyncio.to_thread(analyze_repository, str(safe_repo))
 
         return JSONResponse(
             status_code=200,
@@ -421,9 +449,10 @@ async def apply_resolution(
 
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
+    Issue #2848: Path traversal prevention
     """
-    # Validate file exists
-    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
+    safe_path = _assert_safe_path(request.file_path)
+    file_exists = await asyncio.to_thread(safe_path.exists)
     if not file_exists:
         raise HTTPException(
             status_code=400,
@@ -434,29 +463,29 @@ async def apply_resolution(
         # Create backup if requested
         backup_path = None
         if request.create_backup:
-            backup_path = (
-                f"{request.file_path}.backup.{int(datetime.now().timestamp())}"
-            )
+            backup_str = f"{safe_path}.backup.{int(datetime.now().timestamp())}"
+            backup_safe = _assert_safe_path(backup_str)
             await asyncio.to_thread(
-                lambda: __import__("shutil").copy2(request.file_path, backup_path)
+                lambda: __import__("shutil").copy2(str(safe_path), str(backup_safe))
             )
+            backup_path = str(backup_safe)
             logger.info("Created backup at %s", backup_path)
 
         # Write resolved content
         await asyncio.to_thread(
-            lambda: open(request.file_path, "w", encoding="utf-8").write(
+            lambda: open(str(safe_path), "w", encoding="utf-8").write(
                 request.resolved_content
             )
         )
 
-        logger.info("Applied resolution to %s", request.file_path)
+        logger.info("Applied resolution to %s", safe_path)
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "message": "Resolution applied successfully",
-                "file_path": request.file_path,
+                "file_path": str(safe_path),
                 "backup_path": backup_path,
                 "timestamp": datetime.now().isoformat(),
             },
@@ -554,9 +583,10 @@ async def check_file_conflicts(
 
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
+    Issue #2848: Path traversal prevention
     """
-    # Validate file exists
-    file_exists = await asyncio.to_thread(os.path.exists, file_path)
+    safe_path = _assert_safe_path(file_path)
+    file_exists = await asyncio.to_thread(safe_path.exists)
     if not file_exists:
         raise HTTPException(
             status_code=400,
@@ -565,13 +595,13 @@ async def check_file_conflicts(
 
     try:
         parser = ConflictParser()
-        has_conflicts = await asyncio.to_thread(parser.has_conflicts, file_path)
+        has_conflicts = await asyncio.to_thread(parser.has_conflicts, str(safe_path))
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
-                "file_path": file_path,
+                "file_path": str(safe_path),
                 "has_conflicts": has_conflicts,
                 "timestamp": datetime.now().isoformat(),
             },

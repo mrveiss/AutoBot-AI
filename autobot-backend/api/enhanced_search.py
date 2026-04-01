@@ -11,16 +11,16 @@ import asyncio
 import time
 from typing import List, Optional
 
-from ai_hardware_accelerator import HardwareDevice
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+from ai_hardware_accelerator import HardwareDevice
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.logging_manager import get_llm_logger
 
 # Import NPU semantic search components
 from npu_semantic_search import get_npu_search_engine
-from pydantic import BaseModel, Field
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("enhanced_search_api")
 

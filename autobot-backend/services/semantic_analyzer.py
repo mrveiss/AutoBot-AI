@@ -51,10 +51,10 @@ class SemanticAnalyzer:
             "class_naming": re.compile(r"class [A-Z][a-zA-Z0-9]*:"),
         },
         "google": {
-            "docstring": re.compile(r'"""[\s\S]*Args:[\s\S]*Returns:'),
+            "docstring": re.compile(r'"""[\s\S]{0,5000}Args:[\s\S]{0,5000}Returns:'),
         },
         "numpy": {
-            "docstring": re.compile(r'"""[\s\S]*Parameters[\s\S]*----------'),
+            "docstring": re.compile(r'"""[\s\S]{0,5000}Parameters[\s\S]{0,5000}----------'),
         },
     }
 

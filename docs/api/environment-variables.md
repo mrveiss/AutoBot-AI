@@ -17,13 +17,24 @@ AutoBot supports comprehensive configuration through environment variables with 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | **Primary** - Default LLM model for all tasks |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | **Quality tier** - Default LLM model for complex tasks (chat, research, code) |
 | `AUTOBOT_OLLAMA_HOST` | `172.16.168.24` | Ollama server host (AI Stack VM) |
 | `AUTOBOT_OLLAMA_PORT` | `11434` | Ollama server port |
 | `AUTOBOT_OLLAMA_ENDPOINT` | `http://${HOST}:${PORT}/api/generate` | Ollama API endpoint |
 | `AUTOBOT_LLM_PROVIDER_TYPE` | `local` | LLM provider type (local/cloud) |
 
 > **Note:** `AUTOBOT_OLLAMA_MODEL` is deprecated. Use `AUTOBOT_DEFAULT_LLM_MODEL` instead.
+
+### 6-Tier Model Configuration
+
+| Variable | Default | Tier | Purpose |
+|----------|---------|------|---------|
+| `AUTOBOT_MODEL_TIER_ROUTING` | `llama3.2:1b` | Routing | Orchestrator, request routing |
+| `AUTOBOT_MODEL_TIER_CLASSIFICATION` | `gemma2:2b` | Classification | Intent detection, category assignment |
+| `AUTOBOT_MODEL_TIER_LIGHT` | `phi3:mini` | Light Processing | Extraction, formatting |
+| `AUTOBOT_MODEL_TIER_INSTRUCTION` | `mistral:7b-instruct` | Instruction | RAG, step execution |
+| `AUTOBOT_MODEL_TIER_SYSTEM` | `dolphin-llama3:8b` | System | Commands, security |
+| `AUTOBOT_MODEL_TIER_QUALITY` | `qwen3.5:9b` | Quality | Chat, research, code |
 
 ## Redis Configuration
 
@@ -119,8 +130,13 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 
 ### Setting Default LLM Model
 ```bash
+# Quality tier (default for complex tasks)
 export AUTOBOT_DEFAULT_LLM_MODEL="qwen3.5:9b"
-export AUTOBOT_ORCHESTRATOR_LLM="qwen3.5:9b"
+
+# Override specific tiers
+export AUTOBOT_MODEL_TIER_ROUTING="llama3.2:1b"
+export AUTOBOT_MODEL_TIER_INSTRUCTION="mistral:7b-instruct"
+export AUTOBOT_MODEL_TIER_SYSTEM="dolphin-llama3:8b"
 ```
 
 ### Using Different Backend Port

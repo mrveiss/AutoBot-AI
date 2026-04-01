@@ -280,6 +280,7 @@ onUnmounted(async () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .chat-browser-container {
   @apply flex flex-col h-full bg-autobot-bg-card border border-autobot-border overflow-hidden rounded-lg;
 }

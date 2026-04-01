@@ -21,13 +21,13 @@ from urllib.parse import urlparse
 
 import aiohttp
 import yaml
+
+from autobot_shared.http_client import get_http_client
 from constants.security_constants import SecurityConstants
 from security.threat_intelligence import (
     ThreatIntelligenceService,
     get_threat_intelligence_service,
 )
-
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,9 @@ class DomainSecurityManager:
         for pattern in self.config.config.get("domain_security", {}).get(
             "blacklist", []
         ):
-            regex_pattern = pattern.replace("*", ".*").replace(".", "\\.")
+            # Split on wildcards, escape each literal part, rejoin with .*
+            parts = pattern.split("*")
+            regex_pattern = ".*".join(re.escape(p) for p in parts)
             self.blacklist_patterns.append(
                 re.compile(f"^{regex_pattern}$", re.IGNORECASE)
             )
@@ -192,7 +194,8 @@ class DomainSecurityManager:
         for pattern in self.config.config.get("domain_security", {}).get(
             "whitelist", []
         ):
-            regex_pattern = pattern.replace("*", ".*").replace(".", "\\.")
+            parts = pattern.split("*")
+            regex_pattern = ".*".join(re.escape(p) for p in parts)
             self.whitelist_patterns.append(
                 re.compile(f"^{regex_pattern}$", re.IGNORECASE)
             )
@@ -760,7 +763,7 @@ class DomainSecurityManager:
         except Exception as e:
             logger.error("Failed to get threat intel status: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve threat intelligence status",
                 "virustotal": {"configured": False},
                 "urlvoid": {"configured": False},
             }

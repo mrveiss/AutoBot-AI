@@ -181,7 +181,7 @@ onMounted(() => {
 <template>
   <div class="p-6 h-full flex flex-col">
     <!-- Terminal Container -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -215,7 +215,7 @@ onMounted(() => {
           <!-- Add Tab -->
           <button
             @click="addTab"
-            class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors"
+            class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-sm transition-colors"
             title="New Tab"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,7 +239,7 @@ onMounted(() => {
           <!-- Clear -->
           <button
             @click="clearTerminal"
-            class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors"
+            class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-sm transition-colors"
             title="Clear Terminal"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +309,7 @@ onMounted(() => {
             v-model="commandInput"
             @keydown="handleKeydown"
             type="text"
-            class="flex-1 bg-transparent text-gray-100 outline-none"
+            class="flex-1 bg-transparent text-gray-100 outline-hidden"
             placeholder="Enter command..."
             :disabled="loading"
           />
@@ -328,7 +328,7 @@ onMounted(() => {
           <h3 class="font-medium text-gray-900">{{ currentHost.name }}</h3>
           <p class="text-sm text-gray-600">{{ currentHost.description }}</p>
         </div>
-        <code class="text-sm bg-gray-200 px-2 py-1 rounded">{{ currentHost.ip }}</code>
+        <code class="text-sm bg-gray-200 px-2 py-1 rounded-sm">{{ currentHost.ip }}</code>
       </div>
     </div>
   </div>

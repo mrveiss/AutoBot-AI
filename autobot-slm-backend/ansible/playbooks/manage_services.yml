@@ -10,6 +10,13 @@
   vars:
     service_action: "{{ action | default('status') }}"
     valid_actions: ['start', 'stop', 'restart', 'status', 'enable', 'disable']
+    # Role detection — works with either inventory naming convention
+    is_frontend: "{{ 'frontend' in group_names }}"
+    is_database: "{{ 'database' in group_names or 'redis' in group_names }}"
+    is_npu: "{{ 'npu' in group_names or 'npu_workers' in group_names }}"
+    is_ai_stack: "{{ 'ai_stack' in group_names or 'ai' in group_names or 'aiml' in group_names }}"
+    is_browser: "{{ 'browser' in group_names }}"
+    is_slm: "{{ 'slm' in group_names }}"
 
   pre_tasks:
     - name: "Validate action parameter"
@@ -38,7 +45,7 @@
       loop:
         - nginx
         - autobot-frontend
-      when: "'frontend' in group_names"
+      when: is_frontend | bool
       register: frontend_service_result
       ignore_errors: yes
       tags: ['frontend']
@@ -48,7 +55,7 @@
         name: redis-stack-server
         state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
         enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
-      when: "'database' in group_names"
+      when: is_database | bool
       register: redis_service_result
       ignore_errors: yes
       tags: ['redis']
@@ -58,7 +65,7 @@
         name: autobot-npu-worker
         state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
         enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
-      when: "'npu' in group_names"
+      when: is_npu | bool
       register: npu_service_result
       ignore_errors: yes
       tags: ['npu_worker']
@@ -71,10 +78,23 @@
       loop:
         - ollama
         - autobot-ai-stack
-      when: "'aiml' in group_names"
+      when: is_ai_stack | bool
       register: ai_service_result
       ignore_errors: yes
       tags: ['ai_stack']
+
+    - name: "Manage SLM Backend Service"
+      systemd:
+        name: "{{ item }}"
+        state: "{{ service_action if service_action in ['started', 'stopped', 'restarted'] else omit }}"
+        enabled: "{{ true if service_action == 'enable' else false if service_action == 'disable' else omit }}"
+      loop:
+        - autobot-slm-backend
+        - nginx
+      when: is_slm | bool
+      register: slm_service_result
+      ignore_errors: yes
+      tags: ['slm']
 
     - name: "Manage Browser Services"
       systemd:
@@ -84,7 +104,7 @@
       loop:
         - autobot-vnc
         - autobot-playwright
-      when: "'browser' in group_names"
+      when: is_browser | bool
       register: browser_service_result
       ignore_errors: yes
       tags: ['browser']

@@ -16,9 +16,9 @@ from typing import Dict, Optional
 
 import structlog
 from fastapi import HTTPException, Request
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 from autobot_shared.redis_client import get_redis_client
+from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = structlog.get_logger()
 
@@ -253,4 +253,4 @@ async def validate_service_auth(request: Request) -> Dict:
         logger.error(
             "Service auth validation error", error=str(e), path=request.url.path
         )
-        raise_server_error("API_0003", f"Authentication service error: {str(e)}")
+        raise_server_error("API_0003", "Authentication service error")

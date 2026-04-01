@@ -200,7 +200,7 @@ OPENVINO_CACHE_DIR=/tmp/openvino_cache
 
 ```dockerfile
 # Dockerfile additions for OpenVINO
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Install OpenVINO dependencies
 RUN apt-get update && apt-get install -y \

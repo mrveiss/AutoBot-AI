@@ -19,11 +19,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from utils.service_registry import get_service_url
-
-from autobot_shared.logging_manager import get_logger
 
 # Get centralized logger
 logger = get_logger(__name__, "backend")

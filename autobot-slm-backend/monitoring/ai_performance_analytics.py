@@ -28,18 +28,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class NPUMetrics:
-    """NPU (Neural Processing Unit) performance metrics."""
+    """NPU (Neural Processing Unit) performance metrics.
+
+    Fields that require Intel NPU monitoring tools or benchmark_app are typed
+    Optional[float] and set to None when the hardware is detected but the data
+    cannot be retrieved.  Callers must check for None before using these values.
+    Ref: #2871.
+    """
 
     timestamp: str
     device_id: str
-    utilization_percent: float
-    memory_used_mb: float
-    memory_total_mb: float
+    utilization_percent: Optional[float]  # None when Intel NPU tools unavailable
+    memory_used_mb: Optional[float]  # None when Intel NPU tools unavailable
+    memory_total_mb: Optional[float]  # None when Intel NPU tools unavailable
     power_draw_watts: Optional[float]
     temperature_celsius: Optional[float]
     operations_per_second: Optional[float]
-    inference_latency_ms: float
-    throughput_mbps: float
+    inference_latency_ms: Optional[float]  # None when benchmark not performed
+    throughput_mbps: Optional[float]  # None when not measurable
     error_count: int = 0
 
 
@@ -179,10 +185,15 @@ else:
             if "NPU_FOUND" in openvino_output:
                 device_id = openvino_output.split(":")[1].strip()
 
-                # Get NPU utilization (simulated for now, requires Intel tools)
                 utilization = await self._get_npu_utilization()
                 memory_used, memory_total = await self._get_npu_memory()
                 inference_latency = await self._benchmark_npu_inference()
+
+                ops_per_sec = (
+                    1000.0 / inference_latency
+                    if inference_latency is not None and inference_latency > 0
+                    else None
+                )
 
                 return NPUMetrics(
                     timestamp=datetime.now(timezone.utc).isoformat(),
@@ -192,11 +203,9 @@ else:
                     memory_total_mb=memory_total,
                     power_draw_watts=None,  # Requires Intel NPU monitoring tools
                     temperature_celsius=None,
-                    operations_per_second=(
-                        1000.0 / inference_latency if inference_latency > 0 else 0
-                    ),
+                    operations_per_second=ops_per_sec,
                     inference_latency_ms=inference_latency,
-                    throughput_mbps=100.0,  # Estimated
+                    throughput_mbps=None,  # Cannot be measured without benchmark_app (#2871)
                     error_count=0,
                 )
         except Exception as e:
@@ -204,35 +213,40 @@ else:
 
         return None
 
-    async def _get_npu_utilization(self) -> float:
-        """Get current NPU utilization percentage."""
-        try:
-            # This would use Intel NPU monitoring APIs
-            # For now, simulate based on system load
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            # Estimate NPU usage based on AI workload indicators
-            return min(cpu_percent * 0.3, 100.0)  # Conservative estimate
-        except Exception:
-            return 0.0
+    async def _get_npu_utilization(self) -> Optional[float]:
+        """Get current NPU utilization percentage.
 
-    async def _get_npu_memory(self) -> Tuple[float, float]:
-        """Get NPU memory usage in MB."""
-        try:
-            # Intel NPU typically has dedicated memory
-            # This would use Intel NPU APIs
-            return 512.0, 2048.0  # Example: 512MB used of 2GB total
-        except Exception:
-            return 0.0, 0.0
+        Returns None when Intel NPU monitoring tools are unavailable.  Callers
+        must handle None explicitly.  Ref: #2871.
+        """
+        self.logger.debug(
+            "NPU utilization unavailable: Intel NPU monitoring tools not present (#2871)"
+        )
+        return None
 
-    async def _benchmark_npu_inference(self) -> float:
-        """Benchmark NPU inference latency."""
-        try:
-            start_time = time.time()
-            # Simple inference benchmark (placeholder)
-            await asyncio.sleep(0.05)  # Simulate 50ms inference
-            return (time.time() - start_time) * 1000
-        except Exception:
-            return 0.0
+    async def _get_npu_memory(self) -> Tuple[Optional[float], Optional[float]]:
+        """Get NPU memory usage in MB.
+
+        Returns (None, None) when Intel NPU monitoring tools are unavailable.
+        Callers must handle None explicitly.  Ref: #2871.
+        """
+        self.logger.debug(
+            "NPU memory unavailable: Intel NPU monitoring tools not present (#2871)"
+        )
+        return None, None
+
+    async def _benchmark_npu_inference(self) -> Optional[float]:
+        """Benchmark NPU inference latency.
+
+        Returns None when a real inference benchmark cannot be performed.
+        A real implementation requires loading a model via OpenVINO and timing
+        actual inference, which is not available in the current environment.
+        Callers must handle None explicitly.  Ref: #2871.
+        """
+        self.logger.debug(
+            "NPU inference benchmark not performed: no model/benchmark_app available (#2871)"
+        )
+        return None
 
     async def _run_pipeline_stages(self, start_time: float) -> tuple:
         """Simulate and time the three pipeline stages: load, inference, post-process.
@@ -812,7 +826,7 @@ else:
             self.logger.error(f"Error generating AI performance report: {e}")
             self.logger.error(traceback.format_exc())
             return {
-                "error": str(e),
+                "error": "Failed to generate AI performance report",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 

@@ -9,6 +9,14 @@ Contains workflow execution, step coordination, and agent interaction handling.
 
 Issue #2168: Added circuit breaker + retry decorators to step execution.
 Issue #2172: Added parallel execution for independent workflow steps.
+Issue #2140: DAG-based execution with condition evaluation and branch routing.
+Issue #2141: Structured variable piping — ${steps.<id>.output} resolved before
+             each step executes; completed step results stored as StepOutput.
+Issue #2154: Step-level error handlers (retry/skip/fallback/pause/abort) and
+             workflow resume-from-checkpoint via Redis.
+Issue #2143: Sub-workflow composition — a step with type="sub_workflow" delegates
+             to SubWorkflowExecutor, which executes the child workflow and stores
+             its result as a StepOutput under the caller's step_outputs registry.
 """
 
 import asyncio
@@ -22,13 +30,46 @@ from circuit_breaker import circuit_breaker_async
 from constants.threshold_constants import (
     CircuitBreakerDefaults,
     RetryConfig,
-    TimingConstants,
 )
 from retry_mechanism import RetryStrategy, retry_async
 
+from .dag_executor import (
+    DAGExecutionContext,
+    DAGExecutor,
+    DAGNode,
+    build_dag,
+    workflow_has_condition_nodes,
+)
+from .error_handler import (
+    StepCheckpoint,
+    StepErrorAction,
+    StepErrorHandler,
+    WorkflowCheckpointManager,
+)
+from .execution_modes import DebugController, DryRunValidator, ExecutionMode
+from .sub_workflow import (
+    SubWorkflowExecutor,
+    extract_sub_workflow_step,
+    is_sub_workflow_step,
+)
 from .types import AgentInteraction, AgentProfile
+from .variable_resolver import StepOutput, VariableResolver
+from .workflow_memory import WorkflowMemory
+
+# Issue #3101: lazy import to avoid circular deps at module level
+_notification_service = None
 
 logger = logging.getLogger(__name__)
+
+
+def _get_notification_service():
+    """Lazy-load NotificationService singleton (#3101)."""
+    global _notification_service  # noqa: PLW0603
+    if _notification_service is None:
+        from services.notification_service import NotificationService
+
+        _notification_service = NotificationService()
+    return _notification_service
 
 
 class WorkflowExecutor:
@@ -49,22 +90,40 @@ class WorkflowExecutor:
         reserve_agent_callback: Callable[[str], None],
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
+        workflow_fetcher: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
     ):
         """
         Initialize the workflow executor.
 
         Args:
-            agent_registry: Registry of available agents
-            agent_interactions: List to track agent interactions
-            reserve_agent_callback: Function to reserve an agent
-            release_agent_callback: Function to release an agent
-            update_performance_callback: Function to update agent performance
+            agent_registry:              Registry of available agents.
+            agent_interactions:          List to track agent interactions.
+            reserve_agent_callback:      Function to reserve an agent.
+            release_agent_callback:      Function to release an agent.
+            update_performance_callback: Function to update agent performance.
+            workflow_fetcher:            Optional callable ``(workflow_id) → workflow_dict``
+                                         used to load child workflows for sub-workflow
+                                         composition (Issue #2143).  When None, sub-workflow
+                                         steps raise ``ValueError`` at execution time.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
         self._reserve_agent = reserve_agent_callback
         self._release_agent = release_agent_callback
         self._update_performance = update_performance_callback
+        # Issue #2141: variable resolver for ${steps…} piping between steps
+        self._variable_resolver = VariableResolver()
+        # Issue #2154: checkpoint manager and error handler
+        self._checkpoint_manager = WorkflowCheckpointManager()
+        self._error_handler = StepErrorHandler()
+        # Issue #2143: sub-workflow executor (None when fetcher not provided)
+        self._sub_workflow_executor: Optional[SubWorkflowExecutor] = (
+            SubWorkflowExecutor(
+                workflow_executor=self, workflow_fetcher=workflow_fetcher
+            )
+            if workflow_fetcher is not None
+            else None
+        )
 
     def _group_steps_by_dependency(
         self, steps: List[Dict[str, Any]]
@@ -133,86 +192,648 @@ class WorkflowExecutor:
             execution_context["agents_involved"]
         )
 
+    def _resolve_notification_config(
+        self, workflow_id: str, execution_context: Dict[str, Any]
+    ):
+        """Resolve the workflow's NotificationConfig (#3168).
+
+        Looks for ``notification_config`` in ``execution_context`` (injected
+        by the workflow manager).  Returns None when no config is present,
+        which causes notification methods to skip silently.
+        """
+        from services.notification_service import NotificationConfig
+
+        raw = execution_context.get("notification_config")
+        if raw is None:
+            return None
+        if isinstance(raw, NotificationConfig):
+            return raw
+        if isinstance(raw, dict):
+            return NotificationConfig(workflow_id=workflow_id, **raw)
+        return None
+
+    async def _send_workflow_notification(
+        self, workflow_id: str, execution_context: Dict[str, Any]
+    ) -> None:
+        """Fire a notification for a terminal workflow status (#3101, #3168)."""
+        from services.notification_service import NotificationEvent
+
+        config = self._resolve_notification_config(workflow_id, execution_context)
+        if config is None:
+            return
+
+        status = execution_context.get("status", "")
+        event_map = {
+            "completed": NotificationEvent.WORKFLOW_COMPLETED,
+            "failed": NotificationEvent.WORKFLOW_FAILED,
+        }
+        event = event_map.get(status)
+        if event is None:
+            return
+        try:
+            svc = _get_notification_service()
+            payload = {
+                "workflow_id": workflow_id,
+                "status": status,
+                "error": execution_context.get("error", ""),
+            }
+            await svc.send(event, workflow_id, payload, config)
+        except Exception:
+            logger.warning(
+                "Failed to send %s notification for workflow %s",
+                status,
+                workflow_id,
+                exc_info=True,
+            )
+
+    async def _send_step_failure_notification(
+        self, workflow_id: str, step_id: str, error: str,
+        execution_context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Fire a STEP_FAILED notification (#3101, #3168)."""
+        from services.notification_service import NotificationEvent
+
+        config = self._resolve_notification_config(
+            workflow_id, execution_context or {}
+        )
+        if config is None:
+            return
+
+        try:
+            svc = _get_notification_service()
+            payload = {
+                "workflow_id": workflow_id,
+                "step_name": step_id,
+                "error": error,
+            }
+            await svc.send(
+                NotificationEvent.STEP_FAILED, workflow_id, payload, config
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send step-failure notification for %s/%s",
+                workflow_id,
+                step_id,
+                exc_info=True,
+            )
+
+    def _resolve_step_variables(
+        self, step: Dict[str, Any], step_outputs: Dict[str, StepOutput]
+    ) -> None:
+        """
+        Resolve ``${steps.<id>.<accessor>}`` tokens in *step* in-place.
+
+        Mutates the step dict's ``command`` (str) and ``inputs`` (dict of str
+        values) fields so the step executes with fully-substituted values.
+        Fields that contain no variable tokens are left untouched.
+
+        Issue #2141.
+        """
+        command = step.get("command")
+        if isinstance(command, str):
+            resolved = self._variable_resolver.resolve(command, step_outputs)
+            if resolved != command:
+                logger.debug(
+                    "Step %s: resolved command variables (#2141)", step.get("id")
+                )
+                step["command"] = resolved
+
+        inputs = step.get("inputs")
+        if isinstance(inputs, dict):
+            for key, value in inputs.items():
+                if isinstance(value, str):
+                    resolved_value = self._variable_resolver.resolve(
+                        value, step_outputs
+                    )
+                    if resolved_value != value:
+                        logger.debug(
+                            "Step %s: resolved input '%s' variable (#2141)",
+                            step.get("id"),
+                            key,
+                        )
+                        inputs[key] = resolved_value
+
     async def _execute_step_with_agent(
         self,
         step: Dict[str, Any],
         execution_context: Dict[str, Any],
         context: Dict[str, Any],
     ) -> None:
-        """Execute a single workflow step with agent management (Issue #398: extracted)."""
+        """Execute a single workflow step with agent management.
+
+        Issue #398: extracted from execute_coordinated_workflow.
+        Issue #2141: resolves ${steps…} variables in step command/inputs before
+        execution, then stores a StepOutput for downstream steps to reference.
+        Issue #2154: checkpoints successful steps; consults error handler on failure.
+        """
         step_start_time = time.time()
         agent_id = step.get("assigned_agent")
+        step_id = step["id"]
+
+        # Issue #2141: Resolve variable references using outputs from prior steps.
+        step_outputs: Dict[str, StepOutput] = execution_context.get("step_outputs", {})
+        self._resolve_step_variables(step, step_outputs)
+
+        # Issue #2143: sub-workflow steps are handled before agent reservation.
+        if is_sub_workflow_step(step):
+            await self._execute_sub_workflow_step(step, execution_context, context)
+            return
 
         if agent_id:
             self._reserve_agent(agent_id)
 
         try:
-            step_result = await self._execute_coordinated_step(
+            step_result = await self._execute_step_with_retry(
                 step, execution_context, context
             )
+            elapsed = time.time() - step_start_time
 
             step["status"] = "completed" if step_result.get("success") else "failed"
-            step["execution_time"] = time.time() - step_start_time
+            step["execution_time"] = elapsed
             step["result"] = step_result
-            execution_context["step_results"][step["id"]] = step_result
+            execution_context["step_results"][step_id] = step_result
+
+            # Issue #3101/#3168: notify on step failure.
+            if not step_result.get("success"):
+                await self._send_step_failure_notification(
+                    execution_context.get("workflow_id", ""),
+                    step_id,
+                    step_result.get("error", "unknown"),
+                    execution_context=execution_context,
+                )
+
+            # Issue #2141: Record typed StepOutput so later steps can reference it.
+            if "step_outputs" in execution_context:
+                execution_context["step_outputs"][step_id] = (
+                    StepOutput.from_step_result(step_result)
+                )
+
+            # Issue #2154: Checkpoint after successful completion.
+            if step_result.get("success"):
+                self._save_checkpoint(
+                    execution_context.get("workflow_id", ""), step_id, step_result
+                )
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
                 self._update_performance(
                     agent_id,
                     step_result.get("success", False),
-                    time.time() - step_start_time,
+                    elapsed,
                 )
         finally:
             if agent_id:
                 self._release_agent(agent_id)
+
+    async def _execute_sub_workflow_step(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> None:
+        """
+        Execute a sub-workflow invocation step and store its result.
+
+        Delegates to SubWorkflowExecutor, then stores the child execution
+        context as a StepOutput in ``execution_context["step_outputs"]`` under
+        the step's ID, so parent steps can reference child results via the
+        standard ``${steps.<id>.output.*}`` variable syntax.
+
+        Issue #2143.
+
+        Args:
+            step:              The sub-workflow step dict (type="sub_workflow").
+            execution_context: Parent workflow's execution context (mutated in-place).
+            context:           Parent workflow's input context forwarded to the child.
+        """
+        step_id = step["id"]
+        step_start_time = time.time()
+
+        if self._sub_workflow_executor is None:
+            logger.error(
+                "Sub-workflow step %s: no workflow_fetcher configured — cannot execute",
+                step_id,
+            )
+            step["status"] = "failed"
+            step["result"] = {
+                "success": False,
+                "step_id": step_id,
+                "error": "WorkflowExecutor was not initialised with a workflow_fetcher; "
+                "sub-workflow steps cannot be executed.",
+            }
+            execution_context["step_results"][step_id] = step["result"]
+            return
+
+        sub_step = extract_sub_workflow_step(step)
+        parent_step_outputs: Dict[str, StepOutput] = execution_context.get(
+            "step_outputs", {}
+        )
+
+        try:
+            step_result = await self._sub_workflow_executor.execute(
+                sub_step=sub_step,
+                parent_context=context,
+                parent_step_outputs=parent_step_outputs,
+            )
+        except Exception as exc:
+            elapsed = time.time() - step_start_time
+            logger.error("Sub-workflow step %s failed: %s", step_id, exc)
+            step["status"] = "failed"
+            step["execution_time"] = elapsed
+            step["result"] = {"success": False, "step_id": step_id, "error": str(exc)}
+            execution_context["step_results"][step_id] = step["result"]
+            return
+
+        elapsed = time.time() - step_start_time
+        step["status"] = "completed" if step_result.get("success") else "failed"
+        step["execution_time"] = elapsed
+        step["result"] = step_result
+        execution_context["step_results"][step_id] = step_result
+
+        # Store the child's execution context as a StepOutput for variable piping.
+        if "step_outputs" in execution_context:
+            child_ctx = step_result.get("sub_workflow_result", {})
+            stdout = ""
+            execution_context["step_outputs"][step_id] = StepOutput(
+                status="completed" if step_result.get("success") else "failed",
+                stdout=stdout,
+                parsed_json=child_ctx if isinstance(child_ctx, dict) else None,
+                metadata={"output_key": sub_step.output_key, "execution_time": elapsed},
+            )
+            logger.debug(
+                "Sub-workflow step %s: stored child result under step_outputs[%s]",
+                step_id,
+                step_id,
+            )
+
+        # Issue #2154: checkpoint after successful completion.
+        if step_result.get("success"):
+            self._save_checkpoint(
+                execution_context.get("workflow_id", ""), step_id, step_result
+            )
+
+    async def _execute_step_with_retry(
+        self,
+        step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Execute *step* and apply error_config on failure.
+
+        Handles RETRY (with backoff), SKIP, FALLBACK, PAUSE, and ABORT.
+        Returns a step result dict with ``success`` True/False.
+
+        Issue #2154.
+        """
+        attempt = 1
+        while True:
+            try:
+                return await self._execute_coordinated_step(
+                    step, execution_context, context
+                )
+            except Exception as exc:
+                outcome = await self._error_handler.handle_error(
+                    step, exc, attempt, execution_context
+                )
+                action = outcome["action"]
+
+                if action == StepErrorAction.RETRY:
+                    attempt += 1
+                    continue
+
+                if action == StepErrorAction.SKIP:
+                    step["status"] = "skipped"
+                    logger.info("Step %s skipped due to error_config", step.get("id"))
+                    return {"success": True, "skipped": True, "step_id": step.get("id")}
+
+                if action == StepErrorAction.FALLBACK:
+                    return await self._execute_fallback_step(
+                        outcome["fallback_id"], step, execution_context, context
+                    )
+
+                if action == StepErrorAction.PAUSE:
+                    execution_context["status"] = "paused"
+                    execution_context["paused_at_step"] = step.get("id")
+                    return {
+                        "success": False,
+                        "paused": True,
+                        "step_id": step.get("id"),
+                        "error": outcome["reason"],
+                    }
+
+                # ABORT — propagate so the caller marks the workflow failed.
+                raise
+
+    async def _execute_fallback_step(
+        self,
+        fallback_step_id: str,
+        original_step: Dict[str, Any],
+        execution_context: Dict[str, Any],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Look up and execute the fallback step for *original_step*.
+
+        If the fallback step is not found in the execution context's step
+        registry, abort with an error rather than silently returning success.
+
+        Issue #2154.
+        """
+        step_registry: Dict[str, Dict[str, Any]] = execution_context.get(
+            "step_registry", {}
+        )
+        fallback_step = step_registry.get(fallback_step_id)
+
+        if fallback_step is None:
+            logger.error(
+                "Step %s: fallback step '%s' not found in step_registry — ABORT",
+                original_step.get("id"),
+                fallback_step_id,
+            )
+            raise ValueError(
+                f"Fallback step '{fallback_step_id}' not found in workflow "
+                f"(original step: {original_step.get('id')})"
+            )
+
+        logger.info(
+            "Executing fallback step %s for failed step %s",
+            fallback_step_id,
+            original_step.get("id"),
+        )
+        try:
+            result = await self._execute_coordinated_step(
+                fallback_step, execution_context, context
+            )
+            result["fallback_for"] = original_step.get("id")
+            return result
+        except Exception as exc:
+            logger.error("Fallback step %s also failed: %s", fallback_step_id, exc)
+            raise
+
+    def _save_checkpoint(
+        self, workflow_id: str, step_id: str, step_result: Dict[str, Any]
+    ) -> None:
+        """
+        Persist a checkpoint for *step_id* after successful execution.
+
+        Silently skips when *workflow_id* is empty (e.g. DAG adapter calls).
+
+        Issue #2154.
+        """
+        if not workflow_id:
+            return
+        checkpoint = StepCheckpoint(
+            step_id=step_id,
+            status="completed",
+            output=step_result,
+        )
+        self._checkpoint_manager.save(workflow_id, checkpoint)
 
     async def execute_coordinated_workflow(
         self,
         workflow_id: str,
         steps: List[Dict[str, Any]],
         context: Dict[str, Any],
+        edges: Optional[List[Dict[str, Any]]] = None,
+        resume_from_checkpoint: bool = False,
+        mode: ExecutionMode = ExecutionMode.NORMAL,
+        debug_controller: Optional[DebugController] = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
 
+        When the step list contains condition nodes (or explicit edges are
+        provided), delegates to DAGExecutor for branch-aware execution.
+        Plain linear workflows continue to use the existing dependency-group
+        path for full backward compatibility.  Issue #2140.
+
+        Issue #2154: Pass ``resume_from_checkpoint=True`` to skip steps that
+        already have a persisted checkpoint and continue from the first
+        incomplete step.  Checkpoints are cleared on full completion.
+
         Args:
-            workflow_id: Workflow identifier
-            steps: List of enhanced workflow steps
-            context: Workflow context
+            workflow_id:             Workflow identifier.
+            steps:                   List of enhanced workflow steps.
+            context:                 Workflow context.
+            edges:                   Optional DAG edge dicts.
+            resume_from_checkpoint:  When True, load prior checkpoints and skip
+                                     already-completed steps.
 
         Returns:
-            Execution context with results
+            Execution context with results.
         """
+        # Issue #2148: dry-run returns a validation report without executing.
+        if mode == ExecutionMode.DRY_RUN:
+            validator = DryRunValidator()
+            report = validator.validate(workflow_id, steps, edges)
+            return {
+                "status": "dry_run_complete",
+                "mode": "dry_run",
+                "dry_run_report": report.to_dict(),
+            }
+
+        effective_edges = edges or []
+        if workflow_has_condition_nodes(steps, effective_edges):
+            logger.info(
+                "Workflow %s: condition nodes detected — using DAG executor (#2140)",
+                workflow_id,
+            )
+            return await self._execute_dag_workflow(
+                workflow_id, steps, effective_edges, context
+            )
+
+        # Issue #2154: build a step registry so fallback resolution works.
+        step_registry = {s["id"]: s for s in steps}
+
+        # Issue #3019: shared KV store for in-flight collaboration between
+        # parallel steps.  Exposed via execution_context["shared_memory"] so
+        # step executors can read/write without knowing workflow internals.
+        shared_memory = WorkflowMemory(workflow_id=workflow_id)
+
         execution_context = {
             "workflow_id": workflow_id,
             "agents_involved": set(),
             "interactions": [],
             "step_results": {},
+            # Issue #2141: typed StepOutput objects for variable resolution
+            "step_outputs": {},
             "status": "in_progress",
+            # Issue #2154: registry for fallback step lookup
+            "step_registry": step_registry,
+            # Issue #3019: shared memory for parallel-step collaboration
+            "shared_memory": shared_memory,
         }
+
+        # Issue #2154: pre-populate results from persisted checkpoints.
+        if resume_from_checkpoint:
+            self._apply_checkpoints(workflow_id, steps, execution_context)
 
         try:
             # Execute steps in dependency-ordered parallel groups (Issue #2172)
             groups = self._group_steps_by_dependency(steps)
             logger.info(
-                "Workflow %s: %d steps in %d parallel group(s)",
+                "Workflow %s: %d steps in %d parallel group(s)%s",
                 workflow_id,
                 len(steps),
                 len(groups),
+                " (resuming)" if resume_from_checkpoint else "",
             )
 
             for group in groups:
-                await self._execute_step_group(group, execution_context, context)
+                # Issue #2154: skip groups where all steps are already checkpointed.
+                pending = [s for s in group if s.get("status") != "completed"]
+                if not pending:
+                    logger.debug(
+                        "Workflow %s: skipping fully-checkpointed group %s",
+                        workflow_id,
+                        [s["id"] for s in group],
+                    )
+                    continue
+                await self._execute_step_group(pending, execution_context, context)
+
+                # Issue #2154: stop if a step triggered a PAUSE.
+                if execution_context.get("status") == "paused":
+                    logger.info(
+                        "Workflow %s paused at step %s",
+                        workflow_id,
+                        execution_context.get("paused_at_step"),
+                    )
+                    return execution_context
 
             self._determine_workflow_status(steps, execution_context)
+
+            # Issue #2154: clear checkpoints on full success.
+            # Issue #3019: also clear shared memory — no longer needed once the
+            # workflow reaches a terminal state.
+            if execution_context.get("status") == "completed":
+                self._checkpoint_manager.clear(workflow_id)
+                shared_memory.clear()
+
+            # Issue #3101: fire notification on terminal status.
+            await self._send_workflow_notification(
+                workflow_id, execution_context
+            )
+
             return execution_context
 
         except Exception as e:
             logger.error("Workflow %s execution failed: %s", workflow_id, e)
             execution_context["status"] = "failed"
             execution_context["error"] = str(e)
+            # Issue #3101: fire failure notification.
+            await self._send_workflow_notification(
+                workflow_id, execution_context
+            )
             return execution_context
+
+    def _apply_checkpoints(
+        self,
+        workflow_id: str,
+        steps: List[Dict[str, Any]],
+        execution_context: Dict[str, Any],
+    ) -> None:
+        """
+        Load checkpoints from Redis and mark already-completed steps.
+
+        Mutates *steps* in-place (sets ``status="completed"``) and populates
+        ``execution_context["step_results"]`` and ``execution_context["step_outputs"]``
+        so variable resolution works correctly for resumed steps.
+
+        Issue #2154.
+        """
+        checkpoints = self._checkpoint_manager.load_all(workflow_id)
+        if not checkpoints:
+            return
+
+        logger.info(
+            "Workflow %s: resuming with %d checkpointed steps: %s",
+            workflow_id,
+            len(checkpoints),
+            list(checkpoints.keys()),
+        )
+
+        for step in steps:
+            step_id = step["id"]
+            cp = checkpoints.get(step_id)
+            if cp is None:
+                continue
+            step["status"] = "completed"
+            execution_context["step_results"][step_id] = cp.output
+            execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
+                cp.output
+            )
+
+    async def _execute_dag_workflow(
+        self,
+        workflow_id: str,
+        steps: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Execute a branching workflow via DAGExecutor.
+
+        Builds a WorkflowDAG from *steps* + *edges*, runs it, then
+        converts the DAGExecutionContext back into the legacy
+        execution_context dict shape so callers stay oblivious to the
+        execution path.  Issue #2140.
+        """
+        dag = build_dag(steps, edges)
+        executor = DAGExecutor(step_executor_callback=self._dag_step_adapter)
+        dag_ctx = await executor.execute(dag, workflow_id, context)
+        return self._dag_ctx_to_execution_context(dag_ctx)
+
+    async def _dag_step_adapter(
+        self,
+        node: DAGNode,
+        dag_ctx: DAGExecutionContext,
+    ) -> Dict[str, Any]:
+        """
+        Bridge between DAGExecutor and the existing _execute_coordinated_step path.
+
+        Converts a DAGNode back into the dict shape expected by
+        _execute_coordinated_step, runs it, and returns the result.
+        Issue #2140.
+        """
+        step = dict(node.data)
+        step.setdefault("id", node.node_id)
+
+        # Build a minimal execution_context that _execute_step_with_agent can update.
+        # Issue #2141: share step_outputs from dag_ctx so variable references resolve
+        # across DAG branches that have already executed.
+        local_ctx: Dict[str, Any] = {
+            "workflow_id": dag_ctx.workflow_id,
+            "agents_involved": dag_ctx.agents_involved,
+            "interactions": dag_ctx.interactions,
+            "step_results": dag_ctx.step_results,
+            "step_outputs": dag_ctx.step_outputs,
+            "status": "in_progress",
+        }
+
+        await self._execute_step_with_agent(step, local_ctx, {})
+        return step.get("result", {"success": step.get("status") == "completed"})
+
+    @staticmethod
+    def _dag_ctx_to_execution_context(dag_ctx: DAGExecutionContext) -> Dict[str, Any]:
+        """
+        Convert a DAGExecutionContext into the legacy execution_context dict shape.
+
+        Issue #2140: Keeps the API surface of execute_coordinated_workflow
+        stable regardless of which executor ran.
+        """
+        return {
+            "workflow_id": dag_ctx.workflow_id,
+            "agents_involved": list(dag_ctx.agents_involved),
+            "interactions": dag_ctx.interactions,
+            "step_results": dag_ctx.step_results,
+            # Issue #2141: expose typed step outputs to callers
+            "step_outputs": dag_ctx.step_outputs,
+            "status": dag_ctx.status,
+            "branches_taken": dag_ctx.branches_taken,
+            "skipped_nodes": list(dag_ctx.skipped_nodes),
+            **({"error": dag_ctx.error} if dag_ctx.error else {}),
+        }
 
     async def _execute_step_group(
         self,
@@ -236,11 +857,17 @@ class WorkflowExecutor:
             [s["id"] for s in group],
         )
         # Issue #2204: each step writes to its own isolated context, merged after.
+        # Issue #2141: share a snapshot of current step_outputs so parallel steps
+        # can resolve references from prior groups; each step writes its own
+        # StepOutput to a local dict that is merged back below.
+        shared_prior_outputs = dict(execution_context.get("step_outputs", {}))
         isolated_contexts = [
             {
                 "step_results": {},
                 "agents_involved": set(),
                 "interactions": [],
+                # Shallow copy: prior-group outputs are readable; writes are isolated.
+                "step_outputs": dict(shared_prior_outputs),
             }
             for _ in group
         ]
@@ -254,6 +881,14 @@ class WorkflowExecutor:
             execution_context["step_results"].update(iso_ctx["step_results"])
             execution_context["agents_involved"].update(iso_ctx["agents_involved"])
             execution_context["interactions"].extend(iso_ctx["interactions"])
+            # Merge new step outputs written during this group into the main context.
+            if "step_outputs" in execution_context:
+                new_outputs = {
+                    k: v
+                    for k, v in iso_ctx["step_outputs"].items()
+                    if k not in shared_prior_outputs
+                }
+                execution_context["step_outputs"].update(new_outputs)
 
     def _create_agent_interaction(
         self,
@@ -377,6 +1012,21 @@ class WorkflowExecutor:
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
+        # Issue #3099: Auto-inject prior agent findings from shared memory
+        # into both the context dict and the step command/prompt so downstream
+        # agents receive the information without needing to read context explicitly.
+        shared_memory = execution_context.get("shared_memory")
+        if shared_memory:
+            prior_findings = shared_memory.get_all()
+            if prior_findings:
+                context["prior_agent_findings"] = prior_findings
+                findings_section = "\n\n## Prior Agent Findings\n"
+                for key, value in prior_findings.items():
+                    findings_section += f"- **{key}**: {value}\n"
+                command = step.get("command", "")
+                if isinstance(command, str) and command:
+                    step["command"] = command + findings_section
+
         try:
             result = await self._simulate_step_execution(step, context)
             if interaction:
@@ -397,27 +1047,29 @@ class WorkflowExecutor:
         context: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Simulate step execution (placeholder for actual agent execution).
+        Placeholder — actual agent delegation is not implemented.
 
-        In real implementation, this would delegate to actual agents.
+        Issue #2869: Replace this method body with a real agent dispatch call.
+        Until then, raise explicitly so workflows fail loudly rather than
+        returning fake results that look like real work.
 
         Args:
             step: The step to execute
             context: Workflow context
-
-        Returns:
-            Execution result
         """
-        action = step["action"]
-
-        # Add small delay to simulate work
-        await asyncio.sleep(TimingConstants.MICRO_DELAY)
-
-        return {
-            "action_completed": action,
-            "timestamp": time.time(),
-            "simulated": True,
-        }
+        step_id = step.get("id", "<unknown>")
+        action = step.get("action", "<unknown>")
+        logger.warning(
+            "Workflow step %s (action=%s) cannot be executed: "
+            "agent dispatch is not implemented. (#2869)",
+            step_id,
+            action,
+        )
+        raise NotImplementedError(
+            f"Workflow step '{step_id}' (action='{action}'): "
+            "agent execution is not implemented. "
+            "Wire _simulate_step_execution to the agent dispatcher. (#2869)"
+        )
 
     def _log_plan_details(self, workflow_id: str, plan_summary: Dict[str, Any]) -> None:
         """

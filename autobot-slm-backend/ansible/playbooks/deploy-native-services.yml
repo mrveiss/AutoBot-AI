@@ -369,6 +369,9 @@
         virtualenv: /opt/autobot/venv
         virtualenv_python: python3.11
       become_user: autobot-service
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
     - name: Install OpenVINO runtime for NPU Worker
       pip:
@@ -377,6 +380,9 @@
           - openvino-dev[pytorch,tensorflow]
         virtualenv: /opt/autobot/venv
       become_user: autobot-service
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
     - name: Create NPU Worker configuration
       template:
@@ -502,13 +508,19 @@
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
       become_user: autobot-service
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
     - name: Install Python dependencies
       shell: |
         cd /opt/autobot
         source venv/bin/activate
-        pip install -r src/requirements.txt
+        pip install --timeout 120 -r src/requirements.txt
       become_user: autobot-service
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
 
     - name: Install Ollama
       block:
@@ -549,13 +561,21 @@
             state: started
             daemon_reload: yes
 
-        - name: Pull default model
+        - name: Pull required Ollama models (6-tier mapping, #2553)
           shell: |
             sleep 10  # Wait for Ollama to start
-            /usr/local/bin/ollama pull llama3.2:1b
+            /usr/local/bin/ollama pull {{ item }}
           become_user: autobot-service
-          async: 300
-          poll: 10
+          async: 600
+          poll: 15
+          loop:
+            - "llama3.2:1b"           # Routing tier
+            - "gemma2:2b"             # Classification tier
+            - "phi3:mini"             # Light processing tier
+            - "mistral:7b-instruct"   # Instruction tier
+            - "dolphin-llama3:8b"     # System/uncensored tier
+            - "qwen3.5:9b"            # Quality tier
+            - "nomic-embed-text"      # Embeddings
 
     - name: Create AI Stack service
       copy:

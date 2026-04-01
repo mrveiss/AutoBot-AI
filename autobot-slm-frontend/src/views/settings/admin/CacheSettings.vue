@@ -200,7 +200,7 @@ onMounted(async () => {
   <div class="p-6 space-y-6">
     <!-- Messages -->
     <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
@@ -212,7 +212,7 @@ onMounted(async () => {
     </div>
 
     <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ success }}
@@ -221,7 +221,7 @@ onMounted(async () => {
     <!-- Cache API Unavailable Warning -->
     <div v-if="!cacheApiAvailable && !loading" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
       <div class="flex gap-4">
-        <svg class="w-6 h-6 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-6 h-6 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <div>
@@ -271,7 +271,7 @@ onMounted(async () => {
 
     <template v-if="cacheApiAvailable && !loading">
       <!-- Cache Configuration -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Cache Configuration</h2>
 
         <div class="space-y-4">
@@ -283,7 +283,7 @@ onMounted(async () => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="cacheConfig.enabled" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -353,7 +353,7 @@ onMounted(async () => {
       </div>
 
       <!-- Cache Statistics -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900">Cache Statistics</h2>
           <button
@@ -394,7 +394,7 @@ onMounted(async () => {
       </div>
 
       <!-- Redis Database Caches -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900">Redis Database Caches</h2>
         </div>
@@ -456,7 +456,7 @@ onMounted(async () => {
       </div>
 
       <!-- Application Caches -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900">Application Caches</h2>
         </div>

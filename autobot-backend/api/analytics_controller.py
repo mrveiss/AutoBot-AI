@@ -27,13 +27,12 @@ import redis
 
 # Import models from dedicated module (Issue #185)
 from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from config import ConfigManager
 from constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.system_metrics import get_metrics_collector
-
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
@@ -65,7 +64,7 @@ _DYNAMIC_SEGMENT_PATTERNS = [
     re.compile(r"^\d+$"),
     # Alphanumeric slugs that look generated: starts with alpha/digit, contains
     # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
-    re.compile(r"^(?=.*[a-z])(?=.*\d)[a-z0-9_-]{8,}$", re.I),
+    re.compile(r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I),
 ]
 
 

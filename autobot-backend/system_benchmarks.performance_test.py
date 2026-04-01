@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
-from config.manager import ConfigManager as ConfigManager
 from enhanced_memory_manager import EnhancedMemoryManager
+
+from config.manager import ConfigManager as ConfigManager
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,

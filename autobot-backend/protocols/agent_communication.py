@@ -26,9 +26,8 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
-
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
+from constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":
@@ -601,7 +600,7 @@ class AgentCommunicationProtocol:
                             ),
                             payload=MessagePayload(
                                 content={
-                                    "error": str(e),
+                                    "error": "Message handling failed",
                                     "error_type": type(e).__name__,
                                 }
                             ),

@@ -13,11 +13,12 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from api.analytics_models import CodeAnalysisRequest
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.analytics_models import CodeAnalysisRequest
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated
@@ -60,11 +61,12 @@ async def index_codebase(
     Issue #744: Requires admin authentication.
     """
     # Validate request
-    # Issue #358 - avoid blocking
-    if not await asyncio.to_thread(Path(request.target_path).exists):
+    try:
+        safe_target_path = validate_path(request.target_path, must_exist=True)
+    except (ValueError, PermissionError):
         raise HTTPException(
             status_code=400,
-            detail=f"Target path does not exist: {request.target_path}",
+            detail="Invalid or inaccessible target path",
         )
 
     # Perform analysis

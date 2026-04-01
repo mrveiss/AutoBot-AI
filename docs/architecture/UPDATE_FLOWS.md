@@ -34,7 +34,7 @@ post-commit hook
   ├─ rsync changed roles ──────────────────────────────►
   │   to /opt/autobot/cache/                            /opt/autobot/cache/
   │                                                       autobot-backend/
-  │                                                       autobot-shared/
+  │                                                       autobot_shared/
   │
   └─ POST /api/code-source/notify ───────────────────►
        { changed_roles, commit_hash }
@@ -131,7 +131,7 @@ ansible-playbook playbooks/update-all-nodes.yml \
   -i inventory/slm-nodes.yml \
   --limit 02-Frontend
 
-# One role across all nodes (e.g., after changing autobot-shared/)
+# One role across all nodes (e.g., after changing autobot_shared/)
 ansible-playbook playbooks/deploy-full.yml \
   --tags shared
 ```

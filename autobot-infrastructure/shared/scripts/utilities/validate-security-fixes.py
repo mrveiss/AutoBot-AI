@@ -54,7 +54,7 @@ class SecurityValidator:
                     "type": description,
                     "file": file_path,
                     "line": line_num,
-                    "content": content.strip(),
+                    "content": "[REDACTED — potential secret detected]",
                 }
             )
         return findings

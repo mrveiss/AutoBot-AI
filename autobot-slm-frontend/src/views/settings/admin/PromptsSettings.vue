@@ -165,7 +165,7 @@ onMounted(() => {
   <div class="p-6 space-y-6">
     <!-- Messages -->
     <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
@@ -177,14 +177,14 @@ onMounted(() => {
     </div>
 
     <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ success }}
     </div>
 
     <!-- Header with Controls -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900">Prompt Templates</h2>
         <button
@@ -234,7 +234,7 @@ onMounted(() => {
 
     <div class="grid lg:grid-cols-2 gap-6">
       <!-- Prompts List -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200">
           <h3 class="font-medium text-gray-900">Available Prompts ({{ filteredPrompts.length }})</h3>
         </div>
@@ -275,15 +275,15 @@ onMounted(() => {
                   {{ prompt.content.substring(0, 100) }}{{ prompt.content.length > 100 ? '...' : '' }}
                 </p>
                 <div class="flex items-center gap-2 mt-2">
-                  <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                  <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-sm text-xs">
                     {{ prompt.category }}
                   </span>
-                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
+                  <span v-if="prompt.is_default" class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-sm text-xs">
                     Default
                   </span>
                 </div>
               </div>
-              <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -292,12 +292,12 @@ onMounted(() => {
       </div>
 
       <!-- Prompt Editor -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
         <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <h3 class="font-medium text-gray-900">
             {{ selectedPrompt ? `Editing: ${selectedPrompt.name}` : 'Select a Prompt' }}
           </h3>
-          <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
+          <div v-if="hasUnsavedChanges" class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-sm text-xs font-medium">
             Unsaved Changes
           </div>
         </div>

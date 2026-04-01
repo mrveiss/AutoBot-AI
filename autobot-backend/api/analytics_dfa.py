@@ -23,10 +23,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)

@@ -14,14 +14,14 @@ import logging
 from typing import List
 
 import aiohttp
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

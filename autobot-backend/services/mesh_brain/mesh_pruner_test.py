@@ -7,6 +7,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock
 
 import pytest
+
 from services.mesh_brain.mesh_pruner import MeshPruner, PruningReport
 
 # =============================================================================

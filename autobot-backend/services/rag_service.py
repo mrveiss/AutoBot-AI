@@ -16,7 +16,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.redis_client import get_redis_client
 from knowledge.search_components.query_classifier import get_query_classifier
+from knowledge.search_components.retrieval_learner import get_retrieval_learner
 from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
@@ -27,9 +30,6 @@ from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
 from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
-
-from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("rag_service")
 
@@ -314,6 +314,67 @@ class RAGService:
         except Exception as exc:
             logger.debug("Semantic cache store failed: %s", exc)
 
+    async def _lookup_retrieval_pattern(
+        self,
+        query: str,
+        complexity: str,
+        categories: Optional[List[str]],
+    ) -> Optional[str]:
+        """Query the retrieval learner for a matching historical pattern. Issue #2095.
+
+        Returns the pattern_hash of the best match (for later outcome recording)
+        or None when no high-confidence pattern exists.  Strategy hints are
+        logged at DEBUG level; callers may inspect them via get_retrieval_learner().
+
+        Args:
+            query:      Raw query string.
+            complexity: QueryComplexity.value string.
+            categories: Optional category list from the search context.
+
+        Returns:
+            pattern_hash string or None.
+        """
+        try:
+            learner = get_retrieval_learner()
+            pattern = await learner.get_matching_pattern(
+                query=query, complexity=complexity, categories=categories
+            )
+            if pattern is not None:
+                logger.debug(
+                    "RetrievalLearner: matched pattern %s hints=%s",
+                    pattern.pattern_hash,
+                    pattern.strategy_hints,
+                )
+                return pattern.pattern_hash
+        except Exception as exc:
+            logger.debug("RetrievalLearner lookup failed (non-fatal): %s", exc)
+        return None
+
+    async def _record_retrieval_outcome(
+        self,
+        pattern_hash: Optional[str],
+        results: List[SearchResult],
+    ) -> None:
+        """Record search outcome against the matched retrieval pattern. Issue #2095.
+
+        Success is defined as returning at least one result with hybrid_score >= 0.5,
+        which mirrors the threshold used by the context-sufficiency evaluator.
+
+        Args:
+            pattern_hash: Hash returned by _lookup_retrieval_pattern(), or None.
+            results:      Final search results to evaluate.
+        """
+        if pattern_hash is None:
+            return
+        try:
+            success = any(r.hybrid_score >= 0.5 for r in results)
+            learner = get_retrieval_learner()
+            await learner.record_pattern_outcome(pattern_hash, success)
+        except Exception as exc:
+            logger.debug(
+                "RetrievalLearner outcome recording failed (non-fatal): %s", exc
+            )
+
     async def _emit_retrieval_feedback(
         self,
         query: str,
@@ -460,6 +521,35 @@ class RAGService:
         )
         return results, metrics
 
+    async def _emit_ranked_feedback(
+        self, query: str, results: List[SearchResult]
+    ) -> None:
+        """Classify query complexity and emit retrieval feedback to event + Redis stream.
+
+        ranked_ids: results already sorted by rerank_score (post-rerank order).
+        retrieved_ids: re-sorted by hybrid_score to recover pre-rerank retrieval order.
+        Ref: #2024, #1516, #2035, #2735.
+        """
+        classifier = get_query_classifier()
+        complexity = classifier.classify(query)
+        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
+        retrieved_ids = [
+            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
+        ]
+        await self._emit_retrieval_feedback(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
+            complexity=complexity.value,
+        )
+        await self._store_feedback_in_stream(
+            query=query,
+            retrieved_ids=retrieved_ids,
+            ranked_ids=ranked_ids,
+            complexity=complexity.value,
+        )
+
     async def advanced_search(
         self,
         query: str,
@@ -490,6 +580,13 @@ class RAGService:
             logger.warning("RAG init failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
+        # Issue #2095: consult retrieval learner for historical pattern hints.
+        classifier = get_query_classifier()
+        complexity = classifier.classify(query)
+        pattern_hash = await self._lookup_retrieval_pattern(
+            query=query, complexity=complexity.value, categories=categories
+        )
+
         cache_key = self._build_cache_key(
             query, max_results, enable_reranking, categories
         )
@@ -507,30 +604,10 @@ class RAGService:
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
 
-        # Classify query complexity for feedback tagging (Issue #2024)
-        classifier = get_query_classifier()
-        complexity = classifier.classify(query)
+        await self._emit_ranked_feedback(query, results)
 
-        # Emit retrieval feedback event and persist to Redis stream (#1516, #2035)
-        # ranked_ids: results are already sorted by rerank_score (post-rerank order).
-        # retrieved_ids: re-sort by hybrid_score to recover pre-rerank retrieval order.
-        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
-        pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [
-            r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order
-        ]
-        await self._emit_retrieval_feedback(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=ranked_ids,
-            complexity=complexity.value,
-        )
-        await self._store_feedback_in_stream(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=ranked_ids,
-            complexity=complexity.value,
-        )
+        # Issue #2095: record outcome so the learner can update success_rate.
+        await self._record_retrieval_outcome(pattern_hash, results)
 
         return results, metrics
 
@@ -572,7 +649,7 @@ class RAGService:
 
         except Exception as e:
             logger.error("Failed to get optimized context: %s", e)
-            return f"Error: {str(e)}", RAGMetrics()
+            return "Error: RAG context retrieval failed", RAGMetrics()
 
     async def rerank_results(
         self,

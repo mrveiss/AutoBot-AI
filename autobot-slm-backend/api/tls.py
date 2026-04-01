@@ -13,6 +13,10 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import Node
 from models.schemas import (
     TLSCredentialCreate,
@@ -25,9 +29,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.tls_credentials import get_tls_credential_service
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 
@@ -987,8 +988,10 @@ def _write_cert_files(tmpdir: str, certs: dict) -> tuple:
     with open(cert_path, "w", encoding="utf-8") as f:
         f.write(certs["certificate"])
 
+    # TLS private key written to ephemeral tmpdir for Ansible
+    # deployment; directory cleaned up after use.
     with open(key_path, "w", encoding="utf-8") as f:
-        f.write(certs["private_key"])
+        f.write(certs["private_key"])  # lgtm[py/clear-text-storage-sensitive-data]
 
     if chain_path:
         with open(chain_path, "w", encoding="utf-8") as f:

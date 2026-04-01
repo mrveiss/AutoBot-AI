@@ -46,59 +46,9 @@
   tags: ['frontend', 'config']
 
 # ============================================================
-- name: "Frontend | Check if Node.js is already installed"
-  ansible.builtin.command:
-    cmd: node --version
-  register: _node_check
-  changed_when: false
-  failed_when: false
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Install Node.js prerequisites"
-  apt:
-    name:
-      - curl
-      - gnupg
-      - ca-certificates
-    state: present
-  become: yes
-  when: _node_check.rc != 0
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Check if NodeSource repo exists"
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/nodesource.list
-  register: _nodesource_repo
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Add NodeSource repository for Node.js"
-  ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_version }} | bash -
-  when:
-    - _node_check.rc != 0
-    - not _nodesource_repo.stat.exists
-  become: yes
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Install Node.js and nginx"
-  apt:
-    name:
-      - nodejs
-      - nginx
-      - build-essential
-    state: present
-    update_cache: yes
-  become: yes
-  when: _node_check.rc != 0
-  tags: ['frontend', 'packages']
-
-- name: "Frontend | Ensure nginx is installed"
-  apt:
-    name: nginx
-    state: present
-  become: yes
-  when: _node_check.rc == 0
-  tags: ['frontend', 'packages']
+# Node.js and nginx are installed by shared dependency roles
+# in Phase 0 (nodejs, nginx). No per-role install needed.
+# ============================================================
 
 - name: "Frontend | Verify Node.js installation"
   command: node --version
@@ -115,6 +65,17 @@
     mode: '0755'
   become: yes
   tags: ['frontend', 'directories']
+
+- name: "Frontend | Sync frontend code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-frontend/"
+    dest: "{{ frontend_install_dir }}/autobot-frontend/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=__pycache__"
+      - "--exclude=.git"
+  tags: ['frontend', 'deploy']
 
 - name: "Frontend | Ensure TLS cert directory exists"
   file:
@@ -162,16 +123,27 @@
   tags: ['frontend', 'npm']
 
 - name: "Frontend | Install npm dependencies"
-  community.general.npm:
-    path: "{{ frontend_install_dir }}/autobot-frontend"
-    state: present
+  ansible.builtin.command:
+    cmd: npm install --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
   become: yes
   become_user: "{{ frontend_user }}"
   environment:
     CYPRESS_INSTALL_BINARY: "0"
   when: package_json_path.stat.exists
+  register: _npm_install
+  changed_when: _npm_install.rc == 0
   tags: ['frontend', 'npm']
-  ignore_errors: yes
+
+- name: "Frontend | Install esbuild (required by vite/rolldown)"
+  ansible.builtin.command:
+    cmd: npm install esbuild --legacy-peer-deps
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
+  become: yes
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
+  changed_when: true
+  tags: ['frontend', 'npm']
 
 - name: "Frontend | Build production frontend"
   command: npx vite build
@@ -182,6 +154,7 @@
   when: package_json_path.stat.exists
   tags: ['frontend', 'build']
 
+# Skip nginx config when co-located with SLM — SLM nginx handles both (#2829)
 - name: "Frontend | Configure nginx"
   template:
     src: nginx-frontend.conf.j2
@@ -192,6 +165,7 @@
   notify:
     - test nginx config
     - restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Enable nginx site"
@@ -201,6 +175,16 @@
     state: link
   become: yes
   notify: restart nginx
+  when: not (slm_colocated_frontend | default(false) | bool)
+  tags: ['frontend', 'nginx']
+
+- name: "Frontend | Disable standalone nginx when co-located with SLM (#2829)"
+  file:
+    path: /etc/nginx/sites-enabled/autobot-frontend
+    state: absent
+  become: yes
+  notify: restart nginx
+  when: slm_colocated_frontend | default(false) | bool
   tags: ['frontend', 'nginx']
 
 - name: "Frontend | Remove default nginx site"
@@ -240,13 +224,19 @@
   become: yes
   tags: ['frontend', 'service']
 
-- name: "Frontend | Stop legacy Vite dev server (if running)"
+- name: "Frontend | Check if legacy Vite dev server service exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-frontend.service
+  register: _legacy_frontend_service
+  tags: ['frontend', 'cleanup']
+
+- name: "Frontend | Stop and disable legacy Vite dev server"
   systemd:
     name: autobot-frontend
     state: stopped
     enabled: no
   become: yes
-  ignore_errors: yes
+  when: _legacy_frontend_service.stat.exists
   tags: ['frontend', 'cleanup']
 
 - name: "Frontend | Display configuration summary"
@@ -256,6 +246,6 @@
       - "Node.js: {{ node_version.stdout }}"
       - "Frontend URL: https://{{ ansible_default_ipv4.address }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
-      - "API Proxy: {{ backend_host }}:{{ backend_port }}"
+      - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"
       - "Nginx: Enabled (production build)"
   tags: ['frontend', 'report']

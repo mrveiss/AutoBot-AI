@@ -18,6 +18,7 @@ Parent Epic: #217 - Advanced Code Intelligence
 import textwrap
 
 import pytest
+
 from code_intelligence.precommit_analyzer import (
     CheckCategory,
     CheckDefinition,

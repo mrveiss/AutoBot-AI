@@ -15,6 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
@@ -28,8 +32,7 @@ from code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
-from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
+from constants.path_constants import PATH
 from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
@@ -44,12 +47,15 @@ from utils.file_categorization import (
 )
 from utils.io_executor import get_analytics_executor, run_in_analytics_executor
 
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import DuplicateAnalysis, DuplicateCodeDetector  # noqa: F401
 from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
+from .shared import (
+    filter_problems_by_file_existence,
+    get_project_root,
+    resolve_source_root,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1263,14 +1269,25 @@ def _generate_cross_language_section(
 
 def _fetch_problems_from_chromadb(
     source_id: Optional[str] = None,
+    source_root: Optional[Path] = None,
 ) -> List[Dict]:
     """
     Fetch code problems from ChromaDB collection.
 
     Issue #1772: source_id filters to per-project data.
+    Issue #2724: File paths are validated against source_root before
+    returning — findings that reference non-existent paths are dropped to
+    prevent hallucinated results from reaching the issue tracker.
+
+    Args:
+        source_id: Optional source registry ID to scope results.
+        source_root: Filesystem root to resolve relative file paths against.
+                     Defaults to the project root when None.
 
     Returns:
         List of problem dictionaries with type, severity, file_path, etc.
+        Each entry includes ``file_verified: True`` when the path was confirmed
+        on disk, or ``file_verified: False`` when the path field was absent.
     """
     code_collection = get_code_collection()
     problems = []
@@ -1310,7 +1327,14 @@ def _fetch_problems_from_chromadb(
                     }
                 )
 
-        logger.info("Retrieved %s problems for report", len(problems))
+        logger.info("Retrieved %s problems for report (pre-validation)", len(problems))
+
+        # Issue #2724: Validate file paths — drop findings that reference
+        # files not present in the indexed repository.
+        root = source_root or get_project_root()
+        problems = filter_problems_by_file_existence(problems, root)
+
+        logger.info("Returning %s validated problems for report", len(problems))
     except Exception as e:
         logger.error("Failed to fetch problems from ChromaDB: %s", e)
 
@@ -1519,11 +1543,14 @@ async def _get_pattern_analysis() -> Optional[PatternAnalysisReport]:
     """
     Get code pattern analysis for the project (Issue #208).
 
+    Issue #2655: Scope analysis to autobot-backend/ (PATH.BACKEND_DIR) instead of
+    the full repo root to avoid the 180s timeout on large codebases.
+
     Returns:
         PatternAnalysisReport or None if analysis fails
     """
     try:
-        project_root = str(Path(__file__).resolve().parents[4])
+        project_root = str(PATH.BACKEND_DIR)
 
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=True,
@@ -1565,12 +1592,14 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
 
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
+        # Issue #2655: Increased timeout from 60s to 120s — large codebases
+        # need more time for duplicate hash comparison across all Python/TS files.
         analysis = await asyncio.wait_for(
             asyncio.get_running_loop().run_in_executor(
                 get_analytics_executor(),
                 lambda: DuplicateCodeDetector(project_root=project_root).run_analysis(),
             ),
-            timeout=60.0,  # 60 second timeout for duplicate detection
+            timeout=120.0,  # 120 second timeout for duplicate detection
         )
 
         logger.info(
@@ -1635,8 +1664,10 @@ async def _get_bug_prediction(
         PredictionResult or None if analysis fails or times out
     """
     try:
-        # Use project root or default to current working directory
-        root = project_root or str(Path.cwd())
+        # Issue #2655: Use PATH.PROJECT_ROOT as fallback — Path.cwd() is unreliable
+        # in deployed environments where the backend process CWD may differ from
+        # the project root, causing FileNotFoundError in git subprocess calls.
+        root = project_root or str(PATH.PROJECT_ROOT)
 
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
@@ -2067,7 +2098,19 @@ async def generate_analysis_report(
     Returns:
         Markdown formatted report as plain text
     """
-    problems = await asyncio.to_thread(_fetch_problems_from_chromadb, source_id)
+    # Default to most recent source to prevent cross-project data mixing (#2653)
+    if not source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
+
+        source_id = await get_default_source_id()
+
+    # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
+    # (which runs in a thread) can validate file paths without blocking the event loop.
+    source_root = await resolve_source_root(source_id)
+
+    problems = await asyncio.to_thread(
+        _fetch_problems_from_chromadb, source_id, source_root
+    )
     analyses = await _resolve_analyses(
         quick=quick,
         include_bug_prediction=include_bug_prediction,

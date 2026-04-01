@@ -28,6 +28,8 @@
   register: ollama_models_check
   changed_when: false
   when: install_ollama
+  # (#2872) Intentional: model list may be empty on first provision
+  # before async model pulls complete; result is displayed below.
   failed_when: false
 
 - name: Check Node.js version

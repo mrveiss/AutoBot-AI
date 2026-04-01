@@ -4,20 +4,20 @@
 import asyncio
 import logging
 
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import ConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
 from constants.model_constants import ModelConstants
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
 from services.config_service import ConfigService
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from utils.advanced_cache_manager import cache_response
 from utils.connection_utils import ConnectionTester, ModelManager
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = ConfigManager()

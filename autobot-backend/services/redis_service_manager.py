@@ -5,14 +5,12 @@
 Redis Service Manager
 Manages Redis Stack service lifecycle and health on the Redis VM (see NetworkConstants.REDIS_VM_IP)
 
-Related Issue: #729 - SSH operations now proxied through SLM API
-
-TODO (#729): This service needs refactoring to proxy SSH through SLM API
+SSH operations are proxied through the SLM API (resolved in #729).
 
 Features:
 - Service control operations (start/stop/restart)
 - Health monitoring and status checks
-- Integration with SSHManager for remote operations (will proxy through SLM)
+- Integration with SSHManager for remote operations (proxied through SLM)
 - Audit logging for all service operations
 - RBAC enforcement for admin/operator roles
 """
@@ -26,6 +24,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 import aiohttp
+
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 
@@ -365,9 +364,9 @@ class RedisServiceManager:
             logger.error("Start service failed: %s", e)
             await self._record_error()
             self._audit_log(
-                "redis_service_start_failed", {"error": str(e)}, user_id=user_id
+                "redis_service_start_failed", {"error": type(e).__name__}, user_id=user_id
             )
-            return self._operation_failure_result("start", str(e), duration)
+            return self._operation_failure_result("start", "Service start failed", duration)
 
     async def stop_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
@@ -429,9 +428,9 @@ class RedisServiceManager:
             logger.error("Stop service failed: %s", e)
             await self._record_error()
             self._audit_log(
-                "redis_service_stop_failed", {"error": str(e)}, user_id=user_id
+                "redis_service_stop_failed", {"error": type(e).__name__}, user_id=user_id
             )
-            return self._operation_failure_result("stop", str(e), duration)
+            return self._operation_failure_result("stop", "Service stop failed", duration)
 
     async def restart_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
@@ -484,9 +483,9 @@ class RedisServiceManager:
             logger.error("Restart service failed: %s", e)
             await self._record_error()
             self._audit_log(
-                "redis_service_restart_failed", {"error": str(e)}, user_id=user_id
+                "redis_service_restart_failed", {"error": type(e).__name__}, user_id=user_id
             )
-            return self._operation_failure_result("restart", str(e), duration)
+            return self._operation_failure_result("restart", "Service restart failed", duration)
 
     async def get_service_status(self, use_cache: bool = True) -> ServiceStatus:
         """
@@ -536,7 +535,7 @@ class RedisServiceManager:
             from autobot_shared.redis_client import get_redis_client
 
             ping_start = datetime.now()
-            client = get_redis_client(async_client=True, database="main")
+            client = await get_redis_client(async_client=True, database="main")
             await client.ping()
             response_time_ms = (datetime.now() - ping_start).total_seconds() * 1000
             return True, response_time_ms

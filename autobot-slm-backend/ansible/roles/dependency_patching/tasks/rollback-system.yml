@@ -29,7 +29,7 @@
   ansible.builtin.debug:
     msg: |
       ═══════════════════════════════════════════════════════════
-      ⚠️ SYSTEM ROLLBACK INITIATED on {{ inventory_hostname }}
+      SYSTEM ROLLBACK INITIATED on {{ inventory_hostname }}
       ═══════════════════════════════════════════════════════════
 
       Latest dpkg backup: {{ latest_dpkg_backup | default('NONE FOUND') }}
@@ -41,13 +41,19 @@
       3. Provide dpkg backup for manual recovery
       ═══════════════════════════════════════════════════════════
 
+# (#2872) Rollback tasks below use failed_when: false because they run
+# during error recovery — the system is already in a degraded state and
+# each step is best-effort.  Results are logged and a final health check
+# determines overall rollback success.
+
 - name: Stop potentially broken service
   ansible.builtin.systemd:
     name: "{{ current_service.service_name }}"
     state: stopped
   when:
     - current_service.service_name is defined
-  ignore_errors: yes
+  # (#2872) Best-effort: service may already be stopped or unit may be broken
+  failed_when: false
   register: service_stop_rollback
 
 - name: Wait for service to stop
@@ -59,7 +65,8 @@
   ansible.builtin.apt:
     state: fixed
   register: apt_fix
-  ignore_errors: yes
+  # (#2872) Best-effort: apt fix may fail if package DB is corrupted
+  failed_when: false
   timeout: 300
 
 - name: Log apt fix result
@@ -92,7 +99,8 @@
     - current_service.service_name is defined
     - (service_unit_file.stat.exists | default(false)) or (service_unit_file_lib.stat.exists | default(false))
   register: service_restart_rollback
-  ignore_errors: yes
+  # (#2872) Best-effort: service restart may fail after broken package update
+  failed_when: false
 
 - name: Wait for service to stabilize after rollback
   ansible.builtin.pause:
@@ -113,7 +121,8 @@
     - health_check_enabled
     - current_service.health_endpoint is defined
     - current_service.health_endpoint is not none
-  ignore_errors: yes
+  # (#2872) Best-effort: health endpoint may not be reachable after rollback
+  failed_when: false
 
 - name: Log rollback result
   ansible.builtin.debug:

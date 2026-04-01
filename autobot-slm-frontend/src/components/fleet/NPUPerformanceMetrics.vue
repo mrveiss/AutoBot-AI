@@ -133,13 +133,13 @@ onBeforeUnmount(() => {
         <div
           v-for="i in 4"
           :key="i"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
           <div class="animate-pulse flex items-center gap-3">
             <div class="w-10 h-10 bg-gray-200 rounded-lg" />
             <div class="flex-1 space-y-2">
-              <div class="h-5 bg-gray-200 rounded w-16" />
-              <div class="h-3 bg-gray-200 rounded w-24" />
+              <div class="h-5 bg-gray-200 rounded-sm w-16" />
+              <div class="h-3 bg-gray-200 rounded-sm w-24" />
             </div>
           </div>
         </div>
@@ -150,15 +150,15 @@ onBeforeUnmount(() => {
         <div
           v-for="i in 3"
           :key="i"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
           <div class="animate-pulse space-y-3">
             <div class="flex justify-between">
-              <div class="h-4 bg-gray-200 rounded w-32" />
-              <div class="h-4 bg-gray-200 rounded w-16" />
+              <div class="h-4 bg-gray-200 rounded-sm w-32" />
+              <div class="h-4 bg-gray-200 rounded-sm w-16" />
             </div>
-            <div class="h-2 bg-gray-200 rounded w-full" />
-            <div class="h-2 bg-gray-200 rounded w-3/4" />
+            <div class="h-2 bg-gray-200 rounded-sm w-full" />
+            <div class="h-2 bg-gray-200 rounded-sm w-3/4" />
           </div>
         </div>
       </div>
@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
       <!-- Fleet Summary Cards -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Total Inferences -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-blue-100">
               <!-- Bolt / lightning icon -->
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Avg Latency -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-purple-100">
               <!-- Clock icon -->
@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Throughput -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-green-100">
               <!-- Trending up icon -->
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Queue Depth -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 rounded-lg bg-amber-100">
               <!-- Queue / list icon -->
@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
 
         <p
           v-if="nodeMetrics.length === 0"
-          class="text-sm text-gray-500 bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center"
+          class="text-sm text-gray-500 bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-center"
         >
           No NPU worker metrics available.
         </p>
@@ -261,7 +261,7 @@ onBeforeUnmount(() => {
         <div
           v-for="node in nodeMetrics"
           :key="node.node_id"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden"
         >
           <!-- Collapsed row header -->
           <button
@@ -273,7 +273,7 @@ onBeforeUnmount(() => {
               <!-- Chevron -->
               <svg
                 :class="[
-                  'w-4 h-4 text-gray-400 transition-transform flex-shrink-0',
+                  'w-4 h-4 text-gray-400 transition-transform shrink-0',
                   isExpanded(node.node_id) ? 'rotate-90' : '',
                 ]"
                 fill="none"
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
               </span>
             </div>
 
-            <div class="flex items-center gap-4 flex-shrink-0 text-sm">
+            <div class="flex items-center gap-4 shrink-0 text-sm">
               <!-- Utilization badge -->
               <span :class="['font-medium', utilizationTextColor(node.utilization)]">
                 {{ node.utilization.toFixed(1) }}%
@@ -352,7 +352,7 @@ onBeforeUnmount(() => {
             <!-- Detail grid -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <!-- Temperature -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p :class="['text-lg font-semibold', temperatureColor(node.temperature_celsius)]">
                   {{ temperatureDisplay(node.temperature_celsius) }}
                 </p>
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Inference Count -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.inference_count.toLocaleString() }}
                 </p>
@@ -368,7 +368,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Avg Latency -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.avg_latency_ms.toFixed(1) }}
                 </p>
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Throughput -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.throughput_rps.toFixed(2) }}
                 </p>
@@ -384,7 +384,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Queue Depth -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.queue_depth }}
                 </p>
@@ -392,7 +392,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Error Count -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p
                   :class="[
                     'text-lg font-semibold',
@@ -405,7 +405,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Uptime -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ formatUptime(node.uptime_seconds) }}
                 </p>
@@ -413,7 +413,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Last Report -->
-              <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-center p-2 bg-gray-50 rounded-sm">
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A' }}
                 </p>

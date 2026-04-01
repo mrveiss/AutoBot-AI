@@ -8,7 +8,7 @@
  * For the global singleton WebSocket, use useGlobalWebSocket instead.
  */
 
-import { ref, onUnmounted, watch, unref, type Ref } from 'vue'
+import { ref, computed, onUnmounted, watch, unref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for useWebSocket
@@ -134,7 +134,12 @@ export function useWebSocket(
   const isConnected = ref(false)
   const isConnecting = ref(false)
   const lastMessage = ref<any>(null)
-  const error = ref<Error | null>(null)
+  const errors = ref<Error[]>([])
+  const error = computed<Error | null>(() => {
+    if (errors.value.length === 0) return null
+    if (errors.value.length === 1) return errors.value[0]
+    return new Error(errors.value.map((e) => e.message).join('; '))
+  })
   const reconnectAttempts = ref(0)
 
   // Timers
@@ -188,7 +193,7 @@ export function useWebSocket(
     }
 
     isConnecting.value = true
-    error.value = null
+    errors.value = []
 
     try {
       ws.value = new WebSocket(wsUrl)
@@ -198,7 +203,7 @@ export function useWebSocket(
         connectionTimeoutTimer = setTimeout(() => {
           if (isConnecting.value) {
             logger.warn('Connection timeout')
-            error.value = new Error('Connection timeout')
+            errors.value = [...errors.value, new Error('Connection timeout')]
             ws.value?.close()
           }
         }, opts.connectionTimeout)
@@ -208,7 +213,7 @@ export function useWebSocket(
         isConnected.value = true
         isConnecting.value = false
         reconnectAttempts.value = 0
-        error.value = null
+        errors.value = []
         clearTimers()
 
         logger.info('Connected to:', wsUrl)
@@ -234,7 +239,7 @@ export function useWebSocket(
 
       ws.value.onerror = (event) => {
         logger.error('Error:', event)
-        error.value = new Error('WebSocket error')
+        errors.value = [...errors.value, new Error('WebSocket error')]
         isConnecting.value = false
         // Clear heartbeat timer - dead socket should not keep sending pings (#820)
         if (heartbeatTimer) {
@@ -272,12 +277,12 @@ export function useWebSocket(
           }, delay)
         } else if (opts.maxReconnectAttempts > 0 && reconnectAttempts.value >= opts.maxReconnectAttempts) {
           logger.warn('Max reconnection attempts reached')
-          error.value = new Error('Max reconnection attempts reached')
+          errors.value = [...errors.value, new Error('Max reconnection attempts reached')]
         }
       }
     } catch (err) {
       logger.error('Connection error:', err)
-      error.value = err instanceof Error ? err : new Error('Connection error')
+      errors.value = [...errors.value, err instanceof Error ? err : new Error('Connection error')]
       isConnecting.value = false
     }
   }
@@ -319,7 +324,7 @@ export function useWebSocket(
       return true
     } catch (err) {
       logger.error('Error sending data:', err)
-      error.value = err instanceof Error ? err : new Error('Send error')
+      errors.value = [...errors.value, err instanceof Error ? err : new Error('Send error')]
       return false
     }
   }

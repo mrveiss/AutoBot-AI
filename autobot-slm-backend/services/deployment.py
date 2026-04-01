@@ -16,12 +16,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.encryption import decrypt_data
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -185,17 +186,17 @@ _ENROLLMENT_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
 
           import psutil
           import requests
-          import urllib3
           import yaml
-
-          # Suppress InsecureRequestWarning for self-signed certs
-          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           logging.basicConfig(
               level=logging.INFO,
               format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
           )
           logger = logging.getLogger("slm-agent")
+
+          # TLS verification for heartbeat calls to the SLM admin (#2852).
+          # Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs.
+          _VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
           class SLMAgent:
@@ -228,8 +229,7 @@ _ENROLLMENT_PLAYBOOK_TEMPLATE = """# AutoBot - AI-Powered Automation Platform
                   try:
                       health = self.collect_health()
                       url = f"{self.config['admin_url']}/api/nodes/{self.config['node_id']}/heartbeat"
-                      # verify=False for self-signed certs on nginx proxy
-                      response = requests.post(url, json=health, timeout=10, verify=False)
+                      response = requests.post(url, json=health, timeout=10, verify=_VERIFY_TLS)
                       response.raise_for_status()
                       logger.debug("Heartbeat sent successfully")
                       return True
@@ -653,7 +653,7 @@ class DeploymentService:
             "-e",
             f"target_host={host}",
             "-e",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
             "-e",
             "ansible_ssh_pipelining=false",
         ]
@@ -879,7 +879,7 @@ class DeploymentService:
             logger.error("Enrollment failed for node %s: %s", node_id, e)
             node.status = NodeStatus.ERROR.value
             await db.commit()
-            return False, str(e)
+            return False, "Node enrollment failed"
 
     def _build_enrollment_command(
         self,
@@ -913,7 +913,7 @@ class DeploymentService:
             "-e",
             f"slm_heartbeat_interval={settings.heartbeat_interval}",
             "-e",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlPath=none'",
+            "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ControlPath=none'",
             "-e",
             "ansible_ssh_pipelining=false",
         ]

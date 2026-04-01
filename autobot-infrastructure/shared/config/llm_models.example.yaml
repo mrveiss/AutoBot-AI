@@ -65,7 +65,7 @@ performance_classification:
 
   # Standard models (2-8B parameters) - Balanced performance/quality
   standard:
-    - llama3.2:3b
+    - llama3.2:1b
     - gemma2:2b
     - gemma3:latest
     - artifish/llama3.2-uncensored

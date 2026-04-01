@@ -22,11 +22,12 @@ Admins bypass the per-workflow check (they hold all permissions).
 import logging
 from typing import Callable
 
+from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
-from fastapi import Depends, HTTPException, Request, status
 from services.workflow_permission_service import WorkflowPermissionService
-from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.config import DeploymentMode, get_deployment_config
 
 logger = logging.getLogger(__name__)

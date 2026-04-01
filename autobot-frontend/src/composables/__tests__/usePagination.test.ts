@@ -201,9 +201,10 @@ describe('usePagination - Navigation', () => {
     pagination.goToPage(10)  // Only 5 pages exist
 
     expect(pagination.currentPage.value).toBe(1)
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Invalid page number')
-    )
+    // createLogger passes [timestamp] as first arg, message as second
+    expect(consoleWarnSpy).toHaveBeenCalled()
+    const allArgs = consoleWarnSpy.mock.calls[0].join(' ')
+    expect(allArgs).toContain('Invalid page number')
 
     consoleWarnSpy.mockRestore()
   })

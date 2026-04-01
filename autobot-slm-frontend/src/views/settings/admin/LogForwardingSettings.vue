@@ -12,6 +12,7 @@
 
 import { ref, reactive, onMounted } from 'vue'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
+import config from '@/config/ssot-config'
 
 const api = useAutobotApi()
 
@@ -261,7 +262,7 @@ function getUrlPlaceholder(): string {
     case 'http':
       return 'https://webhook.example.com/logs'
     case 'elasticsearch':
-      return 'http://elasticsearch:9200'
+      return `http://elasticsearch:${config.port.elasticsearch}`
     default:
       return ''
   }
@@ -277,7 +278,7 @@ onMounted(async () => {
   <div class="p-6 space-y-6">
     <!-- Messages -->
     <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
@@ -289,14 +290,14 @@ onMounted(async () => {
     </div>
 
     <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ success }}
     </div>
 
     <!-- Service Status -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
           <div
@@ -394,14 +395,14 @@ onMounted(async () => {
             @change="toggleAutoStart"
             class="sr-only peer"
           />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
         </label>
         <span class="text-sm text-gray-700">Auto-start on backend startup</span>
       </div>
     </div>
 
     <!-- Destinations -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 class="font-semibold text-gray-900">Destinations</h3>
         <button
@@ -451,7 +452,7 @@ onMounted(async () => {
             <div class="flex items-center gap-3">
               <span
                 :class="[
-                  'px-2 py-1 rounded text-xs font-semibold uppercase',
+                  'px-2 py-1 rounded-sm text-xs font-semibold uppercase',
                   dest.type === 'syslog' ? 'bg-teal-100 text-teal-700' : '',
                   dest.type === 'http' ? 'bg-pink-100 text-pink-700' : '',
                   dest.type === 'file' ? 'bg-gray-100 text-gray-700' : '',
@@ -471,7 +472,7 @@ onMounted(async () => {
             <div class="flex items-center gap-2">
               <button
                 @click="testDestination(dest.id)"
-                class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded"
+                class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-sm"
                 title="Test Connection"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,7 +481,7 @@ onMounted(async () => {
               </button>
               <button
                 @click="openEditModal(dest)"
-                class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded"
+                class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-sm"
                 title="Edit"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -489,7 +490,7 @@ onMounted(async () => {
               </button>
               <button
                 @click="confirmDelete(dest.id)"
-                class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-sm"
                 title="Delete"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -620,7 +621,7 @@ onMounted(async () => {
                 v-model="formData.config.url"
                 type="text"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                placeholder="http://elasticsearch:9200"
+                :placeholder="`http://elasticsearch:${config.port.elasticsearch}`"
               />
             </div>
             <div>
@@ -671,7 +672,7 @@ onMounted(async () => {
           <div class="flex items-center gap-3 pt-2">
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="formData.enabled" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
             <span class="text-sm text-gray-700">Enabled</span>
           </div>

@@ -50,6 +50,9 @@ from .analyzers import (
 # Main engine
 from .engine import ThreatDetectionEngine
 
+# Adaptive learner
+from .learner import ThreatDetectionLearner
+
 # Data models
 from .models import (
     AnalysisContext,
@@ -104,4 +107,6 @@ __all__ = [
     "MaliciousFileAnalyzer",
     # Engine
     "ThreatDetectionEngine",
+    # Learner
+    "ThreatDetectionLearner",
 ]

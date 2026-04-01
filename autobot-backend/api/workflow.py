@@ -13,19 +13,19 @@ import uuid
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from pydantic import BaseModel
+
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from event_manager import event_manager
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 from models.task_context import WorkflowStepContext
 from monitoring.prometheus_metrics import get_metrics_manager
 from patterns.conversation_patterns import conversation_patterns
-from pydantic import BaseModel
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1007,7 +1007,8 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             await _handle_fallback_step(ctx, agent_type)
 
     except Exception as e:
-        step["result"] = f"Error executing step: {str(e)}"
+        logger.error("Error executing step %s: %s", step_id, e)
+        step["result"] = "Error executing step"
         step["status"] = "failed"
 
         # End step timing with failure

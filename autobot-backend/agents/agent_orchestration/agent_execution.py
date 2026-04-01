@@ -421,7 +421,7 @@ class AgentExecutor:
             return {
                 "status": "error",
                 "response": "Error in multi-agent coordination",
-                "error": str(e),
+                "error": "Multi-agent execution failed",
                 "routing_strategy": "multi_agent_error",
             }
 
@@ -448,7 +448,7 @@ class AgentExecutor:
             return {
                 "status": "error",
                 "response": "I'm unable to process this request at the moment.",
-                "error": str(e),
+                "error": "Orchestrator fallback failed",
                 "routing_strategy": "final_fallback",
             }
 

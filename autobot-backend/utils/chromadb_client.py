@@ -17,16 +17,17 @@ For async contexts (FastAPI endpoints, async functions), always use the
 async variants to prevent event loop blocking. See Issue #369.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import pickle  # nosec B403 — reading ChromaDB internal pickle files only
 import sqlite3
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
+from autobot_shared.ssot_config import config as _ssot_config
 
 # Re-export async utilities for convenient imports
 from utils.async_chromadb_client import (
@@ -37,13 +38,14 @@ from utils.async_chromadb_client import (
 )
 
 if TYPE_CHECKING:
-    pass
+    import chromadb  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-# Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
+# Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
+# Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
-_CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
+_CHROMADB_PORT = _ssot_config.ports.chromadb
 
 # Module exports
 __all__ = [
@@ -55,6 +57,46 @@ __all__ = [
     "wrap_collection_async",
     "_fix_hnsw_pickle_format",
 ]
+
+
+def _read_hnsw_params(cursor: sqlite3.Cursor, collection_id: str) -> dict:
+    """Read HNSW metadata for one collection from collection_metadata table.
+
+    Ref: #2735. Helper for _migrate_legacy_collection_configs.
+    """
+    cursor.execute(
+        "SELECT key, str_value, int_value, float_value "
+        "FROM collection_metadata WHERE collection_id=?",
+        (collection_id,),
+    )
+    hnsw: dict = {}
+    for key, sv, iv, fv in cursor.fetchall():
+        if key.startswith("hnsw:"):
+            hnsw[key[5:]] = sv if sv is not None else (iv if iv is not None else fv)
+    return hnsw
+
+
+def _build_collection_config_json(hnsw: dict) -> str:
+    """Build the ChromaDB 0.5.x config_json_str from HNSW parameter dict.
+
+    Ref: #2735. Helper for _migrate_legacy_collection_configs.
+    """
+    return json.dumps(
+        {
+            "hnsw_configuration": {
+                "space": hnsw.get("space", "l2"),
+                "ef_construction": hnsw.get("construction_ef", 100),
+                "ef_search": hnsw.get("search_ef", 10),
+                "num_threads": 4,
+                "M": hnsw.get("M", 16),
+                "resize_factor": 1.2,
+                "batch_size": 100,
+                "sync_threshold": 1000,
+                "_type": "HNSWConfigurationInternal",
+            },
+            "_type": "CollectionConfigurationInternal",
+        }
+    )
 
 
 def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
@@ -76,40 +118,13 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
         rows = cursor.fetchall()
 
         fixed = 0
-        for cid, name, config_str in rows:
+        for cid, _name, config_str in rows:
             config = json.loads(config_str) if config_str else {}
             if "_type" in config:
                 continue
 
-            # Read HNSW metadata stored by the old version
-            cursor.execute(
-                "SELECT key, str_value, int_value, float_value "
-                "FROM collection_metadata WHERE collection_id=?",
-                (cid,),
-            )
-            hnsw = {}
-            for key, sv, iv, fv in cursor.fetchall():
-                if key.startswith("hnsw:"):
-                    hnsw[key[5:]] = (
-                        sv if sv is not None else (iv if iv is not None else fv)
-                    )
-
-            new_cfg = json.dumps(
-                {
-                    "hnsw_configuration": {
-                        "space": hnsw.get("space", "l2"),
-                        "ef_construction": hnsw.get("construction_ef", 100),
-                        "ef_search": hnsw.get("search_ef", 10),
-                        "num_threads": 4,
-                        "M": hnsw.get("M", 16),
-                        "resize_factor": 1.2,
-                        "batch_size": 100,
-                        "sync_threshold": 1000,
-                        "_type": "HNSWConfigurationInternal",
-                    },
-                    "_type": "CollectionConfigurationInternal",
-                }
-            )
+            hnsw = _read_hnsw_params(cursor, cid)
+            new_cfg = _build_collection_config_json(hnsw)
             cursor.execute(
                 "UPDATE collections SET config_json_str=? WHERE id=?",
                 (new_cfg, cid),
@@ -119,8 +134,7 @@ def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
         if fixed:
             conn.commit()
             logger.info(
-                "Migrated %d ChromaDB collection config(s) " "to 0.5.x format",
-                fixed,
+                "Migrated %d ChromaDB collection config(s) to 0.5.x format", fixed
             )
         conn.close()
     except Exception as e:
@@ -257,6 +271,7 @@ def _fix_hnsw_pickle_format(chroma_path: Path) -> None:
     as None (HNSW init requires an int). This patches both.
     """
     try:
+        # Issue #3016: lazy import — chromadb is heavy
         from chromadb.segment.impl.vector.local_persistent_hnsw import PersistentData
     except ImportError:
         return
@@ -303,7 +318,7 @@ def get_chromadb_client(
     db_path: str = "",
     allow_reset: bool = False,
     anonymized_telemetry: bool = False,
-) -> Union[chromadb.HttpClient, chromadb.PersistentClient]:
+) -> Any:
     """
     Create a ChromaDB client with consistent configuration.
 
@@ -318,6 +333,10 @@ def get_chromadb_client(
     Returns:
         Configured ChromaDB client (Http or Persistent)
     """
+    # Issue #3016: lazy import — chromadb is heavy (~1s import)
+    import chromadb  # noqa: F811
+    from chromadb.config import Settings as ChromaSettings
+
     try:
         if _CHROMADB_HOST:
             client = chromadb.HttpClient(

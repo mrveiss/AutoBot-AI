@@ -8,9 +8,10 @@ Tests for SLM Stateful Services API.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from api.slm.stateful import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from api.slm.stateful import router
 from services.slm.stateful_manager import (
     BackupContext,
     BackupState,

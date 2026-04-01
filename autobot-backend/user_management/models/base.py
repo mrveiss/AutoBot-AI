@@ -14,8 +14,8 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
+from sqlalchemy.types import Uuid
 
 
 class Base(DeclarativeBase):
@@ -23,7 +23,7 @@ class Base(DeclarativeBase):
 
     # Use UUID as default type annotation for id columns
     type_annotation_map = {
-        uuid.UUID: UUID(as_uuid=True),
+        uuid.UUID: Uuid(as_uuid=True),
     }
 
 
@@ -55,7 +55,7 @@ class TenantMixin:
     @declared_attr
     def org_id(cls) -> Mapped[uuid.UUID]:
         return mapped_column(
-            UUID(as_uuid=True),
+            Uuid(as_uuid=True),
             ForeignKey("organizations.id", ondelete="CASCADE"),
             nullable=False,
             index=True,

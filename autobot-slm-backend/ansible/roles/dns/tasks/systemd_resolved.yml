@@ -8,6 +8,8 @@
   command: systemctl status systemd-resolved
   register: resolved_check
   changed_when: false
+  # (#2872) Intentional: systemd-resolved may not be installed on all hosts;
+  # the result gates conditional configuration below.
   failed_when: false
 
 - name: Configure systemd-resolved
@@ -39,6 +41,8 @@
   command: systemctl is-active systemd-resolved
   register: resolved_status
   changed_when: false
+  # (#2872) Intentional: status check for display only; non-zero rc
+  # just means the service is inactive, reported below.
   failed_when: false
   when: resolved_check.rc == 0
 

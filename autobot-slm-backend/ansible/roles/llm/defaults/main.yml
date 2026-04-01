@@ -9,25 +9,38 @@ llm_models_dir: /var/lib/ollama
 
 # Installation
 llm_install_ollama: true
-llm_pull_models: false
+llm_pull_models: true
 
 # GPU detection: "auto" runs nvidia-smi at deploy time.
 # Override with true/false to skip detection.
 llm_has_gpu: "auto"
 
+# AutoBot LLM Model Stack
+#
+# 6 models, ~15 GB total. GPU-accelerated on NVIDIA (RTX 4070+).
+#
+# ┌──────────────────┬──────────────────┬────────┬─────────────────────────────────┐
+# │ Tier             │ Model            │ Size   │ Purpose                         │
+# ├──────────────────┼──────────────────┼────────┼─────────────────────────────────┤
+# │ Embeddings       │ nomic-embed-text │ 274 MB │ RAG, vector search, memory      │
+# │ Routing          │ llama3.2:1b      │ 1.3 GB │ Orchestrator task routing       │
+# │ Classification   │ gemma2:2b        │ 1.6 GB │ Intent detection, filtering     │
+# │ Light processing │ phi3:mini        │ 2.2 GB │ Quick tasks, summaries          │
+# │ Main chat        │ gemma3:4b        │ 3.3 GB │ Default conversational LLM      │
+# │ Quality/tools    │ qwen3.5:9b       │ 6.6 GB │ Complex reasoning, tool use     │
+# └──────────────────┴──────────────────┴────────┴─────────────────────────────────┘
+
 # Models requiring GPU for reasonable performance (>= 7B parameters)
 llm_gpu_models:
-  - qwen3.5:9b      # Default LLM for all agents
-  - deepseek-r1:14b           # Multi-provider fallback
-  - codellama:13b             # Code generation
+  - qwen3.5:9b                # Quality/tools tier — default LLM for complex tasks
 
-# Lightweight models that run well on CPU (<= 3B parameters)
+# Lightweight models that run well on CPU (<= 4B parameters)
 llm_cpu_models:
   - nomic-embed-text          # Embeddings (vectorization, RAG, memory graph)
-  - llama3.2:1b               # Tier 1 fast ops (env analyzer, codebase analytics)
-  - llama3.2:3b               # Tier 2 processing
-  - llama3.2:latest           # Agent think tool reasoning
-  - gemma2:2b                 # Tiered routing simple tier
+  - llama3.2:1b               # Routing tier (orchestrator)
+  - gemma2:2b                 # Classification tier (intent detection)
+  - phi3:mini                 # Light processing tier
+  - gemma3:4b                 # Main chat tier (default conversational LLM)
 
 # Server settings
 llm_host: "0.0.0.0"

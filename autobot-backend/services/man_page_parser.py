@@ -24,6 +24,32 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Regex for validating command names passed to subprocess (Issue #1733).
+# Man page command names contain only alphanumeric, hyphen, underscore, dot, plus.
+_VALID_COMMAND_RE = re.compile(r"^[a-zA-Z0-9_.+-]+$")
+# Man page sections are single digits, optionally followed by a letter.
+_VALID_SECTION_RE = re.compile(r"^[0-9][a-zA-Z]?$")
+
+
+def _validate_man_args(command: str, section: str) -> None:
+    """Validate command and section before passing to subprocess.
+
+    Prevents command injection via untrusted input. Ref: #1733.
+
+    Raises:
+        ValueError: If command or section contains invalid characters.
+    """
+    if not _VALID_COMMAND_RE.match(command):
+        raise ValueError(
+            f"Invalid command name: {command!r} "
+            "(must contain only alphanumeric, hyphen, underscore, dot, or plus)"
+        )
+    if not _VALID_SECTION_RE.match(section):
+        raise ValueError(
+            f"Invalid man section: {section!r} "
+            "(must be a digit optionally followed by a letter)"
+        )
+
 
 # Man page section descriptions for metadata
 MAN_SECTION_DESCRIPTIONS = {
@@ -398,6 +424,7 @@ class ManPageParser:
         self, command: str, section: str
     ) -> subprocess.CompletedProcess:
         """Helper for parse_man_page_with_subprocess. Ref: #1088."""
+        _validate_man_args(command, section)
         cmd = ["man", section, command]
         return subprocess.run(
             cmd,
@@ -483,6 +510,9 @@ class ManPageParser:
             str: Brief description or empty string
         """
         try:
+            if not _VALID_COMMAND_RE.match(command):
+                logger.warning("Invalid command name for summary: %s", command)
+                return ""
             cmd = ["man", "-k", f"^{command}$"]
             proc = subprocess.run(
                 cmd,

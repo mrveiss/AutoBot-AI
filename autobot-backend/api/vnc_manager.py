@@ -17,6 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
 # Issue #74 - Area 5: Human-like behavior helpers
 from api.vnc_humanization import (
     humanize_action_delay,
@@ -27,12 +30,9 @@ from api.vnc_humanization import (
     simulate_mouse_curve,
 )
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import with_error_handling
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +135,26 @@ def is_vnc_running() -> bool:
         return False
 
 
+def _launch_websockify() -> None:
+    """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735."""
+    websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
+    vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
+    subprocess.Popen(  # nosec B607
+        [
+            "/usr/bin/websockify",
+            "--web",
+            "/usr/share/novnc",
+            "--cert=/etc/autobot/certs/server-cert.pem",
+            "--key=/etc/autobot/certs/server-key.pem",
+            "--ssl-only",
+            websockify_bind,
+            vnc_target,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def start_vnc_server() -> Dict[str, str]:
     """Start VNC server on display :1 with full XFCE desktop"""
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
@@ -153,7 +173,6 @@ def start_vnc_server() -> Dict[str, str]:
         }
 
     try:
-        # Start VNC server
         result = subprocess.run(  # nosec B607
             [
                 "/usr/bin/vncserver",
@@ -181,26 +200,7 @@ def start_vnc_server() -> Dict[str, str]:
                 "message": f"VNC server failed to start: {result.stderr}",
             }
 
-        # Start websockify for noVNC access (TLS-only, bound to localhost — proxied by nginx)
-        websockify_bind = (
-            f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
-        )
-        vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
-        subprocess.Popen(  # nosec B607
-            [
-                "/usr/bin/websockify",
-                "--web",
-                "/usr/share/novnc",
-                "--cert=/etc/autobot/certs/server-cert.pem",
-                "--key=/etc/autobot/certs/server-key.pem",
-                "--ssl-only",
-                websockify_bind,
-                vnc_target,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
+        _launch_websockify()
         return {"status": "started", "message": "VNC server started successfully"}
 
     except subprocess.TimeoutExpired:

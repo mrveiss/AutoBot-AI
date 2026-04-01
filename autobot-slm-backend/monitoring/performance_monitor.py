@@ -21,10 +21,10 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiohttp
 import psutil
-from config import ConfigManager
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -245,10 +245,15 @@ class PerformanceMonitor:
         return None, None
 
     async def get_npu_metrics(self) -> Optional[float]:
-        """Get NPU utilization (Intel AI Boost chip)."""
+        """Get NPU utilization (Intel AI Boost chip).
+
+        Returns the NPU utilization percentage when Intel NPU monitoring tools are
+        available, or None when they are not.  The legacy placeholder value of 0.0
+        has been removed — 0.0 is indistinguishable from "idle" and misleads callers.
+        Ref: #2871.
+        """
         try:
-            # Check Intel NPU via OpenVINO tools using async subprocess
-            # This is a placeholder - actual implementation depends on Intel NPU drivers
+            # Detect NPU via OpenVINO using async subprocess
             process = await asyncio.create_subprocess_exec(
                 "python3",
                 "-c",
@@ -259,8 +264,15 @@ class PerformanceMonitor:
             try:
                 stdout, _ = await asyncio.wait_for(process.communicate(), timeout=3.0)
                 if process.returncode == 0:
-                    # NPU is available but actual utilization requires specific Intel tools
-                    return 0.0  # Placeholder
+                    # NPU hardware detected. Actual utilization percentage requires
+                    # Intel NPU monitoring tools (e.g., intel_npu_top) which are not
+                    # available in this environment.  Return None so dashboards can
+                    # display "unavailable" rather than a misleading 0%.  Ref: #2871.
+                    self.logger.debug(
+                        "Intel NPU detected but utilization monitoring tools absent; "
+                        "returning None (#2871)"
+                    )
+                    return None
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()

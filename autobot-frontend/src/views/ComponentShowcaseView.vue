@@ -193,6 +193,7 @@
               </BaseBadge>
             </template>
 
+            <!-- eslint-disable-next-line vue/no-unused-vars -->
             <template #actions="{ row }">
               <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <BaseButton size="xs" variant="ghost">{{ $t('views.componentShowcase.edit') }}</BaseButton>

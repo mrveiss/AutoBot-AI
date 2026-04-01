@@ -2,20 +2,24 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# Full node decommission playbook (Issue #1369)
+# Full node decommission playbook (Issue #1369, #2678)
 #
-# Removes ALL AutoBot software, services, data, and caches from a node.
-# This is irreversible — use the preflight API to check for required
-# roles before running.
+# Removes ALL AutoBot software, services, data, users, packages, and
+# caches from a node — leaving a blank VM ready for reuse.
+# This is irreversible — use the preflight API before running.
 #
 # Optional vars:
 #   backup_before_decommission - Archive data dirs first (default: false)
 #   all_data_dirs              - List of data directories to backup
 #
-# Usage:
+# Usage (via API — preferred):
+#   The SLM backend generates a temporary single-host inventory and
+#   calls this playbook automatically.
+#
+# Usage (manual):
 #   ansible-playbook playbooks/decommission-node.yml \
-#     -i inventory/production.yml -i inventory/slm-nodes.yml \
-#     --limit <node_id> \
+#     -i inventory/slm-nodes.yml \
+#     --limit <hostname> \
 #     -e "backup_before_decommission=true"
 
 - name: "Decommission AutoBot node"
@@ -34,12 +38,51 @@
       - /var/lib/autobot
       - /usr/share/ollama/.ollama
       - /var/lib/ollama
+    # Packages installed during enrollment that should be removed.
+    # Base system packages (curl, wget, git, vim, etc.) are left intact
+    # since the OS may need them.
+    autobot_packages:
+      - redis-stack-server
+      - redis-tools
+      - ollama
+      - libopencv-dev
+      - python3-opencv
+    # APT repo files added during enrollment
+    autobot_repo_files:
+      - /etc/apt/sources.list.d/redis.list
+      - /etc/apt/sources.list.d/nodesource.list
+      - /etc/apt/sources.list.d/ollama.list
+    autobot_keyring_files:
+      - /usr/share/keyrings/redis-archive-keyring.gpg
+      - /usr/share/keyrings/nodesource.gpg
+    # Nginx configs to remove per role — explicit list instead of
+    # blanket "autobot*" glob to protect SLM configs on co-located
+    # hosts (#2918).  autobot-slm* is intentionally excluded; the API
+    # already blocks SLM Manager decommission (HTTP 400) but this
+    # provides defense-in-depth for manual playbook runs.
+    _nginx_role_configs:
+      # backend
+      - /etc/nginx/sites-enabled/autobot-backend.conf
+      - /etc/nginx/sites-available/autobot-backend.conf
+      - /etc/nginx/conf.d/autobot-backend.conf
+      # frontend
+      - /etc/nginx/sites-enabled/autobot-frontend
+      - /etc/nginx/sites-available/autobot-frontend
+      - /etc/nginx/conf.d/autobot-frontend.conf
+      # npu-worker
+      - /etc/nginx/sites-enabled/autobot-npu-worker.conf
+      - /etc/nginx/sites-available/autobot-npu-worker.conf
+      - /etc/nginx/conf.d/autobot-npu-worker.conf
+      # browser
+      - /etc/nginx/sites-enabled/autobot-browser.conf
+      - /etc/nginx/sites-available/autobot-browser.conf
+      - /etc/nginx/conf.d/autobot-browser.conf
 
   tasks:
     # =======================================================================
     # PHASE 1: OPTIONAL BACKUP
     # =======================================================================
-    - name: "Backup data before decommission"
+    - name: "Phase 1 — Backup data before decommission"
       when: backup_before_decommission | default(false) | bool
       block:
         - name: Set data directories to back up
@@ -89,118 +132,268 @@
     # =======================================================================
     # PHASE 2: STOP ALL AUTOBOT SERVICES
     # =======================================================================
-    - name: Find all autobot systemd services
-      ansible.builtin.shell: >
-        systemctl list-units 'autobot-*' --no-pager --plain --no-legend
-        | awk '{print $1}'
-      register: _autobot_services
-      changed_when: false
+    - name: "Phase 2 — Stop all AutoBot services"
+      block:
+        - name: Find all autobot systemd services
+          ansible.builtin.shell: >
+            systemctl list-units 'autobot-*' --no-pager --plain --no-legend
+            | awk '{print $1}'
+          register: _autobot_services
+          changed_when: false
 
-    - name: Check for additional managed services
-      ansible.builtin.shell: >
-        systemctl list-units '{{ item }}' --no-pager --plain --no-legend
-        | awk '{print $1}'
-      loop:
-        - slm-agent.service
-        - redis-stack-server.service
-        - ollama.service
-      register: _extra_services
-      changed_when: false
+        - name: Check for additional managed services
+          ansible.builtin.shell: >
+            systemctl list-units '{{ item }}' --no-pager --plain --no-legend
+            | awk '{print $1}'
+          loop:
+            - slm-agent.service
+            - redis-stack-server.service
+            - ollama.service
+            - nginx.service
+          register: _extra_services
+          changed_when: false
 
-    - name: Build full service list
-      ansible.builtin.set_fact:
-        _all_services: >-
-          {{ (_autobot_services.stdout_lines | default([]))
-             + (_extra_services.results
-                | map(attribute='stdout_lines')
-                | flatten
-                | select('match', '.+')
-                | list) }}
+        - name: Build full service list
+          ansible.builtin.set_fact:
+            _all_services: >-
+              {{ (_autobot_services.stdout_lines | default([]))
+                 + (_extra_services.results
+                    | map(attribute='stdout_lines')
+                    | flatten
+                    | select('match', '.+')
+                    | list) }}
 
-    - name: Stop and disable all services
-      ansible.builtin.systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: false
-      loop: "{{ _all_services }}"
-      ignore_errors: true
+        - name: Stop and disable all services
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            state: stopped
+            enabled: false
+          loop: "{{ _all_services }}"
+          ignore_errors: true
 
     # =======================================================================
     # PHASE 3: REMOVE SYSTEMD UNIT FILES
     # =======================================================================
-    - name: Find autobot unit files
-      ansible.builtin.shell: >
-        find /etc/systemd/system -name 'autobot-*.service' -type f
-      register: _unit_files
-      changed_when: false
+    - name: "Phase 3 — Remove systemd unit files"
+      block:
+        - name: Find autobot unit files
+          ansible.builtin.shell: >
+            find /etc/systemd/system -name 'autobot-*.service' -type f 2>/dev/null || true
+          register: _unit_files
+          changed_when: false
 
-    - name: Remove autobot unit files
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop: "{{ _unit_files.stdout_lines | default([]) }}"
+        - name: Remove autobot unit files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ _unit_files.stdout_lines | default([]) }}"
 
-    - name: Remove additional managed service files
-      ansible.builtin.file:
-        path: "/etc/systemd/system/{{ item }}"
-        state: absent
-      loop:
-        - slm-agent.service
-        - redis-stack-server.service
-        - ollama.service
+        # Issue #3011: Only delete Ansible-managed service files here.
+        # dpkg conffiles (e.g. redis-stack-server.service) are removed by
+        # Phase 5 via 'apt purge' — deleting them manually breaks reinstall
+        # because apt does not restore deleted conffiles without --force-confmiss.
+        - name: Remove Ansible-managed service files (non-dpkg)
+          ansible.builtin.file:
+            path: "/etc/systemd/system/{{ item }}"
+            state: absent
+          loop:
+            - slm-agent.service
+            - ollama.service
 
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: true
-
-    # =======================================================================
-    # PHASE 4: REMOVE APPLICATION CODE
-    # =======================================================================
-    - name: "Remove /opt/autobot contents (preserve backups)"
-      ansible.builtin.shell: |
-        find /opt/autobot -mindepth 1 -maxdepth 1 ! -name 'backups' -exec rm -rf {} +
-      args:
-        removes: /opt/autobot
+        - name: Reload systemd daemon
+          ansible.builtin.systemd:
+            daemon_reload: true
 
     # =======================================================================
-    # PHASE 5: REMOVE DATA AND LOGS
+    # PHASE 4: REMOVE APPLICATION CODE AND DATA
     # =======================================================================
-    - name: Remove data, log, and config directories
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /var/lib/autobot
-        - /var/log/autobot
-        - /etc/autobot
+    - name: "Phase 4 — Remove application code, data, and logs"
+      block:
+        - name: Copy backup out of /opt/autobot if backup was requested
+          ansible.builtin.shell: |
+            if [ -d "{{ decommission_backup_path }}" ]; then
+              mkdir -p /tmp/autobot-decommission-backup
+              cp -a "{{ decommission_backup_path }}" /tmp/autobot-decommission-backup/
+            fi
+          when: backup_before_decommission | default(false) | bool
+
+        - name: Remove /opt/autobot entirely
+          ansible.builtin.file:
+            path: /opt/autobot
+            state: absent
+
+        - name: Restore backup to /tmp if it was requested
+          ansible.builtin.debug:
+            msg: "Backup preserved at /tmp/autobot-decommission-backup/"
+          when: backup_before_decommission | default(false) | bool
+
+        - name: Remove data, log, and config directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /var/lib/autobot
+            - /var/lib/chromadb
+            - /var/lib/ollama
+            - /usr/share/ollama
+            - /var/log/autobot
+            - /etc/autobot
 
     # =======================================================================
-    # PHASE 6: CLEAN USER PACKAGES AND CACHES
+    # PHASE 5: UNINSTALL AUTOBOT-SPECIFIC PACKAGES
     # =======================================================================
-    - name: Find home directories
-      ansible.builtin.find:
-        paths: /home
-        file_type: directory
-        recurse: false
-      register: _home_dirs
+    - name: "Phase 5 — Uninstall AutoBot-specific packages"
+      block:
+        - name: Check which packages are installed
+          ansible.builtin.shell: "dpkg -l {{ item }} 2>/dev/null | grep -q ^ii && echo installed || echo absent"
+          loop: "{{ autobot_packages }}"
+          register: _pkg_checks
+          changed_when: false
 
-    - name: Remove Python user packages
-      ansible.builtin.shell: "rm -rf {{ item.path }}/.local/lib/python*"
-      loop: "{{ _home_dirs.files }}"
-      args:
-        removes: "{{ item.path }}/.local/lib"
+        - name: Build list of installed AutoBot packages
+          ansible.builtin.set_fact:
+            _installed_packages: >-
+              {{ _pkg_checks.results
+                 | selectattr('stdout', 'equalto', 'installed')
+                 | map(attribute='item')
+                 | list }}
 
-    - name: Remove pip cache
-      ansible.builtin.file:
-        path: "{{ item.path }}/.cache/pip"
-        state: absent
-      loop: "{{ _home_dirs.files }}"
+        - name: Remove installed AutoBot packages
+          ansible.builtin.apt:
+            name: "{{ _installed_packages }}"
+            state: absent
+            purge: true
+          when: _installed_packages | length > 0
 
-    - name: Remove HuggingFace cache
-      ansible.builtin.file:
-        path: "{{ item.path }}/.cache/huggingface"
-        state: absent
-      loop: "{{ _home_dirs.files }}"
+        - name: Autoremove orphaned dependencies
+          ansible.builtin.apt:
+            autoremove: true
+            purge: true
+
+    # =======================================================================
+    # PHASE 6: REMOVE APT REPOSITORIES AND KEYRINGS
+    # =======================================================================
+    - name: "Phase 6 — Remove APT repositories and keyrings"
+      block:
+        - name: Remove AutoBot APT repo files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ autobot_repo_files }}"
+
+        - name: Remove AutoBot keyring files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ autobot_keyring_files }}"
+
+        - name: Update apt cache after repo removal
+          ansible.builtin.apt:
+            update_cache: true
+          ignore_errors: true
+
+    # =======================================================================
+    # PHASE 7: REMOVE AUTOBOT USERS AND SYSTEM CONFIG
+    # =======================================================================
+    # Safe to pkill/userdel autobot here because we connect as 'martins'.
+    - name: "Phase 7 — Remove AutoBot users and system config"
+      block:
+        - name: Kill any processes owned by autobot user
+          ansible.builtin.shell: "pkill -u autobot || true"
+          changed_when: false
+
+        - name: Remove autobot user and home directory
+          ansible.builtin.user:
+            name: autobot
+            state: absent
+            remove: true
+            force: true
+          ignore_errors: true
+
+        - name: Remove autobot_admin emergency user
+          ansible.builtin.user:
+            name: autobot_admin
+            state: absent
+            remove: true
+            force: true
+          ignore_errors: true
+
+        - name: Remove autobot group
+          ansible.builtin.group:
+            name: autobot
+            state: absent
+          ignore_errors: true
+
+        - name: Remove sudoers entries
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/sudoers.d/90-autobot
+            - /etc/sudoers.d/90-autobot_admin
+
+        - name: Remove logrotate configs
+          ansible.builtin.shell: "rm -f /etc/logrotate.d/autobot*"
+          changed_when: true
+
+        - name: Remove autobot crontabs
+          ansible.builtin.shell: "crontab -r -u autobot 2>/dev/null || true"
+          changed_when: false
+
+        # Explicit per-role nginx config removal (#2918).
+        # Does NOT touch autobot-slm* — see _nginx_role_configs var.
+        - name: Remove per-role autobot nginx configs
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ _nginx_role_configs }}"
+
+        - name: Reload nginx if still running
+          ansible.builtin.shell: "systemctl is-active nginx && systemctl reload nginx || true"
+          changed_when: false
+
+    # =======================================================================
+    # PHASE 8: CLEAN CACHES AND TEMP FILES
+    # =======================================================================
+    - name: "Phase 8 — Clean caches and temp files"
+      block:
+        - name: Find home directories
+          ansible.builtin.find:
+            paths: /home
+            file_type: directory
+            recurse: false
+          register: _home_dirs
+
+        - name: Remove Python user packages
+          ansible.builtin.shell: "rm -rf {{ item.path }}/.local/lib/python*"
+          loop: "{{ _home_dirs.files }}"
+          args:
+            removes: "{{ item.path }}/.local/lib"
+
+        - name: Remove pip cache
+          ansible.builtin.file:
+            path: "{{ item.path }}/.cache/pip"
+            state: absent
+          loop: "{{ _home_dirs.files }}"
+
+        - name: Remove HuggingFace cache
+          ansible.builtin.file:
+            path: "{{ item.path }}/.cache/huggingface"
+            state: absent
+          loop: "{{ _home_dirs.files }}"
+
+        - name: Remove root caches
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /root/.cache/pip
+            - /root/.cache/huggingface
+            - /root/.local/lib
+
+        - name: Clean Ansible temp files
+          ansible.builtin.shell: "rm -rf /tmp/ansible* /tmp/.ansible*"
+          changed_when: true
 
     # =======================================================================
     # SUMMARY
@@ -208,10 +401,22 @@
     - name: Display decommission summary
       ansible.builtin.debug:
         msg: |
-          Node decommission complete: {{ ansible_hostname }}
+          ========================================
+          Node decommission COMPLETE: {{ ansible_hostname }}
+          ========================================
           - IP: {{ ansible_default_ipv4.address }}
-          - Services stopped and removed
-          - Application code removed from /opt/autobot
-          - Data directories cleaned
-          - User caches cleaned
+          - Services: stopped and removed
+          - Systemd units: removed
+          - Application code: /opt/autobot removed
+          - Data directories: cleaned
+          - Packages: AutoBot-specific packages purged
+          - APT repos: removed (redis, nodesource, ollama)
+          - Users: autobot and autobot_admin removed
+          - Sudoers: entries removed
+          - Crontabs: cleaned
+          - Nginx: role-specific configs removed (SLM preserved)
+          - Caches: pip, huggingface, ansible temp cleaned
           - Backup: {{ decommission_backup_path if (backup_before_decommission | default(false) | bool) else 'none (not requested)' }}
+          ========================================
+          VM is now ready for reuse.
+          ========================================

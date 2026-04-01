@@ -16,12 +16,12 @@ This eliminates the need for a separate AutoBotMemoryGraph system.
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

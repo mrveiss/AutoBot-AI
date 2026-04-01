@@ -11,8 +11,10 @@ create, edit, run, approve, delete, view, grant, revoke.
 import uuid
 
 from sqlalchemy import Column, DateTime, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base
 
 
@@ -26,7 +28,7 @@ class WorkflowAuditLog(Base):
     __tablename__ = "workflow_audit_log"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )

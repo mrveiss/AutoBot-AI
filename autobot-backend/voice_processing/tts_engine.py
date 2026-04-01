@@ -12,6 +12,7 @@ import asyncio
 import logging
 
 import aiofiles
+
 from task_execution_tracker import task_tracker
 from voice_processing.models import SpeechSynthesisRequest
 
@@ -98,7 +99,7 @@ class TextToSpeechEngine:
                 return audio_data
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Speech synthesis failed"})
                 logger.error("Speech synthesis failed: %s", e)
                 return b""
 

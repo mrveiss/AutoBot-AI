@@ -13,6 +13,7 @@ Issue #617: Fix 5 Technical Debt BUG Comments (All High Severity)
 """
 
 import pytest
+
 from api.codebase_analytics.analyzers import _detect_technical_debt_in_line
 
 

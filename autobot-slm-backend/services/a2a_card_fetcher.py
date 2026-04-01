@@ -16,10 +16,15 @@ Public API:
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# TLS verification for A2A card fetches from internal backend nodes.
+# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs (#2852).
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 # Only nodes with this role expose the A2A endpoint
 _A2A_ROLE = "backend"
@@ -41,8 +46,9 @@ async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
 
     url = f"https://{ip_address}:{_A2A_PORT}{_WELL_KNOWN_PATH}"
     ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    if not _VERIFY_TLS:
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
         timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -58,8 +64,9 @@ async def _fetch_one(ip_address: str) -> Optional[Dict[str, Any]]:
 
 async def _store_card(db, node, card: Optional[Dict[str, Any]]) -> None:
     """Persist the fetched card into Node.extra_data."""
-    from models.database import Node
     from sqlalchemy import update
+
+    from models.database import Node
 
     extra = dict(node.extra_data or {})
     extra["a2a_card"] = card
@@ -76,9 +83,10 @@ async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
 
     Returns the card dict on success, None otherwise.
     """
+    from sqlalchemy import select
+
     from models.database import Node
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -99,9 +107,10 @@ async def fetch_card_for_node(node_id: str) -> Optional[Dict[str, Any]]:
 
 async def _refresh_all_backend_nodes() -> None:
     """Fetch A2A cards for every online backend node."""
+    from sqlalchemy import select
+
     from models.database import Node
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(
@@ -173,9 +182,10 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     Respects the agent's ssl_verify flag.  Decrypts api_key if present.
     Returns the card dict on success, None otherwise.
     """
+    from sqlalchemy import select, update
+
     from models.database import ExternalAgent
     from services.database import db_service
-    from sqlalchemy import select, update
 
     async with db_service.session() as db:
         result = await db.execute(
@@ -211,9 +221,10 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
 
 async def _refresh_all_external_agents() -> None:
     """Re-fetch cards for every enabled ExternalAgent."""
+    from sqlalchemy import select
+
     from models.database import ExternalAgent
     from services.database import db_service
-    from sqlalchemy import select
 
     async with db_service.session() as db:
         result = await db.execute(

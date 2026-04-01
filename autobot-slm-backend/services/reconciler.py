@@ -16,6 +16,9 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import settings
 from models.database import (
     Deployment,
@@ -31,8 +34,6 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +189,9 @@ class ReconcilerService:
 
     async def _check_node_health(self) -> None:
         """Check node health based on heartbeats and network reachability."""
-        from services.database import db_service
         from sqlalchemy import or_
+
+        from services.database import db_service
 
         async with db_service.session() as db:
             timeout_setting = await db.execute(
@@ -1503,8 +1505,9 @@ class ReconcilerService:
             import aiohttp
 
             ssl_ctx = ssl.create_default_context()
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
+            if not settings.verify_ssl:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url, ssl=ssl_ctx) as resp:

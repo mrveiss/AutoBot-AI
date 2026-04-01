@@ -8,20 +8,27 @@ Handles terminal tool initialization, command execution, tool call parsing,
 and approval workflows.
 """
 
+from __future__ import annotations
+
 import asyncio
 import html
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
 from async_chat_workflow import WorkflowMessage
 from utils.errors import RepairableException
 
+if TYPE_CHECKING:
+    from .models import LLMIterationContext
+
 logger = logging.getLogger(__name__)
 
-# Issue #1368: Browser tool names that route to browser_mcp handlers
-_BROWSER_TOOL_NAMES = frozenset(
+# Issue #1368: Browser tool names that route to browser_mcp handlers.
+# Exported (no leading underscore) so ToolRegistry can derive its list from this
+# single source of truth rather than maintaining a duplicate. Issue #2609.
+BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "navigate",
         "click",
@@ -181,8 +188,8 @@ def _match_repairable_error(
 
 
 def _create_execution_result(
-    command: str, host: str, result: Dict[str, Any], approved: bool = False
-) -> Dict[str, Any]:
+    command: str, host: str, result: dict[str, Any], approved: bool = False
+) -> dict[str, Any]:
     """Create standardized execution result record (Issue #315: extracted).
 
     Args:
@@ -205,6 +212,105 @@ def _create_execution_result(
     }
 
 
+def _build_mcp_approval_message(
+    tool_name: str,
+    bridge: str,
+    raw_result: dict,
+    execution_results: list[dict[str, Any]],
+) -> WorkflowMessage:
+    """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
+    approval_msg = raw_result.get("message", "This operation requires approval.")
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": bridge,
+            "result": approval_msg,
+            "status": "approval_required",
+        }
+    )
+    logger.info(
+        "[Issue #2622] MCP approval required: tool=%s bridge=%s",
+        tool_name,
+        bridge,
+    )
+    return WorkflowMessage(
+        type="tool_result",
+        content=(
+            f"[{bridge}] **Approval required:** {approval_msg}\n"
+            "Ask the user to confirm, then retry with `approved: true` "
+            "in the arguments."
+        ),
+        metadata={
+            "tool_name": tool_name,
+            "bridge": bridge,
+            "mcp_dispatch": True,
+            "approval_required": True,
+        },
+    )
+
+
+async def _try_mcp_dispatch(
+    tool_name: str,
+    tool_call: dict[str, Any],
+    execution_results: list[dict[str, Any]],
+    role: str = "user",
+) -> WorkflowMessage | None:
+    """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    Args:
+        tool_name: Name of the tool to dispatch.
+        tool_call: Raw tool call dict from the LLM.
+        execution_results: Accumulator list for execution results.
+        role: Caller RBAC role forwarded to the dispatcher (#2629).
+
+    Returns a WorkflowMessage on success, or None if the tool is not found
+    in the registry (so the caller can fall through to the unknown-tool error).
+    """
+    from services.mcp_dispatch import get_mcp_dispatcher
+
+    dispatcher = get_mcp_dispatcher()
+    if not dispatcher._cache_loaded:
+        await dispatcher.refresh_tool_cache()
+
+    tool = dispatcher.find_tool(tool_name)
+    if tool is None:
+        return None
+
+    arguments = tool_call.get("arguments", {})
+    mcp_result = await dispatcher.dispatch(tool_name, arguments, role=role)
+    bridge = mcp_result.get("bridge", "unknown")
+    success = mcp_result.get("success", False)
+    raw_result = mcp_result.get("result", "")
+
+    # Issue #2622: Detect approval_required from MCP bridges
+    if isinstance(raw_result, dict) and raw_result.get("status") == "approval_required":
+        return _build_mcp_approval_message(
+            tool_name, bridge, raw_result, execution_results
+        )
+
+    result_text = str(raw_result)
+    execution_results.append(
+        {
+            "tool": tool_name,
+            "bridge": bridge,
+            "result": result_text,
+            "status": "success" if success else "error",
+        }
+    )
+    msg_type = "tool_result" if success else "error"
+    logger.info(
+        "[Issue #2513] MCP dispatch: tool=%s bridge=%s success=%s",
+        tool_name,
+        bridge,
+        success,
+    )
+    return WorkflowMessage(
+        type=msg_type,
+        content=f"[{bridge}] {result_text}",
+        metadata={"tool_name": tool_name, "bridge": bridge, "mcp_dispatch": True},
+    )
+
+
 class ToolHandlerMixin:
     """Mixin for tool and command handling."""
 
@@ -212,6 +318,7 @@ class ToolHandlerMixin:
         """Initialize terminal tool for command execution."""
         try:
             import backend.api.agent_terminal as agent_terminal_api
+
             from tools.terminal_tool import TerminalTool
 
             # CRITICAL: Access the global singleton instance directly
@@ -234,7 +341,7 @@ class ToolHandlerMixin:
 
     def _parse_tool_calls(
         self, text: str, is_first_iteration: bool = False
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Parse tool calls from LLM response using XML-style markers.
 
@@ -297,7 +404,7 @@ class ToolHandlerMixin:
 
     def _extract_tool_calls_from_text(
         self, text: str
-    ) -> tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Extract tool calls using regex pattern. Issue #650, #620."""
         tool_calls = []
         match_count = 0
@@ -333,7 +440,7 @@ class ToolHandlerMixin:
 
     def _log_parsing_result(
         self,
-        tool_calls: List,
+        tool_calls: list,
         match_count: int,
         has_tool_call: bool,
         is_first_iteration: bool,
@@ -358,7 +465,7 @@ class ToolHandlerMixin:
 
     async def _execute_terminal_command(
         self, session_id: str, command: str, host: str = "main", description: str = ""
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
 
@@ -433,7 +540,7 @@ class ToolHandlerMixin:
     def _check_command_mismatch(
         self,
         command: str,
-        last_command: Dict[str, Any],
+        last_command: dict[str, Any],
         elapsed_time: float,
         max_wait_time: float,
     ) -> tuple | None:
@@ -453,8 +560,8 @@ class ToolHandlerMixin:
         return None, None, False
 
     def _build_approval_status_msg(
-        self, last_command: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, last_command: dict[str, Any]
+    ) -> dict[str, Any]:
         """Build approval status message from command history. Issue #620."""
         approval_status = "approved" if last_command.get("approved_by") else "denied"
         comment = last_command.get("approval_comment") or last_command.get(
@@ -464,7 +571,7 @@ class ToolHandlerMixin:
 
     def _check_approval_completion(
         self,
-        session_info: Dict[str, Any],
+        session_info: dict[str, Any],
         command: str,
         elapsed_time: float,
         max_wait_time: float,
@@ -500,7 +607,7 @@ class ToolHandlerMixin:
         self,
         session_id: str,
         command: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
     ) -> WorkflowMessage:
@@ -520,7 +627,7 @@ class ToolHandlerMixin:
         )
 
     def _build_waiting_message(
-        self, command: str, result: Dict[str, Any]
+        self, command: str, result: dict[str, Any]
     ) -> WorkflowMessage:
         """Build the waiting for approval WorkflowMessage."""
         return WorkflowMessage(
@@ -534,7 +641,7 @@ class ToolHandlerMixin:
         )
 
     def _log_polling_status(
-        self, poll_count: int, session_info: Dict[str, Any] | None, elapsed_time: float
+        self, poll_count: int, session_info: dict[str, Any] | None, elapsed_time: float
     ) -> None:
         """Log periodic polling status updates. Issue #620."""
         if poll_count % 20 != 0:
@@ -591,7 +698,7 @@ class ToolHandlerMixin:
         self,
         session_id: str,
         command: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
     ):
@@ -641,7 +748,7 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        approval_result: Dict[str, Any],
+        approval_result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
         session_id: str = "",
@@ -696,7 +803,7 @@ class ToolHandlerMixin:
         yield (exec_result, additional_text)
 
     def _handle_approval_failure(
-        self, command: str, approval_result: Dict[str, Any] | None
+        self, command: str, approval_result: dict[str, Any] | None
     ) -> tuple[WorkflowMessage, str]:
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
@@ -730,7 +837,7 @@ class ToolHandlerMixin:
         session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         terminal_session_id: str,
         description: str,
         ollama_endpoint: str,
@@ -772,7 +879,7 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
         session_id: str = "",
@@ -814,14 +921,14 @@ class ToolHandlerMixin:
         yield (exec_result, f"\n\n{interpretation}")
 
     async def _collect_workflow_results(
-        self, workflow_gen, execution_results: List, additional_response_parts: List
+        self, workflow_gen, execution_results: list, additional_response_parts: list
     ):
         """Collect results from workflow generator (Issue #315: extracted).
 
         Args:
             workflow_gen: Async generator from workflow handler
-            execution_results: List to append exec results to
-            additional_response_parts: List to append text parts to
+            execution_results: list to append exec results to
+            additional_response_parts: list to append text parts to
 
         Yields:
             WorkflowMessage items from the generator
@@ -842,12 +949,12 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         description: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Handle command requiring approval workflow. Issue #620."""
         if not terminal_session_id:
@@ -878,11 +985,11 @@ class ToolHandlerMixin:
         self,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
         session_id: str = "",
     ):
         """Handle successful direct command execution. Issue #620."""
@@ -895,7 +1002,7 @@ class ToolHandlerMixin:
             yield msg
 
     def _extract_command_params(
-        self, tool_call: Dict[str, Any]
+        self, tool_call: dict[str, Any]
     ) -> tuple[str, str, str]:
         """Extract command parameters from tool call dict. Issue #620."""
         command = tool_call["params"].get("command")
@@ -910,12 +1017,12 @@ class ToolHandlerMixin:
         terminal_session_id: str,
         command: str,
         host: str,
-        result: Dict[str, Any],
+        result: dict[str, Any],
         description: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Dispatch command handling based on execution status. Issue #620."""
         if status == "pending_approval":
@@ -952,13 +1059,13 @@ class ToolHandlerMixin:
 
     async def _process_single_command(
         self,
-        tool_call: Dict[str, Any],
+        tool_call: dict[str, Any],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List,
-        additional_response_parts: List,
+        execution_results: list,
+        additional_response_parts: list,
     ):
         """Process a single execute_command tool call. Issue #620.
 
@@ -992,8 +1099,8 @@ class ToolHandlerMixin:
     async def _handle_command_error(
         self,
         command: str,
-        result: Dict[str, Any],
-        additional_response_parts: List,
+        result: dict[str, Any],
+        additional_response_parts: list,
     ):
         """Handle command execution error (Issue #665: extracted helper).
 
@@ -1002,7 +1109,7 @@ class ToolHandlerMixin:
         Args:
             command: The command that failed
             result: Execution result dict with error/stderr
-            additional_response_parts: List to append context to
+            additional_response_parts: list to append context to
 
         Yields:
             WorkflowMessage with error details
@@ -1076,7 +1183,7 @@ class ToolHandlerMixin:
         )
 
     def _handle_respond_tool(
-        self, tool_call: Dict[str, Any]
+        self, tool_call: dict[str, Any]
     ) -> tuple[WorkflowMessage, bool, str]:
         """
         Handle the 'respond' tool for explicit task completion.
@@ -1110,7 +1217,7 @@ class ToolHandlerMixin:
         return message, break_loop_requested, respond_content
 
     def _handle_delegate_tool(
-        self, tool_call: Dict[str, Any], execution_results: List[Dict[str, Any]]
+        self, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]
     ) -> WorkflowMessage:
         """
         Handle the 'delegate' tool for subordinate agent delegation.
@@ -1152,7 +1259,7 @@ class ToolHandlerMixin:
         )
 
     def _validate_browser_params(
-        self, tool_name: str, params: Dict[str, Any]
+        self, tool_name: str, params: dict[str, Any]
     ) -> str | None:
         """Validate browser tool params. Returns error message or None. #1368."""
         from api.browser_mcp import is_script_safe, is_url_allowed
@@ -1165,8 +1272,8 @@ class ToolHandlerMixin:
 
     async def _handle_browser_tool(
         self,
-        tool_call: Dict[str, Any],
-        execution_results: List[Dict[str, Any]],
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
     ):
         """Execute a browser tool call via browser_mcp. Issue #1368.
 
@@ -1204,39 +1311,52 @@ class ToolHandlerMixin:
             from api.browser_mcp import send_to_browser_vm
 
             result = await send_to_browser_vm(tool_name, params)
-            summary = self._format_browser_result(tool_name, params, result)
-
-            execution_results.append(
-                {"tool": tool_name, "status": "success", "output": summary}
-            )
-            yield WorkflowMessage(
-                type="command_output",
-                content=summary,
-                metadata={
-                    "tool": tool_name,
-                    "params": params,
-                    "result": result,
-                    "status": "success",
-                },
+            yield self._record_browser_success(
+                tool_name, params, result, execution_results
             )
 
         except Exception as e:
-            error_msg = f"Browser tool '{tool_name}' failed: {e}"
-            logger.error("[Issue #1368] %s", error_msg)
+            logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
             execution_results.append(
-                {"tool": tool_name, "status": "error", "error": str(e)}
+                {"tool": tool_name, "status": "error", "error": "Browser tool execution failed"}
             )
             yield WorkflowMessage(
                 type="error",
-                content=error_msg,
+                content=f"Browser tool '{tool_name}' execution failed",
                 metadata={"tool": tool_name, "error": True},
             )
+
+    def _record_browser_success(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        result: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ) -> "WorkflowMessage":
+        """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
+
+        Extracted from _handle_browser_tool to keep parent under 65 lines.
+        """
+        summary = self._format_browser_result(tool_name, params, result)
+        execution_results.append(
+            {"tool": tool_name, "status": "success", "output": summary}
+        )
+        return WorkflowMessage(
+            type="command_output",
+            content=summary,
+            metadata={
+                "tool": tool_name,
+                "params": params,
+                "result": result,
+                "status": "success",
+            },
+        )
 
     def _format_browser_result(
         self,
         tool_name: str,
-        params: Dict[str, Any],
-        result: Dict[str, Any],
+        params: dict[str, Any],
+        result: dict[str, Any],
     ) -> str:
         """Format browser tool result as text for LLM context. Issue #1368.
 
@@ -1292,8 +1412,137 @@ class ToolHandlerMixin:
 
         return json.dumps(result, default=str)[:1000]
 
+    async def _handle_web_search_tool(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+    ):
+        """Execute a web search via browser VM. Issue #2306.
+
+        Abstracts the multi-step browser flow (navigate → fill → click → get_text)
+        into a single tool call so small models don't need to orchestrate it.
+
+        Yields:
+            WorkflowMessage for search execution stages
+        """
+        params = tool_call.get("params", {})
+        query = params.get("query", "").strip()
+        description = tool_call.get("description", f"Web search: {query}")
+
+        if not query:
+            error_msg = 'Error: web_search requires a "query" parameter'
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": error_msg}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": "web_search", "error": True},
+            )
+            return
+
+        logger.info("[Issue #2306] Web search: query=%s", query)
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Searching the web: {description}",
+            metadata={"tool": "web_search", "query": query},
+        )
+
+        try:
+            results = await self._execute_web_search(query)
+            execution_results.append(
+                {"tool": "web_search", "status": "success", "output": results}
+            )
+            yield WorkflowMessage(
+                type="command_output",
+                content=results,
+                metadata={
+                    "tool": "web_search",
+                    "query": query,
+                    "status": "success",
+                },
+            )
+        except Exception as e:
+            logger.error("[Issue #2306] Web search failed: %s", e)
+            execution_results.append(
+                {"tool": "web_search", "status": "error", "error": "Web search failed"}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content="Web search failed",
+                metadata={"tool": "web_search", "error": True},
+            )
+
+    async def _execute_web_search(self, query: str) -> str:
+        """Run a web search and return formatted results. Issue #2306.
+
+        Tries the existing Playwright search service first (structured results),
+        then falls back to browser VM DuckDuckGo navigation.
+        """
+        # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
+        try:
+            result = await self._web_search_via_playwright(query)
+            if result:
+                return result
+        except Exception as e:
+            logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
+
+        # Fallback: browser VM with DuckDuckGo HTML
+        return await self._web_search_via_browser_vm(query)
+
+    async def _web_search_via_playwright(self, query: str) -> str:
+        """Search via Playwright service. Returns formatted text or empty string. Issue #2306."""
+        from services.playwright_service import search_web_embedded
+
+        result = await search_web_embedded(query, max_results=5)
+        if not result.get("success", False):
+            return ""
+
+        entries = result.get("results", [])
+        if not entries:
+            return ""
+
+        lines = [f'Web search results for "{query}":\n']
+        for i, entry in enumerate(entries[:5], 1):
+            title = entry.get("title", "No title")
+            url = entry.get("url", "")
+            snippet = entry.get("snippet", entry.get("description", ""))
+            lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
+        return "\n".join(lines)
+
+    async def _web_search_via_browser_vm(self, query: str) -> str:
+        """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
+        from urllib.parse import (  # stdlib — lazy to match surrounding pattern
+            quote_plus,
+        )
+
+        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+
+        search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        if not nav_result.get("success", True):
+            raise RuntimeError(
+                f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}"
+            )
+
+        # Try results div first, then fall back to body
+        for selector in ("div.results", "body"):
+            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            inner = text_result.get("result", text_result)
+            raw_text = inner.get("text", "")
+            if raw_text:
+                max_len = 3000
+                truncated = raw_text[:max_len]
+                if len(raw_text) > max_len:
+                    truncated += "\n\n... [results truncated]"
+                return f'Web search results for "{query}":\n\n{truncated}'
+
+        return f"No search results found for: {query}"
+
     def _build_execution_summary(
-        self, execution_results: List[Dict[str, Any]]
+        self, execution_results: list[dict[str, Any]]
     ) -> WorkflowMessage:
         """Build execution summary message from results. Issue #620."""
         return WorkflowMessage(
@@ -1308,63 +1557,142 @@ class ToolHandlerMixin:
             },
         )
 
+    def _build_unknown_tool_error(
+        self,
+        tool_name: str,
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage:
+        """Build error message for an unknown tool call (#2305, #2310)."""
+        known_tools = sorted(
+            {"respond", "delegate", "execute_command", "web_search"}
+            | BROWSER_TOOL_NAMES
+        )
+        if ctx is not None:
+            ctx.consecutive_invalid_tool_calls += 1
+        consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
+        error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
+        logger.warning(
+            "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
+            tool_name,
+            consecutive,
+        )
+        execution_results.append(
+            {"tool": tool_name, "status": "error", "error": error_msg}
+        )
+        return WorkflowMessage(
+            type="error",
+            content=error_msg,
+            metadata={"message_type": "unknown_tool", "tool_name": tool_name},
+        )
+
     async def _dispatch_tool_call(
         self,
-        tool_call: Dict[str, Any],
+        tool_call: dict[str, Any],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
-        execution_results: List[Dict[str, Any]],
-        additional_response_parts: List[str],
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+        ctx: "LLMIterationContext" | None = None,
+        role: str = "user",
     ):
-        """Dispatch a single tool call to appropriate handler. Issue #620.
+        """Route a tool call to the appropriate handler. Issue #620/#2310/#2629.
 
-        Yields:
-            WorkflowMessage for tool execution stages
-            Tuple of (break_loop, respond_content) for respond tool
+        Yields WorkflowMessage for execution stages, or (break_loop, respond_content) tuple
+        for the respond tool. Helpers handle MCP, browser, web_search, and execute_command.
         """
         tool_name = tool_call["name"]
 
         if tool_name == "respond":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             msg, break_loop, respond_content = self._handle_respond_tool(tool_call)
             yield msg
             yield (break_loop, respond_content)
             return
 
         if tool_name == "delegate":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             yield self._handle_delegate_tool(tool_call, execution_results)
             return
 
         # Issue #1368: Route browser tools to browser VM
-        if tool_name in _BROWSER_TOOL_NAMES:
+        if tool_name in BROWSER_TOOL_NAMES:
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
             async for msg in self._handle_browser_tool(tool_call, execution_results):
                 yield msg
             return
 
-        if tool_name != "execute_command":
-            # Issue #2305: Return a tool error so the agent can self-correct instead of
-            # silently dropping the call and causing an infinite hallucination loop.
-            known_tools = sorted(
-                {"respond", "delegate", "execute_command"} | _BROWSER_TOOL_NAMES
-            )
-            error_msg = (
-                f'Error: Tool "{tool_name}" not found. '
-                f"Available tools: {', '.join(known_tools)}"
-            )
-            logger.warning(
-                "[Issue #2305] Unknown tool call reported to agent: %s", tool_name
-            )
-            execution_results.append(
-                {"tool": tool_name, "status": "error", "error": error_msg}
-            )
-            yield WorkflowMessage(
-                type="error",
-                content=error_msg,
-                metadata={"message_type": "unknown_tool", "tool_name": tool_name},
-            )
+        # Issue #2306: web_search convenience tool wraps browser multi-step flow
+        if tool_name == "web_search":
+            if ctx is not None:
+                ctx.consecutive_invalid_tool_calls = 0
+            async for msg in self._handle_web_search_tool(tool_call, execution_results):
+                yield msg
             return
 
+        if tool_name != "execute_command":
+            async for msg in self._dispatch_mcp_or_unknown(
+                tool_name, tool_call, execution_results, ctx, role
+            ):
+                yield msg
+            return
+
+        if ctx is not None:
+            ctx.consecutive_invalid_tool_calls = 0
+        async for msg in self._dispatch_execute_command(
+            tool_call,
+            session_id,
+            terminal_session_id,
+            ollama_endpoint,
+            selected_model,
+            execution_results,
+            additional_response_parts,
+        ):
+            yield msg
+
+    async def _dispatch_mcp_or_unknown(
+        self,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        ctx: "LLMIterationContext" | None,
+        role: str,
+    ):
+        """Try MCP dispatch; yield unknown-tool error if not registered. Issue #2513/#2629.
+
+        Extracted from _dispatch_tool_call (#2735) to keep parent under 65 lines.
+        """
+        # Issue #2513: Check MCP registry before reporting unknown tool.
+        # Issue #2629: Forward RBAC role so admin-only tools are enforced.
+        mcp_result = await _try_mcp_dispatch(
+            tool_name, tool_call, execution_results, role=role
+        )
+        if mcp_result is not None:
+            yield mcp_result
+            return
+
+        # Issue #2305/#2310: Report unknown tool and track consecutive failures.
+        yield self._build_unknown_tool_error(tool_name, ctx, execution_results)
+
+    async def _dispatch_execute_command(
+        self,
+        tool_call: dict[str, Any],
+        session_id: str,
+        terminal_session_id: str,
+        ollama_endpoint: str,
+        selected_model: str,
+        execution_results: list[dict[str, Any]],
+        additional_response_parts: list[str],
+    ):
+        """Delegate execute_command tool call to _process_single_command. Issue #2735.
+
+        Extracted from _dispatch_tool_call to keep parent under 65 lines.
+        """
         async for msg in self._process_single_command(
             tool_call,
             session_id,
@@ -1378,17 +1706,19 @@ class ToolHandlerMixin:
 
     async def _process_tool_calls(
         self,
-        tool_calls: List[Dict[str, Any]],
+        tool_calls: list[dict[str, Any]],
         session_id: str,
         terminal_session_id: str,
         ollama_endpoint: str,
         selected_model: str,
+        ctx: "LLMIterationContext" | None = None,
     ):
         """Process all tool calls from LLM response.
 
         Issue #315: Refactored to use helper methods for reduced nesting.
         Issue #654: Added support for 'respond' tool with break_loop pattern.
         Issue #620: Refactored using Extract Method pattern.
+        Issue #2310: Accepts optional ctx for consecutive-invalid-tool tracking.
 
         Yields:
             WorkflowMessage for each stage of execution
@@ -1409,6 +1739,7 @@ class ToolHandlerMixin:
                 selected_model,
                 execution_results,
                 additional_response_parts,
+                ctx=ctx,
             ):
                 if isinstance(result, tuple):
                     break_loop_requested, respond_content = result

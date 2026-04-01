@@ -15,6 +15,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 
 import asyncio
 import fcntl
+import functools
 import json
 import logging
 import os
@@ -32,21 +33,28 @@ logger = logging.getLogger(__name__)
 _CHAT_IO_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat_io_")
 
 
-async def run_in_chat_io_executor(func, *args):
+async def run_in_chat_io_executor(func, *args, **kwargs):
     """Run a function in the dedicated chat I/O thread pool.
 
     Issue #718: Module-level function for use across all chat history mixins.
     Uses dedicated thread pool to prevent blocking when the main asyncio
     thread pool is saturated by indexing operations.
 
+    Issue #2958: loop.run_in_executor() only accepts positional arguments.
+    When kwargs are provided, functools.partial is used to bind them before
+    passing the callable to the executor.
+
     Args:
         func: Function to run
-        *args: Arguments to pass to the function
+        *args: Positional arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
 
     Returns:
         Result of the function call
     """
     loop = asyncio.get_running_loop()
+    if kwargs:
+        func = functools.partial(func, **kwargs)
     return await loop.run_in_executor(_CHAT_IO_EXECUTOR, func, *args)
 
 
@@ -62,13 +70,13 @@ class FileIOMixin:
     - self._periodic_memory_check(): method
     """
 
-    async def _run_in_io_executor(self, func, *args):
+    async def _run_in_io_executor(self, func, *args, **kwargs):
         """Run a function in the dedicated chat I/O thread pool.
 
         Issue #718: Uses dedicated thread pool to prevent blocking when the
         main asyncio thread pool is saturated by indexing operations.
         """
-        return await run_in_chat_io_executor(func, *args)
+        return await run_in_chat_io_executor(func, *args, **kwargs)
 
     async def _atomic_write(self, file_path: str, content: str) -> None:
         """

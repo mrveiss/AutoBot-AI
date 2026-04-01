@@ -36,10 +36,10 @@ log_rotation_size = {{ postgresql_log_rotation_size }}
 password_encryption = {{ postgresql_password_encryption }}
 
 # Locale Settings
-lc_messages = 'en_US.UTF-8'
-lc_monetary = 'en_US.UTF-8'
-lc_numeric = 'en_US.UTF-8'
-lc_time = 'en_US.UTF-8'
+lc_messages = '{{ postgresql_locale }}'
+lc_monetary = '{{ postgresql_locale }}'
+lc_numeric = '{{ postgresql_locale }}'
+lc_time = '{{ postgresql_locale }}'
 
 # Default text search configuration
 default_text_search_config = 'pg_catalog.english'

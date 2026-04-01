@@ -175,7 +175,7 @@ onUnmounted(() => {
   <div class="p-6">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Total Agents</p>
@@ -189,7 +189,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Active Agents</p>
@@ -203,7 +203,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Tasks Completed</p>
@@ -217,7 +217,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Success Rate</p>
@@ -233,7 +233,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
       <div class="flex items-center gap-4">
         <div class="flex-1">
           <input
@@ -293,7 +293,7 @@ onUnmounted(() => {
         :key="agent.id"
         @click="selectAgent(agent)"
         :class="[
-          'bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer transition-all',
+          'bg-white rounded-lg shadow-xs border border-gray-200 p-6 cursor-pointer transition-all',
           selectedAgent?.id === agent.id ? 'ring-2 ring-primary-500' : 'hover:shadow-md'
         ]"
       >
@@ -340,7 +340,7 @@ onUnmounted(() => {
             <span
               v-for="cap in agent.capabilities"
               :key="cap"
-              class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+              class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm"
             >
               {{ cap }}
             </span>

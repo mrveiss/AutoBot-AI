@@ -12,11 +12,10 @@ All reranking parameters are configurable without code changes.
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from knowledge.search_components.reranking import RerankWeights
 from type_defs.common import Metadata
-
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("rag_config")
 
@@ -47,6 +46,8 @@ class RAGConfig:
     reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
+    # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
+    mmr_lambda: float = model_config.RAG_MMR_LAMBDA
 
     # Performance (from model_config)
     cache_ttl_seconds: int = model_config.DEFAULT_CACHE_TTL
@@ -64,14 +65,37 @@ class RAGConfig:
     mesh_pruner: bool = False
     mesh_node_promoter: bool = False
 
+    # EWC++ catastrophic forgetting prevention for EdgeLearner (Issue #2097)
+    ewc_lambda: float = 0.4
+    ewc_consolidation_interval: int = 100
+
+    # Neural Mesh staleness propagation (Issue #2111)
+    mesh_staleness_propagation: bool = False
+    mesh_staleness_max_depth: int = 3
+    mesh_staleness_decay: float = 0.7
+    mesh_staleness_threshold: float = 0.3
+    mesh_staleness_ttl: int = 3600
+
     # Issue #556: Category-based filtering for chat RAG
     # Default categories to search when no specific categories are specified
     # Available categories: system_knowledge, user_knowledge, autobot_knowledge
     default_chat_categories: Optional[list] = None
     enable_smart_category_selection: bool = True
 
+    # Issue #1718: Agentic RAG — search exposed as LLM tool
+    enable_agentic_search: bool = True
+    rewrite_enabled: bool = True
+    max_search_iterations: int = 3
+
     def __post_init__(self):
-        """Validate configuration values."""
+        """Validate configuration values and propagate mmr_lambda to rerank_weights.
+
+        Issue #2090: top-level mmr_lambda is the canonical knob for the MMR pass.
+        When it differs from rerank_weights.mmr_lambda (i.e. user set it at the
+        top level only), propagate it into rerank_weights so ResultReranker sees it.
+        """
+        if self.mmr_lambda != 0.0 and self.rerank_weights.mmr_lambda == 0.0:
+            self.rerank_weights.mmr_lambda = self.mmr_lambda
         self._validate()
 
     def _validate(self):
@@ -117,6 +141,23 @@ class RAGConfig:
         if self.timeout_seconds <= 0:
             raise ValueError(f"timeout_seconds must be > 0, got {self.timeout_seconds}")
 
+        if self.ewc_lambda < 0:
+            raise ValueError(f"ewc_lambda must be >= 0, got {self.ewc_lambda}")
+
+        if self.ewc_consolidation_interval < 1:
+            raise ValueError(
+                f"ewc_consolidation_interval must be >= 1, got {self.ewc_consolidation_interval}"
+            )
+
+        if not 0.0 <= self.mmr_lambda <= 1.0:
+            raise ValueError(f"mmr_lambda must be in [0, 1], got {self.mmr_lambda}")
+
+        # Issue #1718: Agentic search iteration guard
+        if self.max_search_iterations < 1:
+            raise ValueError(
+                f"max_search_iterations must be >= 1, got {self.max_search_iterations}"
+            )
+
     @classmethod
     def from_dict(cls, config_dict: Metadata) -> "RAGConfig":
         """
@@ -161,18 +202,27 @@ class RAGConfig:
             "enable_reranking": self.enable_reranking,
             "reranking_model": self.reranking_model,
             # Issue #2004: serialise as a plain dict for YAML round-trips.
+            # Issue #2111: staleness weight added.
             "rerank_weights": {
                 "reranker": self.rerank_weights.reranker,
                 "vector": self.rerank_weights.vector,
                 "edge": self.rerank_weights.edge,
                 "recency": self.rerank_weights.recency,
+                "staleness": self.rerank_weights.staleness,
+                "mmr_lambda": self.rerank_weights.mmr_lambda,
             },
+            # Issue #2090: top-level MMR lambda (mirrors rerank_weights.mmr_lambda).
+            "mmr_lambda": self.mmr_lambda,
             "cache_ttl_seconds": self.cache_ttl_seconds,
             "timeout_seconds": self.timeout_seconds,
             "enable_advanced_rag": self.enable_advanced_rag,
             "fallback_to_basic_search": self.fallback_to_basic_search,
             "default_chat_categories": self.default_chat_categories,
             "enable_smart_category_selection": self.enable_smart_category_selection,
+            # Issue #1718: Agentic RAG feature flags
+            "enable_agentic_search": self.enable_agentic_search,
+            "rewrite_enabled": self.rewrite_enabled,
+            "max_search_iterations": self.max_search_iterations,
             # Neural Mesh RAG feature flags (Issue #2059)
             "mesh_retriever_enabled": self.mesh_retriever_enabled,
             "mesh_seed_edges": self.mesh_seed_edges,
@@ -180,6 +230,15 @@ class RAGConfig:
             "mesh_edge_discoverer": self.mesh_edge_discoverer,
             "mesh_pruner": self.mesh_pruner,
             "mesh_node_promoter": self.mesh_node_promoter,
+            # EWC++ catastrophic forgetting prevention (Issue #2097)
+            "ewc_lambda": self.ewc_lambda,
+            "ewc_consolidation_interval": self.ewc_consolidation_interval,
+            # Neural Mesh staleness propagation (Issue #2111)
+            "mesh_staleness_propagation": self.mesh_staleness_propagation,
+            "mesh_staleness_max_depth": self.mesh_staleness_max_depth,
+            "mesh_staleness_decay": self.mesh_staleness_decay,
+            "mesh_staleness_threshold": self.mesh_staleness_threshold,
+            "mesh_staleness_ttl": self.mesh_staleness_ttl,
         }
 
 

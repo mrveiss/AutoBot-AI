@@ -46,6 +46,9 @@ postgresql_log_filename: "postgresql-%Y-%m-%d_%H%M%S.log"
 postgresql_log_rotation_age: "1d"
 postgresql_log_rotation_size: "100MB"
 
+# Locale (auto-detect: prefer en_US.UTF-8, fall back to C.UTF-8)
+postgresql_locale: "{{ 'en_US.UTF-8' if ansible_env.LANG is defined and 'en_US' in ansible_env.LANG else 'C.UTF-8' }}"
+
 # Authentication
 postgresql_password_encryption: "scram-sha-256"
 

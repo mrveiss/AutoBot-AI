@@ -6,11 +6,16 @@
 Simple Redis hash test
 """
 
+import os
+
 import redis
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 
 def simple_redis_test():
-    client = redis.Redis(host="localhost", port=6379, db=2, decode_responses=True)
+    client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
 
     # Get first key directly from FT.SEARCH
     result = client.execute_command("FT.SEARCH", "llama_index", "*", "LIMIT", "0", "1")

@@ -13,10 +13,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

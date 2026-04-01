@@ -10,22 +10,26 @@ FastAPI endpoints for workflow automation.
 import json
 import logging
 import threading
+from dataclasses import asdict
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.notification_service import NotificationConfig
 
 from .manager import WorkflowAutomationManager
 from .models import (
     AutomatedWorkflowRequest,
     AutomationMode,
+    NotificationConfigRequest,
     PlanApprovalMode,
     PlanApprovalResponse,
     PlanPresentationRequest,
     WorkflowControlRequest,
     WorkflowStep,
 )
+from .persistence import load_notification_config, save_notification_config
 
 logger = logging.getLogger(__name__)
 
@@ -461,6 +465,110 @@ async def get_pending_approval(
 
     except Exception as e:
         logger.error("Failed to get pending approval: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# Issue #3139: Per-Workflow Notification Configuration
+# =========================================================================
+
+
+def _find_workflow(workflow_id: str, current_user: dict = None):
+    """Look up a workflow in active or completed stores.
+
+    Returns the ActiveWorkflow dataclass or raises 404/403.
+    Verifies ownership when current_user is provided.
+    """
+    mgr = get_workflow_manager()
+    wf = mgr.active_workflows.get(workflow_id)
+    if wf is None:
+        wf = mgr.completed_workflows.get(workflow_id)
+    if wf is None:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if current_user and hasattr(wf, "owner_id") and wf.owner_id:
+        user_id = current_user.get("user_id", current_user.get("sub"))
+        if user_id and wf.owner_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+    return wf
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_notification_config",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.get("/notification_config/{workflow_id}")
+async def get_notification_config(
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the notification configuration for a workflow (#3139, #3166)."""
+    try:
+        wf = _find_workflow(workflow_id, current_user)
+        if wf.notification_config is None:
+            wf.notification_config = await load_notification_config(workflow_id)
+        config_dict = None
+        if wf.notification_config is not None:
+            config_dict = asdict(wf.notification_config)
+        return {
+            "success": True,
+            "workflow_id": workflow_id,
+            "notification_config": config_dict,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get notification config: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_notification_config",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.put("/notification_config/{workflow_id}")
+async def update_notification_config(
+    workflow_id: str,
+    request: NotificationConfigRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Create or update the notification configuration for a workflow (#3139, #3166).
+
+    When ``enabled`` is false the config is removed entirely so the
+    executor skips notification delivery.  The config is persisted to
+    Redis so it survives a backend restart.
+    """
+    try:
+        wf = _find_workflow(workflow_id, current_user)
+        if not request.enabled:
+            wf.notification_config = None
+        else:
+            user_id = current_user.get("user_id", current_user.get("sub", ""))
+            wf.notification_config = NotificationConfig(
+                workflow_id=workflow_id,
+                user_id=user_id,
+                channels=request.channels,
+                templates=request.templates,
+                email_recipients=request.email_recipients,
+                slack_webhook_url=request.slack_webhook_url,
+                webhook_url=request.webhook_url,
+            )
+        await save_notification_config(workflow_id, wf.notification_config)
+        config_dict = None
+        if wf.notification_config is not None:
+            config_dict = asdict(wf.notification_config)
+        return {
+            "success": True,
+            "workflow_id": workflow_id,
+            "notification_config": config_dict,
+            "message": "Notification configuration updated",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update notification config: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

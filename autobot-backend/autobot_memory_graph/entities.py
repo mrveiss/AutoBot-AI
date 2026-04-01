@@ -302,7 +302,7 @@ class EntityOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to add observations: %s", e)
-            raise RuntimeError(f"Add observations failed: {str(e)}")
+            raise RuntimeError("Add observations failed") from e
 
     async def delete_entity(
         self: AutoBotMemoryGraphCore,
@@ -375,6 +375,7 @@ class EntityOperationsMixin:
             self.embedding_cache[entity_id] = embedding_text
 
         except Exception as e:
+            # CodeQL: false positive — entity_id is a UUID, not sensitive
             logger.warning(
                 "Failed to generate embedding for entity %s: %s", entity_id, e
             )

@@ -20,9 +20,9 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from chat_history.file_io import run_in_chat_io_executor
 
 from autobot_shared.security.path_validator import validate_relative_path
+from chat_history.file_io import run_in_chat_io_executor
 
 logger = logging.getLogger(__name__)
 

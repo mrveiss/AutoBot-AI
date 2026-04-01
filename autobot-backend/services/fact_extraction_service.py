@@ -14,12 +14,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
+from autobot_shared.logging_manager import get_llm_logger
 from config import config_manager
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from utils.entity_resolver import entity_resolver
-
-from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.redis_client import get_redis_client
 
 logger = get_llm_logger("fact_extraction_service")
 
@@ -41,7 +39,7 @@ class FactExtractionService:
         """
         self.knowledge_base = knowledge_base
         self.extraction_agent = KnowledgeExtractionAgent()
-        self.redis_client = get_redis_client(async_client=True)
+        self.redis_client = None  # Lazy init (#2725)
 
         # Configuration
         self.fact_storage_prefix = "atomic_fact:"
@@ -59,6 +57,13 @@ class FactExtractionService:
         )
 
         logger.info("Fact Extraction Service initialized")
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def _apply_fact_processing(self, extraction_result) -> None:
         """Apply deduplication and entity resolution to extracted facts (Issue #398: extracted).
@@ -184,7 +189,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error in fact extraction and storage: %s", e)
-            return self._build_extraction_error_response(str(e))
+            return self._build_extraction_error_response("Fact extraction failed")
 
     def _build_extraction_success_response(
         self,
@@ -334,7 +339,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error processing chunks for fact extraction: %s", e)
-            return self._build_chunks_error_response(str(e), len(chunks))
+            return self._build_chunks_error_response("Chunk fact extraction failed", len(chunks))
 
     async def _deduplicate_facts(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """
@@ -858,6 +863,7 @@ class FactExtractionService:
         Returns:
             Dictionary with extraction statistics
         """
+        await self._ensure_redis()
         try:
             if not self.redis_client:
                 return {"error": "Redis client not available"}
@@ -893,7 +899,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error getting extraction statistics: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve extraction statistics"}
 
     async def _handle_temporal_invalidation(self, new_facts: List[AtomicFact]):
         """

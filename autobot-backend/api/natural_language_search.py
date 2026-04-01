@@ -21,9 +21,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+from constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 

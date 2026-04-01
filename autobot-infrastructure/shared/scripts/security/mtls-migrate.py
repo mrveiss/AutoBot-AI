@@ -85,7 +85,8 @@ class MTLSMigration:
             f"REDIS_ADMIN_PASSWORD={password}\n"  # noqa: S105
         )
         with open(self.ADMIN_CREDS_FILE, "w", encoding="utf-8") as f:
-            f.write(creds_content)
+            # Emergency recovery credentials, secured by 0o600 perms
+            f.write(creds_content)  # lgtm[py/clear-text-storage-sensitive-data]
         # Secure file permissions (owner read/write only)
         os.chmod(self.ADMIN_CREDS_FILE, 0o600)
         logger.info(

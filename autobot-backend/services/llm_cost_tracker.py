@@ -256,7 +256,7 @@ class LLMCostTracker:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = await get_redis_client(
+            self._redis_client = get_redis_client(
                 async_client=True, database=RedisDatabase.ANALYTICS
             )
         return self._redis_client
@@ -610,8 +610,7 @@ class LLMCostTracker:
         error_message: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> LLMUsageRecord:
-        """
-        Track an LLM API usage event. Ref: #1088.
+        """Track an LLM API usage event. Ref: #1088.
 
         Supports request object or individual keyword params (legacy).
         Delegates to _resolve_usage_params then _build_and_persist_record.
@@ -619,20 +618,7 @@ class LLMCostTracker:
         Returns:
             LLMUsageRecord with calculated cost
         """
-        (
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            session_id,
-            user_id,
-            agent_id,
-            endpoint,
-            latency_ms,
-            success,
-            error_message,
-            metadata,
-        ) = self._resolve_usage_params(
+        params = self._resolve_usage_params(
             request,
             provider,
             model,
@@ -647,20 +633,7 @@ class LLMCostTracker:
             error_message,
             metadata,
         )
-        return await self._build_and_persist_record(
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            session_id,
-            user_id,
-            agent_id,
-            endpoint,
-            latency_ms,
-            success,
-            error_message,
-            metadata,
-        )
+        return await self._build_and_persist_record(*params)
 
     async def _store_usage_record(self, record: LLMUsageRecord) -> None:
         """Store usage record in Redis.
@@ -853,7 +826,7 @@ class LLMCostTracker:
         except Exception as e:
             logger.error("Failed to get cost summary: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve cost summary",
                 "period": {
                     "start": start_date.isoformat(),
                     "end": end_date.isoformat(),
@@ -885,7 +858,7 @@ class LLMCostTracker:
 
         except Exception as e:
             logger.error("Failed to get session cost: %s", e)
-            return {"session_id": session_id, "error": str(e)}
+            return {"session_id": session_id, "error": "Failed to retrieve session cost"}
 
     async def get_cost_trends(self, days: int = 30) -> Dict[str, Any]:
         """
@@ -973,7 +946,7 @@ class LLMCostTracker:
             }
         except Exception as e:
             logger.error("Failed to get agent cost: %s", e)
-            return {"agent_id": agent_id, "error": str(e)}
+            return {"agent_id": agent_id, "error": "Failed to retrieve agent cost"}
 
     async def get_all_agent_costs(self) -> List[Dict[str, Any]]:
         """Get cost breakdown for all agents (#1401)."""
@@ -1050,7 +1023,7 @@ class LLMCostTracker:
             }
         except Exception as e:
             logger.error("Failed to set agent budget: %s", e)
-            return {"agent_id": agent_id, "error": str(e)}
+            return {"agent_id": agent_id, "error": "Failed to set agent budget"}
 
     async def get_agent_budget(self, agent_id: str) -> Optional[Dict[str, Any]]:
         """Get budget config for an agent (#1401)."""

@@ -107,7 +107,7 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest tags: %s", e)
-            return {"success": False, "suggestions": [], "error": str(e)}
+            return {"success": False, "suggestions": [], "error": "Failed to suggest tags"}
 
     async def suggest_categories(
         self,
@@ -146,7 +146,7 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest categories: %s", e)
-            return {"success": False, "suggestions": [], "error": str(e)}
+            return {"success": False, "suggestions": [], "error": "Failed to suggest categories"}
 
     def _empty_suggestion_response(self, error: str = None) -> Dict[str, Any]:
         """Build empty suggestion response (Issue #398: extracted)."""
@@ -214,7 +214,7 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to suggest tags and categories: %s", e)
-            return self._empty_suggestion_response(str(e))
+            return self._empty_suggestion_response("Tag and category suggestion failed")
 
     async def _apply_tag_suggestions(
         self, fact_id: str, suggestions: List[Dict], min_confidence: float, result: Dict
@@ -300,7 +300,7 @@ class SuggestionsMixin:
 
         except Exception as e:
             logger.error("Failed to auto-apply suggestions: %s", e)
-            return {"success": False, "fact_id": fact_id, "error": str(e)}
+            return {"success": False, "fact_id": fact_id, "error": "Failed to apply suggestions"}
 
     async def _find_similar_documents(
         self, content: str, limit: int

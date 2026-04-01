@@ -2,11 +2,31 @@
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-03-28
 
 ---
 
-## ✅ RECENT UPDATES (2026-01-29)
+## ✅ RECENT UPDATES (2026-03-28)
+
+### Issue #2671: Migrate Hardcoded Values to SSOT Config
+
+**Status:** Complete (2026-03-28)
+**GitHub Issue:** #2671 - Migrate remaining hardcoded values to SSOT config
+
+**Summary:**
+Migrated 36+ hardcoded values (IPs, ports, model names) across frontend and backend to use the SSOT configuration system. Reduced detection script violations from 41 to 5 (all remaining are false positives: docstrings, schema examples, cost table keys).
+
+**Key Changes:**
+
+- `registry_defaults.py` now sources all values from `autobot_shared.ssot_config` at import time
+- `ConfigRegistry.get()` callers no longer need hardcoded IP/port fallbacks
+- Frontend views use `ssot-config.ts` ports and helper functions
+- Backend model fallbacks use `DEFAULT_LLM_MODEL` and `DEFAULT_EMBEDDING_MODEL` constants
+- Added `ollama` and `elasticsearch` ports to TypeScript SSOT config
+
+**Files Modified:** 17 source files + 2 documentation files
+
+---
 
 ### Issue #725: mTLS Service Authentication Migration
 

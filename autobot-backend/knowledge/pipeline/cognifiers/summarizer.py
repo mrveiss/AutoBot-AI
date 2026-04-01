@@ -13,6 +13,7 @@ from typing import Dict, List, Tuple
 from uuid import UUID
 
 import numpy as np
+
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
 from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,

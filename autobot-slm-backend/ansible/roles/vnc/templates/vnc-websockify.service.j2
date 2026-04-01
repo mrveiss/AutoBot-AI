@@ -19,7 +19,7 @@ ExecStart=/usr/bin/websockify --web={{ novnc_path }} \
     --cert=/etc/autobot/certs/server-cert.pem \
     --key=/etc/autobot/certs/server-key.pem \
     --ssl-only \
-    localhost:{{ websockify_port }} localhost:{{ 5900 + vnc_display | int }}
+    0.0.0.0:{{ websockify_port }} localhost:{{ 5900 + vnc_display | int }}
 
 Restart=on-failure
 RestartSec=5

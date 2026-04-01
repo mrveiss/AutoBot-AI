@@ -22,9 +22,10 @@ import logging
 import re
 from typing import List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+
+from auth_middleware import get_current_user
 from services.workflow_secret_service import (
     WorkflowSecretService,
     get_workflow_secret_service,

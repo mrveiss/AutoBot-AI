@@ -5,6 +5,10 @@
 # SLM Agent role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes stale agent code copied to wrong paths on any node.
 # The legacy autobot-agent.service is already cleaned in main.yml (#917).
+#
+# All deletions target LEGACY agent paths only (agent, slm-agent,
+# /opt/slm-agent). No cross-role directories are touched, so no
+# node_roles guards are needed (#2836).
 
 - name: "SLM Agent | Clean: legacy flat agent dir at /opt/autobot/agent"
   ansible.builtin.file:

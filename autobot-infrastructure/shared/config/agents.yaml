@@ -1,20 +1,47 @@
-# AI Agents Configuration
-# Contains all AI agent and LLM-related settings
+# AI Agents Configuration (#2553)
+# 6-tier model mapping — see docs/developer/TIERED_MODEL_ROUTING.md
 
 llm:
-  # Default model for most operations
-  default_model: dolphin-llama3:8b
+  default_model: qwen3.5:9b
 
-  # Model assignments by agent type
   models:
-    chat: dolphin-llama3:8b
+    # Tier 1: Routing — orchestrator only
+    orchestrator: llama3.2:1b
+    # Tier 2: Classification — intent detection
     classification: gemma2:2b
-    kb_librarian: dolphin-llama3:8b
-    rag: dolphin-llama3:8b
-    research: dolphin-llama3:8b
-    security_scanner: dolphin-llama3:8b
+    gemma_classification: gemma2:2b
+    # Tier 3: Light Processing — extraction, formatting
+    kb_librarian: phi3:mini
+    knowledge_extraction: phi3:mini
+    knowledge_retrieval: phi3:mini
+    json_formatter: phi3:mini
+    npu_code_search: phi3:mini
+    # Tier 4: Instruction Following — RAG, entity extraction
+    rag: mistral:7b-instruct
+    graph_entity_extractor: mistral:7b-instruct
+    man_page_knowledge_integrator: mistral:7b-instruct
+    librarian_assistant: mistral:7b-instruct
+    step_executor: mistral:7b-instruct
+    network_discovery: mistral:7b-instruct
+    # Tier 5: System/Uncensored — commands, security
     system_commands: dolphin-llama3:8b
+    enhanced_system_commands: dolphin-llama3:8b
     interactive_terminal: dolphin-llama3:8b
+    security_scanner: dolphin-llama3:8b
+    llm_failsafe: dolphin-llama3:8b
+    # Tier 6: Quality — user-facing chat, research, code
+    chat: qwen3.5:9b
+    research: qwen3.5:9b
+    code_analysis: qwen3.5:9b
+    web_research_assistant: qwen3.5:9b
+    advanced_web_research: qwen3.5:9b
+    development_speedup: qwen3.5:9b
+    overseer: qwen3.5:9b
+    containerized_librarian: qwen3.5:9b
+    system_knowledge_manager: qwen3.5:9b
+    machine_aware_knowledge_manager: qwen3.5:9b
+    standardized: qwen3.5:9b
+    web_research_integration: qwen3.5:9b
 
 agents:
   chat:
@@ -55,6 +82,85 @@ agents:
     approval_required: true
     enabled: true
     safety_enabled: true
+
+  orchestrator:
+    enabled: true
+
+  knowledge_extraction:
+    enabled: true
+
+  knowledge_retrieval:
+    enabled: true
+    max_results: 10
+
+  code_analysis:
+    enabled: true
+
+  enhanced_system_commands:
+    approval_required: true
+    enabled: true
+    safety_enabled: true
+
+  network_discovery:
+    enabled: true
+    timeout_seconds: 30
+
+  web_research_assistant:
+    enabled: true
+    timeout_seconds: 60
+
+  advanced_web_research:
+    enabled: true
+    timeout_seconds: 120
+
+  development_speedup:
+    enabled: true
+
+  json_formatter:
+    enabled: true
+
+  graph_entity_extractor:
+    enabled: true
+
+  overseer:
+    enabled: true
+
+  step_executor:
+    enabled: true
+
+  npu_code_search:
+    enabled: true
+
+  librarian_assistant:
+    enabled: true
+    timeout_seconds: 60
+
+  containerized_librarian:
+    enabled: true
+    timeout_seconds: 120
+
+  system_knowledge_manager:
+    enabled: true
+
+  machine_aware_knowledge_manager:
+    enabled: true
+
+  man_page_knowledge_integrator:
+    enabled: true
+
+  llm_failsafe:
+    enabled: true
+
+  gemma_classification:
+    enabled: true
+    preferred_model: gemma2:2b
+
+  standardized:
+    enabled: true
+
+  web_research_integration:
+    enabled: true
+    timeout_seconds: 60
 
 knowledge_base:
   enabled: true

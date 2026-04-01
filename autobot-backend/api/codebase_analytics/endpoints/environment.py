@@ -20,6 +20,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.ssot_config import QUALITY_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -198,16 +199,20 @@ def _get_environment_analyzer():
     try:
         import importlib.util
 
-        # Issue #542: Add project root so env_analyzer.py can import from utils
+        # Issue #542: Add backend root so env_analyzer.py can import from utils
+        # Issue #2655: Use autobot-backend/ (parents[3]) not repo root (parents[4])
+        backend_root = str(Path(__file__).resolve().parents[3])
         project_root = str(Path(__file__).resolve().parents[4])
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+        for path_entry in (backend_root, project_root):
+            if path_entry not in sys.path:
+                sys.path.insert(0, path_entry)
 
         # Issue #611: Load env_analyzer directly from file to avoid namespace conflict
+        # Issue #2655: Fixed path — env_analyzer lives in autobot-backend/code_analysis/src/,
+        # not in tools/code-analysis-suite/src/ (which does not exist in this layout).
         env_analyzer_path = (
-            Path(__file__).resolve().parents[4]
-            / "tools"
-            / "code-analysis-suite"
+            Path(__file__).resolve().parents[3]
+            / "code_analysis"
             / "src"
             / "env_analyzer.py"
         )
@@ -378,7 +383,7 @@ async def get_environment_analysis(
     use_llm_filter: bool = Query(
         False, description="Issue #633: Use LLM to filter false positives"
     ),
-    llm_model: str = Query("llama3.2:1b", description="Ollama model for LLM filtering"),
+    llm_model: str = Query(QUALITY_MODEL, description="Ollama model for LLM filtering"),
     filter_priority: str = Query(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
@@ -462,8 +467,14 @@ async def get_env_recommendations(
             )
 
     # Run fresh analysis if no cache
+    project_root = _get_project_root()
     if not path:
-        path = str(Path(__file__).resolve().parents[4])
+        path = project_root
+
+    error_response = _validate_env_path_security(path, project_root)
+    if error_response:
+        return error_response
+
     return await _fetch_live_env_recommendations(path)
 
 
@@ -593,6 +604,44 @@ def _build_export_response_json(
     )
 
 
+async def _load_env_analysis_cache() -> tuple:
+    """Thread-safe cache read for export_env_analysis. Returns (full_data, error_response).
+
+    Issue #2735: Extracted from export_env_analysis for length compliance.
+    Issue #559: Thread-safe access to _env_analysis_full_cache.
+    Returns (full_data, None) on success or (None, JSONResponse) when cache is empty.
+    """
+    async with _env_analysis_cache_lock:
+        if not _env_analysis_full_cache:
+            return None, JSONResponse(
+                {
+                    "status": "error",
+                    "message": "No cached analysis available. Run environment analysis first.",
+                    "hardcoded_values": [],
+                    "recommendations": [],
+                    "total": 0,
+                },
+                status_code=404,
+            )
+        return _env_analysis_full_cache.copy(), None
+
+
+def _validate_export_severity(severity: Optional[str]) -> Optional[JSONResponse]:
+    """Return a 400 JSONResponse if severity is invalid, else None. Issue #2735."""
+    if severity and severity.lower() not in _VALID_SEVERITIES:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
+                "hardcoded_values": [],
+                "recommendations": [],
+                "total": 0,
+            },
+            status_code=400,
+        )
+    return None
+
+
 @router.get("/env-analysis/export")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -617,34 +666,15 @@ async def export_env_analysis(
     """
     Export full environment analysis results without truncation (Issue #631).
     Issue #665: Refactored to use extracted helpers for filtering and sorting.
+    Issue #2735: Cache load and severity validation extracted to helpers.
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _env_analysis_cache_lock:
-        if not _env_analysis_full_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No cached analysis available. Run environment analysis first.",
-                    "hardcoded_values": [],
-                    "recommendations": [],
-                    "total": 0,
-                },
-                status_code=404,
-            )
-        full_data = _env_analysis_full_cache.copy()
+    full_data, cache_error = await _load_env_analysis_cache()
+    if cache_error is not None:
+        return cache_error
 
-    # Validate severity (Issue #665: use module constant)
-    if severity and severity.lower() not in _VALID_SEVERITIES:
-        return JSONResponse(
-            {
-                "status": "error",
-                "message": f"Invalid severity '{severity}'. Must be one of: {', '.join(sorted(_VALID_SEVERITIES))}",
-                "hardcoded_values": [],
-                "recommendations": [],
-                "total": 0,
-            },
-            status_code=400,
-        )
+    severity_error = _validate_export_severity(severity)
+    if severity_error is not None:
+        return severity_error
 
     # Issue #631: Copy to avoid mutating cache; Issue #665: use helpers
     hardcoded_values = list(full_data.get("hardcoded_values", []))

@@ -4,6 +4,16 @@
 ---
 # Browser role - Phase 1 CLEAN task (#926 Phase 4)
 # Removes legacy and wrong-node directories from .25 (browser node).
+#
+# LEGACY directory deletions (browser-service, npu-worker, ai-stack) run
+# unconditionally because NO current role deploys to those paths — they are
+# pre-rename leftovers.
+#
+# Wrong-node deletions of CURRENT canonical dirs (autobot-backend,
+# autobot-frontend, autobot-slm-backend) ONLY run when node_roles is defined
+# (dynamic inventory). When undefined (localhost self-deploy via install.sh),
+# skip ALL cross-role deletions to prevent wiping co-located services on
+# single-host (#2836).
 
 - name: "Browser | Clean: legacy browser-service dir (old name)"
   ansible.builtin.file:
@@ -15,18 +25,27 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-backend
     state: absent
+  when:
+    - node_roles is defined
+    - "'backend' not in node_roles"
   tags: ['clean']
 
 - name: "Browser | Clean: wrong-node autobot-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-frontend
     state: absent
+  when:
+    - node_roles is defined
+    - "'frontend' not in node_roles"
   tags: ['clean']
 
 - name: "Browser | Clean: wrong-node autobot-slm-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
+  when:
+    - node_roles is defined
+    - "'slm-backend' not in node_roles"
   tags: ['clean']
 
 - name: "Browser | Clean: legacy npu-worker dir"

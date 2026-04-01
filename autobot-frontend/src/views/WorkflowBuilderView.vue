@@ -107,6 +107,22 @@
           <span>{{ $t('workflow.views.history') }}</span>
         </div>
 
+        <!-- Issue #3139: Per-workflow notification configuration -->
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'notifications' }"
+          @click="activeSection = 'notifications'"
+          role="button"
+          :aria-label="$t('workflow.notifications.sidebarLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span>{{ $t('workflow.notifications.sidebarLabel') }}</span>
+        </button>
+
         <button
           class="category-item"
           :class="{ active: activeSection === 'gui-automation' }"
@@ -178,6 +194,21 @@
           <span>{{ $t('workflow.views.orchestration') }}</span>
         </div>
 
+        <!-- Issue #2155: Live Execution Dashboard -->
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'live-dashboard' }"
+          @click="activeSection = 'live-dashboard'"
+          role="button"
+          :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <span>{{ $t('workflow.views.liveDashboard') }}</span>
+        </button>
+
         <div
           class="category-item"
           :class="{ active: activeSection === 'orchestration' }"
@@ -214,6 +245,11 @@
 
     <!-- Main Content -->
     <main class="workflow-content">
+      <!-- Child route content (#2368) -->
+      <router-view v-if="isChildRoute" />
+
+      <!-- Workflow Builder own content -->
+      <template v-else>
       <!-- Header -->
       <header class="content-header">
         <div class="header-left">
@@ -490,6 +526,28 @@
           />
         </section>
 
+        <!-- Issue #3139: Per-Workflow Notification Configuration -->
+        <section v-if="activeSection === 'notifications'" class="section-notifications">
+          <WorkflowNotificationConfig
+            :workflows="allWorkflowsForNotificationPicker"
+            @saved="handleNotificationConfigSaved"
+          />
+        </section>
+
+        <!-- Live Dashboard Section (#2155) -->
+        <section v-if="activeSection === 'live-dashboard'" class="section-live-dashboard">
+          <WorkflowLiveDashboard
+            :active-workflows="activeWorkflows"
+            :agent-performance="agentPerformance"
+            :agent-capabilities="agentCapabilities"
+            :loading="loading"
+            :loading-capabilities="loadingCapabilities"
+            @refresh="refreshAll"
+            @refresh-agents="handleRefreshAgents"
+            @select-workflow="handleViewWorkflow"
+          />
+        </section>
+
         <!-- Orchestration Visualizer Section -->
         <section v-if="activeSection === 'orchestration'" class="section-orchestration">
           <OrchestrationVisualizer
@@ -581,12 +639,14 @@
           </div>
         </section>
       </div>
+      </template>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
@@ -603,7 +663,9 @@ import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
+import WorkflowNotificationConfig from '@/components/workflow/WorkflowNotificationConfig.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
+import WorkflowLiveDashboard from '@/components/workflow/WorkflowLiveDashboard.vue';
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue';
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
@@ -615,6 +677,10 @@ import {
 
 const logger = createLogger('WorkflowBuilderView');
 const { t } = useI18n();
+const route = useRoute();
+
+/** True when a child route (e.g. /automation/browser-automation) is active (#2368) */
+const isChildRoute = computed(() => route.matched.length > 1);
 const { showToast } = useToast();
 
 // Section Types
@@ -625,12 +691,14 @@ type SectionType =
   | 'natural-language'
   | 'runner'
   | 'history'
+  | 'notifications'
   | 'gui-automation'
   | 'screen-analysis'
   | 'video-processing'
   | 'media-gallery'
   | 'orchestration'
-  | 'agents';
+  | 'agents'
+  | 'live-dashboard';
 
 // Composable
 const {
@@ -645,6 +713,7 @@ const {
   orchestrationStatus,
   executionStrategies,
   agentCapabilities,
+  agentPerformance,
   exampleWorkflows,
   workflowNodes,
   selectedNodeId,
@@ -653,6 +722,7 @@ const {
   loadOrchestrationStatus,
   loadExecutionStrategies,
   loadAgentCapabilities,
+  loadAgentPerformance,
   loadExampleWorkflows,
   loadActiveWorkflows,
   loadCompletedWorkflows,
@@ -767,6 +837,8 @@ const sectionTitle = computed(() => {
     'natural-language': t('workflow.views.sectionTitleNaturalLanguage'),
     runner: t('workflow.views.sectionTitleRunner'),
     history: t('workflow.views.sectionTitleHistory'),
+    notifications: t('workflow.notifications.sectionTitle'),
+    'live-dashboard': t('workflow.views.sectionTitleLiveDashboard'),
     orchestration: t('workflow.views.sectionTitleOrchestration'),
     agents: t('workflow.views.sectionTitleAgents'),
     'gui-automation': t('workflow.views.sectionTitleGuiAutomation'),
@@ -785,6 +857,8 @@ const sectionDescription = computed(() => {
     'natural-language': t('workflow.views.sectionDescNaturalLanguage'),
     runner: t('workflow.views.sectionDescRunner'),
     history: t('workflow.views.sectionDescHistory'),
+    notifications: t('workflow.notifications.sectionDesc'),
+    'live-dashboard': t('workflow.views.sectionDescLiveDashboard'),
     orchestration: t('workflow.views.sectionDescOrchestration'),
     agents: t('workflow.views.sectionDescAgents'),
     'gui-automation': t('workflow.views.sectionDescGuiAutomation'),
@@ -793,6 +867,21 @@ const sectionDescription = computed(() => {
     'media-gallery': t('workflow.views.sectionDescMediaGallery'),
   };
   return descriptions[activeSection.value] || '';
+});
+
+/** Combine active + completed workflows for the notification config picker (#3139). */
+const allWorkflowsForNotificationPicker = computed(() => {
+  const combined = [
+    ...activeWorkflows.value,
+    ...completedWorkflows.value,
+  ];
+  // Deduplicate by workflow_id
+  const seen = new Set<string>();
+  return combined.filter((wf) => {
+    if (seen.has(wf.workflow_id)) return false;
+    seen.add(wf.workflow_id);
+    return true;
+  });
 });
 
 // Methods
@@ -805,6 +894,11 @@ function getStrategyIcon(strategy: string): string {
     adaptive: 'fas fa-random',
   };
   return icons[strategy] || 'fas fa-cog';
+}
+
+/** Refresh agent performance and capabilities (#2155). */
+async function handleRefreshAgents(): Promise<void> {
+  await Promise.all([loadAgentPerformance(), loadAgentCapabilities()]);
 }
 
 async function refreshAll(): Promise<void> {
@@ -921,7 +1015,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
 
 async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
   let full = template as WorkflowTemplate;
-  // Issue #1367: API summaries lack steps — fetch full detail
+  // Issue #1367: API summaries lack steps -- fetch full detail
   if (!full.steps?.length) {
     const detail = await fetchTemplateDetail(template.id);
     if (!detail?.steps?.length) {
@@ -1043,6 +1137,12 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
   } else {
     showToast('Failed to re-run workflow', 'error');
   }
+}
+
+/** Handle notification config saved event (#3139). */
+function handleNotificationConfigSaved(workflowId: string): void {
+  showToast('Notification settings saved', 'success');
+  logger.info('Notification config saved for workflow %s', workflowId);
 }
 
 // Lifecycle

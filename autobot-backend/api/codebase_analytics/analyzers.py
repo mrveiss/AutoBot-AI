@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import aiofiles
+
 from constants.network_constants import NetworkConstants
 from llm_interface import LLMInterface
 from type_defs.common import Metadata
@@ -1433,7 +1434,7 @@ async def analyze_python_file(file_path: str, use_llm: bool = False) -> Metadata
 
     except Exception as e:
         logger.error("Error analyzing Python file %s: %s", file_path, e)
-        return _create_parse_error_result(str(e))
+        return _create_parse_error_result("Python file analysis failed")
 
 
 def _extract_js_functions(line: str, line_num: int) -> List[Dict]:

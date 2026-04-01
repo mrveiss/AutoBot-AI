@@ -12,17 +12,17 @@ import logging
 import time
 from typing import TYPE_CHECKING, Dict, List
 
-from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+
+from auth_middleware import check_admin_permission, get_current_user
 from type_defs.common import Metadata
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
-from monitoring.prometheus_metrics import get_metrics_manager
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)
@@ -353,7 +353,7 @@ async def websocket_stream(websocket: WebSocket):
             except Exception as e:
                 logger.error("Error processing WebSocket goal: %s", e)
                 await websocket.send_json(
-                    {"type": "error", "content": f"Error processing goal: {str(e)}"}
+                    {"type": "error", "content": "Error processing goal"}
                 )
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed")
@@ -361,7 +361,7 @@ async def websocket_stream(websocket: WebSocket):
         logger.error("WebSocket error: %s", e)
         try:
             await websocket.send_json(
-                {"type": "error", "content": f"WebSocket error: {str(e)}"}
+                {"type": "error", "content": "WebSocket error"}
             )
         except Exception as conn_error:
             logger.debug("Connection error: %s", conn_error)  # Connection closed

@@ -17,6 +17,7 @@ from typing import Dict, List
 import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+
 from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
@@ -69,8 +70,8 @@ EXEMPT_PATHS: List[str] = [
     "/api/monitoring",
     "/api/metrics",
     "/api/analytics",
-    # WebSocket connections
-    "/ws",
+    # WebSocket connections (api.websockets router mounted at /api prefix)
+    "/api/ws",
     # API documentation
     "/docs",
     "/openapi.json",

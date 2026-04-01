@@ -263,7 +263,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-xl font-semibold text-gray-900 mb-4">
         Two-Factor Authentication
       </h2>
@@ -351,7 +351,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-semibold text-gray-900">API Keys</h2>
         <button
@@ -432,7 +432,7 @@ onMounted(async () => {
               </td>
               <td class="px-4 py-3 whitespace-nowrap">
                 <code
-                  class="text-xs bg-gray-100 px-2 py-1 rounded"
+                  class="text-xs bg-gray-100 px-2 py-1 rounded-sm"
                 >{{ key.key_prefix }}...</code>
               </td>
               <td class="px-4 py-3">
@@ -440,7 +440,7 @@ onMounted(async () => {
                   <span
                     v-for="scope in key.scopes"
                     :key="scope"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                    class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800"
                   >
                     {{ scope }}
                   </span>
@@ -481,7 +481,7 @@ onMounted(async () => {
             <p class="mb-2">
               Scan the QR code with your authenticator app or enter the secret manually:
             </p>
-            <div class="bg-gray-50 p-4 rounded border border-gray-200">
+            <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
               <p class="font-mono text-xs break-all mb-2">
                 {{ setupData?.secret }}
               </p>
@@ -495,7 +495,7 @@ onMounted(async () => {
             <p class="mt-3 text-xs">
               Manual Entry URI (for apps that support it):
             </p>
-            <div class="bg-gray-50 p-2 rounded border border-gray-200 mt-1">
+            <div class="bg-gray-50 p-2 rounded-sm border border-gray-200 mt-1">
               <p class="font-mono text-xs break-all">
                 {{ setupData?.otpauth_uri }}
               </p>
@@ -553,7 +553,7 @@ onMounted(async () => {
             used once.
           </div>
 
-          <div class="bg-gray-50 p-4 rounded border border-gray-200">
+          <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
             <div class="grid grid-cols-2 gap-2">
               <code
                 v-for="(code, idx) in backupCodes"
@@ -788,7 +788,7 @@ onMounted(async () => {
             This key will not be shown again. Save it in a secure location.
           </div>
 
-          <div class="bg-gray-50 p-4 rounded border border-gray-200">
+          <div class="bg-gray-50 p-4 rounded-sm border border-gray-200">
             <code class="text-sm font-mono break-all">{{ createdKey?.key }}</code>
           </div>
 

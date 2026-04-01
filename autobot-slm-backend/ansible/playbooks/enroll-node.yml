@@ -38,7 +38,7 @@
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"
     # Password hash must be provided via Ansible Vault or --extra-vars.
-    # Generate with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('YOUR_PASSWORD'))"
+    # Generate with: python3 -c "import bcrypt; print(bcrypt.hashpw(b'YOUR_PASSWORD', bcrypt.gensalt()).decode())"
     # See: inventory/group_vars/vault.yml
     emergency_admin_password_hash: "{{ vault_emergency_admin_password_hash | default(omit) }}"
 
@@ -64,6 +64,10 @@
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
         ports: [3000, 5900]
+      vnc:
+        services: ['vnc-server', 'vnc-websockify']
+        packages: ['tigervnc-standalone-server', 'x11vnc', 'websockify', 'novnc', 'xfce4', 'xfce4-terminal', 'dbus-x11']
+        ports: [5900, 6080]
       slm-agent:
         services: ['slm-agent']
         packages: ['python3', 'python3-pip', 'python3-venv']
@@ -153,11 +157,12 @@
             - "{{ autobot_cert_dir }}"
             - "{{ autobot_home }}/.ssh"
 
+        # Issue #2828: Use shared key path — accessible to any operator
         - name: "Configure SSH authorized keys"
           authorized_key:
             user: "{{ autobot_user }}"
             state: present
-            key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
+            key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
           ignore_errors: yes  # Key may not exist during initial enrollment
 
         - name: "Create emergency admin user"
@@ -302,6 +307,14 @@
                   - libgbm1
                   - libasound2
                 state: present
+
+        # VNC Desktop setup (Issue #1525)
+        - name: "Setup VNC Desktop Node"
+          when: node_role == 'vnc'
+          block:
+            - name: "Include VNC role for full desktop provisioning"
+              ansible.builtin.include_role:
+                name: vnc
 
         # Code-source setup (Issue #741)
         - name: "Setup Code Source Node"

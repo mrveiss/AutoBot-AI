@@ -21,11 +21,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from knowledge.search_components.reranking import RerankWeights, compute_blended_score
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
-
-from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("advanced_rag_optimizer")
 
@@ -804,7 +803,7 @@ class AdvancedRAGOptimizer:
 
         except Exception as e:
             logger.error("Context optimization failed: %s", e)
-            return f"Error retrieving context: {str(e)}", RAGMetrics()
+            return "Error retrieving context", RAGMetrics()
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the RAG optimizer."""

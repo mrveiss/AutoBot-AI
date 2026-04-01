@@ -86,7 +86,7 @@ def validate_workflow():
 
         print("\n🎯 Pipeline Features:")
         features = [
-            "Multi-Python version testing (3.10, 3.11)",
+            "Python 3.12 testing",
             "Security testing with bandit",
             "Code quality checks (black, isort, flake8)",
             "Unit and integration tests",

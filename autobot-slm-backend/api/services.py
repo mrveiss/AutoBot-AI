@@ -13,8 +13,12 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 
-from api.websocket import ws_manager
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from api.websocket import ws_manager
 from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
     FleetServicesResponse,
@@ -34,9 +38,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_categorizer import categorize_service
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -62,7 +63,7 @@ def _build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
     return [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -111,7 +112,7 @@ async def _run_ansible_service_action(
         return False, f"Timeout waiting for {action} to complete"
     except Exception as e:
         logger.exception("Service action error: %s", e)
-        return False, f"Error: {str(e)[:200]}"
+        return False, "Service action failed"
 
 
 # Port mapping for services that bind to specific ports
@@ -148,7 +149,7 @@ async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -174,7 +175,7 @@ async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
 
     except Exception as e:
         logger.warning("Could not kill orphan on port %d: %s", port, e)
-        return False, str(e)
+        return False, f"Could not kill orphan on port {port}"
 
 
 async def _run_ansible_get_logs(
@@ -201,7 +202,7 @@ async def _run_ansible_get_logs(
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -237,7 +238,7 @@ async def _run_ansible_get_logs(
         return False, "Timeout fetching logs"
     except Exception as e:
         logger.exception("Get logs error: %s", e)
-        return False, f"Error: {str(e)[:200]}"
+        return False, "Failed to fetch logs"
 
 
 def _build_scan_failure_response(node_id: str, message: str) -> ServiceScanResponse:
@@ -423,7 +424,7 @@ async def scan_node_services(
 
     except Exception as e:
         logger.exception("Service scan error on %s: %s", node.hostname, e)
-        return _build_scan_failure_response(node_id, f"Error: {str(e)[:200]}")
+        return _build_scan_failure_response(node_id, "Service scan failed")
 
 
 async def _upsert_service(

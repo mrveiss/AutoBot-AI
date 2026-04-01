@@ -32,12 +32,12 @@ AutoBot uses a **Single Source of Truth (SSOT)** configuration pattern where all
 ### Python (Backend)
 
 ```python
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 
 # Access configuration values
 backend_host = config.backend.host        # "172.16.168.20"
 redis_url = config.redis.url              # Full connection URL
-llm_model = config.llm.default_model      # "llama3.2:3b"
+llm_model = config.llm.default_model      # "qwen3.5:9b"
 
 # Get full URL for a service
 api_url = config.backend.url              # "https://172.16.168.20:8443"
@@ -100,8 +100,8 @@ All SSOT variables use the `AUTOBOT_` prefix. Here's the complete list:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_DEFAULT_LLM_MODEL` | `llama3.2:3b` | Default LLM model |
-| `AUTOBOT_OLLAMA_HOST` | `172.16.168.24` | Ollama API host |
+| `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | Default LLM model |
+| `AUTOBOT_OLLAMA_HOST` | `127.0.0.1` | Ollama API host |
 | `AUTOBOT_OLLAMA_PORT` | `11434` | Ollama API port |
 
 ### Redis Databases
@@ -113,13 +113,46 @@ All SSOT variables use the `AUTOBOT_` prefix. Here's the complete list:
 | `AUTOBOT_REDIS_DB_PROMPTS` | `2` | LLM prompts/templates |
 | `AUTOBOT_REDIS_DB_ANALYTICS` | `3` | Analytics data |
 
+## ConfigRegistry and Registry Defaults
+
+The `ConfigRegistry` (in `autobot-backend/config/registry.py`) provides a five-tier fallback chain:
+
+```
+Cache → Redis → Environment → Registry Defaults → Caller Default
+```
+
+As of Issue #2671, `registry_defaults.py` sources all its values from the SSOT config at import time:
+
+```python
+from autobot_shared.ssot_config import get_config
+
+_ssot = get_config()
+
+REGISTRY_DEFAULTS = {
+    "vm.main": _ssot.vm.main,          # From .env or pydantic default
+    "vm.redis": _ssot.vm.redis,
+    "port.backend": str(_ssot.port.backend),
+    # ... all values from SSOT
+}
+```
+
+This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks**:
+
+```python
+# ✅ CORRECT — registry_defaults provides SSOT-sourced fallback
+redis_host = ConfigRegistry.get("vm.redis")
+
+# ❌ WRONG — redundant hardcoded fallback
+redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+```
+
 ## Best Practices
 
 ### DO: Use SSOT Config Loaders
 
 ```python
 # ✅ CORRECT - Python
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 redis_host = config.redis.host
 ```
 
@@ -202,7 +235,7 @@ client = redis.Redis(host="172.16.168.23", port=6379, db=0)
 
 **After (SSOT):**
 ```python
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 import redis
 
 client = redis.Redis(
@@ -436,7 +469,7 @@ AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 
 ```python
 # For infrastructure (network, ports, hosts) - use SSOT
-from src.config.ssot_config import config
+from autobot_shared.ssot_config import config
 redis_host = config.vm.redis           # Infrastructure from .env
 backend_url = config.backend_url       # Computed URL from .env
 

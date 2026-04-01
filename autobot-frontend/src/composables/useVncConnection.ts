@@ -7,7 +7,7 @@
  * Issue #74 - Area 4: Advanced Session Management
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -37,36 +37,33 @@ export interface ConnectionMetrics {
 
 export function useVncConnection(sessionId: string = 'default') {
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
   const settings = ref<ConnectionSettings | null>(null)
   const metrics = ref<ConnectionMetrics | null>(null)
 
-  /**
-   * Load connection settings
-   */
   async function loadSettings(): Promise<void> {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       const data = await ApiClient.get<ConnectionSettings>(
         `/vnc/connection/settings?session_id=${sessionId}`
       )
       settings.value = data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to load connection settings:', err)
-      error.value = 'Failed to load connection settings'
+      errors.value = [...errors.value, 'Failed to load connection settings']
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Update connection settings
-   */
   async function updateSettings(newSettings: ConnectionSettings): Promise<boolean> {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       await ApiClient.post(
@@ -75,30 +72,24 @@ export function useVncConnection(sessionId: string = 'default') {
       )
       settings.value = newSettings
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to update connection settings:', err)
-      error.value = 'Failed to update connection settings'
+      errors.value = [...errors.value, 'Failed to update connection settings']
       return false
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Load connection quality metrics
-   */
   async function loadMetrics(): Promise<void> {
     try {
       const data = await ApiClient.get<ConnectionMetrics>('/vnc/connection/quality-metrics')
       metrics.value = data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to load connection metrics:', err)
     }
   }
 
-  /**
-   * Update quality preset (quick settings)
-   */
   async function setQualityPreset(preset: 'low' | 'medium' | 'high' | 'best'): Promise<boolean> {
     if (!settings.value) {
       await loadSettings()

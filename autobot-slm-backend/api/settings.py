@@ -10,15 +10,16 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.database import Node, Setting
-from models.schemas import SettingResponse, SettingUpdate
 from pydantic import BaseModel
-from services.auth import get_current_user, require_admin
-from services.database import get_db
-from services.playbook_executor import get_playbook_executor
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from models.database import Node, Setting
+from models.schemas import SettingResponse, SettingUpdate
+from services.auth import get_current_user, require_admin
+from services.database import get_db
+from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])

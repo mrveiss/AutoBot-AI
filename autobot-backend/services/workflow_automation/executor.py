@@ -9,9 +9,10 @@ Handles workflow step execution, dependency checking, and command execution.
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Dict, FrozenSet, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -26,11 +27,33 @@ from .models import (
     WorkflowStep,
     WorkflowStepStatus,
 )
+from .safety_limits import (
+    CostTracker,
+    StepTimeoutEnforcer,
+    WorkflowLimits,
+)
 from .state_machine import WorkflowPhase, WorkflowStateMachine
 from .step_evaluator import WorkflowStepEvaluator
+from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
 if TYPE_CHECKING:
+    from services.notification_service import NotificationService
+
     from .messaging import WorkflowMessenger
+
+# Lazy import to avoid circular dependency at module level.
+_notification_event_mod: Optional[type] = None
+
+
+def _get_notification_event():
+    """Return NotificationEvent enum, importing lazily on first call."""
+    global _notification_event_mod  # noqa: PLW0603
+    if _notification_event_mod is None:
+        from services.notification_service import NotificationEvent
+
+        _notification_event_mod = NotificationEvent
+    return _notification_event_mod
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,12 +117,83 @@ def _redact_result_secrets(
     return result
 
 
+# ---------------------------------------------------------------------------
+# Issue #2601 — Step reference resolution for vision step chaining
+# ---------------------------------------------------------------------------
+
+_REF_PATTERN = re.compile(r"\$\{steps\.(\w+)\.([^}]+)\}")
+_ARRAY_PART = re.compile(r"^(\w+)\[(\d+)\]$")
+
+
+def _navigate_path(data: Any, path: str) -> Any:
+    """Navigate a dot-separated path with optional array indexing into *data*.
+
+    Example path: ``result.elements[0].coordinates``
+    Returns ``None`` for missing keys or out-of-range indices. (#2601)
+    """
+    current = data
+    for part in path.split("."):
+        if current is None:
+            return None
+        array_match = _ARRAY_PART.match(part)
+        if array_match:
+            key, index = array_match.group(1), int(array_match.group(2))
+            if isinstance(current, dict):
+                current = current.get(key)
+            if isinstance(current, (list, tuple)) and index < len(current):
+                current = current[index]
+            else:
+                return None
+        elif isinstance(current, dict):
+            current = current.get(part)
+        else:
+            return None
+    return current
+
+
+def _resolve_step_references(config: dict, step_results: dict) -> dict:
+    """Resolve ``${steps.<step_id>.<path>}`` references in step config values.
+
+    Only string values are scanned.  Non-matching strings and non-string values
+    are returned unchanged.
+
+    - A value that IS a single reference (entire string) returns the raw
+      navigated value preserving the original type (dict, list, int, …).
+    - A value that CONTAINS multiple references returns a substituted string.
+    - Unknown step IDs keep the original token unchanged. (#2601, #2632)
+    """
+
+    def _replace_ref(match: re.Match) -> str:
+        step_id, path = match.group(1), match.group(2)
+        value = _navigate_path(step_results.get(step_id), path)
+        return str(value) if value is not None else match.group(0)
+
+    resolved: dict = {}
+    for key, value in config.items():
+        if isinstance(value, str) and "${steps." in value:
+            sole = _REF_PATTERN.fullmatch(value)
+            if sole:
+                step_id, path = sole.group(1), sole.group(2)
+                resolved[key] = _navigate_path(step_results.get(step_id), path)
+            else:
+                resolved[key] = _REF_PATTERN.sub(_replace_ref, value)
+        else:
+            resolved[key] = value
+    return resolved
+
+
 class WorkflowExecutor:
     """Handles workflow step execution and processing"""
 
-    def __init__(self, messenger: "WorkflowMessenger"):
+    def __init__(
+        self,
+        messenger: "WorkflowMessenger",
+        notification_service: Optional["NotificationService"] = None,
+    ):
         """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
+        # Issue #3101: Notification service for workflow lifecycle events.
+        self._notification_service = notification_service
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()
         # Issue #390: Track pending plan approvals
@@ -109,13 +203,52 @@ class WorkflowExecutor:
         self.on_workflow_finished: Optional[Callable[[str], None]] = None
         # Issue #1380: State machine for explicit routing
         self.state_machine = WorkflowStateMachine()
+        # Issue #2159: Safety limits infrastructure
+        self.limits = WorkflowLimits()
+        self.cost_tracker = CostTracker()
+        self._timeout_enforcer = StepTimeoutEnforcer()
+
+    async def _notify(
+        self,
+        workflow: ActiveWorkflow,
+        event_name: str,
+        extra: Dict[str, Any],
+    ) -> None:
+        """Fire a notification if the service is wired and workflow has config (#3101)."""
+        if self._notification_service is None:
+            return
+        config = getattr(workflow, "notification_config", None)
+        if config is None:
+            return
+        try:
+            NE = _get_notification_event()
+            event = NE(event_name)
+            payload = {"workflow_id": workflow.workflow_id, **extra}
+            await self._notification_service.send(
+                event, workflow.workflow_id, payload, config
+            )
+        except Exception:
+            logger.exception("Notification delivery failed for %s", event_name)
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> bool:
         """Start executing automated workflow"""
+        # Issue #2159: Enforce max_steps limit before starting
+        if len(workflow.steps) > self.limits.max_steps:
+            logger.error(
+                "Workflow %s has %d steps, exceeding limit of %d",
+                workflow.workflow_id,
+                len(workflow.steps),
+                self.limits.max_steps,
+            )
+            return False
+
         workflow.started_at = datetime.now()
         workflow.prometheus_start_time = time.time()
+
+        # Issue #2159: Begin cost tracking for this execution
+        self.cost_tracker.start(workflow.workflow_id)
 
         # Issue #1380: Create state machine entry
         sm_state = await self.state_machine.create(
@@ -267,6 +400,12 @@ class WorkflowExecutor:
             },
         )
 
+        # Issue #3101: Notify configured channels that approval is needed.
+        if step.requires_confirmation:
+            await self._notify(workflow, "approval_needed", {
+                "step_name": step.step_id,
+            })
+
     def _check_step_dependencies(
         self, workflow: ActiveWorkflow, step: WorkflowStep
     ) -> bool:
@@ -286,15 +425,18 @@ class WorkflowExecutor:
 
         return True
 
-    def _record_step_metric(self, status: str) -> None:
+    def _record_step_metric(
+        self, status: str, step_type: str = "command_execution"
+    ) -> None:
         """
         Record Prometheus workflow step metric.
 
         Args:
             status: The step status ('completed' or 'failed'). Issue #620.
+            step_type: The workflow step type (e.g. 'command_execution', 'vision-capture').
+                Issue #2397: Vision steps pass their own type for granular metrics.
         """
         workflow_type = "automated_workflow"
-        step_type = "command_execution"
         self.prometheus_metrics.record_workflow_step(
             workflow_type=workflow_type, step_type=step_type, status=status
         )
@@ -368,7 +510,7 @@ class WorkflowExecutor:
         current_step.status = WorkflowStepStatus.FAILED
         current_step.execution_result = {"error": str(error)}
 
-        self._record_step_metric("failed")
+        self._record_step_metric("failed", current_step.step_type)
 
         # Issue #1380: Record failure in state machine
         await self._sm_transition(
@@ -388,6 +530,12 @@ class WorkflowExecutor:
             },
         )
 
+        # Issue #3101: Notify configured channels on step failure.
+        await self._notify(workflow, "step_failed", {
+            "step_name": step_id,
+            "error": str(error),
+        })
+
     async def approve_and_execute_step(
         self,
         workflow: ActiveWorkflow,
@@ -405,37 +553,113 @@ class WorkflowExecutor:
 
         current_step.status = WorkflowStepStatus.EXECUTING
 
-        try:
-            # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
-            # Issue #2321: Capture resolved_names so redaction only scans
-            # injected secrets — not all secrets for all users.
-            owner_id = workflow.owner_id or workflow.session_id
-            resolved_command, resolved_names = _resolve_command_secrets(
-                current_step.command, owner_id
+        # Issue #2159: Enforce token/output budget before executing next step
+        if not self.cost_tracker.check_token_budget(workflow.workflow_id, self.limits):
+            await self._handle_step_execution_failure(
+                workflow,
+                current_step,
+                step_id,
+                RuntimeError("Token budget exhausted for this workflow execution"),
             )
+            return
 
-            result = await self._execute_command(workflow.session_id, resolved_command)
-
-            # Issue #2153: Redact any secret values that may appear in output.
-            result = _redact_result_secrets(result, owner_id, resolved_names)
-
-            current_step.status = WorkflowStepStatus.COMPLETED
-            current_step.execution_result = result
-            current_step.completed_at = datetime.now()
-
-            self._record_step_metric("completed")
-
-            # Issue #1380: Record step completion in state machine
-            await self._sm_record_step(workflow, step_id)
-
-            workflow.current_step_index += 1
-            await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
-            await self.process_next_step(workflow, workflows)
-
+        try:
+            await self._resolve_and_run_step(workflow, current_step, step_id, workflows)
         except Exception as e:
             await self._handle_step_execution_failure(
                 workflow, current_step, step_id, e
             )
+
+    async def _resolve_and_run_step(
+        self,
+        workflow: ActiveWorkflow,
+        current_step,
+        step_id: str,
+        workflows: Dict[str, ActiveWorkflow],
+    ) -> None:
+        """Resolve secrets/step-refs, execute the step, redact output, and finalize. Issue #2735.
+
+        Extracted from approve_and_execute_step to keep parent under 65 lines.
+        Handles both vision and command step types (Issues #2153, #2321, #2397, #2632).
+        """
+        # Issue #2153: Resolve ${secrets.NAME} tokens before execution.
+        # Issue #2321: Capture resolved_names so redaction only scans
+        # injected secrets — not all secrets for all users.
+        owner_id = workflow.owner_id or workflow.session_id
+        resolved_command, resolved_names = _resolve_command_secrets(
+            current_step.command, owner_id
+        )
+
+        # Issue #2632: Resolve ${steps.<id>.<path>} references for ALL step
+        # types, not just vision.  Resolution is cheap and harmless for steps
+        # that have no step_config or no references in their config.
+        resolved_config = _resolve_step_references(
+            current_step.step_config or {}, workflow.step_results
+        )
+
+        # Issue #2397: Route vision node types to the vision step handler.
+        # All other step types fall through to the standard command executor.
+        if current_step.step_type in VISION_STEP_TYPES:
+            result = await self._timeout_enforcer.run_with_timeout(
+                coro=execute_vision_step(current_step.step_type, resolved_config),
+                step_id=step_id,
+                timeout_seconds=current_step.timeout_seconds,
+                limits=self.limits,
+            )
+        else:
+            # Issue #2159: Wrap execution in per-step timeout enforcer
+            result = await self._timeout_enforcer.run_with_timeout(
+                coro=self._execute_command(workflow.session_id, resolved_command),
+                step_id=step_id,
+                timeout_seconds=current_step.timeout_seconds,
+                limits=self.limits,
+            )
+
+        # Issue #2153: Redact any secret values that may appear in output.
+        result = _redact_result_secrets(result, owner_id, resolved_names)
+        await self._finalize_step_result(
+            workflow, current_step, step_id, result, workflows
+        )
+
+    async def _finalize_step_result(
+        self,
+        workflow: ActiveWorkflow,
+        current_step,
+        step_id: str,
+        result: Metadata,
+        workflows: Dict[str, ActiveWorkflow],
+    ) -> None:
+        """Record execution result, check budgets, and advance to next step (#2397 extract)."""
+        # Issue #2159: Record output size for budget tracking
+        output_size = len(str(result.get("stdout", "")).encode("utf-8"))
+        self.cost_tracker.record_output_bytes(workflow.workflow_id, output_size)
+
+        if not self.cost_tracker.check_output_budget(workflow.workflow_id, self.limits):
+            await self._handle_step_execution_failure(
+                workflow,
+                current_step,
+                step_id,
+                RuntimeError(
+                    "Output size budget exhausted for this workflow execution"
+                ),
+            )
+            return
+
+        current_step.status = WorkflowStepStatus.COMPLETED
+        current_step.execution_result = result
+        current_step.completed_at = datetime.now()
+
+        # Issue #2601: Store result so later vision steps can reference it.
+        workflow.step_results[step_id] = result
+
+        self._record_step_metric("completed", current_step.step_type)
+
+        # Issue #1380: Record step completion in state machine
+        await self._sm_record_step(workflow, step_id)
+
+        workflow.current_step_index += 1
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
+        await self.process_next_step(workflow, workflows)
 
     async def skip_step(
         self,
@@ -544,9 +768,18 @@ class WorkflowExecutor:
 
         self._record_workflow_completion_metrics(workflow, workflows)
 
+        # Issue #2159: Finalise cost tracking and log cost summary
+        self.cost_tracker.finish(workflow.workflow_id)
+
         await self.messenger.send_message(
             workflow.session_id, self._build_completion_message(workflow)
         )
+
+        # Issue #3101: Notify configured channels on workflow completion.
+        await self._notify(workflow, "workflow_completed", {
+            "status": "completed",
+            "total_steps": len(workflow.steps),
+        })
 
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:
@@ -596,10 +829,19 @@ class WorkflowExecutor:
 
         self._record_cancellation_metrics(workflow, workflows)
 
+        # Issue #2159: Clean up cost tracker entry to prevent memory leak
+        if hasattr(self, "cost_tracker") and self.cost_tracker:
+            self.cost_tracker.finish(workflow.workflow_id)
+
         await self.messenger.send_message(
             workflow.session_id,
             {"type": "workflow_cancelled", "workflow_id": workflow.workflow_id},
         )
+
+        # Issue #3101: Notify configured channels on workflow cancellation/failure.
+        await self._notify(workflow, "workflow_failed", {
+            "error": "cancelled",
+        })
 
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:

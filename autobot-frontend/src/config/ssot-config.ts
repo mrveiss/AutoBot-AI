@@ -370,7 +370,7 @@ function buildConfig(): AutoBotConfig {
 
   // LLM configuration
   const llm: LLMConfig = {
-    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),
+    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),  // Quality tier (#2553)
     embeddingModel: getEnv('VITE_LLM_EMBEDDING_MODEL', 'nomic-embed-text:latest'),
     provider: getEnv('VITE_LLM_PROVIDER', 'ollama'),
     timeout: getEnvNumber('VITE_LLM_TIMEOUT', 30000),

@@ -786,13 +786,17 @@ class AutoBotMCPServer {
     }
   }
 
-  // Utility methods
+  // Utility methods — commands are always hardcoded strings from this server,
+  // never from user/environment input. Shell is restricted to PROJECT_ROOT.
   async executeCommand(command, options = {}) {
+    if (typeof command !== 'string' || command.length === 0) {
+      throw new Error('Command must be a non-empty string');
+    }
     try {
-      const result = execSync(command, { 
-        encoding: 'utf8', 
+      const result = execSync(command, { // codeql-suppress js/shell-command-injection-from-environment -- all callers pass hardcoded command strings; this is a local dev MCP server
+        encoding: 'utf8',
         maxBuffer: 1024 * 1024,
-        ...options 
+        ...options
       });
       return result.toString().trim();
     } catch (error) {

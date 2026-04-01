@@ -13,8 +13,6 @@ from typing import Any, Dict, List
 
 from config import UnifiedConfig
 
-from autobot_shared.redis_client import get_redis_client
-
 # Initialize unified config
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
@@ -53,7 +51,7 @@ class AutomatedFixGenerator:
     """Generates automated code fixes based on analysis results"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
 
         # Caching key
@@ -63,6 +61,13 @@ class AutomatedFixGenerator:
         self.fix_templates = self._initialize_fix_templates()
 
         logger.info("Automated Fix Generator initialized")
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     def _initialize_fix_templates(self) -> Dict[str, List[FixTemplate]]:
         """Initialize fix templates for common code issues.
@@ -660,6 +665,7 @@ class AutomatedFixGenerator:
 
     async def _cache_fixes(self, results: Dict[str, Any]):
         """Cache generated fixes"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 await self.redis_client.setex(

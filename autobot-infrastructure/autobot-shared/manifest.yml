@@ -1,12 +1,12 @@
-role: autobot-shared
+role: autobot_shared
 description: "Shared Python utilities — redis_client, ssot_config, tracing, logging (deployed with every backend)"
 version: "1.0.0"
 target_node: null         # Deployed to all nodes that run Python backends
 deploy_to_all: true
 
 deploy:
-  source: autobot-shared/
-  destination: /opt/autobot/autobot-shared/
+  source: autobot_shared/
+  destination: /opt/autobot/autobot_shared/
   shared: false           # IS the shared component — no recursion
   infrastructure: false
 
@@ -47,4 +47,4 @@ notes: |
   Pure Python library. Deployed alongside any role that imports from autobot_shared.
   Key modules: redis_client, ssot_config, tracing, logging_config.
   Import path: from autobot_shared.redis_client import get_redis_client
-  The autobot_shared/ symlink at repo root points to autobot-shared/ for WSL2 compat.
+  Directory renamed from autobot-shared/ to autobot_shared/ in #2934 — no symlink needed.

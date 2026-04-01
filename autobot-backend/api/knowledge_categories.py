@@ -26,6 +26,8 @@ import logging
 import re
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+
 from api.knowledge_models import (
     AssignFactToCategoryRequest,
     CreateCategoryRequest,
@@ -33,11 +35,9 @@ from api.knowledge_models import (
     UpdateCategoryRequest,
 )
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from knowledge_factory import get_or_create_knowledge_base
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import QueryDefaults
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

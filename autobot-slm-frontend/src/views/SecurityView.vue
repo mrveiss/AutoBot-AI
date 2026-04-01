@@ -18,6 +18,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import config from '@/config/ssot-config'
 
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
@@ -728,7 +729,7 @@ const scoreColor = computed(() => {
             </p>
             <details v-if="tlsEnableResult.details" class="mt-2">
               <summary class="text-sm text-gray-600 cursor-pointer">Show details</summary>
-              <pre class="mt-2 text-xs bg-white p-3 rounded border overflow-x-auto max-h-48">{{ tlsEnableResult.details }}</pre>
+              <pre class="mt-2 text-xs bg-white p-3 rounded-sm border overflow-x-auto max-h-48">{{ tlsEnableResult.details }}</pre>
             </details>
           </div>
           <button @click="tlsEnableResult = null" class="ml-auto text-gray-400 hover:text-gray-600" aria-label="Dismiss TLS result">
@@ -757,7 +758,7 @@ const scoreColor = computed(() => {
                 <input
                   type="checkbox"
                   :checked="selectedTlsServices.includes(service.name)"
-                  class="h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+                  class="h-5 w-5 text-primary-600 rounded-sm border-gray-300 focus:ring-primary-500"
                   :aria-label="`Enable TLS for ${service.displayName}`"
                   @click.stop
                   @change="toggleTlsService(service.name)"
@@ -795,7 +796,7 @@ const scoreColor = computed(() => {
             <input
               v-model="deployCertsFirst"
               type="checkbox"
-              class="h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+              class="h-5 w-5 text-primary-600 rounded-sm border-gray-300 focus:ring-primary-500"
             />
             <div>
               <span class="font-medium text-gray-900">Deploy certificates first</span>
@@ -840,9 +841,9 @@ const scoreColor = computed(() => {
               <li>TLS certificates are deployed to the selected nodes</li>
               <li>Service configurations are updated to use HTTPS/TLS</li>
               <li>Services are restarted to apply the changes</li>
-              <li>Frontend will be accessible at https://frontend-host:443</li>
-              <li>Backend API will be accessible at https://backend-host:8443</li>
-              <li>Redis will accept TLS connections on port 6380</li>
+              <li>Frontend will be accessible at https://frontend-host:{{ config.port.tlsFrontend }}</li>
+              <li>Backend API will be accessible at https://backend-host:{{ config.port.tlsBackend }}</li>
+              <li>Redis will accept TLS connections on port {{ config.port.tlsRedis }}</li>
             </ul>
           </div>
         </div>
@@ -867,7 +868,7 @@ const scoreColor = computed(() => {
         </div>
         <div v-if="fleetCerts.length === 0 && !fleetCertsLoading" class="p-4 text-sm text-gray-500">
           No cert records yet. Run
-          <code class="text-xs bg-gray-100 px-1 rounded">setup-internal-ca.yml</code>
+          <code class="text-xs bg-gray-100 px-1 rounded-sm">setup-internal-ca.yml</code>
           to issue CA-signed certs and populate this list.
         </div>
         <table v-else class="min-w-full divide-y divide-gray-200 text-sm">
@@ -889,7 +890,7 @@ const scoreColor = computed(() => {
               </td>
               <td class="px-4 py-2">
                 <span
-                  :class="['px-2 py-0.5 rounded text-xs font-medium', certExpiryBadge(cert.days_until_expiry).cls]"
+                  :class="['px-2 py-0.5 rounded-sm text-xs font-medium', certExpiryBadge(cert.days_until_expiry).cls]"
                 >
                   {{ certExpiryBadge(cert.days_until_expiry).text }}
                 </span>
@@ -897,7 +898,7 @@ const scoreColor = computed(() => {
               <td class="px-4 py-2">
                 <span
                   :class="[
-                    'px-2 py-0.5 rounded text-xs font-medium',
+                    'px-2 py-0.5 rounded-sm text-xs font-medium',
                     cert.status === 'active' ? 'bg-green-100 text-green-700' :
                     cert.status === 'expired' ? 'bg-red-100 text-red-700' :
                     'bg-gray-100 text-gray-600'
@@ -980,7 +981,7 @@ const scoreColor = computed(() => {
               <td class="px-6 py-4 whitespace-nowrap">
                 <span
                   :class="[
-                    'px-2 py-1 rounded text-xs font-medium',
+                    'px-2 py-1 rounded-sm text-xs font-medium',
                     formatExpiryStatus(endpoint.days_until_expiry).class
                   ]"
                 >
@@ -1002,7 +1003,7 @@ const scoreColor = computed(() => {
                   <button
                     @click="renewTlsCertificate(endpoint.credential_id)"
                     :disabled="renewingCredentialId === endpoint.credential_id"
-                    class="px-2 py-1 rounded text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
+                    class="px-2 py-1 rounded-sm text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
                     :aria-label="`Renew certificate for ${endpoint.hostname}`"
                   >
                     {{ renewingCredentialId === endpoint.credential_id ? '...' : 'Renew' }}
@@ -1010,7 +1011,7 @@ const scoreColor = computed(() => {
                   <button
                     @click="rotateTlsCertificate(endpoint.credential_id)"
                     :disabled="rotatingCredentialId === endpoint.credential_id"
-                    class="px-2 py-1 rounded text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
+                    class="px-2 py-1 rounded-sm text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
                     :aria-label="`Rotate certificate for ${endpoint.hostname}`"
                   >
                     {{ rotatingCredentialId === endpoint.credential_id ? '...' : 'Rotate' }}
@@ -1018,7 +1019,7 @@ const scoreColor = computed(() => {
                   <button
                     @click="toggleTlsCertificateActive(endpoint.credential_id, endpoint.is_active)"
                     :class="[
-                      'px-2 py-1 rounded text-xs',
+                      'px-2 py-1 rounded-sm text-xs',
                       endpoint.is_active
                         ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                         : 'bg-success-100 hover:bg-success-200 text-success-700'
@@ -1029,7 +1030,7 @@ const scoreColor = computed(() => {
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
-                    class="px-2 py-1 rounded text-xs bg-error-100 hover:bg-error-200 text-error-700"
+                    class="px-2 py-1 rounded-sm text-xs bg-error-100 hover:bg-error-200 text-error-700"
                     :aria-label="`Delete certificate for ${endpoint.hostname}`"
                   >
                     Delete
@@ -1051,7 +1052,7 @@ const scoreColor = computed(() => {
           id="audit-category-filter"
           v-model="auditCategoryFilter"
           @change="fetchAuditLogs()"
-          class="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+          class="rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
         >
           <option value="">All Categories</option>
           <option value="authentication">Authentication</option>
@@ -1151,7 +1152,7 @@ const scoreColor = computed(() => {
           id="event-severity-filter"
           v-model="eventSeverityFilter"
           @change="fetchSecurityEvents()"
-          class="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm"
+          class="rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
         >
           <option value="">All Severities</option>
           <option value="critical">Critical</option>
@@ -1192,7 +1193,7 @@ const scoreColor = computed(() => {
               <div class="flex items-center gap-2">
                 <span
                   :class="[
-                    'px-2 py-1 rounded text-xs',
+                    'px-2 py-1 rounded-sm text-xs',
                     event.is_resolved
                       ? 'bg-success-100 text-success-700'
                       : event.is_acknowledged
@@ -1206,14 +1207,14 @@ const scoreColor = computed(() => {
                   <button
                     v-if="!event.is_acknowledged"
                     @click="acknowledgeEvent(event.event_id)"
-                    class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
+                    class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-sm"
                     :aria-label="`Acknowledge event: ${event.title}`"
                   >
                     Ack
                   </button>
                   <button
                     @click="resolveEvent(event.event_id)"
-                    class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded"
+                    class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded-sm"
                     :aria-label="`Resolve event: ${event.title}`"
                   >
                     Resolve
@@ -1259,7 +1260,7 @@ const scoreColor = computed(() => {
               <div class="flex items-center gap-2">
                 <span
                   :class="[
-                    'px-2 py-1 rounded text-xs',
+                    'px-2 py-1 rounded-sm text-xs',
                     policy.status === 'active'
                       ? 'bg-success-100 text-success-700'
                       : policy.status === 'inactive'
@@ -1272,7 +1273,7 @@ const scoreColor = computed(() => {
                 <button
                   @click="togglePolicyEnforcement(policy.policy_id, policy.is_enforced)"
                   :class="[
-                    'px-3 py-1 text-xs rounded',
+                    'px-3 py-1 text-xs rounded-sm',
                     policy.is_enforced
                       ? 'bg-error-100 hover:bg-error-200 text-error-700'
                       : 'bg-success-100 hover:bg-success-200 text-success-700'
@@ -1325,7 +1326,7 @@ const scoreColor = computed(() => {
                   v-model="selectedNodeId"
                   type="text"
                   placeholder="Enter node ID"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
@@ -1336,7 +1337,7 @@ const scoreColor = computed(() => {
                   v-model="uploadForm.name"
                   type="text"
                   placeholder="e.g., redis-server, api-client"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
@@ -1347,7 +1348,7 @@ const scoreColor = computed(() => {
                   v-model="uploadForm.ca_cert"
                   rows="4"
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
               </div>
 
@@ -1358,7 +1359,7 @@ const scoreColor = computed(() => {
                   v-model="uploadForm.server_cert"
                   rows="4"
                   placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
               </div>
 
@@ -1369,7 +1370,7 @@ const scoreColor = computed(() => {
                   v-model="uploadForm.server_key"
                   rows="4"
                   placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
                 ></textarea>
                 <p class="text-xs text-gray-500 mt-1">The private key will be encrypted before storage.</p>
               </div>

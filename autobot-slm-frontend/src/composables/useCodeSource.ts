@@ -12,6 +12,7 @@
 
 import { ref } from 'vue'
 import axios from 'axios'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 export interface CodeSource {
   node_id: string
@@ -36,9 +37,9 @@ export function useCodeSource() {
   const error = ref<string | null>(null)
 
   // Use relative path for same-origin SLM backend API (Issue #860)
-  const api = axios.create({ baseURL: '/api', timeout: 15000 })
+  const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
   api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

@@ -64,6 +64,7 @@ defineExpose({
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .file-upload-section {
   @apply mb-6 p-0 border-2 border-dashed border-autobot-border rounded-lg bg-autobot-bg-secondary hover:border-autobot-border transition-colors;
 }

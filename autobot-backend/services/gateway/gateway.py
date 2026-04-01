@@ -326,14 +326,19 @@ class Gateway:
             routing.confidence,
         )
 
-        # TODO: Integrate with agent execution
-        # For now, return routing decision
-        return {
-            "message_id": message.message_id,
-            "agent_type": routing.agent_type,
-            "confidence": routing.confidence,
-            "reasoning": routing.reasoning,
-        }
+        # Agent execution is not yet integrated. Raise explicitly so callers
+        # cannot silently receive routing-only results as if work was done.
+        # Issue #2869: wire to real agent execution when ready.
+        logger.warning(
+            "route_and_process called for message %s but agent execution is not implemented "
+            "(agent_type=%s). (#2869)",
+            message.message_id,
+            routing.agent_type,
+        )
+        raise NotImplementedError(
+            "route_and_process: agent execution is not implemented. "
+            "Wire this method to the agent dispatcher before enabling message routing. (#2869)"
+        )
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get Gateway statistics."""

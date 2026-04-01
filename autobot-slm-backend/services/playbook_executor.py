@@ -15,6 +15,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from services.provision_progress import TaskProgressTracker
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,9 +31,15 @@ class PlaybookExecutor:
             ansible_dir: Path to Ansible directory (defaults to autobot-slm-backend/ansible)
         """
         if ansible_dir is None:
+            # Use code_source for latest Ansible roles; fall back to deployed copy
             ansible_dir = Path(
-                os.getenv("SLM_ANSIBLE_DIR", "/opt/autobot/autobot-slm-backend/ansible")
+                os.getenv(
+                    "SLM_ANSIBLE_DIR",
+                    "/opt/autobot/code_source/autobot-slm-backend/ansible",
+                )
             )
+            if not ansible_dir.exists():
+                ansible_dir = Path("/opt/autobot/autobot-slm-backend/ansible")
         self.ansible_dir = ansible_dir
         self.inventory_path = ansible_dir / "inventory" / "slm-nodes.yml"
 
@@ -132,7 +140,7 @@ class PlaybookExecutor:
 
     def _parse_progress(self, line: str) -> Optional[Dict[str, str]]:
         """
-        Parse Ansible output line for progress updates (Issue #880).
+        Parse Ansible output line for progress updates (Issue #880, #2829).
 
         Args:
             line: Single line of Ansible output
@@ -140,7 +148,7 @@ class PlaybookExecutor:
         Returns:
             Dict with 'stage' and 'message' keys if progress found, None otherwise
         """
-        # Match TASK lines with [PLAY N] prefix
+        # Match TASK lines with [PLAY N] prefix (update-all-nodes.yml)
         if "TASK [" in line and "[PLAY " in line:
             try:
                 task_start = line.index("TASK [")
@@ -155,7 +163,32 @@ class PlaybookExecutor:
 
         # Match PLAY lines for overall progress
         if "PLAY [" in line:
-            return self._parse_play_line(line)
+            known = self._parse_play_line(line)
+            if known:
+                return known
+            # Generic PLAY match — extract play name for any playbook
+            try:
+                play_name = line.split("PLAY [")[1].split("]")[0]
+                return {"stage": "play", "message": play_name}
+            except (IndexError, ValueError):
+                pass
+
+        # Generic TASK match — stream task names for any playbook (#2829)
+        if "TASK [" in line:
+            try:
+                task_name = line.split("TASK [")[1].split("]")[0]
+                return {"stage": "task", "message": task_name}
+            except (IndexError, ValueError):
+                pass
+
+        # Surface fatal/failed lines so the UI shows errors in real time
+        stripped = line.strip()
+        if stripped.startswith("fatal:") or stripped.startswith("FAILED!"):
+            return {"stage": "error", "message": stripped[:200]}
+
+        # PLAY RECAP line
+        if "PLAY RECAP" in line:
+            return {"stage": "recap", "message": "Play recap"}
 
         return None
 
@@ -195,31 +228,156 @@ class PlaybookExecutor:
         progress_callback: Optional[callable],
     ) -> List[str]:
         """
-        Stream and parse playbook output for progress.
+        Stream and parse playbook output for progress (Issue #880, #3033).
 
-        Helper for execute_playbook (Issue #880).
+        Fires progress_callback for each recognized Ansible output line.
+        Between recognized lines — when Ansible is silent during long-running
+        tasks such as ``ollama pull`` or ``npm install`` — a TaskProgressTracker
+        sends periodic heartbeat messages so the UI does not appear stuck.
+
+        A new tracker is started each time a TASK line is detected and the
+        previous one is cancelled, so heartbeats are scoped per task.
         """
         output_lines = []
+        current_tracker: Optional[TaskProgressTracker] = None
+
+        async def _stop_current_tracker() -> None:
+            nonlocal current_tracker
+            if current_tracker is not None:
+                await current_tracker.__aexit__(None, None, None)
+                current_tracker = None
+
+        async def _start_tracker(task_name: str) -> None:
+            nonlocal current_tracker
+            await _stop_current_tracker()
+            if progress_callback is not None:
+                current_tracker = TaskProgressTracker(task_name, progress_callback)
+                await current_tracker.__aenter__()
+
         if process.stdout:
-            while True:
-                line = await process.stdout.readline()
-                if not line:
-                    break
+            try:
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
 
-                line_str = line.decode("utf-8", errors="replace").rstrip()
-                output_lines.append(line_str)
+                    line_str = line.decode("utf-8", errors="replace").rstrip()
+                    output_lines.append(line_str)
 
-                if progress_callback:
-                    progress = self._parse_progress(line_str)
-                    if progress:
-                        try:
-                            await progress_callback(progress)
-                        except Exception as e:
-                            logger.debug(
-                                f"Progress callback error: {e}", exc_info=False
-                            )
+                    if progress_callback:
+                        progress = self._parse_progress(line_str)
+                        if progress:
+                            stage = progress.get("stage", "")
+                            # Start a fresh tracker for every new task boundary
+                            # so heartbeats reflect the task currently executing.
+                            if stage in ("task", "heartbeat") or stage.endswith(
+                                ("_starting", "_syncing", "_restarting", "_waiting")
+                            ):
+                                await _start_tracker(progress.get("message", stage))
+                            try:
+                                await progress_callback(progress)
+                            except Exception as e:
+                                logger.debug(
+                                    "Progress callback error: %s", e, exc_info=False
+                                )
+            finally:
+                await _stop_current_tracker()
 
         return output_lines
+
+    @staticmethod
+    def _ensure_ansible_temp_dirs() -> None:
+        """Ensure Ansible temp directories exist with correct ownership (#2829).
+
+        When another user (e.g. a developer running ansible manually) creates
+        /tmp/ansible_local_tmp or /tmp/ansible_fact_cache first, the autobot
+        service user gets a permission denied error and Ansible exits with a
+        misleading code 4.  Pre-creating the dirs avoids this.
+        """
+        for tmp_dir in (
+            "/tmp/ansible_local_tmp",
+            "/tmp/ansible_fact_cache",
+        ):  # nosec B108
+            Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
+
+    async def _update_code_source(self) -> None:
+        """
+        Pull latest code into code_source before running a playbook (#2896).
+
+        Derives code_source root from self.ansible_dir (two levels up).
+        Skips silently when the path does not exist or has no .git dir — safe
+        in local dev environments.  Never blocks provisioning: any failure is
+        logged as a warning and the caller continues.
+        """
+        code_source_dir = self.ansible_dir.parent.parent
+        git_dir = code_source_dir / ".git"
+        if not git_dir.exists():
+            logger.debug(
+                "_update_code_source: no .git at %s — skipping", code_source_dir
+            )
+            return
+
+        branch = os.getenv("AUTOBOT_GIT_BRANCH", "Dev_new_gui")
+
+        async def _run_git(*args: str) -> int:
+            """Run a git command in code_source_dir with a 30-second timeout."""
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(code_source_dir),
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                await asyncio.wait_for(proc.communicate(), timeout=30)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.communicate()
+                return -1
+            return proc.returncode
+
+        try:
+            if await _run_git("checkout", "--", ".") != 0:
+                logger.warning(
+                    "_update_code_source: git checkout -- . failed; continuing"
+                )
+
+            if await _run_git("fetch", "origin") != 0:
+                logger.warning(
+                    "_update_code_source: git fetch origin failed; continuing"
+                )
+                return
+
+            if await _run_git("reset", "--hard", f"origin/{branch}") != 0:
+                logger.warning(
+                    "_update_code_source: git reset --hard origin/%s failed; continuing",
+                    branch,
+                )
+                return
+
+            # Log the resulting HEAD commit for traceability
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(code_source_dir),
+                "rev-parse",
+                "--short",
+                "HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            commit_hash = stdout.decode("utf-8", errors="replace").strip()
+            logger.info(
+                "_update_code_source: code_source updated to %s on branch %s",
+                commit_hash,
+                branch,
+            )
+        except Exception as exc:
+            logger.warning(
+                "_update_code_source: unexpected error — %s; continuing", exc
+            )
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """
@@ -227,6 +385,7 @@ class PlaybookExecutor:
 
         Helper for execute_playbook.
         """
+        self._ensure_ansible_temp_dirs()
         return {
             **os.environ,
             "ANSIBLE_FORCE_COLOR": "0",
@@ -283,6 +442,8 @@ class PlaybookExecutor:
         Returns:
             Dict with keys: success (bool), output (str), returncode (int)
         """
+        await self._update_code_source()
+
         playbook_path = self.ansible_dir / playbook_name
         effective_inventory = inventory_path or self.inventory_path
 
@@ -302,9 +463,11 @@ class PlaybookExecutor:
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 
         try:
-            proc_result = await self._run_subprocess(
-                cmd, self._build_ansible_env(), progress_callback
-            )
+            env = self._build_ansible_env()
+            # Override ansible.cfg default inventory to prevent merging
+            # with production.yml when wizard passes a temp inventory (#2836)
+            env["ANSIBLE_INVENTORY"] = str(effective_inventory)
+            proc_result = await self._run_subprocess(cmd, env, progress_callback)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")

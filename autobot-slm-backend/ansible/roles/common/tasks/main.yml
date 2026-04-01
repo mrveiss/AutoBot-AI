@@ -60,6 +60,7 @@
     password: "{{ emergency_admin_password_hash }}"
     state: present
   become: yes
+  when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
 - name: "Common | Configure passwordless sudo for emergency admin"
@@ -71,6 +72,7 @@
     mode: '0440'
     validate: 'visudo -cf %s'
   become: yes
+  when: emergency_admin_password_hash is defined
   tags: ['common', 'users', 'emergency']
 
 - name: "Common | Create AutoBot directory structure"
@@ -89,13 +91,15 @@
   become: yes
   tags: ['common', 'directories']
 
+# Issue #2828: Use shared key path so any user in the autobot group can
+# run Ansible without needing the key in their own ~/.ssh/.
 - name: "Common | Configure SSH key authentication"
   authorized_key:
     user: autobot
-    key: "{{ lookup('file', '~/.ssh/autobot_key.pub') }}"
+    key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
     state: present
   become: yes
-  when: lookup('file', '~/.ssh/autobot_key.pub', errors='ignore') is not none
+  when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
 - name: "Common | Reset UFW to clean state (Issue #895)"
@@ -126,6 +130,15 @@
     - { direction: 'incoming', policy: "{{ ufw_default_incoming_policy }}" }
     - { direction: 'outgoing', policy: "{{ ufw_default_outgoing_policy }}" }
     - { direction: 'routed', policy: "{{ ufw_default_routed_policy }}" }
+  become: yes
+  tags: ['common', 'firewall']
+
+- name: "Common | Allow all localhost traffic (#2722)"
+  ufw:
+    rule: allow
+    from_ip: 127.0.0.1
+    to_ip: 127.0.0.1
+    comment: "Allow localhost"
   become: yes
   tags: ['common', 'firewall']
 
@@ -193,6 +206,8 @@
   shell: ls /usr/lib/python3*/EXTERNALLY-MANAGED 2>/dev/null
   register: _pep668
   changed_when: false
+  # (#2872) Intentional: EXTERNALLY-MANAGED marker may not exist; rc != 0
+  # means system pip is allowed and the pip install below should proceed.
   failed_when: false
   tags: ['common', 'python']
 
@@ -205,6 +220,9 @@
     state: latest
     executable: pip3
   become: yes
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   when: _pep668.rc != 0
   tags: ['common', 'python']
 

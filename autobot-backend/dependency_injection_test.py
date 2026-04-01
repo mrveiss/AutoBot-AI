@@ -8,6 +8,7 @@ with injected dependencies and that backward compatibility is maintained.
 from unittest.mock import Mock
 
 import pytest
+
 from config import ConfigManager
 from dependencies import (
     get_config,

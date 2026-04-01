@@ -256,7 +256,7 @@ function _teardownVad(): void {
     _vadNode = null
   }
   if (_vadAudioCtx) {
-    _vadAudioCtx.close().catch(() => {})
+    _vadAudioCtx.close().catch((err) => { logger.warn('Audio context close failed: %s', err) })
     _vadAudioCtx = null
   }
   if (_micStream) {

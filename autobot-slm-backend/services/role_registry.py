@@ -13,9 +13,10 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-from models.database import Role, SyncType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import Role, SyncType
 
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
 _SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
@@ -309,13 +310,13 @@ _OPTIONAL_ROLES = [
 # ---------------------------------------------------------------------------
 _INFRA_ROLES = [
     {
-        "name": "autobot-shared",
+        "name": "autobot_shared",
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,
-        "source_paths": ["autobot-shared/"],
-        "target_path": f"{_BASE_DIR}/autobot-shared",
+        "source_paths": ["autobot_shared/"],
+        "target_path": f"{_BASE_DIR}/autobot_shared",
         "auto_restart": False,
-        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-shared && pip install -e ."),
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "deploy-shared.yml",
@@ -364,14 +365,37 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "browser-service": "browser-automation",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
-    # tts-worker has no dedicated phase in provision-fleet-roles.yml;
-    # it co-locates with npu-worker by convention.
+    # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
+    # it co-locates with npu-worker in the inventory group.
     "tts-worker": "npu-worker",
     # SLM roles run on the manager node (#1455)
     "slm-backend": "00-SLM-Manager",
     "slm-frontend": "00-SLM-Manager",
     "slm-database": "00-SLM-Manager",
     "slm-monitoring": "00-SLM-Manager",
+}
+
+# Static dependency map: role -> infrastructure packages required.
+# Used by setup_wizard.py to compute node_dependencies for provisioning Phase 0.
+# Dependencies are Ansible role names: nginx, python312, nodejs, postgresql.
+ROLE_DEPENDENCIES: Dict[str, List[str]] = {
+    # SLM roles
+    "slm-backend": ["python312", "nginx"],
+    "slm-frontend": ["nodejs", "nginx"],
+    "slm-database": ["postgresql"],
+    "slm-monitoring": [],
+    # Service roles
+    "backend": ["python312", "nginx"],
+    "celery": ["python312"],
+    "frontend": ["nodejs", "nginx"],
+    "redis": [],
+    "ai-stack": ["python312"],
+    "chromadb": ["python312"],
+    "browser-service": ["nodejs"],
+    "npu-worker": ["python312"],
+    "tts-worker": ["python312"],
+    "vnc": [],
+    "slm-agent": [],
 }
 
 
@@ -405,7 +429,7 @@ async def list_roles(db: AsyncSession) -> List[Role]:
 
 
 # Infra roles allowed on multiple nodes simultaneously (#1389)
-MULTI_NODE_ROLES = {"autobot-shared", "slm-agent"}
+MULTI_NODE_ROLES = {"autobot_shared", "slm-agent"}
 
 
 async def check_role_uniqueness(
@@ -416,7 +440,7 @@ async def check_role_uniqueness(
     """Check if a role is already assigned to another node (#1389).
 
     Returns the node_id that currently owns the role, or None if available.
-    Infra roles (autobot-shared, slm-agent) are exempt.
+    Infra roles (autobot_shared, slm-agent) are exempt.
     """
     if role_name in MULTI_NODE_ROLES:
         return None

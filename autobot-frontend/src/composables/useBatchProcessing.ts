@@ -290,7 +290,10 @@ export function useBatchProcessingState() {
   const completedCount = ref(0)
   const failedCount = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
   const selectedJob = ref<BatchJob | null>(null)
   const jobLogs = ref<BatchJobLogsResponse | null>(null)
   const healthStatus = ref<BatchHealthResponse | null>(null)
@@ -339,7 +342,7 @@ export function useBatchProcessingState() {
    */
   async function loadJobs() {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       const result = await batchApi.listJobs(filter.value)
@@ -352,7 +355,8 @@ export function useBatchProcessingState() {
         failedCount.value = result.failed_count
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error'
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      errors.value = [...errors.value, msg]
       logger.error('Failed to load batch jobs:', e)
     } finally {
       loading.value = false

@@ -41,11 +41,11 @@ from typing import Any, Dict, List, Literal, Optional
 
 import aiofiles
 import redis.asyncio as async_redis
+
+from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -906,7 +906,7 @@ class AuditLogger:
         except Exception as e:
             logger.error("Failed to get audit statistics: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve audit statistics",
                 "total_logged": self._total_logged,
                 "total_failed": self._total_failed,
             }

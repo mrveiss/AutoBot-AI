@@ -573,6 +573,27 @@
     "discardChanges": "Discard Changes",
     "cacheApiUnavailable": "Cache API not available",
     "cachedSettings": "Using cached settings (backend offline)",
+    "apiKeys": {
+      "wizardTitle": "API Key Setup",
+      "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed.",
+      "configureKeysDescription": "Configure required API keys below. Click the license link to accept any required model agreements.",
+      "summaryDescription": "Review your API key configuration before saving.",
+      "noKeysRequired": "No API keys are required for the selected roles.",
+      "required": "Required",
+      "optional": "Optional",
+      "enterKey": "Enter API key...",
+      "acceptLicense": "Accept license / Get key",
+      "back": "Back",
+      "next": "Next",
+      "save": "Save Keys",
+      "stepRoles": "Roles",
+      "stepKeys": "API Keys",
+      "stepSummary": "Summary",
+      "statusReady": "Ready",
+      "statusMissing": "Missing",
+      "statusSkipped": "Skipped (optional)",
+      "manageInSecrets": "Manage all secrets in Settings"
+    },
     "appearanceDesc": "Customize the look and feel of your workspace",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
     "languageDesc": "Choose your preferred language for the interface and AI responses",
@@ -820,7 +841,13 @@
         "redisOptimizations": "Redis Optimization Suggestions",
         "loadingRedisOptimizations": "Loading Redis optimizations...",
         "noRedisOptimizations": "No Redis optimization suggestions.",
-        "noScoresData": "No code intelligence scores available. Run analysis to generate scores."
+        "noScoresData": "No code intelligence scores available. Run analysis to generate scores.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Duplicate Code Detection",
@@ -1134,7 +1161,17 @@
         "businessIntelligence": "Business Intelligence",
         "businessIntelligenceAria": "Business intelligence analytics",
         "security": "Security",
-        "securityAria": "Security analytics"
+        "securityAria": "Security analytics",
+        "codeQuality": "Code Quality",
+        "codeQualityAria": "Code quality analytics",
+        "codeReview": "Code Review",
+        "codeReviewAria": "Code review analytics",
+        "codeGeneration": "Code Generation",
+        "codeGenerationAria": "Code generation analytics",
+        "evolution": "Evolution",
+        "evolutionAria": "Evolution analytics",
+        "audit": "Audit",
+        "auditAria": "Audit logs"
       }
     },
     "header": {
@@ -1216,7 +1253,8 @@
       "securityScore": "Security Score",
       "performanceScore": "Performance Score",
       "redisScore": "Redis Usage Score",
-      "scoreNotAvailable": "Not available in this view — see Codebase Analytics"
+      "scoreNotAvailable": "Not available in this view — see Codebase Analytics",
+      "noPreviousScan": "No previous scan available"
     },
     "evolution": {
       "title": "Code Evolution",
@@ -3132,7 +3170,11 @@
       "sectionTitleMediaGallery": "Media Gallery",
       "sectionDescScreenAnalysis": "Capture and analyze screen content",
       "sectionDescVideoProcessing": "Process and analyze video frames",
-      "sectionDescMediaGallery": "Browse captured media and analysis results"
+      "sectionDescMediaGallery": "Browse captured media and analysis results",
+      "liveDashboard": "Live Dashboard",
+      "liveDashboardAriaLabel": "View live workflow execution dashboard",
+      "sectionTitleLiveDashboard": "Live Execution Dashboard",
+      "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -3322,6 +3364,60 @@
       "addStepAriaLabel": "Add step",
       "cancel": "Cancel",
       "cancelAriaLabel": "Cancel"
+    },
+    "notifications": {
+      "sidebarLabel": "Notifications",
+      "title": "Notification Settings",
+      "sectionTitle": "Notification Settings",
+      "sectionDesc": "Configure per-workflow notification routing",
+      "selectWorkflow": "Workflow",
+      "chooseWorkflow": "-- Select a workflow --",
+      "loading": "Loading configuration...",
+      "enableNotifications": "Enable notifications for this workflow",
+      "emailRecipients": "Email Recipients",
+      "emailPlaceholder": "Enter email and press Enter",
+      "emailHint": "Comma-separated email addresses",
+      "slackWebhookUrl": "Slack Webhook URL",
+      "slackWebhook": "Slack Webhook URL",
+      "webhookUrl": "Webhook URL",
+      "eventRouting": "Event Routing",
+      "eventRoutingHint": "Choose which channels receive each event type",
+      "channelMapping": "Event-to-Channel Routing",
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "channelEmail": "Email",
+      "channelSlack": "Slack",
+      "channelWebhook": "Webhook",
+      "channelInApp": "In-App",
+      "eventCompleted": "Workflow Completed",
+      "eventFailed": "Workflow Failed",
+      "eventStepFailed": "Step Failed",
+      "eventApprovalNeeded": "Approval Needed",
+      "save": "Save",
+      "saving": "Saving...",
+      "saved": "Saved successfully"
+    },
+    "liveDashboard": {
+      "reconnect": "Reconnect",
+      "running": "Running",
+      "paused": "Paused",
+      "completedRecent": "Completed",
+      "failed": "Failed",
+      "activeExecutions": "Active Executions",
+      "noActiveWorkflows": "No Active Workflows",
+      "noActiveDescription": "Start a workflow to see live execution progress here.",
+      "loading": "Loading workflows...",
+      "stepOf": "Step {current} of {total}",
+      "stepN": "Step {n}"
+    },
+    "agentObservability": {
+      "title": "Agent Observability",
+      "loading": "Loading agent metrics...",
+      "noAgents": "No Agent Data",
+      "noAgentsDescription": "Agent performance metrics will appear once workflows are executed.",
+      "tasksCompleted": "{count} tasks completed",
+      "success": "Success",
+      "failed": "Failed",
+      "avgTime": "Avg Time"
     }
   },
   "agent": {
@@ -3344,7 +3440,51 @@
       "noModel": "no model",
       "defaultModel": "default",
       "moreCount": "+{count} more",
-      "summaryStats": "{backend} backend \u2022 {specialized} specialized agents"
+      "summaryStats": "{backend} backend • {specialized} specialized agents"
+    },
+    "settings": {
+      "tabTitle": "Settings",
+      "loading": "Loading settings...",
+      "save": "Save Settings",
+      "saving": "Saving...",
+      "saveSuccess": "Agent settings saved successfully.",
+      "resetDefaults": "Reset to Defaults",
+      "unsavedChanges": "You have unsaved changes",
+      "concurrency": {
+        "title": "Concurrency",
+        "maxAgents": "Max Concurrent Agents",
+        "maxAgentsHint": "Number of agents that can run simultaneously (1-20)"
+      },
+      "timeouts": {
+        "title": "Timeouts",
+        "agentTimeout": "Agent Timeout",
+        "agentTimeoutHint": "Maximum time an agent can run before being terminated (30-3600)",
+        "seconds": "seconds"
+      },
+      "memory": {
+        "title": "Memory",
+        "enableLabel": "Enable Agent Memory",
+        "enableHint": "Allow agents to retain context across invocations"
+      },
+      "logging": {
+        "title": "Logging",
+        "levelLabel": "Log Level",
+        "levelHint": "Controls verbosity of agent log output"
+      },
+      "retry": {
+        "title": "Retry",
+        "attemptsLabel": "Retry Attempts",
+        "attemptsHint": "Number of retry attempts on failure (0-10)",
+        "delayLabel": "Retry Delay",
+        "delayHint": "Delay between retry attempts (100-30000)"
+      },
+      "execution": {
+        "title": "Execution",
+        "parallelLabel": "Parallel Execution",
+        "parallelHint": "Allow multiple agents to execute tasks in parallel",
+        "priorityLabel": "Priority Queue",
+        "priorityHint": "Use priority-based task scheduling for agents"
+      }
     }
   },
   "errors": {
@@ -3515,6 +3655,8 @@
       "skipDesc": "Skip this command and continue to next step",
       "takeControlLabel": "Take Control:",
       "takeControlDesc": "Pause automation and perform manual steps",
+      "noStepData": "No step data available.",
+      "stepProgress": "Step {current} of {total}",
       "statusConnected": "Connected",
       "statusConnecting": "Connecting...",
       "statusDisconnected": "Disconnected",
@@ -6090,7 +6232,6 @@
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
     "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
     "profileSettings": "Profile Settings"

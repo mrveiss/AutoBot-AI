@@ -92,25 +92,24 @@ jobs:
     - name: Run Phase Validation System
       run: |
         source .venv/bin/activate
-        echo "🔍 Running AutoBot Phase Validation System..."
+        echo "Running AutoBot Phase Validation System..."
 
         # Run the validation system
         python3 scripts/phase_validation_system.py --output-format json > phase_validation_results.json || echo '{"overall_maturity": 0, "phases": []}' > phase_validation_results.json
 
         # Display results summary
         echo "## Phase Validation Results" >> $GITHUB_STEP_SUMMARY
-        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"📊 **Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
+        python3 -c 'import json; r=json.load(open("phase_validation_results.json")); print(f"**Overall System Maturity:** {r.get(\"overall_maturity\", 0):.1f}%")' >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Results not available" >> $GITHUB_STEP_SUMMARY
 
     - name: Generate Validation Dashboard
       run: |
         source .venv/bin/activate
-        echo "📈 Generating validation dashboard..."
-        python3 scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "⚠️ Dashboard generation failed"
+        echo "Generating validation dashboard..."
+        python3 scripts/validation_dashboard_generator.py --ci-mode > validation_dashboard.html || echo "Dashboard generation failed"
 
     - name: Phase Validation Gate
-      continue-on-error: true  # Non-blocking while validation scripts are being developed
       run: |
-        echo "🚪 Checking phase validation gate..."
+        echo "Checking phase validation gate..."
 
         # Extract overall maturity from results
         MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
@@ -128,12 +127,12 @@ jobs:
 
         # Compare maturity to threshold
         if (( $(echo "$MATURITY >= $THRESHOLD" | bc -l) )); then
-          echo "✅ Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
+          echo "Phase validation passed: ${MATURITY}% >= ${THRESHOLD}%"
         else
-          echo "⚠️ Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
-          echo "## ⚠️ Phase Validation Below Threshold" >> $GITHUB_STEP_SUMMARY
+          echo "::error::Phase validation below threshold: ${MATURITY}% < ${THRESHOLD}%"
+          echo "## Phase Validation Below Threshold" >> $GITHUB_STEP_SUMMARY
           echo "Current maturity (${MATURITY}%) is below threshold (${THRESHOLD}%)" >> $GITHUB_STEP_SUMMARY
-          echo "Note: This check is non-blocking while validation scripts are being developed" >> $GITHUB_STEP_SUMMARY
+          exit 1
         fi
 
     - name: Upload Validation Reports
@@ -156,13 +155,13 @@ jobs:
           try {
             const results = JSON.parse(fs.readFileSync('phase_validation_results.json', 'utf8'));
 
-            let comment = '## 🤖 AutoBot Phase Validation Results\n\n';
+            let comment = '## AutoBot Phase Validation Results\n\n';
             comment += `**System Maturity:** ${results.overall_maturity?.toFixed(1)}%\n\n`;
             comment += '### Phase Status:\n\n';
 
             for (const phase of results.phases || []) {
-              const emoji = phase.status === 'complete' ? '✅' :
-                           phase.status === 'in_progress' ? '🔄' : '❌';
+              const emoji = phase.status === 'complete' ? 'PASS' :
+                           phase.status === 'in_progress' ? 'IN PROGRESS' : 'FAIL';
               comment += `${emoji} **${phase.name}**: ${phase.completion_percentage?.toFixed(1)}%\n`;
             }
 
@@ -184,13 +183,13 @@ jobs:
     - name: Phase Validation Summary
       if: always()
       run: |
-        echo "🎯 Phase Validation Summary"
+        echo "Phase Validation Summary"
         echo "=========================="
         if [ -f "phase_validation_results.json" ]; then
-          echo "✅ Phase validation results available"
+          echo "Phase validation results available"
           cat phase_validation_results.json | python3 -m json.tool | head -20 || true
         else
-          echo "❌ No validation results found"
+          echo "No validation results found"
         fi
 
     - name: Cleanup
@@ -215,24 +214,25 @@ jobs:
 
     - name: Integration readiness check
       run: |
-        echo "🔗 Checking integration readiness..."
+        echo "Checking integration readiness..."
 
         # Check if validation results indicate system is ready for integration
         MATURITY=$(python3 -c 'import json; f=open("phase_validation_results.json"); r=json.load(f); print(r.get("overall_maturity", 0))' 2>/dev/null || echo "0")
 
         if (( $(echo "$MATURITY >= 70" | bc -l) )); then
-          echo "✅ System ready for integration (${MATURITY}%)"
-          echo "## ✅ Integration Ready" >> $GITHUB_STEP_SUMMARY
+          echo "System ready for integration (${MATURITY}%)"
+          echo "## Integration Ready" >> $GITHUB_STEP_SUMMARY
           echo "System maturity: ${MATURITY}% - Ready for integration testing" >> $GITHUB_STEP_SUMMARY
         else
-          echo "⚠️ System not ready for integration (${MATURITY}%)"
-          echo "## ⚠️ Integration Not Ready" >> $GITHUB_STEP_SUMMARY
+          echo "::error::System not ready for integration (${MATURITY}%)"
+          echo "## Integration Not Ready" >> $GITHUB_STEP_SUMMARY
           echo "System maturity: ${MATURITY}% - Additional development required" >> $GITHUB_STEP_SUMMARY
+          exit 1
         fi
 
     - name: Update phase progression status
       run: |
-        echo "📊 Updating phase progression status..."
+        echo "Updating phase progression status..."
 
         # This could integrate with your phase progression system
         # to automatically update the current system phase based on validation

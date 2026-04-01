@@ -18,6 +18,7 @@ Related Issue: #160 - Enhanced System Prompts Testing and Validation
 from unittest.mock import patch
 
 import pytest
+
 from chat_intent_detector import (
     CONTEXT_PROMPT_MAP,
     EXIT_KEYWORDS,

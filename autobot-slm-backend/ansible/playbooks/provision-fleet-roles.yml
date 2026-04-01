@@ -2,25 +2,91 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Auto-Provision Fleet Nodes by Role (#837)
+# Auto-Provision Fleet Nodes by Role (#837, #2678)
 #
-# After seed-fleet-nodes.yml registers nodes, this playbook
-# provisions each node with its assigned Ansible roles.
-# Runs automatically as part of deploy-slm-manager.yml.
+# Provisions each node with common baseline, SLM agent, and
+# role-specific configuration in dependency order.
+# Works with both static inventory and dynamic/temp inventories.
 #
-# Can also run standalone:
+# Usage:
 #   cd autobot-slm-backend/ansible
 #   ansible-playbook -i inventory/slm-nodes.yml playbooks/provision-fleet-roles.yml
 #
 # Limit to specific nodes:
 #   --limit "02-Frontend,04-Databases"
+#
+# Tag filtering (--tags) works correctly with include_role because
+# every include_role task carries an apply: block that propagates
+# the tag set into the included role's own tasks (#2827).
 ---
 
 # -------------------------------------------------------------------
-# Phase 1: Common baseline on ALL nodes (SSH keys, packages, users)
+# Phase 0: Shared Dependencies (nginx, python312, nodejs)
+# Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
+# -------------------------------------------------------------------
+- name: "Provision Phase 0: Shared Dependencies"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "Deps | Install nginx"
+      ansible.builtin.include_role:
+        name: nginx
+        apply:
+          tags: ['deps', 'nginx']
+      when: "'nginx' in (node_dependencies | default([]))"
+      tags: ['deps', 'nginx']
+
+    - name: "Deps | Install Python 3.12"
+      ansible.builtin.include_role:
+        name: python312
+        apply:
+          tags: ['deps', 'python312']
+      when: "'python312' in (node_dependencies | default([]))"
+      tags: ['deps', 'python312']
+
+    - name: "Deps | Install Node.js"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: ['deps', 'nodejs']
+      when: "'nodejs' in (node_dependencies | default([]))"
+      tags: ['deps', 'nodejs']
+
+    # Orphan removals (admin-approved only)
+    - name: "Deps | Remove nginx if marked for removal"
+      ansible.builtin.apt:
+        name: nginx
+        state: absent
+        purge: true
+      when: "'nginx' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Python 3.12 if marked for removal"
+      ansible.builtin.apt:
+        name:
+          - python3.12
+          - python3.12-venv
+          - python3.12-dev
+        state: absent
+        purge: true
+      when: "'python312' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+    - name: "Deps | Remove Node.js if marked for removal"
+      ansible.builtin.apt:
+        name: nodejs
+        state: absent
+        purge: true
+      when: "'nodejs' in (pending_dep_removals | default([]))"
+      tags: ['deps', 'removal']
+
+# -------------------------------------------------------------------
+# Phase 1: Common baseline on ALL target nodes
 # -------------------------------------------------------------------
 - name: "Provision Phase 1: Common Baseline"
-  hosts: slm_nodes:!00-SLM-Manager
+  hosts: all
   become: true
   gather_facts: true
   serial: "100%"
@@ -29,13 +95,15 @@
     - name: "Common | Apply common role to all fleet nodes"
       ansible.builtin.include_role:
         name: common
+        apply:
+          tags: ['common', 'provision']
       tags: ['common', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 2: SLM Agent on ALL managed nodes
+# Phase 2: SLM Agent on ALL target nodes
 # -------------------------------------------------------------------
 - name: "Provision Phase 2: SLM Agent"
-  hosts: slm_nodes:!00-SLM-Manager
+  hosts: all
   become: true
   gather_facts: false
 
@@ -49,7 +117,7 @@
 # Phase 3: Data layer (Redis, PostgreSQL)
 # -------------------------------------------------------------------
 - name: "Provision Phase 3: Data Layer"
-  hosts: 04-Databases
+  hosts: all
   become: true
   gather_facts: true
 
@@ -57,13 +125,17 @@
     - name: "Data | Deploy Redis role"
       ansible.builtin.import_role:
         name: redis
-      tags: ['redis', 'redis_exporter', 'provision']
+      when: >-
+        'redis' in (node_roles | default([])) or
+        inventory_hostname in groups.get('redis', []) or
+        inventory_hostname in groups.get('database', [])
+      tags: ['redis', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 4: Application layer (Backend, Frontend)
+# Phase 4a: Backend
 # -------------------------------------------------------------------
 - name: "Provision Phase 4a: Backend"
-  hosts: 01-Backend
+  hosts: all
   become: true
   gather_facts: true
 
@@ -71,15 +143,32 @@
     - name: "App | Deploy backend role"
       ansible.builtin.include_role:
         name: backend
+        apply:
+          tags: ['backend', 'provision']
+      when: >-
+        'backend' in (node_roles | default([])) or
+        'autobot-backend' in (node_roles | default([])) or
+        inventory_hostname in groups.get('main', []) or
+        inventory_hostname in groups.get('backend', [])
       tags: ['backend', 'provision']
 
     - name: "App | Deploy VNC role"
       ansible.builtin.include_role:
         name: vnc
+        apply:
+          tags: ['vnc', 'provision']
+      when: >-
+        'vnc' in (node_roles | default([])) or
+        inventory_hostname in groups.get('main', []) or
+        inventory_hostname in groups.get('backend', []) or
+        inventory_hostname in groups.get('vnc_nodes', [])
       tags: ['vnc', 'provision']
 
+# -------------------------------------------------------------------
+# Phase 4b: Frontend
+# -------------------------------------------------------------------
 - name: "Provision Phase 4b: Frontend"
-  hosts: 02-Frontend
+  hosts: all
   become: true
   gather_facts: true
 
@@ -87,13 +176,95 @@
     - name: "App | Deploy frontend role"
       ansible.builtin.include_role:
         name: frontend
+        apply:
+          tags: ['frontend', 'provision']
+      when: >-
+        'frontend' in (node_roles | default([])) or
+        'autobot-frontend' in (node_roles | default([])) or
+        inventory_hostname in groups.get('frontend', [])
       tags: ['frontend', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 5: AI layer (AI Stack, NPU, LLM)
+# Phase 4c: Re-render SLM nginx for co-located frontend (#3012)
+#
+# When the frontend role deploys user frontend code onto a node
+# that also runs the SLM manager, the SLM nginx config must switch
+# to co-located mode (user frontend at /, SLM at /slm/).
+# The slm_manager role's own nginx task auto-detects this by
+# checking for the user frontend package.json, but it runs before
+# the frontend role syncs the code. This phase re-renders the
+# SLM nginx config after the frontend role has completed.
+# -------------------------------------------------------------------
+- name: "Provision Phase 4c: SLM Nginx Co-location Update"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "SLM | Check if node has both frontend and slm_manager roles"
+      ansible.builtin.set_fact:
+        _is_slm_frontend_colocated: >-
+          {{
+            (
+              'frontend' in (node_roles | default([])) or
+              'autobot-frontend' in (node_roles | default([])) or
+              inventory_hostname in groups.get('frontend', []) or
+              inventory_hostname in groups.get('02-Frontend', [])
+            ) and (
+              'slm-backend' in (node_roles | default([])) or
+              'slm_manager' in (node_roles | default([])) or
+              inventory_hostname in groups.get('slm', []) or
+              inventory_hostname in groups.get('00-SLM-Manager', [])
+            )
+          }}
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Detect co-located user frontend after frontend deploy"
+      ansible.builtin.stat:
+        path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
+      register: _post_frontend_colocated_check
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Set co-located frontend flag"
+      ansible.builtin.set_fact:
+        slm_colocated_frontend: "{{ _post_frontend_colocated_check.stat.exists | default(false) }}"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
+      ansible.builtin.template:
+        src: "{{ role_path | default(playbook_dir + '/../roles/slm_manager') }}/templates/autobot-slm.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+        mode: "0644"
+        backup: true
+      when:
+        - _is_slm_frontend_colocated | bool
+        - slm_colocated_frontend | default(false) | bool
+      register: _slm_nginx_rerendered
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Test nginx config after co-location update"
+      ansible.builtin.command:
+        cmd: nginx -t
+      when:
+        - _slm_nginx_rerendered is changed
+      changed_when: false
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+    - name: "SLM | Reload nginx after co-location update"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when:
+        - _slm_nginx_rerendered is changed
+      tags: ['frontend', 'slm-nginx', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5a: AI Stack
 # -------------------------------------------------------------------
 - name: "Provision Phase 5a: AI Stack"
-  hosts: 03-AI-Stack
+  hosts: all
   become: true
   gather_facts: true
 
@@ -101,15 +272,31 @@
     - name: "AI | Deploy AI stack role"
       ansible.builtin.include_role:
         name: ai-stack
+        apply:
+          tags: ['ai-stack', 'provision']
+      when: >-
+        'ai-stack' in (node_roles | default([])) or
+        'autobot-ai-stack' in (node_roles | default([])) or
+        inventory_hostname in groups.get('ai_stack', []) or
+        inventory_hostname in groups.get('aiml', [])
       tags: ['ai-stack', 'provision']
 
     - name: "AI | Deploy LLM role"
       ansible.builtin.include_role:
         name: llm
+        apply:
+          tags: ['llm', 'provision']
+      when: >-
+        'llm' in (node_roles | default([])) or
+        inventory_hostname in groups.get('ai_stack', []) or
+        inventory_hostname in groups.get('llm_nodes', [])
       tags: ['llm', 'provision']
 
+# -------------------------------------------------------------------
+# Phase 5b: NPU Worker
+# -------------------------------------------------------------------
 - name: "Provision Phase 5b: NPU Worker"
-  hosts: npu-worker
+  hosts: all
   become: true
   gather_facts: true
 
@@ -117,13 +304,39 @@
     - name: "AI | Deploy NPU worker role"
       ansible.builtin.include_role:
         name: npu-worker
+        apply:
+          tags: ['npu-worker', 'provision']
+      when: >-
+        'npu-worker' in (node_roles | default([])) or
+        'autobot-npu-worker' in (node_roles | default([])) or
+        inventory_hostname in groups.get('npu_worker', []) or
+        inventory_hostname in groups.get('npu', [])
       tags: ['npu-worker', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 5c: Standalone LLM nodes (GPU-aware — #1040)
+# Phase 5c: TTS Worker (co-located with NPU worker by convention)
 # -------------------------------------------------------------------
-- name: "Provision Phase 5c: LLM Nodes"
-  hosts: llm_nodes
+- name: "Provision Phase 5c: TTS Worker"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "AI | Deploy TTS worker role"
+      ansible.builtin.include_role:
+        name: tts-worker
+        apply:
+          tags: ['tts-worker', 'provision']
+      when: >-
+        'tts-worker' in (node_roles | default([])) or
+        'autobot-tts-worker' in (node_roles | default([]))
+      tags: ['tts-worker', 'provision']
+
+# -------------------------------------------------------------------
+# Phase 5d: Standalone LLM nodes (GPU-aware — #1040)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5d: LLM Nodes"
+  hosts: all
   become: true
   gather_facts: true
 
@@ -131,13 +344,17 @@
     - name: "LLM | Deploy LLM role (GPU auto-detected)"
       ansible.builtin.include_role:
         name: llm
+        apply:
+          tags: ['llm', 'provision']
+      when: >-
+        inventory_hostname in groups.get('llm_nodes', [])
       tags: ['llm', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 6: Automation layer (Browser)
+# Phase 6: Browser Automation
 # -------------------------------------------------------------------
 - name: "Provision Phase 6: Browser Automation"
-  hosts: browser-automation
+  hosts: all
   become: true
   gather_facts: true
 
@@ -145,11 +362,18 @@
     - name: "Auto | Deploy browser role"
       ansible.builtin.include_role:
         name: browser
+        apply:
+          tags: ['browser', 'provision']
+      when: >-
+        'browser' in (node_roles | default([])) or
+        'autobot-browser-worker' in (node_roles | default([])) or
+        'browser-service' in (node_roles | default([])) or
+        inventory_hostname in groups.get('browser_worker', []) or
+        inventory_hostname in groups.get('browser', [])
       tags: ['browser', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 7: Summary
-# (node_exporter is now deployed by slm_agent role in Phase 2 - #945)
 # -------------------------------------------------------------------
 - name: "Provision Summary"
   hosts: localhost
@@ -162,16 +386,15 @@
         msg:
           - "=== Fleet Auto-Provisioning Complete ==="
           - ""
-          - "Provisioned nodes:"
-          - "  01-Backend      : autobot-backend, llm, vnc, autobot-slm-agent"
-          - "  02-Frontend     : autobot-frontend, autobot-slm-agent"
-          - "  npu-worker      : autobot-npu-worker, autobot-slm-agent"
-          - "  03-AI-Stack     : autobot-ai-stack, llm, autobot-slm-agent"
-          - "  04-Databases    : autobot-database, autobot-slm-agent"
-          - "  browser-auto    : autobot-browser-worker, autobot-slm-agent"
-          - "  05-LLM-CPU      : llm (GPU-aware), autobot-slm-agent"
+          - "All targeted nodes provisioned with:"
+          - "  Phase 1: Common baseline (SSH, packages, users)"
+          - "  Phase 2: SLM Agent + Node Exporter"
+          - "  Phase 3-6: Role-specific configuration (when matched)"
+          - "  Phase 4c: SLM nginx co-location update (when applicable)"
+          - "  Phase 5c: TTS Worker (when tts-worker in node_roles)"
           - ""
-          - "All nodes have: common + autobot-slm-agent + node_exporter"
-          - "  (node_exporter deployed by slm_agent role, not a separate phase)"
+          - "Roles deployed based on:"
+          - "  - node_roles variable (from DB/API)"
+          - "  - Inventory group membership (static inventory)"
           - ""
           - "Next: Verify with health-check.yml"

@@ -134,7 +134,7 @@ class AdapterRegistry:
                     healthy=False,
                     adapter_type=name,
                     diagnostics=[],
-                    metadata={"error": str(e)},
+                    metadata={"error": "Adapter environment test failed"},
                 )
         return results
 

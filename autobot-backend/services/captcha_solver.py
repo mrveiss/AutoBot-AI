@@ -31,20 +31,23 @@ Usage:
 Related: Issue #206
 """
 
+from __future__ import annotations
+
 import io
 import logging
 import re
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import TYPE_CHECKING, Optional
 
-from PIL import Image, ImageEnhance, ImageFilter
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozensets for CAPTCHA type detection
-_MATH_OPERATORS = frozenset({"+", "-", "=", "×", "÷", "*"})
+_MATH_OPERATORS = frozenset({"+", "-", "=", "\u00d7", "\u00f7", "*"})
 
 # Issue #380: Pre-compiled regex patterns for CAPTCHA processing
 _NON_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
@@ -196,10 +199,12 @@ class CaptchaSolver:
         """
         import time
 
+        from PIL import Image as PILImage  # Issue #3016: lazy import
+
         start_time = time.time()
 
         try:
-            image = Image.open(io.BytesIO(image_data))
+            image = PILImage.open(io.BytesIO(image_data))
 
             if captcha_type == CaptchaType.UNKNOWN:
                 captcha_type = await self._detect_captcha_type(image)
@@ -421,7 +426,7 @@ class CaptchaSolver:
             requires_human=True,
         )
 
-    async def _preprocess_for_ocr(self, image: Image.Image) -> List[Image.Image]:
+    async def _preprocess_for_ocr(self, image: Image.Image) -> list:
         """
         Apply various preprocessing techniques to improve OCR accuracy.
 
@@ -431,6 +436,10 @@ class CaptchaSolver:
         Returns:
             List of preprocessed images to try
         """
+        # Issue #3016: lazy import — PIL is heavy
+        from PIL import Image as PILImage
+        from PIL import ImageEnhance, ImageFilter
+
         results = []
 
         # Convert to grayscale
@@ -450,13 +459,13 @@ class CaptchaSolver:
         results.append(sharpened.point(lambda x: 255 if x > 128 else 0))
 
         # 4. Inverted (for dark background CAPTCHAs)
-        inverted = Image.eval(gray, lambda x: 255 - x)
+        inverted = PILImage.eval(gray, lambda x: 255 - x)
         results.append(inverted.point(lambda x: 255 if x > 128 else 0))
 
         # 5. Scaled up (2x) for small CAPTCHAs
         if image.width < 200:
             scaled = gray.resize(
-                (gray.width * 2, gray.height * 2), Image.Resampling.LANCZOS
+                (gray.width * 2, gray.height * 2), PILImage.Resampling.LANCZOS
             )
             results.append(scaled.point(lambda x: 255 if x > 128 else 0))
 
@@ -536,8 +545,8 @@ class CaptchaSolver:
         expr = _TRAILING_EQUALS_RE.sub("", expr)
         # Replace text/symbol operators with standard operators
         replacements = [
-            ("×", "*"),
-            ("÷", "/"),
+            ("\u00d7", "*"),
+            ("\u00f7", "/"),
             ("X", "*"),
             ("PLUS", "+"),
             ("MINUS", "-"),

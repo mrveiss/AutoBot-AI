@@ -146,26 +146,26 @@ onMounted(async () => {
 
       <!-- Status Summary Cards -->
       <div class="grid grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Total Nodes</p>
           <p class="text-3xl font-bold text-gray-900">{{ infrastructureStatus.total }}</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-green-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4">
           <p class="text-sm text-green-600">Online</p>
           <p class="text-3xl font-bold text-green-700">{{ infrastructureStatus.online }}</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-red-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
           <p class="text-sm text-red-600">Offline</p>
           <p class="text-3xl font-bold text-red-700">{{ infrastructureStatus.offline }}</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-yellow-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-yellow-200 p-4">
           <p class="text-sm text-yellow-600">Pending</p>
           <p class="text-3xl font-bold text-yellow-700">{{ infrastructureStatus.pending }}</p>
         </div>
       </div>
 
       <!-- Quick Actions -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-gray-900">Node Management</h3>
@@ -184,7 +184,7 @@ onMounted(async () => {
       </div>
 
       <!-- Service Endpoints -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h2 class="text-lg font-semibold mb-4">Service Endpoints</h2>
         <p class="text-sm text-gray-500 mb-6">
           Configured infrastructure endpoints from SSOT configuration
@@ -199,7 +199,7 @@ onMounted(async () => {
             <div class="flex items-center gap-4">
               <div
                 :class="[
-                  'px-2 py-1 text-xs font-medium rounded border',
+                  'px-2 py-1 text-xs font-medium rounded-sm border',
                   getStatusClass(endpoint.status)
                 ]"
               >
@@ -227,7 +227,7 @@ onMounted(async () => {
           <div>
             <p class="text-sm font-medium text-blue-800">Configuration Source</p>
             <p class="text-sm text-blue-600 mt-1">
-              These endpoints are configured in <code class="bg-blue-100 px-1 rounded">src/config/ssot-config.ts</code>.
+              These endpoints are configured in <code class="bg-blue-100 px-1 rounded-sm">src/config/ssot-config.ts</code>.
               For detailed node management including enrollment, updates, and certificate management, use the
               <button @click="navigateToNodes" class="underline hover:text-blue-800">Nodes settings</button>.
             </p>

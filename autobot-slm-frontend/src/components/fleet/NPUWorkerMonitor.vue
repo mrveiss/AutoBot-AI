@@ -186,7 +186,7 @@ onUnmounted(() => {
 <template>
   <div>
     <!-- Fleet Summary Bar -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-6">
           <div class="flex items-center gap-2">
@@ -222,7 +222,7 @@ onUnmounted(() => {
     <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{{ error }}</div>
 
     <!-- Empty State -->
-    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+    <div v-if="npuNodes.length === 0 && !loading" class="bg-white rounded-lg shadow-xs border border-gray-200 p-12 text-center">
       <svg class="mx-auto w-12 h-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
       </svg>
@@ -236,7 +236,7 @@ onUnmounted(() => {
         v-for="node in npuNodes"
         :key="node.node_id"
         @click="emit('select-node', node)"
-        class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+        class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
       >
         <!-- Header: hostname, IP, status dot -->
         <div class="flex items-start justify-between mb-3">
@@ -252,7 +252,7 @@ onUnmounted(() => {
 
         <!-- Device Type Badge -->
         <div class="mb-3">
-          <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">{{ deviceTypeLabel(node.node_id) }}</span>
+          <span class="px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-700">{{ deviceTypeLabel(node.node_id) }}</span>
         </div>
 
         <!-- Utilization Bar -->
@@ -271,11 +271,11 @@ onUnmounted(() => {
 
         <!-- Queue Depth + Current Task -->
         <div class="grid grid-cols-2 gap-2 mb-3">
-          <div class="bg-gray-50 rounded p-2">
+          <div class="bg-gray-50 rounded-sm p-2">
             <p class="text-xs text-gray-500">Queue Depth</p>
             <p class="text-sm font-semibold text-gray-900">{{ nodeMetrics(node.node_id)?.queue_depth ?? 0 }}</p>
           </div>
-          <div class="bg-gray-50 rounded p-2">
+          <div class="bg-gray-50 rounded-sm p-2">
             <p class="text-xs text-gray-500">Current Task</p>
             <p class="text-sm font-semibold text-gray-900 truncate" :title="currentTask(node.node_id)">{{ currentTask(node.node_id) }}</p>
           </div>

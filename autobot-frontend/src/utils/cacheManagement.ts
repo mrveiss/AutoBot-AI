@@ -6,6 +6,10 @@
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 // Create scoped logger for cacheManagement
 const logger = createLogger('cacheManagement')
 
@@ -264,7 +268,7 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
           <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
         </svg>
         <span>
-          <strong>Update available</strong> - v${version}
+          <strong>Update available</strong> - v${escapeHtml(version)}
           <br>
           <span style="font-size: 11px; opacity: 0.9;">
             ⚠️ Unsaved changes detected. Please save your work first.
@@ -281,7 +285,7 @@ export function showSubtleUpdateNotification(version: string, buildHash: string,
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
         </svg>
         <span>
-          <strong>Update available</strong> - v${version}
+          <strong>Update available</strong> - v${escapeHtml(version)}
           <span style="font-size: 11px; opacity: 0.8; margin-left: 8px;">
             <button onclick="performSafeReload()" style="background: none; border: 1px solid #059669; color: #059669; border-radius: 3px; padding: 2px 6px; margin-left: 8px; font-size: 10px; cursor: pointer;">Refresh now</button>
             <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" style="background: none; border: 1px solid #6b7280; color: #6b7280; border-radius: 3px; padding: 2px 6px; margin-left: 4px; font-size: 10px; cursor: pointer;">Dismiss</button>
@@ -379,7 +383,7 @@ export function showCacheUpdateNotification(message: string, type: 'info' | 'war
   notification.innerHTML = `
     <div style="display: flex; align-items: center; gap: 8px;">
       <i class="fas fa-sync-alt" style="animation: spin 1s linear infinite;"></i>
-      ${message}
+      ${escapeHtml(message)}
     </div>
   `
 
@@ -479,16 +483,16 @@ export function showSubtleErrorNotification(title: string, message: string, seve
 
   notification.innerHTML = `
     <div style="display: flex; align-items: flex-start; gap: 8px;">
-      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${iconColor}; flex-shrink: 0; margin-top: 2px;">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${iconColor}; shrink: 0; margin-top: 2px;">
         ${iconSvg}
       </svg>
-      <div style="flex-grow: 1; min-width: 0;">
-        <div style="font-weight: 600; margin-bottom: 2px;">${title}</div>
-        <div style="font-size: 12px; opacity: 0.9; line-height: 1.4;">${message}</div>
+      <div style="grow: 1; min-width: 0;">
+        <div style="font-weight: 600; margin-bottom: 2px;">${escapeHtml(title)}</div>
+        <div style="font-size: 12px; opacity: 0.9; line-height: 1.4;">${escapeHtml(message)}</div>
       </div>
       <button
         onclick="this.parentElement.parentElement.remove()"
-        style="background: none; border: none; color: ${textColor}; opacity: 0.7; cursor: pointer; font-size: 16px; padding: 2px; line-height: 1; flex-shrink: 0;"
+        style="background: none; border: none; color: ${textColor}; opacity: 0.7; cursor: pointer; font-size: 16px; padding: 2px; line-height: 1; shrink: 0;"
         title="Dismiss"
       >×</button>
     </div>

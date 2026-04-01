@@ -67,9 +67,9 @@ UNIT_TEST_MAPPINGS = {
     "input_validator": "autobot-user-backend/security",
     # agents/
     "graph_entity_extractor": "autobot-user-backend/agents",
-    # autobot-shared/
-    "error_boundaries": "autobot-shared",
-    "ssot_config": "autobot-shared",
+    # autobot_shared/
+    "error_boundaries": "autobot_shared",
+    "ssot_config": "autobot_shared",
     # --- Tests mapped by import analysis (no direct name match) ---
     # src.extensions.base
     "extension_hooks": "autobot-user-backend/extensions",

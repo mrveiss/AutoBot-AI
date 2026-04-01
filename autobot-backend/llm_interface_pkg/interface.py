@@ -8,22 +8,24 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 This simplified class delegates to specialized provider modules.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
 import re
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import aiohttp
 import xxhash
-from constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
 from config import ConfigManager
+from constants.model_constants import ModelConstants
 
 # Issue #1403: Adapter registry
 from .adapters.registry import get_adapter_registry
@@ -101,7 +103,7 @@ class LLMInterface:
     - Structured request/response handling
     """
 
-    def __init__(self, settings: Optional[LLMSettings] = None):
+    def __init__(self, settings: LLMSettings | None = None):
         """
         Initialize LLM interface with optional settings and configure providers.
 
@@ -192,13 +194,13 @@ class LLMInterface:
         Initialize async components including HTTP client and caching.
         """
         self._http_client = get_http_client()
-        self._models_cache: Optional[List[str]] = None
+        self._models_cache: list[str | None] = None
         self._models_cache_time: float = 0
         self._lock = asyncio.Lock()
         # Issue #551: L1/L2 dual-tier caching system
         self._response_cache = get_llm_cache()
 
-    def _init_metrics(self) -> Dict[str, Any]:
+    def _init_metrics(self) -> dict[str, Any]:
         """
         Issue #665: Extracted from __init__ to reduce function length.
 
@@ -245,6 +247,7 @@ class LLMInterface:
         from .adapters import (
             AIStackAdapter,
             AnthropicAdapter,
+            LayerInferenceAdapter,
             OllamaAdapter,
             OpenAIAdapter,
             ProcessAdapter,
@@ -257,6 +260,7 @@ class LLMInterface:
         registry.register(OpenAIAdapter())
         registry.register(AnthropicAdapter())
         registry.register(ProcessAdapter())
+        registry.register(LayerInferenceAdapter())
 
         registry.set_fallback_chain(self._provider_priority)
         self._adapter_registry = registry
@@ -279,6 +283,7 @@ class LLMInterface:
             "vllm": self._handle_vllm_request,
             "mock": self._handle_mock_request,
             "local": self._handle_local_request,
+            "layer_inference": self._handle_layer_inference_request,
         }
 
     def _init_backward_compatibility(self) -> None:
@@ -423,7 +428,7 @@ class LLMInterface:
         lightweight models and complex requests to capable models.
 
         Args:
-            messages: List of message dicts to analyze
+            messages: list of message dicts to analyze
             provider: Current provider name
             current_model: Currently selected model name
 
@@ -460,7 +465,7 @@ class LLMInterface:
 
     async def switch_provider(
         self, provider: str, model: str = "", validate: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Switch the active LLM provider at runtime (#536).
 
         Args:
@@ -491,7 +496,7 @@ class LLMInterface:
         logger.info("Switched LLM provider to %s (model=%s)", provider, model)
         return {"success": True, "provider": provider, "model": model}
 
-    async def get_all_provider_status(self) -> Dict[str, Any]:
+    async def get_all_provider_status(self) -> dict[str, Any]:
         """Get status of all configured providers (#536).
 
         Returns:
@@ -635,7 +640,7 @@ class LLMInterface:
         """Get Ollama base URL."""
         return f"http://{self.settings.ollama_host}:{self.settings.ollama_port}"
 
-    async def _generate_cache_key(self, messages: List[ChatMessage], **params) -> str:
+    async def _generate_cache_key(self, messages: list[ChatMessage], **params) -> str:
         """Generate cache key with high-performance hashing."""
         key_data = (
             tuple((m.role, m.content) for m in messages),
@@ -753,7 +758,7 @@ class LLMInterface:
         request_id: str,
         start_time: float,
         **kwargs,
-    ) -> tuple[Optional[LLMResponse], Optional[str]]:
+    ) -> tuple[LLMResponse | None, str | None]:
         """
         Check L1/L2 cache for existing response.
 
@@ -812,7 +817,7 @@ class LLMInterface:
         Prepare request context with provider, model, and optimizations. Issue #620.
 
         Args:
-            messages: List of message dicts
+            messages: list of message dicts
             llm_type: Type of LLM
             **kwargs: Additional parameters
 
@@ -834,17 +839,17 @@ class LLMInterface:
         messages: list,
         model_name: str,
         provider: str,
-        cache_key: Optional[str],
+        cache_key: str | None,
         request_id: str,
         start_time: float,
-        session_id: Optional[str],
+        session_id: str | None,
     ) -> LLMResponse:
         """
         Finalize response with metrics, caching, and usage tracking. Issue #620.
 
         Args:
             response: LLM response object
-            messages: List of message dicts
+            messages: list of message dicts
             model_name: Model name used
             provider: Provider name
             cache_key: Cache key if applicable
@@ -907,7 +912,7 @@ class LLMInterface:
         Execute chat request with caching and fallback. Issue #620.
 
         Args:
-            messages: List of message dicts
+            messages: list of message dicts
             llm_type: Type of LLM
             request_id: Request identifier
             start_time: Request start time
@@ -956,7 +961,7 @@ class LLMInterface:
         Issue #665: Refactored to use helper methods for reduced complexity.
 
         Args:
-            messages: List of message dicts
+            messages: list of message dicts
             llm_type: Type of LLM ("orchestrator", "task", "chat", etc.)
             **kwargs: Additional parameters (provider, model_name, etc.)
 
@@ -1010,7 +1015,7 @@ class LLMInterface:
             )
 
     def _build_all_providers_failed_response(
-        self, request_id: str, last_error: Optional[str]
+        self, request_id: str, last_error: str | None
     ) -> LLMResponse:
         """Build error response when all providers fail. Issue #620."""
         logger.error(f"All providers failed. Last error: {last_error}")
@@ -1204,7 +1209,7 @@ class LLMInterface:
         model: str,
         response: LLMResponse,
         processing_time: float,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ):
         """Track LLM usage for cost optimization analysis (Issue #229)."""
         if not PATTERN_ANALYZER_AVAILABLE:
@@ -1268,8 +1273,19 @@ class LLMInterface:
         """Handle local requests via handler."""
         return await self._local_handler.chat_completion(request)
 
+    async def _handle_layer_inference_request(
+        self, request: LLMRequest
+    ) -> LLMResponse:
+        """Handle layer-by-layer inference requests via adapter (#3104)."""
+        adapter = self._adapter_registry.get("layer_inference")
+        if not adapter:
+            raise ValueError(
+                "LayerInferenceAdapter not registered in adapter registry"
+            )
+        return await adapter.execute(request)
+
     # Utility methods
-    async def get_available_models(self, provider: str = "ollama") -> List[str]:
+    async def get_available_models(self, provider: str = "ollama") -> list[str]:
         """Get available models for a provider."""
         if provider == "ollama":
             ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
@@ -1292,7 +1308,7 @@ class LLMInterface:
 
         return []
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get performance metrics including cache and optimization statistics."""
         metrics = self._metrics.copy()
         # Issue #551: Include L1/L2 cache metrics
@@ -1311,7 +1327,7 @@ class LLMInterface:
             metrics["tiered_routing"] = self._tier_router.get_metrics()
         return metrics
 
-    def get_cache_metrics(self) -> Dict[str, Any]:
+    def get_cache_metrics(self) -> dict[str, Any]:
         """
         Get detailed cache performance metrics.
 
@@ -1322,7 +1338,7 @@ class LLMInterface:
         """
         return self._response_cache.get_metrics()
 
-    async def clear_cache(self, l1: bool = True, l2: bool = True) -> Dict[str, int]:
+    async def clear_cache(self, l1: bool = True, l2: bool = True) -> dict[str, int]:
         """
         Clear LLM response cache.
 
@@ -1356,11 +1372,11 @@ class LLMInterface:
         agent_type: str,
         user_message: str,
         session_id: str,
-        user_name: Optional[str] = None,
-        user_role: Optional[str] = None,
-        available_tools: Optional[list] = None,
-        recent_context: Optional[str] = None,
-        additional_params: Optional[dict] = None,
+        user_name: str | None = None,
+        user_role: str | None = None,
+        available_tools: list | None = None,
+        recent_context: str | None = None,
+        additional_params: dict | None = None,
         **llm_params,
     ) -> LLMResponse:
         """Chat completion with vLLM-optimized prompts. Issue #620."""

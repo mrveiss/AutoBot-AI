@@ -23,9 +23,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.path_constants import PATH
-
 from autobot_shared.ssot_config import get_ollama_url
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -557,6 +556,7 @@ class DocIndexerService:
             import asyncio
 
             from llama_index.embeddings.ollama import OllamaEmbedding
+
             from utils.chromadb_client import get_chromadb_client
 
             chromadb_path = self._root_dir / "data" / "chromadb"
@@ -667,6 +667,46 @@ class DocIndexerService:
             logger.error("Failed to index chunk %s: %s", chunk_id, e)
             return False
 
+    def _check_hash_and_update_cache(self, file_str: str, force: bool) -> bool:
+        """Check incremental hash cache; update cache entry if changed. Issue #2735.
+
+        Returns True if the file should be skipped (hash unchanged and not forced).
+        Extracted from index_file to keep parent under 65 lines.
+        """
+        if force:
+            return False
+        rel_path = os.path.relpath(file_str, self._root_dir)
+        cache = _load_hash_cache()
+        current_hash = _compute_file_hash(file_str)
+        if cache.get(rel_path) == current_hash:
+            return True
+        cache[rel_path] = current_hash
+        _save_hash_cache(cache)
+        return False
+
+    async def _index_file_chunks(
+        self, file_str: str, content: str, rel_path: str, tier: int
+    ) -> tuple[int, int]:
+        """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735.
+
+        Extracted from index_file to keep parent under 65 lines.
+        """
+        import asyncio
+
+        chunks = _chunk_markdown(content, file_str)
+        if not chunks:
+            return 0, 0
+
+        file_tags = _extract_tags(content, file_str)
+        indexed = 0
+        for i, chunk in enumerate(chunks):
+            ok = await asyncio.to_thread(
+                self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier
+            )
+            if ok:
+                indexed += 1
+        return indexed, len(chunks)
+
     async def index_file(
         self, file_path: Path, tier: int = 3, force: bool = False
     ) -> IndexResult:
@@ -680,8 +720,6 @@ class DocIndexerService:
         Returns:
             IndexResult with counts.
         """
-        import asyncio
-
         if not self._initialized:
             await self.initialize()
 
@@ -693,17 +731,9 @@ class DocIndexerService:
             result.errors.append(f"File not found: {file_str}")
             return result
 
-        # Hash check for incremental
-        if not force:
-            rel_path = os.path.relpath(file_str, self._root_dir)
-            cache = _load_hash_cache()
-            current_hash = _compute_file_hash(file_str)
-            if cache.get(rel_path) == current_hash:
-                result.skipped = 1
-                return result
-            # Update cache
-            cache[rel_path] = current_hash
-            _save_hash_cache(cache)
+        if self._check_hash_and_update_cache(file_str, force):
+            result.skipped = 1
+            return result
 
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -711,27 +741,14 @@ class DocIndexerService:
                 result.skipped = 1
                 return result
 
-            chunks = _chunk_markdown(content, file_str)
-            if not chunks:
+            rel_path = os.path.relpath(file_str, self._root_dir)
+            indexed, total_chunks = await self._index_file_chunks(
+                file_str, content, rel_path, tier
+            )
+
+            if total_chunks == 0:
                 result.skipped = 1
                 return result
-
-            rel_path = os.path.relpath(file_str, self._root_dir)
-            file_tags = _extract_tags(content, file_str)
-
-            indexed = 0
-            for i, chunk in enumerate(chunks):
-                ok = await asyncio.to_thread(
-                    self._index_chunk,
-                    chunk,
-                    i,
-                    len(chunks),
-                    rel_path,
-                    file_tags,
-                    tier,
-                )
-                if ok:
-                    indexed += 1
 
             result.success = 1 if indexed > 0 else 0
             result.failed = 0 if indexed > 0 else 1

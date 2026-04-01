@@ -22,12 +22,13 @@
     name: autobot-agent
     enabled: yes
 
+# (#2872) Removed failed_when: false — service start failures must
+# surface so deployment reports the real state.
 - name: Start autobot-agent service
-  systemd:
+  ansible.builtin.systemd:
     name: autobot-agent
     state: started
   register: service_start
-  failed_when: false
 
 - name: Wait for agent to be ready
   wait_for:

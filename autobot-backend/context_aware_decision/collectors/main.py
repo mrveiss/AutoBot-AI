@@ -145,7 +145,7 @@ class ContextCollector:
                 )
                 return decision_context
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Context collection failed"})
                 logger.error("Context collection failed: %s", e)
                 raise
 

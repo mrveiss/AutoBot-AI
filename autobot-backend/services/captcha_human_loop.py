@@ -45,10 +45,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from playwright.async_api import Page
+
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
-from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -463,7 +464,7 @@ class CaptchaHumanLoop:
 
         except Exception as e:
             logger.error("Error requesting CAPTCHA intervention: %s", e)
-            return self._build_error_result(captcha_id, url, start_time, str(e))
+            return self._build_error_result(captcha_id, url, start_time, "CAPTCHA intervention request failed")
 
         finally:
             self._cleanup_captcha_tracking(captcha_id)

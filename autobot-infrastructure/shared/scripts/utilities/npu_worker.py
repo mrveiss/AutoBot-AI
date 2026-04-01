@@ -508,7 +508,7 @@ class NPUWorker:
         """Get list of available models for NPU."""
         return [
             "llama3.2:1b-instruct-q4_K_M",
-            "llama3.2:3b-instruct-q4_K_M",
+            "llama3.2:1b-instruct-q4_K_M",
             "nomic-embed-text",
             "text-classification-model",
         ]

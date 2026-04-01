@@ -212,8 +212,7 @@ class MeshDB:
         Joins mesh_edges with mesh_nodes to include from_content/to_content so
         the LLM can read the chunk text when naming the relationship.
         """
-        sql = text(
-            """
+        sql = text("""
             SELECT e.id::text          AS id,
                    e.from_node::text   AS from_node,
                    e.to_node::text     AS to_node,
@@ -232,8 +231,7 @@ class MeshDB:
               AND e.origin         = :origin
             ORDER BY e.weight DESC
             LIMIT :limit
-            """
-        )
+            """)
         params: dict[str, Any] = {
             "edge_type": edge_type,
             "min_weight": min_weight,
@@ -282,15 +280,13 @@ class MeshDB:
         decay_factor: float,
     ) -> int:
         """Multiply weight by decay_factor for matching edges. Returns count affected (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             UPDATE mesh_edges
             SET weight = weight * :factor,
                 last_reinforced = NOW()
             WHERE origin = ANY(:origins)
               AND (last_reinforced IS NULL OR last_reinforced < :cutoff)
-            """
-        )
+            """)
         async with self.engine.begin() as conn:
             result = await conn.execute(
                 sql,
@@ -315,8 +311,7 @@ class MeshDB:
 
     async def archive_orphan_nodes(self, no_access_since: datetime) -> int:
         """Archive nodes with no edges and no access since cutoff. Returns count (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             WITH archived AS (
                 DELETE FROM mesh_nodes n
                 WHERE (last_accessed IS NULL OR last_accessed < :cutoff)
@@ -329,8 +324,7 @@ class MeshDB:
             INSERT INTO mesh_nodes_archive
             SELECT * FROM archived
             ON CONFLICT DO NOTHING
-            """
-        )
+            """)
         async with self.engine.begin() as conn:
             result = await conn.execute(sql, {"cutoff": no_access_since})
         logger.debug("Archived %d orphan nodes", result.rowcount)
@@ -338,8 +332,7 @@ class MeshDB:
 
     async def merge_duplicate_edges(self) -> int:
         """Merge edges with same from/to but different types; keep highest weight (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             WITH ranked AS (
                 SELECT id,
                        ROW_NUMBER() OVER (
@@ -354,8 +347,7 @@ class MeshDB:
                 RETURNING id
             )
             SELECT COUNT(*) FROM deleted
-            """
-        )
+            """)
         async with self.engine.begin() as conn:
             result = await conn.execute(sql)
             count = result.scalar() or 0
@@ -364,15 +356,13 @@ class MeshDB:
 
     async def get_graph_density(self) -> float:
         """Return avg edges per node (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             SELECT CASE WHEN COUNT(DISTINCT n.id) = 0 THEN 0.0
                         ELSE COUNT(e.id)::float / COUNT(DISTINCT n.id)
                    END
             FROM mesh_nodes n
             LEFT JOIN mesh_edges e ON e.from_node = n.id
-            """
-        )
+            """)
         async with self.engine.connect() as conn:
             result = await conn.execute(sql)
             return float(result.scalar() or 0.0)
@@ -385,8 +375,7 @@ class MeshDB:
         self, min_access: int, min_edges: int
     ) -> list[dict]:
         """Return nodes with access_count >= min_access, edge_count >= min_edges, not anchor (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             SELECT n.id::text,
                    n.chunk_id,
                    n.node_type,
@@ -398,8 +387,7 @@ class MeshDB:
               AND n.access_count >= :min_access
             GROUP BY n.id
             HAVING COUNT(e.id) >= :min_edges
-            """
-        )
+            """)
         async with self.engine.connect() as conn:
             rows = await conn.execute(
                 sql, {"min_access": min_access, "min_edges": min_edges}
@@ -410,16 +398,14 @@ class MeshDB:
         self, max_access: int, inactive_days: int
     ) -> list[dict]:
         """Return anchor nodes with access below threshold, inactive for N days (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             SELECT id::text, chunk_id, node_type, access_count, last_accessed
             FROM mesh_nodes
             WHERE is_anchor = TRUE
               AND access_count <= :max_access
               AND (last_accessed IS NULL
                    OR last_accessed < NOW() - make_interval(days => :inactive_days))
-            """
-        )
+            """)
         async with self.engine.connect() as conn:
             rows = await conn.execute(
                 sql, {"max_access": max_access, "inactive_days": inactive_days}
@@ -428,8 +414,7 @@ class MeshDB:
 
     async def get_neighborhood(self, node_id: str, hops: int) -> list[dict]:
         """BFS to collect nodes within N hops. Returns list of dicts with content (#2178)."""
-        sql = text(
-            """
+        sql = text("""
             WITH RECURSIVE bfs AS (
                 SELECT id, 0 AS depth
                 FROM mesh_nodes
@@ -443,8 +428,7 @@ class MeshDB:
             SELECT DISTINCT n.id::text, n.chunk_id, n.node_type, n.raptor_level
             FROM bfs b
             JOIN mesh_nodes n ON n.id = b.id
-            """
-        )
+            """)
         async with self.engine.connect() as conn:
             rows = await conn.execute(sql, {"node_id": node_id, "hops": hops})
             return [dict(r) for r in rows.mappings()]

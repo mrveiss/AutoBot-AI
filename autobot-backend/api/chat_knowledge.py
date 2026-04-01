@@ -17,16 +17,16 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
-from chat_history import ChatHistoryManager
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from chat_history import ChatHistoryManager
 
 # Import existing components
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
-from pydantic import BaseModel
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

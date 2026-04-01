@@ -6,6 +6,15 @@
 # Removes legacy and wrong-node directories from .20 (backend node).
 # Run via: ansible-playbook ... --tags clean
 # Safe to run any time; all removes are conditional.
+#
+# LEGACY directory deletions (npu-worker, browser-service, ai-stack,
+# autobot-user-backend, config) run unconditionally because NO current role
+# deploys to those paths — they are pre-rename leftovers.
+#
+# Wrong-node deletions of CURRENT canonical dirs (autobot-slm-frontend,
+# autobot-slm-backend) ONLY run when node_roles is defined (dynamic inventory).
+# When undefined (localhost self-deploy via install.sh), skip ALL cross-role
+# deletions to prevent wiping co-located services on single-host (#2836).
 
 - name: "Backend | Clean: legacy npu-worker dir"
   ansible.builtin.file:
@@ -41,10 +50,16 @@
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-frontend
     state: absent
+  when:
+    - node_roles is defined
+    - "'slm-frontend' not in node_roles"
   tags: ['clean']
 
 - name: "Backend | Clean: wrong-node autobot-slm-backend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-backend
     state: absent
+  when:
+    - node_roles is defined
+    - "'slm-backend' not in node_roles"
   tags: ['clean']

@@ -5,10 +5,13 @@
 Async Database Connection Pool Manager
 Provides async connection pooling for SQLite and other databases using aiosqlite
 to improve performance and prevent blocking operations.
+
+Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,6 +25,16 @@ from constants.threshold_constants import TimingConstants
 from utils.database_helpers import join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
+
+
+def _get_sqlite_pool_size() -> int:
+    """Get SQLite pool size from SSOT config (#2860)."""
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().database_pool.sqlite_pool_size
+    except Exception:
+        return 10
 
 
 @dataclass
@@ -41,7 +54,7 @@ class AsyncSQLiteConnectionPool:
     def __init__(
         self,
         db_path: str,
-        pool_size: int = 20,
+        pool_size: int | None = None,
         timeout: float = TimingConstants.SHORT_TIMEOUT,
     ):
         """
@@ -49,13 +62,14 @@ class AsyncSQLiteConnectionPool:
 
         Args:
             db_path: Path to SQLite database file
-            pool_size: Maximum number of connections in pool
+            pool_size: Maximum number of connections in pool.
+                       Defaults to SSOT config sqlite_pool_size (#2860).
             timeout: Timeout for acquiring connection from pool
         """
         self.db_path = db_path
-        self.pool_size = pool_size
+        self.pool_size = pool_size if pool_size is not None else _get_sqlite_pool_size()
         self.timeout = timeout
-        self._pool = asyncio.Queue(maxsize=pool_size)
+        self._pool = asyncio.Queue(maxsize=self.pool_size)
         self._lock = asyncio.Lock()
         self._created_connections = 0
         self._stats = PoolStats()
@@ -118,7 +132,8 @@ class AsyncSQLiteConnectionPool:
 
             self._initialized = True
             logger.info(
-                f"Async connection pool initialized with {initial_size} connections"
+                "Async connection pool initialized with %s connections",
+                initial_size,
             )
 
     async def _acquire_connection(self) -> aiosqlite.Connection:
@@ -248,14 +263,14 @@ _async_pools_lock = asyncio.Lock()
 
 
 async def get_async_connection_pool(
-    db_path: str, pool_size: int = 20
+    db_path: str, pool_size: int | None = None
 ) -> AsyncSQLiteConnectionPool:
     """
     Get or create an async connection pool for a database.
 
     Args:
         db_path: Path to database file
-        pool_size: Maximum pool size
+        pool_size: Maximum pool size. Defaults to SSOT config (#2860).
 
     Returns:
         AsyncSQLiteConnectionPool: Async connection pool instance
@@ -278,7 +293,9 @@ async def get_async_connection_pool(
         await pool._initialize_pool()
         _async_connection_pools[db_path] = pool
         logger.info(
-            f"Created async connection pool for {db_path} with size {pool_size}"
+            "Created async connection pool for %s with size %s",
+            db_path,
+            pool.pool_size,
         )
         return pool
 
@@ -403,6 +420,33 @@ async def async_transaction(pool: AsyncSQLiteConnectionPool):
             raise
 
 
+_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
+    """Validate a SQL identifier (table or column name) against an allowlist pattern.
+
+    Only permits names composed of ASCII letters, digits, and underscores, starting
+    with a letter or underscore. This prevents SQL injection via identifier interpolation
+    in f-string query construction. (#2845)
+
+    Args:
+        name: The identifier to validate.
+        label: Human-readable label used in the error message.
+
+    Returns:
+        The validated name unchanged.
+
+    Raises:
+        ValueError: If the name contains characters outside the allowed set.
+    """
+    if not _SQL_IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed"
+        )
+    return name
+
+
 # Batch operation helpers
 class AsyncBatchOperations:
     """Helper class for efficient batch database operations."""
@@ -425,6 +469,9 @@ class AsyncBatchOperations:
             data: List of tuples with data to insert
             batch_size: Number of records per batch
         """
+        _validate_sql_identifier(table, "table name")
+        for col in columns:
+            _validate_sql_identifier(col, "column name")
         placeholders = ", ".join(["?" for _ in columns])
         column_names = ", ".join(columns)
         query = f"INSERT INTO {table} ({column_names}) VALUES ({placeholders})"  # nosec B608
@@ -456,6 +503,10 @@ class AsyncBatchOperations:
             data: List of tuples with (set_values..., where_value)
             batch_size: Number of records per batch
         """
+        _validate_sql_identifier(table, "table name")
+        for col in set_columns:
+            _validate_sql_identifier(col, "column name")
+        _validate_sql_identifier(where_column, "column name")
         set_clause = ", ".join([f"{col} = ?" for col in set_columns])
         query = (
             f"UPDATE {table} SET {set_clause} WHERE {where_column} = ?"  # nosec B608

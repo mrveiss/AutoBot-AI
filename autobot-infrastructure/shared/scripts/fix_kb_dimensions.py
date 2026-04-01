@@ -4,23 +4,26 @@ Fix knowledge base dimension mismatch by recreating with correct settings.
 """
 
 import asyncio
+import logging
 import os
 import sys
-
-logger = logging.getLogger(__name__)
-
 
 import redis
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+logger = logging.getLogger(__name__)
+
+# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
+_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
+
 
 async def fix_dimensions():
     """Drop all llama_index traces and let it recreate properly."""
 
-    # Connect to Redis
-    r = redis.Redis(host="localhost", port=6379, db=0)
+    # Connect to Redis knowledge DB (llama_index lives in DB 1 per redis-databases.yaml SSOT, #2806)
+    r = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE)
 
     logger.info("Cleaning up Redis...")
 

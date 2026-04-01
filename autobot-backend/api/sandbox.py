@@ -10,10 +10,12 @@ API endpoints for executing commands in the secure Docker sandbox environment.
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission, get_current_user
-from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.network_constants import NetworkConstants
 from secure_sandbox_executor import (
     SandboxConfig,
     SandboxExecutionMode,
@@ -25,8 +27,6 @@ from utils.response_builder import (
     service_unavailable_response,
     success_response,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -4,10 +4,10 @@
 redis_databases:
   main:
     db: 0
-    description: "Main application data (switched to match kb_db configuration)"
+    description: "Main application data (general cache, queues, sessions)"
   knowledge:
     db: 1
-    description: "Knowledge base and documents (CRITICAL: 13,383 vectors - moving from DB 0 to DB 1)"
+    description: "Knowledge base and documents (vectors and LlamaIndex data)"
   prompts:
     db: 2
     description: "Prompt templates and management"
@@ -26,9 +26,7 @@ redis_databases:
   workflows:
     db: 7
     description: "Workflow state and execution"
-  monitoring:
-    db: 7
-    description: "Infrastructure monitoring data (alias for workflows DB)"
+  # monitoring: removed — was unused alias of workflows (DB 7). See #2810.
   logs:
     db: 8
     description: "Log data and history"
@@ -43,9 +41,16 @@ redis_databases:
   analytics:
     db: 11
     description: "Codebase analytics and code analysis results"
-  codebase:
-    db: 11
-    description: "Codebase analytics (alias for analytics DB)"
+  # codebase: removed — was unused alias of analytics (DB 11). See #2810.
+  testing:
+    db: 13
+    description: "Test suite isolation database (#2720)"
+  celery_broker:
+    db: 14
+    description: "Celery task broker"
+  celery_results:
+    db: 15
+    description: "Celery task results backend"
 
 # Connection settings
 host: localhost
@@ -53,7 +58,7 @@ port: 6379
 password: null
 timeout: 5
 
-# Knowledge base vectors are in database 0 as configured above
+# Knowledge base vectors are in database 1 as configured above (see ADR-002)
 retry_attempts: 3
 retry_delay: 1
 

@@ -15,18 +15,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
 import redis
-from config import ConfigManager
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from redis import asyncio as aioredis
+
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
+from autobot_shared.redis_management.types import DATABASE_MAPPING
+from config import ConfigManager
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
 from utils.knowledge_base_timeouts import kb_timeouts
-
-from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 
 if TYPE_CHECKING:
     pass
@@ -78,7 +79,7 @@ class KnowledgeBaseCore:
         self.redis_host = config.get("redis.host")
         self.redis_port = config.get("redis.port")
         self.redis_password = config.get("redis.password")
-        self.redis_db = 1  # Default for knowledge base (historical compatibility)
+        self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
         self.redis_index_name = config.get(
             "redis.indexes.knowledge_base", "llama_index"
         )
@@ -333,7 +334,7 @@ class KnowledgeBaseCore:
             )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = await get_redis_client(
+            self.aioredis_client = get_redis_client(
                 async_client=True, database="knowledge"
             )
 

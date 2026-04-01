@@ -34,13 +34,13 @@ Complete step-by-step installation guide for the AutoBot NPU Worker on Windows s
 ### Software Requirements
 
 - ✅ **Automatically Installed by Installer Package:**
-  - Python 3.10+ (embedded)
+  - Python 3.12+ (embedded)
   - Visual C++ Redistributables
   - NSSM Service Manager
   - All Python dependencies
 
 - ⚠️ **For Manual Installation:**
-  - Python 3.10 or higher
+  - Python 3.12 or higher
   - Git (optional, for development)
 
 ---
@@ -126,7 +126,7 @@ cd C:\AutoBot\NPU
 
 #### Step 2: Install Python (if not present)
 
-1. Download Python 3.10+ from https://www.python.org/
+1. Download Python 3.12+ from https://www.python.org/
 2. Install with "Add Python to PATH" checked
 3. Verify installation:
    ```powershell

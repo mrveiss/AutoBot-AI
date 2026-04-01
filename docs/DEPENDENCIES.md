@@ -29,7 +29,7 @@ This document tracks ALL dependencies across the AutoBot platform for each compo
 curl
 gnupg
 ca-certificates
-python3 (3.10+)
+python3 (3.12+)
 python3-pip
 python3-venv
 nginx (1.18+)
@@ -71,7 +71,7 @@ Key packages:
 - redis (5.0+)
 - pydantic (2.5+)
 - PyJWT[crypto]
-- passlib[bcrypt]
+- bcrypt (5.0+)
 - python-multipart
 - aiohttp
 
@@ -101,7 +101,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.10+)
+python3 (3.12+)
 python3-pip
 python3-venv
 redis-tools
@@ -180,7 +180,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.10+)
+python3 (3.12+)
 python3-pip
 python3-venv
 
@@ -242,7 +242,7 @@ redis-stack-server (7.2+)
 
 ### System Packages
 ```bash
-python3 (3.10+)
+python3 (3.12+)
 python3-pip
 python3-venv
 curl
@@ -274,7 +274,7 @@ Key packages:
 
 ### System Packages
 ```bash
-python3 (3.10+)
+python3 (3.12+)
 python3-pip
 python3-venv
 
@@ -324,13 +324,13 @@ python3 -m playwright install webkit
 
 ## Python Package Dependencies
 
-### Backend Common (autobot-shared)
+### Backend Common (autobot_shared)
 ```python
-# See autobot-shared/requirements.txt
+# See autobot_shared/requirements.txt
 redis>=5.0.0
 pydantic>=2.5.0
 PyJWT[crypto]>=2.8.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=5.0.0
 ```
 
 ### User Backend
@@ -362,7 +362,7 @@ asyncpg>=0.29.0
 redis>=5.0.0
 pydantic>=2.5.0
 PyJWT[crypto]>=2.8.0
-passlib[bcrypt]>=1.7.4
+bcrypt>=5.0.0
 python-multipart>=0.0.6
 aiohttp>=3.9.0
 ```
@@ -435,7 +435,7 @@ All VMs must be able to reach:
 
 | Component | Ubuntu 22.04 | Kali Rolling | Notes |
 |-----------|--------------|--------------|-------|
-| Python | 3.10+ | 3.11+ | ✅ Compatible |
+| Python | 3.12+ | 3.12+ | ✅ Compatible |
 | Ansible (control) | 2.17.14 (PPA) | 2.19.4 | ✅ Compatible |
 | Ansible (target) | 2.17+ modules | 2.17+ modules | ⚠️ MUST upgrade SLM from 2.10.8 |
 | Node.js | 20.x (NodeSource) | 20.x | ✅ Compatible |

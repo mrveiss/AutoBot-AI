@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -114,7 +114,10 @@ class SystemResources:
     cpu_percent: float
     memory_percent: float
     available_memory_gb: float
-    gpu_vram_gb: float = 0.0  # Available GPU VRAM in GB (Issue #1966)
+    gpu_vram_gb: float = 0.0  # Total free VRAM across all GPUs in GB (#1966, #2032)
+    per_gpu_vram_gb: List[float] = field(
+        default_factory=list
+    )  # Per-GPU free VRAM (#2032)
 
     def allows_large_models(self) -> bool:
         """Tell if system can handle large models."""
@@ -129,13 +132,14 @@ class SystemResources:
             return 1.0
         return self.available_memory_gb * 0.8
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for backward compatibility."""
         return {
             "cpu_percent": self.cpu_percent,
             "memory_percent": self.memory_percent,
             "available_memory_gb": self.available_memory_gb,
             "gpu_vram_gb": self.gpu_vram_gb,
+            "per_gpu_vram_gb": list(self.per_gpu_vram_gb),
         }
 
 

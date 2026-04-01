@@ -7,15 +7,16 @@
 import logging
 from typing import Any, Dict, List, Literal, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.cicd_integration import (
     CircleCIIntegration,
     GitLabCIIntegration,
     JenkinsIntegration,
 )
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

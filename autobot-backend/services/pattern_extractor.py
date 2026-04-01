@@ -71,7 +71,7 @@ class PatternExtractor:
         python_dirs = [
             self.base_path / "autobot-backend",
             self.base_path / "autobot-slm-backend",
-            self.base_path / "autobot-shared",
+            self.base_path / "autobot_shared",
         ]
 
         for base_dir in python_dirs:

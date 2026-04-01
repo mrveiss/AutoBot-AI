@@ -153,7 +153,7 @@ class AnthropicAdapter(AdapterBase):
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
-                    message=f"API call failed: {e}",
+                    message="API call failed",
                 )
             )
 

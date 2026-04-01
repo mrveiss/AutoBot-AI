@@ -161,7 +161,7 @@ async def test_config_consolidation():
         env_vars = [
             "AUTOBOT_DEFAULT_LLM_MODEL",
             "AUTOBOT_BACKEND_PORT",
-            "AUTOBOT_REDIS_DB",
+            "AUTOBOT_REDIS_DB_MAIN",
         ]
 
         for var in env_vars:

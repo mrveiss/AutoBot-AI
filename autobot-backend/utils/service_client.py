@@ -19,9 +19,9 @@ from typing import Dict
 
 import aiohttp
 import structlog
-from security.service_auth import ServiceAuthManager
 
 from autobot_shared.http_client import get_http_client
+from security.service_auth import ServiceAuthManager
 
 logger = structlog.get_logger()
 

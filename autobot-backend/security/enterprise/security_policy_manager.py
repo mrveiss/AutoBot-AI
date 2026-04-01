@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import yaml
+
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -745,7 +746,8 @@ class SecurityPolicyManager:
         self, policy: SecurityPolicy, context: Dict, result: Dict
     ) -> Dict:
         """Check password policy compliance."""
-        password = context.get("password", "")
+        # CodeQL: false positive — password is checked for policy compliance, never logged
+        password = context.get("password", "")  # noqa: S105
         if not password:
             return result
 

@@ -11,16 +11,27 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-import torch
-import torch.optim as optim
-from models.completion_feedback import CompletionFeedback
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from training.completion_trainer import CompletionTrainer
 
 from autobot_shared.ssot_config import config
+from models.completion_feedback import CompletionFeedback
+from training.completion_trainer import CompletionTrainer
 
 logger = logging.getLogger(__name__)
+
+# Issue #3016: lazy module-level import for torch
+_torch = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
 
 
 class IncrementalTrainer:
@@ -61,6 +72,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        torch = _get_torch()
+
         contexts = []
         targets = []
 
@@ -86,6 +99,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        torch = _get_torch()
+
         # Forward pass
         logits, _ = self.trainer.model(batch_contexts)
 
@@ -108,6 +123,8 @@ class IncrementalTrainer:
 
         Helper for update_from_feedback (Issue #905).
         """
+        import torch.optim as optim  # Issue #3016: lazy import
+
         self.trainer.model.train()
         optimizer = optim.AdamW(self.trainer.model.parameters(), lr=self.learning_rate)
 
@@ -151,50 +168,54 @@ class IncrementalTrainer:
         Returns:
             Dictionary with update statistics
         """
-        db = self.SessionLocal()
-        try:
-            feedback_events = self._fetch_recent_feedback(db, time_window_hours)
+        with self.SessionLocal() as db:
+            try:
+                feedback_events = self._fetch_recent_feedback(db, time_window_hours)
 
-            if len(feedback_events) < min_feedback:
-                logger.info(
-                    f"Insufficient feedback for update: {len(feedback_events)} "
-                    f"< {min_feedback}"
+                if len(feedback_events) < min_feedback:
+                    logger.info(
+                        "Insufficient feedback for update: %d < %d",
+                        len(feedback_events),
+                        min_feedback,
+                    )
+                    return {
+                        "status": "skipped",
+                        "reason": "insufficient_feedback",
+                        "feedback_count": len(feedback_events),
+                    }
+
+                # Prepare and train
+                context_batch, target_batch = self._prepare_training_data(
+                    feedback_events
                 )
+                avg_loss, num_batches = self._run_training_loop(
+                    context_batch, target_batch
+                )
+
+                # Save updated model
+                self.trainer.save_checkpoint(is_best=False)
+
+                logger.info(
+                    "Incremental update complete: %d samples, avg_loss=%.4f",
+                    len(feedback_events),
+                    avg_loss,
+                )
+
                 return {
-                    "status": "skipped",
-                    "reason": "insufficient_feedback",
+                    "status": "success",
                     "feedback_count": len(feedback_events),
+                    "batches_processed": num_batches,
+                    "avg_loss": avg_loss,
+                    "timestamp": datetime.utcnow().isoformat(),
                 }
 
-            # Prepare and train
-            context_batch, target_batch = self._prepare_training_data(feedback_events)
-            avg_loss, num_batches = self._run_training_loop(context_batch, target_batch)
-
-            # Save updated model
-            self.trainer.save_checkpoint(is_best=False)
-
-            logger.info(
-                f"Incremental update complete: {len(feedback_events)} samples, "
-                f"avg_loss={avg_loss:.4f}"
-            )
-
-            return {
-                "status": "success",
-                "feedback_count": len(feedback_events),
-                "batches_processed": num_batches,
-                "avg_loss": avg_loss,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-
-        except Exception as e:
-            logger.error(f"Incremental training failed: {e}", exc_info=True)
-            return {
-                "status": "error",
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-        finally:
-            db.close()
+            except Exception as e:
+                logger.error("Incremental training failed: %s", e, exc_info=True)
+                return {
+                    "status": "error",
+                    "error": "Incremental training failed",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
 
     def trigger_full_retrain(
         self, language: Optional[str] = None, num_epochs: int = 5
@@ -243,9 +264,9 @@ class IncrementalTrainer:
             }
 
         except Exception as e:
-            logger.error(f"Full retrain failed: {e}", exc_info=True)
+            logger.error("Full retrain failed: %s", e, exc_info=True)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Full retraining failed",
                 "timestamp": datetime.utcnow().isoformat(),
             }

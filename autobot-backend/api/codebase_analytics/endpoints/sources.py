@@ -10,6 +10,7 @@ Mount point: /api/analytics/codebase/sources (via router.py)
 
 import asyncio
 import logging
+import re
 import shutil
 import uuid
 from datetime import datetime
@@ -67,8 +68,21 @@ def _build_clone_url(repo: str, token: Optional[str]) -> str:
     return f"https://github.com/{repo}"
 
 
+_GIT_TIMEOUT_SECONDS = 120
+_CREDENTIAL_URL_RE = re.compile(r"https?://[^@\s]+@", re.IGNORECASE)
+
+
+def _sanitize_git_error(message: str) -> str:
+    """Strip credential tokens from git error messages before storing (#3095)."""
+    return _CREDENTIAL_URL_RE.sub("https://***@", message)
+
+
 async def _run_git_clone(url: str, dest: str, branch: str) -> str:
-    """Clone a repo shallowly. Returns stderr on failure."""
+    """Clone a repo shallowly. Returns stderr on failure.
+
+    A 120-second timeout prevents the background task from hanging
+    indefinitely on large repos or network issues (#3092).
+    """
     proc = await asyncio.create_subprocess_exec(
         "git",
         "clone",
@@ -79,14 +93,23 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
         dest,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return f"git clone timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
     return ""
 
 
 async def _run_git_pull(clone_path: str) -> str:
-    """Pull latest changes in an existing clone. Returns stderr on failure."""
+    """Pull latest changes in an existing clone. Returns stderr on failure.
+
+    A 120-second timeout prevents the background task from hanging
+    indefinitely on network issues (#3092).
+    """
     proc = await asyncio.create_subprocess_exec(
         "git",
         "-C",
@@ -95,7 +118,12 @@ async def _run_git_pull(clone_path: str) -> str:
         "--ff-only",
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return f"git pull timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
     return ""
@@ -126,7 +154,7 @@ async def _do_sync(source: CodeSource) -> None:
 
         if err:
             source.status = SourceStatus.ERROR
-            source.error_message = err[:500]
+            source.error_message = _sanitize_git_error(err)[:500]
         else:
             source.status = SourceStatus.READY
             source.last_synced = datetime.now().isoformat()
@@ -136,7 +164,7 @@ async def _do_sync(source: CodeSource) -> None:
     except Exception as exc:
         logger.error("Sync failed for source %s: %s", source.id, exc)
         source.status = SourceStatus.ERROR
-        source.error_message = str(exc)[:500]
+        source.error_message = _sanitize_git_error(str(exc))[:500]
 
     await save_source(source)
 
@@ -253,6 +281,25 @@ async def create_code_source(request: CodeSourceCreateRequest):
         logger.info("Auto-sync started for new source %s", source.id)
 
     return JSONResponse(source.model_dump(), status_code=201)
+
+
+@router.get("/sources/summary")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_source_summary",
+    error_code_prefix="CODEBASE",
+)
+async def get_all_source_summaries():
+    """Return summaries for all sources in one request (#1468).
+
+    Replaces N+1 per-source /summary calls from the landing page.
+    Registered before /sources/{source_id} to avoid the literal
+    string "summary" being captured by the {source_id} path parameter (#2654, #3107).
+    """
+    sources = await list_sources()
+    results = await asyncio.gather(*[_build_summary(s) for s in sources])
+    summaries = {r["source_id"]: r for r in results}
+    return JSONResponse({"summaries": summaries})
 
 
 @router.get("/sources/{source_id}")
@@ -483,23 +530,6 @@ async def _build_summary(source: CodeSource) -> dict:
         "last_indexed": last_indexed,
         "last_commit": last_commit,
     }
-
-
-@router.get("/sources/summary")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_source_summary",
-    error_code_prefix="CODEBASE",
-)
-async def get_all_source_summaries():
-    """Return summaries for all sources in one request (#1468).
-
-    Replaces N+1 per-source /summary calls from the landing page.
-    """
-    sources = await list_sources()
-    results = await asyncio.gather(*[_build_summary(s) for s in sources])
-    summaries = {r["source_id"]: r for r in results}
-    return JSONResponse({"summaries": summaries})
 
 
 @router.get("/sources/{source_id}/summary")

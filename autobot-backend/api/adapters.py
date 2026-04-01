@@ -10,9 +10,10 @@ status endpoints for the formal adapter registry.
 
 import logging
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+
+from auth_middleware import get_current_user
 from llm_interface_pkg.adapters.registry import get_adapter_registry
 
 logger = logging.getLogger(__name__)

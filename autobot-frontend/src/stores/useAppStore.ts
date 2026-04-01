@@ -324,7 +324,7 @@ export const useAppStore = defineStore('app', () => {
   const addSystemNotification = (notification: Omit<SystemNotification, 'id' | 'visible' | 'timestamp'>) => {
     const newNotification: SystemNotification = {
       ...notification,
-      id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `notification-${crypto.randomUUID()}`,
       visible: true,
       timestamp: Date.now()
     }
@@ -473,7 +473,7 @@ export const useAppStore = defineStore('app', () => {
   persist: {
     key: 'autobot-app',
     storage: localStorage,
-    paths: [
+    pick: [
       'sessions',
       'currentSessionId',
       'notificationSettings',

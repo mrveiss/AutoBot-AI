@@ -12,11 +12,13 @@ import time
 import uuid
 from typing import Dict, List, Optional, Union
 
-import torch
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
+
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
@@ -26,10 +28,7 @@ from multimodal_processor import (
 
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
-from pydantic import BaseModel, Field
 from type_defs.common import Metadata
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +190,7 @@ async def process_image(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Image processing failed",
         )
 
 
@@ -263,7 +262,7 @@ async def process_audio(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Audio processing failed",
         )
 
 
@@ -322,7 +321,7 @@ async def process_text(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Text processing failed",
         )
 
 
@@ -522,6 +521,8 @@ async def get_multimodal_stats(
 
 def _get_gpu_stats() -> tuple:
     """Helper for get_multimodal_stats. Ref: #1088."""
+    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
+
     gpu_available = torch.cuda.is_available()
     gpu_stats = {}
     if gpu_available:
@@ -865,6 +866,8 @@ async def health_check(
 
     Issue #744: Requires authenticated user.
     """
+    import torch  # Issue #3016: lazy import — avoid ~3s startup cost
+
     return {
         "status": "healthy",
         "timestamp": time.time(),

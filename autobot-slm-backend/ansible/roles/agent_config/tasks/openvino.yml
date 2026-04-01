@@ -46,6 +46,9 @@
     name: openvino
     virtualenv: "{{ venv_dir }}"
   become_user: "{{ service_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
 
 - name: Verify OpenVINO installation
   command: "{{ venv_dir }}/bin/python -c 'import openvino; print(openvino.__version__)'"

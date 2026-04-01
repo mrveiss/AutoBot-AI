@@ -402,6 +402,34 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["bi-reports"],
         "bi_reports",
     ),
+    # Issue #2597: AutoResearch experiment runner (Milestone 1 of #1440)
+    (
+        "services.autoresearch.routes",
+        "/autoresearch",
+        ["autoresearch"],
+        "autoresearch",
+    ),
+    # Issue #2165: Workflow export/import/sharing
+    (
+        "api.workflow_export",
+        "/workflow-export",
+        ["workflow-export"],
+        "workflow_export",
+    ),
+    # Issue #2139: Event-driven trigger system for workflows
+    (
+        "api.triggers",
+        "",
+        ["triggers", "workflow"],
+        "triggers",
+    ),
+    # Issue #1808: Conversation export and import
+    (
+        "api.conversation_export",
+        "/conversations",
+        ["conversation-export"],
+        "conversation_export",
+    ),
 ]
 
 

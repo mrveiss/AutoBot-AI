@@ -215,7 +215,7 @@
       <div class="panel-content">
         <div class="history-list" v-if="checkHistory.length > 0">
           <div
-            v-for="(run, index) in checkHistory"
+            v-for="run in checkHistory"
             :key="run.timestamp"
             class="history-item"
             :class="{ passed: run.passed, failed: !run.passed }"

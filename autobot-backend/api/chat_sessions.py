@@ -6,11 +6,13 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import auth_middleware, get_current_user
-from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from auth_middleware import auth_middleware, get_current_user
+from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
@@ -28,8 +30,6 @@ from utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # ====================================================================
 # Router Configuration
@@ -1914,9 +1914,8 @@ async def share_session(
     shared_by = user_data.get("username", "unknown")
 
     # Share session access
-    from security.session_ownership import SessionOwnershipValidator
-
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
+    from security.session_ownership import SessionOwnershipValidator
 
     redis = await get_redis_mgr(async_client=True, database="main")
     validator = SessionOwnershipValidator(redis)
@@ -1985,3 +1984,28 @@ async def get_share_preview(
         message="Share preview retrieved",
         request_id=request_id,
     )
+
+
+@router.delete("/sessions/{session_id}/checkpoints")
+async def clear_session_checkpoints(session_id: str):
+    """Clear LangGraph checkpoints for a session (#1482).
+
+    Admin-only endpoint for recovering broken sessions whose checkpoints
+    are corrupted or stuck.  Delegates to ``delete_thread_checkpoints``
+    which removes the Redis-backed LangGraph checkpoint data.
+    """
+    try:
+        from chat_workflow.graph import delete_thread_checkpoints
+
+        await delete_thread_checkpoints(session_id)
+        logger.info("Cleared checkpoints for session %s (#1482)", session_id)
+        return create_success_response(
+            data={"session_id": session_id},
+            message=f"Checkpoints cleared for session {session_id}",
+        )
+    except Exception:
+        logger.exception("Failed to clear checkpoints for %s", session_id)
+        return create_error_response(
+            error="Failed to clear checkpoints",
+            status_code=500,
+        )

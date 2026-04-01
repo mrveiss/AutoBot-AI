@@ -32,15 +32,15 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import aiohttp
-from auth_middleware import check_admin_permission
-from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from type_defs.common import JSONObject, Metadata
-from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from type_defs.common import JSONObject, Metadata
+from utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

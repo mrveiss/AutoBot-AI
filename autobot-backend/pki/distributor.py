@@ -21,6 +21,7 @@ from typing import Dict, List, Optional
 import asyncssh
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
+
 from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,6 @@ class CertificateDistributor:
                     vm_info.ip,
                     username=self.config.ssh_user,
                     client_keys=[str(self.config.ssh_key_path)],
-                    known_hosts=None,  # TODO: Use proper known_hosts in production
                     connect_timeout=10,
                 ) as conn:
                     return await self._execute_distribution(conn, vm_info, span)
@@ -303,7 +303,7 @@ class CertificateDistributor:
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
-                    message=f"SSH error: {e}",
+                    message="SSH connection error",
                 )
             except Exception as e:
                 logger.error(f"Error distributing to {vm_info.name}: {e}")
@@ -311,7 +311,7 @@ class CertificateDistributor:
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
-                    message=str(e),
+                    message="Certificate distribution failed",
                 )
 
     async def _copy_file(
@@ -348,7 +348,6 @@ class CertificateDistributor:
                     vm_ip,
                     username=self.config.ssh_user,
                     client_keys=[str(self.config.ssh_key_path)],
-                    known_hosts=None,
                     connect_timeout=10,
                 ) as conn:
                     remote_dir = self.config.remote_cert_dir

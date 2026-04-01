@@ -64,8 +64,8 @@ AutoBot can be deployed in various configurations depending on your needs:
 
 #### Core Dependencies
 ```bash
-# Python 3.10+
-python3 --version  # Should be 3.10 or higher
+# Python 3.12+
+python3 --version  # Should be 3.12 or higher
 
 # Node.js 18+
 node --version     # Should be 18.0.0 or higher
@@ -171,7 +171,7 @@ backend:
     - "http://127.0.0.1:5173"
 
 llm_config:
-  orchestrator_llm: "ollama_llama3.2:3b"
+  orchestrator_llm: "ollama_llama3.2:1b"
   default_llm: "ollama_llama3.2:1b"
 
 memory:

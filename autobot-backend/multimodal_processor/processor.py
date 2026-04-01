@@ -15,7 +15,6 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-import torch
 from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
@@ -26,15 +25,36 @@ from .models import MultiModalInput, ProcessingResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor
 from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType
 
-# Import torch modules for attention fusion
-try:
-    import torch.nn as nn
-
-    TORCH_NN_AVAILABLE = True
-except ImportError:
-    TORCH_NN_AVAILABLE = False
-
 logger = logging.getLogger(__name__)
+
+# Issue #3016: lazy module-level imports for torch to avoid startup cost
+_torch = None
+_torch_nn = None
+_TORCH_NN_AVAILABLE = None
+
+
+def _get_torch():
+    """Lazy-load torch on first use. Issue #3016."""
+    global _torch  # noqa: PLW0603
+    if _torch is None:
+        import torch
+
+        _torch = torch
+    return _torch
+
+
+def _get_torch_nn():
+    """Lazy-load torch.nn on first use. Issue #3016."""
+    global _torch_nn, _TORCH_NN_AVAILABLE  # noqa: PLW0603
+    if _TORCH_NN_AVAILABLE is None:
+        try:
+            import torch.nn as nn
+
+            _torch_nn = nn
+            _TORCH_NN_AVAILABLE = True
+        except ImportError:
+            _TORCH_NN_AVAILABLE = False
+    return _torch_nn, _TORCH_NN_AVAILABLE
 
 
 class UnifiedMultiModalProcessor:
@@ -44,6 +64,8 @@ class UnifiedMultiModalProcessor:
 
     def __init__(self):
         """Initialize unified processor with all modal-specific processors."""
+        torch = _get_torch()
+
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
@@ -254,7 +276,8 @@ class UnifiedMultiModalProcessor:
 
     def _initialize_fusion_components(self):
         """Initialize cross-modal attention fusion components."""
-        if not TORCH_NN_AVAILABLE:
+        nn, nn_available = _get_torch_nn()
+        if not nn_available:
             self.logger.warning("PyTorch NN modules not available for fusion")
             return
 
@@ -302,6 +325,8 @@ class UnifiedMultiModalProcessor:
         self, results: List[ProcessingResult]
     ) -> tuple:
         """Collect and filter embeddings from results (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         embeddings = []
         modalities = []
         confidences = []
@@ -333,10 +358,10 @@ class UnifiedMultiModalProcessor:
 
         return embeddings, modalities, confidences, result_data
 
-    def _normalize_embeddings(
-        self, embeddings: List[torch.Tensor]
-    ) -> List[torch.Tensor]:
+    def _normalize_embeddings(self, embeddings: list) -> list:
         """Normalize embeddings to target dimension (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         normalized_embeddings = []
         target_dim = 512
 
@@ -353,8 +378,10 @@ class UnifiedMultiModalProcessor:
 
         return normalized_embeddings
 
-    def _apply_attention_fusion(self, stacked_embeddings: torch.Tensor) -> tuple:
+    def _apply_attention_fusion(self, stacked_embeddings: Any) -> tuple:
         """Apply multi-head attention (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         use_cuda = torch.cuda.is_available()
         with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_cuda):
             attended_output, attention_weights = self.attention_layer(
@@ -362,10 +389,10 @@ class UnifiedMultiModalProcessor:
             )
         return attended_output, attention_weights
 
-    def _compute_fused_embedding(
-        self, weighted_embeddings: torch.Tensor
-    ) -> torch.Tensor:
+    def _compute_fused_embedding(self, weighted_embeddings: Any) -> Any:
         """Compute final fused embedding (Issue #315 - extracted method)"""
+        torch = _get_torch()
+
         # Prepare input for fusion network (pad to 1536 = 3 modalities * 512)
         fusion_input = torch.zeros(1536, device=self.device)
         flat_weighted = weighted_embeddings.flatten()
@@ -389,11 +416,11 @@ class UnifiedMultiModalProcessor:
 
     def _build_fusion_result(
         self,
-        fused_embedding: torch.Tensor,
+        fused_embedding: Any,
         fusion_confidence: float,
         modality_contributions: Dict[str, float],
         modalities: List[str],
-        embeddings: List[torch.Tensor],
+        embeddings: list,
         results: List[ProcessingResult],
         result_data: List[Any],
     ) -> Dict[str, Any]:
@@ -411,13 +438,15 @@ class UnifiedMultiModalProcessor:
 
     def _perform_attention_fusion(
         self,
-        embeddings: List[torch.Tensor],
+        embeddings: list,
         modalities: List[str],
         confidences: List[float],
         result_data: List[Any],
         results: List[ProcessingResult],
     ) -> Dict[str, Any]:
         """Perform attention-based fusion on embeddings. Issue #620."""
+        torch = _get_torch()
+
         with torch.no_grad():
             normalized_embeddings = self._normalize_embeddings(embeddings)
             stacked_embeddings = torch.stack(normalized_embeddings).unsqueeze(0)
@@ -662,6 +691,7 @@ class UnifiedMultiModalProcessor:
         self, batch: List[MultiModalInput]
     ) -> List[ProcessingResult]:
         """Process a batch of images efficiently"""
+        torch = _get_torch()
         results = []
 
         try:
@@ -703,6 +733,7 @@ class UnifiedMultiModalProcessor:
         self, batch: List[MultiModalInput]
     ) -> List[ProcessingResult]:
         """Process a batch of audio inputs efficiently"""
+        torch = _get_torch()
         results = []
 
         try:

@@ -189,7 +189,7 @@ class LLMResponseCache:
         Returns:
             CachedResponse if found, None otherwise
         """
-        redis_client = await get_redis_client(
+        redis_client = get_redis_client(
             async_client=True, database=self._redis_database
         )
         if not redis_client:
@@ -295,7 +295,7 @@ class LLMResponseCache:
 
         # Store in L2 Redis cache
         try:
-            redis_client = await get_redis_client(
+            redis_client = get_redis_client(
                 async_client=True, database=self._redis_database
             )
             if redis_client:
@@ -403,7 +403,7 @@ class LLMResponseCache:
             Number of entries deleted
         """
         try:
-            redis_client = await get_redis_client(
+            redis_client = get_redis_client(
                 async_client=True, database=self._redis_database
             )
             if redis_client:

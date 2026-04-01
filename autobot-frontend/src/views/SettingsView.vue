@@ -46,6 +46,13 @@ Issue #753: User preference management interface
           <i class="fas fa-microphone"></i>
           Voice
         </button>
+        <button
+          @click="activeTab = 'apikeys'"
+          :class="['settings-tab', { active: activeTab === 'apikeys' }]"
+        >
+          <i class="fas fa-key"></i>
+          {{ $t('settings.apiKeys.stepKeys') }}
+        </button>
       </div>
 
       <!-- Tab Content -->
@@ -88,7 +95,25 @@ Issue #753: User preference management interface
             <VoiceSettingsPanel />
           </div>
         </section>
+
+        <section v-if="activeTab === 'apikeys'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-key"></i>
+              {{ $t('settings.apiKeys.stepKeys') }}
+            </h2>
+            <p class="section-description">{{ $t('settings.apiKeys.configureKeysDescription') }}</p>
+          </div>
+          <div class="section-content">
+            <button class="open-wizard-btn" @click="showApiKeyWizard = true">
+              <i class="fas fa-magic"></i>
+              {{ $t('settings.apiKeys.wizardTitle') }}
+            </button>
+          </div>
+        </section>
       </div>
+
+    <ApiKeySetupWizard v-model="showApiKeyWizard" @saved="onApiKeysSaved" />
     </div>
   </div>
 </template>
@@ -97,6 +122,7 @@ Issue #753: User preference management interface
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
+import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -104,8 +130,13 @@ const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'language' | 'voice'
+type PreferenceTab = 'appearance' | 'language' | 'voice' | 'apikeys'
 const activeTab = ref<PreferenceTab>('appearance')
+const showApiKeyWizard = ref(false)
+
+function onApiKeysSaved(): void {
+  logger.info('API keys saved successfully')
+}
 </script>
 
 <style scoped>
@@ -278,5 +309,22 @@ const activeTab = ref<PreferenceTab>('appearance')
   .section-content {
     padding: var(--spacing-md);
   }
+}
+.open-wizard-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.open-wizard-btn:hover {
+  opacity: 0.9;
 }
 </style>

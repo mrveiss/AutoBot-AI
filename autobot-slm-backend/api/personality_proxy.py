@@ -21,6 +21,7 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
+
 from services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,9 @@ AUTOBOT_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
 
 _MUTATION_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
 _TIMEOUT = 15.0
+# TLS verification for proxy calls to the main backend.
+# Set AUTOBOT_SKIP_TLS_VERIFY=true ONLY in dev/test with self-signed certs (#2852).
+_VERIFY_TLS = os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
 async def _proxy_to_main_backend(request: Request, path: str) -> Response:
@@ -52,9 +56,7 @@ async def _proxy_to_main_backend(request: Request, path: str) -> Response:
     target_url = f"{AUTOBOT_BACKEND_URL}/api/personality/{path}"
 
     try:
-        async with httpx.AsyncClient(
-            verify=False, timeout=_TIMEOUT
-        ) as client:  # nosec B501 — self-signed internal cert
+        async with httpx.AsyncClient(verify=_VERIFY_TLS, timeout=_TIMEOUT) as client:
             response = await client.request(
                 method=request.method,
                 url=target_url,

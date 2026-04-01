@@ -14,10 +14,10 @@ from typing import Dict, List, Set
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
-from utils.background_task_manager import BackgroundTaskManager
-from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.background_task_manager import BackgroundTaskManager
+from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root
@@ -439,7 +439,7 @@ async def _scan_filesystem_imports(
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
     # Prioritize source directories over infrastructure/tooling (#1197)
-    _priority = {"autobot-backend", "autobot-shared"}
+    _priority = {"autobot-backend", "autobot_shared"}
     python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)
     for py_file in python_files[:1500]:  # Cover all backend+shared files
         await _analyze_file_imports(

@@ -7,7 +7,7 @@ This document describes the GitHub Actions CI/CD pipeline setup for the AutoBot 
 
 ### 1. Security Tests Job (`security-tests`)
 **Triggers:** Push to `main` or `Dev_new_gui` branches, PRs to `main`
-**Environment:** Ubuntu Latest with Python 3.10 & 3.11
+**Environment:** Ubuntu Latest with Python 3.12
 
 **Steps:**
 - Code quality checks (black, isort, flake8)
@@ -93,7 +93,7 @@ docker run --rm autobot-sandbox:latest echo "Sandbox test successful"
 ## Pipeline Features
 
 ### ✅ Implemented Features
-- Multi-Python version testing (3.10, 3.11)
+- Python 3.12 testing
 - Comprehensive security testing suite
 - Code quality enforcement
 - Docker sandbox validation

@@ -32,7 +32,6 @@ DEFAULT_RETENTION_HOURS = 24
 AUTOBOT_PROCESS_KEYWORDS = [
     "autobot",
     "fast_app_factory",
-    "run_autobot",
     "npu-worker",
     "ai-stack",
     "browser-service",

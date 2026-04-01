@@ -1,66 +1,213 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap')
+layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+@theme {
+  --color-blueGray-50: #f8fafc;
+  --color-blueGray-100: #f1f5f9;
+  --color-blueGray-200: #e2e8f0;
+  --color-blueGray-300: #cbd5e1;
+  --color-blueGray-400: #94a3b8;
+  --color-blueGray-500: #64748b;
+  --color-blueGray-600: #475569;
+  --color-blueGray-700: #334155;
+  --color-blueGray-800: #1e293b;
+  --color-blueGray-900: #0f172a;
+
+  --color-electric-50: #eff6ff;
+  --color-electric-100: #dbeafe;
+  --color-electric-200: #bfdbfe;
+  --color-electric-300: #93c5fd;
+  --color-electric-400: #60a5fa;
+  --color-electric-500: #3b82f6;
+  --color-electric-600: #2563eb;
+  --color-electric-700: #1d4ed8;
+  --color-electric-800: #1e40af;
+  --color-electric-900: #1e3a8a;
+  --color-electric-950: #172554;
+
+  --color-autobot-primary: var(--color-primary);
+  --color-autobot-primary-hover: var(--color-primary-hover);
+  --color-autobot-primary-active: var(--color-primary-active);
+  --color-autobot-primary-light: var(--color-primary-light);
+  --color-autobot-primary-dark: var(--color-primary-dark);
+  --color-autobot-primary-bg: var(--color-primary-bg);
+  --color-autobot-secondary: var(--color-secondary);
+  --color-autobot-secondary-hover: var(--color-secondary-hover);
+  --color-autobot-secondary-light: var(--color-secondary-light);
+  --color-autobot-success: var(--color-success);
+  --color-autobot-success-hover: var(--color-success-hover);
+  --color-autobot-success-light: var(--color-success-light);
+  --color-autobot-success-bg: var(--color-success-bg);
+  --color-autobot-warning: var(--color-warning);
+  --color-autobot-warning-hover: var(--color-warning-hover);
+  --color-autobot-warning-light: var(--color-warning-light);
+  --color-autobot-warning-bg: var(--color-warning-bg);
+  --color-autobot-error: var(--color-error);
+  --color-autobot-error-hover: var(--color-error-hover);
+  --color-autobot-error-light: var(--color-error-light);
+  --color-autobot-error-bg: var(--color-error-bg);
+  --color-autobot-info: var(--color-info);
+  --color-autobot-info-hover: var(--color-info-hover);
+  --color-autobot-info-light: var(--color-info-light);
+  --color-autobot-info-bg: var(--color-info-bg);
+  --color-autobot-bg-primary: var(--bg-primary);
+  --color-autobot-bg-secondary: var(--bg-secondary);
+  --color-autobot-bg-tertiary: var(--bg-tertiary);
+  --color-autobot-bg-elevated: var(--bg-elevated);
+  --color-autobot-bg-surface: var(--bg-surface);
+  --color-autobot-bg-card: var(--bg-card);
+  --color-autobot-bg-input: var(--bg-input);
+  --color-autobot-bg-hover: var(--bg-hover);
+  --color-autobot-bg-active: var(--bg-active);
+  --color-autobot-text-primary: var(--text-primary);
+  --color-autobot-text-secondary: var(--text-secondary);
+  --color-autobot-text-tertiary: var(--text-tertiary);
+  --color-autobot-text-muted: var(--text-muted);
+  --color-autobot-text-inverse: var(--text-inverse);
+  --color-autobot-text-link: var(--text-link);
+  --color-autobot-border: var(--border-default);
+  --color-autobot-border-subtle: var(--border-subtle);
+  --color-autobot-border-strong: var(--border-strong);
+  --color-autobot-chart-1: var(--chart-1);
+  --color-autobot-chart-2: var(--chart-2);
+  --color-autobot-chart-3: var(--chart-3);
+  --color-autobot-chart-4: var(--chart-4);
+  --color-autobot-chart-5: var(--chart-5);
+  --color-autobot-chart-6: var(--chart-6);
+  --color-autobot-chart-7: var(--chart-7);
+  --color-autobot-chart-8: var(--chart-8);
+  --color-autobot-chart-9: var(--chart-9);
+  --color-autobot-chart-10: var(--chart-10);
+
+  --background-color-surface: var(--bg-surface);
+  --background-color-elevated: var(--bg-elevated);
+  --background-color-card: var(--card-bg);
+  --background-color-input: var(--input-bg);
+
+  --text-color-primary: var(--text-primary);
+  --text-color-secondary: var(--text-secondary);
+  --text-color-muted: var(--text-muted);
+  --text-color-inverse: var(--text-inverse);
+
+  --border-color-default: var(--border-default);
+  --border-color-subtle: var(--border-subtle);
+  --border-color-strong: var(--border-strong);
+  --border-color-focus: var(--border-focus);
+
+  --radius: var(--radius-default);
+
+  --shadow: var(--shadow-md);
+  --shadow-xl-soft:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  --z-index-dropdown: var(--z-dropdown);
+  --z-index-sticky: var(--z-sticky);
+  --z-index-fixed: var(--z-fixed);
+  --z-index-modal-backdrop: var(--z-modal-backdrop);
+  --z-index-modal: var(--z-modal);
+  --z-index-popover: var(--z-popover);
+  --z-index-tooltip: var(--z-tooltip);
+  --z-index-toast: var(--z-toast);
+  --z-index-max: var(--z-maximum);
+
+  --transition-duration-75: var(--duration-75);
+  --transition-duration-100: var(--duration-100);
+  --transition-duration-150: var(--duration-150);
+  --transition-duration-200: var(--duration-200);
+  --transition-duration-300: var(--duration-300);
+  --transition-duration-500: var(--duration-500);
+  --transition-duration-700: var(--duration-700);
+  --transition-duration-1000: var(--duration-1000);
+
+  --height-header: var(--header-height);
+  --height-screen-minus-header: var(--view-min-height);
+
+  --width-sidebar: var(--sidebar-width);
+  --width-sidebar-collapsed: var(--sidebar-width-collapsed);
+
+  --container-content: var(--content-max-width);
+
+  --min-height-view: var(--view-min-height);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility btn {
+  /* Vue Notus inspired component styles */
+  @apply font-bold py-2 px-4 rounded inline-flex items-center transition-all duration-150 ease-linear;
+}
+
+@utility btn-primary {
+  @apply bg-indigo-500 text-white hover:bg-indigo-700 hover:shadow-lg;
+}
+
+@utility btn-secondary {
+  @apply bg-blueGray-700 text-white hover:bg-blueGray-800 hover:shadow-lg;
+}
+
+@utility btn-success {
+  @apply bg-emerald-500 text-white hover:bg-emerald-700 hover:shadow-lg;
+}
+
+@utility btn-danger {
+  @apply bg-red-500 text-white hover:bg-red-700 hover:shadow-lg;
+}
+
+@utility btn-outline {
+  @apply bg-transparent text-blueGray-700 border border-blueGray-500 hover:bg-blueGray-500 hover:text-white;
+}
+
+@utility card {
+  @apply relative flex flex-col min-w-0 wrap-break-word bg-white rounded-lg shadow-xl-soft;
+}
+
+@utility card-header {
+  @apply bg-transparent first:rounded-t-lg px-6 py-4;
+}
+
+@utility card-body {
+  @apply flex-auto px-6 py-4;
+}
+
+@utility nav-link {
+  @apply text-blueGray-700 hover:text-blueGray-500 px-3 py-2 flex items-center text-xs uppercase font-bold transition-all duration-150;
+}
+
+@utility nav-link-active {
+  @apply text-indigo-500 hover:text-indigo-700;
+}
+
+@utility input-field {
+  @apply border-0 px-3 py-3 placeholder-blueGray-300 text-blueGray-600 bg-white rounded text-sm shadow focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-full ease-linear transition-all duration-150;
+}
+
+@utility label {
+  @apply block uppercase text-blueGray-600 text-xs font-bold mb-2;
+}
 
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
-  }
-}
-
-@layer components {
-  /* Vue Notus inspired component styles */
-  .btn {
-    @apply font-bold py-2 px-4 rounded inline-flex items-center transition-all duration-150 ease-linear;
-  }
-
-  .btn-primary {
-    @apply bg-indigo-500 text-white hover:bg-indigo-700 hover:shadow-lg;
-  }
-
-  .btn-secondary {
-    @apply bg-blueGray-700 text-white hover:bg-blueGray-800 hover:shadow-lg;
-  }
-
-  .btn-success {
-    @apply bg-emerald-500 text-white hover:bg-emerald-700 hover:shadow-lg;
-  }
-
-  .btn-danger {
-    @apply bg-red-500 text-white hover:bg-red-700 hover:shadow-lg;
-  }
-
-  .btn-outline {
-    @apply bg-transparent text-blueGray-700 border border-blueGray-500 hover:bg-blueGray-500 hover:text-white;
-  }
-
-  .card {
-    @apply relative flex flex-col min-w-0 break-words bg-white rounded-lg shadow-xl-soft;
-  }
-
-  .card-header {
-    @apply bg-transparent first:rounded-t-lg px-6 py-4;
-  }
-
-  .card-body {
-    @apply flex-auto px-6 py-4;
-  }
-
-  .nav-link {
-    @apply text-blueGray-700 hover:text-blueGray-500 px-3 py-2 flex items-center text-xs uppercase font-bold transition-all duration-150;
-  }
-
-  .nav-link-active {
-    @apply text-indigo-500 hover:text-indigo-700;
-  }
-
-  .input-field {
-    @apply border-0 px-3 py-3 placeholder-blueGray-300 text-blueGray-600 bg-white rounded text-sm shadow focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full ease-linear transition-all duration-150;
-  }
-
-  .label {
-    @apply block uppercase text-blueGray-600 text-xs font-bold mb-2;
   }
 }

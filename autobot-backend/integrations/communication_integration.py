@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,

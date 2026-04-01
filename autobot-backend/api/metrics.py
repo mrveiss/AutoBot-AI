@@ -9,13 +9,13 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from fastapi import APIRouter, HTTPException, Query
+
 # Prometheus query helpers shared from monitoring module (Issue #1283)
 from api.monitoring import _query_prometheus_range
-from fastapi import APIRouter, HTTPException, Query
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

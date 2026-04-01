@@ -20,7 +20,7 @@
 #   npu, npu-worker      - NPU worker deploy + restart tasks
 #   browser, browser-worker - browser worker deploy + restart tasks
 #   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
-#   shared               - autobot-shared deploy tasks (all nodes)
+#   shared               - autobot_shared deploy tasks (all nodes)
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -111,7 +111,7 @@
       loop:
         - { name: slm-backend, path: autobot-slm-backend/ }
         - { name: slm-frontend, path: autobot-slm-frontend/ }
-        - { name: shared, path: autobot-shared/ }
+        - { name: shared, path: autobot_shared/ }
         - { name: backend, path: autobot-backend/ }
         - { name: frontend, path: autobot-frontend/ }
         - { name: npu-worker, path: autobot-npu-worker/ }
@@ -136,7 +136,7 @@
       shell: >-
         git -C {{ git_repo_root }} diff --name-only
         {{ prev_commit.stdout | default('HEAD') }} HEAD
-        -- '*/requirements.txt' 'autobot-shared/setup.py' 'autobot-shared/pyproject.toml'
+        -- '*/requirements.txt' 'autobot_shared/setup.py' 'autobot_shared/pyproject.toml'
       register: python_deps_diff
       changed_when: false
       failed_when: false
@@ -222,7 +222,7 @@
       become: true
       tags: [slm, slm-frontend]
 
-    - name: "[PLAY 1] SLM | Deploy autobot-shared"
+    - name: "[PLAY 1] SLM | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -239,7 +239,7 @@
       loop:
         - autobot-slm-backend
         - autobot-slm-frontend
-        - autobot-shared
+        - autobot_shared
       tags: [slm]
 
     # --- SLM custom migrations (#1630) ---
@@ -286,9 +286,12 @@
       command:
         cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
              -r /opt/autobot/autobot-slm-backend/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when: hostvars['localhost']['python_deps_changed'] | bool
       register: slm_pip_install
       tags: [slm, slm-backend, deps]
@@ -443,7 +446,7 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend]
 
-    - name: "[PLAY 2] Backend | Deploy autobot-shared"
+    - name: "[PLAY 2] Backend | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -460,13 +463,25 @@
 
     - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
       file:
-        path: /opt/autobot/autobot-shared
+        path: /opt/autobot/autobot_shared
         owner: autobot
         group: autobot
         recurse: true
       become: true
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, shared]
+
+    - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
+      ansible.builtin.file:
+        src: /opt/autobot/autobot_shared
+        dest: /opt/autobot/autobot-backend/autobot_shared
+        state: link
+        force: true
+        owner: autobot
+        group: autobot
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared, symlink]
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
@@ -480,9 +495,12 @@
       command:
         cmd: /opt/autobot/autobot-backend/venv/bin/pip install
              -r /opt/autobot/autobot-backend/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - "'01-Backend' in inventory_hostname"
         - hostvars['localhost']['python_deps_changed'] | bool
@@ -510,6 +528,38 @@
         - backend_migration_result is defined
         - backend_migration_result.rc | default(0) != 0
       tags: [backend, migrate]
+
+    - name: "[PLAY 2] Backend | Read existing secret key before .env regen (#2649)"
+      ansible.builtin.shell:
+        cmd: grep '^SECRET_KEY=' /opt/autobot/autobot-backend/.env | cut -d= -f2-
+      register: existing_secret_key
+      become: true
+      become_user: autobot
+      when: "'01-Backend' in inventory_hostname"
+      failed_when: false
+      changed_when: false
+      tags: [backend, env]
+
+    - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
+      ansible.builtin.include_vars:
+        file: vars/backend-env.yml
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, env]
+
+    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
+      ansible.builtin.template:
+        src: ../roles/backend/templates/backend.env.j2
+        dest: /opt/autobot/autobot-backend/.env
+        mode: "0600"
+        owner: autobot
+        group: autobot
+        backup: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      vars:
+        # backend_secret_key uses a register var specific to this playbook
+        backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
+      tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
@@ -619,9 +669,12 @@
       command:
         cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
              -r /opt/autobot/autobot-npu-worker/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
           '03-NPU' in inventory_hostname or
@@ -692,9 +745,12 @@
       command:
         cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
              -r /opt/autobot/autobot-browser-worker/requirements.txt
-             --quiet
+             --quiet --timeout 120
       become: true
       become_user: autobot
+      environment:
+        PIP_DEFAULT_TIMEOUT: "120"
+      timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
       when:
         - >-
           '05-Browser' in inventory_hostname or
@@ -728,7 +784,7 @@
       tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
-    - name: "[PLAY 2] Shared | Deploy autobot-shared"
+    - name: "[PLAY 2] Shared | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
@@ -738,7 +794,7 @@
 
     - name: "[PLAY 2] Shared | Fix ownership"
       file:
-        path: /opt/autobot/autobot-shared
+        path: /opt/autobot/autobot_shared
         owner: autobot
         group: autobot
         recurse: true

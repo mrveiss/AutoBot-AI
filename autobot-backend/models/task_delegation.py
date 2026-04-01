@@ -12,7 +12,9 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -37,7 +39,7 @@ class TaskDelegation(Base, TimestampMixin):
 
     __tablename__ = "task_delegations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     delegator_id = Column(String(255), nullable=False, index=True)
     assignee_id = Column(String(255), nullable=False, index=True)
     task_description = Column(Text, nullable=False)

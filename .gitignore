@@ -434,6 +434,7 @@ ansible/inventory/group_vars/vault.yml
 
 .claude/agents-optimized/
 .claude/.optimization_cache.json
+.claude/settings.local.json
 
 # Git worktrees for isolated development
 .worktrees/

@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from knowledge.embedding_cache import get_embedding_cache
-from worker_node import WorkerNode
 
 from autobot_shared.logging_manager import get_llm_logger
+from knowledge.embedding_cache import get_embedding_cache
+from worker_node import WorkerNode
 
 logger = get_llm_logger("code_embedding_generator")
 

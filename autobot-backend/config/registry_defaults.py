@@ -15,65 +15,75 @@ Issue: #751 - Consolidate Common Utilities
 
 from typing import Optional
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import (
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_LLM_MODEL,
+    get_config,
+)
+
+# Populate defaults from the SSOT config (Issue #2671)
+# All values sourced from autobot_shared.ssot_config → .env → pydantic defaults
+_ssot = get_config()
 
 # VM IP addresses (6-VM distributed architecture + SLM admin)
 REGISTRY_DEFAULTS = {
-    # VM IPs
-    "vm.main": "172.16.168.20",
-    "vm.frontend": "172.16.168.21",
-    "vm.npu": "172.16.168.22",
-    "vm.redis": "172.16.168.23",
-    "vm.aistack": "172.16.168.24",
-    "vm.browser": "172.16.168.25",
-    "vm.slm": "172.16.168.19",  # Issue #768: SLM admin server
-    "vm.ollama": "127.0.0.1",
+    # VM IPs — sourced from SSOT VMConfig
+    "vm.main": _ssot.vm.main,
+    "vm.frontend": _ssot.vm.frontend,
+    "vm.npu": _ssot.vm.npu,
+    "vm.redis": _ssot.vm.redis,
+    "vm.aistack": _ssot.vm.aistack,
+    "vm.browser": _ssot.vm.browser,
+    "vm.slm": _ssot.vm.slm,  # Issue #768: SLM admin server
+    "vm.ollama": _ssot.vm.ollama,
     # Provider-agnostic LLM service — autobot-llm-gpu (.20) hosts Ollama for GPU (#1193)
-    "vm.llm": "172.16.168.20",  # autobot-llm-gpu (Main Backend, RTX 4070)
-    # Convenience aliases
-    "redis.host": "172.16.168.23",
-    "redis.port": "6379",
-    "backend.host": "172.16.168.20",
-    "backend.port": "8001",
-    "frontend.host": "172.16.168.21",
-    "frontend.port": "5173",
-    "npu.host": "172.16.168.22",
-    "npu.port": "8081",
-    "aistack.host": "172.16.168.24",
-    "aistack.port": "8080",
-    "browser.host": "172.16.168.25",
-    "browser.port": "3000",
-    "slm.host": "172.16.168.19",  # Issue #768
-    "slm.port": "8000",  # Issue #768
-    # Ports (for port.X access pattern)
-    "port.backend": "8001",
-    "port.frontend": "5173",
-    "port.redis": "6379",
-    "port.ollama": "11434",
-    "port.llm": "11434",  # Provider-agnostic LLM port (defaults to Ollama)
-    "port.vnc": "6080",
-    "port.browser": "3000",
-    "port.aistack": "8080",
-    "port.npu": "8081",
-    "port.npu_windows": "8081",
-    "port.slm": "8000",  # Issue #768: SLM admin server
-    "port.prometheus": "9090",
-    "port.grafana": "3000",
-    # LLM defaults
+    "vm.llm": _ssot.vm.main,  # autobot-llm-gpu (Main Backend, RTX 4070)
+    # Convenience aliases — sourced from SSOT VMConfig + PortConfig
+    "redis.host": _ssot.vm.redis,
+    "redis.port": str(_ssot.port.redis),
+    "backend.host": _ssot.vm.main,
+    "backend.port": str(_ssot.port.backend),
+    "frontend.host": _ssot.vm.frontend,
+    "frontend.port": str(_ssot.port.frontend),
+    "npu.host": _ssot.vm.npu,
+    "npu.port": str(_ssot.port.npu),
+    "aistack.host": _ssot.vm.aistack,
+    "aistack.port": str(_ssot.port.aistack),
+    "browser.host": _ssot.vm.browser,
+    "browser.port": str(_ssot.port.browser),
+    "slm.host": _ssot.vm.slm,  # Issue #768
+    "slm.port": str(_ssot.port.slm),  # Issue #768
+    # Ports (for port.X access pattern) — sourced from SSOT PortConfig
+    "port.backend": str(_ssot.port.backend),
+    "port.frontend": str(_ssot.port.frontend),
+    "port.redis": str(_ssot.port.redis),
+    "port.ollama": str(_ssot.port.ollama),
+    "port.llm": str(
+        _ssot.port.ollama
+    ),  # Provider-agnostic LLM port (defaults to Ollama)
+    "port.vnc": str(_ssot.port.vnc),
+    "port.browser": str(_ssot.port.browser),
+    "port.aistack": str(_ssot.port.aistack),
+    "port.npu": str(_ssot.port.npu),
+    "port.npu_windows": str(_ssot.port.npu),
+    "port.slm": str(_ssot.port.slm),  # Issue #768: SLM admin server
+    "port.prometheus": str(_ssot.port.prometheus),
+    "port.grafana": str(_ssot.port.grafana),
+    # LLM defaults — sourced from SSOT model constants
     "llm.default_model": DEFAULT_LLM_MODEL,
-    "llm.embedding_model": "nomic-embed-text:latest",
+    "llm.embedding_model": DEFAULT_EMBEDDING_MODEL,
     # Timeouts
     "timeout.http": "30",
     "timeout.redis": "5",
     "timeout.llm": "120",
-    # TLS Configuration (Issue #164)
+    # TLS Configuration (Issue #164) — sourced from SSOT TLSConfig
     "tls.redis_enabled": "false",
     "tls.backend_enabled": "false",
     "tls.frontend_enabled": "false",
     "tls.slm_enabled": "false",
-    "tls.frontend_port": "443",
-    "tls.backend_port": "8443",
-    "tls.slm_port": "443",
+    "tls.frontend_port": str(_ssot.tls.frontend_tls_port),
+    "tls.backend_port": str(_ssot.tls.backend_tls_port),
+    "tls.slm_port": str(_ssot.tls.slm_tls_port),
     "tls.cert_path": "/etc/ssl/autobot",
     "tls.ca_cert": "/etc/ssl/autobot/ca.crt",
 }

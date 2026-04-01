@@ -4,7 +4,7 @@
 all:
   vars:
     ansible_user: autobot
-    ansible_ssh_private_key_file: ~/.ssh/autobot_key
+    ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     python_interpreter: /usr/bin/python3
 
   children:
@@ -47,3 +47,17 @@ all:
           hosts:
             autobot-redis:
               ansible_host: 192.168.1.150
+
+# Cross-inventory aliases (#2515)
+# Ensure group names from production.yml resolve in hosts-router.yml.
+aiml:
+  children:
+    ai_stack:
+
+npu:
+  children:
+    npu_workers:
+
+redis:
+  children:
+    database:

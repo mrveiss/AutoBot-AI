@@ -122,11 +122,11 @@ const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) =
 #### Focus Styling
 ```css
 .file-table tbody tr:focus {
-  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
 }
 
 .file-table tbody tr:focus-visible {
-  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
 }
 ```
 

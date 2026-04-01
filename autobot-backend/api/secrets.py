@@ -28,16 +28,16 @@ from enum import Enum
 from time import time
 from typing import Dict, List, Optional
 
-from auth_middleware import check_admin_permission
-from autobot_memory_graph import AutoBotMemoryGraph
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from middleware.proxy_utils import get_client_ip
 from pydantic import BaseModel, Field, field_validator
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from middleware.proxy_utils import get_client_ip
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -267,8 +267,10 @@ class SecretsManager:
                 key = f.read()
         else:
             key = Fernet.generate_key()
+            # Fernet key must persist to decrypt secrets on next startup;
+            # secured by 0o600 file permissions.
             with open(self.key_file, "wb") as f:
-                f.write(key)
+                f.write(key)  # lgtm[py/clear-text-storage-sensitive-data]
             os.chmod(self.key_file, 0o600)  # Restrict permissions
 
         self.cipher = Fernet(key)

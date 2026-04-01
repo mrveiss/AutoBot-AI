@@ -13,6 +13,10 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import Node, Setting
 from models.schemas import (
     NPUCapabilities,
@@ -29,9 +33,6 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/npu", tags=["npu"])

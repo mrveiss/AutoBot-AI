@@ -574,6 +574,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* Container styling matching browser/desktop design */
 .terminal-container {
   @apply flex flex-col h-full bg-white border-0 border-t border-l border-r border-gray-300 overflow-hidden;
@@ -740,7 +741,7 @@ onUnmounted(() => {
 }
 
 .command-input {
-  @apply flex-1 bg-transparent border-none text-green-400 outline-none py-1;
+  @apply flex-1 bg-transparent border-none text-green-400 outline-hidden py-1;
   font-family: inherit;
   font-size: inherit;
 }

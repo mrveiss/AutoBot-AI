@@ -20,7 +20,12 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
 from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -36,12 +41,7 @@ from code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 from utils.background_task_manager import BackgroundTaskManager
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -1759,6 +1759,8 @@ async def get_performance_score(
     Get performance health score for a codebase.
 
     Issue #744: Requires admin authentication.
+    Issue #2655: Return no_data (200) instead of 400 when path does not exist
+    so the frontend can display an informative message without treating it as an error.
 
     Returns a score from 0-100 based on the number and severity
     of performance issues detected. Higher scores indicate
@@ -1766,9 +1768,14 @@ async def get_performance_score(
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
+        logger.warning("Performance score: path does not exist: %s", path)
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "no_data",
+                "message": f"Path does not exist: {path}",
+                "performance_score": 0,
+            },
         )
 
     try:
@@ -2225,13 +2232,25 @@ async def start_security_analysis(
     path: str = Query(..., description="Directory path to analyze"),
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Start background security score analysis (#1304)."""
+    """Start background security score analysis (#1304).
+
+    Issue #2655: Return a completed no_data task instead of 400 when the path
+    does not exist. This allows the frontend to display an informative message
+    rather than treating a missing path as a hard error.
+    """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
+        logger.warning("Security score analysis: path does not exist: %s", path)
+        task_id = await _sec_manager.create_task(params={"path": path})
+        await _sec_manager.complete_task(
+            task_id,
+            {
+                "status": "no_data",
+                "message": f"Path does not exist: {path}",
+                "security_score": 0,
+            },
         )
+        return {"task_id": task_id, "status": "completed"}
     task_id = await _sec_manager.create_task(params={"path": path})
     background_tasks.add_task(_run_security_analysis, task_id, path)
     return {"task_id": task_id, "status": "pending"}

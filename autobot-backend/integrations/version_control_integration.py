@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import aiohttp
+
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -62,7 +63,7 @@ class GitLabIntegration(BaseIntegration):
             logger.error("GitLab connection test failed: %s", str(e))
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
-                message=f"Connection failed: {str(e)}",
+                message="Connection failed",
                 last_checked=datetime.utcnow(),
             )
 
@@ -316,7 +317,7 @@ class BitbucketIntegration(BaseIntegration):
             logger.error("Bitbucket connection test failed: %s", str(e))
             return IntegrationHealth(
                 status=IntegrationStatus.UNHEALTHY,
-                message=f"Connection failed: {str(e)}",
+                message="Connection failed",
                 last_checked=datetime.utcnow(),
             )
 

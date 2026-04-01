@@ -156,7 +156,7 @@ test_no_vulnerable_scripts() {
     log_info "Test 5: Checking for vulnerable SSH usage in scripts..."
 
     local vulnerable_count
-    vulnerable_count=$(grep -r "StrictHostKeyChecking=no" \
+    vulnerable_count=$(grep -r "StrictHostKeyChecking=accept-new" \
         /home/kali/Desktop/AutoBot/scripts/ 2>/dev/null | wc -l)
 
     if [ "$vulnerable_count" -eq 0 ]; then
@@ -164,7 +164,7 @@ test_no_vulnerable_scripts() {
         ((PASSED_TESTS++))
         return 0
     else
-        log_fail "Found $vulnerable_count instances of StrictHostKeyChecking=no in scripts"
+        log_fail "Found $vulnerable_count instances of StrictHostKeyChecking=accept-new in scripts"
         log_info "Scripts still need remediation"
         ((FAILED_TESTS++))
         return 1

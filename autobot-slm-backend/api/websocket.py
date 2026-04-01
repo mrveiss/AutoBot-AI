@@ -9,12 +9,45 @@ Provides real-time updates for deployments and system events.
 
 import asyncio
 import logging
-from typing import Dict, Set
+import time
+from typing import Dict, Optional, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from services.auth import auth_service
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
+
+
+async def _authenticate_websocket_token(websocket: WebSocket) -> Optional[dict]:
+    """Authenticate a WebSocket connection via the ``token`` query parameter.
+
+    Reads the ``token`` query parameter, validates it as a JWT using the
+    existing auth service, and returns the decoded payload on success.
+    On failure the socket is closed with code 4001 before it is accepted,
+    and ``None`` is returned.  Callers must return immediately when ``None``
+    is received.
+
+    Args:
+        websocket: The incoming WebSocket connection (not yet accepted).
+
+    Returns:
+        Decoded JWT payload dict, or ``None`` if authentication failed.
+    """
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        logger.warning("WebSocket connection rejected: missing token")
+        return None
+
+    payload = auth_service.decode_token(token)
+    if not payload:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        logger.warning("WebSocket connection rejected: invalid token")
+        return None
+
+    return payload
 
 
 class ConnectionManager:
@@ -204,6 +237,34 @@ class ConnectionManager:
         # Broadcast to node-specific channel
         await self.broadcast(f"node:{node_id}", event_message)
 
+    async def send_provision_log(self, log_type: str, message: str) -> None:
+        """Send a provisioning log line to watchers (#2754)."""
+        await self.broadcast(
+            "provision",
+            {
+                "type": "log",
+                "log_type": log_type,
+                "message": message,
+            },
+        )
+
+    async def send_provision_status(
+        self, status: str, stage: str = "", elapsed: float = 0, error: str | None = None
+    ) -> None:
+        """Send a provisioning status update to watchers (#2754)."""
+
+        await self.broadcast(
+            "provision",
+            {
+                "type": "status",
+                "status": status,
+                "stage": stage,
+                "elapsed_seconds": round(elapsed, 1),
+                "error": error,
+                "timestamp": time.time(),
+            },
+        )
+
 
 # Global connection manager instance
 ws_manager = ConnectionManager()
@@ -212,6 +273,9 @@ ws_manager = ConnectionManager()
 @router.websocket("/deployments/{deployment_id}")
 async def deployment_websocket(websocket: WebSocket, deployment_id: str):
     """WebSocket endpoint for watching deployment progress."""
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = f"deployment:{deployment_id}"
     await ws_manager.connect(websocket, channel)
 
@@ -250,6 +314,9 @@ async def deployment_websocket(websocket: WebSocket, deployment_id: str):
 @router.websocket("/events")
 async def events_websocket(websocket: WebSocket):
     """WebSocket endpoint for global system events."""
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = "events:global"
     await ws_manager.connect(websocket, channel)
 
@@ -291,6 +358,9 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
 
     Clients receive only events for the specified node_id.
     """
+    if not await _authenticate_websocket_token(websocket):
+        return
+
     channel = f"node:{node_id}"
     await ws_manager.connect(websocket, channel)
 
@@ -318,5 +388,38 @@ async def node_events_websocket(websocket: WebSocket, node_id: str):
         logger.debug("Client disconnected from node %s events", node_id)
     except Exception as e:
         logger.error("WebSocket error for node %s: %s", node_id, e)
+    finally:
+        await ws_manager.disconnect(websocket, channel)
+
+
+@router.websocket("/provision")
+async def provision_websocket(websocket: WebSocket):
+    """WebSocket endpoint for watching provisioning progress (#2754)."""
+    if not await _authenticate_websocket_token(websocket):
+        return
+
+    channel = "provision"
+    await ws_manager.connect(websocket, channel)
+
+    try:
+        await websocket.send_json(
+            {"type": "connected", "message": "Connected to provision stream"}
+        )
+
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+    except WebSocketDisconnect:
+        logger.debug("Client disconnected from provision stream")
+    except Exception as e:
+        logger.error("WebSocket error for provision: %s", e)
     finally:
         await ws_manager.disconnect(websocket, channel)

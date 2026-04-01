@@ -9,11 +9,12 @@ This creates a completely new knowledge base instance for testing the fixes
 import asyncio
 import logging
 
-from auth_middleware import check_admin_permission
-from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, Request
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_management.types import DATABASE_MAPPING
+from constants.threshold_constants import TimingConstants
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -146,7 +147,7 @@ async def debug_redis_connection():
 
         return {
             "redis_connection": "successful",
-            "database": 1,
+            "database": DATABASE_MAPPING["knowledge"],
             "vector_keys_found": len(vector_keys),
             "sample_keys": vector_keys[:5],
             "indexed_documents": indexed_docs,

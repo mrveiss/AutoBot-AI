@@ -18,10 +18,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from auth_middleware import check_admin_permission
-from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +214,7 @@ BUILTIN_CHECKS: dict[str, CheckDefinition] = {
         category=CheckCategory.QUALITY,
         severity=CheckSeverity.WARN,
         pattern=r"except\s*(?:\w+\s*)?:\s*(?:pass|\.\.\.)\s*$",
-        description="Empty exception handler found",
+        description="Empty exception handler found (note: may match inside multi-line strings #2911)",
         suggestion="Add proper error handling or logging",
         file_patterns=["*.py"],
     ),
@@ -919,8 +920,8 @@ def get_demo_content(filepath: str) -> str:
 import os
 
 # Configuration
-password = "admin123"  # TODO: move to env
-api_key = "sk-1234567890abcdef1234567890abcdef"
+password = "admin123"  # noqa: S105 — intentional demo credential for analyzer testing
+api_key = "sk-1234567890abcdef1234567890abcdef"  # noqa: S105 — intentional demo credential
 
 def process_data(items):
     for item in items:

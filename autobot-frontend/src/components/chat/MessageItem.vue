@@ -166,6 +166,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import ApprovalRequestCard from './ApprovalRequestCard.vue'
 import CitationsDisplay from './CitationsDisplay.vue'
 import MessageAttachments from './MessageAttachments.vue'
+import { sanitizeChatHtml } from '@/utils/sanitize'
 
 interface Props {
   message: ChatMessage
@@ -305,11 +306,12 @@ const formattedContent = computed(() => {
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
   )
 
-  return content
+  return sanitizeChatHtml(content)
 })
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200;
   max-width: 85%;

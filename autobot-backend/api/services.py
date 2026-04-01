@@ -11,10 +11,10 @@ import time
 from datetime import datetime
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality

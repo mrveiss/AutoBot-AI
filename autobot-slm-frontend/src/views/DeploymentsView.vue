@@ -604,7 +604,7 @@ function getNodeHostname(nodeId: string): string {
             rollbackNotification.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
           ]"
         >
-          <div :class="['flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
+          <div :class="['shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
             rollbackNotification.success ? 'bg-green-100' : 'bg-red-100'
           ]">
             <svg
@@ -841,7 +841,7 @@ function getNodeHostname(nodeId: string): string {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getStatusIcon(deployment.status)" />
                     </svg>
                     <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(deployment.status)]">
-                      {{ deployment.status.replace('_', ' ') }}
+                      {{ deployment.status.replaceAll('_', ' ') }}
                     </span>
                   </div>
                 </td>
@@ -853,7 +853,7 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded"
+                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
                     >
                       {{ role }}
                     </span>
@@ -1031,7 +1031,7 @@ function getNodeHostname(nodeId: string): string {
               <tr v-for="deployment in bgDeployments" :key="deployment.bg_deployment_id" class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(deployment.status)]">
-                    {{ deployment.status.replace('_', ' ') }}
+                    {{ deployment.status.replaceAll('_', ' ') }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -1051,7 +1051,7 @@ function getNodeHostname(nodeId: string): string {
                     <span
                       v-for="role in deployment.blue_roles"
                       :key="role"
-                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded"
+                      class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
                     >
                       {{ role }}
                     </span>
@@ -1184,7 +1184,7 @@ function getNodeHostname(nodeId: string): string {
               <span
                 v-for="role in (nodeOptions.find(n => n.value === newDeployment.node_id)?.roles || [])"
                 :key="role"
-                class="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded"
+                class="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-700 rounded-sm"
               >
                 {{ role }}
               </span>
@@ -1225,7 +1225,7 @@ function getNodeHostname(nodeId: string): string {
                     >
                       <!-- Checkbox -->
                       <div :class="[
-                        'w-5 h-5 rounded flex-shrink-0 flex items-center justify-center mt-0.5',
+                        'w-5 h-5 rounded-sm shrink-0 flex items-center justify-center mt-0.5',
                         newDeployment.roles.includes(role.name)
                           ? 'bg-primary-600'
                           : 'border-2 border-gray-300'
@@ -1252,7 +1252,7 @@ function getNodeHostname(nodeId: string): string {
                           <!-- Dependencies Badge -->
                           <span
                             v-if="role.dependencies.length > 0"
-                            class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded"
+                            class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-sm"
                             :title="'Requires: ' + role.dependencies.join(', ')"
                           >
                             needs: {{ role.dependencies.join(', ') }}
@@ -1260,7 +1260,7 @@ function getNodeHostname(nodeId: string): string {
                           <!-- Current Owner Badge (#1389) -->
                           <span
                             v-if="getRoleOwnerHostname(role.name) && roleOwners[role.name] !== newDeployment.node_id"
-                            class="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded"
+                            class="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-sm"
                             :title="'Currently deployed on ' + getRoleOwnerHostname(role.name)"
                           >
                             on {{ getRoleOwnerHostname(role.name) }}
@@ -1282,7 +1282,7 @@ function getNodeHostname(nodeId: string): string {
               <span
                 v-for="role in newDeployment.roles"
                 :key="role"
-                class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded"
+                class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-sm"
               >
                 {{ role }}
               </span>
@@ -1295,7 +1295,7 @@ function getNodeHostname(nodeId: string): string {
               type="checkbox"
               id="force-deploy"
               v-model="newDeployment.force"
-              class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
             />
             <label for="force-deploy" class="text-sm text-gray-700">
               Force deployment (skip checks and redeploy even if roles already exist)
@@ -1453,7 +1453,7 @@ function getNodeHostname(nodeId: string): string {
               <input
                 type="checkbox"
                 v-model="newBgDeployment.auto_rollback"
-                class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
               />
               <span class="text-sm text-gray-700">Auto-rollback on failure</span>
             </label>
@@ -1461,7 +1461,7 @@ function getNodeHostname(nodeId: string): string {
               <input
                 type="checkbox"
                 v-model="newBgDeployment.purge_on_complete"
-                class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
               />
               <span class="text-sm text-gray-700">Purge blue roles after completion</span>
             </label>
@@ -1515,7 +1515,7 @@ function getNodeHostname(nodeId: string): string {
               <div class="flex items-center gap-3">
                 <h3 class="text-lg font-semibold text-gray-900">Deployment Details</h3>
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedDeployment.status)]">
-                  {{ selectedDeployment.status.replace('_', ' ') }}
+                  {{ selectedDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
               <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
@@ -1619,7 +1619,7 @@ function getNodeHostname(nodeId: string): string {
               <div class="flex items-center gap-3">
                 <h3 class="text-lg font-semibold text-gray-900">Blue-Green Deployment Details</h3>
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedBgDeployment.status)]">
-                  {{ selectedBgDeployment.status.replace('_', ' ') }}
+                  {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
               <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600">

@@ -12,10 +12,10 @@
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="height: 56px;">
           <!-- Logo/Brand with System Status -->
-          <div class="flex-shrink-0 flex items-center">
+          <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary focus:ring-opacity-50"
+              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary focus:ring-opacity-50"
               :title="getSystemStatusTooltip()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
@@ -88,11 +88,11 @@
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true"
-              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
               :title="$t('nav.profileSettings')"
               :aria-label="$t('nav.profileSettings')"
             >
-              <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+              <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
               </div>
               <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
@@ -104,7 +104,7 @@
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
-              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
               aria-controls="mobile-nav"
               aria-expanded="false"
             >
@@ -193,7 +193,7 @@
       <div
         v-if="showMobileNav"
         @click="showMobileNav = false"
-        class="lg:hidden fixed inset-0 bg-black bg-opacity-25 z-10"
+        class="lg:hidden fixed inset-0 bg-black/25 z-10"
       ></div>
     </header>
 
@@ -205,7 +205,7 @@
         @click="showSystemStatus = false"
       >
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="fixed inset-0 bg-black bg-opacity-75 transition-opacity"></div>
+          <div class="fixed inset-0 bg-black/75 transition-opacity"></div>
 
           <div
             @click.stop
@@ -221,7 +221,7 @@
               </h3>
               <button
                 @click="showSystemStatus = false"
-                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -233,9 +233,9 @@
             <div class="mb-4">
               <div
                 :class="{
-                  'bg-green-900 bg-opacity-20 border-green-700': systemStatus.isHealthy && !systemStatus.hasIssues,
-                  'bg-yellow-900 bg-opacity-20 border-yellow-700': !systemStatus.isHealthy && !systemStatus.hasIssues,
-                  'bg-red-900 bg-opacity-20 border-red-700': systemStatus.hasIssues
+                  'bg-green-900/20 border-green-700': systemStatus.isHealthy && !systemStatus.hasIssues,
+                  'bg-yellow-900/20 border-yellow-700': !systemStatus.isHealthy && !systemStatus.hasIssues,
+                  'bg-red-900/20 border-red-700': systemStatus.hasIssues
                 }"
                 class="rounded-lg border p-3 flex items-center"
               >
@@ -293,7 +293,7 @@
             <div class="mt-6 flex justify-between">
               <button
                 @click="refreshSystemStatus"
-                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
+                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -302,7 +302,7 @@
               </button>
               <button
                 @click="showSystemStatus = false"
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-autobot-primary hover:bg-autobot-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-autobot-primary hover:bg-autobot-primary-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 {{ $t('common.close') }}
               </button>
@@ -534,6 +534,14 @@ export default {
       }
     };
 
+    // Named handlers for global error listeners (#2849)
+    const handleWindowError = (event: ErrorEvent) => {
+      handleGlobalError(event.error || event);
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      handleGlobalError(event.reason);
+    };
+
     // Unified loading event handlers
     const handleLoadingComplete = () => {
       logger.debug('Loading completed successfully');
@@ -649,14 +657,9 @@ export default {
       // Add global click listener for mobile nav
       document.addEventListener('click', closeNavbarOnClickOutside);
 
-      // Set up global error handling
-      window.addEventListener('error', (event) => {
-        handleGlobalError(event.error || event);
-      });
-
-      window.addEventListener('unhandledrejection', (event) => {
-        handleGlobalError(event.reason);
-      });
+      // Set up global error handling (#2849: use named handlers for cleanup)
+      window.addEventListener('error', handleWindowError);
+      window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
       // CRITICAL FIX: Clear any stuck system notifications on startup
       logger.debug('Clearing stuck system notifications on startup...');
@@ -705,14 +708,16 @@ export default {
         appStore.setLoading(false);
       }
 
-      logger.debug('✅ Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
+      logger.debug('Optimized AutoBot initialized - monitoring restored with <50ms performance budget');
     });
 
     onUnmounted(() => {
       logger.debug('Cleaning up optimized monitoring systems...');
 
-      // Clean up listeners
+      // Clean up listeners (#2849: remove all event listeners added in onMounted)
       document.removeEventListener('click', closeNavbarOnClickOutside);
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       stopOptimizedNotificationCleanup();
 
       // Destroy optimized health monitor
@@ -733,7 +738,7 @@ export default {
       { to: '/secrets', labelKey: 'nav.secrets', icon: 'M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z', iconRule: 'evenodd' },
       { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
       { to: '/automation/browser-automation', labelKey: 'nav.browserAutomation', icon: 'M4.083 9h1.946c.089-1.546.383-2.97.837-4.118A6.004 6.004 0 004.083 9zM10 2a8 8 0 100 16 8 8 0 000-16zm0 2c-.076 0-.232.032-.465.262-.238.234-.497.623-.737 1.182-.389.907-.673 2.142-.766 3.556h3.936c-.093-1.414-.377-2.649-.766-3.556-.24-.56-.5-.948-.737-1.182C10.232 4.032 10.076 4 10 4zm3.971 5c-.089-1.546-.383-2.97-.837-4.118A6.004 6.004 0 0115.917 9h-1.946zm-2.003 2H8.032c.093 1.414.377 2.649.766 3.556.24.56.5.948.737 1.182.233.23.389.262.465.262.076 0 .232-.032.465-.262.238-.234.497-.623.737-1.182.389-.907.673-2.142.766-3.556zm1.166 4.118c.454-1.147.748-2.572.837-4.118h1.946a6.004 6.004 0 01-2.783 4.118zm-6.268 0C6.412 13.97 6.118 12.546 6.03 11H4.083a6.004 6.004 0 002.783 4.118z', iconRule: 'evenodd' },
-      { to: '/code-intelligence', labelKey: 'nav.codeIntelligence', icon: 'M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z', iconRule: 'evenodd' },
+      // Code Intelligence removed from main nav — merged into /analytics/codebase
       { to: '/agent-registry', labelKey: 'nav.agentRegistry', icon: 'M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z' },
       { to: '/preferences', labelKey: 'nav.preferences', icon: 'M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z', iconRule: 'evenodd' },
       // Issue #2371: LLM Config moved to SLM admin settings

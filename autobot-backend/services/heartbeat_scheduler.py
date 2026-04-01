@@ -18,6 +18,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from models.heartbeat import (
     AgentRuntimeState,
     AgentWakeupRequest,
@@ -26,8 +29,6 @@ from models.heartbeat import (
     HeartbeatRunStatus,
     WakeupTrigger,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 logger = logging.getLogger(__name__)
 

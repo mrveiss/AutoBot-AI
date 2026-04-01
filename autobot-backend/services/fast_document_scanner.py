@@ -457,11 +457,21 @@ class FastDocumentScanner:
         Returns:
             ManPageContent with structured sections, or None if failed
         """
+        from autobot_shared.security.path_validator import validate_path
+
         parser = ManPageParser()
 
         try:
+            # Validate path stays within system man directories (#1721)
+            safe_path = validate_path(
+                file_path,
+                allowed_roots=[
+                    "/usr/share/man",
+                    "/usr/local/share/man",
+                ],
+            )
             # Try direct file parsing first (faster)
-            result = parser.parse_man_page(Path(file_path))
+            result = parser.parse_man_page(safe_path)
 
             if result.parse_success:
                 return result

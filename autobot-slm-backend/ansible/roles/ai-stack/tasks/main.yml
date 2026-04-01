@@ -56,15 +56,13 @@
   tags: ['ai', 'config']
 
 # ============================================================
-- name: Install AI stack dependencies
+- name: "AI Stack | Install build dependencies"
   ansible.builtin.apt:
     name:
-      - python3
-      - python3-pip
-      - python3-venv
       - build-essential
     state: present
     update_cache: true
+  tags: ['ai-stack', 'packages']
 
 - name: Create AI stack directories
   ansible.builtin.file:
@@ -98,6 +96,9 @@
     virtualenv: "{{ ai_install_dir }}/venv"
     state: latest
   become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
 - name: Check if requirements-ai.txt exists
   ansible.builtin.stat:
@@ -111,6 +112,9 @@
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
 - name: Install AI Python packages (fallback list)
@@ -139,6 +143,9 @@
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: not _ai_requirements_file.stat.exists
 
 - name: Deploy AI stack environment file

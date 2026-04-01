@@ -12,9 +12,10 @@ slm_backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(slm_backend_root))
 
 import pytest  # noqa: E402
-from models.database import Base as SLMBase  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
+
+from models.database import Base as SLMBase  # noqa: E402
 
 
 @pytest.fixture(scope="function")

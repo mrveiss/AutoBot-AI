@@ -28,6 +28,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+from autobot_shared.error_boundaries import error_boundary
+
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,
@@ -45,8 +47,6 @@ from knowledge.search_components.helpers import (
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
 from models.task_context import EnhancedSearchContext
-
-from autobot_shared.error_boundaries import error_boundary
 
 if TYPE_CHECKING:
     import aioredis
@@ -462,7 +462,7 @@ class SearchMixin:
             )
         except Exception as e:
             logger.error("Enhanced search failed: %s", e)
-            return {"success": False, "results": [], "total_count": 0, "error": str(e)}
+            return {"success": False, "results": [], "total_count": 0, "error": "Search failed"}
 
     def _preprocess_query(self, query: str) -> str:
         """Preprocess search query for better results. Issue #78: Query preprocessing."""
@@ -775,7 +775,7 @@ class SearchMixin:
             import traceback
 
             logger.error(traceback.format_exc())
-            return {"success": False, "results": [], "total_count": 0, "error": str(e)}
+            return {"success": False, "results": [], "total_count": 0, "error": "Search failed"}
 
     def _expand_query_terms(self, query: str, enable_expansion: bool) -> List[str]:
         """Expand query with synonyms and related terms."""

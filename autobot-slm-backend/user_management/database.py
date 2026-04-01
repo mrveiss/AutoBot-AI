@@ -7,9 +7,12 @@ Dual Database Engine Management for SLM
 Two SQLAlchemy async engines:
 - slm_engine: Local SLM admin users
 - autobot_engine: Remote AutoBot application users
+
+Pool sizes are coordinated via SSOT config (#2860).
 """
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -20,6 +23,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
@@ -32,58 +36,114 @@ _autobot_engine: AsyncEngine | None = None
 _slm_session_maker: async_sessionmaker[AsyncSession] | None = None
 _autobot_session_maker: async_sessionmaker[AsyncSession] | None = None
 
+# Locks for thread-safe lazy initialization (#2854).
+# threading.Lock is required: these synchronous getters can be called from
+# thread-pool workers (e.g. startup hooks) as well as the main asyncio thread.
+_slm_engine_lock = threading.Lock()
+_autobot_engine_lock = threading.Lock()
+_slm_session_maker_lock = threading.Lock()
+_autobot_session_maker_lock = threading.Lock()
+
+
+def _get_pool_config() -> dict:
+    """Get database pool settings from SSOT config (#2860)."""
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        pool_cfg = get_config().database_pool
+        return {
+            "pool_size": pool_cfg.pool_size,
+            "max_overflow": pool_cfg.max_overflow,
+            "pool_recycle": pool_cfg.pool_recycle,
+            "pool_timeout": pool_cfg.pool_timeout,
+        }
+    except Exception:
+        logger.warning("Could not load SSOT database pool config, using defaults")
+        return {
+            "pool_size": 10,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+        }
+
 
 def get_slm_engine() -> AsyncEngine:
-    """Get or create SLM database engine (local)."""
+    """Get or create SLM database engine (local).
+
+    Thread-safe: uses _slm_engine_lock to prevent double-initialization (#2854).
+    """
     global _slm_engine
     if _slm_engine is None:
-        config = get_slm_db_config()
-        _slm_engine = create_async_engine(
-            config.url,
-            echo=False,
-            pool_size=10,
-            max_overflow=10,
-            pool_pre_ping=True,
-        )
-        logger.info("Created SLM database engine")
+        with _slm_engine_lock:
+            if _slm_engine is None:
+                config = get_slm_db_config()
+                pool = _get_pool_config()
+                _slm_engine = create_async_engine(
+                    config.url,
+                    echo=False,
+                    pool_size=pool["pool_size"],
+                    max_overflow=pool["max_overflow"],
+                    pool_recycle=pool["pool_recycle"],
+                    pool_timeout=pool["pool_timeout"],
+                    pool_pre_ping=True,
+                )
+                logger.info("Created SLM database engine")
     return _slm_engine
 
 
 def get_autobot_engine() -> AsyncEngine:
-    """Get or create AutoBot database engine (remote on Redis VM)."""
+    """Get or create AutoBot database engine (remote on Redis VM).
+
+    Thread-safe: uses _autobot_engine_lock to prevent double-initialization (#2854).
+    """
     global _autobot_engine
     if _autobot_engine is None:
-        config = get_autobot_db_config()
-        _autobot_engine = create_async_engine(
-            config.url,
-            echo=False,
-            pool_size=20,
-            max_overflow=20,
-            pool_pre_ping=True,
-        )
-        logger.info("Created AutoBot database engine")
+        with _autobot_engine_lock:
+            if _autobot_engine is None:
+                config = get_autobot_db_config()
+                pool = _get_pool_config()
+                _autobot_engine = create_async_engine(
+                    config.url,
+                    echo=False,
+                    pool_size=pool["pool_size"],
+                    max_overflow=pool["max_overflow"],
+                    pool_recycle=pool["pool_recycle"],
+                    pool_timeout=pool["pool_timeout"],
+                    pool_pre_ping=True,
+                )
+                logger.info("Created AutoBot database engine")
     return _autobot_engine
 
 
 def get_slm_session_maker() -> async_sessionmaker[AsyncSession]:
-    """Get SLM session maker."""
+    """Get SLM session maker.
+
+    Thread-safe: uses _slm_session_maker_lock to prevent double-initialization (#2854).
+    """
     global _slm_session_maker
     if _slm_session_maker is None:
-        engine = get_slm_engine()
-        _slm_session_maker = async_sessionmaker(
-            engine, class_=AsyncSession, expire_on_commit=False
-        )
+        with _slm_session_maker_lock:
+            if _slm_session_maker is None:
+                engine = get_slm_engine()
+                _slm_session_maker = async_sessionmaker(
+                    engine, class_=AsyncSession, expire_on_commit=False
+                )
     return _slm_session_maker
 
 
 def get_autobot_session_maker() -> async_sessionmaker[AsyncSession]:
-    """Get AutoBot session maker."""
+    """Get AutoBot session maker.
+
+    Thread-safe: uses _autobot_session_maker_lock to prevent double-initialization (#2854).
+    """
     global _autobot_session_maker
     if _autobot_session_maker is None:
-        engine = get_autobot_engine()
-        _autobot_session_maker = async_sessionmaker(
-            engine, class_=AsyncSession, expire_on_commit=False
-        )
+        with _autobot_session_maker_lock:
+            if _autobot_session_maker is None:
+                engine = get_autobot_engine()
+                _autobot_session_maker = async_sessionmaker(
+                    engine, class_=AsyncSession, expire_on_commit=False
+                )
     return _autobot_session_maker
 
 

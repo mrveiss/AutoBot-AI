@@ -38,12 +38,11 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from autobot_shared.security.path_validator import validate_relative_path
 from services.agent_secrets_integration import (
     AgentSecretsIntegration,
     get_agent_secrets_integration,
 )
-
-from autobot_shared.security.path_validator import validate_relative_path
 
 logger = logging.getLogger(__name__)
 
@@ -162,9 +161,9 @@ class TerminalSecretsService:
                     session_state.session_id,
                 )
             except Exception as e:
-                error_msg = f"Failed to prepare key '{key_data['name']}': {e}"
-                result["errors"].append(error_msg)
-                logger.error(error_msg)
+                logger.error("Failed to prepare key '%s': %s", key_data["name"], e)
+                result["errors"].append(f"Failed to prepare key '{key_data['name']}'")
+
 
     async def setup_ssh_keys(
         self,
@@ -224,9 +223,8 @@ class TerminalSecretsService:
             )
 
         except Exception as e:
-            error_msg = f"SSH key setup failed: {e}"
-            result["errors"].append(error_msg)
-            logger.error(error_msg)
+            logger.error("SSH key setup failed: %s", e)
+            result["errors"].append("SSH key setup failed")
 
         return result
 

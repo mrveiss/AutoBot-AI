@@ -7,12 +7,18 @@ Workflow Automation Models
 Enums, dataclasses, and Pydantic models for workflow automation.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
-from pydantic import BaseModel
+if TYPE_CHECKING:
+    from services.notification_service import NotificationConfig
+
+from pydantic import BaseModel, Field, field_validator
+
 from type_defs.common import Metadata
 
 
@@ -136,6 +142,12 @@ class WorkflowStep:
     execution_result: Optional[Metadata] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Issue #2159: Per-step timeout override (seconds). None uses WorkflowLimits default.
+    timeout_seconds: Optional[int] = None
+    # Issue #2397: Step type — "command_execution" (default) or a vision node type.
+    step_type: str = "command_execution"
+    # Issue #2397: Step-level configuration dict for vision and future step types.
+    step_config: Optional[Metadata] = None
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
@@ -174,6 +186,10 @@ class ActiveWorkflow:
     prometheus_start_time: Optional[float] = None  # For Prometheus duration tracking
     # Issue #2153: Owner identifier for workflow secret resolution.
     owner_id: Optional[str] = None
+    # Issue #2601: Store step execution results keyed by step_id for reference passing.
+    step_results: Dict[str, Metadata] = field(default_factory=dict)
+    # Issue #3101: Per-workflow notification routing configuration.
+    notification_config: Optional[NotificationConfig] = None
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""
@@ -187,6 +203,14 @@ class ActiveWorkflow:
     # Issue #1380: Current workflow phase from state machine
     phase: Optional[str] = None
     active_service: Optional[str] = None
+
+    def _serialize_notification_config(self) -> Optional[Metadata]:
+        """Serialize notification_config to a plain dict for API responses."""
+        if self.notification_config is None:
+            return None
+        from dataclasses import asdict
+
+        return asdict(self.notification_config)
 
     def to_status_dict(self) -> Metadata:
         """Convert workflow to status dictionary (Issue #372 - reduces feature envy)."""
@@ -209,6 +233,7 @@ class ActiveWorkflow:
             ),
             "steps": [step.to_status_dict() for step in self.steps],
             "user_interventions": self.user_interventions,
+            "notification_config": self._serialize_notification_config(),
         }
 
 
@@ -224,6 +249,8 @@ class WorkflowStepRequest(BaseModel):
     requires_confirmation: bool = True
     risk_level: str = "low"
     dependencies: List[str] = []
+    # Issue #2159: Per-step timeout in seconds. None means use system default.
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class AutomatedWorkflowRequest(BaseModel):
@@ -272,3 +299,71 @@ class PlanPresentationRequest(BaseModel):
     approval_mode: str = "full_plan"
     include_risk_assessment: bool = True
     timeout_seconds: int = 300
+
+
+# =========================================================================
+# Issue #3139: Notification Config API Models
+# =========================================================================
+
+_EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+_PRIVATE_PREFIXES = (
+    "https://10.", "https://172.16.", "https://172.17.", "https://172.18.",
+    "https://172.19.", "https://172.20.", "https://172.21.", "https://172.22.",
+    "https://172.23.", "https://172.24.", "https://172.25.", "https://172.26.",
+    "https://172.27.", "https://172.28.", "https://172.29.", "https://172.30.",
+    "https://172.31.", "https://192.168.", "https://127.", "https://169.254.",
+    "https://localhost",
+)
+
+
+def _reject_private_url(url: str) -> str:
+    """Raise ValueError if URL targets a private/loopback address."""
+    for prefix in _PRIVATE_PREFIXES:
+        if url.startswith(prefix):
+            raise ValueError("Webhook URL must not target private networks")
+    return url
+
+
+class NotificationConfigRequest(BaseModel):
+    """
+    Request model for updating per-workflow notification routing.
+
+    Issue #3139: Maps notification events to delivery channels.
+    """
+
+    enabled: bool = True
+    email_recipients: List[str] = Field(default_factory=list)
+    slack_webhook_url: Optional[str] = None
+    webhook_url: Optional[str] = None
+    channels: Dict[str, List[str]] = Field(default_factory=dict)
+    templates: Dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("email_recipients", mode="before")
+    @classmethod
+    def validate_emails(cls, v: List[str]) -> List[str]:
+        """Validate email format for each recipient."""
+        for email in v:
+            if not _EMAIL_RE.match(email):
+                raise ValueError("Invalid email: %s" % email)
+        return v
+
+    @field_validator("slack_webhook_url", mode="before")
+    @classmethod
+    def validate_slack_url(cls, v: Optional[str]) -> Optional[str]:
+        """Enforce https://hooks.slack.com/ prefix."""
+        if not v:
+            return v
+        if not v.startswith("https://hooks.slack.com/"):
+            raise ValueError("Slack webhook must use https://hooks.slack.com/")
+        return v
+
+    @field_validator("webhook_url", mode="before")
+    @classmethod
+    def validate_webhook_url(cls, v: Optional[str]) -> Optional[str]:
+        """Enforce https and block private IPs."""
+        if not v:
+            return v
+        if not v.startswith("https://"):
+            raise ValueError("Webhook URL must use https://")
+        return _reject_private_url(v)

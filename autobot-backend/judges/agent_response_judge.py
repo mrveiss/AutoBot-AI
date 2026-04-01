@@ -258,7 +258,7 @@ Focus on practical assessment that helps improve agent performance and user expe
 
         except Exception as e:
             logger.error("Error in response quality assessment: %s", e)
-            return False, 0.0, f"Assessment error: {str(e)}"
+            return False, 0.0, "Response quality assessment error"
 
     def _build_feedback_by_dimension(self, criterion_scores: List) -> Dict[str, Any]:
         """
@@ -353,7 +353,7 @@ Focus on practical assessment that helps improve agent performance and user expe
         except Exception as e:
             logger.error("Error generating improvement feedback: %s", e)
             return {
-                "error": str(e),
+                "error": "Improvement feedback generation failed",
                 "overall_assessment": {"score": 0.0, "recommendation": "ERROR"},
                 "improvement_suggestions": ["Resolve evaluation error and retry"],
             }
@@ -404,7 +404,7 @@ Focus on practical assessment that helps improve agent performance and user expe
         except Exception as e:
             logger.error("Error comparing agent responses: %s", e)
             return {
-                "error": str(e),
+                "error": "Agent response comparison failed",
                 "best_response": None,
                 "recommendation": "Unable to compare responses due to error",
             }

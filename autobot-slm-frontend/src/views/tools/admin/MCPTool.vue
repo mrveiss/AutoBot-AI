@@ -223,7 +223,7 @@ onUnmounted(() => {
     <!-- Overview Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <!-- Total Tools Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 border-l-4 border-l-blue-500">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-blue-500">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-sm font-medium text-gray-500 uppercase">Total MCP Tools</h3>
@@ -237,7 +237,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Healthy Bridges Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 border-l-4 border-l-green-500">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-green-500">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-sm font-medium text-gray-500 uppercase">Healthy Bridges</h3>
@@ -255,7 +255,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Last Updated Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 border-l-4 border-l-purple-500">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4 border-l-purple-500">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-sm font-medium text-gray-500 uppercase">Last Updated</h3>
@@ -362,7 +362,7 @@ onUnmounted(() => {
         <div
           v-for="bridge in bridges"
           :key="bridge.name"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 border-l-4"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 border-l-4"
           :class="getBorderClass(bridge.status)"
         >
           <div class="flex items-start justify-between mb-4">
@@ -394,7 +394,7 @@ onUnmounted(() => {
               <span
                 v-for="feature in bridge.features"
                 :key="feature"
-                class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-sm"
               >
                 {{ feature }}
               </span>
@@ -403,12 +403,12 @@ onUnmounted(() => {
 
           <div class="mt-4 pt-4 border-t border-gray-200">
             <p class="text-xs text-gray-500">ENDPOINT:</p>
-            <code class="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded">
+            <code class="text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded-sm">
               {{ bridge.endpoint }}
             </code>
           </div>
 
-          <div v-if="bridge.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+          <div v-if="bridge.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-sm">
             <p class="text-xs text-red-700">{{ bridge.error }}</p>
           </div>
         </div>
@@ -440,7 +440,7 @@ onUnmounted(() => {
           <div
             v-for="tool in filteredTools"
             :key="tool.name"
-            class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow"
+            class="bg-white rounded-lg shadow-xs border border-gray-200 p-5 hover:shadow-md transition-shadow"
           >
             <div class="flex items-start justify-between mb-3">
               <div class="flex-1">
@@ -454,7 +454,7 @@ onUnmounted(() => {
               </div>
               <button
                 @click="toggleToolSchema(tool.name)"
-                class="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded flex items-center gap-1"
+                class="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-sm flex items-center gap-1"
               >
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -473,13 +473,13 @@ onUnmounted(() => {
                 Bridge: <strong class="text-gray-900">{{ tool.bridge }}</strong>
               </span>
               <span class="flex items-center gap-1">
-                <code class="text-xs bg-gray-100 px-2 py-0.5 rounded">{{ tool.endpoint }}</code>
+                <code class="text-xs bg-gray-100 px-2 py-0.5 rounded-sm">{{ tool.endpoint }}</code>
               </span>
             </div>
 
             <div v-if="expandedTools.has(tool.name)" class="mt-4 pt-4 border-t border-gray-200">
               <p class="text-xs font-medium text-gray-700 mb-2">INPUT SCHEMA:</p>
-              <pre class="bg-gray-900 text-green-400 p-4 rounded text-xs overflow-x-auto">{{ JSON.stringify(tool.input_schema, null, 2) }}</pre>
+              <pre class="bg-gray-900 text-green-400 p-4 rounded-sm text-xs overflow-x-auto">{{ JSON.stringify(tool.input_schema, null, 2) }}</pre>
             </div>
           </div>
         </div>
@@ -489,7 +489,7 @@ onUnmounted(() => {
     <!-- Health Tab -->
     <div v-else-if="activeTab === 'health'">
       <!-- Overall Health Status -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-lg font-bold text-gray-900">Overall MCP System Health</h3>
@@ -506,7 +506,7 @@ onUnmounted(() => {
         <div
           v-for="check in healthData.checks"
           :key="check.bridge"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 p-5"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 p-5"
         >
           <div class="flex items-start justify-between mb-3">
             <h4 class="text-base font-bold text-gray-900">{{ check.bridge }}</h4>
@@ -526,7 +526,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="check.error" class="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+          <div v-if="check.error" class="mt-3 p-2 bg-red-50 border border-red-200 rounded-sm">
             <p class="text-xs text-red-700">{{ check.error }}</p>
           </div>
         </div>

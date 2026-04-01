@@ -13,11 +13,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePrometheusMetrics')
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // ===== Type Definitions =====
 

@@ -9,6 +9,7 @@ and configurable k1/b parameters.
 """
 
 import pytest
+
 from knowledge.search_components.bm25 import BM25Scorer
 
 

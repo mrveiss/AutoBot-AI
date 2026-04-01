@@ -15,6 +15,8 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
+
+from autobot_shared.ssot_config import get_ollama_url
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 try:
@@ -77,7 +79,7 @@ def _build_platform_config() -> Dict[str, SkillConfigField]:
         ),
         "ollama_host": SkillConfigField(
             type="string",
-            default="http://localhost:11434",
+            default=get_ollama_url(),
             description="Ollama API host for llm_draft_content",
             required=False,
         ),

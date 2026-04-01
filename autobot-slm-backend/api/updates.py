@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     EventSeverity,
     EventType,
@@ -45,9 +49,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
-from sqlalchemy import or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/updates", tags=["updates"])
@@ -282,7 +283,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             job.error = "Internal server error"
             job.completed_at = datetime.utcnow()
             await db.commit()
-            await _broadcast_job_update(job_id, "failed", job.progress, str(e))
+            await _broadcast_job_update(job_id, "failed", job.progress, "Update job failed")
 
 
 def _parse_discover_output(output: str) -> List[dict]:
@@ -335,6 +336,20 @@ def _parse_discover_output(output: str) -> List[dict]:
         start = pos + 1
 
     return results
+
+
+def _parse_unreachable_hosts(output: str) -> List[str]:
+    """Extract hostnames of unreachable nodes from Ansible output.
+
+    Ansible emits lines like:
+        fatal: [hostname]: UNREACHABLE! => {...}
+    This function collects all such hostnames so callers can report
+    partial success with a descriptive warning (Issue #1816).
+    """
+    import re
+
+    pattern = re.compile(r"^fatal:\s+\[([^\]]+)\]:\s+UNREACHABLE!", re.MULTILINE)
+    return list(dict.fromkeys(m.group(1) for m in pattern.finditer(output)))
 
 
 async def _resolve_host_to_node(
@@ -571,11 +586,15 @@ async def _run_discover_job(
         job["progress"] = 70
         job["message"] = "Parsing discovered packages..."
         host_results = _parse_discover_output(result["output"])
+        unreachable = (
+            _parse_unreachable_hosts(result["output"]) if not result["success"] else []
+        )
 
         if not result["success"] and not host_results:
             job["status"] = "failed"
             job["message"] = "Playbook failed: " + result["output"][:500]
             job["completed_at"] = datetime.utcnow().isoformat()
+            logger.error("Discover job %s failed — no nodes reported results", job_id)
             return
 
         total_packages = 0
@@ -584,22 +603,42 @@ async def _run_discover_job(
                 total_packages += await _store_host_packages(db, host_data, job)
             await db.commit()
 
-        job["status"] = "completed"
+        nodes_checked = job.get("nodes_checked", 0)
+        total_nodes = job.get("total_nodes", 0)
+
+        if unreachable:
+            unreachable_names = ", ".join(unreachable)
+            job["status"] = "completed_with_warnings"
+            job["unreachable_nodes"] = unreachable
+            job["message"] = (
+                f"Found {total_packages} upgradable packages across "
+                f"{nodes_checked}/{total_nodes} nodes "
+                f"({len(unreachable)} unreachable: {unreachable_names})"
+            )
+            logger.warning(
+                "Discover job %s partial success: %d unreachable node(s): %s",
+                job_id,
+                len(unreachable),
+                unreachable_names,
+            )
+        else:
+            job["status"] = "completed"
+            job["message"] = (
+                f"Found {total_packages} upgradable packages "
+                f"across {nodes_checked} nodes"
+            )
+
         job["progress"] = 100
         job["packages_found"] = total_packages
-        job["message"] = (
-            f"Found {total_packages} upgradable packages "
-            f"across {job['nodes_checked']} nodes"
-        )
         job["completed_at"] = datetime.utcnow().isoformat()
-        await _broadcast_job_update(job_id, "completed", 100, job["message"])
+        await _broadcast_job_update(job_id, job["status"], 100, job["message"])
 
     except Exception as e:
         logger.exception("Discover job failed: %s", job_id)
         job["status"] = "failed"
-        job["message"] = str(e)
+        job["message"] = "Discover job failed"
         job["completed_at"] = datetime.utcnow().isoformat()
-        await _broadcast_job_update(job_id, "failed", job.get("progress", 0), str(e))
+        await _broadcast_job_update(job_id, "failed", job.get("progress", 0), "Discover job failed")
 
 
 @router.post("/discover", response_model=UpdateDiscoverResponse)
@@ -619,6 +658,7 @@ async def discover_updates(
         "nodes_checked": 0,
         "total_nodes": 0,
         "packages_found": 0,
+        "unreachable_nodes": [],
         "started_at": None,
         "completed_at": None,
     }

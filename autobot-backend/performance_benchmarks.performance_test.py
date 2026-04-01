@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import psutil
 import pytest
 from enhanced_memory_manager import EnhancedMemoryManager
+
 from knowledge_base import KnowledgeBase
 
 # Import components to benchmark
@@ -307,7 +308,7 @@ class TestOrchestratorPerformance:
 
         with patch("src.orchestrator.global_config_manager") as mock_config:
             mock_config.get_llm_config.return_value = {
-                "orchestrator_llm": "llama3.2:3b"
+                "orchestrator_llm": "llama3.2:1b"
             }
             self.orchestrator = Orchestrator()
 

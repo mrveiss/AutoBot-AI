@@ -6,13 +6,14 @@
 import logging
 from typing import Any, Dict, List
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from skills.db import get_skills_engine
-from skills.models import RepoType, SkillRepo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from auth_middleware import check_admin_permission
+from skills.db import get_skills_engine
+from skills.models import RepoType, SkillRepo
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

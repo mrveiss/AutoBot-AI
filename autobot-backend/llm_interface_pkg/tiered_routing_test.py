@@ -1,5 +1,3 @@
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -10,6 +8,8 @@ Issue #748: Tiered Model Distribution Implementation.
 """
 
 import pytest
+
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 from llm_interface_pkg.tiered_routing import (
     ComplexityResult,
     TaskComplexityScorer,
@@ -18,8 +18,6 @@ from llm_interface_pkg.tiered_routing import (
     TierMetrics,
     TierModels,
 )
-
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 
 class TestTierConfig:

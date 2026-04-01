@@ -8,22 +8,24 @@ ai_user: autobot-ai
 ai_group: autobot-ai
 ai_install_dir: /opt/autobot/autobot-ai-stack
 ai_log_dir: /var/log/autobot
-ai_data_dir: /var/lib/autobot
+# Issue #3097: ai-stack gets its own /var/lib/autobot-ai to avoid ownership
+# conflict with /var/lib/autobot (owned by autobot:autobot for the backend).
+ai_data_dir: /var/lib/autobot-ai
 
 # Server settings
 ai_host: "0.0.0.0"
 ai_port: 8080
 
 # ChromaDB
-chromadb_persist_dir: /var/lib/autobot/chromadb
+chromadb_persist_dir: /var/lib/autobot-ai/chromadb
 chromadb_host: "0.0.0.0"
-chromadb_port: 8000
+chromadb_port: 8100
 
 # Ollama (remote on backend node - resolved from inventory)
-ollama_host: "{{ backend_host }}"
+ollama_host: "{{ backend_host | default(ansible_host) }}"
 ollama_port: 11434
 
 # Redis connection (resolved from inventory)
-ai_redis_host: "{{ redis_host }}"
+ai_redis_host: "{{ redis_host | default(ansible_host) }}"
 ai_redis_port: "{{ redis_port | default(6379) }}"
 ai_redis_password: "{{ vault_redis_password | default('') }}"

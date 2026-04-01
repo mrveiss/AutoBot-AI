@@ -6,6 +6,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+
 from services.mesh_brain.ppr import PersonalizedPageRank
 
 # =============================================================================

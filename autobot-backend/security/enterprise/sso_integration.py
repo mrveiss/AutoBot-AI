@@ -21,7 +21,6 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import yaml
-from constants.path_constants import PATH
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import (
@@ -30,6 +29,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from autobot_shared.http_client import get_http_client
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

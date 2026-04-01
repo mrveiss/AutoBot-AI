@@ -35,9 +35,13 @@ Endpoints:
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+
+from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_management.types import DATABASE_MAPPING
+from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -47,8 +51,6 @@ from models.npu_models import (
     WorkerTestResult,
 )
 from services.npu_worker_manager import get_worker_manager
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -683,10 +685,8 @@ async def proxy_npu_health():
     """
     from autobot_shared.ssot_config import config as ssot_config
 
-    npu_host = ssot_config.get_host(
-        "npu_worker", "172.16.168.22"  # noqa: ssot-fallback
-    )
-    npu_port = ssot_config.get_port("npu_worker", 8081)
+    npu_host = ssot_config.vm.npu
+    npu_port = ssot_config.port.npu
     url = f"http://{npu_host}:{npu_port}/health"
 
     try:
@@ -785,23 +785,23 @@ def _generate_repair_bootstrap_config() -> dict:
 
     return {
         "redis": {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
-            "db": 0,
+            "db": DATABASE_MAPPING["main"],
             "socket_timeout": 5,
             "max_connections": 10,
         },
         "backend": {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
+            "host": ssot_config.vm.main,
+            "port": ssot_config.port.backend,
             "register_with_backend": True,
             "health_check_interval": 30,
         },
         "models": {
             "autoload_defaults": True,
-            "default_embedding": "nomic-embed-text",
-            "default_llm": "llama3.2:1b-instruct-q4_K_M",
+            "default_embedding": DEFAULT_EMBEDDING_MODEL,
+            "default_llm": DEFAULT_LLM_MODEL,
         },
         "logging": {"level": "INFO", "format": "structured"},
     }
@@ -1018,17 +1018,17 @@ def _build_pairing_config() -> Tuple[Dict, str]:
 
     worker_config = {
         "redis": {
-            "host": ssot_config.redis.host,
-            "port": ssot_config.redis.port,
+            "host": ssot_config.vm.redis,
+            "port": ssot_config.port.redis,
             "password": ssot_config.redis.password,
-            "db": 0,
+            "db": DATABASE_MAPPING["main"],
         },
         "backend": {
-            "host": ssot_config.backend.host,
-            "port": ssot_config.backend.port,
+            "host": ssot_config.vm.main,
+            "port": ssot_config.port.backend,
         },
     }
-    main_host = f"{ssot_config.backend.host}:{ssot_config.backend.port}"
+    main_host = f"{ssot_config.vm.main}:{ssot_config.port.backend}"
     return worker_config, main_host
 
 
@@ -1331,10 +1331,10 @@ def _build_worker_redis_config(ssot_config) -> dict:
         Redis configuration dict for workers
     """
     return {
-        "host": ssot_config.redis.host,
-        "port": ssot_config.redis.port,
+        "host": ssot_config.vm.redis,
+        "port": ssot_config.port.redis,
         "password": ssot_config.redis.password,
-        "db": 0,  # Default db for workers
+        "db": DATABASE_MAPPING["main"],
         "socket_timeout": 5,
         "max_connections": 10,
     }
@@ -1353,8 +1353,8 @@ def _build_worker_backend_config(ssot_config) -> dict:
         Backend configuration dict for workers
     """
     return {
-        "host": ssot_config.backend.host,
-        "port": ssot_config.backend.port,
+        "host": ssot_config.vm.main,
+        "port": ssot_config.port.backend,
         "register_with_backend": True,
         "health_check_interval": 30,
     }
@@ -1371,8 +1371,8 @@ def _build_worker_models_config() -> dict:
     """
     return {
         "autoload_defaults": True,
-        "default_embedding": "nomic-embed-text",
-        "default_llm": "llama3.2:1b-instruct-q4_K_M",
+        "default_embedding": DEFAULT_EMBEDDING_MODEL,
+        "default_llm": DEFAULT_LLM_MODEL,
     }
 
 

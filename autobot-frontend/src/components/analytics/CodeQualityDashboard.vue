@@ -510,6 +510,7 @@ const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
 const drillDownData = ref({ total_files: 0, total_issues: 0, average_score: 0, files: [] as any[] });
 
 let ws: WebSocket | null = null;
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Computed
 const scoreCircleLength = computed(() => 2 * Math.PI * 54);
@@ -795,7 +796,7 @@ function connectWebSocket(): void {
     wsConnected.value = false;
     logger.debug('WebSocket disconnected');
     // Reconnect after 5 seconds
-    setTimeout(connectWebSocket, 5000);
+    wsReconnectTimer = setTimeout(connectWebSocket, 5000);
   };
 
   ws.onerror = (error) => {
@@ -944,7 +945,12 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
   if (ws) {
+    ws.onclose = null;
     ws.close();
   }
 });

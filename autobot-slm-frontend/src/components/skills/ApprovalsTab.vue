@@ -18,7 +18,7 @@
         </div>
         <span
           :class="[
-            'text-xs px-2 py-0.5 rounded border',
+            'text-xs px-2 py-0.5 rounded-sm border',
             approval.status === 'pending'
               ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
               : approval.status === 'approved'
@@ -34,7 +34,7 @@
         <select
           v-model="trustLevels[approval.id]"
           class="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white
-                 focus:outline-none focus:border-blue-500"
+                 focus:outline-hidden focus:border-blue-500"
         >
           <option value="monitored">Monitored</option>
           <option value="trusted">Trusted</option>

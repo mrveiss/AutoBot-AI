@@ -307,6 +307,7 @@ const formatDate = formatDateTime
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .file-list-container {
   @apply overflow-auto;
 }
@@ -336,11 +337,11 @@ const formatDate = formatDateTime
 }
 
 .file-table tbody tr:focus {
-  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
 }
 
 .file-table tbody tr:focus-visible {
-  @apply outline-none bg-blue-50 ring-2 ring-blue-500 ring-inset;
+  @apply outline-hidden bg-blue-50 ring-2 ring-blue-500 ring-inset;
 }
 
 .file-name-cell {

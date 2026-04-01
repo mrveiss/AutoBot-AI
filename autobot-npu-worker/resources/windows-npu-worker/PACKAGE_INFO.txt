@@ -85,7 +85,7 @@ Total Lines of Code:  ~3,500+ lines (code + documentation)
 ===============================================================================
 
 Build Requirements:
-  - Python 3.10+
+  - Python 3.12+
   - PyInstaller (installed automatically)
   - Inno Setup 6 (https://jrsoftware.org/isinfo.php)
   - Windows 10/11 (64-bit)
@@ -490,7 +490,7 @@ See LICENSE.txt for complete license details.
 Build Date:           2025-10-04
 Package Version:      1.0.0
 Target Platform:      Windows 10/11 (64-bit)
-Python Version:       3.10+
+Python Version:       3.12+
 OpenVINO Version:     2023.2.0+
 PyInstaller:          Latest (auto-installed)
 Inno Setup:           6.x

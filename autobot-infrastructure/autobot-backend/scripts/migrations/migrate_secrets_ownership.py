@@ -25,7 +25,7 @@ from typing import Dict, List, Optional
 
 # Add autobot modules to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-shared"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
 from encryption_service import encrypt_data, is_encryption_enabled
 
@@ -116,7 +116,7 @@ class SecretsMigrator:
             return decoded
         except Exception as e:
             logger.error(
-                "Failed to get secret %s: %s", secret_id, e
+                "Failed to get secret %s...: %s", secret_id[:8], e
             )
             return None
 
@@ -154,7 +154,7 @@ class SecretsMigrator:
                     return session_owner
 
         except json.JSONDecodeError:
-            logger.debug(f"Could not parse metadata for {secret_id}")
+            logger.debug("Could not parse metadata for %s...", secret_id[:8])
 
         # Default to admin for unattributed secrets
         return "admin"
@@ -181,7 +181,7 @@ class SecretsMigrator:
             metadata = session.get("metadata", {})
             return metadata.get("owner") or metadata.get("user_id")
         except Exception as e:
-            logger.debug(f"Could not get session owner for {session_id}: {e}")
+            logger.debug("Could not get session owner for %s: %s", session_id, e)
             return None
 
     async def migrate_secret(self, secret_id: str) -> bool:
@@ -199,14 +199,14 @@ class SecretsMigrator:
             # Get secret data
             secret_data = await self.get_secret_data(secret_id)
             if not secret_data:
-                logger.warning(f"Secret {secret_id} not found")
+                logger.warning("Secret %s... not found", secret_id[:8])
                 self.stats["failed"] += 1
                 return False
 
             # Check if already has owner
             if secret_data.get("owner_id"):
                 logger.debug(
-                    "Secret %s already has owner", secret_id
+                    "Secret %s... already has owner", secret_id[:8]
                 )
                 self.stats["skipped"] += 1
                 return True
@@ -217,7 +217,7 @@ class SecretsMigrator:
             )
             if not owner_id:
                 logger.warning(
-                    "Could not infer owner for %s", secret_id
+                    "Could not infer owner for %s...", secret_id[:8]
                 )
                 self.stats["missing_owner"] += 1
                 owner_id = "admin"  # Default fallback
@@ -232,8 +232,8 @@ class SecretsMigrator:
                     value = encrypt_data(value)
                     self.stats["encrypted"] += 1
                     logger.debug(
-                        "Encrypted value for secret %s",
-                        secret_id,
+                        "Encrypted value for secret %s...",
+                        secret_id[:8],
                     )
 
             # Generate rollback SQL
@@ -244,9 +244,9 @@ class SecretsMigrator:
 
             if self.dry_run:
                 logger.info(
-                    "[DRY RUN] Would migrate secret %s "
+                    "[DRY RUN] Would migrate secret %s... "
                     "with owner: [REDACTED], scope: %s",
-                    secret_id,
+                    secret_id[:8],
                     scope,
                 )
                 self.stats["migrated"] += 1
@@ -260,8 +260,8 @@ class SecretsMigrator:
 
         except Exception as e:
             logger.error(
-                "Failed to migrate secret %s: %s",
-                secret_id,
+                "Failed to migrate secret %s...: %s",
+                secret_id[:8],
                 e,
             )
             self.stats["failed"] += 1
@@ -304,9 +304,9 @@ class SecretsMigrator:
         await self.redis_client.sadd(user_secrets_key, secret_id)
 
         logger.info(
-            "Migrated secret %s "
+            "Migrated secret %s... "
             "with owner: [REDACTED], scope: %s",
-            secret_id,
+            secret_id[:8],
             scope,
         )
 

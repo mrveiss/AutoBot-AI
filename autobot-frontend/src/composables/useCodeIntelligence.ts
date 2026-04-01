@@ -7,7 +7,7 @@
  * Issue #899 - Code Intelligence Tools
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -110,6 +110,22 @@ export interface ComparisonResult {
   quality_change: number
 }
 
+export interface SecurityScoreCached {
+  status: 'success' | 'no_data'
+  from_cache?: boolean
+  completed_at?: string
+  security_score?: number
+  grade?: string
+  risk_level?: string
+  status_message?: string
+  total_findings?: number
+  critical_issues?: number
+  high_issues?: number
+  files_analyzed?: number
+  severity_breakdown?: Record<string, number>
+  owasp_breakdown?: Record<string, number>
+}
+
 export interface UseCodeIntelligenceOptions {
   autoFetch?: boolean
 }
@@ -126,14 +142,32 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
   const healthScore = ref<CodeHealthScore | null>(null)
   const suggestions = ref<CodeSuggestion[]>([])
   const trends = ref<AnalysisTrend[]>([])
+  const securityScoreCached = ref<SecurityScoreCached | null>(null)
   const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const loadingCount = ref(0)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
 
   // ===== API Methods =====
 
-  async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
+  /** Increment loading counter and set isLoading flag. */
+  function startLoading(): void {
+    loadingCount.value++
     isLoading.value = true
-    error.value = null
+  }
+
+  /** Decrement loading counter and clear isLoading when all done. */
+  function stopLoading(): void {
+    loadingCount.value = Math.max(0, loadingCount.value - 1)
+    if (loadingCount.value === 0) {
+      isLoading.value = false
+    }
+  }
+
+  async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
+    startLoading()
     try {
       const data = await ApiClient.post('/api/code-intelligence/analyze', request)
       currentAnalysis.value = data
@@ -142,16 +176,15 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to analyze code'
       logger.error('Code analysis failed:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getAnalysis(analysisId: string): Promise<CodeAnalysisResult | null> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.get(`/api/code-intelligence/analysis/${analysisId}`)
       currentAnalysis.value = data
@@ -160,16 +193,15 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch analysis'
       logger.error('Failed to fetch analysis:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.post('/api/code-intelligence/quality-score', { code, language })
       qualityScore.value = data
@@ -178,16 +210,15 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to get quality score'
       logger.error('Failed to get quality score:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getSuggestions(code: string, language?: string): Promise<void> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.post('/api/code-intelligence/suggestions', { code, language })
       suggestions.value = data.suggestions || []
@@ -195,31 +226,49 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch suggestions'
       logger.error('Failed to fetch suggestions:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
-  async function getHealthScore(): Promise<void> {
-    isLoading.value = true
-    error.value = null
+  async function getHealthScore(path?: string): Promise<void> {
+    startLoading()
     try {
-      const data = await ApiClient.get('/api/code-intelligence/health-score')
+      const url = path
+        ? `/api/code-intelligence/health-score?path=${encodeURIComponent(path)}`
+        : '/api/code-intelligence/health-score'
+      const data = await ApiClient.get(url)
       healthScore.value = data
       logger.debug('Health score:', healthScore.value)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch health score'
       logger.error('Failed to fetch health score:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
     } finally {
-      isLoading.value = false
+      stopLoading()
+    }
+  }
+
+  async function getSecurityScoreCached(): Promise<SecurityScoreCached | null> {
+    startLoading()
+    try {
+      const data = await ApiClient.get('/api/code-intelligence/security/score/cached')
+      securityScoreCached.value = data
+      logger.debug('Cached security score:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch cached security score'
+      logger.error('Failed to fetch cached security score:', err)
+      errors.value = [...errors.value, message]
+      return null
+    } finally {
+      stopLoading()
     }
   }
 
   async function getTrends(days: number = 30): Promise<void> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.get(`/api/code-intelligence/trends?days=${days}`)
       trends.value = data.trends || []
@@ -227,15 +276,14 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch trends'
       logger.error('Failed to fetch trends:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function compareCode(file1: string, file2: string): Promise<ComparisonResult | null> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.post('/api/code-intelligence/compare', { file1, file2 })
       logger.debug('Comparison result:', data)
@@ -243,16 +291,15 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to compare code'
       logger.error('Failed to compare code:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return null
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function getAnalysisHistory(limit: number = 50): Promise<void> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.get(`/api/code-intelligence/history?limit=${limit}`)
       analysisHistory.value = data.analyses || []
@@ -260,15 +307,14 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch history'
       logger.error('Failed to fetch history:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function deleteAnalysis(analysisId: string): Promise<boolean> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       await ApiClient.delete(`/api/code-intelligence/analysis/${analysisId}`)
       analysisHistory.value = analysisHistory.value.filter(a => a.id !== analysisId)
@@ -277,16 +323,15 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete analysis'
       logger.error('Failed to delete analysis:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return false
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
   }
 
   async function batchAnalyze(files: Array<{ code: string; filename: string; language?: string }>): Promise<CodeAnalysisResult[]> {
-    isLoading.value = true
-    error.value = null
+    startLoading()
     try {
       const data = await ApiClient.post('/api/code-intelligence/batch-analyze', { files })
       logger.debug('Batch analysis complete:', data.results?.length)
@@ -294,18 +339,27 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to batch analyze'
       logger.error('Failed to batch analyze:', err)
-      error.value = message
+      errors.value = [...errors.value, message]
       return []
     } finally {
-      isLoading.value = false
+      stopLoading()
     }
+  }
+
+  /** Clear all accumulated errors. */
+  function clearErrors(): void {
+    errors.value = []
   }
 
   // ===== Lifecycle =====
 
   onMounted(() => {
     if (autoFetch) {
-      Promise.all([getHealthScore(), getAnalysisHistory()])
+      clearErrors()
+      Promise.all([
+        getSecurityScoreCached(),
+        getAnalysisHistory(),
+      ])
     }
   })
 
@@ -315,10 +369,12 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     analysisHistory,
     qualityScore,
     healthScore,
+    securityScoreCached,
     suggestions,
     trends,
     isLoading,
     error,
+    errors,
 
     // Methods
     analyzeCode,
@@ -326,11 +382,13 @@ export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
     getQualityScore,
     getSuggestions,
     getHealthScore,
+    getSecurityScoreCached,
     getTrends,
     compareCode,
     getAnalysisHistory,
     deleteAnalysis,
     batchAnalyze,
+    clearErrors,
   }
 }
 

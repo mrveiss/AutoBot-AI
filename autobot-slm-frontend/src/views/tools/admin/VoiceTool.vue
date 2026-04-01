@@ -42,9 +42,40 @@ const settings = ref<VoiceSettings>({
 const availableVoices = ref<string[]>(['default'])
 const conversationHistory = ref<{ role: 'user' | 'assistant'; text: string; timestamp: Date }[]>([])
 
-// Speech Recognition (using any to avoid missing lib types for SpeechRecognition)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let recognition: any = null
+// Speech Recognition browser API types
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly [index: number]: { readonly transcript: string }
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  readonly [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionEvent {
+  readonly resultIndex: number
+  readonly results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent {
+  readonly error: string
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onend: (() => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
+let recognition: SpeechRecognitionInstance | null = null
 
 function initSpeechRecognition(): void {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -52,8 +83,9 @@ function initSpeechRecognition(): void {
     return
   }
 
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  recognition = new SpeechRecognition()
+  const SpeechRecognitionCtor = (window as unknown as Record<string, new () => SpeechRecognitionInstance>).SpeechRecognition
+    || (window as unknown as Record<string, new () => SpeechRecognitionInstance>).webkitSpeechRecognition
+  recognition = new SpeechRecognitionCtor()
 
   recognition.continuous = false
   recognition.interimResults = true
@@ -65,8 +97,7 @@ function initSpeechRecognition(): void {
     error.value = null
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onresult = (event: any) => {
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
     let interimTranscript = ''
     let finalTranscript = ''
 
@@ -89,8 +120,7 @@ function initSpeechRecognition(): void {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onerror = (event: any) => {
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     isListening.value = false
     error.value = `Speech recognition error: ${event.error}`
   }
@@ -217,7 +247,7 @@ onUnmounted(() => {
   <div class="p-6 h-full flex flex-col">
     <div class="flex gap-6 flex-1 overflow-hidden">
       <!-- Main Panel -->
-      <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+      <div class="flex-1 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
         <!-- Header -->
         <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
           <div class="flex items-center justify-between">
@@ -332,7 +362,7 @@ onUnmounted(() => {
               v-for="(msg, index) in conversationHistory"
               :key="index"
               :class="[
-                'p-2 rounded text-sm',
+                'p-2 rounded-sm text-sm',
                 msg.role === 'user' ? 'bg-gray-100 ml-8' : 'bg-primary-50 mr-8'
               ]"
             >
@@ -347,7 +377,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Settings Panel -->
-      <div class="w-80 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="w-80 bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">Voice Settings</h3>
 
         <div class="space-y-4">

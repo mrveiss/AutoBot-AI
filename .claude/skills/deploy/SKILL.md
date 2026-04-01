@@ -137,7 +137,7 @@ ssh autobot@{target_ip} "grep -E '(HOST|PORT|PASSWORD)' /opt/autobot/.env 2>/dev
 ssh autobot@{target_ip} "which python3 && /opt/autobot/venv/bin/python --version"
 ```
 
-- ✅ PASS: Points to venv Python with correct version (3.10+ for Ubuntu 22.04)
+- ✅ PASS: Points to venv Python with correct version (3.12+ for Ubuntu 22.04)
 - ❌ FAIL: Wrong path or version → Fix venv or activate correct Python
 
 ### Check 3: Database Migrations Current

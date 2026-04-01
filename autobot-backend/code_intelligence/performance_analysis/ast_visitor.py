@@ -10,7 +10,7 @@ Contains the AST visitor that analyzes code for performance patterns.
 
 import ast
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from .patterns import (
     BLOCKING_IO_OPERATIONS,
@@ -47,28 +47,38 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         self.loop_stack: List[ast.AST] = []
         self.function_calls_in_loop: List[tuple] = []
         self.awaits_in_function: List[ast.Await] = []
+        # Issue #2656: Track node IDs of Call nodes that are directly awaited.
+        # When visit_Await fires before generic_visit descends into the awaited
+        # Call, we record the Call's id() so _check_blocking_in_async can skip
+        # it — an awaited call is already async-safe by definition.
+        self._awaited_call_ids: Set[int] = set()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Analyze synchronous function definitions."""
         old_function = self.current_function
         old_async = self.async_context
+        old_awaited_ids = self._awaited_call_ids
         self.current_function = node.name
         self.async_context = False
         self.awaits_in_function = []
+        self._awaited_call_ids = set()
 
         self._analyze_function(node)
         self.generic_visit(node)
 
         self.current_function = old_function
         self.async_context = old_async
+        self._awaited_call_ids = old_awaited_ids
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Analyze async function definitions."""
         old_function = self.current_function
         old_async = self.async_context
+        old_awaited_ids = self._awaited_call_ids
         self.current_function = node.name
         self.async_context = True
         self.awaits_in_function = []
+        self._awaited_call_ids = set()
 
         self._analyze_function(node)
         self._check_sequential_awaits(node)
@@ -76,6 +86,7 @@ class PerformanceASTVisitor(ast.NodeVisitor):
 
         self.current_function = old_function
         self.async_context = old_async
+        self._awaited_call_ids = old_awaited_ids
 
     def visit_For(self, node: ast.For) -> None:
         """Analyze for loops."""
@@ -115,8 +126,15 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Await(self, node: ast.Await) -> None:
-        """Track await expressions."""
+        """Track await expressions.
+
+        Issue #2656: Record the node ID of any Call that is directly awaited so
+        that _check_blocking_in_async can skip it.  A call inside ``await``
+        is already async-safe — flagging it as blocking is a false positive.
+        """
         self.awaits_in_function.append(node)
+        if isinstance(node.value, ast.Call):
+            self._awaited_call_ids.add(id(node.value))
         self.generic_visit(node)
 
     def visit_BinOp(self, node: ast.BinOp) -> None:
@@ -559,8 +577,17 @@ class PerformanceASTVisitor(ast.NodeVisitor):
         """Check for blocking operations in async context.
 
         Issue #281/#385/#665: Refactored with confidence-based pattern matching.
+        Issue #2656: Skip calls that are directly awaited — they are async-safe
+        by definition (e.g. ``await db.execute(...)`` with SQLAlchemy AsyncSession).
         """
         if not self.async_context:
+            return
+
+        # Issue #2656: A call wrapped in ``await`` is already async-safe.
+        # visit_Await registers the inner Call's id() before generic_visit
+        # descends into it, so by the time visit_Call fires for that node
+        # the id is already present in _awaited_call_ids.
+        if id(node) in self._awaited_call_ids:
             return
 
         call_name = self._get_call_name(node)

@@ -6,6 +6,7 @@
 import asyncio
 
 import pytest
+
 from utils.pipeline_profiler import PipelineProfiler
 
 

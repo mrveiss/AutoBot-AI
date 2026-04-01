@@ -273,19 +273,21 @@ const routes: RouteRecordRaw[] = [
       icon: 'fas fa-project-diagram',
       description: 'Visual workflow builder and automation (Issue #585)',
       requiresAuth: true
-    }
-  },
-  // Issue #900: Browser Automation Dashboard — moved under /automation (#2367)
-  {
-    path: '/automation/browser-automation',
-    name: 'browser-automation',
-    component: () => import('@/views/BrowserAutomationView.vue'),
-    meta: {
-      title: 'Browser Automation',
-      icon: 'fas fa-globe',
-      description: 'Control browser workers and automate web tasks',
-      requiresAuth: true
-    }
+    },
+    // Child routes render inside WorkflowBuilderView's <router-view /> (#2368)
+    children: [
+      {
+        path: 'browser-automation',
+        name: 'browser-automation',
+        component: () => import('@/views/BrowserAutomationView.vue'),
+        meta: {
+          title: 'Browser Automation',
+          icon: 'fas fa-globe',
+          description: 'Control browser workers and automate web tasks',
+          requiresAuth: true
+        }
+      }
+    ]
   },
   // Redirect old path (#2367)
   {
@@ -377,15 +379,7 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
-      {
-        path: 'bug-prediction',
-        name: 'analytics-bug-prediction',
-        component: () => import('@/components/analytics/BugPredictionDashboard.vue'),
-        meta: {
-          title: 'Bug Prediction',
-          parent: 'analytics'
-        }
-      },
+      // bug-prediction route removed — functionality in CodebaseBugPredictionPanel
       {
         path: 'code-generation',
         name: 'analytics-code-generation',
@@ -395,15 +389,7 @@ const routes: RouteRecordRaw[] = [
           parent: 'analytics'
         }
       },
-      {
-        path: 'code-intelligence',
-        name: 'analytics-code-intelligence',
-        component: () => import('@/components/analytics/CodeIntelligenceDashboard.vue'),
-        meta: {
-          title: 'Code Intelligence',
-          parent: 'analytics'
-        }
-      },
+      // code-intelligence route removed — functionality in CodebaseIntelligenceScoresPanel
       {
         path: 'code-quality',
         name: 'analytics-code-quality',
@@ -523,29 +509,22 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
-  // Issue #1794: Agent Registry — browse backend + Claude agents
+  // Issue #1521: Agent Heartbeat Panel — real-time agent run status
   {
-    path: '/agent-registry',
-    name: 'agent-registry',
-    component: () => import('@/views/AgentRegistryView.vue'),
+    path: '/agents/heartbeat',
+    name: 'agent-heartbeat',
+    component: () => import('@/components/agents/HeartbeatPanel.vue'),
     meta: {
-      title: 'Agent Registry',
-      icon: 'fas fa-robot',
-      description: 'Browse and monitor all registered agents',
+      title: 'Agent Heartbeat',
+      icon: 'fas fa-heartbeat',
+      description: 'Monitor agent heartbeat and real-time run status',
       requiresAuth: true
     }
   },
-  // Issue #899: Code Intelligence Tools
+  // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
     path: '/code-intelligence',
-    name: 'code-intelligence',
-    component: () => import('@/views/CodeIntelligenceView.vue'),
-    meta: {
-      title: 'Code Intelligence',
-      icon: 'fas fa-code',
-      description: 'Code analysis, quality monitoring, and suggestions',
-      requiresAuth: true
-    }
+    redirect: '/analytics/codebase'
   },
   // Issue #902: Developer Speedup Tools
   {
@@ -558,6 +537,18 @@ const routes: RouteRecordRaw[] = [
       description: 'Code search, generation, and productivity tools',
       requiresAuth: true
     }
+  },
+  // Issue #3201: AutoResearch Experiment Dashboard
+  {
+    path: '/experiments',
+    name: 'experiments',
+    component: () => import('@/views/ExperimentDashboard.vue'),
+    meta: {
+      title: 'Experiments',
+      icon: 'BeakerIcon',
+      description: 'AutoResearch experiment dashboard',
+      requiresAuth: true,
+    },
   },
 
   // Issue #729: Infrastructure routes redirected to slm-admin
@@ -758,7 +749,8 @@ router.onError((error) => {
 })
 
 // Global navigation guards with enhanced error handling
-router.beforeEach(async (to, from, next) => {
+// Issue #2676: Migrated from next() callback to return-value pattern (vue-router v5)
+router.beforeEach(async (to, from) => {
   try {
     const appStore = useAppStore()
     const userStore = useUserStore()
@@ -788,7 +780,6 @@ router.beforeEach(async (to, from, next) => {
       if (backendAuthenticated) {
         logger.debug('Backend auto-authenticated user (single_user mode)')
         // Continue to route - user is now authenticated
-        next()
         return
       }
     }
@@ -805,16 +796,14 @@ router.beforeEach(async (to, from, next) => {
         })
       }
 
-      // Redirect to login (no redirect param — clean URL)
-      next({ name: 'login' })
-      return
+      // Redirect to login (no redirect param -- clean URL)
+      return { name: 'login' }
     }
 
     // If user is authenticated and trying to access login page, redirect to chat
     if (to.name === 'login' && userStore.isAuthenticated) {
       logger.debug('User already authenticated, redirecting to chat')
-      next({ path: '/chat' })
-      return
+      return { path: '/chat' }
     }
 
     // Check for expired tokens
@@ -824,8 +813,7 @@ router.beforeEach(async (to, from, next) => {
 
       // If the route requires auth, redirect to login
       if (requiresAuth) {
-        next({ name: 'login' })
-        return
+        return { name: 'login' }
       }
     }
 
@@ -857,8 +845,7 @@ router.beforeEach(async (to, from, next) => {
       })
     }
 
-    // Continue navigation
-    next()
+    // Continue navigation (returning undefined allows navigation to proceed)
 
   } catch (error: unknown) {
     logger.error('Navigation guard error:', error)
@@ -877,7 +864,7 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // Even on error, continue navigation to prevent blocking
-    next()
+    // (returning undefined allows navigation to proceed)
   }
 })
 

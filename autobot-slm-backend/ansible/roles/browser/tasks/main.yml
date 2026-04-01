@@ -51,7 +51,34 @@
   tags: ['browser', 'config']
 
 # ============================================================
+# Sync browser worker code from code_source
+# ============================================================
+- name: "Browser | Ensure worker directory exists"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-browser-worker
+    state: directory
+    owner: "{{ browser_user }}"
+    group: "{{ browser_group }}"
+    mode: '0755'
+  become: yes
+  tags: ['browser', 'deploy']
+
+- name: "Browser | Sync browser worker code from code_source"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-browser-worker/"
+    dest: /opt/autobot/autobot-browser-worker/
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=__pycache__"
+      - "--exclude=.git"
+      - "--exclude=venv"
+  tags: ['browser', 'deploy']
+
+# ============================================================
 # VNC + desktop environment (opt-in, default false)  (#1363)
+# Guard: install_vnc must be true AND node must have 'vnc' in
+# node_roles (when defined).  Prevents VNC deployment on headless
+# Playwright workers like .25.  (#2989)
 # ============================================================
 - name: "Browser | Install desktop environment and VNC"
   apt:
@@ -64,30 +91,15 @@
       - xvfb
     state: present
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'packages', 'vnc']
 
 # ============================================================
 # Playwright headless browser automation
+# Node.js is installed by shared dependency roles in Phase 0
 # ============================================================
-- name: "Browser | Check if Node.js is already installed"
-  command: node --version
-  register: node_check
-  failed_when: false
-  changed_when: false
-  become: yes
-  tags: ['browser', 'packages']
-
-- name: "Browser | Install Node.js from NodeSource"
-  shell: |
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-  args:
-    creates: /usr/bin/node
-  when: node_check.rc != 0
-  become: yes
-  tags: ['browser', 'packages']
-
 - name: "Browser | Install Playwright system dependencies"
   apt:
     name:
@@ -120,6 +132,9 @@
     state: present
     executable: pip3
   become: yes
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['browser', 'packages']
 
 - name: "Browser | Install Playwright browsers"
@@ -128,13 +143,20 @@
   changed_when: false
   tags: ['browser', 'packages']
 
+- name: "Browser | Check if browser worker directory exists"
+  ansible.builtin.stat:
+    path: /opt/autobot/autobot-browser-worker/package.json
+  register: _browser_worker_dir
+  tags: ['browser', 'packages']
+
+# (#2872) Replaced failed_when: false with a stat guard -- npm install
+# failures on a deployed worker directory must surface.
 - name: "Browser | Install Node.js dependencies for browser worker"
   npm:
     path: /opt/autobot/autobot-browser-worker
     state: present
   become: yes
-  when: "'autobot-browser-worker' is exists"
-  failed_when: false
+  when: _browser_worker_dir.stat.exists | default(false)
   tags: ['browser', 'packages']
 
 - name: "Browser | Create VNC directory"
@@ -145,7 +167,9 @@
     group: autobot
     mode: '0700'
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'directories', 'vnc']
 
 - name: "Browser | Check if VNC secrets file exists"
@@ -153,7 +177,9 @@
     path: /etc/autobot/vnc-secrets.env
   register: browser_vnc_secrets_stat
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'vnc']
 
 - name: "Browser | Generate secure VNC password"
@@ -167,6 +193,7 @@
   become: yes
   when:
     - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
     - not (browser_vnc_secrets_stat.stat.exists | default(false))
   tags: ['browser', 'vnc']
 
@@ -177,7 +204,9 @@
   register: browser_vnc_password
   changed_when: false
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'vnc']
 
 - name: "Browser | Set VNC password file"
@@ -189,6 +218,7 @@
   become: yes
   when:
     - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
     - browser_vnc_password.stdout | default('') | length > 0
   tags: ['browser', 'vnc']
 
@@ -198,7 +228,9 @@
     dest: /etc/systemd/system/autobot-vnc.service
     mode: '0644'
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   notify:
     - reload systemd
     - restart vnc
@@ -223,7 +255,9 @@
     from_ip: "{{ network_subnet }}"
     comment: "VNC Server"
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   notify: reload firewall
   tags: ['browser', 'firewall', 'vnc']
 
@@ -244,7 +278,9 @@
     enabled: yes
     daemon_reload: yes
   become: yes
-  when: install_vnc | default(false)
+  when:
+    - install_vnc | default(false)
+    - node_roles is not defined or 'vnc' in node_roles
   tags: ['browser', 'service', 'vnc']
 
 - name: "Browser | Enable Playwright service"

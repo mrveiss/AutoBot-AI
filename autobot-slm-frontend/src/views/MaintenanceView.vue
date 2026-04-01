@@ -462,7 +462,7 @@ function getNodeName(nodeId: string | null): string {
               type="checkbox"
               v-model="includeCompleted"
               @change="fetchMaintenanceWindows"
-              class="rounded text-primary-600 focus:ring-primary-500"
+              class="rounded-sm text-primary-600 focus:ring-primary-500"
             />
             Show completed
           </label>
@@ -539,21 +539,21 @@ function getNodeName(nodeId: string | null): string {
                 <div class="flex items-center gap-2 text-xs">
                   <span
                     v-if="window.suppress_alerts"
-                    class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded"
+                    class="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-sm"
                     title="Alerts suppressed"
                   >
                     Alerts
                   </span>
                   <span
                     v-if="window.suppress_remediation"
-                    class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded"
+                    class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-sm"
                     title="Auto-remediation suppressed"
                   >
                     Remediation
                   </span>
                   <span
                     v-if="window.auto_drain"
-                    class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded"
+                    class="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-sm"
                     title="Auto-drain enabled"
                   >
                     Drain
@@ -719,7 +719,7 @@ function getNodeName(nodeId: string | null): string {
                   <input
                     type="checkbox"
                     v-model="formData.suppress_alerts"
-                    class="rounded text-primary-600 focus:ring-primary-500"
+                    class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
                     <span class="text-sm font-medium text-gray-900">Suppress Alerts</span>
@@ -731,7 +731,7 @@ function getNodeName(nodeId: string | null): string {
                   <input
                     type="checkbox"
                     v-model="formData.suppress_remediation"
-                    class="rounded text-primary-600 focus:ring-primary-500"
+                    class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
                     <span class="text-sm font-medium text-gray-900">Suppress Auto-Remediation</span>
@@ -743,7 +743,7 @@ function getNodeName(nodeId: string | null): string {
                   <input
                     type="checkbox"
                     v-model="formData.auto_drain"
-                    class="rounded text-primary-600 focus:ring-primary-500"
+                    class="rounded-sm text-primary-600 focus:ring-primary-500"
                   />
                   <div>
                     <span class="text-sm font-medium text-gray-900">Auto-Drain</span>

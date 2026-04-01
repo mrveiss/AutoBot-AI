@@ -13,9 +13,10 @@ import { ref, computed, readonly, toRef } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // =============================================================================
 // Type Definitions
@@ -164,7 +165,7 @@ export function useCodeSync() {
 
   // Add auth token to all requests
   client.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

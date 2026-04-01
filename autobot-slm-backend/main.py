@@ -9,8 +9,12 @@ Main FastAPI application entry point.
 
 import asyncio
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api import (
     agents_router,
@@ -60,8 +64,7 @@ from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from config import settings
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from middleware import SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.database import db_service
 from services.git_tracker import start_version_checker
@@ -81,15 +84,14 @@ def _check_tablename_collisions() -> None:
 
     Delegates to :func:`autobot_shared.tablename_validator.check_tablename_collisions`
     after resolving the two application-specific ``MetaData`` objects.  The heavy
-    detection + logging logic lives in autobot-shared so it can be tested in
+    detection + logging logic lives in autobot_shared so it can be tested in
     isolation without importing this module's full dependency tree (#2413).
     """
     # Import after path is set up so this function is safe to call early in lifespan.
     import user_management.models  # noqa: F401 — registers all UM models with UMBase
+    from autobot_shared.tablename_validator import check_tablename_collisions
     from models.database import Base as SLMBase
     from user_management.models.base import Base as UMBase
-
-    from autobot_shared.tablename_validator import check_tablename_collisions
 
     check_tablename_collisions(SLMBase.metadata, UMBase.metadata)
 
@@ -286,6 +288,7 @@ app = FastAPI(
     description="Service Lifecycle Manager for AutoBot",
     version="1.0.0",
     lifespan=lifespan,
+    root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
 )
@@ -297,6 +300,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Issue #2858 — explicit CSRF mitigation + security headers.
+# Registered after CORSMiddleware so CORS headers are already present.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(health_router, prefix="/api")
 app.include_router(browser_router, prefix="/api")

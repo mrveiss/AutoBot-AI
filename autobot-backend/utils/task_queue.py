@@ -192,6 +192,10 @@ class TaskQueue:
         self.is_running = False
         self.logger = logging.getLogger(__name__)
 
+        # Optional NPUWorkerManager reference for per-worker task tracking (#2944).
+        # Set externally after construction: queue.npu_worker_manager = manager
+        self.npu_worker_manager = None
+
         # Lock for thread-safe stats access
         self._stats_lock = asyncio.Lock()
 
@@ -408,8 +412,42 @@ class TaskQueue:
                     await asyncio.sleep(TimingConstants.STANDARD_DELAY)
                     continue
 
-                # Process task
-                await self._process_task(task_id, worker_name)
+                # Record task assignment in per-worker SET so failover monitor
+                # can migrate only this worker's tasks if it dies (#2944, #2985).
+                if self.npu_worker_manager is not None:
+                    try:
+                        await self.npu_worker_manager.assign_task_to_worker(
+                            self.queue_name, worker_name, task_id
+                        )
+                    except Exception as assign_err:
+                        # Tracking failed: move the task back to pending so
+                        # another worker can pick it up with tracking intact.
+                        # Processing without tracking would make this task
+                        # invisible to failover and silently lost on crash (#2985).
+                        self.logger.error(
+                            "Worker %s: task tracking failed for %s, "
+                            "returning task to pending queue: %s",
+                            worker_name,
+                            task_id,
+                            assign_err,
+                        )
+                        if self.redis:
+                            await self.redis.zrem(self.running_key, task_id)
+                            await self.redis.zadd(
+                                self.pending_key, {task_id: time.time()}
+                            )
+                        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
+                        continue
+
+                try:
+                    # Process task
+                    await self._process_task(task_id, worker_name)
+                finally:
+                    # Always release regardless of success or exception (#2944).
+                    if self.npu_worker_manager is not None:
+                        await self.npu_worker_manager.release_worker_task(
+                            self.queue_name, worker_name, task_id
+                        )
 
             except asyncio.CancelledError:
                 break

@@ -8,17 +8,23 @@ Codebase statistics endpoints
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.chromadb_client import get_all_paginated
 
 from ..scanner import _tasks_sync_lock, indexing_tasks
 from ..storage import get_code_collection, get_redis_connection
-from .shared import _in_memory_storage
+from .shared import (
+    _in_memory_storage,
+    filter_problems_by_file_existence,
+    get_project_root,
+    resolve_source_root,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -380,8 +386,14 @@ def _fetch_problems_from_chromadb(
     code_collection,
     problem_type: Optional[str],
     source_id: Optional[str] = None,
+    source_root: Optional[Path] = None,
 ) -> list:
-    """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)"""
+    """Fetch problems from ChromaDB. (Issue #315, #1710: per-source filter)
+
+    Issue #2724: File paths are validated against source_root before returning.
+    Findings that reference non-existent paths are dropped to prevent
+    hallucinated results from reaching the issue tracker.
+    """
     if source_id:
         if problem_type:
             where_filter = {
@@ -406,7 +418,11 @@ def _fetch_problems_from_chromadb(
     results = get_all_paginated(
         code_collection, where=where_filter, include=["metadatas"]
     )
-    return [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
+    problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
+
+    # Issue #2724: Validate file paths against the indexed repository root.
+    root = source_root if source_root else get_project_root()
+    return filter_problems_by_file_existence(problems, root)
 
 
 async def _fetch_problems_from_redis(
@@ -564,6 +580,16 @@ async def get_codebase_problems(
     source_id: Optional[str] = None,
 ):
     """Get real code problems detected during analysis (#1710: per-source)."""
+    # Default to most recent source to prevent cross-project data mixing (#2653)
+    if not source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
+
+        source_id = await get_default_source_id()
+
+    # Issue #2724 / #2760: Resolve source root via shared helper so _fetch_problems_from_chromadb
+    # can validate file paths without needing to do async I/O in a sync context.
+    source_root = await resolve_source_root(source_id)
+
     code_collection = await asyncio.to_thread(get_code_collection)
     all_problems = []
     storage_type = "chromadb"
@@ -572,7 +598,10 @@ async def get_codebase_problems(
     if code_collection:
         try:
             all_problems = _fetch_problems_from_chromadb(
-                code_collection, problem_type, source_id=source_id
+                code_collection,
+                problem_type,
+                source_id=source_id,
+                source_root=source_root,
             )
             logger.info("Retrieved %s problems from ChromaDB", len(all_problems))
         except Exception as chroma_error:

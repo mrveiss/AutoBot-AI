@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import yaml
+
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from models.npu_models import (
@@ -746,13 +747,83 @@ class NPUWorkerManager:
         except Exception as e:
             logger.error("Failed to migrate task %s during failover: %s", task_id, e)
 
+    def _worker_tasks_key(self, queue_name: str, worker_id: str) -> str:
+        """Return the Redis SET key that tracks tasks assigned to a worker (#2496).
+
+        Args:
+            queue_name: Base name for the task queue Redis keys
+            worker_id: ID of the worker
+
+        Returns:
+            Redis key string for the worker's task set
+        """
+        return f"{queue_name}:worker:{worker_id}:tasks"
+
+    async def assign_task_to_worker(
+        self, queue_name: str, worker_id: str, task_id: str
+    ) -> None:
+        """Record that task_id is now running on worker_id (#2496).
+
+        Call this whenever a task is dispatched to a specific worker so that
+        the failover monitor can migrate only that worker's tasks on failure.
+
+        Args:
+            queue_name: Base name for the task queue Redis keys
+            worker_id: ID of the worker that will execute the task
+            task_id: ID of the task being assigned
+        """
+        if not self.redis_client:
+            return
+        try:
+            key = self._worker_tasks_key(queue_name, worker_id)
+            await self.redis_client.sadd(key, task_id)
+            logger.debug("Assigned task %s to worker %s", task_id, worker_id)
+        except Exception as e:
+            logger.error(
+                "Failed to assign task %s to worker %s: %s", task_id, worker_id, e
+            )
+            # Re-raise so the caller (_worker_loop) does not process the task
+            # without tracking.  An untracked task would be invisible to failover
+            # and could be silently lost on worker failure (#2985).
+            raise
+
+    async def release_worker_task(
+        self, queue_name: str, worker_id: str, task_id: str
+    ) -> None:
+        """Remove task_id from the worker's task set on completion or cancellation (#2496).
+
+        Call this when a task finishes (success or failure) so the per-worker
+        set stays accurate and the failover monitor does not re-queue it.
+
+        Args:
+            queue_name: Base name for the task queue Redis keys
+            worker_id: ID of the worker that executed the task
+            task_id: ID of the task being released
+        """
+        if not self.redis_client:
+            return
+        try:
+            key = self._worker_tasks_key(queue_name, worker_id)
+            await self.redis_client.srem(key, task_id)
+            logger.debug("Released task %s from worker %s", task_id, worker_id)
+        except Exception as e:
+            logger.error(
+                "Failed to release task %s from worker %s: %s", task_id, worker_id, e
+            )
+
     async def _failover_dead_worker(
         self,
         worker_id: str,
         queue_name: str,
         max_retries: int,
     ) -> None:
-        """Re-queue all running tasks for a dead worker and remove it (#1769).
+        """Re-queue only the dead worker's tasks and remove it from the registry (#1769, #2496).
+
+        Primary source: per-worker task SET ({queue}:worker:{worker_id}:tasks),
+        populated by assign_task_to_worker() callers (#2944).  When the SET is
+        empty (e.g. on existing deployments before callers were wired) the method
+        falls back to the global {queue}:running ZSET so that task migration is
+        never silently skipped.
 
         Args:
             worker_id: ID of the dead worker
@@ -763,22 +834,41 @@ class NPUWorkerManager:
         pending_key = f"{queue_name}:pending"
         failed_key = f"{queue_name}:failed"
         tasks_hash = f"{queue_name}:tasks"
+        worker_tasks_key = self._worker_tasks_key(queue_name, worker_id)
 
-        task_ids = await self.redis_client.zrange(running_key, 0, -1)
+        task_ids = await self.redis_client.smembers(worker_tasks_key)
         if not task_ids:
-            logger.info("Failover: dead worker %s had no running tasks", worker_id)
+            # Per-worker SET is empty.  In a multi-worker deployment the global
+            # running ZSET contains tasks from ALL live workers, so migrating it
+            # would incorrectly steal work from healthy workers (#2985).  Instead,
+            # log a WARNING and skip migration — stale running tasks will be
+            # reclaimed by the global retry/timeout mechanism.
+            logger.warning(
+                "Failover: per-worker SET empty for %s — skipping migration to "
+                "avoid stealing tasks from other workers. Stale tasks will be "
+                "reclaimed by the global retry mechanism (#2985).",
+                worker_id,
+            )
+            task_ids = set()
         else:
-            for task_id in task_ids:
-                await self._migrate_running_task(
-                    task_id,
-                    running_key,
-                    pending_key,
-                    failed_key,
-                    tasks_hash,
-                    max_retries,
-                )
+            logger.info(
+                "Failover: migrating %d tasks from per-worker SET for worker %s",
+                len(task_ids),
+                worker_id,
+            )
 
-        # Remove worker status key and registry entry
+        for task_id in task_ids:
+            await self._migrate_running_task(
+                task_id,
+                running_key,
+                pending_key,
+                failed_key,
+                tasks_hash,
+                max_retries,
+            )
+
+        # Remove per-worker task set and worker status/registry
+        await self.redis_client.delete(worker_tasks_key)
         await self.redis_client.delete(f"npu:worker:{worker_id}:status")
         await self.redis_client.delete(f"npu:worker:{worker_id}:metrics")
         self._workers.pop(worker_id, None)

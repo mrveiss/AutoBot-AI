@@ -60,6 +60,7 @@ def migrate(db_url: str) -> None:
         db_url: Main SLM PostgreSQL sync URL (from migration runner).
     """
     import psycopg2
+
     from migrations.runner import _parse_db_url
 
     # Connection to main SLM database (contains slm_users table)

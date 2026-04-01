@@ -11,12 +11,13 @@ direct reports, and org metadata updates with cycle detection.
 import logging
 from typing import Any, Dict, List, Optional
 
-from api.user_management.dependencies import get_db_session
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.user_management.dependencies import get_db_session
 from services.agent_org_service import AgentOrgService
 from services.delegation_service import DelegationService
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -20,12 +20,12 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from services.user_behavior_analytics import UserEvent, get_behavior_analytics
 
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from services.user_behavior_analytics import UserEvent, get_behavior_analytics
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/behavior", tags=["analytics", "behavior"])

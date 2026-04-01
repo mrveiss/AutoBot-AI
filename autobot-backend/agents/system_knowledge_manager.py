@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import yaml
+
 from agents.kb_librarian import EnhancedKBLibrarian
 from knowledge_base import KnowledgeBase
 
@@ -873,4 +874,4 @@ class SystemKnowledgeManager:
 
         except Exception as e:
             logger.error("Failed to get knowledge categories: %s", e)
-            return {"success": False, "error": str(e), "categories": {}}
+            return {"success": False, "error": "Failed to retrieve knowledge categories", "categories": {}}

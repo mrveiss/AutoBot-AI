@@ -1,6 +1,6 @@
 ---
 # Backend VM Configuration (VM2)
-# Services: FastAPI, Python 3.10+, Log aggregation
+# Services: FastAPI, Python 3.12+, Log aggregation
 
 # ==========================================
 # FIREWALL CONFIGURATION (Issue #894)
@@ -56,7 +56,7 @@ security:
 backend:
   # Python and FastAPI configuration
   python:
-    version: "3.10"
+    version: "3.12"
     pip_version: "latest"
     virtual_env: "{{ autobot.base_dir }}/backend/venv"
     packages_file: "{{ autobot.base_dir }}/requirements.txt"

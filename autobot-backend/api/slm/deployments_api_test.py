@@ -8,9 +8,10 @@ Tests for SLM Deployments API.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from api.slm.deployments import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from api.slm.deployments import router
 from models.infrastructure import DeploymentStrategy as DeploymentStrategyType
 from services.slm.deployment_orchestrator import (
     DeploymentContext,

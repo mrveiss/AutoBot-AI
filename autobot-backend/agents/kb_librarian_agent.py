@@ -11,16 +11,15 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from config import config
-from constants.path_constants import PATH
-from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from config import config
+from constants.path_constants import PATH
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +147,7 @@ class KBLibrarianAgent:
                 ),
                 "knowledge_base_results": kb_results,
                 "sources": [result["source"] for result in kb_results],
-                "error": str(e),
+                "error": "LLM response generation failed",
             }
 
     def _get_learning_extensions(self) -> tuple:
@@ -232,7 +231,7 @@ class KBLibrarianAgent:
             return stats
         except Exception as e:
             logger.error("KB-LIBRARIAN: Failed to get stats: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve knowledge base stats"}
 
     async def add_new_knowledge(self, content: str, title: str, source: str = None):
         """Add new knowledge to the base."""

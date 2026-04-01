@@ -11,7 +11,7 @@
 
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
+import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
 
 const authStore = useAuthStore()
 const testingConnection = ref(false)
@@ -22,7 +22,7 @@ const connectionMessage = ref('')
 // nginx proxy). For display we need to resolve against window.location.origin.
 const origin = typeof window !== 'undefined' ? window.location.origin : ''
 const apiUrl = computed(() => origin || authStore.getApiUrl() || '(unavailable)')
-const wsUrl = computed(() => `${config.wsBaseUrl}/api/ws/events`)
+const wsUrl = computed(() => `${config.wsBaseUrl}${getSlmApiBase()}/ws/events`)
 
 async function testConnection(): Promise<void> {
   testingConnection.value = true
@@ -31,7 +31,7 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${apiUrl.value}/api/health`, {
+    const response = await fetch(`${getSlmApiBase()}/health`, {
       headers: authStore.getAuthHeaders(),
     })
 
@@ -60,7 +60,7 @@ function copyToClipboard(text: string): void {
 <template>
   <div class="p-6">
     <!-- Connection Test Card -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Connection Status</h2>
         <button
@@ -100,7 +100,7 @@ function copyToClipboard(text: string): void {
     </div>
 
     <!-- API Endpoints -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
       <h2 class="text-lg font-semibold mb-6">API Endpoints</h2>
 
       <div class="space-y-4">
@@ -112,7 +112,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(apiUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +129,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(wsUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,7 +146,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getGrafanaUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getPrometheusUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +180,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getBackendUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,7 +192,7 @@ function copyToClipboard(text: string): void {
     </div>
 
     <!-- Configuration Reference -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold mb-4">Configuration Reference</h2>
       <p class="text-sm text-gray-500 mb-4">
         These settings are defined in the SSOT configuration file.

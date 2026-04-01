@@ -13,6 +13,9 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.schemas import (
     DeploymentCreate,
     DeploymentListResponse,
@@ -24,8 +27,6 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.deployment import deployment_service
 from services.role_registry import DEFAULT_ROLES
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/deployments", tags=["deployments"])
@@ -121,7 +122,7 @@ _ROLE_UI_META: Dict[str, Dict] = {
         "category": "ai",
         "tools": ["ollama"],
     },
-    "autobot-shared": {
+    "autobot_shared": {
         "description": "Shared Python library (deployed to all nodes)",
         "category": "infrastructure",
         "tools": ["pip", "python3"],

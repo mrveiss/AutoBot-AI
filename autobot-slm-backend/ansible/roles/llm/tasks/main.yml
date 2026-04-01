@@ -15,6 +15,8 @@
     cmd: nvidia-smi --query-gpu=name --format=csv,noheader
   register: _nvidia_smi_result
   changed_when: false
+  # (#2872) Intentional: nvidia-smi exits rc != 0 when no GPU is present;
+  # the result drives GPU vs CPU model selection below.
   failed_when: false
   when: llm_has_gpu == "auto"
 
@@ -81,6 +83,7 @@
     name:
       - curl
       - ca-certificates
+      - zstd
     state: present
     update_cache: true
   when: not _ollama_binary.stat.exists
@@ -148,5 +151,9 @@
   ansible.builtin.command:
     cmd: "ollama pull {{ item }}"
   loop: "{{ _llm_models_to_pull }}"
-  when: llm_pull_models | default(false)
-  changed_when: false
+  when: llm_pull_models | default(true)
+  become: yes
+  register: _model_pull
+  changed_when: "'pulling' in (_model_pull.stderr | default(''))"
+  failed_when: _model_pull.rc != 0
+  tags: ['llm', 'models']

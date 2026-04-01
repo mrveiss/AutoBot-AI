@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import aiofiles
+
 from config import ConfigManager
 
 try:
@@ -308,7 +309,7 @@ class ResearchBrowserSession:
 
         except Exception as e:
             logger.error("Navigation failed for session %s: %s", self.session_id, e)
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Navigation failed"}
 
     async def extract_content(self) -> Dict[str, Any]:
         """
@@ -334,10 +335,8 @@ class ResearchBrowserSession:
             }
 
         except Exception as e:
-            logger.error(
-                f"Content extraction failed for session {self.session_id}: {e}"
-            )
-            return {"success": False, "error": str(e)}
+            logger.error("Content extraction failed for session %s: %s", self.session_id, e)
+            return {"success": False, "error": "Content extraction failed"}
 
     async def save_mhtml(self) -> Optional[str]:
         """Save current page as MHTML file"""
@@ -591,7 +590,7 @@ class ResearchBrowserManager:
 
         except Exception as e:
             logger.error("Research failed for URL %s: %s", url, e)
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Research request failed"}
 
     async def _try_mhtml_fallback(
         self, session: ResearchBrowserSession, url: str
@@ -629,7 +628,7 @@ class ResearchBrowserManager:
 
         except Exception as e:
             logger.error("MHTML fallback error: %s", e)
-            return {"success": False, "error": f"MHTML fallback error: {str(e)}"}
+            return {"success": False, "error": "MHTML fallback failed"}
 
     async def _extract_from_mhtml(self, mhtml_path: str) -> Dict[str, Any]:
         """Extract content from MHTML file"""
@@ -652,7 +651,7 @@ class ResearchBrowserManager:
 
         except Exception as e:
             logger.error("Failed to extract from MHTML %s: %s", mhtml_path, e)
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "MHTML extraction failed"}
 
     async def _cleanup_oldest_session(self):
         """Clean up the oldest inactive session"""

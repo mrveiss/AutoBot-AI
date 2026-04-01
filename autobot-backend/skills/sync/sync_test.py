@@ -8,6 +8,7 @@ import tempfile
 import textwrap
 
 import pytest
+
 from skills.models import SkillState
 from skills.sync.local_sync import LocalDirSync
 
@@ -125,34 +126,48 @@ async def test_git_repo_sync_clones_and_delegates(tmp_path, monkeypatch):
 
 @pytest.mark.anyio
 async def test_mcp_client_sync_wraps_tools():
-    """MCPClientSync converts remote tool descriptors into skill packages."""
-    from unittest.mock import AsyncMock, MagicMock, patch
+    """MCPClientSync delegates to MCPClient and wraps tools as skill packages."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
 
-    fake_response_data = {
-        "result": {
-            "tools": [
-                {"name": "echo", "description": "Echo a message"},
-            ]
-        }
-    }
+    fake_tool = SimpleNamespace(name="echo", description="Echo a message")
 
-    mock_resp = AsyncMock()
-    mock_resp.json = AsyncMock(return_value=fake_response_data)
-    mock_resp.status = 200
-    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_resp.__aexit__ = AsyncMock(return_value=None)
-
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_client = AsyncMock()
+    mock_client.discover_tools = AsyncMock(return_value=[fake_tool])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
 
     from skills.sync.mcp_sync import MCPClientSync
 
-    with patch("aiohttp.ClientSession", return_value=mock_session):
+    with patch("skills.sync.mcp_sync.MCPClient", return_value=mock_client):
         sync = MCPClientSync("http://mcp-server.example.com")
         packages = await sync.discover()
 
     assert len(packages) == 1
     assert packages[0]["name"] == "echo"
     assert packages[0]["manifest"]["remote_mcp"] == "http://mcp-server.example.com"
+
+
+@pytest.mark.anyio
+async def test_mcp_client_sync_supports_stdio_uri():
+    """MCPClientSync passes non-HTTP URIs through to MCPClient."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    fake_tool = SimpleNamespace(name="read_file", description="Read a file")
+
+    mock_client = AsyncMock()
+    mock_client.discover_tools = AsyncMock(return_value=[fake_tool])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    from skills.sync.mcp_sync import MCPClientSync
+
+    stdio_uri = "stdio://npx -y @modelcontextprotocol/server-fs /tmp"
+    with patch("skills.sync.mcp_sync.MCPClient", return_value=mock_client) as mock_cls:
+        sync = MCPClientSync(stdio_uri)
+        packages = await sync.discover()
+
+    mock_cls.assert_called_once_with(stdio_uri)
+    assert len(packages) == 1
+    assert packages[0]["name"] == "read_file"

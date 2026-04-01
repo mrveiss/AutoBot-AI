@@ -36,11 +36,18 @@ code_source_module = __import__("importlib.util").util.module_from_spec(spec)
 sys.modules["services.auth"] = MagicMock()
 sys.modules["services.database"] = MagicMock()
 sys.modules["models.database"] = MagicMock()
+_mock_config = MagicMock()
+_mock_config.settings.external_url = "http://172.16.168.19:8080"
+sys.modules["config"] = _mock_config
 
 spec.loader.exec_module(code_source_module)
 
 _find_similar_paths = code_source_module._find_similar_paths
 _validate_repo_path = code_source_module._validate_repo_path
+_is_local_node = code_source_module._is_local_node
+
+# Patch target within the dynamically loaded module
+_LOCAL_NODE_PATCH = "code_source_module._is_local_node"
 
 
 class TestCodeSourceValidation:
@@ -54,7 +61,9 @@ class TestCodeSourceValidation:
     @pytest.mark.asyncio
     async def test_validate_repo_path_success(self, mock_node):
         """Test successful path validation when directory exists."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(return_value=(b"exists\n", b""))
             mock_process.returncode = 0
@@ -73,7 +82,9 @@ class TestCodeSourceValidation:
     @pytest.mark.asyncio
     async def test_validate_repo_path_not_exists(self, mock_node):
         """Test validation fails when directory doesn't exist."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             # First call: test -d fails (path doesn't exist)
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(return_value=(b"", b""))
@@ -92,7 +103,9 @@ class TestCodeSourceValidation:
     @pytest.mark.asyncio
     async def test_validate_repo_path_case_mismatch_suggestion(self, mock_node):
         """Test validation suggests correct path when case mismatch detected."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             # First call: test -d fails
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(return_value=(b"", b""))
@@ -116,7 +129,9 @@ class TestCodeSourceValidation:
     @pytest.mark.asyncio
     async def test_validate_repo_path_timeout(self, mock_node):
         """Test validation handles SSH timeout gracefully."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
             mock_exec.return_value = mock_process
@@ -131,7 +146,9 @@ class TestCodeSourceValidation:
     @pytest.mark.asyncio
     async def test_validate_repo_path_ssh_failure(self, mock_node):
         """Test validation handles SSH connection failure."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.side_effect = OSError("Connection refused")
 
             with pytest.raises(HTTPException) as exc_info:
@@ -143,9 +160,10 @@ class TestCodeSourceValidation:
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_case_mismatch(self, mock_node):
-        """Test finding similar paths detects case differences."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            # Mock ls -1 output showing case mismatch
+        """Test finding similar paths detects case differences (#2721)."""
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(
                 return_value=(b"AutoBot\nother-dir\n", b"")
@@ -159,9 +177,10 @@ class TestCodeSourceValidation:
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_no_match(self, mock_node):
-        """Test finding similar paths returns None when no match."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            # Mock ls -1 output with no matching entries
+        """Test finding similar paths returns None when no match (#2721)."""
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(
                 return_value=(b"other-dir\nanother-dir\n", b"")
@@ -175,26 +194,99 @@ class TestCodeSourceValidation:
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_exact_match(self, mock_node):
-        """Test finding similar paths ignores exact matches."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            # Mock ls -1 output with exact match (same case)
+        """Test finding similar paths ignores exact matches (#2721)."""
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(return_value=(b"AutoBot\n", b""))
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            # Should return None because it's an exact match (not a case mismatch)
             result = await _find_similar_paths(mock_node, "/home/kali/Desktop/AutoBot")
 
             assert result is None
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_ssh_failure(self, mock_node):
-        """Test finding similar paths handles SSH failure gracefully."""
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
+        """Test finding similar paths handles SSH failure gracefully (#2721)."""
+        with patch(_LOCAL_NODE_PATCH, return_value=False), patch(
+            "asyncio.create_subprocess_exec"
+        ) as mock_exec:
             mock_exec.side_effect = OSError("Connection refused")
 
             result = await _find_similar_paths(mock_node, "/home/kali/Desktop/autobot")
 
-            # Should return None on failure, not raise exception
             assert result is None
+
+
+class TestLocalNodeValidation:
+    """Tests for local (SLM Manager) path validation (#2721)."""
+
+    @pytest.fixture
+    def mock_node(self):
+        """Create a mock node for testing."""
+        return MockNode()
+
+    @pytest.mark.asyncio
+    async def test_validate_local_path_exists(self, mock_node, tmp_path):
+        """Test local validation succeeds when directory exists."""
+        repo_dir = tmp_path / "code_source"
+        repo_dir.mkdir()
+
+        with patch(_LOCAL_NODE_PATCH, return_value=True):
+            await _validate_repo_path(mock_node, str(repo_dir))
+
+    @pytest.mark.asyncio
+    async def test_validate_local_path_not_exists(self, mock_node):
+        """Test local validation fails when directory doesn't exist."""
+        with patch(_LOCAL_NODE_PATCH, return_value=True):
+            with pytest.raises(HTTPException) as exc_info:
+                await _validate_repo_path(mock_node, "/nonexistent/path")
+
+            assert exc_info.value.status_code == 400
+            assert "does not exist" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_find_similar_paths_local(self, mock_node, tmp_path):
+        """Test local similar path detection for case mismatches."""
+        (tmp_path / "CodeSource").mkdir()
+
+        with patch(_LOCAL_NODE_PATCH, return_value=True):
+            result = await _find_similar_paths(mock_node, str(tmp_path / "codesource"))
+
+            assert result == str(tmp_path / "CodeSource")
+
+    @pytest.mark.asyncio
+    async def test_is_local_node_localhost(self):
+        """Test _is_local_node detects localhost (#2721, #2759)."""
+        node = MockNode()
+        node.ip_address = "127.0.0.1"
+        # Patch shared utility so the test is deterministic regardless of host (#2759)
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
+            assert _is_local_node(node) is True
+
+    @pytest.mark.asyncio
+    async def test_is_local_node_own_ip(self):
+        """Test _is_local_node detects own IP from settings (#2721, #2759)."""
+        node = MockNode()
+        node.ip_address = "172.16.168.19"
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
+            assert _is_local_node(node) is True
+
+    @pytest.mark.asyncio
+    async def test_is_local_node_remote(self):
+        """Test _is_local_node returns False for remote nodes (#2721, #2759)."""
+        node = MockNode()
+        node.ip_address = "172.16.168.20"
+        with patch(
+            "autobot_shared.network_utils.get_local_ips",
+            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+        ):
+            assert _is_local_node(node) is False

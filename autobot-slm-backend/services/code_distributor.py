@@ -17,9 +17,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
+from sqlalchemy import select
+
 from models.database import Setting
 from services.database import db_service
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -144,9 +145,8 @@ class CodeDistributor:
         cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=30",
             "-p",
@@ -401,7 +401,7 @@ class CodeDistributor:
     def _build_ssh_opts(self, ssh_port: int) -> str:
         """Helper for trigger_node_sync. Ref: #1088."""
         ssh_opts = (
-            f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+            f"ssh -o StrictHostKeyChecking=accept-new "
             f"-o ConnectTimeout=30 -p {ssh_port}"
         )
         if Path(SSH_KEY_PATH).exists():

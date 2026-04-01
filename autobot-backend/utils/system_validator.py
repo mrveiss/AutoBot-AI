@@ -15,9 +15,9 @@ from typing import Any, Dict, List
 
 import aiohttp
 import psutil
-from config import ConfigManager
 
 from autobot_shared.http_client import get_http_client
+from config import ConfigManager
 
 # Create singleton config instance
 config = ConfigManager()

@@ -181,9 +181,8 @@ class TaskExecutor:
             return result
         except KeyError as e:
             # Missing required parameter
-            error_msg = f"Missing required parameter: {str(e)}"
-            logger.error("Task %s failed: %s", task_id, error_msg)
-            return {"status": "error", "message": error_msg}
+            logger.error("Task %s failed - missing required parameter: %s", task_id, e)
+            return {"status": "error", "message": "Missing required parameter"}
         except Exception as e:
             return self._handle_execution_error(e, ctx, task_type)
 

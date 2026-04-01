@@ -19,6 +19,7 @@ import axios, { type AxiosInstance } from 'axios'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 import type {
   ServiceDefinition,
   ServiceActionRequest,
@@ -30,7 +31,7 @@ import type {
 } from '@/composables/useOrchestration'
 
 const logger = createLogger('useOrchestrationManagement')
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // =============================================================================
 // Additional Type Definitions (Fleet Services)
@@ -81,7 +82,7 @@ export function useOrchestrationManagement() {
 
   // Add auth token to all requests
   client.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

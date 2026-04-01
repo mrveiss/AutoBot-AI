@@ -21,11 +21,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import yaml
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
 from sklearn.cluster import DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
+
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 from .analyzers import (
     APIAbuseAnalyzer,
@@ -36,6 +37,7 @@ from .analyzers import (
     MaliciousFileAnalyzer,
     ThreatAnalyzer,
 )
+from .learner import ThreatDetectionLearner
 from .models import (
     AnalysisContext,
     EventHistory,
@@ -72,6 +74,7 @@ class ThreatDetectionEngine:
         self._initialize_stats()
         self._initialize_analyzers()
 
+        self._initialize_learner()
         self._load_user_profiles()
         self._start_background_tasks()
 
@@ -124,6 +127,17 @@ class ThreatDetectionEngine:
             APIAbuseAnalyzer(),
             InsiderThreatAnalyzer(),
         ]
+
+    def _initialize_learner(self) -> None:
+        """Initialize adaptive learning layer. Issue #2110."""
+        try:
+            self.learner: Optional[ThreatDetectionLearner] = ThreatDetectionLearner()
+        except Exception as exc:
+            logger.error(
+                "Failed to initialise ThreatDetectionLearner (Redis unavailable?): %s",
+                exc,
+            )
+            self.learner = None
 
     def _load_config(self) -> Dict:
         """Load threat detection configuration"""
@@ -359,8 +373,21 @@ class ThreatDetectionEngine:
                     TimingConstants.HOURLY_INTERVAL
                 )  # Cleanup every hour
                 await self._cleanup_old_data()
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self._run_learner_consolidation
+                )
             except Exception as e:
                 logger.error("Error in periodic cleanup: %s", e)
+
+    def _run_learner_consolidation(self) -> None:
+        """Run learner consolidation off the event loop thread. Issue #2110."""
+        if self.learner is None:
+            return
+        try:
+            summary = self.learner.consolidate()
+            logger.info("Learner consolidation: %s", summary)
+        except Exception as exc:
+            logger.error("Learner consolidation failed: %s", exc)
 
     def _get_analyzer_mode_map(self) -> Dict:
         """Get mapping of analyzer types to their config mode keys. Issue #620."""
@@ -388,9 +415,20 @@ class ThreatDetectionEngine:
 
             threat = await analyzer.analyze(security_event, context)
             if threat:
+                threat = self._apply_learner_confidence(threat, type(analyzer).__name__)
                 detected_threats.append(threat)
 
         return detected_threats
+
+    def _apply_learner_confidence(
+        self, threat: ThreatEvent, pattern_id: str
+    ) -> ThreatEvent:
+        """Adjust threat confidence using learner's historical precision. Issue #2110."""
+        if self.learner is None:
+            return threat
+        adjusted = self.learner.adjust_confidence(threat.confidence_score, pattern_id)
+        threat.confidence_score = adjusted
+        return threat
 
     async def _process_detected_threat(
         self, detected_threats: List[ThreatEvent]
@@ -494,10 +532,29 @@ class ThreatDetectionEngine:
                 continue
 
             # Execute with proper argument handling
-            if isinstance(args, tuple):
-                await handler(*args)
-            else:
-                await handler(args)
+            success = True
+            try:
+                if isinstance(args, tuple):
+                    await handler(*args)
+                else:
+                    await handler(args)
+            except Exception as exc:
+                success = False
+                logger.error("Response action %s failed: %s", action, exc)
+
+            self._record_mitigation(threat, action, success)
+
+    def _record_mitigation(
+        self, threat: ThreatEvent, action: str, success: bool
+    ) -> None:
+        """Record mitigation outcome to the learner. Issue #2110."""
+        if self.learner is None:
+            return
+        threat_type = threat.threat_category.value
+        try:
+            self.learner.record_mitigation_outcome(threat_type, action, success)
+        except Exception as exc:
+            logger.error("Failed to record mitigation outcome: %s", exc)
 
     async def _block_ip_address(self, ip_address: str):
         """Block suspicious IP address"""

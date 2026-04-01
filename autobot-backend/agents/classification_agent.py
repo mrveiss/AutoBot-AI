@@ -14,16 +14,15 @@ from typing import Any, Dict, List, Optional
 
 from agents.json_formatter_agent import CLASSIFICATION_SCHEMA, json_formatter
 from agents.llm_failsafe_agent import get_robust_llm_response
-from autobot_types import TaskComplexity
-from llm_interface import LLMInterface
-from workflow_classifier import WorkflowClassifier
-
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from autobot_types import TaskComplexity
+from llm_interface import LLMInterface
+from workflow_classifier import WorkflowClassifier
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent

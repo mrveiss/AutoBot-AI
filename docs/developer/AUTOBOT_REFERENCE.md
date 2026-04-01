@@ -57,7 +57,7 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 | `autobot-slm-frontend/` | 172.16.168.19 (SLM) | SLM admin dashboard - Vue 3 UI (nginx+SSL) |
 | `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
 | `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
-| `autobot-shared/` | All backends | Common utilities (redis, config, logging) |
+| `autobot_shared/` | All backends | Common utilities (redis, config, logging) |
 | `autobot-infrastructure/` | Dev machine | Per-role infrastructure (not deployed) |
 
 **Critical project structure rules:**

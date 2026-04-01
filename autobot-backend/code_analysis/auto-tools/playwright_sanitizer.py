@@ -373,7 +373,7 @@ class PlaywrightSecurityFixer:
 
         except Exception as e:
             logger.error("Error processing %s: %s", file_path, e)
-            return {"file": file_path, "status": "error", "error": str(e)}
+            return {"file": file_path, "status": "error", "error": "File processing failed"}
 
     def _compute_report_stats(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
         """

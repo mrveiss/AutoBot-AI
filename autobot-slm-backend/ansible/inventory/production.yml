@@ -7,7 +7,7 @@ all:
     # Global SSH and connection settings - UPDATED FOR PROVIDED VMs
     # Issue #700: SSH key authentication (no plaintext passwords)
     ansible_user: autobot
-    ansible_ssh_private_key_file: ~/.ssh/autobot_key
+    ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     ansible_become: yes
     # Become password from vault (only needed if passwordless sudo not configured)
     # To use: ansible-playbook ... --ask-vault-pass
@@ -30,7 +30,9 @@ all:
     # Service discovery endpoints - derived from inventory host definitions (#799)
     # Each host IP is defined ONCE in ansible_host; these vars look it up dynamically.
     # Backend uses network_address since ansible_host is 127.0.0.1 (local connection).
-    slm_host: "{{ hostvars['autobot-slm']['ansible_host'] }}"
+    # slm_host: read from install-time secrets (set by install.sh), not hostvars
+    #           which gets polluted by gathered facts on multi-interface hosts.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
     slm_port: 8000
     backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
     backend_port: 8443
@@ -112,7 +114,7 @@ all:
         terminal_port: 7681
         novnc_port: 6080
         vnc_port: 5900
-        python_version: "3.10"
+        python_version: "3.12"
         fastapi_workers: 4
         log_level: "INFO"
 
@@ -194,7 +196,7 @@ all:
         # AI/ML-specific configuration
         ai_stack_port: 8080
         ollama_port: 11434
-        # TTS Worker (#928, migrated from .22 — #1394)
+        # TTS Worker (#928, migrated from .22 -- #1394)
         tts_worker_port: 8082
         model_cache_size: "10gb"
         inference_threads: 4
@@ -202,7 +204,7 @@ all:
     browser:
       hosts:
         autobot-browser:
-          ansible_host: 172.16.168.25  # Browser VM
+          ansible_host: 172.16.168.25  # Browser VM - headless Playwright worker
           vm_id: "autobot-browser-vm"
           vm_role: "browser"
           vm_hostname: "autobot-browser"
@@ -210,21 +212,53 @@ all:
             ram_mb: 4096     # Test config - dynamic memory
             cpu_cores: 2
             disk_gb: 50      # LVM expansion target
+          # (#2989) .25 is a headless Playwright worker, not a VNC host.
+          # VNC desktop is on .26 (llm node with vnc role).
+          node_roles:
+            - browser
           services:
             - playwright
-            - vnc-server
-            - desktop-environment
             - browser-automation
+      vars:
+        # Browser-specific configuration
+        playwright_port: 3000
+        browser_timeout: 30
+        headless_mode: true
+
+    llm:
+      hosts:
+        autobot-llm:
+          ansible_host: 172.16.168.26  # LLM CPU node (#1040) -- also VNC desktop (#1525)
+          vm_id: "autobot-llm-vm"
+          vm_role: "llm"
+          vm_hostname: "autobot-llm"
+          vm_resources:
+            ram_mb: 16384
+            cpu_cores: 8
+            disk_gb: 100
+          node_roles:
+            - llm
+            - vnc
+          services:
+            - ollama
+            - vnc-server
+            - vnc-websockify
           desktop_features:
             vnc_enabled: true
             desktop_environment: "xfce4"
       vars:
-        # Browser-specific configuration
-        playwright_port: 3000
-        vnc_port: 5901
-        vnc_display: ":1"
-        browser_timeout: 30
-        headless_mode: false
+        ollama_port: 11434
+        vnc_port: 5900
+        websockify_port: 6080
+
+    reserved:
+      hosts:
+        autobot-reserved:
+          ansible_host: 172.16.168.27  # Reserved node - pending role assignment
+          vm_id: "autobot-reserved-vm"
+          vm_role: "reserved"
+          vm_hostname: "autobot-reserved"
+          services: []
 
 # Environment-specific groups
 production_vms:
@@ -234,6 +268,8 @@ production_vms:
     database:
     aiml:
     browser:
+    llm:
+    reserved:
   vars:
     environment_type: "production"
     monitoring_enabled: true
@@ -288,3 +324,47 @@ infrastructure:
     npu:
     aiml:
     browser:
+    llm:
+    reserved:
+
+# Cross-inventory aliases (#2515)
+# Ensure group names from hosts.yml and slm-nodes.yml resolve in production.yml.
+redis:
+  children:
+    database:
+
+npu_workers:
+  children:
+    npu:
+
+npu_worker:
+  children:
+    npu:
+
+ai_stack:
+  children:
+    aiml:
+
+# LLM inference nodes alias -- used by provision-fleet-roles.yml (#1040)
+llm_nodes:
+  children:
+    llm:
+
+# VNC desktop nodes (#1525, #2407) -- nodes with VNC remote desktop access
+vnc_nodes:
+  children:
+    llm:
+
+# slm_nodes group used by SLM-specific playbooks (deploy-slm-agent, cleanup-nodes, etc.)
+# Maps all nodes managed by the SLM system.
+slm_nodes:
+  children:
+    slm:
+    backend:
+    frontend:
+    npu:
+    database:
+    aiml:
+    browser:
+    llm:
+    reserved:

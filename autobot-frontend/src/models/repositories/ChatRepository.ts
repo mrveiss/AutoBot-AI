@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosResponse } from 'axios'
+import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import type { ChatMessage } from '@/types/api'
@@ -37,9 +37,9 @@ export interface SendMessageOptions {
   /** File IDs from conversation-files API to attach to this message */
   attachments?: string[]
   /** Additional metadata to include with the message */
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   /** Allow any additional options to be passed through */
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -48,7 +48,7 @@ export interface SendMessageOptions {
 export interface SendMessageResponse {
   type: 'streaming' | 'buffered'
   response?: Response  // For streaming responses
-  data?: any           // For buffered responses (backward compatibility)
+  data?: Record<string, unknown>  // For buffered responses (backward compatibility)
 }
 
 /**
@@ -93,6 +93,31 @@ export interface KBCleanupResult {
   facts_deleted: number
   facts_preserved: number
   cleanup_error?: string | null
+}
+
+/** Minimal session shape returned by the backend list endpoint */
+interface BackendSessionEntry {
+  id?: string
+  chatId?: string
+  title?: string
+  name?: string
+  createdAt?: string
+  createdTime?: string
+  updatedAt?: string
+  lastModified?: string
+}
+
+/** Minimal message shape returned by the backend get-session endpoint */
+interface BackendMessageEntry {
+  id?: string
+  sender?: string
+  text?: string
+  content?: string
+  timestamp?: string
+  messageType?: string
+  type?: string
+  metadata?: Record<string, unknown>
+  rawData?: Record<string, unknown>
 }
 
 /**
@@ -169,7 +194,7 @@ export class ChatRepository {
   async sendMessage(
     message: string,
     chatId?: string,
-    options?: SendMessageOptions
+    options?: SendMessageOptions | Record<string, unknown>
   ): Promise<SendMessageResponse> {
     try {
       // Ensure we have a chat ID
@@ -178,23 +203,24 @@ export class ChatRepository {
       }
 
       // Build metadata object from options
-      const metadata: Record<string, any> = {}
+      const metadata: Record<string, unknown> = {}
 
       if (options) {
         // Include attachments if provided
-        if (options.attachments && options.attachments.length > 0) {
-          metadata.attachments = options.attachments
+        const opts = options as SendMessageOptions
+        if (opts.attachments && opts.attachments.length > 0) {
+          metadata.attachments = opts.attachments
         }
 
         // Merge any explicit metadata
-        if (options.metadata) {
-          Object.assign(metadata, options.metadata)
+        if (opts.metadata) {
+          Object.assign(metadata, opts.metadata)
         }
 
         // Include any other options (excluding attachments and metadata to avoid duplication)
         Object.keys(options).forEach(key => {
           if (key !== 'attachments' && key !== 'metadata') {
-            metadata[key] = options[key]
+            metadata[key] = (options as Record<string, unknown>)[key]
           }
         })
       }
@@ -234,7 +260,7 @@ export class ChatRepository {
           data: data
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to send message:', error)
       throw error
     }
@@ -286,21 +312,21 @@ export class ChatRepository {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to send streaming message:', error)
       throw error
     }
   }
 
   // Create new chat session
-  async createNewChat(title?: string, metadata?: any): Promise<ChatSession> {
+  async createNewChat(title?: string, metadata?: Record<string, unknown>): Promise<ChatSession> {
     try {
       const response = await this.post('/api/chat/sessions', {
         title: title || 'New Chat',
         metadata: metadata || {}
       })
       return response.data?.data || response.data
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to create new chat:', error)
       throw error
     }
@@ -312,22 +338,22 @@ export class ChatRepository {
   }
 
   // Get list of all chat sessions (for compatibility with controller)
-  async getChatList(): Promise<any[]> {
+  async getChatList(): Promise<ChatSession[]> {
     try {
       const response = await this.get('/api/chat/sessions')
       // Fix: axios wraps response in .data, and API response has { data: { sessions: [...] } }
       const sessions = response.data?.data?.sessions || response.data?.sessions || []
 
       // Transform backend session format to frontend store format
-      return sessions.map((session: any) => ({
+      return sessions.map((session: BackendSessionEntry) => ({
         id: session.id || session.chatId,
         title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
         messages: [], // Sessions list doesn't include messages - loaded separately
-        createdAt: new Date(session.createdAt || session.createdTime),
-        updatedAt: new Date(session.updatedAt || session.lastModified),
+        createdAt: new Date(session.createdAt || session.createdTime || Date.now()),
+        updatedAt: new Date(session.updatedAt || session.lastModified || Date.now()),
         isActive: false // Will be set by store when session is selected
       }))
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
       return [] // Return empty array on error to prevent app crash
     }
@@ -338,7 +364,7 @@ export class ChatRepository {
     try {
       const response = await this.get(`/api/chat/sessions/${sessionId}`)
       return response.data
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to get session:', error)
       throw error
     }
@@ -353,11 +379,11 @@ export class ChatRepository {
       logger.debug(`Raw API response:`, JSON.stringify(data).substring(0, 200))
 
       // Backend returns messages in data.messages
-      const backendMessages = data.data?.messages || data.messages || []
+      const backendMessages: BackendMessageEntry[] = data.data?.messages || data.messages || []
       logger.debug(`Backend returned ${backendMessages.length} messages`)
 
       // Transform backend message format to frontend format
-      const messages = backendMessages.map((msg: any, index: number) => {
+      const messages = backendMessages.map((msg: BackendMessageEntry, index: number) => {
         // Issue #680: Normalize message type to prevent wrong badges
         // Backend may save raw types like 'llm_response_chunk' which need mapping
         const rawType = msg.messageType || msg.type || 'message'
@@ -373,13 +399,13 @@ export class ChatRepository {
           // Check both rawData (old format) and metadata (new format) for backward compatibility
           metadata: msg.metadata || msg.rawData || {}
         }
-        logger.debug(`Message ${index + 1}: sender=${msg.sender} → ${transformed.sender}, type=${rawType} → ${normalizedType}, content length=${transformed.content.length}`)
+        logger.debug(`Message ${index + 1}: sender=${msg.sender} -> ${transformed.sender}, type=${rawType} -> ${normalizedType}, content length=${transformed.content.length}`)
         return transformed
       })
 
       logger.debug(`Transformed ${messages.length} messages, returning to controller`)
-      return messages
-    } catch (error: any) {
+      return messages as ChatMessage[]
+    } catch (error: unknown) {
       logger.error('Failed to get chat messages:', error)
       // Return empty array on error to prevent UI breakage
       return []
@@ -434,10 +460,10 @@ export class ChatRepository {
   async deleteChat(
     chatId: string,
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
-    fileOptions?: any
-  ): Promise<any> {
+    fileOptions?: Record<string, unknown>
+  ): Promise<AxiosResponse> {
     try {
-      const params: any = {}
+      const params: Record<string, string> = {}
 
       if (fileAction) {
         params.file_action = fileAction
@@ -449,7 +475,7 @@ export class ChatRepository {
 
       const response = await this.delete(`/api/chat/sessions/${chatId}`, { params })
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to delete chat:', error)
       throw error
     }
@@ -457,11 +483,11 @@ export class ChatRepository {
 
   // Reset chat (clear current session)
   // Issue #552: Fixed path - backend uses /api/chat/reset
-  async resetChat(): Promise<any> {
+  async resetChat(): Promise<AxiosResponse> {
     try {
       const response = await this.post('/api/chat/reset')
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to reset chat:', error)
       throw error
     }
@@ -469,17 +495,17 @@ export class ChatRepository {
 
   // Get chat history (legacy endpoint)
   // Issue #552: Fixed path - backend uses /api/chat/sessions
-  async getChatHistory(): Promise<any> {
+  async getChatHistory(): Promise<{ messages: ChatMessage[] }> {
     try {
       const response = await this.get('/api/chat/sessions')
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.warn('Failed to get chat history (legacy):', error)
       return { messages: [] }
     }
   }
 
-  async saveChatMessages(params: { chatId: string; messages: any[]; name?: string }): Promise<any> {
+  async saveChatMessages(params: { chatId: string; messages: ChatMessage[]; name?: string }): Promise<AxiosResponse> {
     try {
       // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
       // Backend expects: { data: { messages: [...], name: "..." } }
@@ -490,7 +516,7 @@ export class ChatRepository {
         }
       })
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to save chat messages:', error)
       throw error
     }
@@ -509,7 +535,7 @@ export class ChatRepository {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
       const response = await this.get(`/api/chat-knowledge/chat/sessions/${sessionId}/facts`)
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
       throw error
     }
@@ -531,26 +557,26 @@ export class ChatRepository {
         preserve
       })
       return response.data || response
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
       throw error
     }
   }
 
   // Helper methods for axios operations
-  private async get(url: string, config?: any): Promise<AxiosResponse> {
+  private async get(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> {
     return this.axios.get(url, config)
   }
 
-  private async post(url: string, data?: any, config?: any): Promise<AxiosResponse> {
+  private async post(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse> {
     return this.axios.post(url, data, config)
   }
 
-  private async delete(url: string, config?: any): Promise<AxiosResponse> {
+  private async delete(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> {
     return this.axios.delete(url, config)
   }
 
-  private async put(url: string, data?: any, config?: any): Promise<AxiosResponse> {
+  private async put(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse> {
     return this.axios.put(url, data, config)
   }
 }

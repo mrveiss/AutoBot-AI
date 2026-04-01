@@ -37,14 +37,14 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 import aiohttp
-from auth_middleware import check_admin_permission
-from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from type_defs.common import Metadata
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from constants.network_constants import NetworkConstants
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -302,6 +302,19 @@ MCP_BRIDGES = [
             "get_service_health",
             "get_vm_metrics",
             "list_available_metrics",
+        ],
+    ),
+    (
+        "redis_mcp",
+        "Redis Data & Operations - Direct Redis access, vector search, server ops",
+        "/api/redis/mcp/tools",
+        [
+            "data_access",
+            "vector_search",
+            "hybrid_search",
+            "ops_intelligence",
+            "stream_health",
+            "rbac_filtering",
         ],
     ),
 ]

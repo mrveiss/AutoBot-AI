@@ -22,11 +22,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -175,8 +176,9 @@ class BlueGreenService:
         self.ansible_dir = Path(settings.ansible_dir)
         self._running_deployments: Dict[str, asyncio.Task] = {}
         self._monitoring_tasks: Dict[str, asyncio.Task] = {}
-        # SSL verification - configurable via settings
-        self._verify_ssl = getattr(settings, "verify_ssl", False)
+        # SSL verification - configurable via SLM_VERIFY_SSL env var (#2852).
+        # Defaults to True (verify); only set False in dev/test with self-signed certs.
+        self._verify_ssl = getattr(settings, "verify_ssl", True)
 
     # =========================================================================
     # Public Methods
@@ -1239,7 +1241,7 @@ class BlueGreenService:
                 "-e",
                 f"ansible_port={node.ssh_port or 22}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -1293,9 +1295,8 @@ class BlueGreenService:
             cmd = [
                 "ssh",
                 "-o",
-                "StrictHostKeyChecking=no",
+                "StrictHostKeyChecking=accept-new",
                 "-o",
-                "UserKnownHostsFile=/dev/null",
                 "-o",
                 "ConnectTimeout=10",
                 "-o",
@@ -1392,7 +1393,7 @@ class BlueGreenService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(

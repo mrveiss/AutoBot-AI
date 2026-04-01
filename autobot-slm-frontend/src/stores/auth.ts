@@ -38,11 +38,13 @@ const USER_KEY = 'slm_user'
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter()
 
-  const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+  // Session-scoped storage: tokens are cleared when the browser tab closes
+  const token = ref<string | null>(sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY))
   const user = ref<User | null>(
-    localStorage.getItem(USER_KEY)
-      ? JSON.parse(localStorage.getItem(USER_KEY)!)
-      : null
+    (() => {
+      const raw = sessionStorage.getItem(USER_KEY) || localStorage.getItem(USER_KEY)
+      return raw ? JSON.parse(raw) : null
+    })()
   )
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -87,7 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
 
       token.value = data.access_token!
-      localStorage.setItem(TOKEN_KEY, data.access_token!)
+      sessionStorage.setItem(TOKEN_KEY, data.access_token!)
 
       await fetchCurrentUser()
       return true
@@ -114,7 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       const data: TokenResponse = await response.json()
       token.value = data.access_token
-      localStorage.setItem(TOKEN_KEY, data.access_token)
+      sessionStorage.setItem(TOKEN_KEY, data.access_token)
       mfaPending.value = false
       mfaTempToken.value = ''
       await fetchCurrentUser()
@@ -152,7 +154,7 @@ export const useAuthStore = defineStore('auth', () => {
         username: data.username,
         isAdmin: data.is_admin,
       }
-      localStorage.setItem(USER_KEY, JSON.stringify(user.value))
+      sessionStorage.setItem(USER_KEY, JSON.stringify(user.value))
     } catch {
       logout()
     }
@@ -175,7 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       const data: TokenResponse = await response.json()
       token.value = data.access_token
-      localStorage.setItem(TOKEN_KEY, data.access_token)
+      sessionStorage.setItem(TOKEN_KEY, data.access_token)
       return true
     } catch {
       logout()
@@ -186,6 +188,8 @@ export const useAuthStore = defineStore('auth', () => {
   function logout(): void {
     token.value = null
     user.value = null
+    sessionStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(USER_KEY)
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     router.push('/login')

@@ -8,9 +8,9 @@ import time
 from typing import Dict, Optional
 
 import aiofiles
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 
@@ -380,6 +380,57 @@ async def save_prompt(
         raise HTTPException(status_code=500, detail="Error saving prompt")
 
 
+async def _write_prompt_from_default(
+    prompt_id: str, default_file_path: str, prompts_dir: str
+) -> dict:
+    """Read the default prompt file and overwrite the custom location. Ref: #2735.
+
+    Uses per-file locking (#514) to prevent concurrent write corruption.
+    Returns the response dict for revert_prompt on success.
+    Raises HTTPException(404) if the default file is absent.
+    """
+    if not await asyncio.to_thread(os.path.exists, default_file_path):
+        logger.warning("No default found for prompt %s", prompt_id)
+        raise HTTPException(
+            status_code=404, detail=f"No default prompt found for {prompt_id}"
+        )
+
+    async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
+        default_content = await f.read()
+
+    custom_file_path = str(
+        validate_relative_path(prompt_id.replace("_", "/"), prompts_dir)
+    )
+    await asyncio.to_thread(
+        os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
+    )
+
+    # Issue #514: per-file locking to prevent concurrent write corruption
+    file_lock = await _get_prompt_file_lock(custom_file_path)
+    async with file_lock:
+        async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
+            await f.write(default_content)
+
+    logger.info("Reverted prompt %s to default", prompt_id)
+    prompt_name = os.path.basename(custom_file_path).rsplit(".", 1)[0]
+    prompt_type = (
+        os.path.dirname(custom_file_path).replace(prompts_dir + "/", "")
+        if prompts_dir in custom_file_path
+        else os.path.dirname(custom_file_path)
+    )
+    return {
+        "id": prompt_id,
+        "name": prompt_name,
+        "type": prompt_type if prompt_type else "custom",
+        "path": (
+            custom_file_path.replace(prompts_dir + "/", "")
+            if prompts_dir in custom_file_path
+            else custom_file_path
+        ),
+        "content": default_content,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="revert_prompt",
@@ -406,44 +457,12 @@ async def revert_prompt(
                 prompts_dir,
             )
         )
-        if await asyncio.to_thread(os.path.exists, default_file_path):
-            async with aiofiles.open(default_file_path, "r", encoding="utf-8") as f:
-                default_content = await f.read()
-            # Save default content to custom prompt location
-            custom_file_path = str(
-                validate_relative_path(prompt_id.replace("_", "/"), prompts_dir)
-            )
-            await asyncio.to_thread(
-                os.makedirs, os.path.dirname(custom_file_path), exist_ok=True
-            )
-            # Issue #514: Use per-file locking to prevent concurrent write corruption
-            file_lock = await _get_prompt_file_lock(custom_file_path)
-            async with file_lock:
-                async with aiofiles.open(custom_file_path, "w", encoding="utf-8") as f:
-                    await f.write(default_content)
-            logger.info("Reverted prompt %s to default", prompt_id)
-            prompt_name = os.path.basename(custom_file_path).rsplit(".", 1)[0]
-            prompt_type = (
-                os.path.dirname(custom_file_path).replace(prompts_dir + "/", "")
-                if prompts_dir in custom_file_path
-                else os.path.dirname(custom_file_path)
-            )
-            return {
-                "id": prompt_id,
-                "name": prompt_name,
-                "type": prompt_type if prompt_type else "custom",
-                "path": (
-                    custom_file_path.replace(prompts_dir + "/", "")
-                    if prompts_dir in custom_file_path
-                    else custom_file_path
-                ),
-                "content": default_content,
-            }
-        else:
-            logger.warning("No default found for prompt %s", prompt_id)
-            raise HTTPException(
-                status_code=404, detail=f"No default prompt found for {prompt_id}"
-            )
+        return await _write_prompt_from_default(
+            prompt_id, default_file_path, prompts_dir
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g. 404 from _write_prompt_from_default) — #2745
+        raise
     except OSError as e:
         logger.error(
             "Failed to read/write prompt file during revert %s: %s", prompt_id, e

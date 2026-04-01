@@ -6,6 +6,8 @@
     cmd: dpkg -l redis-stack-server
   register: _redis_installed
   changed_when: false
+  # (#2872) Intentional: dpkg exits rc=1 when package is not installed;
+  # the result gates conditional installation below.
   failed_when: false
   tags: ['redis', 'packages']
 
@@ -42,6 +44,26 @@
   when: _redis_installed.rc != 0
   tags: ['redis', 'packages']
 
+- name: "Redis | Create redis system group"
+  group:
+    name: redis
+    system: true
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
+- name: "Redis | Create redis system user"
+  user:
+    name: redis
+    group: redis
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/redis-stack
+    create_home: false
+    state: present
+  become: yes
+  tags: ['redis', 'packages']
+
 - name: "Redis | Create Redis data directory"
   file:
     path: /var/lib/redis-stack
@@ -51,6 +73,26 @@
     mode: '0755'
   become: yes
   tags: ['redis', 'directories']
+
+- name: "Redis | Fix Redis Stack data directory permissions"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: redis
+    group: redis
+    mode: '0750'
+  become: yes
+  tags: ['redis', 'configuration']
+
+- name: "Redis | Set vm.overcommit_memory for background saves"
+  ansible.builtin.sysctl:
+    name: vm.overcommit_memory
+    value: '1'
+    state: present
+    sysctl_set: true
+    reload: true
+  become: yes
+  tags: ['redis', 'configuration']
 
 - name: "Redis | Configure Redis Stack"
   template:
@@ -86,6 +128,24 @@
   notify: reload firewall
   tags: ['redis', 'firewall']
 
+# Issue #3011: Defense-in-depth — restore dpkg conffile if it was deleted
+# by a prior decommission or remove-role run. Plain `apt reinstall` does
+# NOT restore deleted conffiles; --force-confmiss is required.
+- name: "Redis | Check if base systemd service file exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/redis-stack-server.service
+  register: _redis_service_file
+  become: yes
+  tags: ['redis', 'systemd']
+
+- name: "Redis | Restore missing dpkg conffile (--force-confmiss)"
+  ansible.builtin.shell: >
+    apt-get -o Dpkg::Options::="--force-confmiss"
+    install --reinstall redis-stack-server -y
+  become: yes
+  when: not _redis_service_file.stat.exists
+  tags: ['redis', 'systemd']
+
 - name: "Redis | Create systemd override directory"
   file:
     path: /etc/systemd/system/redis-stack-server.service.d
@@ -116,7 +176,7 @@
 
 - name: "Redis | Wait for Redis to be ready"
   wait_for:
-    host: "{{ ansible_default_ipv4.address }}"
+    host: 127.0.0.1
     port: "{{ redis_port }}"
     timeout: 60
     state: started
@@ -124,12 +184,13 @@
 
 - name: "Redis | Test Redis connectivity"
   command: >
-    redis-cli -h {{ ansible_default_ipv4.address }} -p {{ redis_port }}
+    {{ redis_cli_path | default('/usr/bin/redis-cli') }}
+    -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_password is defined and redis_password %}-a {{ redis_password }}{% endif %}
     ping
   register: redis_ping
   changed_when: false
-  no_log: true  # Hide password from logs
+  no_log: "{{ redis_password is defined and redis_password | default(false) | bool }}"
   tags: ['redis', 'validation']
 
 - name: "Redis | Create backup directory"

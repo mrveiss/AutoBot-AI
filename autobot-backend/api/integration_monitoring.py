@@ -12,11 +12,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, validator
+
+from auth_middleware import check_admin_permission
 from integrations.base import IntegrationConfig
 from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
-from pydantic import BaseModel, Field, validator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(

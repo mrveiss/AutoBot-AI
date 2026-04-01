@@ -24,12 +24,12 @@ import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from constants.redis_constants import REDIS_KEY
 from pydantic import BaseModel, Field
 
 from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_client import get_redis_client
+from constants.redis_constants import REDIS_KEY
 
 logger = logging.getLogger(__name__)
 

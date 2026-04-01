@@ -22,12 +22,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 
@@ -1209,13 +1210,10 @@ async def analyze_file_control_flow(
 
     Issue #744: Requires admin authentication.
     """
-    file_path = Path(request.file_path)
-
-    # Issue #358 - avoid blocking
-    if not await asyncio.to_thread(file_path.exists):
-        raise HTTPException(
-            status_code=404, detail=f"File not found: {request.file_path}"
-        )
+    try:
+        file_path = Path(validate_path(request.file_path, must_exist=True))
+    except (ValueError, PermissionError):
+        raise HTTPException(status_code=400, detail="Invalid or inaccessible file path")
 
     if not file_path.suffix == ".py":
         raise HTTPException(status_code=400, detail="Only Python files are supported")
@@ -1223,6 +1221,8 @@ async def analyze_file_control_flow(
     try:
         # Issue #358 - avoid blocking
         source_code = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading file")
 

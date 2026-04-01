@@ -38,7 +38,7 @@
           <td class="py-3 pr-4">
             <span
               :class="[
-                'text-xs px-2 py-0.5 rounded border',
+                'text-xs px-2 py-0.5 rounded-sm border',
                 repoBadgeClass(repo.repo_type),
               ]"
             >
@@ -79,7 +79,7 @@
               type="text"
               placeholder="my-skills"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-none focus:border-blue-500"
+                     text-white text-sm focus:outline-hidden focus:border-blue-500"
             />
           </label>
           <label class="block">
@@ -89,7 +89,7 @@
               type="text"
               placeholder="https://... or /path/to/dir"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-none focus:border-blue-500"
+                     text-white text-sm focus:outline-hidden focus:border-blue-500"
             />
           </label>
           <label class="block">
@@ -97,7 +97,7 @@
             <select
               v-model="newRepo.repo_type"
               class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-none focus:border-blue-500"
+                     text-white text-sm focus:outline-hidden focus:border-blue-500"
             >
               <option value="git">Git</option>
               <option value="local">Local</option>

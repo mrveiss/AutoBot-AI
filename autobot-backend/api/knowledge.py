@@ -8,9 +8,6 @@ import json
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission, get_current_user
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from exceptions import InternalError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -20,15 +17,18 @@ from fastapi import (
     Query,
     Request,
 )
+from pydantic import BaseModel, Field, field_validator
+
+from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from exceptions import InternalError
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field, field_validator
 from utils.path_validation import contains_path_traversal
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -634,9 +634,23 @@ def _fallback_html_strip(html_content: str) -> tuple:
     """
     import re
     from html import unescape
+    from html.parser import HTMLParser
+    from io import StringIO
 
-    text = re.sub(r"<[^>]+>", " ", html_content)
-    text = unescape(text)
+    class _TagStripper(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+
+        def handle_data(self, data: str):
+            self._parts.append(data)
+
+        def get_text(self) -> str:
+            return " ".join(self._parts)
+
+    stripper = _TagStripper()
+    stripper.feed(html_content)
+    text = unescape(stripper.get_text())
     return re.sub(r"\s+", " ", text).strip(), ""
 
 
@@ -800,6 +814,36 @@ async def add_facts_to_knowledge(
     }
 
 
+async def _fetch_and_extract_url(
+    validated_url: str, fallback_title: str
+) -> "tuple[str, str]":
+    """Fetch HTML from a validated URL and return (content, title). Ref: #2735.
+
+    Raises HTTPException on HTTP error or connection failure.
+    Prevents SSRF via redirect (#1721).
+    """
+    import aiohttp
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                validated_url,
+                timeout=aiohttp.ClientTimeout(total=30),
+                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=400, detail=f"HTTP {response.status}"
+                    )
+                html_content = await response.text()
+                # Use safe HTML parser instead of regex (Issue #549 Code Review)
+                content, extracted_title = _sanitize_html_content(html_content)
+                title = fallback_title or extracted_title or validated_url
+                return content, title
+    except aiohttp.ClientError:
+        raise HTTPException(status_code=400, detail="Failed to fetch URL")
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_url_to_knowledge",
@@ -817,7 +861,7 @@ async def add_url_to_knowledge(
     Issue #549: Created to match KnowledgeRepository.ts POST /api/knowledge_base/url
     Issue #744: Requires admin authentication.
     """
-    import aiohttp
+    from urllib.parse import urlparse
 
     from autobot_shared.security.input_sanitizer import validate_url
 
@@ -831,27 +875,14 @@ async def add_url_to_knowledge(
     except ValueError:
         raise HTTPException(status_code=400, detail="Request failed")
 
+    # Inline SSRF guard so static analysis can trace the sanitization (#1733)
+    parsed = urlparse(validated_url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Request failed")
+
     logger.info("Fetching content from URL: %s", validated_url)
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                validated_url,
-                timeout=aiohttp.ClientTimeout(total=30),
-                allow_redirects=False,  # Prevent SSRF via redirect (#1721)
-            ) as response:
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=400, detail=f"HTTP {response.status}"
-                    )
-                html_content = await response.text()
-
-                # Use safe HTML parser instead of regex (Issue #549 Code Review)
-                content, extracted_title = _sanitize_html_content(html_content)
-                title = request.title or extracted_title or validated_url
-
-    except aiohttp.ClientError:
-        raise HTTPException(status_code=400, detail="Failed to fetch URL")
+    content, title = await _fetch_and_extract_url(validated_url, request.title or "")
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,

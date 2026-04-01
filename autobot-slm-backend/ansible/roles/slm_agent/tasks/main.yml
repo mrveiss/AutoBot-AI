@@ -34,6 +34,8 @@
     enabled: false
     daemon_reload: true
   when: legacy_agent_unit.stat.exists
+  # (#2872) Intentional: legacy service may already be stopped/disabled;
+  # this is cleanup of a previous service name (#917).
   failed_when: false
   become: yes
   tags: ['slm_agent', 'cleanup']
@@ -72,6 +74,8 @@
     chdir: "{{ playbook_dir }}/../../.."
   register: git_commit_result
   changed_when: false
+  # (#2872) Intentional: git may not be available on the Ansible controller
+  # (e.g. container-based CI); version falls back to 'unknown'.
   failed_when: false
   tags: ['slm_agent', 'version']
 
@@ -97,6 +101,9 @@
     executable: pip3
     extra_args: "--break-system-packages"
   become: yes
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['slm_agent', 'packages']
 
 - name: "SLM Agent | Copy agent source - __init__.py (slm package)"

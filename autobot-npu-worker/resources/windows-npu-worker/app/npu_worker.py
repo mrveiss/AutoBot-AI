@@ -1257,7 +1257,7 @@ class WindowsNPUWorker:
 
         except Exception as e:
             logger.error(f"Pairing failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Pairing failed")
 
     def _handle_pairing_status(self) -> Dict[str, Any]:
         """Return current pairing status for GET /pairing-status (Issue #641)."""
@@ -1296,7 +1296,7 @@ class WindowsNPUWorker:
 
         except Exception as e:
             logger.error(f"Unpair failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Unpair failed")
 
     def _register_device_routes(self):
         """Register /device-info route (Issue #640)."""
@@ -1452,7 +1452,7 @@ class WindowsNPUWorker:
             }
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Embedding generation failed")
 
     async def _handle_semantic_search(
         self,
@@ -1484,7 +1484,7 @@ class WindowsNPUWorker:
             }
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Semantic search failed")
 
     def _register_model_routes(self):
         """Register /model/optimize and /performance/benchmark routes."""
@@ -1502,7 +1502,7 @@ class WindowsNPUWorker:
                 }
             except Exception as e:
                 logger.error(f"Model optimization failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Model optimization failed")
 
         @self.app.get("/performance/benchmark")
         async def benchmark():
@@ -1515,7 +1515,7 @@ class WindowsNPUWorker:
                 }
             except Exception as e:
                 logger.error(f"Benchmark failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Benchmark failed")
 
     async def initialize(self):
         """
@@ -1587,8 +1587,10 @@ class WindowsNPUWorker:
             service_config = config.get("service", {})
 
             # Issue #640: Pass our persistent worker_id to prevent duplicates
+            # Issue #3084: Use AUTOBOT_BACKEND_HOST env var; fallback to localhost (no hardcoded IPs)
+            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
             bootstrap = await fetch_bootstrap_config(
-                backend_host=backend_config.get("host", "172.16.168.20"),
+                backend_host=backend_config.get("host") or default_backend_host,
                 backend_port=backend_config.get("port", 8001),
                 worker_port=service_config.get("port", 8082),
                 platform="windows",

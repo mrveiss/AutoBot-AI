@@ -7,6 +7,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from agents.overseer.overseer_agent import (
     OverseerAgent,
     _build_error_update,

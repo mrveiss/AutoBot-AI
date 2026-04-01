@@ -207,7 +207,7 @@ class AgentAnalytics:
     async def get_redis(self):
         """Get async Redis client"""
         if self._redis_client is None:
-            self._redis_client = await get_redis_client(
+            self._redis_client = get_redis_client(
                 async_client=True, database=RedisDatabase.ANALYTICS
             )
         return self._redis_client
@@ -646,7 +646,7 @@ class AgentAnalytics:
             }
         except Exception as e:
             logger.error("Failed to get performance trends: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve performance trends"}
 
 
 # Singleton instance (thread-safe)

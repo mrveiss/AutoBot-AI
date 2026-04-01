@@ -18,9 +18,8 @@ autobot_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(autobot_root))
 
 try:
-    from config import config
-
     from autobot_shared.redis_client import get_redis_client
+    from config import config
 except ImportError:
     # Fallback for standalone usage
     def get_redis_client(async_client=False):
@@ -199,7 +198,7 @@ class FrontendAnalyzer:
         }
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2725)
         self.config = config
         self.FRONTEND_KEY = "frontend_analysis:results"
         self.framework_patterns = self._build_framework_patterns()
@@ -217,6 +216,13 @@ class FrontendAnalyzer:
             for category, pattern_list in self.frontend_issues.items()
         }
         logger.info("Frontend Analyzer initialized")
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
 
     async def analyze_frontend_code(
         self, root_path: str = ".", patterns: List[str] = None
@@ -843,6 +849,7 @@ class FrontendAnalyzer:
 
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 await self.redis_client.setex(

@@ -100,12 +100,17 @@
     virtualenv: "{{ npu_install_dir }}/venv"
     state: latest
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
 - name: Check if OpenVINO is already installed
   ansible.builtin.command:
     cmd: "{{ npu_install_dir }}/venv/bin/pip show openvino"
   register: _openvino_check
   changed_when: false
+  # (#2872) Intentional: pip show exits rc=1 when package is not installed;
+  # the result gates conditional OpenVINO installation below.
   failed_when: false
   become_user: "{{ npu_user }}"
 
@@ -117,6 +122,9 @@
     virtualenv: "{{ npu_install_dir }}/venv"
     state: present
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
 
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
@@ -131,6 +139,9 @@
     state: present
     extra_args: "--timeout 120"
   become_user: "{{ npu_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when:
     - npu_install_openvino | default(true)
     - _openvino_check.rc != 0
@@ -166,6 +177,7 @@
   ansible.builtin.command: which ufw
   register: _ufw_installed
   changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
   failed_when: false
 
 - name: Configure UFW for NPU worker

@@ -56,7 +56,7 @@
             <BaseButton
               v-for="cat in availableCategories"
               :key="cat.value ?? 'all'"
-              :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
+              :variant="selectedCategory === cat.value ? 'primary' : 'outline-solid'"
               size="sm"
               @click="selectCategory(cat.value)"
               :class="[

@@ -344,7 +344,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
 
         except Exception as e:
             logger.error("Error in workflow step approval: %s", e)
-            return True, f"Approved (evaluation error): {str(e)}"
+            return True, "Approved (evaluation error occurred)"
 
     async def suggest_improvements(
         self,
@@ -366,7 +366,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
 
         except Exception as e:
             logger.error("Error getting improvement suggestions: %s", e)
-            return [f"Error generating suggestions: {str(e)}"]
+            return ["Error generating suggestions"]
 
     async def _evaluate_alternative_steps(
         self,
@@ -433,7 +433,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
         except Exception as e:
             logger.error("Error comparing alternatives: %s", e)
             return {
-                "error": str(e),
+                "error": "Alternatives comparison failed",
                 "best_option": None,
                 "all_evaluations": [],
                 "recommendation": "REJECT",

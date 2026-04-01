@@ -9,11 +9,12 @@ User={{ slm_user }}
 Group={{ slm_group }}
 WorkingDirectory={{ slm_backend_dir }}
 Environment="PATH={{ slm_backend_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH={{ slm_backend_dir }}:{{ slm_shared_dir }}:{{ slm_base_dir }}"
 EnvironmentFile=-{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}
 EnvironmentFile=-{{ slm_credentials_dir }}/{{ slm_credentials_file }}
 ExecStart={{ slm_backend_dir }}/venv/bin/uvicorn main:app --host {{ slm_backend_host }} --port {{ slm_backend_port }}
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+Restart=always
 RestartSec=5
 StandardOutput=append:{{ slm_log_dir }}/slm-backend.log
 StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
@@ -21,10 +22,9 @@ StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
 # Security hardening
 # NoNewPrivileges intentionally omitted: the backend needs sudo systemctl
 # for self-restart during GUI-triggered SLM sync (#926 code_sync.py)
+# ProtectSystem and ProtectHome removed (#2722): backend runs Ansible
+# provisioning which requires full filesystem access (apt, useradd, etc.)
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths={{ slm_base_dir }} /var/lib/slm
 
 [Install]
 WantedBy=multi-user.target

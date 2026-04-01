@@ -24,6 +24,8 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.http_client import get_http_client
+from autobot_shared.redis_client import get_redis_client
 from config import ConfigManager
 
 # Re-export all public API from the package for backward compatibility
@@ -40,9 +42,6 @@ from utils.model_optimization import (
     TaskComplexity,
     TaskRequest,
 )
-
-from autobot_shared.http_client import get_http_client
-from autobot_shared.redis_client import get_redis_client
 
 # Create singleton config instance
 config = ConfigManager()
@@ -171,12 +170,10 @@ class ModelOptimizer:
                 # Double-check after acquiring lock
                 if self._redis_client is None:
                     try:
-                        self._redis_client = get_redis_client(
+                        self._redis_client = await get_redis_client(
                             async_client=True,
-                            db=config.get("redis.databases.llm_cache.db", 5),
+                            database="analytics",
                         )
-                        if asyncio.iscoroutine(self._redis_client):
-                            self._redis_client = await self._redis_client
 
                         # Initialize performance tracker once Redis is ready
                         if self._redis_client and self._performance_tracker is None:

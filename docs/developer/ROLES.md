@@ -77,7 +77,7 @@ These conflicts drive the default fleet layout:
 | **Internal port** | 8000 (uvicorn HTTP, localhost) |
 | **External port** | 443 (nginx HTTPS reverse proxy) |
 | **Install dir** | `/opt/autobot/autobot-slm-backend` |
-| **Python** | 3.10 (venv at `{install_dir}/venv`) |
+| **Python** | 3.12 (venv at `{install_dir}/venv`) |
 | **Node.js** | 20.x (required for Ansible tasks and build) |
 | **System packages** | `python3 python3-pip python3-venv nginx openssl ansible build-essential curl gnupg ca-certificates` |
 | **External deps** | PostgreSQL :5432, Redis :6379 |
@@ -230,7 +230,7 @@ These conflicts drive the default fleet layout:
 | **Systemd service** | `autobot-npu-worker` |
 | **Port** | 8081 (FastAPI, proxied via nginx) |
 | **Install dir** | `/opt/autobot/autobot-npu-worker` |
-| **Python** | 3.10 (venv) |
+| **Python** | 3.12 (venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-pip python3-venv libopenblas-dev libblas-dev liblapack-dev` |
 | **External deps** | — |
@@ -253,7 +253,7 @@ These conflicts drive the default fleet layout:
 | **Systemd service** | `autobot-tts-worker` |
 | **Port** | 8082 (FastAPI, proxied via nginx) |
 | **Install dir** | `/opt/autobot/autobot-tts-worker` |
-| **Python** | 3.10 (venv) |
+| **Python** | 3.12 (venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-pip python3-venv libsndfile1` |
 | **External deps** | Redis :6379 (optional, for task queue) |
@@ -279,7 +279,7 @@ These conflicts drive the default fleet layout:
 | **Port** | 3000 (Node.js Express, proxied via nginx) |
 | **VNC port** | 5901 (optional) |
 | **Install dir** | `/opt/autobot/autobot-browser-worker` |
-| **Python** | 3.10 (venv, optional) |
+| **Python** | 3.12 (venv, optional) |
 | **Node.js** | Latest |
 | **System packages** | `nodejs xfce4 xfce4-goodies tightvncserver dbus-x11 xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libgbm1 libasound2` |
 | **External deps** | — |
@@ -303,7 +303,7 @@ These conflicts drive the default fleet layout:
 | **Systemd service** | `autobot-ai-stack` |
 | **Port** | 8080 (FastAPI, proxied via nginx) |
 | **Install dir** | `/opt/autobot/autobot-ai-stack` |
-| **Python** | 3.10 (venv) |
+| **Python** | 3.12 (venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-pip python3-venv build-essential` |
 | **External deps** | Redis :6379, Ollama :11434 (resolved from inventory, not hardcoded) |
@@ -325,7 +325,7 @@ These conflicts drive the default fleet layout:
 | **Systemd service** | `autobot-chromadb` |
 | **Port** | 8000 (localhost only) |
 | **Install dir** | `/opt/autobot/autobot-ai-stack` (shared venv with `ai-stack`) |
-| **Python** | 3.10 (shared venv with `ai-stack`) |
+| **Python** | 3.12 (shared venv with `ai-stack`) |
 | **Node.js** | — |
 | **System packages** | — (shared with `ai-stack`) |
 | **External deps** | — (local SQLite + parquet persistence) |
@@ -352,7 +352,7 @@ These conflicts drive the default fleet layout:
 | **External deps** | — |
 | **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | — (binary install from ollama.ai) |
-| **CPU models** | nomic-embed-text, llama3.2:1b, llama3.2:3b, llama3.2:latest, gemma2:2b |
+| **CPU models** | nomic-embed-text, llama3.2:1b, llama3.2:latest, gemma2:2b |
 | **Concurrency** | max_loaded=2, num_parallel=2, keep_alive=5m |
 | **Degraded without** | Local CPU inference — system falls back to cloud providers (OpenAI, Anthropic, Mistral) |
 | **Notes** | Cloud providers (OpenAI, Anthropic, Mistral) are alternative LLM backends — local LLM nodes are optional if cloud is configured. |
@@ -375,7 +375,7 @@ These conflicts drive the default fleet layout:
 | **External deps** | — |
 | **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | — (binary install from ollama.ai) |
-| **GPU models** | qwen3.5:9b, deepseek-r1:14b, codellama:13b |
+| **GPU models** | qwen3.5:9b, mistral:7b-instruct, dolphin-llama3:8b |
 | **Concurrency** | max_loaded=5, num_parallel=4, keep_alive=10m |
 | **Special hardware** | NVIDIA GPU required. Auto-detected via nvidia-smi. |
 | **Degraded without** | Large model inference — system falls back to CPU models or cloud providers |
@@ -411,7 +411,7 @@ These conflicts drive the default fleet layout:
 
 ---
 
-### `autobot-shared`
+### `autobot_shared`
 
 | Field | Value |
 |-------|-------|
@@ -420,13 +420,13 @@ These conflicts drive the default fleet layout:
 | **Required** | yes |
 | **Systemd service** | — (library, no service) |
 | **Port** | — |
-| **Install dir** | `/opt/autobot/autobot-shared` |
-| **Python** | 3.10 / 3.12 (editable install into each service's venv) |
+| **Install dir** | `/opt/autobot/autobot_shared` |
+| **Python** | 3.12 (editable install into each service's venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv` |
 | **External deps** | — |
 | **Ansible playbook** | `deploy-shared.yml` |
-| **Source path** | `autobot-shared/` |
+| **Source path** | `autobot_shared/` |
 | **Post-sync** | `pip install -e .` |
 | **Notes** | Must be deployed before any other Python service. Provides `get_redis_client()`, `ssot_config`, and shared utilities. |
 
@@ -443,7 +443,7 @@ These conflicts drive the default fleet layout:
 | **Port** | — (outbound only to SLM backend HTTPS) |
 | **Node exporter port** | 9100 (scraped by Prometheus on `.19`) |
 | **Install dir** | `/opt/autobot/autobot-slm-agent` |
-| **Python** | 3.10 (venv) |
+| **Python** | 3.12 (venv) |
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv prometheus-node-exporter` |
 | **External deps** | SLM backend HTTPS (resolved from config, not hardcoded) |
@@ -460,18 +460,18 @@ These conflicts drive the default fleet layout:
 
 | IP | Node ID | Primary Roles | Python | Node.js |
 |----|---------|---------------|--------|---------|
-| `.19` | `00-SLM-Manager` | slm-backend, slm-frontend, slm-database, slm-monitoring | 3.10 | 20.x |
-| `.20` | `01-Backend` | backend, celery, autobot-llm-gpu | 3.12 (conda) | — |
+| `.19` | `00-SLM-Manager` | slm-backend, slm-frontend, slm-database, slm-monitoring | 3.12 | 20.x |
+| `.20` | `01-Backend` | backend, celery, autobot-llm-gpu | 3.12 | — |
 | `.21` | `02-Frontend` | frontend | — | 20.x |
-| `.22` | `npu-worker` | npu-worker, tts-worker (current) | 3.10 | — |
+| `.22` | `npu-worker` | npu-worker, tts-worker (current) | 3.12 | — |
 | `.23` | `04-Databases` | redis, postgresql (backend user mgmt) | — | — |
-| `.24` | `03-AI-Stack` | ai-stack, chromadb | 3.10 | — |
-| `.25` | `browser-automation` | browser-service | 3.10 | Latest |
+| `.24` | `03-AI-Stack` | ai-stack, chromadb | 3.12 | — |
+| `.25` | `browser-automation` | browser-service | 3.12 | Latest |
 | `.26` | `05-LLM-CPU` | autobot-llm-cpu | — | — |
 | `.27` | `06-Node-27` | reserved | — | — |
 
 > `slm-agent` + `prometheus-node-exporter` run on **every node**.
-> `autobot-shared` deployed to every node running a Python service.
+> `autobot_shared` deployed to every node running a Python service.
 > `tts-worker` is portable — currently on `.22`, can move to `.21` or any available node.
 > `chromadb` is portable — currently on `.24`, can co-locate with Redis on `.23` or backend on `.20`.
 

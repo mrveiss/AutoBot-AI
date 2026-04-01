@@ -53,6 +53,7 @@ async def fetch_codebase_charts() -> Dict[str, Any]:
     """Fetch codebase analytics chart data via HTTP."""
     try:
         import aiohttp
+
         from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
@@ -84,6 +85,7 @@ async def fetch_debt_summary() -> Dict[str, Any]:
     """Fetch technical debt summary via HTTP."""
     try:
         import aiohttp
+
         from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API
@@ -107,6 +109,7 @@ async def fetch_performance_summary() -> Dict[str, Any]:
     """Fetch performance analysis summary via HTTP."""
     try:
         import aiohttp
+
         from constants.network_constants import ServiceURLs
 
         backend_url = ServiceURLs.BACKEND_API

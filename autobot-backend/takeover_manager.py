@@ -88,6 +88,9 @@ class TakeoverManager:
         self.pending_requests: Dict[str, TakeoverRequest] = {}
         self.active_sessions: Dict[str, TakeoverSession] = {}
         self.paused_tasks: Set[str] = set()
+        # Maps request_id -> memory task_id so _get_task_id_for_request can look it up.
+        # Populated in request_takeover; cleaned up in _expire_request. Issue #2869.
+        self._request_task_ids: Dict[str, str] = {}
 
         # Callbacks and handlers
         self.trigger_handlers: Dict[TakeoverTrigger, List[Callable]] = {}
@@ -254,9 +257,12 @@ class TakeoverManager:
             auto_approve,
         )
 
-        self._record_takeover_in_memory(
+        memory_task_id = self._record_takeover_in_memory(
             trigger, reason, priority, requesting_agent, affected_tasks
         )
+        # Store the mapping so _get_task_id_for_request can complete/fail the task
+        # when the request is approved or expires. Issue #2869.
+        self._request_task_ids[request_id] = memory_task_id
 
         self.pending_requests[request_id] = request
         await self._handle_post_request_actions(request, request_id)
@@ -323,6 +329,8 @@ class TakeoverManager:
                 "status": "approved_and_active",
             },
         )
+        # Clean up the mapping now that the task is closed. Issue #2869.
+        self._request_task_ids.pop(request_id, None)
 
         logger.info(
             f"Takeover approved and session started: {session.session_id} by {human_operator}"
@@ -589,7 +597,7 @@ class TakeoverManager:
 
         except Exception as e:
             logger.error("Failed to capture system snapshot: %s", e)
-            return {"error": str(e), "timestamp": datetime.now().isoformat()}
+            return {"error": "Failed to capture system snapshot", "timestamp": datetime.now().isoformat()}
 
     async def _execute_trigger_handlers(self, request: TakeoverRequest):
         """Execute registered handlers for takeover triggers"""
@@ -625,15 +633,28 @@ class TakeoverManager:
             task_id = self._get_task_id_for_request(request_id)
             if task_id:
                 self.memory_manager.fail_task(task_id, "Takeover request expired")
+                # Clean up the mapping now that the task is closed. Issue #2869.
+                self._request_task_ids.pop(request_id, None)
 
             logger.info("Takeover request expired: %s", request_id)
             await self._notify_state_change("request_expired", request_id)
 
     def _get_task_id_for_request(self, request_id: str) -> Optional[str]:
-        """Get the memory task ID associated with a takeover request"""
-        # This would need to be implemented based on how you store the mapping
-        # For now, returning None as placeholder
-        return None
+        """
+        Return the memory task ID recorded when the takeover request was created.
+
+        Issue #2869: Previously always returned None (placeholder). Now backed by
+        _request_task_ids, populated in request_takeover via _record_takeover_in_memory.
+        Returns None only if the mapping was never stored (e.g. legacy code path).
+        """
+        task_id = self._request_task_ids.get(request_id)
+        if task_id is None:
+            logger.warning(
+                "No memory task ID found for takeover request %s. "
+                "The task completion/failure call will be skipped. (#2869)",
+                request_id,
+            )
+        return task_id
 
     async def _notify_state_change(self, event_type: str, identifier: str):
         """Notify registered callbacks of state changes"""

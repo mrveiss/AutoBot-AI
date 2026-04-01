@@ -15,8 +15,6 @@ from typing import Any, Dict, List, Optional
 
 from config import UnifiedConfig
 
-from autobot_shared.redis_client import get_redis_client
-
 # Initialize unified config
 config = UnifiedConfig()
 logger = logging.getLogger(__name__)
@@ -89,7 +87,7 @@ class TestingCoverageAnalyzer:
     """Analyzes testing coverage and identifies gaps"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2984)
         self.config = config
 
         # Caching keys
@@ -883,8 +881,16 @@ class TestingCoverageAnalyzer:
             "priority_score": gap.priority_score,
         }
 
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2984)."""
+        if self.redis_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = await get_redis_client(async_client=True)
+
     async def _cache_results(self, results: Dict[str, Any]):
         """Cache analysis results in Redis"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 key = self.COVERAGE_KEY
@@ -895,6 +901,7 @@ class TestingCoverageAnalyzer:
 
     async def _clear_cache(self):
         """Clear analysis cache"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 cursor = 0

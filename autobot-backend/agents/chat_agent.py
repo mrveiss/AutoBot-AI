@@ -11,15 +11,14 @@ Focuses on quick, natural interactions without complex reasoning.
 import logging
 from typing import Any, Dict, List, Optional
 
-from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
-from prompt_manager import get_language_instruction, resolve_language
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from constants.threshold_constants import LLMDefaults
+from llm_interface import LLMInterface
+from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -137,14 +136,18 @@ class ChatAgent(StandardizedAgent):
             Dict containing the chat response and metadata
 
         Issue #620: Refactored to use extracted helper methods.
+        Issue #2596: MCP tool definitions injected into system prompt.
         """
         try:
             logger.info("Chat Agent processing message: %s...", message[:50])
 
-            # Prepare chat-optimized system prompt with language (#1327)
+            # Prepare chat-optimized system prompt with language (#1327) and MCP tools (#2596)
             lang_code = resolve_language()
-            system_prompt = self._get_chat_system_prompt() + get_language_instruction(
-                lang_code
+            mcp_section = await self._get_mcp_tools_prompt()
+            system_prompt = (
+                self._get_chat_system_prompt()
+                + mcp_section
+                + get_language_instruction(lang_code)
             )
 
             # Build conversation context

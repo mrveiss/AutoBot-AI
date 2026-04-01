@@ -35,7 +35,7 @@ WORKDIR /app
 # Install dependencies
 COPY autobot-slm-frontend/package.json autobot-slm-frontend/package-lock.json ./
 # Copy shared module (referenced by @shared alias)
-COPY autobot-shared/ /autobot-shared/
+COPY autobot_shared/ /autobot_shared/
 RUN npm ci
 
 # Copy source and build with /slm/ base path

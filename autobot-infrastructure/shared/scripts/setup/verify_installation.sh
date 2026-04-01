@@ -39,7 +39,7 @@ check_python_module() {
 
 # Basic system requirements
 echo -e "${BLUE}📋 System Requirements${NC}"
-check_item "Python 3.10+" "python3 --version | grep -E '3\.(10|11|12)'"
+check_item "Python 3.12+" "python3 --version | grep -E '3\.1[2-9]'"
 check_item "Docker" "docker --version"
 check_item "Ollama" "ollama --version"
 check_item "Node.js" "node --version"

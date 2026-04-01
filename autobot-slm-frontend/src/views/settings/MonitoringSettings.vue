@@ -21,8 +21,8 @@ const success = ref<string | null>(null)
 
 const settings = ref({
   monitoring_location: 'local',
-  prometheus_url: 'http://localhost:9090',
-  grafana_url: 'http://localhost:3000',
+  prometheus_url: getPrometheusUrl(),
+  grafana_url: getGrafanaUrl(),
   scrape_interval: '15',
   retention_days: '30',
   alerting_enabled: true,
@@ -41,7 +41,7 @@ async function fetchSettings(): Promise<void> {
       const data = await response.json()
       data.forEach((s: { key: string; value: string | null }) => {
         if (s.value !== null && s.key in settings.value) {
-          (settings.value as Record<string, any>)[s.key] = s.value
+          (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
         }
       })
     }
@@ -135,7 +135,7 @@ onMounted(fetchSettings)
       </div>
 
       <!-- Settings Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
         <h2 class="text-lg font-semibold mb-6">Monitoring Configuration</h2>
         <p class="text-sm text-gray-500 mb-6">
           Configure where Prometheus and Grafana monitoring services are hosted.
@@ -267,14 +267,14 @@ onMounted(fetchSettings)
                 v-model="settings.alerting_enabled"
                 class="sr-only peer"
               />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
         </div>
       </div>
 
       <!-- Deploy Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h3 class="font-semibold text-gray-900 mb-2">Deploy Monitoring Stack</h3>
         <p class="text-sm text-gray-500 mb-4">
           Use Ansible to deploy or migrate the monitoring stack to a different node.

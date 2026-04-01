@@ -186,23 +186,34 @@
               <i class="fas fa-smile" aria-hidden="true"></i>
             </BaseButton>
 
-            <!-- Vertical Divider -->
+            <!-- Vertical Divider + Quick Actions Toggle (#1569) -->
             <div class="action-divider"></div>
-
-            <!-- Quick Actions -->
             <BaseButton
-              v-for="action in quickActions"
-              :key="action.id"
               variant="ghost"
               size="sm"
-              @click="useQuickAction(action)"
-              class="action-btn quick-action-btn"
-              :disabled="isDisabled"
-              :aria-label="action.description"
+              class="action-btn"
+              :aria-label="showQuickActions ? 'Hide quick actions' : 'Show quick actions'"
+              @click="showQuickActions = !showQuickActions"
             >
-              <i :class="action.icon"></i>
-              <span class="action-label">{{ action.label }}</span>
+              <i class="fas fa-ellipsis-h"></i>
             </BaseButton>
+
+            <!-- Quick Actions (#1569: togglable) -->
+            <template v-if="showQuickActions">
+              <BaseButton
+                v-for="action in quickActions"
+                :key="action.id"
+                variant="ghost"
+                size="sm"
+                @click="useQuickAction(action)"
+                class="action-btn quick-action-btn"
+                :disabled="isDisabled"
+                :aria-label="action.description"
+              >
+                <i :class="action.icon"></i>
+                <span class="action-label">{{ action.label }}</span>
+              </BaseButton>
+            </template>
           </div>
         </div>
 
@@ -287,7 +298,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, inject, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
@@ -350,6 +361,10 @@ const typingDebounceTimer = ref<number | null>(null)
 // Constants
 const maxCharacters = 4000
 const maxFileSize = 10 * 1024 * 1024 // 10MB
+
+// Issue #1569: Quick actions visibility toggle with localStorage persistence
+const showQuickActions = ref(localStorage.getItem('autobot_showQuickActions') !== 'false')
+watch(showQuickActions, (val) => localStorage.setItem('autobot_showQuickActions', String(val)))
 
 // Quick actions
 const quickActions = computed(() => [
@@ -759,7 +774,7 @@ const getFileIcon = (type: string): string => {
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
+  return crypto.randomUUID()
 }
 
 // Real file upload implementation
@@ -903,6 +918,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* CRITICAL FIX: Enforce sticky positioning with !important and solid background */
 .chat-input-container {
   @apply relative bg-autobot-bg-card border-t border-autobot-border p-4;
@@ -987,7 +1003,7 @@ onUnmounted(() => {
 }
 
 .message-input {
-  @apply w-full px-4 py-3 resize-none border-none outline-none min-h-[44px] max-h-[150px];
+  @apply w-full px-4 py-3 resize-none border-none outline-hidden min-h-[44px] max-h-[150px];
   line-height: 1.5;
 }
 

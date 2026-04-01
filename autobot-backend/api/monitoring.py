@@ -15,6 +15,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 from api.monitoring_hardware import hardware_monitor
@@ -28,21 +38,16 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
+
+# Import AutoBot monitoring system
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import get_config
 from config import ConfigManager
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from constants.network_constants import ServiceURLs
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 from utils.performance_monitor import (
     add_alert_callback,
@@ -54,11 +59,6 @@ from utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
-
-# Import AutoBot monitoring system
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
-from autobot_shared.ssot_config import get_config
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
@@ -402,21 +402,36 @@ def _resolve_service_urls() -> tuple:
         browser_url = config.get_service_url("browser", "health")
         ollama_url = f"{config.get_ollama_url()}/api/version"
     except Exception:
-        # Issue #1229: Use ConfigRegistry instead of hardcoded IPs
-        npu_host = ConfigRegistry.get("vm.npu", "172.16.168.22")  # noqa: ssot-fallback
-        npu_port = ConfigRegistry.get("port.npu", "8081")
-        browser_host = ConfigRegistry.get(
-            "vm.browser", "172.16.168.25"  # noqa: ssot-fallback
-        )
-        browser_port = ConfigRegistry.get("port.browser", "3000")
-        ollama_host = ConfigRegistry.get(
-            "vm.llm", "172.16.168.20"  # noqa: ssot-fallback
-        )
-        ollama_port = ConfigRegistry.get("port.ollama", "11434")
+        # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
+        npu_host = ConfigRegistry.get("vm.npu")
+        npu_port = ConfigRegistry.get("port.npu")
+        browser_host = ConfigRegistry.get("vm.browser")
+        browser_port = ConfigRegistry.get("port.browser")
+        ollama_host = ConfigRegistry.get("vm.llm")
+        ollama_port = ConfigRegistry.get("port.ollama")
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
     return npu_url, browser_url, ollama_url
+
+
+def _safe_result(res, default=("offline", "Error")):
+    """Return res if it is a tuple, else default. Ref: #2735."""
+    return res if isinstance(res, tuple) else default
+
+
+def _to_service_entry(name: str, host: str, port: int, status: str, msg: str) -> dict:
+    """Build a single ServicesSummary-compatible dict. Ref: #2735."""
+    is_healthy = status == "online"
+    return {
+        "name": name,
+        "host": host,
+        "port": port,
+        "status": "healthy" if is_healthy else "offline",
+        "response_time_ms": 0,
+        "health_score": 100 if is_healthy else 0,
+        "uptime_hours": 0,
+    }
 
 
 def _build_service_list(results: list) -> list:
@@ -426,61 +441,45 @@ def _build_service_list(results: list) -> list:
     Each entry is a dict with name, host, port, status, response_time_ms,
     health_score, and uptime_hours fields.
     """
+    redis_s, redis_m = _safe_result(results[0])
+    npu_s, npu_m = _safe_result(results[1])
+    ollama_s, ollama_m = _safe_result(results[2])
+    browser_s, browser_m = _safe_result(results[3])
 
-    def _safe(res, default=("offline", "Error")):
-        return res if isinstance(res, tuple) else default
-
-    def _to_service(name, host, port, status, msg):
-        is_healthy = status == "online"
-        return {
-            "name": name,
-            "host": host,
-            "port": port,
-            "status": "healthy" if is_healthy else "offline",
-            "response_time_ms": 0,
-            "health_score": 100 if is_healthy else 0,
-            "uptime_hours": 0,
-        }
-
-    redis_s, redis_m = _safe(results[0])
-    npu_s, npu_m = _safe(results[1])
-    ollama_s, ollama_m = _safe(results[2])
-    browser_s, browser_m = _safe(results[3])
-
-    # Issue #1229: Use ConfigRegistry instead of hardcoded IPs
+    # Issue #1229/#2671: Use ConfigRegistry (defaults from SSOT via registry_defaults)
     return [
-        _to_service(
+        _to_service_entry(
             "Backend API",
-            ConfigRegistry.get("vm.main", "172.16.168.20"),  # noqa: ssot-fallback
-            int(ConfigRegistry.get("port.backend", "8443")),
+            ConfigRegistry.get("vm.main"),
+            int(ConfigRegistry.get("port.backend")),
             "online",
             "Running",
         ),
-        _to_service(
+        _to_service_entry(
             "Redis",
-            ConfigRegistry.get("vm.redis", "172.16.168.23"),  # noqa: ssot-fallback
-            int(ConfigRegistry.get("port.redis", "6379")),
+            ConfigRegistry.get("vm.redis"),
+            int(ConfigRegistry.get("port.redis")),
             redis_s,
             redis_m,
         ),
-        _to_service(
+        _to_service_entry(
             "NPU Worker",
-            ConfigRegistry.get("vm.npu", "172.16.168.22"),  # noqa: ssot-fallback
-            int(ConfigRegistry.get("port.npu", "8081")),
+            ConfigRegistry.get("vm.npu"),
+            int(ConfigRegistry.get("port.npu")),
             npu_s,
             npu_m,
         ),
-        _to_service(
+        _to_service_entry(
             "Ollama",
-            ConfigRegistry.get("vm.llm", "172.16.168.20"),  # noqa: ssot-fallback
-            int(ConfigRegistry.get("port.ollama", "11434")),
+            ConfigRegistry.get("vm.llm"),
+            int(ConfigRegistry.get("port.ollama")),
             ollama_s,
             ollama_m,
         ),
-        _to_service(
+        _to_service_entry(
             "Browser",
-            ConfigRegistry.get("vm.browser", "172.16.168.25"),  # noqa: ssot-fallback
-            int(ConfigRegistry.get("port.browser", "3000")),
+            ConfigRegistry.get("vm.browser"),
+            int(ConfigRegistry.get("port.browser")),
             browser_s,
             browser_m,
         ),

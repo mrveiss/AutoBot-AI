@@ -1,30 +1,30 @@
 # Tiered Model Routing
 
-> **Status**: Fully Implemented (Issue #696)
-> **Version**: 1.0.0
-> **Last Updated**: 2026-02-13
+> **Status**: Fully Implemented (Issue #696, updated by #2553)
+> **Version**: 2.0.0 (6-tier architecture)
+> **Last Updated**: 2026-03-29
 
 ## Overview
 
 Tiered Model Routing automatically selects the most appropriate LLM model based on query complexity analysis. This optimization:
 
 - **Reduces latency** for simple queries (smaller models respond faster)
-- **Saves compute resources** by not using 7B models for simple tasks
+- **Saves compute resources** by not using large models for simple tasks
 - **Improves throughput** by parallelizing across model tiers
 - **Maintains quality** by escalating complex queries to capable models
 
 ## Architecture
 
-### Two-Tier System
+### Six-Tier System
 
-| Tier | Model Size | Complexity Score | Use Cases |
-|------|-----------|------------------|-----------|
-| **Simple** | 1B-3B params | < 3.0 (default) | Basic Q&A, simple lookups, entity extraction |
-| **Complex** | 7B+ params | ≥ 3.0 (default) | Multi-step reasoning, code generation, analysis |
-
-**Default Models:**
-- Simple Tier: `gemma2:2b` (fast, low resource)
-- Complex Tier: `qwen3.5:9b` (capable, comprehensive)
+| Tier | Model | Purpose | Use Cases |
+|------|-------|---------|-----------|
+| **Routing** | `llama3.2:1b` | Orchestrator | Request classification, routing decisions |
+| **Classification** | `gemma2:2b` | Classification | Intent detection, category assignment |
+| **Light Processing** | `phi3:mini` | Extraction, formatting | Simple extraction, text formatting, templates |
+| **Instruction** | `mistral:7b-instruct` | RAG, step execution | Multi-step reasoning, document synthesis, RAG |
+| **System** | `dolphin-llama3:8b` | Commands, security | System commands, security analysis, validation |
+| **Quality** | `qwen3.5:9b` | Chat, research, code | Complex chat, research, code generation |
 
 ### Complexity Scoring
 
@@ -41,17 +41,17 @@ Requests are scored on a **0-10 scale** using weighted heuristics:
 **Scoring Examples:**
 
 ```python
-# Score: 0.8 → Simple Tier
+# Score: 0.8 -> Routing tier (llama3.2:1b)
 "What is Python?"
 
-# Score: 2.1 → Simple Tier
+# Score: 2.1 -> Classification tier (gemma2:2b)
 "List the benefits of async programming"
 
-# Score: 4.5 → Complex Tier
+# Score: 4.5 -> Instruction tier (mistral:7b-instruct)
 "Explain how to implement OAuth authentication with JWT tokens
 and handle CORS in a REST API"
 
-# Score: 7.2 → Complex Tier
+# Score: 7.2 -> Quality tier (qwen3.5:9b)
 """
 Design a microservices architecture with:
 1. Kubernetes deployment
@@ -78,15 +78,23 @@ graph TD
     E -->|No| F[Use requested model]
     E -->|Yes| G[TaskComplexityScorer.score]
     G --> H[Calculate weighted score]
-    H --> I{Score < threshold?}
-    I -->|Yes| J[Select Simple Model]
-    I -->|No| K[Select Complex Model]
-    J --> L[Execute Request]
-    K --> L
-    L --> M{Error?}
-    M -->|Yes, Simple Tier| N[Fallback to Complex]
-    M -->|No| O[Return Response]
-    N --> O
+    H --> I{Select Tier}
+    I -->|Score < 1.5| J[Routing: llama3.2:1b]
+    I -->|Score < 3.0| K[Classification: gemma2:2b]
+    I -->|Score < 4.5| L[Light Processing: phi3:mini]
+    I -->|Score < 6.0| M[Instruction: mistral:7b-instruct]
+    I -->|Score < 7.5| N[System: dolphin-llama3:8b]
+    I -->|Score >= 7.5| O[Quality: qwen3.5:9b]
+    J --> P[Execute Request]
+    K --> P
+    L --> P
+    M --> P
+    N --> P
+    O --> P
+    P --> Q{Error?}
+    Q -->|Yes, Lower Tier| R[Fallback to Higher Tier]
+    Q -->|No| S[Return Response]
+    R --> S
 ```
 
 ## Configuration
@@ -99,17 +107,17 @@ Add to `.env` or `config/llm_config.yaml`:
 # Enable/disable tiered routing (default: true)
 AUTOBOT_TIERED_ROUTING_ENABLED=true
 
-# Complexity threshold (0-10 scale, default: 3.0)
-# Scores below this use simple tier, above use complex tier
-AUTOBOT_COMPLEXITY_THRESHOLD=3.0
-
-# Model assignments
-AUTOBOT_MODEL_TIER_SIMPLE=gemma2:2b
-AUTOBOT_MODEL_TIER_COMPLEX=qwen3.5:9b
+# Model assignments per tier
+AUTOBOT_MODEL_TIER_ROUTING=llama3.2:1b
+AUTOBOT_MODEL_TIER_CLASSIFICATION=gemma2:2b
+AUTOBOT_MODEL_TIER_LIGHT=phi3:mini
+AUTOBOT_MODEL_TIER_INSTRUCTION=mistral:7b-instruct
+AUTOBOT_MODEL_TIER_SYSTEM=dolphin-llama3:8b
+AUTOBOT_MODEL_TIER_QUALITY=qwen3.5:9b
 
 # Fallback behavior (default: true)
-# If simple tier fails, automatically retry with complex tier
-AUTOBOT_FALLBACK_TO_COMPLEX=true
+# If a lower tier fails, automatically retry with a higher tier
+AUTOBOT_FALLBACK_TO_HIGHER_TIER=true
 
 # Logging (default: true for both)
 AUTOBOT_TIERED_LOG_SCORES=true
@@ -129,12 +137,14 @@ tier_config = ConfigRegistry.get("llm.tiered_routing", {})
 # Check if enabled
 enabled = tier_config.get("enabled", True)
 
-# Get models
-simple_model = tier_config.get("models", {}).get("simple", "gemma2:2b")
-complex_model = tier_config.get("models", {}).get("complex", "qwen3.5:9b")
-
-# Get threshold
-threshold = tier_config.get("complexity_threshold", 3.0)
+# Get models per tier
+models = tier_config.get("models", {})
+routing_model = models.get("routing", "llama3.2:1b")
+classification_model = models.get("classification", "gemma2:2b")
+light_model = models.get("light", "phi3:mini")
+instruction_model = models.get("instruction", "mistral:7b-instruct")
+system_model = models.get("system", "dolphin-llama3:8b")
+quality_model = models.get("quality", "qwen3.5:9b")
 ```
 
 ### Runtime Configuration
@@ -146,15 +156,18 @@ Update configuration via API (requires admin authentication):
 curl -X GET http://localhost:8001/api/llm/tiered-routing/config \
   -H "Authorization: Bearer $TOKEN"
 
-# Update threshold
+# Update tier models
 curl -X POST http://localhost:8001/api/llm/tiered-routing/config \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "complexity_threshold": 4.0,
     "models": {
-      "simple": "phi:2.7b",
-      "complex": "llama3:8b"
+      "routing": "llama3.2:1b",
+      "classification": "gemma2:2b",
+      "light": "phi3:mini",
+      "instruction": "mistral:7b-instruct",
+      "system": "dolphin-llama3:8b",
+      "quality": "qwen3.5:9b"
     }
   }'
 
@@ -178,22 +191,17 @@ Get routing statistics for monitoring and optimization.
 {
   "enabled": true,
   "metrics": {
-    "simple_tier_requests": 1250,
-    "complex_tier_requests": 430,
+    "routing_tier_requests": 500,
+    "classification_tier_requests": 350,
+    "light_tier_requests": 280,
+    "instruction_tier_requests": 300,
+    "system_tier_requests": 120,
+    "quality_tier_requests": 130,
     "total_requests": 1680,
-    "simple_tier_percentage": 74.4,
-    "avg_simple_score": 1.8,
-    "avg_complex_score": 5.2,
     "fallback_count": 12
   }
 }
 ```
-
-**Interpretation:**
-- `simple_tier_percentage`: High percentage (>70%) indicates good optimization
-- `avg_simple_score`: Should be well below threshold (e.g., 1-2 for threshold 3.0)
-- `avg_complex_score`: Should be above threshold (e.g., 4-6 for threshold 3.0)
-- `fallback_count`: Low count (<5% of simple requests) is ideal
 
 ### GET `/api/llm/tiered-routing/config`
 
@@ -205,12 +213,15 @@ Get current tiered routing configuration.
 ```json
 {
   "enabled": true,
-  "complexity_threshold": 3.0,
   "models": {
-    "simple": "gemma2:2b",
-    "complex": "qwen3.5:9b"
+    "routing": "llama3.2:1b",
+    "classification": "gemma2:2b",
+    "light": "phi3:mini",
+    "instruction": "mistral:7b-instruct",
+    "system": "dolphin-llama3:8b",
+    "quality": "qwen3.5:9b"
   },
-  "fallback_to_complex": true,
+  "fallback_to_higher_tier": true,
   "logging": {
     "log_scores": true,
     "log_routing_decisions": true
@@ -228,12 +239,15 @@ Update tiered routing configuration at runtime.
 ```json
 {
   "enabled": true,
-  "complexity_threshold": 4.0,
   "models": {
-    "simple": "qwen2:1.5b",
-    "complex": "llama3:8b"
+    "routing": "llama3.2:1b",
+    "classification": "gemma2:2b",
+    "light": "phi3:mini",
+    "instruction": "mistral:7b-instruct",
+    "system": "dolphin-llama3:8b",
+    "quality": "qwen3.5:9b"
   },
-  "fallback_to_complex": true
+  "fallback_to_higher_tier": true
 }
 ```
 
@@ -244,12 +258,15 @@ Update tiered routing configuration at runtime.
   "message": "Tiered routing configuration updated successfully",
   "config": {
     "enabled": true,
-    "complexity_threshold": 4.0,
     "models": {
-      "simple": "qwen2:1.5b",
-      "complex": "llama3:8b"
+      "routing": "llama3.2:1b",
+      "classification": "gemma2:2b",
+      "light": "phi3:mini",
+      "instruction": "mistral:7b-instruct",
+      "system": "dolphin-llama3:8b",
+      "quality": "qwen3.5:9b"
     },
-    "fallback_to_complex": true
+    "fallback_to_higher_tier": true
   }
 }
 ```
@@ -266,12 +283,13 @@ Reset routing metrics to zero (useful after config changes).
   "success": true,
   "message": "Tiered routing metrics reset successfully",
   "metrics": {
-    "simple_tier_requests": 0,
-    "complex_tier_requests": 0,
+    "routing_tier_requests": 0,
+    "classification_tier_requests": 0,
+    "light_tier_requests": 0,
+    "instruction_tier_requests": 0,
+    "system_tier_requests": 0,
+    "quality_tier_requests": 0,
     "total_requests": 0,
-    "simple_tier_percentage": 0.0,
-    "avg_simple_score": 0.0,
-    "avg_complex_score": 0.0,
     "fallback_count": 0
   }
 }
@@ -283,57 +301,39 @@ Reset routing metrics to zero (useful after config changes).
 
 Monitor these metrics to optimize tiered routing:
 
-1. **Simple Tier Percentage** (target: 60-80%)
-   - Too low: Threshold may be too strict, wasting compute
-   - Too high: May be routing complex queries to simple tier
+1. **Tier Distribution** (target: majority in lower tiers)
+   - Routing + Classification should handle 40-60% of requests
+   - Quality tier should handle <15% of requests
 
-2. **Fallback Rate** (target: <5% of simple tier requests)
-   - High rate indicates threshold is too aggressive
-   - Consider raising threshold or improving simple model
+2. **Fallback Rate** (target: <5% of lower tier requests)
+   - High rate indicates tier boundaries need adjustment
+   - Consider adjusting scoring weights
 
-3. **Score Separation**
-   - Simple tier average should be 1-2 points below threshold
-   - Complex tier average should be 1-2 points above threshold
-   - Poor separation indicates threshold needs adjustment
-
-### Tuning the Threshold
-
-**If simple tier percentage is too low (<50%):**
-```bash
-# Increase threshold to route more queries to simple tier
-curl -X POST http://localhost:8001/api/llm/tiered-routing/config \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"complexity_threshold": 4.0}'  # Was 3.0
-```
-
-**If fallback rate is high (>10%):**
-```bash
-# Decrease threshold to be more conservative
-curl -X POST http://localhost:8001/api/llm/tiered-routing/config \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"complexity_threshold": 2.5}'  # Was 3.0
-```
+3. **Latency per Tier**
+   - Lower tiers should be 2-5x faster than higher tiers
+   - If not, check model loading and concurrency settings
 
 ### Logging
 
 When `log_routing_decisions` is enabled, routing decisions are logged:
 
 ```
-INFO - Tiered routing: qwen3.5:9b -> gemma2:2b
-       (score=1.8, tier=simple, reason=Low complexity request with minimal indicators)
+INFO - Tiered routing: selected llama3.2:1b
+       (score=0.8, tier=routing, reason=Simple query with minimal indicators)
+
+INFO - Tiered routing: selected mistral:7b-instruct
+       (score=4.5, tier=instruction, reason=Multi-step reasoning required)
 
 INFO - Tiered routing: selected qwen3.5:9b
-       (score=5.4, tier=complex)
+       (score=7.8, tier=quality, reason=Complex code generation task)
 
-WARNING - Tiered routing fallback triggered: simple -> complex tier
+WARNING - Tiered routing fallback triggered: classification -> instruction tier
 ```
 
 When `log_scores` is enabled, detailed complexity analysis is logged:
 
 ```
-DEBUG - Complexity score: 2.3 (simple) - factors: {
+DEBUG - Complexity score: 2.3 (classification) - factors: {
   'length': 0.0,
   'code': 1.0,
   'technical': 0.5,
@@ -344,25 +344,31 @@ DEBUG - Complexity score: 2.3 (simple) - factors: {
 
 ## Performance Impact
 
-### Latency Reduction
+### Latency by Tier
 
-Simple tier models (1B-3B params) typically respond **2-4x faster**:
+| Model | Tier | Avg Latency | Tokens/sec |
+|-------|------|-------------|------------|
+| llama3.2:1b | Routing | 80ms | 200 |
+| gemma2:2b | Classification | 150ms | 120 |
+| phi3:mini | Light Processing | 200ms | 90 |
+| mistral:7b-instruct | Instruction | 450ms | 35 |
+| dolphin-llama3:8b | System | 550ms | 30 |
+| qwen3.5:9b | Quality | 700ms | 25 |
 
-| Model | Avg Latency | Tokens/sec |
-|-------|-------------|------------|
-| gemma2:2b | 150ms | 120 |
-| mistral:7b | 450ms | 35 |
-
-For workloads with 70% simple queries, tiered routing reduces average latency by ~40%.
+For workloads with 60% simple queries, tiered routing reduces average latency by ~50%.
 
 ### Resource Savings
 
-Simple models use **50-70% less compute**:
+Lower-tier models use significantly less compute:
 
 | Model | VRAM | CPU/Token | Concurrent Capacity |
 |-------|------|-----------|---------------------|
+| llama3.2:1b | 1GB | Very Low | 12-16 parallel |
 | gemma2:2b | 2GB | Low | 8-12 parallel |
-| mistral:7b | 6GB | High | 2-4 parallel |
+| phi3:mini | 3GB | Low | 6-8 parallel |
+| mistral:7b-instruct | 6GB | High | 2-4 parallel |
+| dolphin-llama3:8b | 7GB | High | 2-3 parallel |
+| qwen3.5:9b | 8GB | Very High | 1-2 parallel |
 
 This enables serving more users on the same hardware.
 
@@ -391,13 +397,19 @@ router = get_tiered_router()
 model, result = router.route(messages)
 
 print(f"Selected: {model} (score={result.score}, tier={result.tier})")
-# Output: Selected: gemma2:2b (score=1.8, tier=simple)
+# Output: Selected: gemma2:2b (score=1.8, tier=classification)
 
 # Custom configuration
 config = TierConfig(
     enabled=True,
-    complexity_threshold=4.0,
-    models=TierModels(simple="phi:2.7b", complex="llama3:8b"),
+    models=TierModels(
+        routing="llama3.2:1b",
+        classification="gemma2:2b",
+        light="phi3:mini",
+        instruction="mistral:7b-instruct",
+        system="dolphin-llama3:8b",
+        quality="qwen3.5:9b",
+    ),
 )
 router = TieredModelRouter(config)
 ```
@@ -423,11 +435,11 @@ router = TieredModelRouter(config)
 
 ### Too many fallbacks
 
-Indicates simple model struggling with requests:
+Indicates lower-tier models struggling with requests:
 
-1. Lower threshold to be more conservative
-2. Upgrade simple model (e.g., gemma2:2b → phi:2.7b)
-3. Review `avg_simple_score` - should be well below threshold
+1. Review tier boundaries and scoring weights
+2. Upgrade the struggling tier model
+3. Review score distributions to identify misclassified requests
 
 ### Unexpected model selection
 
@@ -436,16 +448,6 @@ Indicates simple model struggling with requests:
    - Check if code patterns detected correctly
    - Verify technical term detection
    - Confirm multi-step pattern matching
-
-## Future Enhancements
-
-Potential extensions (not currently implemented):
-
-1. **Three-Tier System**: Add moderate tier (3B models) between simple/complex
-2. **Dynamic Thresholds**: Adjust based on server load and latency SLAs
-3. **Per-Agent Configuration**: Different thresholds per agent type
-4. **Quality Feedback Loop**: ML model to predict optimal tier based on response quality
-5. **Cost Optimization**: Factor in API costs for cloud-based tiers
 
 ## Related Documentation
 
@@ -457,7 +459,8 @@ Potential extensions (not currently implemented):
 ---
 
 **Issue References:**
-- #696 - Tiered Model Distribution Strategy (this implementation)
+- #696 - Tiered Model Distribution Strategy (original implementation)
+- #2553 - 6-tier model architecture migration
 - #748 - Initial tiered routing framework
 - #551 - L1/L2 caching system
 - #697 - OpenTelemetry tracing integration

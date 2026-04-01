@@ -18,11 +18,15 @@ Usage:
 
 import argparse
 import json
+import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -35,14 +39,14 @@ class SeqAnalyticsSetup:
         self,
         seq_url: str = "http://localhost:5341",
         username: str = "admin",
-        password: str = "Autobot123!",
+        password: str = "",
     ):
         """Initialize Seq analytics setup with connection credentials."""
         self.seq_url = seq_url.rstrip("/")
         self.username = username
-        self.password = password
+        self.password = password or os.environ.get("SEQ_PASSWORD", "")
         self.session = requests.Session()
-        self.session.auth = (username, password)
+        self.session.auth = (username, self.password)
 
         # Load queries configuration
         self.config_file = Path(__file__).parent.parent / "config" / "seq-queries.json"
@@ -51,10 +55,10 @@ class SeqAnalyticsSetup:
     def load_queries_config(self):
         """Load queries configuration from JSON file."""
         try:
-            with open(self.config_file, "r") as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"❌ Failed to load queries config: {e}")
+            logger.error("Failed to load queries config: %s", e)
             return {"autobot_queries": {}, "dashboards": []}
 
     def test_connection(self):
@@ -62,15 +66,15 @@ class SeqAnalyticsSetup:
         try:
             response = self.session.get(f"{self.seq_url}/api")
             if response.status_code == 200:
-                print("✅ Connected to Seq successfully")
+                logger.info("Connected to Seq successfully")
                 seq_info = response.json()
-                print(f"   Seq Version: {seq_info.get('Version', 'Unknown')}")
+                logger.info("Seq Version: %s", seq_info.get("Version", "Unknown"))
                 return True
             else:
-                print(f"❌ Seq connection failed: {response.status_code}")
+                logger.error("Seq connection failed: %s", response.status_code)
                 return False
         except Exception as e:
-            print(f"❌ Cannot connect to Seq: {e}")
+            logger.error("Cannot connect to Seq: %s", e)
             return False
 
     def create_signal(self, name, description, filter_expression, is_protected=False):
@@ -91,15 +95,15 @@ class SeqAnalyticsSetup:
             )
 
             if response.status_code in [200, 201]:
-                print(f"✅ Created signal: {name}")
+                logger.info("Created signal: %s", name)
                 return response.json()
             else:
-                print(f"⚠️  Failed to create signal '{name}': {response.status_code}")
-                print(f"   Response: {response.text}")
+                logger.warning("Failed to create signal '%s': %s", name, response.status_code)
+                logger.warning("Response: %s", response.text)
                 return None
 
         except Exception as e:
-            print(f"❌ Error creating signal '{name}': {e}")
+            logger.error("Error creating signal '%s': %s", name, e)
             return None
 
     def create_dashboard(self, name, title, charts):
@@ -118,16 +122,14 @@ class SeqAnalyticsSetup:
             )
 
             if response.status_code in [200, 201]:
-                print(f"✅ Created dashboard: {title}")
+                logger.info("Created dashboard: %s", title)
                 return response.json()
             else:
-                print(
-                    f"⚠️  Failed to create dashboard '{title}': {response.status_code}"
-                )
+                logger.warning("Failed to create dashboard '%s': %s", title, response.status_code)
                 return None
 
         except Exception as e:
-            print(f"❌ Error creating dashboard '{title}': {e}")
+            logger.error("Error creating dashboard '%s': %s", title, e)
             return None
 
     def setup_retention_policy(self, days_to_keep=30):
@@ -136,7 +138,7 @@ class SeqAnalyticsSetup:
             # Get current retention policies
             response = self.session.get(f"{self.seq_url}/api/retentionpolicies")
             if response.status_code != 200:
-                print(f"⚠️  Cannot fetch retention policies: {response.status_code}")
+                logger.warning("Cannot fetch retention policies: %s", response.status_code)
                 return False
 
             response.json()
@@ -156,14 +158,14 @@ class SeqAnalyticsSetup:
             )
 
             if response.status_code in [200, 201]:
-                print(f"✅ Created retention policy: {days_to_keep} days")
+                logger.info("Created retention policy: %s days", days_to_keep)
                 return True
             else:
-                print(f"⚠️  Failed to create retention policy: {response.status_code}")
+                logger.warning("Failed to create retention policy: %s", response.status_code)
                 return False
 
         except Exception as e:
-            print(f"❌ Error setting up retention policy: {e}")
+            logger.error("Error setting up retention policy: %s", e)
             return False
 
     def create_alert(self, title, signal_expression, webhook_url=None):
@@ -193,24 +195,24 @@ class SeqAnalyticsSetup:
             )
 
             if response.status_code in [200, 201]:
-                print(f"✅ Created alert: {title}")
+                logger.info("Created alert: %s", title)
                 return response.json()
             else:
-                print(f"⚠️  Failed to create alert '{title}': {response.status_code}")
+                logger.warning("Failed to create alert '%s': %s", title, response.status_code)
                 return None
 
         except Exception as e:
-            print(f"❌ Error creating alert '{title}': {e}")
+            logger.error("Error creating alert '%s': %s", title, e)
             return None
 
     def setup_all_queries(self):
         """Setup all AutoBot queries as signals."""
-        print("🔍 Setting up AutoBot analysis queries...")
+        logger.info("Setting up AutoBot analysis queries...")
 
         created_signals = []
 
         for category, queries in self.queries_config["autobot_queries"].items():
-            print(f"\n📊 Setting up {category.replace('_', ' ').title()} queries...")
+            logger.info("Setting up %s queries...", category.replace("_", " ").title())
 
             for query in queries:
                 name = f"AutoBot - {query['name']}"
@@ -223,12 +225,12 @@ class SeqAnalyticsSetup:
                 if signal:
                     created_signals.append(signal)
 
-        print(f"\n✅ Created {len(created_signals)} analysis queries")
+        logger.info("Created %s analysis queries", len(created_signals))
         return created_signals
 
     def setup_dashboards(self):
         """Setup AutoBot dashboards."""
-        print("📈 Setting up AutoBot dashboards...")
+        logger.info("Setting up AutoBot dashboards...")
 
         created_dashboards = []
 
@@ -253,12 +255,12 @@ class SeqAnalyticsSetup:
             if dashboard:
                 created_dashboards.append(dashboard)
 
-        print(f"✅ Created {len(created_dashboards)} dashboards")
+        logger.info("Created %s dashboards", len(created_dashboards))
         return created_dashboards
 
     def setup_critical_alerts(self):
         """Setup critical alerts for AutoBot."""
-        print("🚨 Setting up critical alerts...")
+        logger.info("Setting up critical alerts...")
 
         critical_alerts = [
             {
@@ -288,7 +290,7 @@ class SeqAnalyticsSetup:
             if created_alert:
                 created_alerts.append(created_alert)
 
-        print(f"✅ Created {len(created_alerts)} critical alerts")
+        logger.info("Created %s critical alerts", len(created_alerts))
         return created_alerts
 
     def _build_test_log_entries(self):
@@ -302,8 +304,20 @@ class SeqAnalyticsSetup:
         return [
             _entry("Information", "AutoBot system started successfully", "System", LogType="System"),
             _entry("Information", "Backend service initialized on port 8001", "Backend-Main", ProcessID="12345"),
-            _entry("Information", "Container started successfully", "Docker-autobot-redis", ContainerName="autobot-redis", LogType="DockerContainer"),
-            _entry("Information", "NPU worker ready for processing", "Docker-autobot-npu-worker", ContainerName="autobot-npu-worker", LogType="DockerContainer"),
+            _entry(
+                "Information",
+                "Container started successfully",
+                "Docker-autobot-redis",
+                ContainerName="autobot-redis",
+                LogType="DockerContainer",
+            ),
+            _entry(
+                "Information",
+                "NPU worker ready for processing",
+                "Docker-autobot-npu-worker",
+                ContainerName="autobot-npu-worker",
+                LogType="DockerContainer",
+            ),
             _entry("Information", "WebSocket connection established", "GlobalWebSocketService", ConnectionType="Global"),
             _entry("Information", "API request completed in 45ms", "Backend-API", ResponseTime="45ms"),
             _entry("Warning", "High memory usage detected: 85%", "System-Monitor", MemoryUsage="85%"),
@@ -315,7 +329,7 @@ class SeqAnalyticsSetup:
 
     def send_test_logs_for_analysis(self):
         """Send comprehensive test logs to verify analytics."""
-        print("🧪 Sending comprehensive test logs for analytics verification...")
+        logger.info("Sending comprehensive test logs for analytics verification...")
 
         test_logs = self._build_test_log_entries()
         headers = {
@@ -337,18 +351,18 @@ class SeqAnalyticsSetup:
                 if response.status_code in [200, 201]:
                     success_count += 1
                 else:
-                    print(f"⚠️  Failed to send test log: {response.status_code}")
+                    logger.warning("Failed to send test log: %s", response.status_code)
             except Exception as e:
-                print(f"❌ Error sending test log: {e}")
+                logger.error("Error sending test log: %s", e)
 
-        print(f"✅ Sent {success_count}/{len(test_logs)} test logs for analytics")
+        logger.info("Sent %s/%s test logs for analytics", success_count, len(test_logs))
         return success_count
 
     def setup_all(self):
         """Setup all Seq analytics components."""
-        print("🚀 Setting up comprehensive AutoBot analytics in Seq...")
-        print(f"   Seq URL: {self.seq_url}")
-        print(f"   Time: {datetime.now()}")
+        logger.info("Setting up comprehensive AutoBot analytics in Seq...")
+        logger.info("Seq URL: %s", self.seq_url)
+        logger.info("Time: %s", datetime.now())
 
         if not self.test_connection():
             return False
@@ -368,20 +382,20 @@ class SeqAnalyticsSetup:
         # Send test logs
         test_logs_sent = self.send_test_logs_for_analysis()
 
-        print("\n🎉 AutoBot Seq Analytics Setup Complete!")
-        print(f"   📊 Signals created: {len(signals)}")
-        print(f"   📈 Dashboards created: {len(dashboards)}")
-        print(f"   🚨 Alerts created: {len(alerts)}")
-        print(f"   🧪 Test logs sent: {test_logs_sent}")
-        print(f"\nAccess Seq at: {self.seq_url}")  # noqa: T201
-        print(f"   Username: {self.username}")  # noqa: T201
-        print("   Password: [REDACTED]")  # noqa: T201
+        logger.info("AutoBot Seq Analytics Setup Complete!")
+        logger.info("Signals created: %s", len(signals))
+        logger.info("Dashboards created: %s", len(dashboards))
+        logger.info("Alerts created: %s", len(alerts))
+        logger.info("Test logs sent: %s", test_logs_sent)
+        logger.info("Access Seq at: %s", self.seq_url)
+        logger.info("Username: %s", self.username)
+        logger.info("Password: [REDACTED]")
 
         return True
 
     def cleanup_autobot_items(self):
         """Clean up AutoBot-related items in Seq."""
-        print("🧹 Cleaning up existing AutoBot items...")
+        logger.info("Cleaning up existing AutoBot items...")
 
         # Delete signals
         try:
@@ -397,9 +411,9 @@ class SeqAnalyticsSetup:
                         f"{self.seq_url}/api/signals/{signal['Id']}"
                     )
                     if delete_response.status_code == 200:
-                        print(f"🗑️  Deleted signal: {signal['Title']}")
+                        logger.info("Deleted signal: %s", signal["Title"])
         except Exception as e:
-            print(f"⚠️  Error cleaning up signals: {e}")
+            logger.warning("Error cleaning up signals: %s", e)
 
         # Delete dashboards
         try:
@@ -415,9 +429,9 @@ class SeqAnalyticsSetup:
                         f"{self.seq_url}/api/dashboards/{dashboard['Id']}"
                     )
                     if delete_response.status_code == 200:
-                        print(f"🗑️  Deleted dashboard: {dashboard['Title']}")
+                        logger.info("Deleted dashboard: %s", dashboard["Title"])
         except Exception as e:
-            print(f"⚠️  Error cleaning up dashboards: {e}")
+            logger.warning("Error cleaning up dashboards: %s", e)
 
 
 def main():
@@ -440,7 +454,11 @@ def main():
         "--seq-url", default="http://localhost:5341", help="Seq server URL"
     )
     parser.add_argument("--username", default="admin", help="Seq username")
-    parser.add_argument("--password", default="Autobot123!", help="Seq password")
+    parser.add_argument(
+        "--password",
+        default=os.environ.get("SEQ_PASSWORD", ""),
+        help="Seq password (default: $SEQ_PASSWORD)",
+    )
 
     args = parser.parse_args()
 
@@ -469,4 +487,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     sys.exit(main())

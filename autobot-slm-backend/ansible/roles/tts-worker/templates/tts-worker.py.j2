@@ -56,6 +56,59 @@ _model_error: Optional[str] = None
 _voice_cache: dict = {}  # voice_id -> voice_state
 
 
+_GATED_MODEL_PREFIXES = (
+    "meta-llama/",
+    "mistralai/",
+    "liquid-ai/",
+    "stabilityai/",
+)
+
+HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
+
+
+def _is_gated_model(model_id: str) -> bool:
+    """Return True when model_id belongs to a known gated-model namespace."""
+    return any(model_id.startswith(prefix) for prefix in _GATED_MODEL_PREFIXES)
+
+
+def _warn_missing_token(model_id: str) -> None:
+    """Log a clear warning when HF_TOKEN is absent for a potentially gated model."""
+    if _is_gated_model(model_id):
+        logger.warning(
+            "HF_TOKEN is not set and model '%s' may be gated. "
+            "Set the HF_TOKEN environment variable (via vault_hf_token in Ansible) "
+            "to authenticate with HuggingFace Hub. "
+            "Model download will fail with a 401/403 error if access is restricted.",
+            model_id,
+        )
+    else:
+        logger.info(
+            "HF_TOKEN is not set. Model '%s' will be downloaded without authentication. "
+            "This is fine for public models.",
+            model_id,
+        )
+
+
+def _configure_hf_token() -> None:
+    """Authenticate with HuggingFace Hub using HF_TOKEN when present.
+
+    The huggingface_hub library also reads HF_TOKEN from the environment
+    automatically, but calling login() here logs a clear confirmation and
+    ensures the token is active for all downstream hub calls (issue #3078).
+    """
+    if HF_TOKEN:
+        try:
+            import huggingface_hub
+
+            huggingface_hub.login(token=HF_TOKEN, add_to_git_credential=False)
+            logger.info("HuggingFace Hub authenticated via HF_TOKEN.")
+        except Exception as exc:
+            logger.error("HuggingFace Hub login failed: %s", exc)
+    else:
+        _warn_missing_token(TTS_MODEL_ID)
+
+
 def _load_model():
     """Load Pocket TTS model. Returns (success, error_msg)."""
     global _model
@@ -64,6 +117,7 @@ def _load_model():
 
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         VOICES_DIR.mkdir(parents=True, exist_ok=True)
+        _configure_hf_token()
         _model = TTSModel.load_model()
         logger.info(
             "Pocket TTS model loaded (sample_rate=%d)",
@@ -287,8 +341,10 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("TTS Worker starting (Pocket TTS)")
     logger.info("Binding to %s:%d", TTS_HOST, TTS_PORT)
+    logger.info("Model ID:   %s", TTS_MODEL_ID)
     logger.info("Voices dir: %s", VOICES_DIR)
     logger.info("Models dir: %s", MODELS_DIR)
+    logger.info("HF_TOKEN:   %s", "set" if HF_TOKEN else "NOT SET")
     logger.info("=" * 60)
     uvicorn.run(
         app,

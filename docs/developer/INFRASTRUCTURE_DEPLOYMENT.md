@@ -45,31 +45,31 @@ Host autobot-frontend
     HostName 172.16.168.21
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-npu
     HostName 172.16.168.22
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-redis
     HostName 172.16.168.23
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-ai
     HostName 172.16.168.24
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 
 Host autobot-browser
     HostName 172.16.168.25
     User autobot
     IdentityFile ~/.ssh/autobot_key
-    StrictHostKeyChecking no
+    StrictHostKeyChecking accept-new
 ```
 
 **Usage**:
@@ -811,7 +811,7 @@ md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 
 ## Related Documentation
 
-- **Network Constants**: `autobot-shared/network_constants.py`
+- **Network Constants**: `autobot_shared/network_constants.py`
 - **Setup Guide**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
 - **Hardcoding Prevention**: `docs/developer/HARDCODING_PREVENTION.md`
 - **Redis Client Usage**: `docs/developer/REDIS_CLIENT_USAGE.md`

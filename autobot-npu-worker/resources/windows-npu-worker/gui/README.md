@@ -33,7 +33,7 @@ Windows desktop application for managing the NPU worker service with real-time m
 
 ### Prerequisites
 - Windows 10/11 (64-bit)
-- Python 3.10+ with PySide6
+- Python 3.12+ with PySide6
 - NPU worker already installed (see parent README.md)
 
 ### Install GUI Dependencies

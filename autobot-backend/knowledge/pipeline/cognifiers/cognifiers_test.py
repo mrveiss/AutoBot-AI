@@ -642,7 +642,7 @@ class TestContextGeneratorEnabled:
         )
 
         cached_payload = json.dumps(
-            {"summary": "cached summary", "model": "llama3.2:3b"}
+            {"summary": "cached summary", "model": "llama3.2:1b"}
         )
         mock_get_redis.return_value = self._mock_redis(cached=cached_payload)
         cog = ContextGeneratorCognifier()

@@ -1,0 +1,58 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Shared dependency role: Node.js (NodeSource)
+# Installs Node.js and npm.
+# npm install / npm build stays in service roles.
+---
+
+- name: "nodejs | Check if Node.js is already installed"
+  ansible.builtin.command:
+    cmd: node --version
+  register: _node_check
+  changed_when: false
+  # (#2872) Intentional: `node` exits rc=127 when not installed;
+  # the result gates conditional installation below.
+  failed_when: false
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Install prerequisites"
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+    state: present
+  become: true
+  when: _node_check.rc != 0
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Check if NodeSource repo exists"
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/nodesource.list
+  register: _nodesource_repo
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Add NodeSource repository"
+  ansible.builtin.shell: |
+    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_major_version }}.x | bash -
+  become: true
+  when:
+    - _node_check.rc != 0
+    - not _nodesource_repo.stat.exists
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Install Node.js"
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  become: true
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Verify Node.js is available"
+  ansible.builtin.command:
+    cmd: node --version
+  changed_when: false
+  tags: ['deps', 'nodejs']

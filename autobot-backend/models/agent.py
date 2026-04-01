@@ -14,7 +14,8 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -37,7 +38,7 @@ class Agent(Base, TimestampMixin):
 
     __tablename__ = "agents"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     agent_id = Column(String(255), nullable=False, unique=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

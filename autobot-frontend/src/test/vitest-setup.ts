@@ -1,6 +1,41 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// Wrap global fetch to resolve relative URLs against document origin (jsdom 29+ compat)
+const originalFetch = global.fetch
+global.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  if (typeof input === 'string' && input.startsWith('/')) {
+    const base = globalThis.location?.origin || 'http://localhost'
+    input = `${base}${input}`
+  }
+  return originalFetch(input, init)
+}) as typeof fetch
+
+// Mock IntersectionObserver (not available in jsdom 29+)
+class MockIntersectionObserver {
+  readonly root: Element | null = null
+  readonly rootMargin: string = ''
+  readonly thresholds: ReadonlyArray<number> = []
+  constructor(
+    private callback: IntersectionObserverCallback,
+    _options?: IntersectionObserverInit,
+  ) {}
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+  takeRecords = vi.fn().mockReturnValue([])
+}
+global.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver
+
+// Mock ResizeObserver (not available in jsdom 29+)
+class MockResizeObserver {
+  constructor(private callback: ResizeObserverCallback) {}
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+}
+global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+
 // Mock WebSocket
 class MockWebSocket {
   static CONNECTING = 0

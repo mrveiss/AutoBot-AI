@@ -17,12 +17,19 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from auth_middleware import check_admin_permission
-from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
+
+# Allowlist pattern for git commit range arguments (Issue #1733).
+# Allows: HEAD, HEAD~N, commit hashes, branch names, .. and ... range operators.
+_VALID_GIT_REF_RE = re.compile(
+    r"^[a-zA-Z0-9_./@{}^~-]+(?:\.{2,3}[a-zA-Z0-9_./@{}^~-]+)?$"
+)
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
@@ -411,6 +418,9 @@ async def get_git_diff(commit_range: Optional[str] = None) -> str:
     try:
         cmd = ["git", "diff"]
         if commit_range:
+            if not _VALID_GIT_REF_RE.match(commit_range):
+                logger.warning("Rejected invalid git commit range: %s", commit_range)
+                return ""
             cmd.append(commit_range)
         else:
             cmd.append("HEAD~1..HEAD")

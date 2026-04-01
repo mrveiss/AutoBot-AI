@@ -329,6 +329,37 @@ class StandardizedAgent(BaseAgent):
         if hasattr(super(), "cleanup"):
             super().cleanup()
 
+    async def _get_mcp_tools_prompt(self, role: str = "user") -> str:
+        """Build an MCP tools section for the system prompt (#2596, #2631).
+
+        Fetches available tool definitions from the dispatcher and formats them
+        as a Markdown list for LLM injection.  The cache refresh is attempted
+        but failures fall through to whatever stale data is available, so a
+        transient registry outage never blocks a chat response (#2631).
+
+        Args:
+            role: Caller RBAC role — passed to filter admin-only tools (#2629).
+
+        Returns:
+            Formatted Markdown string, or "" when no tools are registered.
+        """
+        from services.mcp_dispatch import get_mcp_dispatcher
+
+        dispatcher = get_mcp_dispatcher()
+        try:
+            await dispatcher._ensure_cache_fresh()
+        except Exception:
+            pass  # Use stale cache rather than blocking
+        tools = dispatcher.get_tool_definitions(role=role)
+        if not tools:
+            return ""
+        tool_lines = [f"- **{t['name']}**: {t['description']}" for t in tools]
+        return (
+            "\n\n## Available MCP Tools\n"
+            "You can call these tools by name when the user's request requires them:\n"
+            + "\n".join(tool_lines)
+        )
+
     @abstractmethod
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities - must be implemented by subclasses"""

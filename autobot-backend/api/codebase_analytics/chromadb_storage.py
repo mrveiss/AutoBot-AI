@@ -781,15 +781,28 @@ async def _prepare_batch_data(
         source_id=source_id,
     )
 
+    _append_stats_document(
+        analysis_results, batch_ids, batch_documents, batch_metadatas, source_id
+    )
+
+    update_phase("prepare", "completed")
+    return batch_ids, batch_documents, batch_metadatas
+
+
+def _append_stats_document(
+    analysis_results: Dict,
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    source_id: Optional[str] = None,
+) -> None:
+    """Append the codebase_stats document to the batch lists (Issue #2735)."""
     stats_id, stats_doc, stats_meta = _prepare_stats_document(
         analysis_results, source_id=source_id
     )
     batch_ids.append(stats_id)
     batch_documents.append(stats_doc)
     batch_metadatas.append(stats_meta)
-
-    update_phase("prepare", "completed")
-    return batch_ids, batch_documents, batch_metadatas
 
 
 async def _upsert_with_stale_retry(
@@ -829,6 +842,76 @@ async def _upsert_with_stale_retry(
             raise
 
 
+def _slice_batch(
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    batch_embeddings: Optional[List[List[float]]],
+    start_idx: int,
+    batch_size: int,
+) -> tuple:
+    """Slice batch lists to the current window. Returns (ids, docs, metas, embeddings, end_idx).
+
+    Issue #2735: Extracted from _store_single_batch for length compliance.
+    Issue #660: Preserves optional pre-computed embeddings slice.
+    """
+    end_idx = min(start_idx + batch_size, len(batch_ids))
+    slice_embeddings = (
+        batch_embeddings[start_idx:end_idx] if batch_embeddings is not None else None
+    )
+    return (
+        batch_ids[start_idx:end_idx],
+        batch_documents[start_idx:end_idx],
+        batch_metadatas[start_idx:end_idx],
+        slice_embeddings,
+        end_idx,
+    )
+
+
+async def _record_batch_progress(
+    task_id: str,
+    batch_num: int,
+    total_batches: int,
+    items_in_batch: int,
+    end_idx: int,
+    total_items: int,
+    update_progress,
+    update_stats,
+    tasks_lock: asyncio.Lock,
+    indexing_tasks: Dict,
+) -> None:
+    """Update progress counters and emit a progress event after storing a batch.
+
+    Issue #2735: Extracted from _store_single_batch for length compliance.
+    Issue #539: Thread-safe update for parallel batch processing.
+    """
+    async with tasks_lock:
+        indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
+
+    await update_progress(
+        operation="Writing to ChromaDB",
+        current=end_idx,
+        total=total_items,
+        current_file=f"Batch {batch_num}/{total_batches}",
+        phase="store",
+        batch_info={
+            "current": batch_num,
+            "total": total_batches,
+            "items": items_in_batch,
+        },
+    )
+    update_stats(items_stored=end_idx)
+    logger.info(
+        "[Task %s] Stored batch %d/%d: %d items (%d/%d)",
+        task_id,
+        batch_num,
+        total_batches,
+        items_in_batch,
+        end_idx,
+        total_items,
+    )
+
+
 async def _store_single_batch(
     code_collection,
     batch_ids: list,
@@ -851,56 +934,40 @@ async def _store_single_batch(
     Returns items stored. Retries once on collection errors by
     recreating the collection reference (#1249).
     """
-    end_idx = min(start_idx + batch_size, len(batch_ids))
-    batch_slice_ids = batch_ids[start_idx:end_idx]
-    batch_slice_docs = batch_documents[start_idx:end_idx]
-    batch_slice_metas = batch_metadatas[start_idx:end_idx]
-
-    # Issue #660: Use pre-computed embeddings if available
-    batch_slice_embeddings = None
-    if batch_embeddings is not None:
-        batch_slice_embeddings = batch_embeddings[start_idx:end_idx]
+    slice_ids, slice_docs, slice_metas, slice_embeddings, end_idx = _slice_batch(
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        batch_embeddings,
+        start_idx,
+        batch_size,
+    )
 
     # Use upsert so the preserved codebase_stats entry (#540) gets
     # updated with fresh values instead of being silently skipped by add().
     # Issue #1249: Retry once on stale collection reference.
     await _upsert_with_stale_retry(
         code_collection,
-        batch_slice_ids,
-        batch_slice_docs,
-        batch_slice_metas,
-        batch_slice_embeddings,
+        slice_ids,
+        slice_docs,
+        slice_metas,
+        slice_embeddings,
         task_id,
         batch_num,
     )
-    items_in_batch = len(batch_slice_ids)
+    items_in_batch = len(slice_ids)
 
-    # Issue #539: Thread-safe update for parallel batch processing
-    async with tasks_lock:
-        indexing_tasks[task_id]["batches"]["completed_batches"] = batch_num
-
-    await update_progress(
-        operation="Writing to ChromaDB",
-        current=end_idx,
-        total=total_items,
-        current_file=f"Batch {batch_num}/{total_batches}",
-        phase="store",
-        batch_info={
-            "current": batch_num,
-            "total": total_batches,
-            "items": items_in_batch,
-        },
-    )
-    update_stats(items_stored=end_idx)
-
-    logger.info(
-        "[Task %s] Stored batch %d/%d: %d items (%d/%d)",
+    await _record_batch_progress(
         task_id,
         batch_num,
         total_batches,
         items_in_batch,
         end_idx,
         total_items,
+        update_progress,
+        update_stats,
+        tasks_lock,
+        indexing_tasks,
     )
     return items_in_batch
 

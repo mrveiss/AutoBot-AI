@@ -13,9 +13,10 @@ Related Issue: #964 - Multi-profile personality system
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
+
+from auth_middleware import check_admin_permission
 from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 
 logger = logging.getLogger(__name__)

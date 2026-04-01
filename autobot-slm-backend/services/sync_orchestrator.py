@@ -14,10 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
-from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
-from services.database import db_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
+from services.database import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class SyncOrchestrator:
         Helper for sync_node_role (Issue #665).
         """
         ssh_opts = (
-            "ssh -o StrictHostKeyChecking=no "
+            "ssh -o StrictHostKeyChecking=accept-new "
             "-o UserKnownHostsFile=/dev/null "
             f"-o ConnectTimeout=30 "
             f"-p {port}"
@@ -117,9 +118,8 @@ class SyncOrchestrator:
         ssh_cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-p",
             str(port),
         ]
@@ -307,7 +307,7 @@ class SyncOrchestrator:
         Helper for pull_from_source (Issue #665).
         """
         ssh_opts = (
-            "ssh -o StrictHostKeyChecking=no "
+            "ssh -o StrictHostKeyChecking=accept-new "
             "-o UserKnownHostsFile=/dev/null "
             "-o ConnectTimeout=30"
         )
@@ -355,9 +355,8 @@ class SyncOrchestrator:
         ssh_cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
         ]
@@ -449,16 +448,18 @@ class SyncOrchestrator:
             return False, "Pull timed out", None
         except Exception as e:
             logger.error("Pull error: %s", e)
-            return False, str(e), None
+            return False, "Pull operation failed", None
 
     def _is_local_source(self, node_ip: str) -> bool:
-        """Return True if the code-source node is this machine. Helper for #1194."""
-        from urllib.parse import urlparse
+        """Return True if the code-source node is this machine (#1194, #2759).
 
-        from config import settings
+        Delegates to ``autobot_shared.network_utils.is_local_ip`` which uses
+        the most robust detection strategy: ``ip addr`` enumeration plus the
+        ``settings.external_url`` hostname fallback.
+        """
+        from autobot_shared.network_utils import is_local_ip
 
-        own_ip = urlparse(settings.external_url).hostname or ""
-        return node_ip in {"127.0.0.1", "localhost", own_ip}
+        return is_local_ip(node_ip)
 
     async def _git_pull_local(self, repo_path: str, branch: str) -> Tuple[bool, str]:
         """Run git pull origin <branch> in a local repo. Helper for #1194."""
@@ -484,7 +485,7 @@ class SyncOrchestrator:
             return False, "git pull timed out"
         except Exception as e:
             logger.error("git pull error in %s: %s", repo_path, e)
-            return False, str(e)
+            return False, "git pull failed"
 
     async def _get_local_git_commit(self, repo_path: str) -> Optional[str]:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""

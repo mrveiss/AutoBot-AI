@@ -19,9 +19,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from models.database import Node, Service, ServiceStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.database import Node, Service, ServiceStatus
 
 logger = logging.getLogger(__name__)
 
@@ -739,7 +740,7 @@ class ServiceOrchestrator:
         ssh_cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
             "ConnectTimeout=10",
             "-o",
@@ -774,7 +775,7 @@ class ServiceOrchestrator:
             return False, "SSH command timed out"
         except Exception as e:
             logger.exception("SSH command error: %s", e)
-            return False, f"SSH error: {str(e)[:200]}"
+            return False, "SSH command error"
 
     async def _systemctl_action(
         self, host: str, service: str, action: str, requires_sudo: bool = True
@@ -846,7 +847,7 @@ class ServiceOrchestrator:
         cmd = [
             "ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
             "ConnectTimeout=3",
             "-o",

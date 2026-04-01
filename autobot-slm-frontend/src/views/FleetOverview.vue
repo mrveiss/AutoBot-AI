@@ -16,6 +16,7 @@ import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
+import { useRoles } from '@/composables/useRoles'
 
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
@@ -37,6 +38,9 @@ const router = useRouter()
 
 // Connection test composable (Issue #737)
 const connectionTest = useNodeConnectionTest()
+
+// Roles composable for re-enrollment (#2681)
+const rolesComposable = useRoles()
 
 // WebSocket for real-time updates
 const ws = useSlmWebSocket()
@@ -206,6 +210,9 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'decommission':
       showDecommissionModal.value = true
       break
+    case 'reenroll':
+      handleReenroll(nodeId)
+      break
     case 'restart':
       handleRestart(nodeId)
       break
@@ -336,6 +343,27 @@ async function handleRestart(nodeId: string): Promise<void> {
     alert(`Failed to reboot node: ${err instanceof Error ? err.message : 'Unknown error'}`)
   } finally {
     isRestarting.value = false
+  }
+}
+
+async function handleReenroll(nodeId: string): Promise<void> {
+  const node = fleetStore.getNode(nodeId)
+  const hostname = node?.hostname || nodeId
+  if (!confirm(`Re-enroll node "${hostname}"? This will reset it to pending status for fresh enrollment.`)) {
+    return
+  }
+
+  try {
+    const result = await rolesComposable.reenrollNode(nodeId)
+    if (result.success) {
+      logger.info('Node reset for re-enrollment:', nodeId)
+      await refreshFleet()
+    } else {
+      alert(`Re-enrollment failed: ${result.message}`)
+    }
+  } catch (err) {
+    logger.error('Failed to re-enroll node:', err)
+    alert(`Failed to re-enroll: ${err instanceof Error ? err.message : 'Unknown error'}`)
   }
 }
 </script>
@@ -506,7 +534,7 @@ async function handleRestart(nodeId: string): Promise<void> {
     <AddNodeModal
       :visible="showAddNodeModal"
       :mode="editingNode ? 'edit' : 'add'"
-      :existing-node="(editingNode as any)"
+      :existing-node="(editingNode as SLMNode | null)"
       @close="closeAddNodeModal"
       @added="handleNodeSaved"
       @updated="handleNodeSaved"
@@ -533,7 +561,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDeleteConfirm"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
-              <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
+              <div class="shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
                 <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -598,7 +626,7 @@ async function handleRestart(nodeId: string): Promise<void> {
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
               <div
-                class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
+                class="shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
                 :class="connectionTestResult?.success ? 'bg-green-100' : 'bg-red-100'"
                 aria-hidden="true"
               >

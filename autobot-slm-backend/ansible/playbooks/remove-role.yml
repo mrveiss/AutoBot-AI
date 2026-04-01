@@ -40,7 +40,8 @@
         - /var/lib/postgresql
       ai-stack:
         - /var/lib/chromadb
-        - /var/lib/autobot/ai-stack
+        # Issue #3097: ai-stack data moved to /var/lib/autobot-ai
+        - /var/lib/autobot-ai
       llm:
         - /usr/share/ollama/.ollama
         - /var/lib/ollama
@@ -128,13 +129,39 @@
         state: stopped
         enabled: false
       when: _service_file.stat.exists
-      ignore_errors: true
+      # Service may already be stopped or in a failed state during removal (#2950)
+      failed_when: false
 
-    - name: "Remove {{ systemd_service }} service file"
+    # Issue #3011: Do not delete service files owned by dpkg packages.
+    # Deleting a dpkg conffile means `apt install --reinstall` will NOT
+    # restore it — only `apt -o Dpkg::Options::="--force-confmiss" install
+    # --reinstall` will. Let apt purge handle conffile removal instead.
+    - name: "Check if service file is a dpkg conffile"
+      ansible.builtin.shell: >
+        dpkg -S "/etc/systemd/system/{{ systemd_service }}.service" 2>/dev/null
+        && echo dpkg_owned || echo not_dpkg_owned
+      register: _dpkg_check
+      changed_when: false
+      when: _service_file.stat.exists
+
+    - name: "Remove {{ systemd_service }} service file (non-dpkg only)"
       ansible.builtin.file:
         path: "/etc/systemd/system/{{ systemd_service }}.service"
         state: absent
+      when: >
+        _service_file.stat.exists and
+        (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'not_dpkg_owned'
       notify: reload systemd
+
+    - name: "Skip removal of dpkg-managed service file"
+      ansible.builtin.debug:
+        msg: >-
+          Skipping deletion of /etc/systemd/system/{{ systemd_service }}.service —
+          file is owned by a dpkg package. Use 'apt purge {{ systemd_service }}'
+          to remove it properly.
+      when: >
+        _service_file.stat.exists and
+        (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'dpkg_owned'
 
     # =======================================================================
     # DISK CLEANUP
@@ -164,6 +191,7 @@
           Role removal complete: {{ role_name }}
           - Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
           - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
+          - Service file: {{ 'skipped (dpkg conffile)' if (_dpkg_check.stdout_lines | default([]) | last | default('')) == 'dpkg_owned' else 'removed' }}
           - Disk cleanup: {{ '/opt/autobot/' + role_target_dir + ' removed' if (role_target_dir is defined and role_target_dir | length > 0) else 'skipped (no target dir)' }}
           - Backup: {{ _backup_path | default('none') if (_backup_performed | default(false)) else 'skipped' }}
 

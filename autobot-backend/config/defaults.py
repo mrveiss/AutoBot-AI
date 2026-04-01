@@ -298,7 +298,7 @@ def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
     return {
         "host": redis_host,
         "port": redis_port,
-        "db": int(os.getenv("AUTOBOT_REDIS_DB", "0")),
+        "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
         "password": os.getenv("AUTOBOT_REDIS_PASSWORD"),
     }
 

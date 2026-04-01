@@ -12,6 +12,7 @@
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('InfrastructureWizard')
 
@@ -129,9 +130,9 @@ function stopPolling(): void {
 async function loadPlaybooks(): Promise<void> {
   isLoadingPlaybooks.value = true
   try {
-    const response = await fetch('/api/infrastructure/playbooks', {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
     if (response.ok) {
@@ -154,11 +155,11 @@ async function execute(): Promise<void> {
   executeError.value = null
 
   try {
-    const response = await fetch('/api/infrastructure/execute', {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
       body: JSON.stringify({
         playbook_id: selectedPlaybookId.value,
@@ -193,9 +194,9 @@ function startStatusPolling(executionId: string): void {
 
 async function pollExecutionStatus(executionId: string): Promise<void> {
   try {
-    const response = await fetch(`/api/infrastructure/executions/${executionId}`, {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/executions/${executionId}`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
 
@@ -223,7 +224,7 @@ async function cancelExecution(): Promise<void> {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+          Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
         },
       }
     )
@@ -377,11 +378,11 @@ function getStatusColor(status: string): string {
                         <span
                           v-for="host in playbook.target_hosts"
                           :key="host"
-                          class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                          class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                         >
                           {{ host }}
                         </span>
-                        <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded">
+                        <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-sm">
                           ~{{ playbook.estimated_duration }}
                         </span>
                       </div>
@@ -460,7 +461,7 @@ function getStatusColor(status: string): string {
                     <input
                       v-model="confirmationChecked"
                       type="checkbox"
-                      class="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      class="rounded-sm border-amber-300 text-amber-600 focus:ring-amber-500"
                     />
                     <span class="text-sm text-amber-800">
                       I understand the changes and want to proceed

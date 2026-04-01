@@ -1,5 +1,127 @@
 # LLM Middleware and Telemetry Integration Guide
 
+
+## Quick Answer
+
+**How do you implement a custom middleware in AutoBot to intercept and modify LLM prompts based on real-time infrastructure telemetry?**
+
+Subclass `ChatWorkflowManager` and override `_prepare_llm_request_params()` to
+inject telemetry data into the prompt. This is the recommended approach because it
+gives you full access to the session, RAG context, and conversation history. Here
+is a complete end-to-end example:
+
+```python
+#!/usr/bin/env python3
+"""Custom LLM middleware that injects infrastructure telemetry into prompts."""
+
+import logging
+import time
+from typing import Any, Dict
+
+from chat_workflow.manager import ChatWorkflowManager
+from chat_workflow.models import WorkflowSession
+
+from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
+
+logger = logging.getLogger(__name__)
+
+
+class TelemetryAwareChatManager(ChatWorkflowManager):
+    """Chat manager that injects real-time infrastructure metrics into LLM prompts."""
+
+    def __init__(self):
+        super().__init__()
+        self._telemetry_redis = None
+        self._cache = None
+        self._cache_ts = 0
+
+    async def _gather_telemetry(self) -> str:
+        """Collect fleet metrics from Redis and format as markdown."""
+        now = time.time()
+        if self._cache and (now - self._cache_ts) < 30:
+            return self._cache
+
+        if self._telemetry_redis is None:
+            self._telemetry_redis = await get_redis_client(async_client=True, database="main")
+
+        cpu = await self._telemetry_redis.get("metrics:cpu:current")
+        mem = await self._telemetry_redis.get("metrics:memory:current")
+        disk = await self._telemetry_redis.get("metrics:disk:current")
+
+        lines = ["\n## Infrastructure Status"]
+        lines.append(f"- CPU: {cpu.decode() if cpu else 'N/A'}%")
+        lines.append(f"- Memory: {mem.decode() if mem else 'N/A'}%")
+        lines.append(f"- Disk: {disk.decode() if disk else 'N/A'}%")
+
+        health_keys = await self._telemetry_redis.keys("service:*:health")
+        for key in health_keys:
+            svc = key.decode().split(":")[1]
+            data = await self._telemetry_redis.hgetall(key)
+            status = data.get(b"status", b"unknown").decode()
+            lines.append(f"- {svc}: {status}")
+
+        context = "\n".join(lines)
+        self._cache = context
+        self._cache_ts = now
+        return context
+
+    async def _prepare_llm_request_params(
+        self,
+        session: WorkflowSession,
+        message: str,
+        use_knowledge: bool = True,
+        language: str = None,
+    ) -> Dict[str, Any]:
+        """Override to inject telemetry between system prompt and conversation."""
+        params = await super()._prepare_llm_request_params(
+            session, message, use_knowledge, language
+        )
+        try:
+            telemetry = await self._gather_telemetry()
+            system_prompt = params["system_prompt"]
+            original = params["prompt"]
+            if original.startswith(system_prompt):
+                remainder = original[len(system_prompt):]
+                params["prompt"] = system_prompt + telemetry + remainder
+            else:
+                params["prompt"] = original + "\n" + telemetry
+        except Exception as exc:
+            logger.warning("Telemetry injection failed (non-fatal): %s", exc)
+        return params
+```
+
+**Wire it up** in `chat_workflow/__init__.py`:
+
+```python
+from .telemetry_manager import TelemetryAwareChatManager
+
+def get_chat_workflow_manager():
+    global _workflow_manager
+    if _workflow_manager is None:
+        with _workflow_manager_lock:
+            if _workflow_manager is None:
+                _workflow_manager = TelemetryAwareChatManager()
+    return _workflow_manager
+```
+
+**Seed test telemetry and verify:**
+
+```bash
+redis-cli -h 172.16.168.23 SET metrics:cpu:current 45
+redis-cli -h 172.16.168.23 SET metrics:memory:current 62
+redis-cli -h 172.16.168.23 HSET service:backend:health status healthy
+curl -sk https://localhost:8443/api/chat/message \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is the current system status?", "session_id": "test"}'
+```
+
+For alternative patterns (HTTP middleware, LLM interface middleware) and testing,
+see [Section 3](#3-implementing-a-custom-middleware) and [Section 10](#10-complete-integration-example).
+
+---
+
+
 > **Benchmark question:** "How do you implement a custom middleware in AutoBot
 > to intercept and modify LLM prompts based on real-time infrastructure
 > telemetry?"
@@ -932,7 +1054,7 @@ backend:
       # gpu_endpoint: http://172.16.168.20:11434
       # gpu_models:
       #   - "qwen3.5:9b"
-      #   - "deepseek-r1:14b"
+      #   - "mistral:7b-instruct"
 
 # Fallback path for _get_ollama_endpoint_fallback() via get_host("ollama")
 infrastructure:

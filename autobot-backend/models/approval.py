@@ -11,8 +11,10 @@ import uuid
 from enum import Enum
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -40,7 +42,7 @@ class Approval(Base, TimestampMixin):
     __tablename__ = "approvals"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -99,12 +101,12 @@ class ApprovalComment(Base, TimestampMixin):
     __tablename__ = "approval_comments"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
     approval_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("approvals.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -133,12 +135,12 @@ class TaskApprovalLink(Base):
     __tablename__ = "task_approval_links"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
     approval_id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         ForeignKey("approvals.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

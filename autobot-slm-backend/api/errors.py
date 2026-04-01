@@ -15,13 +15,14 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from models.database import EventSeverity, Node, NodeEvent, Setting
 from pydantic import BaseModel, Field
-from services.auth import get_current_user
-from services.database import get_db
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from models.database import EventSeverity, Node, NodeEvent, Setting
+from services.auth import get_current_user
+from services.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/errors", tags=["errors"])

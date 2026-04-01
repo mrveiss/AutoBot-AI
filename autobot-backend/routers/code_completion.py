@@ -11,14 +11,14 @@ import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from models.code_pattern import CodePattern
 from pydantic import BaseModel, Field
-from services.context_analyzer import ContextAnalyzer
-from services.pattern_extractor import PatternExtractor
 from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from models.code_pattern import CodePattern
+from services.context_analyzer import ContextAnalyzer
+from services.pattern_extractor import PatternExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +127,7 @@ async def extract_patterns(request: ExtractionRequest):
         patterns_dict = extractor.extract_from_codebase(languages=request.languages)
 
         # Store patterns in database
-        db = _get_db_session()
-        try:
+        with _get_db_session() as db:
             total_stored = 0
             for pattern_type, patterns in patterns_dict.items():
                 for pattern_data in patterns:
@@ -154,8 +153,6 @@ async def extract_patterns(request: ExtractionRequest):
                         total_stored += 1
 
             db.commit()
-        finally:
-            db.close()
 
         # Cache hot patterns to Redis
         if request.cache_hot_patterns:
@@ -195,8 +192,7 @@ async def list_patterns(
     - **page_size**: Results per page (1-100)
     - **sort_by**: Sort field (frequency, acceptance_rate, created_at)
     """
-    db = _get_db_session()
-    try:
+    with _get_db_session() as db:
         query = db.query(CodePattern)
 
         # Apply filters
@@ -238,8 +234,6 @@ async def list_patterns(
             page=page,
             page_size=page_size,
         )
-    finally:
-        db.close()
 
 
 @router.get("/patterns/{category}", response_model=PatternListResponse)
@@ -272,8 +266,7 @@ async def search_patterns(request: PatternSearchRequest):
     - Function names
     - Categories
     """
-    db = _get_db_session()
-    try:
+    with _get_db_session() as db:
         query = db.query(CodePattern)
 
         # Apply filters
@@ -314,15 +307,12 @@ async def search_patterns(request: PatternSearchRequest):
             page=1,
             page_size=request.limit,
         )
-    finally:
-        db.close()
 
 
 @router.get("/statistics")
 async def get_statistics():
     """Get pattern extraction statistics."""
-    db = _get_db_session()
-    try:
+    with _get_db_session() as db:
         stats = {
             "total_patterns": db.query(CodePattern).count(),
             "by_language": dict(
@@ -349,8 +339,6 @@ async def get_statistics():
             ],
         }
         return stats
-    finally:
-        db.close()
 
 
 # =============================================================================

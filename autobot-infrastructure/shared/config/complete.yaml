@@ -314,23 +314,9 @@ redis:
     socket_connect_timeout: 2
     retry_on_timeout: true
 
-  # Database allocation
-  databases:
-    main: 0
-    knowledge: 0  # RediSearch indexes MUST be on DB 0
-    celery_broker: 1      # Celery task broker
-    celery_results: 2     # Celery task results
-    metrics: 1    # Performance metrics and monitoring data
-    prompts: 2
-    agents: 3
-    cache: 4
-    sessions: 6
-    chat_history: 8
-    backup: 10
-    testing: 15
-
-  # Knowledge base specific - RediSearch requirement
-  kb_db: 0
+  # Database allocation — SSOT is redis-databases.yaml (#2670).
+  # Do NOT duplicate DB numbers here; read from redis-databases.yaml instead.
+  databases_source: "autobot-infrastructure/shared/config/redis-databases.yaml"
 
   # Pub/Sub channels
   channels:
@@ -610,7 +596,7 @@ llm:
     rag: "gemma3:270m"              # Lightweight model for RAG operations (291MB)
     chat: "llama3.2:1b-instruct-q4_K_M"  # Balanced model for chat (807MB)
     classification: "gemma3:270m"    # Fast model for message classification
-    fallback: "llama3.2:3b-instruct-q4_K_M"  # Heavier model for complex tasks
+    fallback: "qwen3.5:9b"  # Quality model for complex tasks (#2585)
 
   # Model optimization settings
   optimization:
@@ -637,9 +623,9 @@ llm:
     strategy: "performance"    # "performance", "size", "speed"
     max_retries: 3            # Maximum retries before falling back
     fallback_models:          # Ordered list of fallback models
-      - "llama3.2:3b-instruct-q4_K_M"
-      - "llama3.2:1b-instruct-q4_K_M"
+      - "qwen3.5:9b"
       - "gemma2:2b"
+      - "llama3.2:1b"
 
   # Performance targets
   targets:
@@ -649,10 +635,10 @@ llm:
 
   # Existing LLM Configuration (continued)
   fallback_models:
-    - "dolphin-llama3:8b"
-    - "llama3.2:3b"
-    - "nomic-embed-text:latest"
-  emergency_fallback_model: "phi:2.7b"
+    - "qwen3.5:9b"
+    - "gemma2:2b"
+    - "llama3.2:1b"
+  emergency_fallback_model: "llama3.2:1b"
 
   # Embedding settings
   embedding:

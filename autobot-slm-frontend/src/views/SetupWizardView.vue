@@ -253,9 +253,9 @@
             </div>
           </div>
 
-          <!-- SLM services: shown as locked on manager node (#1455) -->
+          <!-- SLM services: shown as locked on manager node only (#1455, #2900) -->
           <div
-            v-if="node.detected_roles.some(r => SLM_ROLES.includes(r))"
+            v-if="node.node_id === '00-SLM-Manager' && node.detected_roles.some(r => SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
             <span class="infra-label">SLM Services:</span>
@@ -280,7 +280,7 @@
               :key="infra"
               class="role-chip infra-chip"
             >
-              {{ infra === 'autobot-shared' ? 'Shared Library' : 'SLM Agent' }}
+              {{ infra === 'autobot_shared' ? 'Shared Library' : 'SLM Agent' }}
             </span>
           </div>
         </div>
@@ -293,6 +293,44 @@
         </button>
       </div>
 
+      <!-- Configure Secrets / API Keys (#3079) -->
+      <div v-if="currentStep === 'configure_secrets'" class="step-panel">
+        <h2>API Keys &amp; Tokens</h2>
+        <p>
+          Some services require API keys or license acceptance to download gated models.
+          These are optional &mdash; you can skip this step and configure them later.
+        </p>
+
+        <div class="secrets-form">
+          <div class="secret-entry">
+            <h3>HuggingFace Token</h3>
+            <p class="secret-desc">
+              Required for TTS voice cloning (Pocket TTS uses a gated model).
+              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">Accept license</a>
+              then
+              <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">create a token</a>.
+            </p>
+            <input
+              v-model="secretValues.hf_token"
+              type="password"
+              placeholder="hf_..."
+              class="full-width"
+            />
+          </div>
+        </div>
+
+        <div v-if="secretsSaved" class="info-box success-box">
+          Secrets saved. They will be injected during provisioning.
+        </div>
+
+        <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
+          {{ savingSecrets ? 'Saving...' : 'Save API Keys' }}
+        </button>
+        <button class="btn-primary" @click="completeStep('configure_secrets')">
+          {{ Object.values(secretValues).some(v => v) ? 'Continue' : 'Skip' }}
+        </button>
+      </div>
+
       <!-- Provision Fleet -->
       <div v-if="currentStep === 'provision_fleet'" class="step-panel">
         <h2>Provision Fleet</h2>
@@ -301,8 +339,26 @@
           This may take several minutes.
         </p>
 
-        <div v-if="provisionOutput" class="provision-log">
-          <pre>{{ provisionOutput }}</pre>
+        <!-- Phase & status bar -->
+        <div v-if="provisioning" class="provision-status-bar">
+          <span class="provision-stage">{{ provisionStage }}</span>
+          <span class="provision-elapsed">{{ provisionElapsed }}s</span>
+        </div>
+
+        <!-- Streaming log panel -->
+        <div
+          v-if="provisionLogs.length > 0"
+          ref="logContainerRef"
+          class="provision-log"
+        >
+          <div
+            v-for="(entry, idx) in provisionLogs"
+            :key="idx"
+            class="log-entry"
+            :class="`log-${entry.type}`"
+          >
+            {{ entry.message }}
+          </div>
         </div>
 
         <button
@@ -372,9 +428,11 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type { NodeRole } from '@/types/slm'
+import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SetupWizard')
@@ -387,6 +445,7 @@ const {
   testConnection,
   enrollNode,
   updateNodeRoles,
+  upsertSecret,
   getWizardStatus,
   completeWizardStep,
   skipWizardSetup,
@@ -415,6 +474,7 @@ const stepLabels: Record<string, string> = {
   test_connections: 'Test',
   enroll_agents: 'Enroll',
   assign_roles: 'Roles',
+  configure_secrets: 'API Keys',
   provision_fleet: 'Provision',
   verify_health: 'Verify',
   complete: 'Done',
@@ -472,7 +532,7 @@ interface RoleInfo {
   degraded_without: string[]
 }
 
-const INFRA_ROLES = ['autobot-shared', 'slm-agent']
+const INFRA_ROLES = ['autobot_shared', 'slm-agent']
 const SLM_ROLES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
 
 const availableRoles = ref<RoleInfo[]>([])
@@ -499,11 +559,45 @@ function roleState(node: Node, roleName: string): RoleState {
   return 'available'
 }
 
+// ── Secrets / API keys (#3079) ────────────────────────────────────────────
+
+const secretValues = ref<Record<string, string>>({ hf_token: '' })
+const savingSecrets = ref(false)
+const secretsSaved = ref(false)
+
+async function saveSecrets() {
+  savingSecrets.value = true
+  secretsSaved.value = false
+  try {
+    for (const [key, value] of Object.entries(secretValues.value)) {
+      if (value.trim()) {
+        await upsertSecret(key, value.trim(), 'api_key', 'Set via setup wizard')
+      }
+    }
+    secretsSaved.value = true
+  } catch (err) {
+    logger.error('Failed to save secrets:', err)
+    alert('Failed to save API keys. Check the console for details.')
+  } finally {
+    savingSecrets.value = false
+  }
+}
+
 // ── Provisioning ──────────────────────────────────────────────────────────
 
 const provisioning = ref(false)
-const provisionOutput = ref('')
 const provisionComplete = ref(false)
+
+interface ProvisionLogEntry {
+  type: 'info' | 'task' | 'success' | 'error' | 'warning'
+  message: string
+}
+
+const provisionLogs = ref<ProvisionLogEntry[]>([])
+const provisionStage = ref('')
+const provisionElapsed = ref(0)
+const logContainerRef = ref<HTMLElement | null>(null)
+let provisionWs: WebSocket | null = null
 
 // ── Health check ──────────────────────────────────────────────────────────
 
@@ -699,7 +793,7 @@ async function saveRoles() {
   try {
     for (const node of nodes.value) {
       const roles = nodeRoles.value[node.node_id] || []
-      await updateNodeRoles(node.node_id, roles as any)
+      await updateNodeRoles(node.node_id, roles as NodeRole[])
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)
@@ -710,46 +804,111 @@ async function saveRoles() {
 
 let provisionPollTimer: ReturnType<typeof setInterval> | null = null
 
-async function provisionFleet() {
-  provisioning.value = true
-  provisionOutput.value = 'Starting fleet provisioning...\n'
-  let linesSeen = 0
+function connectProvisionWs() {
+  // Use SSOT config for WS URL (Issue #2489: Docker prefix support)
+  const cfg = getConfig()
+  const apiPrefix = cfg.apiBaseUrl.startsWith('/') ? cfg.apiBaseUrl : ''
+  const url = `${cfg.wsBaseUrl}${apiPrefix}/api/ws/provision`
 
-  try {
-    await provisionWizardFleet(nodes.value.map(n => n.node_id))
-  } catch (err: unknown) {
-    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
-    provisionOutput.value += `\nERROR: ${detail}\n`
-    provisioning.value = false
-    return
+  provisionWs = new WebSocket(url)
+
+  provisionWs.onopen = () => {
+    logger.info('Provision WebSocket connected')
   }
 
-  // Poll for progress (#1384)
+  provisionWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+
+      if (msg.type === 'log') {
+        provisionLogs.value.push({
+          type: msg.log_type || 'info',
+          message: msg.message,
+        })
+        scrollProvisionLog()
+      } else if (msg.type === 'status') {
+        provisionStage.value = formatStage(msg.stage || '')
+        provisionElapsed.value = Math.round(msg.elapsed_seconds || 0)
+
+        if (msg.status === 'completed') {
+          provisionComplete.value = true
+          provisioning.value = false
+          disconnectProvisionWs()
+        } else if (msg.status === 'failed') {
+          provisionLogs.value.push({
+            type: 'error',
+            message: msg.error || 'Provisioning failed',
+          })
+          provisioning.value = false
+          scrollProvisionLog()
+          disconnectProvisionWs()
+        }
+      } else if (msg.type === 'ping') {
+        provisionWs?.send('pong')
+      }
+    } catch {
+      // Ignore non-JSON messages (pong, etc.)
+    }
+  }
+
+  provisionWs.onclose = () => {
+    logger.debug('Provision WebSocket closed')
+    // If still provisioning, fall back to polling
+    if (provisioning.value) {
+      logger.info('WebSocket closed during provisioning, falling back to polling')
+      startProvisionPolling()
+    }
+  }
+
+  provisionWs.onerror = (err) => {
+    logger.error('Provision WebSocket error:', err)
+  }
+}
+
+function disconnectProvisionWs() {
+  if (provisionWs) {
+    provisionWs.onclose = null // Prevent fallback trigger
+    provisionWs.close()
+    provisionWs = null
+  }
+  stopProvisionPolling()
+}
+
+function startProvisionPolling() {
+  let linesSeen = provisionLogs.value.length
   provisionPollTimer = setInterval(async () => {
     try {
       const status = await getProvisionStatus(linesSeen)
       if (status.lines.length > 0) {
-        provisionOutput.value += status.lines.join('\n') + '\n'
+        for (const line of status.lines) {
+          provisionLogs.value.push({ type: 'info', message: line })
+        }
         linesSeen = status.total_lines
+        scrollProvisionLog()
       }
       if (status.elapsed_seconds) {
-        provisionOutput.value = provisionOutput.value.replace(
-          /^Starting fleet provisioning\.\.\.\n/,
-          `Provisioning in progress (${Math.round(status.elapsed_seconds)}s)...\n`
-        )
+        provisionElapsed.value = Math.round(status.elapsed_seconds)
       }
       if (status.status === 'completed') {
         stopProvisionPolling()
-        provisionOutput.value += '\nProvisioning completed successfully.\n'
+        provisionLogs.value.push({
+          type: 'success',
+          message: 'Provisioning completed successfully.',
+        })
         provisionComplete.value = true
         provisioning.value = false
+        scrollProvisionLog()
       } else if (status.status === 'failed') {
         stopProvisionPolling()
-        provisionOutput.value += `\nERROR: ${status.error || 'Provisioning failed'}\n`
+        provisionLogs.value.push({
+          type: 'error',
+          message: status.error || 'Provisioning failed',
+        })
         provisioning.value = false
+        scrollProvisionLog()
       }
     } catch {
-      // Poll failure is transient — keep trying
+      // Poll failure is transient - keep trying
     }
   }, 2000)
 }
@@ -761,8 +920,60 @@ function stopProvisionPolling() {
   }
 }
 
+function formatStage(stage: string): string {
+  const stageLabels: Record<string, string> = {
+    starting: 'Starting...',
+    slm_starting: 'Preparing SLM server',
+    slm_syncing: 'Syncing SLM backend',
+    slm_restarting: 'Restarting SLM backend',
+    slm_waiting: 'Waiting for SLM backend',
+    slm_complete: 'SLM server updated',
+    play1_start: 'Phase 1: SLM Server',
+    play2_start: 'Phase 2: Infrastructure',
+    nodes_starting: 'Updating infrastructure nodes',
+    node_backend: 'Syncing backend node',
+    node_frontend: 'Syncing frontend node',
+    node_npu: 'Syncing NPU worker',
+    node_browser: 'Syncing browser automation',
+    node_complete: 'Node update complete',
+    complete: 'Complete',
+  }
+  return stageLabels[stage] || stage.replace(/_/g, ' ')
+}
+
+function scrollProvisionLog() {
+  nextTick(() => {
+    if (logContainerRef.value) {
+      logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+    }
+  })
+}
+
+async function provisionFleet() {
+  provisioning.value = true
+  provisionLogs.value = []
+  provisionStage.value = 'Starting...'
+  provisionElapsed.value = 0
+
+  provisionLogs.value.push({ type: 'info', message: 'Starting fleet provisioning...' })
+
+  // Connect WebSocket first
+  connectProvisionWs()
+
+  try {
+    await provisionWizardFleet(nodes.value.map(n => n.node_id))
+  } catch (err: unknown) {
+    const detail =
+      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+      'Unknown error'
+    provisionLogs.value.push({ type: 'error', message: `ERROR: ${detail}` })
+    provisioning.value = false
+    disconnectProvisionWs()
+  }
+}
+
 onUnmounted(() => {
-  stopProvisionPolling()
+  disconnectProvisionWs()
 })
 
 async function checkFleetHealth() {
@@ -1244,17 +1455,59 @@ input.full-width {
   border: 1px solid var(--border-color, #333);
   border-radius: 6px;
   padding: 1rem;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
   margin-bottom: 1rem;
-}
-
-.provision-log pre {
-  margin: 0;
   font-family: monospace;
   font-size: 0.8rem;
+}
+
+.log-entry {
+  padding: 2px 0;
   white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-info {
   color: #a0d0a0;
+}
+
+.log-task {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.log-success {
+  color: #4ade80;
+}
+
+.log-error {
+  color: #f87171;
+}
+
+.log-warning {
+  color: #fbbf24;
+}
+
+.provision-status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.provision-stage {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.provision-elapsed {
+  color: var(--text-secondary, #999);
 }
 
 /* Health summary */
@@ -1303,5 +1556,38 @@ input.full-width {
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
+}
+
+/* Secrets / API Keys (#3079) */
+.secrets-form {
+  margin-bottom: 1.5rem;
+}
+
+.secret-entry {
+  background: var(--bg-tertiary, #252525);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.secret-entry h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.secret-desc {
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.secret-desc a {
+  color: var(--color-accent, #4fc3f7);
+}
+
+.success-box {
+  border-color: var(--color-success, #4caf50);
+  color: var(--color-success, #4caf50);
 }
 </style>

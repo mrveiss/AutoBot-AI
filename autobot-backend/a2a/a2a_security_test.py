@@ -309,8 +309,9 @@ class TestRateLimiting:
             _check_rate_limit("1.2.3.4")  # should not raise
 
     def test_exceeds_limit_raises(self):
-        from api.a2a import _RATE_LIMIT, _check_rate_limit, _rate_buckets
         from fastapi import HTTPException
+
+        from api.a2a import _RATE_LIMIT, _check_rate_limit, _rate_buckets
 
         now = time.time()
         _rate_buckets["9.9.9.9"] = [now] * _RATE_LIMIT

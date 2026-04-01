@@ -117,6 +117,8 @@ import time
 import uuid
 from datetime import datetime
 
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+
 # Import models from dedicated module (Issue #185 - split oversized files)
 from api.terminal_models import (
     MODERATE_RISK_PATTERNS,
@@ -131,13 +133,11 @@ from api.terminal_models import (
     TerminalSessionRequest,
 )
 from auth_middleware import check_admin_permission, get_current_user
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
 from services.terminal_secrets_service import get_terminal_secrets_service
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

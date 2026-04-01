@@ -9,8 +9,9 @@ Provides singleton-like behavior with app.state integration for optimal performa
 
 import logging
 
-from constants.network_constants import NetworkConstants
 from fastapi import Request
+
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

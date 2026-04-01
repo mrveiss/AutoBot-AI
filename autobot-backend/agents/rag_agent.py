@@ -12,14 +12,13 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
+from constants.threshold_constants import LLMDefaults
+from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -200,7 +199,7 @@ class RAGAgent(StandardizedAgent):
                 "synthesized_response": (
                     "I encountered an error while synthesizing information from the documents."
                 ),
-                "error": str(e),
+                "error": "RAG synthesis failed",
                 "agent_type": "rag",
                 "model_used": self.model_name,
             }
@@ -252,7 +251,7 @@ class RAGAgent(StandardizedAgent):
                 "status": "error",
                 "original_query": original_query,
                 "reformulated_queries": [original_query],
-                "error": str(e),
+                "error": "Query reformulation failed",
             }
 
     async def rank_documents(

@@ -13,6 +13,7 @@ import time
 from unittest.mock import patch
 
 import pytest
+
 from enhanced_security_layer import EnhancedSecurityLayer
 from secure_command_executor import CommandRisk
 
@@ -381,7 +382,7 @@ class TestSecurityEdgeCases:
                 results.append(result)
             except Exception as e:
                 # Should handle gracefully
-                results.append({"error": str(e)})
+                results.append({"error": "Command execution failed"})
 
         end_time = time.time()
 

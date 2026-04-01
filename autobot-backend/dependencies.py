@@ -10,8 +10,9 @@ removing the need for components to directly import and use global_config_manage
 
 import threading
 
-from config import ConfigManager
 from fastapi import Depends
+
+from config import ConfigManager
 
 global_config_manager = ConfigManager()
 

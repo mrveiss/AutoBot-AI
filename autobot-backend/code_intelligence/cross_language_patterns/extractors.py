@@ -60,12 +60,13 @@ _TS_VALIDATION_RE: Pattern = re.compile(
 _TS_ZOD_RE: Pattern = re.compile(r"z\.(?:object|string|number|boolean|array)\s*\(")
 
 # Vue patterns (#1721: hardened against bad-tag-filter bypass)
+# #1733: ReDoS fix - replaced nested quantifier ([^<]*(?:...[^<]*)*)  with [\s\S]*?
 _VUE_SCRIPT_RE: Pattern = re.compile(
-    r"<script[^>]*>([^<]*(?:<(?!/script>)[^<]*)*)</script>",
+    r"<script[^>]*>([\s\S]*?)</script>",
     re.IGNORECASE,
 )
 _VUE_TEMPLATE_RE: Pattern = re.compile(
-    r"<template>([^<]*(?:<(?!/template>)[^<]*)*)</template>",
+    r"<template>([\s\S]*?)</template>",
     re.IGNORECASE,
 )
 

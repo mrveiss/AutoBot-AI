@@ -15,10 +15,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+
+from autobot_shared.tracing import (
+    instrument_aiohttp,
+    instrument_redis,
+    shutdown_tracing,
+)
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config import ConfigManager
-from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
@@ -26,12 +32,6 @@ from type_defs.common import Metadata
 from user_management.database import init_database
 from utils.background_llm_sync import BackgroundLLMSync
 from utils.io_executor import shutdown_executors as shutdown_io_executors
-
-from autobot_shared.tracing import (
-    instrument_aiohttp,
-    instrument_redis,
-    shutdown_tracing,
-)
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -201,6 +201,34 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
         raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
 
 
+async def _check_env_drift() -> None:
+    """Run .env drift check against SSOT config definitions (Issue #2650).
+
+    Non-critical: a failed or drifted check is logged as a warning and never
+    prevents startup.  This runs before other init steps so operators see drift
+    warnings at the very top of the startup log.
+    """
+    try:
+        from autobot_shared.env_drift_detector import check_env_drift
+
+        report = check_env_drift()
+        if report.error:
+            logger.warning("env drift check skipped: %s", report.error)
+        elif report.has_drift:
+            logger.warning(
+                "env drift detected — run 'python -m autobot_shared.env_drift_detector' "
+                "for details (%s)",
+                report.summary(),
+            )
+        else:
+            logger.info(
+                "env drift check passed: all %d SSOT keys present in .env",
+                len(report.ssot_keys),
+            )
+    except Exception as exc:
+        logger.warning("env drift check failed (non-critical): %s", exc)
+
+
 async def _init_config(app: FastAPI) -> None:
     """Helper for initialize_critical_services. Ref: #1088."""
     logger.info("✅ [ 10%] Config: Loading unified configuration...")
@@ -305,6 +333,8 @@ async def initialize_critical_services(app: FastAPI):
 
     Issue #665: Refactored to use extracted helper methods for each service.
     Issue #1088: Further extracted inline blocks into private helpers.
+    Issue #3015: Grouped independent steps into dependency tiers and run each
+    tier concurrently with asyncio.gather() to reduce startup latency.
 
     These services MUST be operational before serving requests.
     Failure in this phase will prevent app startup.
@@ -322,20 +352,44 @@ async def initialize_critical_services(app: FastAPI):
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
     try:
+        # Issue #3015: Group init steps into dependency tiers and run each
+        # tier concurrently with asyncio.gather() to reduce startup latency.
+        #
+        # Tier 0 (sequential): env drift check + config — must complete before
+        #         anything else since all services may read global config.
+        # Tier 1 (parallel): security, database, telemetry — independent of
+        #         each other, only need the module-level global config manager.
+        # Tier 2 (parallel): chat managers — independent of each other; benefit
+        #         from telemetry instrumentation being in place for tracing.
+        # Tier 3 (parallel): cache coordinator + skills — non-critical,
+        #         independent of each other and of the chat managers.
+
+        # --- Tier 0: config foundation (sequential) ---
+        # Issue #2650: check .env drift before any service initialisation
+        await _check_env_drift()
         await _init_config(app)
-        await _init_security_layer(app)
-        await _init_database()
-        await _init_telemetry_and_redis()
 
+        # --- Tier 1: independent infrastructure (parallel) ---
+        await asyncio.gather(
+            _init_security_layer(app),
+            _init_database(),
+            _init_telemetry_and_redis(),
+        )
+
+        # --- Tier 2: chat service managers (parallel) ---
         # Issue #665: uses helpers
-        await _init_chat_history_manager(app)
-        await _init_conversation_file_manager(app)
-        await _init_chat_workflow_manager(app)
+        await asyncio.gather(
+            _init_chat_history_manager(app),
+            _init_conversation_file_manager(app),
+            _init_chat_workflow_manager(app),
+        )
 
+        # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
-        await _init_cache_coordinator()
-
-        await _init_skills(app)
+        await asyncio.gather(
+            _init_cache_coordinator(),
+            _init_skills(app),
+        )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 
@@ -577,6 +631,34 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     except Exception as hb_error:
         logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
         app.state.heartbeat_scheduler = None
+
+
+async def _init_trigger_service(app: FastAPI) -> None:
+    """Start TriggerService background loops for event-driven triggers (#3100)."""
+    logger.info("Triggers: Starting trigger service...")
+    try:
+        from api.triggers import get_trigger_service
+
+        trigger_service = get_trigger_service()
+
+        async def _launch_workflow(workflow_id: str, payload: dict) -> None:
+            """Launcher callback invoked by TriggerService when a trigger fires."""
+            from services.workflow_automation import get_workflow_manager
+
+            logger.info("Trigger fired for workflow %s with payload keys=%s",
+                        workflow_id, list(payload.keys()) if payload else [])
+            mgr = get_workflow_manager()
+            if mgr:
+                await mgr.start_workflow_execution(
+                    workflow_id, trigger_payload=payload
+                )
+
+        await trigger_service.start(launcher=_launch_workflow)
+        app.state.trigger_service = trigger_service
+        logger.info("Triggers: Service started")
+    except Exception as trigger_error:
+        logger.warning("Trigger service initialization failed: %s", trigger_error)
+        app.state.trigger_service = None
 
 
 async def _init_slm_reconciler(app: FastAPI):
@@ -852,6 +934,40 @@ async def _recover_index_queue():
         logger.warning("Index queue recovery failed (non-fatal): %s", e)
 
 
+async def _ensure_agent_memory_index() -> None:
+    """Auto-create the idx:agent_memory RediSearch vector index if it doesn't exist (#2645).
+
+    Idempotent — safe to call on every startup. If the index already exists,
+    handle_redis_vector_create_index returns immediately without error.
+    Uses the vectors database (Redis DB 8) with default agent-memory schema:
+    HNSW, FLOAT32, 1536 dimensions, COSINE distance.
+    """
+    logger.info("[ 93%%] Agent Memory Index: Ensuring idx:agent_memory exists...")
+    try:
+        from api.redis_mcp.vector_search import handle_redis_vector_create_index
+
+        result = await handle_redis_vector_create_index(
+            index_name="idx:agent_memory",
+            prefix="autobot:agent:memory:",
+            vector_field="embedding",
+            dimensions=1536,
+            distance_metric="COSINE",
+            database="vectors",
+        )
+        if result.get("message") == "Index already exists":
+            logger.info("[ 93%%] Agent Memory Index: idx:agent_memory already exists")
+        else:
+            logger.info(
+                "[ 93%%] Agent Memory Index: idx:agent_memory created "
+                "(prefix=%s, dims=%d, metric=%s)",
+                result.get("prefix"),
+                result.get("dimensions"),
+                result.get("distance_metric"),
+            )
+    except Exception as e:
+        logger.warning("Agent memory index creation failed (non-critical): %s", e)
+
+
 async def _init_orchestrator(app: FastAPI) -> None:
     """Initialize and store the orchestrator on app.state (#2235).
 
@@ -870,6 +986,33 @@ async def _init_orchestrator(app: FastAPI) -> None:
     except Exception as e:
         logger.warning("Orchestrator initialization failed (non-fatal): %s", e)
         app.state.orchestrator = None
+
+
+async def _wire_npu_task_queue() -> None:
+    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+
+    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
+    never set to an actual instance — making all tracking code dead (#2944).  This helper
+    runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
+    """
+    logger.info("[ 98%%] NPU Task Queue: Wiring NPUWorkerManager into TaskQueue...")
+    try:
+        from autobot_shared.redis_client import get_redis_client
+        from services.npu_worker_manager import get_worker_manager
+        from utils.task_queue import get_task_queue
+
+        redis_client = get_redis_client(async_client=True, database="main")
+        worker_manager = await get_worker_manager(redis_client=redis_client)
+        task_queue = get_task_queue()
+        task_queue.npu_worker_manager = worker_manager
+        logger.info(
+            "[ 98%%] NPU Task Queue: NPUWorkerManager wired — per-worker task tracking active"
+        )
+    except Exception as e:
+        logger.warning(
+            "NPU task queue wiring failed (per-worker tracking disabled): %s", e
+        )
 
 
 async def _wire_scheduler_executor() -> None:
@@ -956,12 +1099,15 @@ async def initialize_background_services(app: FastAPI):
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
+        await _init_trigger_service(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
         await _recover_index_queue()
+        await _ensure_agent_memory_index()
         await _init_process_adapter(app)
         await _init_orchestrator(app)
         await _seed_agent_registry()
+        await _wire_npu_task_queue()
         await _wire_scheduler_executor()
 
         await update_app_state_multi(
@@ -988,6 +1134,11 @@ async def cleanup_services(app: FastAPI):
             await app.state.background_llm_sync.stop()
         if hasattr(app.state, "memory_graph") and app.state.memory_graph:
             await app.state.memory_graph.close()
+
+        # Issue #3100: Stop trigger service background loops
+        if hasattr(app.state, "trigger_service") and app.state.trigger_service:
+            await app.state.trigger_service.stop()
+            logger.info("Trigger service stopped")
 
         # Issue #165: Stop documentation watcher
         try:

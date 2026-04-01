@@ -20,6 +20,7 @@ import tempfile
 import textwrap
 
 import pytest
+
 from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceIssueType,
@@ -278,6 +279,90 @@ class TestAsyncSyncMismatch:
             ]
 
             assert len(sync_results) == 0
+
+    def test_no_false_positive_sqlalchemy_async_execute(self):
+        """Issue #2656: awaited db.execute() must not be flagged as blocking.
+
+        SQLAlchemy's AsyncSession.execute() is async-safe.  The analyzer was
+        matching the generic ``.execute(`` medium-confidence pattern and
+        reporting a false positive for every ``await db.execute(...)`` call.
+        """
+        code = textwrap.dedent("""
+            from sqlalchemy.ext.asyncio import AsyncSession
+
+            async def get_users(db: AsyncSession):
+                result = await db.execute(
+                    "SELECT * FROM users"
+                )
+                return result.fetchall()
+
+            async def get_order(db: AsyncSession, order_id: int):
+                result = await db.execute(
+                    "SELECT * FROM orders WHERE id = :id",
+                    {"id": order_id},
+                )
+                return result.fetchone()
+
+            async def get_items(session: AsyncSession):
+                result = await session.execute(
+                    "SELECT * FROM items"
+                )
+                return result.scalars().all()
+        """)
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = PerformanceAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            blocking_results = [
+                r
+                for r in results
+                if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC
+                and "execute" in (r.current_code or "").lower()
+            ]
+
+            assert blocking_results == [], (
+                f"False positive: awaited db.execute() was flagged as blocking: "
+                f"{[r.description for r in blocking_results]}"
+            )
+
+    def test_no_false_positive_awaited_call_generic(self):
+        """Issue #2656: any directly-awaited call must not be flagged as blocking.
+
+        The AST-level fix ensures that any call wrapped in ``await`` is
+        recognised as async-safe before pattern matching runs.
+        """
+        code = textwrap.dedent("""
+            async def fetch_data(client):
+                data = await client.execute("query")
+                row = await client.fetchone()
+                return data, row
+        """)
+
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", delete=False, mode="w", encoding="utf-8"
+        ) as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = PerformanceAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            blocking_results = [
+                r
+                for r in results
+                if r.issue_type == PerformanceIssueType.BLOCKING_IO_IN_ASYNC
+            ]
+
+            assert blocking_results == [], (
+                f"False positive: directly-awaited call flagged as blocking: "
+                f"{[r.description for r in blocking_results]}"
+            )
 
 
 class TestStringConcatenation:

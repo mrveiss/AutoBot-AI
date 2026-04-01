@@ -73,7 +73,7 @@ class CodeQualityDashboard:
     """Comprehensive code quality dashboard"""
 
     def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.redis_client = redis_client  # Lazy init if None (#2984)
         self.config = config
 
         # Initialize all analyzers
@@ -919,8 +919,14 @@ class CodeQualityDashboard:
             "priority_score": issue.priority_score,
         }
 
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2984)."""
+        if self.redis_client is None:
+            self.redis_client = await get_redis_client(async_client=True)
+
     async def _save_quality_trend(self, metrics: QualityMetrics, issue_count: int):
         """Save quality trend data"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 trend = QualityTrend(
@@ -948,6 +954,7 @@ class CodeQualityDashboard:
 
     async def _get_quality_trends(self) -> List[Dict[str, Any]]:
         """Get historical quality trends"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 trends = await self.redis_client.lrange(self.TRENDS_KEY, 0, -1)
@@ -958,6 +965,7 @@ class CodeQualityDashboard:
 
     async def _cache_dashboard_report(self, report: Dict[str, Any]):
         """Cache dashboard report"""
+        await self._ensure_redis()
         if self.redis_client:
             try:
                 await self.redis_client.setex(

@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import tempfile
 import time
 import uuid
 from datetime import datetime
@@ -16,6 +17,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     Certificate,
     CodeStatus,
@@ -60,15 +67,10 @@ from models.schemas import (
     ServiceOrderEntry,
     UpdatePolicyResponse,
 )
-from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import delete, func, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -134,13 +136,11 @@ async def _process_role_report(
         node_role = result.scalar_one_or_none()
 
         if not node_role:
-            # Create new NodeRole with auto assignment type
-            node_role = NodeRole(
-                node_id=node_id,
-                role_name=role_name,
-                assignment_type="auto",
-            )
-            db.add(node_role)
+            # Only update roles that are already assigned — don't auto-create
+            # entries for roles detected on a node but not assigned via the
+            # wizard.  This prevents SLM-manager roles (slm-backend, etc.)
+            # from appearing on every node that runs the agent (#2900).
+            continue
 
         # Update role status
         node_role.status = report.status
@@ -216,6 +216,21 @@ async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
     """
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
+
+    # After enrollment, Ansible connects as 'autobot' (the user created
+    # during enrollment).  Preserve the original ssh_user in extra_data
+    # so decommission can connect as the original user to remove autobot.
+    # (#2826)
+    if node and node.ssh_user and node.ssh_user != "autobot":
+        extra = node.extra_data or {}
+        extra["original_ssh_user"] = node.ssh_user
+        node.extra_data = extra
+        node.ssh_user = "autobot"
+        logger.info(
+            "Node %s: ssh_user updated to 'autobot' (original: %s)",
+            node_id,
+            extra["original_ssh_user"],
+        )
 
     completion_details = {
         "hostname": node.hostname if node else None,
@@ -473,6 +488,25 @@ async def create_node(
 
     await _create_registration_event(db, node_id, node, node_data, initial_status)
 
+    # Create NodeRole entries for each registered role (#2747)
+    if node_data.roles:
+        for role_name in node_data.roles:
+            existing = await db.execute(
+                select(NodeRole).where(
+                    NodeRole.node_id == node_id,
+                    NodeRole.role_name == role_name,
+                )
+            )
+            if not existing.scalar_one_or_none():
+                db.add(
+                    NodeRole(
+                        node_id=node_id,
+                        role_name=role_name,
+                        status="active",
+                        assignment_type="manual",
+                    )
+                )
+
     await db.commit()
     await db.refresh(node)
 
@@ -515,6 +549,7 @@ async def update_node(
             detail="Node not found",
         )
 
+    old_ip = node.ip_address
     update_data = node_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         if value is not None:
@@ -533,6 +568,16 @@ async def update_node(
             )
         raise
     await db.refresh(node)
+
+    # Warn when IP changes — agent config has a stale admin_url until
+    # re-provisioned (#2833).
+    if "ip_address" in update_data and node.ip_address != old_ip:
+        logger.warning(
+            "Node %s IP changed %s -> %s; re-provision to update agent config",
+            node_id,
+            old_ip,
+            node.ip_address,
+        )
 
     logger.info("Node updated: %s", node_id)
     return NodeResponse.model_validate(node)
@@ -562,6 +607,35 @@ async def update_node_roles(
         )
 
     node.roles = roles_data.roles
+
+    # Sync NodeRole entries to match (#2829, #2836)
+    # The provisioning playbook reads node_roles from the NodeRole table,
+    # so we must keep it in sync with the Node.roles display column.
+    existing_roles = await db.execute(
+        select(NodeRole).where(NodeRole.node_id == node_id)
+    )
+    existing_map = {nr.role_name: nr for nr in existing_roles.scalars().all()}
+
+    desired_roles = set(roles_data.roles or [])
+    current_roles = set(existing_map.keys())
+
+    # Add new roles
+    for role_name in desired_roles - current_roles:
+        db.add(
+            NodeRole(
+                node_id=node_id,
+                role_name=role_name,
+                status="not_installed",
+                assignment_type="manual",
+            )
+        )
+
+    # Remove roles no longer assigned (except slm-agent — always keep)
+    for role_name in current_roles - desired_roles:
+        if role_name == "slm-agent":
+            continue
+        await db.delete(existing_map[role_name])
+
     await db.commit()
     await db.refresh(node)
 
@@ -656,6 +730,21 @@ def _check_role_conflicts(
         )
 
     return conflicts, warnings
+
+
+def _detect_orphaned_dependencies(
+    active_roles: list[str], removed_role: str
+) -> list[str]:
+    """Return dependencies no longer needed after removing a role."""
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    removed_deps = set(ROLE_DEPENDENCIES.get(removed_role, []))
+    if not removed_deps:
+        return []
+    still_needed: set[str] = set()
+    for role in active_roles:
+        still_needed.update(ROLE_DEPENDENCIES.get(role, []))
+    return sorted(removed_deps - still_needed)
 
 
 async def _run_preflight(
@@ -819,21 +908,57 @@ async def _execute_provision_playbook(
     roles: list,
     target_roles: list,
 ) -> dict:
-    """Helper for provision_node_roles. Ref: #1088.
+    """Helper for provision_node_roles. Ref: #1088, #2678, #2959.
 
-    Runs deploy.yml playbook, updates role statuses, and returns result dict.
-    Raises HTTPException on playbook failure.
+    Builds a temp single-host inventory from the node's IP, ssh_user, and
+    node_roles (same pattern as setup_wizard.py) so provision-fleet-roles.yml
+    phase conditions evaluate correctly for the target node.
     """
     from services.playbook_executor import get_playbook_executor
+    from services.role_registry import ROLE_DEPENDENCIES
 
-    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
-    # hostname is user-editable and can drift from inventory host names (#921)
     executor = get_playbook_executor()
-    result = await executor.execute_playbook(
-        playbook_name="deploy.yml",
-        limit=[node.node_id],
-        extra_vars={"target_roles": ",".join(target_roles)},
+    ssh_user = node.ssh_user or "autobot"
+
+    roles_yaml = "".join(f"        - {r}\n" for r in target_roles)
+
+    deps: set = set()
+    for r in target_roles:
+        deps.update(ROLE_DEPENDENCIES.get(r, []))
+    deps_yaml = "".join(f"        - {d}\n" for d in sorted(deps))
+
+    inventory_content = (
+        "all:\n"
+        "  hosts:\n"
+        "    provision_target:\n"
+        f"      ansible_host: {node.ip_address}\n"
+        f"      ansible_user: {ssh_user}\n"
+        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
+        "      ansible_python_interpreter: /usr/bin/python3\n"
+        "      node_roles:\n"
+        + roles_yaml
+        + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
     )
+    tmp_inv = None
+    try:
+        tmp_inv = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            prefix="provision_inv_",
+            dir=str(executor.ansible_dir),
+            delete=False,
+        )
+        tmp_inv.write(inventory_content)
+        tmp_inv.flush()
+        tmp_inv.close()
+
+        result = await executor.execute_playbook(
+            playbook_name="playbooks/provision-fleet-roles.yml",
+            inventory_path=Path(tmp_inv.name),
+        )
+    finally:
+        if tmp_inv and os.path.exists(tmp_inv.name):
+            os.unlink(tmp_inv.name)
 
     for role in roles:
         role.status = "installed" if result["success"] else "failed"
@@ -869,7 +994,7 @@ async def provision_node_roles(
         node_id: Node to provision
         role_names: Specific roles to provision (if None, provisions all assigned roles)
 
-    Uses deploy.yml playbook with --limit and --tags for targeted provisioning.
+    Uses provision-fleet-roles.yml with node_roles set in inventory (#2959).
     """
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
@@ -944,6 +1069,16 @@ async def remove_role_from_node(
     await db.delete(node_role)
     await db.commit()
 
+    # Detect orphaned dependencies after role removal
+    remaining_roles_result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id,
+            NodeRole.status.in_(["active", "inactive"]),
+        )
+    )
+    remaining_roles = [nr.role_name for nr in remaining_roles_result.scalars().all()]
+    orphaned_deps = _detect_orphaned_dependencies(remaining_roles, role_name)
+
     logger.info(
         "Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup
     )
@@ -953,7 +1088,53 @@ async def remove_role_from_node(
     }
     if backup and service_name:
         response["backup_path"] = ansible_result.get("backup_path")
+    if orphaned_deps:
+        response["orphaned_dependencies"] = orphaned_deps
     return response
+
+
+@router.delete("/{node_id}/dependencies/{dep_name}")
+async def mark_dependency_for_removal(
+    node_id: str,
+    dep_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """Mark an orphaned dependency for removal on next provisioning run."""
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    # Get node
+    query = select(Node).where(Node.node_id == node_id)
+    result = await db.execute(query)
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+
+    # Guard: check no active role needs this dependency
+    role_query = select(NodeRole).where(
+        NodeRole.node_id == node_id,
+        NodeRole.status.in_(["active", "inactive"]),
+    )
+    active_roles = [
+        nr.role_name for nr in (await db.execute(role_query)).scalars().all()
+    ]
+    for role in active_roles:
+        if dep_name in ROLE_DEPENDENCIES.get(role, []):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot remove {dep_name}: still required by role '{role}'",
+            )
+
+    # Add to pending removals in extra_data
+    extra = dict(node.extra_data) if node.extra_data else {}
+    pending = extra.get("pending_dep_removals", [])
+    if dep_name not in pending:
+        pending.append(dep_name)
+    extra["pending_dep_removals"] = pending
+    node.extra_data = extra
+    await db.commit()
+
+    return {"status": "marked_for_removal", "dependency": dep_name}
 
 
 async def _get_role_service_and_path(
@@ -1125,18 +1306,63 @@ async def decommission_preflight(
     }
 
 
-async def _run_decommission_playbook(node_id: str, backup: bool) -> dict:
-    """Execute the decommission Ansible playbook (#1369)."""
+async def _run_decommission_playbook(
+    ip_address: str, ssh_user: str, backup: bool
+) -> dict:
+    """Execute the decommission Ansible playbook (#1369, #2678).
+
+    Connects as the node's original SSH user (stored in Node.ssh_user
+    at enrollment time) so the playbook can safely remove the autobot
+    service account without killing its own session.
+    """
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
-    return await executor.execute_playbook(
-        playbook_name="playbooks/decommission-node.yml",
-        limit=[node_id],
-        extra_vars={
-            "backup_before_decommission": str(backup).lower(),
-        },
+    inventory_content = (
+        "all:\n"
+        "  hosts:\n"
+        "    decommission_target:\n"
+        f"      ansible_host: {ip_address}\n"
+        f"      ansible_user: {ssh_user}\n"
+        "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
+        "      ansible_python_interpreter: /usr/bin/python3\n"
     )
+    tmp_inv = None
+    try:
+        tmp_inv = tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            prefix="decommission_inv_",
+            dir=str(executor.ansible_dir),
+            delete=False,
+        )
+        tmp_inv.write(inventory_content)
+        tmp_inv.flush()
+        tmp_inv.close()
+
+        result = await executor.execute_playbook(
+            playbook_name="playbooks/decommission-node.yml",
+            inventory_path=Path(tmp_inv.name),
+            extra_vars={
+                "backup_before_decommission": str(backup).lower(),
+            },
+        )
+        # Detect silent no-op: Ansible exits 0 even when no hosts matched
+        output = result.get("output", "")
+        if result["success"] and "decommission_target" not in output:
+            logger.error(
+                "Decommission playbook ran but target host %s was never reached",
+                ip_address,
+            )
+            result["success"] = False
+            result["output"] += (
+                "\n\nERROR: Playbook completed but target host was "
+                "never reached. Check SSH connectivity to " + ip_address
+            )
+        return result
+    finally:
+        if tmp_inv and os.path.exists(tmp_inv.name):
+            os.unlink(tmp_inv.name)
 
 
 async def _cleanup_decommissioned_node(
@@ -1182,14 +1408,15 @@ async def _fail_deployment(
 async def _execute_decommission(
     db: AsyncSession,
     deployment: Deployment,
-    node_id: str,
+    ip_address: str,
+    ssh_user: str,
     backup: bool,
 ) -> dict:
-    """Run decommission playbook; fail deployment on error (#1369)."""
+    """Run decommission playbook; fail deployment on error (#1369, #2678)."""
     try:
-        result = await _run_decommission_playbook(node_id, backup)
+        result = await _run_decommission_playbook(ip_address, ssh_user, backup)
     except Exception:
-        logger.exception("Decommission playbook failed for node %s", node_id)
+        logger.exception("Decommission playbook failed for node %s", ip_address)
         await _fail_deployment(db, deployment, "Playbook execution failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1254,10 +1481,15 @@ async def decommission_node(
             "output": "Force decommission: Ansible playbook skipped (node already removed)"
         }
     else:
+        # Use original SSH user for decommission so Ansible can remove
+        # the autobot account without killing its own session (#2826)
+        extra = node.extra_data or {}
+        decom_user = extra.get("original_ssh_user", node.ssh_user or "autobot")
         ansible_result = await _execute_decommission(
             db,
             deployment,
-            node_id,
+            node.ip_address,
+            decom_user,
             request.backup,
         )
     await _cleanup_decommissioned_node(
@@ -1276,6 +1508,7 @@ async def decommission_node(
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,
+        "output": ansible_result.get("output", ""),
     }
 
 
@@ -1299,6 +1532,62 @@ def _create_decommission_deployment(
             "backup": backup,
         },
     )
+
+
+@router.post("/{node_id}/reenroll")
+async def reenroll_node(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Reset a decommissioned node to pending so it can be re-enrolled (#2681).
+
+    Clears stale credentials and configs, resets status to PENDING,
+    and logs the event.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+    if node.status != NodeStatus.DECOMMISSIONED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Node must be decommissioned to re-enroll (current: {node.status})",
+        )
+
+    # Clear stale data from previous life
+    await db.execute(delete(NodeCredential).where(NodeCredential.node_id == node_id))
+    await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node_id))
+
+    node.status = NodeStatus.PENDING.value
+    node.updated_at = datetime.utcnow()
+
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.STATUS_CHANGED,
+        EventSeverity.INFO,
+        f"Node reset to pending for re-enrollment by {current_user.get('username', 'unknown')}",
+    )
+    await db.commit()
+
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_status_changed",
+        {"status": "pending", "previous_status": "decommissioned"},
+    )
+
+    logger.info(
+        "Node %s reset from decommissioned to pending for re-enrollment",
+        node_id,
+    )
+    return {
+        "success": True,
+        "message": f"Node {node_id} is ready for re-enrollment",
+    }
 
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1929,9 +2218,8 @@ def _build_password_ssh_command(
         request.password,
         "ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
-        "UserKnownHostsFile=/dev/null",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -1954,9 +2242,8 @@ def _build_key_ssh_command(
     return [
         "ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
-        "UserKnownHostsFile=/dev/null",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -2297,9 +2584,10 @@ async def get_node_updates(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Get available updates for a node."""
+    from sqlalchemy import or_
+
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
-    from sqlalchemy import or_
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -2543,7 +2831,7 @@ def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
     cmd = [
         "ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "ConnectTimeout=10",
         "-p",

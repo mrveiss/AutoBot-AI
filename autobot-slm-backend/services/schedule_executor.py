@@ -16,11 +16,12 @@ from typing import Optional, Tuple
 
 from croniter import croniter
 from fastapi import HTTPException
+from sqlalchemy import select
+
 from models.database import CodeStatus, Node, UpdateSchedule
 from services.code_distributor import get_code_distributor
 from services.database import db_service
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,7 @@ async def execute_schedule(schedule: UpdateSchedule) -> Tuple[bool, str]:
 
     except Exception as e:
         logger.error("Schedule %s execution failed: %s", schedule.name, e)
-        return False, str(e)
+        return False, "Schedule execution failed"
 
 
 async def check_and_execute_schedules() -> int:

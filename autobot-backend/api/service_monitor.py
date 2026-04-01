@@ -15,8 +15,9 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
-from config import ConfigManager
 from fastapi import APIRouter
+
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()

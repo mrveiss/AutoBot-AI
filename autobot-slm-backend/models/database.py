@@ -375,6 +375,7 @@ class FleetSyncJob(Base):
     total_nodes = Column(Integer, default=0)
     completed_nodes = Column(Integer, default=0)
     failed_nodes = Column(Integer, default=0)
+    failure_reason = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 

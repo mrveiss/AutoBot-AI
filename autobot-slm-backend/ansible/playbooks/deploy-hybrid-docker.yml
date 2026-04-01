@@ -366,11 +366,20 @@
         state: present
       become_user: autobot
 
-    - name: Pull Ollama model
+    - name: Pull required Ollama models (6-tier mapping, #2553)
       shell: |
-        docker exec autobot-ollama ollama pull llama3.2:1b
+        docker exec autobot-ollama ollama pull {{ item }}
+      loop:
+        - "llama3.2:1b"           # Routing tier
+        - "gemma2:2b"             # Classification tier
+        - "phi3:mini"             # Light processing tier
+        - "mistral:7b-instruct"   # Instruction tier
+        - "dolphin-llama3:8b"     # System/uncensored tier
+        - "qwen3.5:9b"            # Quality tier
+        - "nomic-embed-text"      # Embeddings
       register: ollama_pull
-      ignore_errors: yes
+      # Individual model pulls may fail due to network or availability (#2950)
+      failed_when: false
 
     - name: Wait for services to be ready
       wait_for:
@@ -491,7 +500,8 @@
             - { url: 'http://localhost:8081/health', name: 'NPU Worker' }
           'autobot-browser':
             - { url: 'http://localhost:3000/health', name: 'Browser Service' }
-      ignore_errors: yes
+      # Endpoint tests are informational; services may still be starting (#2950)
+      failed_when: false
 
     - name: Create service summary
       set_fact:

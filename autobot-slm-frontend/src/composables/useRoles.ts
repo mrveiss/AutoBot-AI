@@ -130,7 +130,7 @@ export function useRoles() {
   // Create axios instance with auth
   const client = axios.create({ baseURL: API_BASE })
   client.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -379,12 +379,13 @@ export function useRoles() {
     nodeId: string,
     backup: boolean,
     confirmNodeId: string
-  ): Promise<{ success: boolean; message?: string; deployment_id?: string }> {
+  ): Promise<{ success: boolean; message?: string; deployment_id?: string; output?: string }> {
     try {
       const resp = await client.post<{
         success: boolean
         message: string
         deployment_id: string
+        output: string
       }>(`/api/nodes/${nodeId}/decommission`, {
         backup,
         confirm_node_id: confirmNodeId,
@@ -399,6 +400,29 @@ export function useRoles() {
         err.response?.data?.detail ||
         err.message ||
         'Decommission failed'
+      error.value = msg
+      return { success: false, message: msg }
+    }
+  }
+
+  async function reenrollNode(
+    nodeId: string
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      const resp = await client.post<{
+        success: boolean
+        message: string
+      }>(`/api/nodes/${nodeId}/reenroll`)
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      const msg =
+        err.response?.data?.detail ||
+        err.message ||
+        'Re-enrollment failed'
       error.value = msg
       return { success: false, message: msg }
     }
@@ -424,5 +448,6 @@ export function useRoles() {
     executeNodeAction,
     decommissionPreflight,
     decommissionNode,
+    reenrollNode,
   })
 }

@@ -819,7 +819,13 @@
         "redisOptimizations": "Redis Optimization Suggestions",
         "loadingRedisOptimizations": "Loading Redis optimizations...",
         "noRedisOptimizations": "No Redis optimization suggestions.",
-        "noScoresData": "No code intelligence scores available. Run analysis to generate scores."
+        "noScoresData": "No code intelligence scores available. Run analysis to generate scores.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Duplicate Code Detection",
@@ -1133,7 +1139,17 @@
         "businessIntelligence": "Business Intelligence",
         "businessIntelligenceAria": "Business intelligence analytics",
         "security": "Security",
-        "securityAria": "Security analytics"
+        "securityAria": "Security analytics",
+        "codeQuality": "Code Quality",
+        "codeQualityAria": "Code quality analytics",
+        "codeReview": "Code Review",
+        "codeReviewAria": "Code review analytics",
+        "codeGeneration": "Code Generation",
+        "codeGenerationAria": "Code generation analytics",
+        "evolution": "Evolution",
+        "evolutionAria": "Evolution analytics",
+        "audit": "Audit",
+        "auditAria": "Audit logs"
       }
     },
     "header": {
@@ -1211,7 +1227,8 @@
       "noResultsDescription": "Paste code above and click Analyze to get AI-powered insights",
       "suggestions": "Suggestions",
       "issuesFound": "Issues Found",
-      "analysisHistory": "Analysis History"
+      "analysisHistory": "Analysis History",
+      "noPreviousScan": "No previous scan available"
     },
     "evolution": {
       "title": "Code Evolution",
@@ -6049,7 +6066,6 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
-    "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel"
+    "agentRegistry": "Agents"
   }
 }

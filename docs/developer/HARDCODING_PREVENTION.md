@@ -16,7 +16,7 @@ The following values must NEVER be hardcoded in source files:
 |------|----------|---------------------|
 | **IP Addresses** | `"172.16.168.20"`, `"192.168.1.100"` | `config.backend.host` (Python) or SSOT env vars |
 | **Port Numbers** | `8001`, `6379`, `5173` | `config.backend.port` (Python) or SSOT env vars |
-| **LLM Model Names** | `"llama3.2:1b-instruct-q4_K_M"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
+| **LLM Model Names** | `"qwen3.5:9b"`, `"mistral:7b-instruct"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
 | **URLs** | `"http://example.com/api"` | `getBackendUrl()` (TypeScript) or SSOT config |
 | **API Keys/Secrets** | `"sk-abc123..."`, `"password123"` | Environment variables (NEVER commit) |
 
@@ -33,7 +33,7 @@ The pre-commit hook automatically scans staged files before every commit:
 ```bash
 # Runs automatically on git commit
 # Located at: .git/hooks/pre-commit-hardcode-check
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 ```
 
 **What it checks**:
@@ -56,17 +56,46 @@ Run the detection script manually to audit the entire codebase:
 
 ```bash
 # Scan entire codebase for violations
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # Get detailed report with line numbers
-./infrastructure/shared/scripts/detect-hardcoded-values.sh | less
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh | less
 
 # Scan specific file or directory
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
 ```
 
-**Script location**: `infrastructure/shared/scripts/detect-hardcoded-values.sh`
+**Script location**: `autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh`
+
+---
+
+## ConfigRegistry Fallback Pattern (Issue #2671)
+
+`registry_defaults.py` now sources all default values from `autobot_shared.ssot_config` at import time. This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks** -- the registry defaults tier provides SSOT-sourced values automatically.
+
+```python
+# GOOD -- no hardcoded fallback needed
+redis_host = ConfigRegistry.get("vm.redis")
+npu_port = ConfigRegistry.get("port.npu")
+
+# BAD -- redundant hardcoded fallback (will trigger detection script)
+redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+```
+
+For model names and embedding models, use the SSOT constants:
+
+```python
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, DEFAULT_EMBEDDING_MODEL
+
+# GOOD
+model = DEFAULT_LLM_MODEL
+embedding = DEFAULT_EMBEDDING_MODEL
+
+# BAD
+model = "qwen3.5:9b"
+embedding = "nomic-embed-text:latest"
+```
 
 ---
 
@@ -125,7 +154,7 @@ BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
 
 ```python
 # BAD - Hardcoded model name
-model = "llama3.2:1b-instruct-q4_K_M"
+model = "qwen3.5:9b"
 
 # GOOD - Use SSOT config
 from autobot_shared.ssot_config import config
@@ -135,7 +164,7 @@ model = config.llm.default_model
 **Environment variable**: Set in `.env` file:
 
 ```bash
-AUTOBOT_DEFAULT_LLM_MODEL=llama3.2:1b-instruct-q4_K_M
+AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```
 
 ### 3. For Other Values (URLs, API Keys, etc.)
@@ -215,7 +244,7 @@ git commit --no-verify -m "Your message"
 ### Script Location
 
 ```text
-infrastructure/shared/scripts/detect-hardcoded-values.sh
+autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 ```
 
 ### What It Detects
@@ -233,7 +262,7 @@ infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 **LLM Model Names**:
 
-- Ollama models: `llama3.2:1b-instruct-q4_K_M`
+- Ollama models: `qwen3.5:9b`, `mistral:7b-instruct`, `gemma2:2b`, `llama3.2:1b`
 - OpenAI models: `gpt-4`, `gpt-3.5-turbo`
 - Anthropic models: `claude-3-opus`
 
@@ -272,12 +301,12 @@ If needed, install manually:
 
 ```bash
 # Make script executable
-chmod +x infrastructure/shared/scripts/detect-hardcoded-values.sh
+chmod +x autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # Create pre-commit hook
 cat > .git/hooks/pre-commit-hardcode-check << 'EOF'
 #!/bin/bash
-./infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh --staged
 if [ $? -ne 0 ]; then
     echo "Hardcoded values detected. Fix violations before committing."
     exit 1
@@ -308,10 +337,10 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 
 ```bash
 # Before starting work
-./infrastructure/shared/scripts/detect-hardcoded-values.sh
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # After making changes
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
+./autobot-autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
 ```
 
 ### 3. Keep .env.example Updated
@@ -391,7 +420,7 @@ git commit --no-verify -m "Emergency fix - see issue #123"
 - **SSOT Config Guide**: [SSOT_CONFIG_GUIDE.md](SSOT_CONFIG_GUIDE.md) - Complete SSOT configuration patterns
 - **Migration Checklist**: [CONFIG_MIGRATION_CHECKLIST.md](CONFIG_MIGRATION_CHECKLIST.md) - Migrating code to SSOT
 - **SSOT Architecture**: [../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md)
-- **Python SSOT Config**: `autobot-shared/ssot_config.py`
+- **Python SSOT Config**: `autobot_shared/ssot_config.py`
 - **TypeScript SSOT Config**: `autobot-frontend/src/config/ssot-config.ts`
 - **Environment Setup**: [PHASE_5_DEVELOPER_SETUP.md](PHASE_5_DEVELOPER_SETUP.md)
 - **Code Quality**: [CODE_QUALITY_ENFORCEMENT.md](CODE_QUALITY_ENFORCEMENT.md)

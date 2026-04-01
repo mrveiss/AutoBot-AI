@@ -144,7 +144,10 @@ export function useOperationsState() {
   const completedCount = ref(0)
   const failedCount = ref(0)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const errors = ref<string[]>([])
+  const error = computed<string | null>(() =>
+    errors.value.length > 0 ? errors.value.join('; ') : null,
+  )
   const selectedOperation = ref<Operation | null>(null)
   const healthStatus = ref<OperationsHealthResponse | null>(null)
 
@@ -184,7 +187,7 @@ export function useOperationsState() {
    */
   async function loadOperations() {
     loading.value = true
-    error.value = null
+    errors.value = []
 
     try {
       const result = await operationsApi.listOperations(filter.value)
@@ -196,7 +199,8 @@ export function useOperationsState() {
         failedCount.value = result.failed_count
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error'
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      errors.value = [...errors.value, msg]
       logger.error('Failed to load operations:', e)
     } finally {
       loading.value = false

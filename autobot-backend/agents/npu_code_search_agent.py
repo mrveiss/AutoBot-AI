@@ -19,12 +19,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from code_embedding_generator import get_code_embedding_generator
-from npu_semantic_search import get_npu_search_engine
-from worker_node import WorkerNode
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.security.path_validator import validate_path
+from code_embedding_generator import get_code_embedding_generator
+from npu_semantic_search import get_npu_search_engine
+from worker_node import WorkerNode
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -192,7 +192,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         # Redis setup
         self.redis_client = get_redis_client(async_client=False)
-        self.redis_async_client = get_redis_client(async_client=True)
+        self.redis_async_client = None  # Lazy init (#2725)
 
         # Worker node for NPU capabilities
         self.worker_node = WorkerNode()
@@ -246,6 +246,13 @@ class NPUCodeSearchAgent(StandardizedAgent):
         except Exception as e:
             self.logger.warning("Failed to initialize NPU: %s", e)
             self.npu_available = False
+
+    async def _ensure_redis(self):
+        """Lazy-init async Redis client on first use (#2725)."""
+        if self.redis_async_client is None:
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_async_client = await get_redis_client(async_client=True)
 
     async def _ensure_search_engine_initialized(self):
         """Lazy-initialize NPU semantic search engine when needed (Issue #68)"""
@@ -404,7 +411,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         except Exception as e:
             self.logger.error("Codebase indexing failed: %s", e)
-            return {"status": "error", "error": str(e), "indexed_files": indexed_files}
+            return {"status": "error", "error": "Codebase indexing failed", "indexed_files": indexed_files}
 
     def _build_file_index_data(
         self, relative_path: str, language: str, content: str, elements: Dict[str, List]
@@ -988,6 +995,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1062,6 +1070,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1170,6 +1179,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1404,6 +1414,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     ) -> List[str]:
         """Get context lines around a specific line number"""
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1454,7 +1465,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
             deleted = await asyncio.to_thread(_clear_cache)
             return {"status": "success", "keys_deleted": deleted}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to clear cache: %s", e)
+            return {"status": "error", "error": "Cache clear failed"}
 
     async def get_index_status(self) -> Dict[str, Any]:
         """Get indexing status information"""
@@ -1493,7 +1505,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
             }
 
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to get index status: %s", e)
+            return {"status": "error", "error": "Failed to retrieve index status"}
 
 
 # Singleton instance (thread-safe)

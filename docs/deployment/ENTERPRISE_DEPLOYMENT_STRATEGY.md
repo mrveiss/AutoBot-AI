@@ -135,7 +135,7 @@ agents:
     enabled: true
 
   rag:
-    model: "llama3.2:3b"
+    model: "mistral:7b-instruct"
     max_concurrent: 5
     npu_enabled: true
 

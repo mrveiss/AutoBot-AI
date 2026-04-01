@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import status
+
 from user_management.middleware.rate_limit import RateLimitExceeded
 from user_management.services.user_service import (
     InvalidCredentialsError,
@@ -124,8 +125,9 @@ class TestPasswordChangeRateLimiting:
             )
             MockLimiter.return_value = mock_limiter
 
-            from api.user_management.users import change_password
             from fastapi import HTTPException
+
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -186,8 +188,9 @@ class TestPasswordChangeRateLimiting:
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from api.user_management.users import change_password
             from fastapi import HTTPException
+
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -229,8 +232,9 @@ class TestPasswordChangeResponses:
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             MockLimiter.return_value = mock_limiter
 
-            from api.user_management.users import change_password
             from fastapi import HTTPException
+
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -263,8 +267,9 @@ class TestPasswordChangeResponses:
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from api.user_management.users import change_password
             from fastapi import HTTPException
+
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)

@@ -15,8 +15,9 @@ can import them without creating a circular dependency.
 import asyncio
 
 from fastapi import HTTPException, status
-from models.database import FleetSyncJob as FleetSyncJobModel
 from sqlalchemy import select, text
+
+from models.database import FleetSyncJob as FleetSyncJobModel
 
 # Serialise check-and-insert across all fleet sync entry points to prevent
 # TOCTOU races (#1730, #1937, #1979).

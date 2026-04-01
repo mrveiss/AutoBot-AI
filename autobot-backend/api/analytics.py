@@ -16,6 +16,15 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
 # Import controller class (extracted from this file - Issue #212)
 from api.analytics_controller import (
@@ -27,21 +36,11 @@ from api.analytics_controller import (
 # Import models from dedicated module (Issue #185 - split oversized files)
 from api.analytics_models import AnalyticsOverview, RealTimeEvent
 from auth_middleware import get_current_user
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import TimingConstants
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    HTTPException,
-    Query,
-    WebSocket,
-    WebSocketDisconnect,
-)
-from utils.background_task_manager import BackgroundTaskManager
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
+from utils.background_task_manager import BackgroundTaskManager
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
@@ -152,7 +151,7 @@ async def _check_redis_db(db) -> Tuple[str, str]:
             return db.name, "connected"
         return db.name, "failed"
     except Exception as e:
-        return db.name, f"error: {str(e)}"
+        return db.name, "connection error"
 
 
 async def _check_service(

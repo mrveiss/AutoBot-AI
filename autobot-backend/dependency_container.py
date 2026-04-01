@@ -14,10 +14,10 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
-from config import ConfigManager, unified_config_manager
-from llm_interface import LLMInterface, get_llm_interface
 
 from autobot_shared.redis_client import get_redis_client
+from config import ConfigManager, unified_config_manager
+from llm_interface import LLMInterface, get_llm_interface
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +338,8 @@ class AsyncServiceContainer:
                         "message": "Service running (no health check method)",
                     }
             except Exception as e:
-                results[service_name] = {"status": "unhealthy", "error": str(e)}
+                logger.error("Health check failed for service %s: %s", service_name, e)
+                results[service_name] = {"status": "unhealthy", "error": "Health check failed"}
 
         return results
 

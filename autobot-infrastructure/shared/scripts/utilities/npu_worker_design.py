@@ -89,8 +89,8 @@ class NPUWorkerArchitecture:
                 ],
                 "models": [
                     "artifish/llama3.2-uncensored:latest (2.2GB) - GPU",
-                    "deepseek-r1:14b (8.4GB) - GPU for complex reasoning",
-                    "llama3.2:3b-instruct-q4_K_M (2GB) - GPU backup",
+                    "qwen3.5:9b (5.2GB) - GPU for complex reasoning",
+                    "mistral:7b-instruct (4.1GB) - GPU backup",
                 ],
             },
             "windows_npu_worker": {

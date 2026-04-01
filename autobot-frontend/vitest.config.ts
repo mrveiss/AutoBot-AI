@@ -17,6 +17,11 @@ export default mergeConfig(
     test: {
       // Test environment setup
       environment: 'jsdom',
+      environmentOptions: {
+        jsdom: {
+          url: 'http://localhost:3000',
+        },
+      },
       globals: true,
       setupFiles: ['src/test/vitest-setup.ts'],
 
@@ -28,7 +33,8 @@ export default mergeConfig(
         'tests/**',
         'src/test/e2e/**',
         '**/*.e2e.test.ts',
-        '**/*.playwright.spec.ts'
+        '**/*.playwright.spec.ts',
+        '**/.worktrees/**',
       ],
 
       // Coverage configuration
@@ -60,7 +66,9 @@ export default mergeConfig(
       testTimeout: 10000,
       hookTimeout: 10000,
 
-      // Mock options
+      // Mock options — WARNING (#3070): mockReset wipes vi.mock() factory
+      // implementations between tests.  Always re-apply mocks in beforeEach,
+      // not in the factory.  Use regular functions for constructor mocks.
       clearMocks: true,
       mockReset: true,
       restoreMocks: true,

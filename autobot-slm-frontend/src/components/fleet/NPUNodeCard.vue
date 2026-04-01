@@ -95,7 +95,7 @@ const detectionStatus = computed(() => {
 <template>
   <div
     @click="emit('select')"
-    class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
+    class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all"
   >
     <!-- Header -->
     <div class="flex items-start justify-between mb-3">
@@ -110,18 +110,18 @@ const detectionStatus = computed(() => {
 
     <!-- Device Type Badge -->
     <div class="mb-3">
-      <span :class="['px-2 py-1 rounded text-xs font-medium', deviceTypeColor]">
+      <span :class="['px-2 py-1 rounded-sm text-xs font-medium', deviceTypeColor]">
         {{ deviceTypeLabel }}
       </span>
       <span
         v-if="detectionStatus === 'pending'"
-        class="ml-2 px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700"
+        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-yellow-100 text-yellow-700"
       >
         Detecting...
       </span>
       <span
         v-else-if="detectionStatus === 'failed'"
-        class="ml-2 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700"
+        class="ml-2 px-2 py-1 rounded-sm text-xs font-medium bg-red-100 text-red-700"
       >
         Detection Failed
       </span>
@@ -129,11 +129,11 @@ const detectionStatus = computed(() => {
 
     <!-- Stats -->
     <div class="grid grid-cols-2 gap-3 mb-3">
-      <div class="text-center p-2 bg-gray-50 rounded">
+      <div class="text-center p-2 bg-gray-50 rounded-sm">
         <p class="text-lg font-semibold text-gray-900">{{ loadedModelsCount }}/{{ modelsCount }}</p>
         <p class="text-xs text-gray-500">Models Loaded</p>
       </div>
-      <div class="text-center p-2 bg-gray-50 rounded">
+      <div class="text-center p-2 bg-gray-50 rounded-sm">
         <p class="text-lg font-semibold text-gray-900">{{ npuStatus?.queueDepth ?? 0 }}</p>
         <p class="text-xs text-gray-500">Queue Depth</p>
       </div>

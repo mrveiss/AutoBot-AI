@@ -10,11 +10,12 @@ Issue #679: Organization-level knowledge policies, analytics, and controls.
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
 from knowledge.ownership import VisibilityLevel
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

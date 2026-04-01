@@ -32,7 +32,7 @@
               <button
                 @click="handleClose"
                 :disabled="isSubmitting"
-                class="rounded-md text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                class="rounded-md text-gray-400 hover:text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -44,7 +44,7 @@
             <!-- Replace Mode Warning -->
             <div v-if="isReplaceMode" class="mx-6 mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg" role="alert">
               <div class="flex items-start gap-3">
-                <svg class="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <svg class="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div>
@@ -255,7 +255,7 @@
                       <input
                         type="checkbox"
                         v-model="formData.has_sudo"
-                        class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <span class="text-sm text-gray-700">User has sudo privileges</span>
                     </label>
@@ -362,7 +362,7 @@
                         type="checkbox"
                         :value="role.id"
                         v-model="formData.roles"
-                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                         :aria-label="`${role.name}: ${role.description}`"
                       />
                       <div>
@@ -403,7 +403,7 @@
                       <input
                         type="checkbox"
                         v-model="formData.import_existing"
-                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
                         <span class="text-sm text-gray-700 font-medium">Import existing node (no deployment)</span>
@@ -418,7 +418,7 @@
                         <input
                           type="checkbox"
                           v-model="formData.auto_enroll"
-                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                         />
                         <div>
                           <span class="text-sm text-gray-700">Start enrollment immediately after adding</span>
@@ -432,7 +432,7 @@
                         <input
                           type="checkbox"
                           v-model="formData.deploy_pki"
-                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                         />
                         <div>
                           <span class="text-sm text-gray-700">Deploy PKI certificates during enrollment</span>
@@ -448,7 +448,7 @@
                   <div v-if="isEditMode" class="space-y-3">
                     <!-- Info: PKI auth - no password ever needed -->
                     <div v-if="formData.auth_method === 'pki'" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
-                      <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <svg class="h-5 w-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                       </svg>
                       <p class="text-sm text-blue-700">
@@ -457,7 +457,7 @@
                     </div>
                     <!-- Info: Password auth - credentials optional for basic edits -->
                     <div v-else-if="!needsCredentialsForEdit" class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg" role="status">
-                      <svg class="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <svg class="h-5 w-5 text-green-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p class="text-sm text-green-700">
@@ -466,7 +466,7 @@
                     </div>
                     <!-- Info: Password auth with SSH ops - password required -->
                     <div v-else class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
-                      <svg class="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <svg class="h-5 w-5 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                       <p class="text-sm text-amber-700">
@@ -478,7 +478,7 @@
                       <input
                         type="checkbox"
                         v-model="formData.deploy_pki"
-                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
                         <span class="text-sm text-gray-700">Deploy PKI certificates after update</span>
@@ -492,7 +492,7 @@
                       <input
                         type="checkbox"
                         v-model="formData.run_enrollment"
-                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        class="mt-0.5 w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
                       />
                       <div>
                         <span class="text-sm text-gray-700">Re-run enrollment tasks</span>
@@ -505,7 +505,7 @@
 
                   <!-- PKI Migration Notice -->
                   <div v-if="isEditMode && formData.auth_method === 'password' && formData.ssh_password" class="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="status">
-                    <svg class="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <svg class="h-5 w-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p class="text-sm text-blue-700">
@@ -520,7 +520,7 @@
                     <input
                       type="checkbox"
                       v-model="replaceConfirmed"
-                      class="mt-0.5 w-4 h-4 text-danger-500 border-gray-300 rounded focus:ring-danger-500"
+                      class="mt-0.5 w-4 h-4 text-danger-500 border-gray-300 rounded-sm focus:ring-danger-500"
                     />
                     <div>
                       <span class="text-sm text-gray-700 font-medium">
@@ -542,7 +542,7 @@
                 ]" :role="testResult.success ? 'status' : 'alert'">
                   <svg
                     :class="[
-                      'h-5 w-5 mt-0.5 flex-shrink-0',
+                      'h-5 w-5 mt-0.5 shrink-0',
                       testResult.success ? 'text-green-600' : 'text-red-600'
                     ]"
                     fill="none"

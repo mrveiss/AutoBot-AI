@@ -26,9 +26,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, Field
+
+from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 

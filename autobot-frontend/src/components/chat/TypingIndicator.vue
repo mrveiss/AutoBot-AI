@@ -132,6 +132,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* Issue #704: Migrated to CSS design tokens */
 .typing-message {
   @apply animate-pulse mr-auto ml-0 rounded-lg shadow-sm border;

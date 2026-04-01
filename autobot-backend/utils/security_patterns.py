@@ -63,8 +63,10 @@ HARDCODED_PATTERNS: dict[str, re.Pattern[str]] = {
     "jwt_tokens": re.compile(
         r"eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+", re.MULTILINE
     ),
+    # Issue #1733: ReDoS fix - removed '.' from domain character class to prevent
+    # ambiguous backtracking between [a-zA-Z0-9.-]+ and \.[a-zA-Z]{2,}
     "email_addresses": re.compile(
-        r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b",
+        r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}\b",
         re.IGNORECASE | re.MULTILINE,
     ),
 }

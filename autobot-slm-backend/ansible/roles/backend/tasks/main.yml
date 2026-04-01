@@ -49,29 +49,33 @@
   notify: restart backend
   tags: ['backend', 'config']
 
-# ============================================================
-# Issue #1898: Standardize Python — deadsnakes PPA + Python 3.12 venv
-# ============================================================
-- name: Install software-properties-common for PPA support
-  ansible.builtin.apt:
-    name: software-properties-common
-    state: present
-    update_cache: true
+# Issue #2953: Write deployment.mode into config/config.yaml so the backend
+# config loader can read it without relying on env alone.
+- name: "Backend | Ensure config directory exists"
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
 
-- name: Add deadsnakes PPA for Python 3.12
-  ansible.builtin.apt_repository:
-    repo: "ppa:deadsnakes/ppa"
-    state: present
-    update_cache: true
+- name: "Backend | Write deployment section to config/config.yaml (#2953)"
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ backend_code_dir }}/config/config.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    force: false  # Never overwrite an existing config.yaml — it may have user customisations
+  tags: ['backend', 'config']
 
-- name: Install Python 3.12 and build dependencies
+# ============================================================
+# Backend-specific system dependencies (Python 3.12 now in shared Phase 0)
+# ============================================================
+- name: "Backend | Install backend-specific system dependencies"
   ansible.builtin.apt:
     name:
-      - python3.12
-      - python3.12-venv
-      - python3.12-dev
-      - git
-      - curl
       - build-essential
       - libssl-dev
       - zlib1g-dev
@@ -85,6 +89,8 @@
       - libxmlsec1-dev
       - libffi-dev
       - liblzma-dev
+      - git
+      - curl
       # GUI / display (VNC, xvfb headless, GUI automation)
       - xvfb
       - x11-utils
@@ -101,6 +107,7 @@
       - python3-tk
     state: present
     update_cache: true
+  tags: ['backend', 'packages']
 
 
 - name: Create autobot user
@@ -123,19 +130,44 @@
     - "{{ backend_data_dir }}"
     - "{{ backend_data_dir }}/conversation_files"
 
+- name: Sync autobot-backend code from code_source
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
+    dest: "{{ backend_code_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--exclude=venv"
+  tags: ['backend', 'deploy']
+
+- name: Sync backend config directory from code_source
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+    dest: "{{ backend_code_dir }}/config/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  tags: ['backend', 'deploy']
+
+- name: Sync autobot_shared to backend install dir
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_install_dir }}/autobot_shared/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+  tags: ['backend', 'deploy']
+
 - name: Create backend symlink for imports
   ansible.builtin.file:
     src: "{{ backend_code_dir }}"
     dest: "{{ backend_install_dir }}/backend"
     state: link
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-
-- name: Create autobot_shared symlink (underscore) so Python can import it
-  ansible.builtin.file:
-    src: "{{ backend_install_dir }}/autobot-shared"
-    dest: "{{ backend_install_dir }}/autobot_shared"
-    state: link
+    force: true
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
@@ -159,6 +191,11 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
+- name: Check if backend code already synced
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/main.py"
+  register: _backend_code_present
+
 - name: Clone/update AutoBot repository
   ansible.builtin.git:
     repo: "{{ backend_repo_url }}"
@@ -166,14 +203,16 @@
     version: "{{ backend_version }}"
     force: true
   become_user: "{{ backend_user }}"
-  when: backend_deploy_from_git | default(true)
+  when:
+    - backend_deploy_from_git | default(true)
+    - not _backend_code_present.stat.exists
 
-- name: Check if valid venv exists
+- name: Check if venv directory itself is a symlink (legacy layout)
   ansible.builtin.stat:
-    path: "{{ backend_code_dir }}/venv/bin/python"
+    path: "{{ backend_code_dir }}/venv"
   register: venv_check
 
-- name: Remove old/broken venv if it's a symlink
+- name: Remove old/broken venv if the directory is a symlink
   ansible.builtin.file:
     path: "{{ backend_code_dir }}/venv"
     state: absent
@@ -199,38 +238,39 @@
     state: latest
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
-- name: Install autobot-shared as editable package
+- name: Install autobot_shared as editable package
   ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot-shared"
+    name: "{{ backend_install_dir }}/autobot_shared"
     editable: true
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
-  when: backend_install_dir is defined
-
-- name: Install root requirements first
-  ansible.builtin.pip:
-    requirements: "{{ backend_install_dir }}/requirements.txt"
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
   environment:
-    PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
+  when: backend_install_dir is defined
 
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
-    cmd: "grep -Ev '^-e.*autobot-shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+    cmd: "grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
   become_user: "{{ backend_user }}"
 
+# (#2872) Removed failed_when: false — pip install failures must surface.
+# The Ansible pip module raises on any pip error; the old bypass (Issue #892)
+# masked real dependency failures during deployment.
 - name: Install filtered backend requirements
   ansible.builtin.pip:
     requirements: "/tmp/requirements-filtered.txt"
     virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
   environment:
+    PIP_DEFAULT_TIMEOUT: "120"
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   register: pip_install_result
-  failed_when: false  # Issue #892: pip module doesn't expose rc, rely on default error handling
-  changed_when: pip_install_result.changed
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:
@@ -240,15 +280,36 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
-- name: Reinstall autobot-shared to pick up ssot_config fixes
+- name: Reinstall autobot_shared to pick up ssot_config fixes
   ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot-shared"
+    name: "{{ backend_install_dir }}/autobot_shared"
     editable: true
     virtualenv: "{{ backend_code_dir }}/venv"
     state: forcereinstall
     extra_args: "--no-deps"
   become_user: "{{ backend_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+
+# ==========================================================
+# PostgreSQL for User Management (Issue #2953)
+# Included only when backend_user_mode is not single_user.
+# Re-uses the shared postgresql role with autobot_users DB.
+# ==========================================================
+- name: "Backend | Configure PostgreSQL for user management (#2953)"
+  ansible.builtin.include_role:
+    name: postgresql
+  vars:
+    db_user: "{{ backend_postgres_user | default('autobot_app') }}"
+    db_env_prefix: "AUTOBOT"
+    db_host: "127.0.0.1"
+    databases:
+      - "{{ backend_postgres_db | default('autobot_users') }}"
+    postgresql_listen_addresses: "localhost"
+  when: (backend_user_mode | default('single_user')) != 'single_user'
+  tags: ['backend', 'postgresql']
 
 # ==========================================================
 # TLS Certificate Generation (Issue #892)
@@ -271,6 +332,8 @@
     cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
   register: backend_cert_valid
   changed_when: false
+  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+  # check window — that is a valid "needs renewal" signal, not an error.
   failed_when: false
   when: backend_cert_stat.stat.exists
 
@@ -296,14 +359,22 @@
     - /etc/autobot/certs/server-key.pem
     - /etc/autobot/certs/server-cert.pem
 
-- name: Deploy backend environment file (install dir — backwards compat)
+# Issue #2824: Deploy .env to backend_code_dir so the systemd
+# EnvironmentFile directive can find it.  Previous code deployed to
+# backend_install_dir which diverges when playbooks override
+# backend_code_dir (e.g. setup-user-backend.yml sets it to
+# backend_install_dir/autobot-backend).  The path expression here
+# mirrors the one used in autobot-backend.service.j2 line 15.
+- name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
   ansible.builtin.template:
     src: backend.env.j2
-    dest: "{{ backend_install_dir }}/.env"
+    dest: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
     mode: "0600"
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
+    backup: true
   notify: restart backend
+  tags: ['backend', 'config']
 
 - name: Deploy backend systemd service
   ansible.builtin.template:
@@ -342,12 +413,20 @@
 # nginx reverse proxy (Issue #957)
 # Holds port backend_nginx_port (8443) permanently so WDF
 # rule is evaluated once for nginx, not on every uvicorn restart.
+#
+# Co-located mode (#2829): When SLM and backend share a host,
+# the SLM nginx proxies directly to uvicorn (port 8001, HTTP).
+# The standalone backend nginx vhost is skipped to avoid a
+# redundant double-proxy (SLM:443 -> backend:8443 -> uvicorn:8001).
 # ==========================================================
-- name: "Backend nginx | Install nginx"
-  ansible.builtin.apt:
-    name: nginx
-    state: present
-    update_cache: true
+
+# Cleanup: disable standalone backend nginx when co-located with SLM
+- name: "Backend nginx | Disable standalone vhost when co-located with SLM (#2829)"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/autobot-backend.conf
+    state: absent
+  notify: reload nginx backend
+  when: slm_colocated_frontend | default(false) | bool
   tags: ['backend', 'nginx']
 
 - name: "Backend nginx | Deploy reverse-proxy vhost config"
@@ -358,6 +437,7 @@
     owner: root
     group: root
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
 - name: "Backend nginx | Enable vhost (symlink)"
@@ -366,6 +446,7 @@
     dest: /etc/nginx/sites-enabled/autobot-backend.conf
     state: link
   notify: reload nginx backend
+  when: not (slm_colocated_frontend | default(false) | bool)
   tags: ['backend', 'nginx']
 
 - name: "Backend nginx | Disable default vhost"
@@ -392,14 +473,22 @@
 # UFW loopback0 rule (WSL2 mirrored networking)
 # WSL2 mirrored networking routes 127.0.0.1 traffic through
 # the loopback0 interface, NOT lo. UFW's default lo accept
-# rule does NOT cover loopback0, so nginx→uvicorn (port 8001)
+# rule does NOT cover loopback0, so nginx->uvicorn (port 8001)
 # connections are dropped by UFW INPUT DROP policy.
 # This rule is harmless on non-WSL2 hosts (no loopback0 traffic).
 # ==========================================================
+- name: "Backend | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _backend_ufw_check
+  changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
+  failed_when: false
+  tags: ['backend', 'ufw']
+
 - name: "Backend | Allow loopback0 interface (WSL2 mirrored networking)"
   community.general.ufw:
     rule: allow
     interface: loopback0
     direction: in
-  failed_when: false
+  when: _backend_ufw_check.rc == 0
   tags: ['backend', 'ufw']

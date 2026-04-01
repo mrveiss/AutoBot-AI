@@ -1,0 +1,3 @@
+# AutoBot LLM Model Configuration
+# Models are auto-discovered from Ollama; this file provides overrides.
+{}

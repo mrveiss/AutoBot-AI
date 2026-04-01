@@ -10,12 +10,12 @@ including Redis, knowledge base, chat workflow, LLM sync, AI Stack, and distribu
 
 import asyncio
 
-from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
-from initialization.ai_stack_init import initialize_ai_stack
-from utils.background_llm_sync import background_llm_sync
 
 from autobot_shared.logging_manager import get_logger
+from chat_workflow import ChatWorkflowManager
+from initialization.ai_stack_init import initialize_ai_stack
+from utils.background_llm_sync import background_llm_sync
 
 logger = get_logger(__name__, "backend")
 
@@ -219,6 +219,36 @@ def _log_initialization_result(failed_services: list):
         )
 
 
+async def _init_retrieval_learner_consolidation(update_status_fn, append_error_fn):
+    """Schedule a one-shot consolidation pass for the retrieval learner. Issue #2095.
+
+    Runs consolidate() to dedup near-identical patterns and prune stale entries.
+    This runs once at startup to clean up any accumulated patterns from the
+    previous session.  Repeated consolidation is handled by the scheduler that
+    calls this function on a daily cadence.
+
+    Args:
+        update_status_fn: Function to update initialization status.
+        append_error_fn:  Function to append initialization errors.
+    """
+    try:
+        from knowledge.search_components.retrieval_learner import get_retrieval_learner
+
+        learner = get_retrieval_learner()
+        deduped, pruned = await learner.consolidate()
+        await update_status_fn("retrieval_learner", "ready")
+        log_initialization_step(
+            "Retrieval Learner",
+            f"Consolidation complete (deduped={deduped}, pruned={pruned})",
+            90,
+            True,
+        )
+    except Exception as exc:
+        logger.warning("Retrieval learner consolidation failed (non-fatal): %s", exc)
+        await update_status_fn("retrieval_learner", "degraded")
+        # Non-fatal: learner absence degrades adaptivity, not core retrieval.
+
+
 async def enhanced_background_init(
     app: FastAPI, update_status_fn, append_error_fn, get_status_fn
 ):
@@ -246,6 +276,7 @@ async def enhanced_background_init(
             _init_llm_sync(update_status_fn, append_error_fn),
             initialize_ai_stack(app, update_status_fn, append_error_fn),
             _init_distributed_tracing(app, update_status_fn),
+            _init_retrieval_learner_consolidation(update_status_fn, append_error_fn),
         ]
 
         await asyncio.gather(*tasks, return_exceptions=True)

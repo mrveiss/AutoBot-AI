@@ -14,10 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from config import settings
-from models.database import Node, Replication, ReplicationStatus
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
+from models.database import Node, Replication, ReplicationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -554,9 +555,8 @@ class ReplicationService:
         cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-o",
@@ -620,7 +620,7 @@ class ReplicationService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -678,7 +678,7 @@ class ReplicationService:
                 "-e",
                 f"ansible_port={ssh_port}",
                 "-e",
-                "ansible_ssh_common_args='-o StrictHostKeyChecking=no'",
+                "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -744,9 +744,8 @@ class ReplicationService:
         cmd = [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-p",
@@ -812,9 +811,8 @@ class ReplicationService:
         return [
             "/usr/bin/ssh",
             "-o",
-            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
             "-o",
-            "UserKnownHostsFile=/dev/null",
             "-o",
             "ConnectTimeout=10",
             "-p",

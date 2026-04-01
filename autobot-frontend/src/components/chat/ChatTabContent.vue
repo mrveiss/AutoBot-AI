@@ -5,7 +5,7 @@
       <div class="flex-1">
         <ChatMessages @tool-call-detected="handleToolCallDetected" />
       </div>
-      <ChatInput class="flex-shrink-0" @vision-send-to-chat="(p: any) => emit('vision-send-to-chat', p)" />
+      <ChatInput class="shrink-0" @vision-send-to-chat="(p: any) => emit('vision-send-to-chat', p)" />
     </div>
 
     <!-- Files Tab Content -->

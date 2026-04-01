@@ -277,7 +277,7 @@ class ApprovalMemoryManager:
             return False
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 logger.warning("Redis not available for approval memory")
                 return False
@@ -327,7 +327,7 @@ class ApprovalMemoryManager:
             return False
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 return False
 
@@ -389,7 +389,7 @@ class ApprovalMemoryManager:
             return []
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 return []
 
@@ -427,7 +427,7 @@ class ApprovalMemoryManager:
             return False
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 return False
 
@@ -478,7 +478,7 @@ class ApprovalMemoryManager:
             return False
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 return False
 
@@ -533,7 +533,7 @@ class ApprovalMemoryManager:
             return {"enabled": False}
 
         try:
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             if not redis:
                 return {"enabled": True, "redis_available": False}
 
@@ -557,8 +557,8 @@ class ApprovalMemoryManager:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get memory stats: {e}")
-            return {"enabled": True, "error": str(e)}
+            logger.error("Failed to get memory stats: %s", e)
+            return {"enabled": True, "error": "Failed to retrieve memory stats"}
 
 
 # Singleton instance for easy access

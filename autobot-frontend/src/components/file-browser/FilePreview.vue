@@ -136,8 +136,9 @@ const downloadFile = () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .file-preview-modal {
-  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50;
 }
 
 .modal-content {
@@ -192,6 +193,6 @@ const downloadFile = () => {
 }
 
 .download-btn {
-  @apply px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 inline-flex items-center gap-2;
+  @apply px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500 inline-flex items-center gap-2;
 }
 </style>

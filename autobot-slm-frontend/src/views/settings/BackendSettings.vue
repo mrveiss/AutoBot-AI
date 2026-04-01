@@ -49,9 +49,9 @@ async function fetchSettings(): Promise<void> {
           if (typeof settings.value[key] === 'boolean') {
             (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
           } else if (typeof settings.value[key] === 'number') {
-            (settings.value as Record<string, any>)[key] = parseInt(s.value)
+            (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
           } else {
-            (settings.value as Record<string, any>)[key] = s.value
+            (settings.value as Record<string, string | number | boolean>)[key] = s.value
           }
         }
       })
@@ -145,7 +145,7 @@ onMounted(() => {
       </div>
 
       <!-- Connection Status -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <div
@@ -184,7 +184,7 @@ onMounted(() => {
       </div>
 
       <!-- SLM Settings -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
         <h2 class="text-lg font-semibold mb-6">SLM Configuration</h2>
 
         <div class="space-y-6">
@@ -225,7 +225,7 @@ onMounted(() => {
                 @change="saveSetting('auto_reconcile', settings.auto_reconcile)"
                 class="sr-only peer"
               />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -269,7 +269,7 @@ onMounted(() => {
       </div>
 
       <!-- Server Info -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h2 class="text-lg font-semibold mb-6">Server Configuration</h2>
         <p class="text-sm text-gray-500 mb-4">
           These settings are read-only and configured in the backend.
@@ -281,7 +281,7 @@ onMounted(() => {
               <p class="font-medium text-gray-900">API Endpoint</p>
               <p class="text-sm text-gray-500">Current backend API URL</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded">
+            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.api_endpoint || authStore.getApiUrl() }}
             </p>
           </div>
@@ -291,7 +291,7 @@ onMounted(() => {
               <p class="font-medium text-gray-900">Server Host</p>
               <p class="text-sm text-gray-500">Bind address</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded">
+            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.server_host }}
             </p>
           </div>
@@ -301,7 +301,7 @@ onMounted(() => {
               <p class="font-medium text-gray-900">Server Port</p>
               <p class="text-sm text-gray-500">API port</p>
             </div>
-            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded">
+            <p class="font-mono text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-sm">
               {{ settings.server_port }}
             </p>
           </div>

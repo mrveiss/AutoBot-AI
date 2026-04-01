@@ -64,6 +64,10 @@ const canEnroll = computed(() => {
   return props.node.status === 'registered' || props.node.status === 'pending'
 })
 
+const isDecommissioned = computed(() => {
+  return props.node.status === 'decommissioned'
+})
+
 const isEnrolling = computed(() => {
   return props.node.status === 'enrolling'
 })
@@ -123,7 +127,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
 
 <template>
   <div
-    class="card p-4 hover:shadow-md transition-shadow relative"
+    :class="['card p-4 hover:shadow-md transition-shadow relative', isDecommissioned ? 'opacity-60 border-dashed' : '']"
     role="listitem"
     :aria-label="`Node ${node.hostname}, status: ${statusText}`"
     @mouseleave="closeMenu"
@@ -132,7 +136,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <div class="flex items-start justify-between mb-3">
       <div class="flex items-center gap-2 min-w-0 flex-1">
         <div
-          :class="['w-3 h-3 rounded-full flex-shrink-0', statusClass]"
+          :class="['w-3 h-3 rounded-full shrink-0', statusClass]"
           role="img"
           :aria-label="`Status: ${statusText}`"
         ></div>
@@ -144,7 +148,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         <div class="relative">
           <button
             @click.stop="toggleMenu"
-            class="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
+            class="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-sm hover:bg-gray-100"
             :aria-label="`Actions for ${node.hostname}`"
             :aria-expanded="showMenu"
             aria-haspopup="true"
@@ -203,9 +207,21 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
               </svg>
               Services
             </button>
+            <!-- Re-enroll for decommissioned nodes (#2681) -->
+            <button
+              v-if="isDecommissioned"
+              @click="handleAction('reenroll')"
+              role="menuitem"
+              class="w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50 flex items-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Re-enroll Node
+            </button>
             <hr class="my-1 border-gray-200" role="separator" />
             <button
-              v-if="node.status !== 'decommissioned' && !node.node_id.startsWith('00-')"
+              v-if="!isDecommissioned && !node.node_id.startsWith('00-')"
               @click="handleAction('decommission')"
               role="menuitem"
               class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -233,7 +249,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         <span v-if="node.ssh_port && node.ssh_port !== 22" class="text-gray-400">:{{ node.ssh_port }}</span>
       </div>
       <span
-        :class="['px-2 py-0.5 text-xs font-medium rounded', authMethodBadge.class]"
+        :class="['px-2 py-0.5 text-xs font-medium rounded-sm', authMethodBadge.class]"
         :title="`Authentication: ${authMethodBadge.label}`"
       >
         {{ authMethodBadge.label }}
@@ -243,7 +259,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <!-- Enrolling Transition Indicator -->
     <div
       v-if="isEnrolling"
-      class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700"
+      class="flex items-center gap-2 px-2 py-1.5 mb-3 bg-blue-50 border border-blue-200 rounded-sm text-xs text-blue-700"
       role="status"
       aria-label="Node is being enrolled"
     >
@@ -259,7 +275,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       <span
         v-for="role in node.roles"
         :key="role"
-        class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded"
+        class="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-sm"
       >
         {{ role }}
       </span>
@@ -271,7 +287,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
     <!-- A2A Agent Card badge (Issue #962) -->
     <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
       <span
-        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
+        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-sm bg-indigo-50 text-indigo-700 border border-indigo-200"
         :title="`A2A Agent Card: ${a2aSkillCount} skill${a2aSkillCount !== 1 ? 's' : ''}`"
       >
         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -288,7 +304,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         :aria-label="`${updateSummary?.total_updates} updates available for ${node.hostname}`"
         class="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors w-full"
       >
-        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
         <span v-if="updateSummary?.system_updates" class="whitespace-nowrap">
@@ -367,7 +383,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
       <div class="flex gap-1">
         <button
           @click="handleAction('view')"
-          class="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors rounded"
+          class="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors rounded-sm"
           :aria-label="`View details for ${node.hostname}`"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -377,7 +393,7 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
         </button>
         <button
           @click="handleAction('restart')"
-          class="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors rounded"
+          class="p-1.5 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors rounded-sm"
           :aria-label="`Restart ${node.hostname}`"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

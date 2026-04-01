@@ -13,13 +13,13 @@ from time import time
 from typing import Dict, List, Optional
 
 import jwt as pyjwt
-from auth_middleware import auth_middleware
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
+
+from auth_middleware import auth_middleware
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -213,6 +213,33 @@ async def login(request: Request, login_data: LoginRequest):
     """
     try:
         ip_address = request.client.host if request.client else "unknown"
+
+        # Issue #2953: In single_user mode, skip PostgreSQL and return synthetic admin.
+        # The /me and /check endpoints already do this; login must be consistent.
+        from user_management.config import DeploymentMode, get_deployment_config
+
+        deploy_cfg = get_deployment_config()
+        if deploy_cfg.mode == DeploymentMode.SINGLE_USER:
+            admin_data = {
+                "username": "admin",
+                "user_id": "admin",
+                "role": "admin",
+                "email": "admin@autobot.local",
+                "last_login": None,
+            }
+            jwt_token = auth_middleware.create_jwt_token(
+                {"username": "admin", "role": "admin", "email": "admin@autobot.local"}
+            )
+            session_id = auth_middleware.create_session(
+                {"username": "admin", "role": "admin"}, request
+            )
+            return LoginResponse(
+                success=True,
+                message="Login successful",
+                user=admin_data,
+                token=jwt_token,
+                session_id=session_id,
+            )
 
         # Authenticate against PostgreSQL and build user data (Issue #888, #898)
         user_data = await _authenticate_and_build_user_data(

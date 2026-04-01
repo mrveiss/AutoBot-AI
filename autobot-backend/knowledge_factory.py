@@ -5,6 +5,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Optional
 
 from fastapi import FastAPI
@@ -14,6 +15,11 @@ logger = logging.getLogger(__name__)
 # Module-level singleton for knowledge base instance (used when no app context available)
 _knowledge_base_instance: Optional["KnowledgeBase"] = None  # noqa: F821
 _knowledge_base_lock = asyncio.Lock()
+
+# Issue #3094/#3106: Retry cooldown — prevent hammering ChromaDB on repeated failures.
+# After a failed init, wait KB_RETRY_COOLDOWN_SECONDS before attempting again.
+KB_RETRY_COOLDOWN_SECONDS = 60
+_last_kb_init_failure: float = 0.0
 
 
 def _is_kb_initialized(kb) -> bool:
@@ -58,9 +64,13 @@ async def _try_initialize_existing_kb(kb):
 async def _create_new_knowledge_base(app: FastAPI):
     """Create and initialize a new knowledge base (Issue #315: extracted).
 
+    Records failure timestamp on failure so callers can enforce retry cooldown.
+    See Issue #3094/#3106.
+
     Returns:
         Initialized kb on success, None on failure
     """
+    global _last_kb_init_failure
     import traceback
 
     try:
@@ -73,6 +83,7 @@ async def _create_new_knowledge_base(app: FastAPI):
         result = await kb.initialize()
 
         if result:
+            _last_kb_init_failure = 0.0  # Reset cooldown on success
             app.state.knowledge_base = kb
             logger.info(
                 "✅ Knowledge base created and initialized (unified KnowledgeBase with ChromaDB)"
@@ -80,15 +91,18 @@ async def _create_new_knowledge_base(app: FastAPI):
             return kb
 
         logger.error("❌ KnowledgeBase initialization returned False")
+        _last_kb_init_failure = time.monotonic()
         return None
 
     except ImportError as import_error:
         logger.error("❌ CRITICAL: KnowledgeBase not available: %s", import_error)
         logger.error("Import traceback:\n%s", traceback.format_exc())
+        _last_kb_init_failure = time.monotonic()
         return None
     except Exception as init_error:
-        logger.error(f"❌ CRITICAL: KnowledgeBase initialization failed: {init_error}")
+        logger.error("❌ CRITICAL: KnowledgeBase initialization failed: %s", init_error)
         logger.error("Full traceback:\n%s", traceback.format_exc())
+        _last_kb_init_failure = time.monotonic()
         return None
 
 
@@ -98,6 +112,8 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
     This is separated from app_factory to avoid circular imports with api/knowledge.py
 
     Issue #315: Refactored to use helper functions for reduced nesting depth.
+    Issue #3094/#3106: Added retry cooldown — after a failed init, suppress re-attempts
+    for KB_RETRY_COOLDOWN_SECONDS to prevent hammering ChromaDB on every 503 request.
     """
     try:
         # Check for existing initialized knowledge base
@@ -120,6 +136,17 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
             if result is not None:
                 return result
             # Fall through to create new instance
+
+        # Issue #3094/#3106: Enforce retry cooldown to avoid hammering ChromaDB after
+        # a startup failure.  force_refresh bypasses the cooldown (e.g. admin /reinit).
+        if not force_refresh and _last_kb_init_failure > 0.0:
+            elapsed = time.monotonic() - _last_kb_init_failure
+            if elapsed < KB_RETRY_COOLDOWN_SECONDS:
+                remaining = int(KB_RETRY_COOLDOWN_SECONDS - elapsed)
+                logger.debug(
+                    "KB init cooldown active — skipping retry (%ds remaining)", remaining
+                )
+                return None
 
         # Create new knowledge base
         return await _create_new_knowledge_base(app)

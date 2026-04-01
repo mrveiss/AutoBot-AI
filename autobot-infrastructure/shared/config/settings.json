@@ -12,14 +12,14 @@
     "timeout": 60,
     "streaming": true,
     "max_retries": 3,
-    "use_phi2": true,
+    "use_phi2": false,
     "ollama_endpoint": "http://localhost:11434/api/generate",
-    "ollama_model": "phi:2.7b"
+    "ollama_model": "qwen3.5:9b"
   },
   "llm_config": {
     "default_llm": "ollama",
     "task_llm": "ollama",
-    "orchestrator_llm": "phi:2.7b",
+    "orchestrator_llm": "qwen3.5:9b",
     "orchestrator_llm_settings": {
       "temperature": 0.7,
       "structured_output": true
@@ -31,10 +31,15 @@
     "ollama": {
       "host": "http://localhost:11434",
       "port": 11434,
-      "model": "phi:2.7b",
+      "model": "qwen3.5:9b",
       "base_url": "http://localhost:11434",
       "models": {
-        "phi:2.7b": "phi:2.7b",
+        "qwen3.5:9b": "qwen3.5:9b",
+        "dolphin-llama3:8b": "dolphin-llama3:8b",
+        "mistral:7b-instruct": "mistral:7b-instruct",
+        "phi3:mini": "phi3:mini",
+        "gemma2:2b": "gemma2:2b",
+        "llama3.2:1b": "llama3.2:1b",
         "nomic-embed-text": "nomic-embed-text"
       }
     },
@@ -50,7 +55,7 @@
     "models": {
       "chat": {
         "provider": "ollama",
-        "model": "phi:2.7b",
+        "model": "qwen3.5:9b",
         "endpoint": "http://localhost:11434"
       },
       "embedding": {
@@ -217,9 +222,9 @@
           }
         }
       },
-      "use_phi2": true,
+      "use_phi2": false,
       "ollama_endpoint": "http://localhost:11434/api/generate",
-      "ollama_model": "phi:2.7b"
+      "ollama_model": "qwen3.5:9b"
     },
     "ui": {
       "theme": "light",
@@ -306,7 +311,7 @@
     "llm_config": {
       "default_llm": "ollama",
       "task_llm": "ollama",
-      "orchestrator_llm": "phi:2.7b",
+      "orchestrator_llm": "qwen3.5:9b",
       "orchestrator_llm_settings": {
         "temperature": 0.7,
         "structured_output": true
@@ -318,10 +323,12 @@
       "ollama": {
         "host": "http://localhost:11434",
         "port": 11434,
-        "model": "phi:2.7b",
+        "model": "qwen3.5:9b",
         "base_url": "http://localhost:11434",
         "models": {
-          "phi:2.7b": "phi:2.7b",
+          "qwen3.5:9b": "qwen3.5:9b",
+          "gemma3:4b": "gemma3:4b",
+          "llama3.2:1b": "llama3.2:1b",
           "nomic-embed-text": "nomic-embed-text"
         }
       },
@@ -337,7 +344,7 @@
       "models": {
         "chat": {
           "provider": "ollama",
-          "model": "phi:2.7b",
+          "model": "qwen3.5:9b",
           "endpoint": "http://localhost:11434"
         },
         "embedding": {

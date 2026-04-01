@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import websockets
+
 from config import config_manager
 from constants.threshold_constants import TimingConstants
 from task_execution_tracker import TaskPriority, task_tracker
@@ -349,9 +350,9 @@ class VNCServerManager:
             return outputs
 
         except Exception as e:
-            error_msg = f"Failed to create VNC session: {e}"
-            task_context.set_outputs({"error": error_msg})
-            raise RuntimeError(error_msg) from e
+            logger.error("Failed to create VNC session: %s", e)
+            task_context.set_outputs({"error": "VNC session creation failed"})
+            raise RuntimeError("Failed to create VNC session") from e
 
     async def _start_vnc_stack(
         self,

@@ -14,8 +14,9 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 import yaml
-from constants.path_constants import PATH
 from performance_monitor import PerformanceMonitor
+
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -518,9 +519,9 @@ class PerformanceOptimizer:
         """Analyze hardware utilization for optimization opportunities."""
         recommendations = []
 
-        # GPU optimization recommendations
+        # GPU optimization recommendations — append a static advisory when GPU is present.
+        # Ref: #2871 (no fake scores; hardware_metrics["gpu_available"] is set by real detection).
         if hardware_metrics.get("gpu_available", False):
-            # This would require actual GPU metrics, placeholder for now
             recommendations.append(
                 OptimizationRecommendation(
                     category="hardware",

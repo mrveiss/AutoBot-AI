@@ -14,9 +14,9 @@ from typing import Dict, List, Optional, Tuple
 import aiofiles
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
-from utils.background_task_manager import BackgroundTaskManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from utils.background_task_manager import BackgroundTaskManager
 
 from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
 

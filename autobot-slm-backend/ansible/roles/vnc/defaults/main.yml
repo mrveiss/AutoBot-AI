@@ -20,7 +20,14 @@ novnc_path: /usr/share/novnc
 
 # Security - password auto-generated to /etc/autobot/vnc-secrets.env
 vnc_security_type: "{{ lookup('env', 'VNC_SECURITY_TYPE') | default('VeNCrypt', true) }}"
+vnc_always_shared: "{{ lookup('env', 'VNC_ALWAYS_SHARED') | default('0', true) }}"
 
 # Service management
 vnc_service_name: vnc-server
 websockify_service_name: vnc-websockify
+
+# SLM credential auto-registration (#2926)
+vnc_register_credentials: true
+slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}"
+slm_admin_user: "admin"
+slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"

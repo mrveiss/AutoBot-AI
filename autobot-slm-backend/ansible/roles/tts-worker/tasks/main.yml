@@ -103,6 +103,9 @@
     virtualenv: "{{ tts_install_dir }}/venv"
     state: latest
   become_user: "{{ tts_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
   tags: ['tts', 'venv']
 
 - name: "TTS Worker | Install FastAPI and server dependencies"
@@ -115,6 +118,9 @@
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
   become_user: "{{ tts_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "120"
+  timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['tts', 'packages']
 
 - name: "TTS Worker | Install torch CPU-only (Pocket TTS requires >=2.5)"
@@ -125,6 +131,9 @@
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
   become_user: "{{ tts_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+  timeout: 600  # Issue #2835: torch downloads are large, prevent indefinite hang
   tags: ['tts', 'packages']
 
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
@@ -138,6 +147,9 @@
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ tts_user }}"
+  environment:
+    PIP_DEFAULT_TIMEOUT: "300"
+  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   tags: ['tts', 'packages']
 
 # ============================================================
@@ -180,6 +192,7 @@
   ansible.builtin.command: which ufw
   register: _ufw_installed
   changed_when: false
+  # (#2872) Intentional: UFW may not be installed on all hosts.
   failed_when: false
   tags: ['tts', 'firewall']
 

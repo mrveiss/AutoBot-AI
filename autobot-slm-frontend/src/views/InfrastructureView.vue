@@ -53,7 +53,7 @@ async function loadPlaybooks(): Promise<void> {
   try {
     const response = await fetch('/api/infrastructure/playbooks', {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
     if (response.ok) {
@@ -166,13 +166,13 @@ function getCategoryColor(category: string): string {
                 <span
                   v-for="host in playbook.target_hosts.slice(0, 2)"
                   :key="host"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                 >
                   {{ host }}
                 </span>
                 <span
                   v-if="playbook.target_hosts.length > 2"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                 >
                   +{{ playbook.target_hosts.length - 2 }}
                 </span>
@@ -209,7 +209,7 @@ function getCategoryColor(category: string): string {
     <!-- Info Panel -->
     <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
       <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-blue-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="text-sm text-blue-700">

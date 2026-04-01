@@ -10,7 +10,7 @@ This directory contains migration scripts to add user attribution and ownership 
 
 1. **Backup production database** before running any migration
 2. Redis must be running and accessible
-3. Python 3.10+ with required dependencies
+3. Python 3.12+ with required dependencies
 4. All AutoBot backend modules must be in path
 
 ## Migration Scripts

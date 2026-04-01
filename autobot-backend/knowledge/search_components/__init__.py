@@ -16,8 +16,16 @@ Note: Package is named search_components to avoid conflict with search.py.
 - tag_filter: Tag-based result filtering
 - analytics: Search analytics tracking
 - response_builder: Search response building and clustering
+- retrieval_learner: Closed-loop retrieval pattern learning (Issue #2095)
+- agentic_search: Agentic RAG — search as LLM tool with query rewriting (Issue #1718)
 """
 
+from .agentic_search import (
+    AgenticSearchConfig,
+    AgenticSearchTool,
+    get_agentic_search_tool,
+    knowledge_search_tool,
+)
 from .analytics import SearchAnalytics, get_analytics
 from .bm25 import BM25Scorer
 from .helpers import (
@@ -31,6 +39,7 @@ from .keyword_search import KeywordSearcher
 from .query_processor import QueryProcessor, get_query_processor
 from .reranking import ResultReranker, get_reranker
 from .response_builder import ResponseBuilder, get_response_builder
+from .retrieval_learner import RetrievalLearner, get_retrieval_learner
 from .tag_filter import TagFilter
 
 __all__ = [
@@ -57,4 +66,12 @@ __all__ = [
     # Response building
     "ResponseBuilder",
     "get_response_builder",
+    # Retrieval pattern learning (#2095)
+    "RetrievalLearner",
+    "get_retrieval_learner",
+    # Agentic RAG search tool (#1718)
+    "AgenticSearchConfig",
+    "AgenticSearchTool",
+    "get_agentic_search_tool",
+    "knowledge_search_tool",
 ]

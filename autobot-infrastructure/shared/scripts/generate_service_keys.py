@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Add project paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "autobot-backend"))
-sys.path.insert(0, str(PROJECT_ROOT / "autobot-shared"))
+sys.path.insert(0, str(PROJECT_ROOT / "autobot_shared"))
 
 from autobot_shared.ssot_config import config  # noqa: E402
 

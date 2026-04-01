@@ -135,8 +135,8 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'ai',
     tools: ['ollama'],
   },
-  'autobot-shared': {
-    name: 'autobot-shared',
+  'autobot_shared': {
+    name: 'autobot_shared',
     displayName: 'Shared Library',
     description: 'Shared Python library (deployed to all nodes)',
     category: 'infrastructure',

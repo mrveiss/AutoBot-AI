@@ -761,9 +761,15 @@ class PerformanceBenchmark:
             try:
                 stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
                 if process.returncode == 0:
-                    # GPU is available, return a simple score
-                    # This is a placeholder - actual GPU benchmarking requires CUDA/OpenCL
-                    return 85.0  # Placeholder score for RTX 4070
+                    # GPU detected. Attempt to read actual utilization via nvidia-smi.
+                    score = await self._query_gpu_utilization_score()
+                    if score is not None:
+                        return score
+                    self.logger.warning(
+                        "GPU detected but utilization query failed; "
+                        "returning None instead of a placeholder score (#2871)"
+                    )
+                    return None
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
@@ -771,6 +777,32 @@ class PerformanceBenchmark:
         except Exception as e:
             self.logger.debug(f"GPU benchmark error: {e}")
 
+        return None
+
+    async def _query_gpu_utilization_score(self) -> Optional[float]:
+        """Query real GPU utilization via nvidia-smi and return a normalised score.
+
+        Returns the GPU utilization percentage (0-100) as the score, or None if the
+        query fails.  Ref: #2871.
+        """
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu",
+                "--format=csv,noheader,nounits",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
+                if process.returncode == 0:
+                    value = stdout.decode("utf-8").strip().split("\n")[0].strip()
+                    return float(value)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+        except Exception as e:
+            self.logger.debug(f"GPU utilization query error: {e}")
         return None
 
     async def _benchmark_npu(self) -> Optional[float]:
@@ -792,9 +824,15 @@ class PerformanceBenchmark:
             try:
                 stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
                 if process.returncode == 0 and "NPU" in stdout.decode("utf-8"):
-                    # NPU is available, return a simple score
-                    # Placeholder - actual NPU benchmarking requires specific Intel tools
-                    return 45.0  # Placeholder score for Intel NPU
+                    # NPU detected, but a real benchmark requires Intel's benchmark_app
+                    # or the OpenVINO benchmark_python tool which we do not invoke here.
+                    # Return None so callers know the score is unavailable rather than
+                    # trusting a hardcoded placeholder.  Ref: #2871.
+                    self.logger.warning(
+                        "Intel NPU detected but no benchmark_app available; "
+                        "returning None instead of a placeholder score (#2871)"
+                    )
+                    return None
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()

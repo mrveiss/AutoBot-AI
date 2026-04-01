@@ -14,12 +14,11 @@ import logging
 import uuid
 from typing import Optional
 
+from autobot_shared.redis_client import get_redis_client
 from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
 from services.semantic_analyzer import SemanticAnalyzer
 from services.type_inference import TypeInferencer
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

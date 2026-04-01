@@ -402,7 +402,7 @@ class SemanticQueryCache:
                     rkey = meta.get("response_key", "")
                     if rkey:
                         try:
-                            client = await get_redis_client(
+                            client = get_redis_client(
                                 async_client=True,
                                 database=_REDIS_DATABASE,
                             )
@@ -449,7 +449,7 @@ class SemanticQueryCache:
                 results = await self._collection.get(include=["metadatas"])
                 if results and results.get("ids"):
                     # Clean Redis
-                    client = await get_redis_client(
+                    client = get_redis_client(
                         async_client=True, database=_REDIS_DATABASE
                     )
                     if client:

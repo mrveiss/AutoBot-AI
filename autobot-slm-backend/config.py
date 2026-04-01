@@ -11,6 +11,7 @@ PostgreSQL replaces SQLite for all database operations (Issue #786).
 import logging
 import os
 import secrets
+import socket
 import stat
 from pathlib import Path
 from typing import Optional
@@ -25,11 +26,34 @@ logger = logging.getLogger(__name__)
 _SLM_KEYS_FILE = ".slm_keys"
 
 
+def _get_local_ip() -> str:
+    """Return the machine's primary outbound IP address.
+
+    Opens a UDP socket toward a public address (no packet is actually sent)
+    to let the OS select the correct source interface, then reads the bound
+    address.  Falls back to ``127.0.0.1`` if the probe fails (e.g. no
+    network at import time), which is safe because callers that need a
+    routable IP should always set ``SLM_EXTERNAL_URL`` via the env file.
+
+    Issue #2758 — prevents external_url from defaulting to a hardcoded IP.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
 def _get_cors_origins() -> list:
     """Build CORS origins from env var or infrastructure SSOT.
 
     Override with SLM_CORS_ORIGINS (comma-separated).
-    Otherwise, generates origins from all known infrastructure VMs.
+    Otherwise, generates origins from all known infrastructure VMs via
+    NetworkConstants (backed by ConfigRegistry / redis-databases.yaml SSOT).
+
+    Issue #2862 — removed hardcoded fallback IPs; all values now flow through
+    NetworkConstants so ConfigRegistry overrides are respected.
     """
     env_origins = os.getenv("SLM_CORS_ORIGINS", "")
     if env_origins:
@@ -44,15 +68,61 @@ def _get_cors_origins() -> list:
             port = host["port"]
             origins.add(f"http://{ip}:{port}")
             origins.add(f"https://{ip}")
-        origins.add("https://172.16.168.19")  # noqa: ssot-cors
-        origins.add("https://172.16.168.21")  # noqa: ssot-cors
+        # Ensure the SLM VM and frontend VM are always included as HTTPS origins
+        # (they may only appear with their service port in get_host_configs()).
+        origins.add(f"https://{NetworkConstants.SLM_VM_IP}")
+        origins.add(f"https://{NetworkConstants.FRONTEND_VM_IP}")
         return sorted(origins)
     except ImportError:
-        logger.warning("autobot_shared not available; using SLM-only CORS")
-        return [
-            "https://172.16.168.19",  # noqa: ssot-cors
-            "https://172.16.168.21",  # noqa: ssot-cors
-        ]
+        logger.warning(
+            "autobot_shared not available; falling back to localhost CORS only"
+        )
+        return ["https://127.0.0.1", "http://127.0.0.1"]
+
+
+def _get_trusted_proxies() -> list:
+    """Build the trusted reverse-proxy list from env var or SSOT.
+
+    Override with SLM_TRUSTED_PROXIES (comma-separated IPs).
+    Otherwise, includes localhost addresses and the SLM/frontend VM IPs
+    read from NetworkConstants (backed by ConfigRegistry SSOT).
+
+    Issue #2862 — replaced hardcoded IP fallback with SSOT-derived values.
+    """
+    env_proxies = os.getenv("SLM_TRUSTED_PROXIES", "")
+    if env_proxies:
+        return [ip.strip() for ip in env_proxies.split(",") if ip.strip()]
+
+    proxies = ["127.0.0.1", "::1"]
+    try:
+        from autobot_shared.network_constants import NetworkConstants
+
+        proxies.append(NetworkConstants.SLM_VM_IP)
+        proxies.append(NetworkConstants.FRONTEND_VM_IP)
+    except ImportError:
+        logger.warning(
+            "autobot_shared not available; trusted_proxies limited to localhost"
+        )
+    return proxies
+
+
+def _get_ssot_pool_defaults() -> tuple:
+    """Load database pool defaults from SSOT config (#2860).
+
+    Returns:
+        Tuple of (pool_size, max_overflow, pool_recycle) from SSOT config.
+    """
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        pool_cfg = get_config().database_pool
+        return (pool_cfg.pool_size, pool_cfg.max_overflow, pool_cfg.pool_recycle)
+    except Exception:
+        return (10, 10, 3600)
+
+
+# Load SSOT defaults at module level so Settings class can reference them.
+_SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_defaults()
 
 
 class Settings(BaseSettings):
@@ -88,10 +158,15 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
     )
 
-    # Database connection pool settings
-    db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", "20"))
-    db_pool_max_overflow: int = int(os.getenv("SLM_DB_POOL_MAX_OVERFLOW", "10"))
-    db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", "3600"))
+    # Database connection pool settings (#2860) — SSOT-coordinated defaults.
+    # SLM_DB_POOL_* env vars still override for per-service tuning.
+    db_pool_size: int = int(os.getenv("SLM_DB_POOL_SIZE", str(_SSOT_POOL_SIZE)))
+    db_pool_max_overflow: int = int(
+        os.getenv("SLM_DB_POOL_MAX_OVERFLOW", str(_SSOT_MAX_OVERFLOW))
+    )
+    db_pool_recycle: int = int(
+        os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE))
+    )
 
     # Server
     host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
@@ -222,23 +297,26 @@ class Settings(BaseSettings):
     # CORS settings
     cors_origins: list = _get_cors_origins()
 
-    # Trusted reverse-proxy IPs (Issue #2239).
+    # Trusted reverse-proxy IPs (Issue #2239, #2862).
     # X-Forwarded-For is only honoured when the direct TCP connection comes
     # from one of these addresses.  Override with SLM_TRUSTED_PROXIES
-    # (comma-separated).  Defaults cover localhost and the two nginx nodes
-    # (.19 SLM VM, .21 Frontend VM).
-    trusted_proxies: list = [
-        ip.strip()
-        for ip in os.getenv(
-            "SLM_TRUSTED_PROXIES",
-            "127.0.0.1,::1,172.16.168.19,172.16.168.21",  # noqa: ssot-proxy
-        ).split(",")
-        if ip.strip()
-    ]
+    # (comma-separated).  The default is derived from NetworkConstants so the
+    # ConfigRegistry SSOT is respected; no IPs are hardcoded here.
+    trusted_proxies: list = _get_trusted_proxies()
 
-    # External URL - remote nodes use nginx reverse proxy
-    external_url: str = os.getenv(
-        "SLM_EXTERNAL_URL", "https://172.16.168.19"  # noqa: ssot-fallback
+    # External URL - remote nodes use nginx reverse proxy.
+    # Issue #2758: derive dynamically from local IP when SLM_EXTERNAL_URL is
+    # not set, instead of defaulting to a hardcoded address.
+    external_url: str = os.getenv("SLM_EXTERNAL_URL", f"https://{_get_local_ip()}")
+
+    # TLS verification for outbound HTTPS calls to internal nodes.
+    # Set SLM_VERIFY_SSL=false ONLY in dev/test environments that use
+    # self-signed certificates.  Production must leave this at the default
+    # True value (#2852).
+    verify_ssl: bool = os.getenv("SLM_VERIFY_SSL", "true").lower() not in (
+        "false",
+        "0",
+        "no",
     )
 
     model_config = ConfigDict(

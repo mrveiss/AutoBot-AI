@@ -52,18 +52,19 @@ jobs:
     - name: Check code formatting with Black
       run: |
         source .venv/bin/activate
-        python3 -m black --check --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
+        python3 -m black --check --line-length=88 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
           echo "⚠️ Black formatting check failed"
-          echo "Run 'python3 -m black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/' to fix"
+          echo "Run 'python3 -m black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
           exit 1
         }
 
     - name: Check import sorting with isort
       run: |
         source .venv/bin/activate
-        python3 -m isort --check --profile=black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
+        # Use --settings-path to read pyproject.toml (profile, src_paths, known_first_party) (#2679)
+        python3 -m isort --check --settings-path=. autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
           echo "⚠️ isort check failed"
-          echo "Run 'python3 -m isort --profile=black --line-length=88 autobot-backend/ autobot-slm-backend/ autobot-shared/' to fix"
+          echo "Run 'python3 -m isort autobot-backend/ autobot-slm-backend/ autobot_shared/' to fix"
           exit 1
         }
 
@@ -71,7 +72,7 @@ jobs:
       run: |
         source .venv/bin/activate
         # Uses .flake8 config for consistency with pre-commit (Issue #2128)
-        python3 -m flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
+        python3 -m flake8 --config=.flake8 autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
           echo "⚠️ flake8 linting issues found"
           exit 1
         }
@@ -84,7 +85,7 @@ jobs:
           --remove-unused-variables \
           --expand-star-imports \
           --ignore-init-module-imports \
-          autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
+          autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
           echo "⚠️ Unused imports/variables detected"
           exit 1
         }
@@ -92,7 +93,7 @@ jobs:
     - name: Security check with bandit
       run: |
         source .venv/bin/activate
-        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ || {
+        python3 -m bandit -c .bandit -r autobot-backend/ autobot-slm-backend/ autobot_shared/ || {
           echo "⚠️ Security issues detected - review bandit output"
           exit 1
         }

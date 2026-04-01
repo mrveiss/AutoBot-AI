@@ -8,8 +8,12 @@
 all:
   vars:
     ansible_user: autobot
-    ansible_ssh_private_key_file: ~/.ssh/autobot_key
+    ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     ansible_python_interpreter: /usr/bin/python3
+
+    # Service discovery — read from install-time secrets (set by install.sh).
+    # Priority: SLM_HOST env > SLM_HOST in secrets > fallback.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
 
   children:
     slm_nodes:
@@ -77,13 +81,18 @@ all:
             - autobot-playwright
             - nginx
 
-        # LLM CPU node (#1040)
+        # LLM CPU node (#1040) — also VNC desktop (#1525)
         05-LLM-CPU:
           ansible_host: 172.16.168.26
           slm_node_id: "05-LLM-CPU"
           slm_node_role: "llm"
+          node_roles:
+            - llm
+            - vnc
           slm_services_to_monitor:
             - ollama
+            - vnc-server
+            - vnc-websockify
 
         # Reserved node - pending role assignment
         06-Node-27:
@@ -125,6 +134,11 @@ all:
       hosts:
         05-LLM-CPU:
 
+    # VNC desktop nodes (#1525, #2407)
+    vnc_nodes:
+      hosts:
+        05-LLM-CPU:
+
     # Aggregate for all infrastructure nodes
     infrastructure:
       children:
@@ -136,3 +150,33 @@ all:
         ai_stack:
         slm_server:
         llm_nodes:
+
+    # Cross-inventory aliases (#2515)
+    # Ensure group names from production.yml resolve in slm-nodes.yml.
+    database:
+      children:
+        redis:
+
+    aiml:
+      children:
+        ai_stack:
+
+    npu:
+      children:
+        npu_worker:
+
+    npu_workers:
+      children:
+        npu_worker:
+
+    backend:
+      children:
+        main:
+
+    browser:
+      children:
+        browser_worker:
+
+    slm:
+      children:
+        slm_server:

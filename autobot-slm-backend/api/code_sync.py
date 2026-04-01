@@ -17,9 +17,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from config import settings
 from models.database import CodeSource, CodeStatus
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
@@ -42,7 +47,6 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
-from pydantic import BaseModel
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
@@ -50,9 +54,6 @@ from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
 from services.sync_orchestrator import get_sync_orchestrator
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -117,6 +118,7 @@ async def reconcile_stale_fleet_sync_jobs() -> int:
         for job in stale_jobs:
             job.status = "failed"
             job.completed_at = datetime.utcnow()
+            job.failure_reason = "reconciled: server restarted while job was running"
             logger.warning(
                 "Reconciled stale fleet sync job %s "
                 "(was 'running', marked 'failed')",
@@ -168,8 +170,9 @@ async def _update_job_status_db(
     *,
     status: Optional[str] = None,
     completed_at: Optional[datetime] = None,
+    failure_reason: Optional[str] = None,
 ) -> None:
-    """Update fleet sync job status in DB (#1707)."""
+    """Update fleet sync job status in DB (#1707, #1980)."""
     from services.database import db_service
 
     async with db_service.session() as db:
@@ -184,6 +187,8 @@ async def _update_job_status_db(
             db_job.status = status
         if completed_at is not None:
             db_job.completed_at = completed_at
+        if failure_reason is not None:
+            db_job.failure_reason = failure_reason[:500]
 
         # Recalculate node counts from node_states
         ns_result = await db.execute(
@@ -261,6 +266,7 @@ async def _load_job_status_from_db(
             total_nodes=db_job.total_nodes,
             completed_nodes=db_job.completed_nodes,
             failed_nodes=db_job.failed_nodes,
+            failure_reason=db_job.failure_reason,
             nodes=[
                 FleetSyncNodeStatus(
                     node_id=ns.node_id,
@@ -506,7 +512,7 @@ _SLM_COMPONENTS = [
         ["node_modules", "dist", ".git"],
     ),
     (
-        "autobot-shared",
+        "autobot_shared",
         ["__pycache__", "*.pyc", ".git"],
     ),
 ]
@@ -524,9 +530,7 @@ async def _rsync_component(
 
     Helper for _sync_slm_from_code_source (#913).
     """
-    ssh_opts = (
-        f"ssh -i {ssh_key} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-    )
+    ssh_opts = f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new"
     cmd = [
         "rsync",
         "-avz",
@@ -799,9 +803,10 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
     source_ip, source_user, repo_path = conn_info
 
-    # Detect if code source is on the same host — skip SSH entirely (#1191)
-    own_ip = urlparse(settings.external_url).hostname or ""
-    is_local_source = source_ip in {"127.0.0.1", "localhost", own_ip}
+    # Detect if code source is on the same host — skip SSH entirely (#1191, #2759)
+    from autobot_shared.network_utils import is_local_ip
+
+    is_local_source = is_local_ip(source_ip)
 
     if is_local_source:
         logger.info(
@@ -1099,6 +1104,7 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
             slm_self_node.node_id,
         )
 
+    failure_reason: Optional[str] = None
     try:
         await _sync_regular_nodes(executor, job, regular_nodes)
 
@@ -1111,10 +1117,14 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
     except Exception as e:
         logger.error("Fleet sync job %s failed: %s", job.job_id, e)
         job.status = "failed"
+        failure_reason = str(e)
 
     job.completed_at = datetime.utcnow()
     await _update_job_status_db(
-        job.job_id, status=job.status, completed_at=job.completed_at
+        job.job_id,
+        status=job.status,
+        completed_at=job.completed_at,
+        failure_reason=failure_reason,
     )
     _running_tasks.pop(job.job_id, None)  # Prevent memory leak (#1928)
     logger.info(

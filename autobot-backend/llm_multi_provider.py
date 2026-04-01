@@ -32,12 +32,14 @@ except ImportError:
     openai = None
 
 import aiohttp
+
 from config.manager import get_config_manager as _get_cfg
 
 config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 load_dotenv()
 
@@ -494,7 +496,7 @@ class UnifiedLLMInterface:
         # Ollama configuration
         ollama_enabled = config_manager.get("llm.ollama.enabled", True)
         ollama_base_url = config_manager.get("llm.ollama.base_url", _OLLAMA_DEFAULT_URL)
-        ollama_model = config_manager.get("llm.ollama.default_model", "deepseek-r1:14b")
+        ollama_model = config_manager.get("llm.ollama.default_model", DEFAULT_LLM_MODEL)
 
         configs[ProviderType.OLLAMA] = ProviderConfig(
             provider_type=ProviderType.OLLAMA,
@@ -779,10 +781,11 @@ class UnifiedLLMInterface:
                     health["overall_healthy"] = False
 
             except Exception as e:
+                logger.error("Health check failed for provider %s: %s", provider_type.value, e)
                 health["providers"][provider_type.value] = {
                     "available": False,
                     "enabled": provider.config.enabled,
-                    "error": str(e),
+                    "error": "Health check failed",
                 }
                 if provider.config.enabled:
                     health["overall_healthy"] = False

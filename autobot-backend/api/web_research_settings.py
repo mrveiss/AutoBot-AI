@@ -105,11 +105,12 @@ async def get_research_status():
 async def enable_web_research():
     """Enable web research functionality"""
     try:
+        from unified_unified_config_manager import unified_unified_config_manager
+
         from agents.web_researcher import (
             get_web_researcher as get_web_research_integration,
         )
         from services.config_service import ConfigService
-        from unified_unified_config_manager import unified_unified_config_manager
 
         # Enable in integration
         integration = get_web_research_integration()
@@ -158,11 +159,12 @@ async def enable_web_research():
 async def disable_web_research():
     """Disable web research functionality"""
     try:
+        from unified_unified_config_manager import unified_unified_config_manager
+
         from agents.web_researcher import (
             get_web_researcher as get_web_research_integration,
         )
         from services.config_service import ConfigService
-        from unified_unified_config_manager import unified_unified_config_manager
 
         # Disable in integration
         integration = get_web_research_integration()

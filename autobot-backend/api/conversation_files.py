@@ -17,13 +17,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import aiofiles
-from auth_middleware import auth_middleware, check_admin_permission
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
-from security_layer import SecurityLayer
 
+from auth_middleware import auth_middleware, check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from security_layer import SecurityLayer
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

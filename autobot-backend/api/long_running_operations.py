@@ -23,8 +23,6 @@ import logging
 import sys
 from typing import Dict, List, Optional
 
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -37,6 +35,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.security.path_validator import validate_path
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -182,12 +183,17 @@ async def start_codebase_indexing(
         # Estimate items based on file patterns
         from pathlib import Path
 
+        try:
+            safe_codebase_path = Path(validate_path(request.codebase_path, must_exist=True))
+        except (ValueError, PermissionError):
+            raise HTTPException(status_code=400, detail="Invalid or inaccessible codebase path")
+
         estimated_files = 0
         try:
             for pattern in request.file_patterns:
                 # Issue #358 - avoid blocking rglob() in async context
                 pattern_files = await asyncio.to_thread(
-                    lambda p=pattern: list(Path(request.codebase_path).rglob(p))
+                    lambda p=pattern: list(safe_codebase_path.rglob(p))
                 )
                 estimated_files += len(pattern_files)
         except Exception:
@@ -196,9 +202,9 @@ async def start_codebase_indexing(
         # Create operation using the integration manager
         create_request = CreateOperationRequest(
             operation_type="codebase_indexing",
-            name=f"Index codebase: {Path(request.codebase_path).name}",
+            name=f"Index codebase: {safe_codebase_path.name}",
             description=(
-                f"Comprehensive indexing of {request.codebase_path} with"
+                f"Comprehensive indexing of {safe_codebase_path} with"
                 f"patterns {request.file_patterns}"
             ),
             priority=request.priority,
@@ -250,12 +256,17 @@ async def start_comprehensive_testing(
         # Estimate test count
         from pathlib import Path
 
+        try:
+            safe_test_path = Path(validate_path(request.test_path, must_exist=True))
+        except (ValueError, PermissionError):
+            raise HTTPException(status_code=400, detail="Invalid or inaccessible test path")
+
         estimated_tests = 0
         try:
             for pattern in request.test_patterns:
                 # Issue #358 - avoid blocking rglob() in async context
                 pattern_files = await asyncio.to_thread(
-                    lambda p=pattern: list(Path(request.test_path).rglob(p))
+                    lambda p=pattern: list(safe_test_path.rglob(p))
                 )
                 estimated_tests += len(pattern_files)
         except Exception:
@@ -263,9 +274,9 @@ async def start_comprehensive_testing(
 
         create_request = CreateOperationRequest(
             operation_type="comprehensive_test_suite",
-            name=f"Comprehensive test suite: {Path(request.test_path).name}",
+            name=f"Comprehensive test suite: {safe_test_path.name}",
             description=(
-                f"Run all tests in {request.test_path} with patterns"
+                f"Run all tests in {safe_test_path} with patterns"
                 f"{request.test_patterns}"
             ),
             priority=request.priority,

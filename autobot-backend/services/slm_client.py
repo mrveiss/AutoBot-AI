@@ -124,14 +124,16 @@ class ServiceDiscoveryCache:
 
 
 def _create_permissive_ssl_context():
-    """Create SSL context that accepts self-signed certificates.
+    """Create SSL context for internal SLM communication (#1048, #2852).
 
-    Used for internal SLM communication where nginx uses self-signed TLS.
-    Issue #1048.
+    By default TLS verification is enabled.  Set AUTOBOT_SKIP_TLS_VERIFY=true
+    ONLY in dev/test environments that use self-signed certificates — never in
+    production.
     """
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() == "true":
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 

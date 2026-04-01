@@ -56,6 +56,9 @@
             </div>
           </div>
           <div class="header-actions">
+            <button class="btn-notif" @click="showNotifConfig = true" :aria-label="$t('workflow.notifications.title')">
+              <i class="fas fa-bell"></i>
+            </button>
             <button v-if="currentWorkflow.is_paused" class="btn-success" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
               <i class="fas fa-play"></i> {{ $t('workflow.runner.resume') }}
             </button>
@@ -127,12 +130,22 @@
         </div>
       </template>
     </div>
+
+    <!-- Notification Config Modal (#3139) -->
+    <NotificationConfigModal
+      v-if="currentWorkflow"
+      :visible="showNotifConfig"
+      :workflow-id="currentWorkflow.workflow_id"
+      @close="showNotifConfig = false"
+      @saved="$emit('refresh')"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
+import NotificationConfigModal from './NotificationConfigModal.vue';
 
 const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
 const emit = defineEmits<{
@@ -144,6 +157,8 @@ const emit = defineEmits<{
   (e: 'skip-step', wfId: string, stepId: string): void;
   (e: 'refresh'): void;
 }>();
+
+const showNotifConfig = ref(false);
 
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
@@ -238,7 +253,21 @@ function formatResult(result: Record<string, unknown>): string {
 .phase-badge.complete { background: var(--color-success-bg); color: var(--color-success); }
 .phase-badge.failed { background: var(--color-error-bg); color: var(--color-error); }
 .service-badge { padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
-.header-actions { display: flex; gap: 10px; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+
+.btn-notif {
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-notif:hover { background: var(--bg-hover); color: var(--color-primary); }
 
 .progress-overview { padding: 20px; background: var(--bg-secondary); }
 .progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }

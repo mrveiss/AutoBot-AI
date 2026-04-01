@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+
 from enhanced_memory_manager_async import TaskPriority
 from memory import EnhancedMemoryManager
 from task_execution_tracker import task_tracker
@@ -130,7 +131,7 @@ class VoiceProcessingSystem:
                 return response
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Voice command processing failed"})
                 logger.error("Voice command processing failed: %s", e)
                 raise
 

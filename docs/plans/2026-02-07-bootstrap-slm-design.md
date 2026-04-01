@@ -65,7 +65,7 @@ All-in-one deployment on SLM node (172.16.168.19).
 │   ├── stop.sh                 # nginx stop
 │   ├── status.sh               # Check status
 │   └── ... (frontend source)
-├── autobot-shared/             # Shared utilities
+├── autobot_shared/             # Shared utilities
 ├── nginx/
 │   └── certs/
 │       ├── slm.crt             # Self-signed TLS cert
@@ -93,7 +93,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 - Check required directories exist:
   - `autobot-slm-backend/`
   - `autobot-slm-frontend/`
-  - `autobot-shared/`
+  - `autobot_shared/`
 - Test SSH connectivity to target host
 - Verify sudo access on target
 
@@ -119,7 +119,7 @@ The `autobot_admin` user is normally disabled and only enabled during key/cert r
 - Backup existing `/opt/autobot/` to `/opt/autobot.bak.TIMESTAMP/` if exists
 - Rsync `autobot-slm-backend/` to `/opt/autobot/autobot-slm-backend/`
 - Rsync `autobot-slm-frontend/` to `/opt/autobot/autobot-slm-frontend/`
-- Rsync `autobot-shared/` to `/opt/autobot/autobot-shared/`
+- Rsync `autobot_shared/` to `/opt/autobot/autobot_shared/`
 - Set ownership: `chown -R autobot:autobot /opt/autobot/`
 
 ### Phase 4: Backend Setup (remote)

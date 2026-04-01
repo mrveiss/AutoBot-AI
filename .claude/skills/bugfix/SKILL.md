@@ -91,7 +91,7 @@ Expected fix: [what needs to change]
 Read: /opt/autobot/autobot_shared/redis_client.py
 
 # Search for related code
-Grep: "redis.Redis" in autobot-shared/
+Grep: "redis.Redis" in autobot_shared/
 Glob: "**/*redis*.py"
 
 # Check recent changes

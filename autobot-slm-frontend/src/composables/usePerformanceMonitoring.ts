@@ -13,11 +13,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePerformanceMonitoring')
 
 // SLM Admin uses the local SLM backend API
-const API_BASE = '/api'
+const API_BASE = getSlmApiBase()
 
 // ===== Type Definitions =====
 

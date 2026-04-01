@@ -378,8 +378,8 @@ const llmConfig = {
     providers: {
       ollama: {
         endpoint: 'http://localhost:11434/api/generate',
-        models: ['deepseek-r1:14b', 'artifish/llama3.2-uncensored:latest'],
-        selected_model: 'deepseek-r1:14b'
+        models: ['qwen3.5:9b', 'dolphin-llama3:8b'],
+        selected_model: 'qwen3.5:9b'
       }
     }
   },

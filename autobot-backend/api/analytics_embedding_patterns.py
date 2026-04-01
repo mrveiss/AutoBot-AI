@@ -25,11 +25,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 router = APIRouter()
@@ -215,7 +215,7 @@ class EmbeddingPatternAnalyzer:
         if self._redis is None:
             async with self._lock:
                 if self._redis is None:
-                    self._redis = await get_redis_client(
+                    self._redis = get_redis_client(
                         async_client=True, database=RedisDatabase.ANALYTICS
                     )
         return self._redis

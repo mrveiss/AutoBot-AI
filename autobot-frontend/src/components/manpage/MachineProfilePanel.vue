@@ -107,6 +107,7 @@ const osBadgeClass = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .machine-info {
   @apply p-4;
 }

@@ -13,6 +13,8 @@ import asyncio
 import logging
 import tempfile
 import time
+import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -21,15 +23,18 @@ _PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from api.websocket import ws_manager
 from services.auth import get_current_user
 from services.database import db_service
+from services.encryption import decrypt_data
 from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["setup-wizard"])
 
-# ── Wizard Steps ────────────────────────────────────────────────────────────
+# -- Wizard Steps ────────────────────────────────────────────────────────────
 
 WIZARD_STEPS = [
     "welcome",
@@ -37,13 +42,14 @@ WIZARD_STEPS = [
     "test_connections",
     "enroll_agents",
     "assign_roles",
+    "configure_secrets",
     "provision_fleet",
     "verify_health",
     "complete",
 ]
 
 
-# ── Schemas ─────────────────────────────────────────────────────────────────
+# -- Schemas ─────────────────────────────────────────────────────────────────
 
 
 class WizardStatus(BaseModel):
@@ -68,13 +74,14 @@ class ProvisionRequest(BaseModel):
     node_ids: Optional[list[str]] = None
 
 
-# ── Settings Helpers ────────────────────────────────────────────────────────
+# -- Settings Helpers ─────────────────────────────────────────────────────────
 
 
 async def _get_setting(key: str, default: str = "") -> str:
     """Read a setting value from the database."""
-    from models.database import Setting
     from sqlalchemy import select
+
+    from models.database import Setting
 
     async with db_service.session() as session:
         result = await session.execute(select(Setting).where(Setting.key == key))
@@ -84,8 +91,9 @@ async def _get_setting(key: str, default: str = "") -> str:
 
 async def _set_setting(key: str, value: str) -> None:
     """Write a setting value to the database."""
-    from models.database import Setting
     from sqlalchemy import select
+
+    from models.database import Setting
 
     async with db_service.session() as session:
         result = await session.execute(select(Setting).where(Setting.key == key))
@@ -100,23 +108,23 @@ async def _set_setting(key: str, value: str) -> None:
 def _build_inventory_children(
     hosts: dict[str, dict],
     node_roles: list,
-    node_id_to_hostname: dict[str, str],
+    node_id_to_inv_name: dict[str, str],
 ) -> tuple[dict[str, dict], dict[str, set[str]]]:
     """Build Ansible inventory ``children`` with role-based groups (#1346).
 
     Returns (children dict, ansible_groups) where ansible_groups maps
-    group name to set of hostnames for logging.
+    group name to set of inventory names for logging.
     """
     from services.role_registry import ROLE_ANSIBLE_GROUPS
 
     ansible_groups: dict[str, set[str]] = {}
     for nr in node_roles:
-        hostname = node_id_to_hostname.get(nr.node_id)
-        if not hostname:
+        inv_name = node_id_to_inv_name.get(nr.node_id)
+        if not inv_name:
             continue
         group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
         if group:
-            ansible_groups.setdefault(group, set()).add(hostname)
+            ansible_groups.setdefault(group, set()).add(inv_name)
 
     children: dict[str, dict] = {
         "slm_nodes": {"hosts": {h: None for h in hosts}},
@@ -158,12 +166,180 @@ def _build_infra_vars(
     return infra_vars
 
 
-async def _generate_dynamic_inventory(
-    node_ids: Optional[list[str]] = None,
-) -> Optional[Path]:
-    """Build Ansible inventory with role-based groups (#1346)."""
-    from models.database import Node, NodeRole
+# -- Secret key -> Ansible variable name mapping (#3079) --------------------
+
+_SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
+    "hf_token": "tts_hf_token",
+}
+
+
+async def _fetch_provision_secrets() -> dict[str, str]:
+    """Read stored secrets and map them to Ansible extra_vars (#3079)."""
     from sqlalchemy import select
+
+    from models.database import SystemSecret
+
+    extra: dict[str, str] = {}
+    try:
+        async with db_service.session() as session:
+            result = await session.execute(
+                select(SystemSecret).where(
+                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
+                )
+            )
+            for secret in result.scalars().all():
+                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
+                if not ansible_var:
+                    continue
+                value = decrypt_data(secret.encrypted_value)
+                if value:
+                    extra[ansible_var] = value
+    except Exception:
+        logger.exception("Failed to load provision secrets")
+    return extra
+
+
+def _build_host_entries(
+    db_nodes: list,
+    local_ips: set,
+) -> tuple[dict[str, dict], dict[str, str], dict[str, str]]:
+    """Build per-host inventory entries from DB node records (#2823).
+
+    Returns (hosts, node_id_to_hostname, node_id_to_ip).
+    Sets ansible_connection=local for nodes whose IP is on this machine (#2722).
+    """
+    hosts: dict[str, dict] = {}
+    node_id_to_hostname: dict[str, str] = {}
+    node_id_to_ip: dict[str, str] = {}
+    for node in db_nodes:
+        host_vars: dict = {
+            "ansible_host": node.ip_address,
+            "ansible_user": node.ssh_user or "autobot",
+            "slm_node_id": node.node_id,
+        }
+        if node.ip_address in local_ips:
+            host_vars["ansible_connection"] = "local"
+        if node.ssh_port and node.ssh_port != 22:
+            host_vars["ansible_port"] = node.ssh_port
+        inventory_name = node.ansible_target  # #1814
+        hosts[inventory_name] = host_vars
+        node_id_to_hostname[node.node_id] = inventory_name
+        node_id_to_ip[node.node_id] = node.ip_address
+    return hosts, node_id_to_hostname, node_id_to_ip
+
+
+def _apply_role_host_vars(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    all_node_roles: list,
+) -> None:
+    """Stamp node_roles, node_dependencies, and pending_dep_removals onto hosts (#2823).
+
+    Sets node_roles so provision-fleet-roles.yml conditions work, resolves
+    shared-dependency names for Phase 0 (#2747), and propagates any pending
+    dependency removals recorded in node.extra_data.
+    """
+    from services.role_registry import ROLE_DEPENDENCIES
+
+    node_id_to_roles: dict[str, list[str]] = {}
+    for nr in all_node_roles:
+        node_id_to_roles.setdefault(nr.node_id, []).append(nr.role_name)
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        if node.node_id in node_id_to_roles:
+            hosts[inv_name]["node_roles"] = node_id_to_roles[node.node_id]
+        roles = hosts[inv_name].get("node_roles", [])
+        deps: set[str] = set()
+        for role in roles:
+            deps.update(ROLE_DEPENDENCIES.get(role, []))
+        hosts[inv_name]["node_dependencies"] = sorted(deps)
+        pending = (node.extra_data or {}).get("pending_dep_removals", [])
+        if pending:
+            hosts[inv_name]["pending_dep_removals"] = pending
+
+
+def _apply_colocation_vars(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    local_ips: set,
+) -> None:
+    """Set co-location Ansible vars when frontend/backend share the SLM host (#2823).
+
+    When a node on the SLM host also carries the 'frontend' role, sets
+    slm_colocated_frontend=True so the SLM nginx config serves the user
+    frontend at / and SLM at /slm/ (#2829).  When backend is co-located too,
+    sets frontend_backend_port=8001 and frontend_backend_protocol=http so
+    templates proxy directly to uvicorn, eliminating the double-proxy.
+    """
+    _frontend_roles = {"frontend", "autobot-frontend"}
+    _backend_roles = {"backend", "autobot-backend"}
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        roles = set(hosts[inv_name].get("node_roles", []))
+        if node.ip_address in local_ips and roles & _frontend_roles:
+            hosts[inv_name]["slm_colocated_frontend"] = True
+            if roles & _backend_roles:
+                hosts[inv_name]["frontend_backend_port"] = 8001
+                hosts[inv_name]["frontend_backend_protocol"] = "http"
+
+
+def _build_inventory_dict(
+    hosts: dict[str, dict],
+    children: dict[str, dict],
+    infra_vars: dict,
+) -> dict:
+    """Assemble the top-level Ansible inventory structure (#2823).
+
+    Derives slm_host from external_url so the slm_agent role builds the
+    correct admin URL on single-host installs (#2747).  Merges infra service
+    discovery vars alongside fixed SSH key and interpreter paths (#2828).
+    """
+    from urllib.parse import urlparse
+
+    from config import settings as _slm_settings
+
+    slm_host = urlparse(_slm_settings.external_url).hostname or "127.0.0.1"
+    return {
+        "all": {
+            "vars": {
+                # Issue #2828: Use shared key path for any-operator access
+                "ansible_ssh_private_key_file": "/etc/autobot/ssh/autobot_key",
+                "ansible_python_interpreter": "/usr/bin/python3",
+                "slm_host": slm_host,
+                **infra_vars,
+            },
+            "hosts": hosts,
+            "children": children,
+        },
+    }
+
+
+async def _fetch_inventory_data(
+    node_ids: Optional[list[str]],
+) -> Optional[
+    tuple[
+        list,
+        dict[str, dict],
+        dict[str, str],
+        dict[str, str],
+        list,
+        list,
+        dict[str, str],
+    ]
+]:
+    """Load all DB data needed to build the Ansible inventory (#2823).
+
+    Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
+             all_node_roles, all_active, all_ip_map) or None when no nodes match.
+    """
+    from sqlalchemy import select
+
+    from autobot_shared.network_utils import get_local_ips
+    from models.database import Node, NodeRole
 
     async with db_service.session() as session:
         query = select(Node)
@@ -173,27 +349,21 @@ async def _generate_dynamic_inventory(
         if not db_nodes:
             return None
 
-        hosts: dict[str, dict] = {}
-        node_id_to_hostname: dict[str, str] = {}
-        node_id_to_ip: dict[str, str] = {}
-        for node in db_nodes:
-            host_vars = {
-                "ansible_host": node.ip_address,
-                "ansible_user": node.ssh_user or "autobot",
-                "slm_node_id": node.node_id,
-            }
-            if node.ssh_port and node.ssh_port != 22:
-                host_vars["ansible_port"] = node.ssh_port
-            inventory_name = node.ansible_target  # #1814
-            hosts[inventory_name] = host_vars
-            node_id_to_hostname[node.node_id] = node.hostname
-            node_id_to_ip[node.node_id] = node.ip_address
+        local_ips = get_local_ips()
+        hosts, node_id_to_hostname, node_id_to_ip = _build_host_entries(
+            db_nodes, local_ips
+        )
 
-        # Only include active roles in Ansible groups (#1431)
-        nr_query = select(NodeRole).where(NodeRole.status == "active")
+        # Include active + inactive + not_installed roles for provisioning (#2747)
+        nr_query = select(NodeRole).where(
+            NodeRole.status.in_(["active", "inactive", "not_installed"])
+        )
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
+
+        _apply_role_host_vars(hosts, db_nodes, all_node_roles)
+        _apply_colocation_vars(hosts, db_nodes, local_ips)
 
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
@@ -205,21 +375,44 @@ async def _generate_dynamic_inventory(
             all_ip_map = node_id_to_ip
             all_active = all_node_roles
 
+    return (
+        db_nodes,
+        hosts,
+        node_id_to_hostname,
+        node_id_to_ip,
+        all_node_roles,
+        all_active,
+        all_ip_map,
+    )
+
+
+async def _generate_dynamic_inventory(
+    node_ids: Optional[list[str]] = None,
+) -> Optional[Path]:
+    """Build Ansible inventory with role-based groups (#1346, #2823).
+
+    Orchestrates focused helpers: _fetch_inventory_data, _build_inventory_children,
+    _build_infra_vars, and _build_inventory_dict, then writes the result to a
+    temporary YAML file for Ansible consumption.
+    """
+    result = await _fetch_inventory_data(node_ids)
+    if result is None:
+        return None
+
+    (
+        _db_nodes,
+        hosts,
+        node_id_to_hostname,
+        _node_id_to_ip,
+        all_node_roles,
+        all_active,
+        all_ip_map,
+    ) = result
     children, ansible_groups = _build_inventory_children(
         hosts, all_node_roles, node_id_to_hostname
     )
     infra_vars = _build_infra_vars(all_active, all_ip_map)
-    inventory = {
-        "all": {
-            "vars": {
-                "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
-                "ansible_python_interpreter": "/usr/bin/python3",
-                **infra_vars,
-            },
-            "hosts": hosts,
-            "children": children,
-        },
-    }
+    inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
     with open(fd, "w", encoding="utf-8") as f:
@@ -235,7 +428,136 @@ async def _generate_dynamic_inventory(
     return Path(path)
 
 
-# ── Provisioning State (#1384) ──────────────────────────────────────────────
+async def _ssh_check_host(
+    hostname: str, ip: str, user: str, key: str
+) -> tuple[str, bool]:
+    """Run a single SSH connectivity probe and return (hostname, reachable).
+
+    Uses BatchMode=yes so the process never prompts for a password (#2897).
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "BatchMode=yes",
+            "-i",
+            key,
+            f"{user}@{ip}",
+            "echo",
+            "ok",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=10)
+        reachable = proc.returncode == 0
+    except (asyncio.TimeoutError, OSError):
+        reachable = False
+    return hostname, reachable
+
+
+async def _check_node_reachability(inventory_path: Path) -> dict[str, bool]:
+    """Parse the generated inventory and SSH-probe each non-local host (#2897).
+
+    Local hosts (ansible_connection: local) are always considered reachable.
+    Probes run in parallel; each probe has a 5-second ConnectTimeout plus a
+    10-second asyncio timeout as a safety net.
+
+    Returns a dict mapping inventory hostname -> reachable (bool).
+    """
+    raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
+    all_vars = raw.get("all", {}).get("vars", {})
+    default_key = str(
+        Path(
+            all_vars.get(
+                "ansible_ssh_private_key_file",
+                "/etc/autobot/ssh/autobot_key",  # Issue #2828
+            )
+        ).expanduser()
+    )
+    default_user = all_vars.get("ansible_user", "autobot")
+
+    hosts: dict[str, dict] = raw.get("all", {}).get("hosts", {})
+    tasks = []
+    local_hosts: set[str] = set()
+
+    for hostname, host_vars in hosts.items():
+        if not isinstance(host_vars, dict):
+            host_vars = {}
+        if host_vars.get("ansible_connection") == "local":
+            local_hosts.add(hostname)
+            continue
+        ip = host_vars.get("ansible_host", hostname)
+        user = host_vars.get("ansible_user", default_user)
+        key = str(
+            Path(
+                host_vars.get("ansible_ssh_private_key_file", default_key)
+            ).expanduser()
+        )
+        tasks.append(_ssh_check_host(hostname, ip, user, key))
+
+    results: dict[str, bool] = {h: True for h in local_hosts}
+    if tasks:
+        for hostname, reachable in await asyncio.gather(*tasks):
+            results[hostname] = reachable
+
+    for hostname, reachable in results.items():
+        if not reachable:
+            host_vars = hosts.get(hostname, {})
+            ip = (
+                host_vars.get("ansible_host", hostname)
+                if isinstance(host_vars, dict)
+                else hostname
+            )
+            logger.warning(
+                "Node %s (%s) is unreachable -- skipping (not enrolled?)",
+                hostname,
+                ip,
+            )
+    return results
+
+
+# -- Provisioning State (#1384) ───────────────────────────────────────────────
+
+
+async def _activate_provisioned_roles(
+    node_ids: Optional[list[str]],
+) -> None:
+    """Mark all roles on provisioned nodes as 'active' (#2836, #2900).
+
+    After provisioning deploys code/services to a node, the role status
+    should reflect that.  Without this, roles stay 'inactive'/'not_installed'
+    and infra-var derivation (backend_host, redis_host) breaks.
+    """
+    from sqlalchemy import select
+
+    from models.database import NodeRole
+
+    try:
+        async with db_service.session() as session:
+            query = select(NodeRole).where(
+                NodeRole.status.in_(["inactive", "not_installed"])
+            )
+            if node_ids:
+                query = query.where(NodeRole.node_id.in_(node_ids))
+            roles = (await session.execute(query)).scalars().all()
+            activated = []
+            for role in roles:
+                role.status = "active"
+                activated.append(f"{role.node_id}/{role.role_name}")
+            await session.commit()
+            if activated:
+                logger.info(
+                    "Activated %d roles after provisioning: %s",
+                    len(activated),
+                    activated,
+                )
+    except Exception as exc:
+        logger.warning("Failed to activate provisioned roles: %s", exc)
+
 
 _provision_state: dict = {
     "status": "idle",  # idle | running | completed | failed
@@ -277,6 +599,113 @@ def _handle_provision_result(result: dict) -> None:
         logger.error("Fleet provisioning failed (rc=%s)", rc)
 
 
+async def _create_wizard_deployments(
+    node_ids: Optional[list[str]],
+) -> dict[str, str]:
+    """Create one Deployment record per provisioned node before playbook runs (#3032).
+
+    Returns a mapping of node_id -> deployment_id so the caller can update
+    records after provisioning completes.  Roles are derived from the
+    NodeRole assignments already stored for each node.
+    """
+    from sqlalchemy import select
+
+    from models.database import Deployment, DeploymentStatus, Node, NodeRole
+
+    node_to_deployment: dict[str, str] = {}
+    try:
+        async with db_service.session() as session:
+            q = select(Node)
+            if node_ids:
+                q = q.where(Node.node_id.in_(node_ids))
+            db_nodes = (await session.execute(q)).scalars().all()
+
+            nr_q = select(NodeRole).where(
+                NodeRole.status.in_(["active", "inactive", "not_installed"])
+            )
+            if node_ids:
+                nr_q = nr_q.where(NodeRole.node_id.in_(node_ids))
+            node_roles = (await session.execute(nr_q)).scalars().all()
+
+            roles_by_node: dict[str, list[str]] = {}
+            for nr in node_roles:
+                roles_by_node.setdefault(nr.node_id, []).append(nr.role_name)
+
+            for node in db_nodes:
+                dep_id = str(uuid.uuid4())[:8]
+                roles = roles_by_node.get(node.node_id, [])
+                session.add(
+                    Deployment(
+                        deployment_id=dep_id,
+                        node_id=node.node_id,
+                        roles=roles,
+                        status=DeploymentStatus.IN_PROGRESS.value,
+                        started_at=datetime.utcnow(),
+                        triggered_by="setup-wizard",
+                        extra_data={"source": "setup_wizard"},
+                    )
+                )
+                node_to_deployment[node.node_id] = dep_id
+
+            await session.commit()
+            logger.info(
+                "Created %d wizard deployment records: %s",
+                len(node_to_deployment),
+                list(node_to_deployment.values()),
+            )
+    except Exception as exc:
+        logger.warning("Failed to create wizard deployment records: %s", exc)
+    return node_to_deployment
+
+
+async def _complete_wizard_deployments(
+    node_to_deployment: dict[str, str],
+    success: bool,
+    output: str,
+    error: Optional[str],
+    reachable_nodes: Optional[list[str]],
+) -> None:
+    """Update Deployment records after wizard provisioning finishes (#3032).
+
+    Nodes that were not reachable keep IN_PROGRESS and are marked failed.
+    """
+    from sqlalchemy import select
+
+    from models.database import Deployment, DeploymentStatus
+
+    if not node_to_deployment:
+        return
+    try:
+        async with db_service.session() as session:
+            for node_id, dep_id in node_to_deployment.items():
+                result = await session.execute(
+                    select(Deployment).where(Deployment.deployment_id == dep_id)
+                )
+                dep = result.scalar_one_or_none()
+                if not dep:
+                    continue
+                node_succeeded = success and (
+                    reachable_nodes is None or node_id in reachable_nodes
+                )
+                dep.status = (
+                    DeploymentStatus.COMPLETED.value
+                    if node_succeeded
+                    else DeploymentStatus.FAILED.value
+                )
+                dep.completed_at = datetime.utcnow()
+                dep.playbook_output = output
+                if not node_succeeded:
+                    dep.error = error or "Provisioning failed or node unreachable"
+            await session.commit()
+            logger.info(
+                "Updated %d wizard deployment records (success=%s)",
+                len(node_to_deployment),
+                success,
+            )
+    except Exception as exc:
+        logger.warning("Failed to update wizard deployment records: %s", exc)
+
+
 async def _run_provisioning_task(
     node_ids: Optional[list[str]],
 ) -> None:
@@ -287,8 +716,11 @@ async def _run_provisioning_task(
         f"Node IDs: {node_ids or 'all'}\n"
         f"{'=' * 60}"
     )
+    await ws_manager.send_provision_status("running", "starting", 0)
+    await ws_manager.send_provision_log("info", "Provisioning started")
 
     temp_inventory_path = None
+    node_to_deployment: dict[str, str] = {}
     try:
         temp_inventory_path = await _generate_dynamic_inventory(node_ids)
         if not temp_inventory_path:
@@ -296,6 +728,12 @@ async def _run_provisioning_task(
             _provision_state["error"] = "No nodes found for provisioning"
             _provision_state["finished_at"] = time.time()
             _write_provision_log("ERROR: No nodes found for provisioning")
+            await ws_manager.send_provision_status(
+                "failed", "", 0, error="No nodes found for provisioning"
+            )
+            await ws_manager.send_provision_log(
+                "error", "No nodes found for provisioning"
+            )
             return
 
         _write_provision_log(
@@ -303,33 +741,164 @@ async def _run_provisioning_task(
             f"{temp_inventory_path.read_text(encoding='utf-8')}"
         )
 
+        # Create Deployment records before running the playbook (#3032)
+        node_to_deployment = await _create_wizard_deployments(node_ids)
+
+        # Pre-check SSH reachability before running Ansible (#2897)
+        reachability = await _check_node_reachability(temp_inventory_path)
+        unreachable = [h for h, ok in reachability.items() if not ok]
+        reachable = [h for h, ok in reachability.items() if ok]
+
+        if unreachable:
+            raw_inv = yaml.safe_load(temp_inventory_path.read_text(encoding="utf-8"))
+            inv_hosts = raw_inv.get("all", {}).get("hosts", {})
+            for hostname in unreachable:
+                host_vars = inv_hosts.get(hostname, {})
+                ip = (
+                    host_vars.get("ansible_host", hostname)
+                    if isinstance(host_vars, dict)
+                    else hostname
+                )
+                msg = (
+                    f"Node {hostname} ({ip}) is unreachable"
+                    " -- skipping (not enrolled?)"
+                )
+                _write_provision_log(f"WARNING: {msg}")
+                await ws_manager.send_provision_log("warning", msg)
+
+        if not reachable:
+            _provision_state["status"] = "failed"
+            _provision_state["error"] = (
+                "All nodes are unreachable"
+                " -- ensure nodes are enrolled before provisioning"
+            )
+            _provision_state["finished_at"] = time.time()
+            _write_provision_log("ERROR: All nodes are unreachable")
+            await ws_manager.send_provision_status(
+                "failed",
+                "",
+                0,
+                error=(
+                    "All nodes are unreachable"
+                    " -- ensure nodes are enrolled before provisioning"
+                ),
+            )
+            await ws_manager.send_provision_log(
+                "error",
+                (
+                    "All nodes are unreachable"
+                    " -- ensure nodes are enrolled before provisioning"
+                ),
+            )
+            await _complete_wizard_deployments(
+                node_to_deployment,
+                success=False,
+                output="",
+                error="All nodes are unreachable -- ensure nodes are enrolled before provisioning",
+                reachable_nodes=None,
+            )
+            return
+
+        # Build --limit to include only reachable nodes (#2897)
+        reachability_limit: Optional[list[str]] = None
+        if unreachable:
+            reachability_limit = reachable
+            logger.info(
+                "Excluding %d unreachable node(s) from provisioning: %s",
+                len(unreachable),
+                unreachable,
+            )
+
         executor = get_playbook_executor()
 
         async def log_callback(progress: dict) -> None:
             msg = progress.get("message", "")
+            stage = progress.get("stage", "")
             if msg:
                 _provision_state["output_lines"].append(msg)
                 _write_provision_log(msg)
+                # Broadcast via WebSocket (#2754)
+                log_type = "task"
+                if stage.endswith("_complete") or stage == "complete":
+                    log_type = "success"
+                elif "error" in msg.lower() or "failed" in msg.lower():
+                    log_type = "error"
+                await ws_manager.send_provision_log(log_type, msg)
+                elapsed = time.time() - (
+                    _provision_state.get("started_at") or time.time()
+                )
+                await ws_manager.send_provision_status("running", stage, elapsed)
+
+        # Issue #3079: Pass stored secrets as Ansible extra_vars
+        extra_vars = await _fetch_provision_secrets()
 
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
-            extra_vars={},
+            extra_vars=extra_vars,
+            limit=reachability_limit,
             inventory_path=temp_inventory_path,
             progress_callback=log_callback,
         )
         _handle_provision_result(result)
+
+        # Update Deployment records with playbook outcome (#3032)
+        await _complete_wizard_deployments(
+            node_to_deployment,
+            success=bool(result.get("success")),
+            output=result.get("output", ""),
+            error=(
+                None
+                if result.get("success")
+                else f"Ansible exited with code {result.get('returncode', -1)}"
+            ),
+            reachable_nodes=None,
+        )
+
+        # Activate roles on provisioned nodes (#2836, #2900)
+        # Even with partial failures, roles on reachable nodes were deployed.
+        await _activate_provisioned_roles(reachable or node_ids)
+
+        elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+        if result.get("success"):
+            await ws_manager.send_provision_status("completed", "complete", elapsed)
+            await ws_manager.send_provision_log(
+                "success", "Fleet provisioning completed successfully"
+            )
+        else:
+            rc = result.get("returncode", -1)
+            await ws_manager.send_provision_status(
+                "failed", "", elapsed, error=f"Ansible exited with code {rc}"
+            )
+            await ws_manager.send_provision_log(
+                "error", f"Provisioning failed (exit code {rc})"
+            )
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
         _write_provision_log(f"EXCEPTION: {exc}")
         logger.exception("Fleet provisioning error: %s", exc)
+        elapsed = time.time() - (_provision_state.get("started_at") or time.time())
+        # Sanitize -- Ansible exceptions may contain credentials (#2754)
+        await ws_manager.send_provision_status(
+            "failed", "", elapsed, error="internal error"
+        )
+        await ws_manager.send_provision_log(
+            "error", "Provisioning error: internal error (see server logs)"
+        )
+        await _complete_wizard_deployments(
+            node_to_deployment,
+            success=False,
+            output="",
+            error="internal error",
+            reachable_nodes=None,
+        )
     finally:
         _provision_state["finished_at"] = time.time()
         if temp_inventory_path and temp_inventory_path.exists():
             temp_inventory_path.unlink(missing_ok=True)
 
 
-# ── Endpoints ───────────────────────────────────────────────────────────────
+# -- Endpoints ────────────────────────────────────────────────────────────────
 
 
 @router.get("/status", response_model=WizardStatus)
@@ -496,9 +1065,9 @@ async def validate_fleet(
     _: Annotated[dict, Depends(get_current_user)],
 ):
     """Validate that all fleet nodes are healthy."""
-    from models.database import Node, NodeRole
-    from services.role_registry import DEFAULT_ROLES
     from sqlalchemy import func, select
+
+    from models.database import Node, NodeRole
 
     async with db_service.session() as session:
         node_count_result = await session.execute(select(func.count(Node.id)))
@@ -509,9 +1078,15 @@ async def validate_fleet(
         )
         online_nodes = online_result.scalar() or 0
 
-        required_roles = [r["name"] for r in DEFAULT_ROLES if r.get("required")]
+        # Only check roles that are actually assigned to nodes (#2747)
+        # Roles not yet assigned via wizard are not "missing"
+        assigned_roles = (
+            (await session.execute(select(NodeRole.role_name).distinct()))
+            .scalars()
+            .all()
+        )
         missing_roles = []
-        for role_name in required_roles:
+        for role_name in assigned_roles:
             active = await session.execute(
                 select(func.count(NodeRole.id)).where(
                     NodeRole.role_name == role_name,
@@ -523,7 +1098,7 @@ async def validate_fleet(
 
     health = "healthy"
     if missing_roles:
-        health = "critical"
+        health = "degraded"
     elif online_nodes < total_nodes:
         health = "degraded"
 
@@ -532,5 +1107,5 @@ async def validate_fleet(
         "total_nodes": total_nodes,
         "online_nodes": online_nodes,
         "missing_required_roles": missing_roles,
-        "ready": health in ("healthy", "degraded") and total_nodes > 0,
+        "ready": total_nodes > 0,
     }

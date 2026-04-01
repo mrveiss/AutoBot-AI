@@ -6,7 +6,7 @@
 Network Constants — Re-export shim (#1195)
 ==========================================
 
-Canonical module lives in ``autobot-shared/network_constants.py``.
+Canonical module lives in ``autobot_shared/network_constants.py``.
 This shim re-exports every public name so that the 74+ backend files
 using ``from constants.network_constants import ...`` keep working
 with zero import changes.
@@ -31,8 +31,8 @@ if _MOD_NAME not in sys.modules:
     _here = os.path.dirname(os.path.abspath(__file__))
     _root = os.path.dirname(os.path.dirname(_here))
 
-    # Try autobot-shared/ first (actual directory), then autobot_shared/
-    for _candidate in ("autobot-shared", "autobot_shared"):
+    # Try autobot_shared/ first (actual directory), then autobot_shared/
+    for _candidate in ("autobot_shared", "autobot_shared"):
         _shared_file = os.path.join(_root, _candidate, "network_constants.py")
         if os.path.isfile(_shared_file):
             break

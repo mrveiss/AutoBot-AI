@@ -13,9 +13,13 @@ import logging
 from datetime import timedelta
 from typing import Union
 
-from api.security import create_audit_log
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
+from api.security import create_audit_log
+from autobot_shared.proxy_utils import get_client_ip
+from config import settings
 from models.schemas import (
     MfaChallengeResponse,
     TokenRequest,
@@ -25,12 +29,8 @@ from models.schemas import (
 )
 from services.auth import auth_service, get_current_user, get_slm_db, require_admin
 from services.database import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 from user_management.models.user import User
 from user_management.services import TenantContext, UserService
-
-from autobot_shared.proxy_utils import get_client_ip
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])

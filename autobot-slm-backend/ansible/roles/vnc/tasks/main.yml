@@ -172,3 +172,11 @@
     daemon_reload: true
   become: true
   when: websockify_enabled | bool
+
+# --- Auto-register VNC credentials in SLM database (#2926) ---
+- name: Register VNC credentials in SLM
+  ansible.builtin.include_tasks: register-credentials.yml
+  when:
+    - vnc_register_credentials | bool
+    - vnc_password_result.stdout | length > 0
+    - slm_node_id is defined

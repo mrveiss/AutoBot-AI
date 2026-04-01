@@ -6,12 +6,12 @@
 import logging
 from typing import List, Optional
 
-from agents.kb_librarian_agent import get_kb_librarian
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from type_defs.common import Metadata
 
+from agents.kb_librarian_agent import get_kb_librarian
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

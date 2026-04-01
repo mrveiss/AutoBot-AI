@@ -17,9 +17,10 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+
+from auth_middleware import get_current_user
 from services.nl_database_service import get_nl_database_service
 
 logger = logging.getLogger(__name__)

@@ -90,7 +90,7 @@ class SecretsManager:
 
         logger.info("🔐 AutoBot Secrets Manager initialized")
         logger.info("   Secrets Directory: [configured]")
-        logger.info(f"   Indexed Secrets: {len(self.secrets_index)}")
+        logger.info("   Indexed Secrets: %s", len(self.secrets_index))
 
     def print_header(self, title: str):
         """Print formatted header."""
@@ -172,7 +172,7 @@ class SecretsManager:
         audit_event = {
             "timestamp": datetime.now().isoformat(),
             "action": action,
-            "secret_id": secret_id,
+            "secret_id": secret_id or "",  # Full ID preserved for audit traceability
             "scope": scope,
             "chat_id": chat_id,
             "details": details,
@@ -294,7 +294,9 @@ class SecretsManager:
             # Load and decrypt secret
             secret_file = self.secrets_dir / f"{secret_id}.secret"
             if not secret_file.exists():
-                self.print_step(f"Secret file not found: {secret_id}", "error")
+                self.print_step(
+                    f"Secret file not found: {secret_id[:8]}...", "error"
+                )
                 return None
 
             with open(secret_file, "rb") as f:
@@ -371,7 +373,7 @@ class SecretsManager:
     ) -> bool:
         """Update an existing secret."""
         if secret_id not in self.secrets_index["secrets"]:
-            self.print_step(f"Secret not found: {secret_id}", "error")
+            self.print_step(f"Secret not found: {secret_id[:8]}...", "error")
             return False
 
         secret_metadata = self.secrets_index["secrets"][secret_id]
@@ -422,7 +424,7 @@ class SecretsManager:
         # Thread-safe read of metadata
         with self._index_lock:
             if secret_id not in self.secrets_index["secrets"]:
-                self.print_step(f"Secret not found: {secret_id}", "error")
+                self.print_step(f"Secret not found: {secret_id[:8]}...", "error")
                 return False
             secret_metadata = self.secrets_index["secrets"][secret_id].copy()
             secret_scope = secret_metadata["scope"]
@@ -476,7 +478,9 @@ class SecretsManager:
         # Thread-safe read and validation
         with self._index_lock:
             if secret_id not in self.secrets_index["secrets"]:
-                self.print_step(f"Secret not found: {secret_id}", "error")
+                self.print_step(
+                    f"Secret not found: {secret_id[:8]}...", "error"
+                )
                 return False
 
             secret_metadata = self.secrets_index["secrets"][secret_id]
@@ -486,7 +490,7 @@ class SecretsManager:
             # Verify it's a chat-scoped secret from the correct chat
             if secret_scope != SecretScope.CHAT or secret_chat_id != chat_id:
                 self.print_step(
-                    f"Cannot transfer: not a chat-scoped secret from chat {chat_id}",
+                    "Cannot transfer: not a chat-scoped secret from this chat",
                     "error",
                 )
                 return False

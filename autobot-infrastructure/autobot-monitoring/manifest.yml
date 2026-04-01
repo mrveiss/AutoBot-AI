@@ -63,7 +63,7 @@ coexistence:
     - autobot-slm-frontend
     - autobot-slm-database
     - autobot-slm-agent
-    - autobot-shared
+    - autobot_shared
   conflicts_with:
     - autobot-browser-worker   # both would bind port 3000 if on same node
   warns_with: []

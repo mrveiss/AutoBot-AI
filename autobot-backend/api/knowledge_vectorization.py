@@ -14,20 +14,20 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, field_validator
+from redis.exceptions import RedisError
+
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from knowledge.pipeline.base import PipelineContext
 from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
 from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
-from pydantic import BaseModel, Field, field_validator
-from redis.exceptions import RedisError
 from type_defs.common import Metadata
 from utils.async_chromadb_client import get_async_chromadb_client
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Set up logging
 logger = logging.getLogger(__name__)

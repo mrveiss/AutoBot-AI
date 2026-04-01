@@ -36,15 +36,26 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
+from autobot_shared.ssot_config import (
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_LLM_MODEL,
+)
+from autobot_shared.ssot_config import INSTRUCTION_MODEL as SSOT_INSTRUCTION_MODEL
+from autobot_shared.ssot_config import (
+    LIGHT_PROCESSING_MODEL as SSOT_LIGHT_PROCESSING_MODEL,
+)
+from autobot_shared.ssot_config import QUALITY_MODEL as SSOT_QUALITY_MODEL
+from autobot_shared.ssot_config import ROUTING_MODEL as SSOT_ROUTING_MODEL
+from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
 
 # =============================================================================
-# FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE
+# FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE (#2553)
 # =============================================================================
-# These are the ultimate fallbacks if SSOT/.env is not configured.
-# Change these values to change the default for the entire system.
+# All values derive from ssot_config.py constants — never hardcode model names.
+# Change models in autobot_shared/ssot_config.py to change the entire system.
 
-FALLBACK_MODEL = DEFAULT_LLM_MODEL  # Default LLM model
+FALLBACK_MODEL = DEFAULT_LLM_MODEL
 FALLBACK_OPENAI_MODEL = "gpt-4"
 FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
 FALLBACK_GOOGLE_MODEL = "gemini-pro"
@@ -79,13 +90,16 @@ class ModelConstants:
     DEFAULT_ANTHROPIC_MODEL: str = FALLBACK_ANTHROPIC_MODEL
     DEFAULT_GOOGLE_MODEL: str = FALLBACK_GOOGLE_MODEL
 
-    # Additional model types
-    EMBEDDING_MODEL: str = "nomic-embed-text:latest"
-    CLASSIFICATION_MODEL: str = FALLBACK_MODEL
-    REASONING_MODEL: str = FALLBACK_MODEL
-    RAG_MODEL: str = FALLBACK_MODEL
-    CODING_MODEL: str = FALLBACK_MODEL
-    ORCHESTRATOR_MODEL: str = FALLBACK_MODEL
+    # Role-specific models — 6-tier mapping from SSOT constants (#2553)
+    EMBEDDING_MODEL: str = DEFAULT_EMBEDDING_MODEL
+    CLASSIFICATION_MODEL: str = SSOT_CLASSIFICATION_MODEL
+    LIGHT_PROCESSING_MODEL: str = SSOT_LIGHT_PROCESSING_MODEL
+    INSTRUCTION_MODEL: str = SSOT_INSTRUCTION_MODEL
+    SYSTEM_MODEL: str = SSOT_SYSTEM_MODEL
+    REASONING_MODEL: str = SSOT_QUALITY_MODEL
+    RAG_MODEL: str = SSOT_INSTRUCTION_MODEL
+    CODING_MODEL: str = SSOT_QUALITY_MODEL
+    ORCHESTRATOR_MODEL: str = SSOT_ROUTING_MODEL
 
     # =========================================================================
     # MODEL PROVIDERS
@@ -190,6 +204,10 @@ class ModelConfig:
     RAG_DEFAULT_CONTEXT_LENGTH: int = 2000
     RAG_MAX_CONTEXT_LENGTH: int = 5000
 
+    # MMR diversity scoring (Issue #2090)
+    # 0.0 = disabled (pure relevance); 1.0 = pure diversity; 0.5 = balanced
+    RAG_MMR_LAMBDA: float = 0.0
+
 
 # Singleton instances for easy access
 model_constants = ModelConstants()
@@ -237,8 +255,8 @@ def get_model_endpoint(provider: str) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from config.registry import ConfigRegistry
-        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")  # noqa: ssot-fallback
-        port = ConfigRegistry.get("port.ollama", "11434")
+        host = ConfigRegistry.get("vm.ollama")
+        port = ConfigRegistry.get("port.ollama")
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.
 

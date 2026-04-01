@@ -13,9 +13,10 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from models.config_revision import ConfigRevision
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.config_revision import ConfigRevision
 
 logger = logging.getLogger(__name__)
 

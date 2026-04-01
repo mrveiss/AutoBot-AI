@@ -14,8 +14,10 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -68,21 +70,21 @@ class Secret(Base, TimestampMixin):
     __tablename__ = "secrets"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Ownership (Issue #870, #685)
     owner_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         nullable=False,
         index=True,
         comment="User ID who owns this secret",
     )
 
     org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         nullable=True,
         index=True,
         comment="Organization ID for org-level secrets (Issue #685)",

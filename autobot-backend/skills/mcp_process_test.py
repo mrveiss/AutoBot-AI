@@ -4,6 +4,7 @@
 """Tests for MCPProcessManager."""
 
 import pytest
+
 from skills.mcp_process import MCPProcessManager, get_mcp_manager
 
 # Restrict anyio tests to asyncio backend only (trio not installed in this env)

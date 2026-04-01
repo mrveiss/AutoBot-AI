@@ -5,6 +5,12 @@
 # Ansible Monitoring Role - Prometheus Installation
 ---
 
+- name: Create prometheus group
+  ansible.builtin.group:
+    name: "{{ prometheus_group }}"
+    system: true
+    state: present
+
 - name: Create prometheus user
   ansible.builtin.user:
     name: "{{ prometheus_user }}"

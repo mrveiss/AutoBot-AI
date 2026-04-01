@@ -170,7 +170,7 @@ const inviteParticipant = () => {
         >
           <div class="flex items-start gap-3">
             <!-- Avatar -->
-            <div class="relative flex-shrink-0">
+            <div class="relative shrink-0">
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
                 :class="participant.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-autobot-bg-tertiary text-autobot-text-primary'"

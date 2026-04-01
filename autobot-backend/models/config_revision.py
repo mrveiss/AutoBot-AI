@@ -11,7 +11,9 @@ Stores before/after snapshots for every configuration change.
 import uuid
 
 from sqlalchemy import Column, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import Uuid
+
 from user_management.models.base import Base, TimestampMixin
 
 
@@ -24,7 +26,7 @@ class ConfigRevision(Base, TimestampMixin):
     __tablename__ = "config_revisions"
 
     id = Column(
-        UUID(as_uuid=True),
+        Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )

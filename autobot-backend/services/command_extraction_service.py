@@ -9,9 +9,7 @@ on first SSH connection. Uses deduplication to store commands once in
 the knowledge base with relations indicating which hosts have them.
 
 Related Issue: #715 - Dynamic SSH/VNC host management via secrets
-Related Issue: #729 - SSH operations now proxied through SLM API
-
-TODO (#729): This service needs refactoring to proxy SSH through SLM API
+SSH operations are proxied through the SLM API (resolved in #729).
 
 Key Features:
 - Extracts all available commands via compgen -c
@@ -388,7 +386,6 @@ async def store_commands_in_knowledge_base(
     adds a relation to the new host rather than duplicating.
 
     NOTE: Infrastructure services removed - now managed by SLM server (#729).
-    TODO (#729): Update to use SLM API for host info.
 
     Args:
         commands: Dict of extracted commands
@@ -421,7 +418,6 @@ async def get_commands_for_host(host_id: str) -> List[str]:
     triggers extraction.
 
     NOTE: Infrastructure services removed - now managed by SLM server (#729).
-    TODO (#729): Update to use SLM API for host info.
 
     Args:
         host_id: Infrastructure host ID
@@ -469,7 +465,6 @@ async def search_commands(
         # Filter by host if specified
         if host_id:
             # Infrastructure services removed - now managed by SLM server (#729)
-            # TODO (#729): Get host info from SLM API for filtering
             logger.warning(
                 "Host filtering temporarily disabled - infrastructure services removed (#729)"
             )

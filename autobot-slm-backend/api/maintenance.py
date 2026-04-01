@@ -13,6 +13,10 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
+
 from models.database import (
     EventSeverity,
     EventType,
@@ -29,9 +33,6 @@ from models.schemas import (
 )
 from services.auth import get_current_user, require_admin
 from services.database import get_db
-from sqlalchemy import and_, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/maintenance", tags=["maintenance"])

@@ -577,7 +577,7 @@ class WorkflowMetricsCollector:
 
         except Exception as e:
             logger.error("Failed to get performance summary: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve performance summary"}
 
     def export_metrics(self, format: str = "json") -> str:
         """Export metrics in specified format"""
@@ -595,7 +595,7 @@ class WorkflowMetricsCollector:
 
         except Exception as e:
             logger.error("Failed to export metrics: %s", e)
-            return f"Export failed: {str(e)}"
+            return "Export failed"
 
 
 # Global metrics collector instance

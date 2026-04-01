@@ -86,9 +86,9 @@ class OllamaHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
-                message=f"Cannot connect to Ollama: {str(e)}",
+                message="Cannot connect to Ollama",
                 response_time=response_time,
-                details={"endpoint": self.ollama_host, "error": str(e)},
+                details={"endpoint": self.ollama_host, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -96,9 +96,9 @@ class OllamaHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
 
@@ -189,9 +189,9 @@ class OpenAIHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
-                message=f"Cannot connect to OpenAI: {str(e)}",
+                message="Cannot connect to OpenAI",
                 response_time=response_time,
-                details={"api_key_set": True, "error": str(e)},
+                details={"api_key_set": True, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -199,9 +199,9 @@ class OpenAIHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
 
@@ -297,9 +297,9 @@ class AnthropicHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
-                message=f"Cannot connect to Anthropic: {str(e)}",
+                message="Cannot connect to Anthropic",
                 response_time=response_time,
-                details={"api_key_set": True, "error": str(e)},
+                details={"api_key_set": True, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -307,9 +307,9 @@ class AnthropicHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
 
@@ -401,9 +401,9 @@ class GoogleHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNAVAILABLE,
                 available=False,
-                message=f"Cannot connect to Google: {str(e)}",
+                message="Cannot connect to Google",
                 response_time=response_time,
-                details={"api_key_set": True, "error": str(e)},
+                details={"api_key_set": True, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -411,9 +411,9 @@ class GoogleHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
 
@@ -477,7 +477,7 @@ class LMStudioHealth(BaseProviderHealth):
                 available=False,
                 message="LM Studio not running or unreachable",
                 response_time=response_time,
-                details={"endpoint": self.lmstudio_host, "error": str(e)},
+                details={"endpoint": self.lmstudio_host, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -485,9 +485,9 @@ class LMStudioHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )
 
 
@@ -551,7 +551,7 @@ class VLLMHealth(BaseProviderHealth):
                 available=False,
                 message="vLLM not running or unreachable",
                 response_time=response_time,
-                details={"endpoint": self.vllm_host, "error": str(e)},
+                details={"endpoint": self.vllm_host, "error": type(e).__name__},
             )
         except Exception as e:
             response_time = time.time() - start_time
@@ -559,7 +559,7 @@ class VLLMHealth(BaseProviderHealth):
             return self._create_result(
                 status=ProviderStatus.UNKNOWN,
                 available=False,
-                message=f"Health check error: {str(e)}",
+                message="Health check error",
                 response_time=response_time,
-                details={"error": str(e)},
+                details={"error": type(e).__name__},
             )

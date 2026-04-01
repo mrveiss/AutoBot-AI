@@ -21,9 +21,10 @@ from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 from urllib.parse import urlparse
 
+from pydantic import BaseModel
+
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
-from pydantic import BaseModel
 from services.captcha_human_loop import get_captcha_human_loop
 
 # Issue #380: Module-level frozenset for CAPTCHA detection keywords
@@ -536,7 +537,7 @@ class WebResearcher:
             return {
                 "status": "error",
                 "query": query,
-                "error": str(e),
+                "error": "Web search failed",
                 "results": [],
                 "timestamp": datetime.now().isoformat(),
             }
@@ -1348,7 +1349,7 @@ class WebResearcher:
             return result
         except Exception as e:
             logger.error("Research failed for %s: %s", query, e)
-            return self._build_rq_error(query, str(e))
+            return self._build_rq_error(query, "Research query failed")
 
     def _build_rq_error(self, query: str, error: str) -> Dict[str, Any]:
         """Build error response for research_query."""
