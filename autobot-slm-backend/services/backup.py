@@ -108,7 +108,7 @@ class BackupService:
             return await self._fail_backup(db, backup, "Backup timed out")
         except Exception as e:
             logger.exception("Backup error: %s", e)
-            return await self._fail_backup(db, backup, str(e))
+            return await self._fail_backup(db, backup, "Backup operation failed")
 
     async def _stop_redis_for_restore(
         self, host: str, ssh_user: str, ssh_port: int
@@ -263,7 +263,7 @@ class BackupService:
 
         except Exception as e:
             logger.exception("Restore error: %s", e)
-            return False, str(e)
+            return False, "Restore operation failed"
 
     async def verify_backup_integrity(
         self,
@@ -389,7 +389,8 @@ class BackupService:
         except asyncio.TimeoutError:
             return False, "Command timed out"
         except Exception as e:
-            return False, str(e)
+            logger.error("SSH command execution error: %s", e)
+            return False, "Command execution failed"
 
     async def _calculate_checksum(self, path: Path) -> Optional[str]:
         """Calculate SHA256 checksum of a file."""
