@@ -3,6 +3,7 @@
 # Core
 fastapi>=0.135.2                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn>=0.42.0
+websockets>=16.0           # Issue #3098: required for WebSocket protocol support (desktop_streaming_manager, slm_client)
 python-dotenv>=1.2.2
 aiofiles>=25.1.0
 pydantic>=2.12.5
