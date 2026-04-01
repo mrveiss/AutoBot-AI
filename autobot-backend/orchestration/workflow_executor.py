@@ -192,14 +192,35 @@ class WorkflowExecutor:
             execution_context["agents_involved"]
         )
 
+    def _resolve_notification_config(
+        self, workflow_id: str, execution_context: Dict[str, Any]
+    ):
+        """Resolve the workflow's NotificationConfig (#3168).
+
+        Looks for ``notification_config`` in ``execution_context`` (injected
+        by the workflow manager).  Returns None when no config is present,
+        which causes notification methods to skip silently.
+        """
+        from services.notification_service import NotificationConfig
+
+        raw = execution_context.get("notification_config")
+        if raw is None:
+            return None
+        if isinstance(raw, NotificationConfig):
+            return raw
+        if isinstance(raw, dict):
+            return NotificationConfig(workflow_id=workflow_id, **raw)
+        return None
+
     async def _send_workflow_notification(
         self, workflow_id: str, execution_context: Dict[str, Any]
     ) -> None:
-        """Fire a notification for a terminal workflow status (#3101)."""
-        from services.notification_service import (
-            NotificationConfig,
-            NotificationEvent,
-        )
+        """Fire a notification for a terminal workflow status (#3101, #3168)."""
+        from services.notification_service import NotificationEvent
+
+        config = self._resolve_notification_config(workflow_id, execution_context)
+        if config is None:
+            return
 
         status = execution_context.get("status", "")
         event_map = {
@@ -211,7 +232,6 @@ class WorkflowExecutor:
             return
         try:
             svc = _get_notification_service()
-            config = NotificationConfig(workflow_id=workflow_id)
             payload = {
                 "workflow_id": workflow_id,
                 "status": status,
@@ -227,17 +247,20 @@ class WorkflowExecutor:
             )
 
     async def _send_step_failure_notification(
-        self, workflow_id: str, step_id: str, error: str
+        self, workflow_id: str, step_id: str, error: str,
+        execution_context: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Fire a STEP_FAILED notification (#3101)."""
-        from services.notification_service import (
-            NotificationConfig,
-            NotificationEvent,
+        """Fire a STEP_FAILED notification (#3101, #3168)."""
+        from services.notification_service import NotificationEvent
+
+        config = self._resolve_notification_config(
+            workflow_id, execution_context or {}
         )
+        if config is None:
+            return
 
         try:
             svc = _get_notification_service()
-            config = NotificationConfig(workflow_id=workflow_id)
             payload = {
                 "workflow_id": workflow_id,
                 "step_name": step_id,
@@ -330,12 +353,13 @@ class WorkflowExecutor:
             step["result"] = step_result
             execution_context["step_results"][step_id] = step_result
 
-            # Issue #3101: notify on step failure.
+            # Issue #3101/#3168: notify on step failure.
             if not step_result.get("success"):
                 await self._send_step_failure_notification(
                     execution_context.get("workflow_id", ""),
                     step_id,
                     step_result.get("error", "unknown"),
+                    execution_context=execution_context,
                 )
 
             # Issue #2141: Record typed StepOutput so later steps can reference it.
