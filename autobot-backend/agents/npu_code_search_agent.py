@@ -995,6 +995,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1069,6 +1070,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1177,6 +1179,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return []
 
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:
@@ -1411,6 +1414,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     ) -> List[str]:
         """Get context lines around a specific line number"""
         try:
+            file_path = str(validate_path(file_path))
             async with aiofiles.open(
                 file_path, "r", encoding="utf-8", errors="ignore"
             ) as f:

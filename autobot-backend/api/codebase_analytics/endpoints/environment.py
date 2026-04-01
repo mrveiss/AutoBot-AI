@@ -467,8 +467,14 @@ async def get_env_recommendations(
             )
 
     # Run fresh analysis if no cache
+    project_root = _get_project_root()
     if not path:
-        path = str(Path(__file__).resolve().parents[4])
+        path = project_root
+
+    error_response = _validate_env_path_security(path, project_root)
+    if error_response:
+        return error_response
+
     return await _fetch_live_env_recommendations(path)
 
 
