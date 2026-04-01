@@ -12,6 +12,7 @@ Selects the appropriate model tier based on task complexity scoring.
 import logging
 from typing import Dict, List, Optional, Tuple
 
+from ..optimization.model_inspector import inspect_model
 from .complexity_scorer import TaskComplexityScorer
 from .tier_config import ComplexityResult, TierConfig, TierMetrics
 
@@ -169,6 +170,34 @@ class TieredModelRouter:
             True if fallback to complex tier should be attempted
         """
         return tier == "simple" and self.config.fallback_to_complex
+
+    def model_fits_in_vram(self, model_name: str, available_vram_gb: float) -> bool:
+        """
+        Return True when model architecture fits within available VRAM.
+
+        Uses ``inspect_model()`` at zero memory cost.  Returns True when model
+        info is unavailable (Ollama models, offline hub) so routing is not
+        blocked unnecessarily.
+
+        Args:
+            model_name: HuggingFace model ID or local path.
+            available_vram_gb: Free VRAM reported by the hardware detector.
+
+        Returns:
+            True if the model fits or inspection is unavailable.
+        """
+        info = inspect_model(model_name)
+        if info is None:
+            return True
+        fits = info.estimated_size_gb <= available_vram_gb
+        if not fits:
+            logger.warning(
+                "VRAM check: %s needs ~%.1f GB, %.1f GB available",
+                model_name,
+                info.estimated_size_gb,
+                available_vram_gb,
+            )
+        return fits
 
 
 # Module-level singleton for easy access
