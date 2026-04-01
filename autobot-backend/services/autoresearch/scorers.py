@@ -22,6 +22,9 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Validation pattern for Redis key components — alphanumeric, hyphens, underscores
+_KEY_COMPONENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
 
 @dataclass
 class ScorerResult:
@@ -81,6 +84,8 @@ class ValBpbScorer(PromptScorer):
         runner: ExperimentRunner,
         baseline_val_bpb: float,
     ) -> None:
+        if baseline_val_bpb <= 0:
+            raise ValueError(f"baseline_val_bpb must be positive, got {baseline_val_bpb}")
         self._runner = runner
         self._baseline = baseline_val_bpb
 
@@ -246,19 +251,36 @@ class HumanReviewScorer(PromptScorer):
     def name(self) -> str:
         return "human_review"
 
+    @staticmethod
+    def _validate_key_component(value: str, name: str) -> str:
+        """Validate a string is safe for use in Redis key patterns."""
+        if not _KEY_COMPONENT_PATTERN.match(value):
+            raise ValueError(
+                f"{name} must be alphanumeric/hyphens/underscores (1-64 chars), got {value!r}"
+            )
+        return value
+
     async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
-        session_id = context.get("session_id", "unknown")
-        variant_id = context.get("variant_id", "unknown")
+        session_id = self._validate_key_component(
+            context.get("session_id", "unknown"), "session_id"
+        )
+        variant_id = self._validate_key_component(
+            context.get("variant_id", "unknown"), "variant_id"
+        )
 
         redis = await self._get_redis()
 
-        # Store pending review
+        # Store pending review — only safe fields, not raw context
         pending_key = self._PENDING_KEY.format(
             session_id=session_id, variant_id=variant_id
         )
         await redis.set(
             pending_key,
-            json.dumps({"prompt_output": prompt_output[:5000], "context": context}),
+            json.dumps({
+                "prompt_output": prompt_output[:5000],
+                "session_id": session_id,
+                "variant_id": variant_id,
+            }),
             ex=self._TTL_SECONDS,
         )
 
