@@ -293,6 +293,44 @@
         </button>
       </div>
 
+      <!-- Configure Secrets / API Keys (#3079) -->
+      <div v-if="currentStep === 'configure_secrets'" class="step-panel">
+        <h2>API Keys &amp; Tokens</h2>
+        <p>
+          Some services require API keys or license acceptance to download gated models.
+          These are optional &mdash; you can skip this step and configure them later.
+        </p>
+
+        <div class="secrets-form">
+          <div class="secret-entry">
+            <h3>HuggingFace Token</h3>
+            <p class="secret-desc">
+              Required for TTS voice cloning (Pocket TTS uses a gated model).
+              <a href="https://huggingface.co/SWivid/F5-TTS" target="_blank" rel="noopener">Accept license</a>
+              then
+              <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">create a token</a>.
+            </p>
+            <input
+              v-model="secretValues.hf_token"
+              type="password"
+              placeholder="hf_..."
+              class="full-width"
+            />
+          </div>
+        </div>
+
+        <div v-if="secretsSaved" class="info-box success-box">
+          Secrets saved. They will be injected during provisioning.
+        </div>
+
+        <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
+          {{ savingSecrets ? 'Saving...' : 'Save API Keys' }}
+        </button>
+        <button class="btn-primary" @click="completeStep('configure_secrets')">
+          {{ Object.values(secretValues).some(v => v) ? 'Continue' : 'Skip' }}
+        </button>
+      </div>
+
       <!-- Provision Fleet -->
       <div v-if="currentStep === 'provision_fleet'" class="step-panel">
         <h2>Provision Fleet</h2>
@@ -406,6 +444,7 @@ const {
   testConnection,
   enrollNode,
   updateNodeRoles,
+  upsertSecret,
   getWizardStatus,
   completeWizardStep,
   skipWizardSetup,
@@ -434,6 +473,7 @@ const stepLabels: Record<string, string> = {
   test_connections: 'Test',
   enroll_agents: 'Enroll',
   assign_roles: 'Roles',
+  configure_secrets: 'API Keys',
   provision_fleet: 'Provision',
   verify_health: 'Verify',
   complete: 'Done',
@@ -516,6 +556,30 @@ function roleState(node: Node, roleName: string): RoleState {
   if (node.detected_roles.includes(roleName)) return 'running'
   if ((nodeRoles.value[node.node_id] || []).includes(roleName)) return 'assigned'
   return 'available'
+}
+
+// ── Secrets / API keys (#3079) ────────────────────────────────────────────
+
+const secretValues = ref<Record<string, string>>({ hf_token: '' })
+const savingSecrets = ref(false)
+const secretsSaved = ref(false)
+
+async function saveSecrets() {
+  savingSecrets.value = true
+  secretsSaved.value = false
+  try {
+    for (const [key, value] of Object.entries(secretValues.value)) {
+      if (value.trim()) {
+        await upsertSecret(key, value.trim(), 'api_key', 'Set via setup wizard')
+      }
+    }
+    secretsSaved.value = true
+  } catch (err) {
+    logger.error('Failed to save secrets:', err)
+    alert('Failed to save API keys. Check the console for details.')
+  } finally {
+    savingSecrets.value = false
+  }
 }
 
 // ── Provisioning ──────────────────────────────────────────────────────────
@@ -1491,5 +1555,38 @@ input.full-width {
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
+}
+
+/* Secrets / API Keys (#3079) */
+.secrets-form {
+  margin-bottom: 1.5rem;
+}
+
+.secret-entry {
+  background: var(--bg-tertiary, #252525);
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.secret-entry h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.secret-desc {
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.secret-desc a {
+  color: var(--color-accent, #4fc3f7);
+}
+
+.success-box {
+  border-color: var(--color-success, #4caf50);
+  color: var(--color-success, #4caf50);
 }
 </style>

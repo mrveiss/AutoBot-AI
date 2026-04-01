@@ -1562,6 +1562,30 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Secrets (Issue #3079)
+
+  async function listSecrets(): Promise<{ key: string; category: string; description: string }[]> {
+    const response = await client.get<{ key: string; category: string; description: string }[]>('/secrets')
+    return response.data
+  }
+
+  async function upsertSecret(key: string, value: string, category: string = 'api_key', description: string = ''): Promise<void> {
+    try {
+      await client.post('/secrets', { key, value, category, description })
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 409) {
+        await client.put(`/secrets/${key}`, { value, description })
+      } else {
+        throw err
+      }
+    }
+  }
+
+  async function deleteSecret(key: string): Promise<void> {
+    await client.delete(`/secrets/${key}`)
+  }
+
   // Setup Wizard (Issue #1294)
   interface WizardStatusResponse {
     completed: boolean
@@ -1771,6 +1795,10 @@ export function useSlmApi() {
     getFleetCerts,
     // Node Reboot (Issue #813)
     rebootNode,
+    // Secrets (Issue #3079)
+    listSecrets,
+    upsertSecret,
+    deleteSecret,
     // Setup Wizard (Issue #1294)
     getWizardStatus,
     completeWizardStep,
