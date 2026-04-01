@@ -56,7 +56,20 @@ from .types import AgentInteraction, AgentProfile
 from .variable_resolver import StepOutput, VariableResolver
 from .workflow_memory import WorkflowMemory
 
+# Issue #3101: lazy import to avoid circular deps at module level
+_notification_service = None
+
 logger = logging.getLogger(__name__)
+
+
+def _get_notification_service():
+    """Lazy-load NotificationService singleton (#3101)."""
+    global _notification_service  # noqa: PLW0603
+    if _notification_service is None:
+        from services.notification_service import NotificationService
+
+        _notification_service = NotificationService()
+    return _notification_service
 
 
 class WorkflowExecutor:
@@ -179,6 +192,68 @@ class WorkflowExecutor:
             execution_context["agents_involved"]
         )
 
+    async def _send_workflow_notification(
+        self, workflow_id: str, execution_context: Dict[str, Any]
+    ) -> None:
+        """Fire a notification for a terminal workflow status (#3101)."""
+        from services.notification_service import (
+            NotificationConfig,
+            NotificationEvent,
+        )
+
+        status = execution_context.get("status", "")
+        event_map = {
+            "completed": NotificationEvent.WORKFLOW_COMPLETED,
+            "failed": NotificationEvent.WORKFLOW_FAILED,
+        }
+        event = event_map.get(status)
+        if event is None:
+            return
+        try:
+            svc = _get_notification_service()
+            config = NotificationConfig(workflow_id=workflow_id)
+            payload = {
+                "workflow_id": workflow_id,
+                "status": status,
+                "error": execution_context.get("error", ""),
+            }
+            await svc.send(event, workflow_id, payload, config)
+        except Exception:
+            logger.warning(
+                "Failed to send %s notification for workflow %s",
+                status,
+                workflow_id,
+                exc_info=True,
+            )
+
+    async def _send_step_failure_notification(
+        self, workflow_id: str, step_id: str, error: str
+    ) -> None:
+        """Fire a STEP_FAILED notification (#3101)."""
+        from services.notification_service import (
+            NotificationConfig,
+            NotificationEvent,
+        )
+
+        try:
+            svc = _get_notification_service()
+            config = NotificationConfig(workflow_id=workflow_id)
+            payload = {
+                "workflow_id": workflow_id,
+                "step_name": step_id,
+                "error": error,
+            }
+            await svc.send(
+                NotificationEvent.STEP_FAILED, workflow_id, payload, config
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send step-failure notification for %s/%s",
+                workflow_id,
+                step_id,
+                exc_info=True,
+            )
+
     def _resolve_step_variables(
         self, step: Dict[str, Any], step_outputs: Dict[str, StepOutput]
     ) -> None:
@@ -254,6 +329,14 @@ class WorkflowExecutor:
             step["execution_time"] = elapsed
             step["result"] = step_result
             execution_context["step_results"][step_id] = step_result
+
+            # Issue #3101: notify on step failure.
+            if not step_result.get("success"):
+                await self._send_step_failure_notification(
+                    execution_context.get("workflow_id", ""),
+                    step_id,
+                    step_result.get("error", "unknown"),
+                )
 
             # Issue #2141: Record typed StepOutput so later steps can reference it.
             if "step_outputs" in execution_context:
@@ -603,12 +686,21 @@ class WorkflowExecutor:
                 self._checkpoint_manager.clear(workflow_id)
                 shared_memory.clear()
 
+            # Issue #3101: fire notification on terminal status.
+            await self._send_workflow_notification(
+                workflow_id, execution_context
+            )
+
             return execution_context
 
         except Exception as e:
             logger.error("Workflow %s execution failed: %s", workflow_id, e)
             execution_context["status"] = "failed"
             execution_context["error"] = str(e)
+            # Issue #3101: fire failure notification.
+            await self._send_workflow_notification(
+                workflow_id, execution_context
+            )
             return execution_context
 
     def _apply_checkpoints(
