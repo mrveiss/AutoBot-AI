@@ -538,6 +538,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #3201: AutoResearch Experiment Dashboard
+  {
+    path: '/experiments',
+    name: 'experiments',
+    component: () => import('@/views/ExperimentDashboard.vue'),
+    meta: {
+      title: 'Experiments',
+      icon: 'BeakerIcon',
+      description: 'AutoResearch experiment dashboard',
+      requiresAuth: true,
+    },
+  },
 
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
