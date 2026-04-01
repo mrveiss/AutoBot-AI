@@ -68,11 +68,11 @@ def _import_accelerate() -> Any:
 def clean_memory() -> None:
     """Release GPU and CPU memory held by deallocated tensors.
 
-    Calls ``torch.cuda.empty_cache()`` (when CUDA is available) then
-    ``gc.collect()`` to reclaim Python-managed objects.  Safe to call when
-    CUDA is absent — the cache flush step is skipped silently.
+    Calls ``torch.cuda.empty_cache()`` (when CUDA is available),
+    ``gc.collect()`` to reclaim Python-managed objects, and
+    ``malloc_trim(0)`` on Linux to return freed heap pages to the OS.
 
-    Issue #1952.
+    Issue #1952, #3165.
     """
     try:
         torch = _import_torch()
@@ -84,6 +84,15 @@ def clean_memory() -> None:
 
     collected = gc.collect()
     logger.debug("gc.collect() reclaimed %d objects", collected)
+
+    # Issue #3165: return freed heap memory to the OS (Linux only).
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+        logger.debug("malloc_trim(0) completed")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def get_gpu_memory_allocated() -> int:
