@@ -207,12 +207,12 @@
     - backend_deploy_from_git | default(true)
     - not _backend_code_present.stat.exists
 
-- name: Check if valid venv exists
+- name: Check if venv directory itself is a symlink (legacy layout)
   ansible.builtin.stat:
-    path: "{{ backend_code_dir }}/venv/bin/python"
+    path: "{{ backend_code_dir }}/venv"
   register: venv_check
 
-- name: Remove old/broken venv if it's a symlink
+- name: Remove old/broken venv if the directory is a symlink
   ansible.builtin.file:
     path: "{{ backend_code_dir }}/venv"
     state: absent
