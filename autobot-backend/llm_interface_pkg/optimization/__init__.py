@@ -70,6 +70,7 @@ from .meta_eviction import (
     evict_layer_to_meta,
     get_gpu_memory_allocated,
 )
+from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor
 from .rate_limiter import RateLimitConfig, RateLimitError, RateLimitHandler
@@ -161,4 +162,8 @@ __all__ = [
     "LayerInferenceConfig",
     "LayerInferenceEngine",
     "LayerInferenceStats",
+    # End-to-end pipeline (Issue #3140)
+    "LayerInferencePipeline",
+    "PipelineConfig",
+    "PreparedPipeline",
 ]
