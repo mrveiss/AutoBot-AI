@@ -16,7 +16,7 @@ transformers>=5.4.0
 huggingface-hub>=1.8.0
 
 # Tensor Operations (NPU optimized)
-numpy>=2.4.3
+numpy>=2.4.3,<3.0.0
 
 # HTTP and API
 aiohttp>=3.13.3
