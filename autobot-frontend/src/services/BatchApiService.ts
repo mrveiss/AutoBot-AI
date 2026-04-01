@@ -6,28 +6,44 @@
 import apiClient from '@/utils/ApiClient';
 import type { ApiClient } from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
+import { extractErrorMessage } from '@/utils/errorExtract';
 
 // Create scoped logger for BatchApiService
 const logger = createLogger('BatchApiService');
 
 // Type definitions
+interface ChatMessage {
+  id: string;
+  content: string;
+  sender: string;
+  timestamp: string;
+}
+
 interface ChatInitData {
-  messages: any[];
-  session_info: any;
-  user_preferences: any;
+  messages: ChatMessage[];
+  session_info: Record<string, unknown>;
+  user_preferences: Record<string, unknown>;
 }
 
 interface FallbackResults {
-  chat_sessions: any;
-  system_health: any;
-  settings: any;
+  chat_sessions: Record<string, unknown> | Record<string, unknown>[];
+  system_health: Record<string, unknown>;
+  settings: Record<string, unknown>;
 }
 
 interface BatchRequest {
   endpoint: string;
   method: string;
-  data?: any;
+  data?: unknown;
   priority?: number;
+}
+
+interface BatchResult {
+  endpoint: string;
+  method: string;
+  success: boolean;
+  data?: unknown;
+  error?: string;
 }
 
 export class BatchApiService {
@@ -40,47 +56,34 @@ export class BatchApiService {
     this.apiClient = client || apiClient;
   }
 
-  /**
-   * Load chat interface data using individual API calls.
-   * Note: Batch endpoint doesn't exist, so we use parallel individual calls instead.
-   */
-  async initializeChatInterface(): Promise<any> {
-    // Debug level - this is expected behavior, not a warning condition
+  async initializeChatInterface(): Promise<FallbackResults> {
     logger.debug('Using individual API calls for chat initialization');
     return await this.fallbackChatInitialization();
   }
 
-  /**
-   * Load chat initialization data for a specific session using individual calls.
-   * Note: Batch endpoint doesn't exist, so we use parallel individual calls instead.
-   */
   async loadChatInitData(sessionId: string): Promise<ChatInitData> {
     logger.debug('Loading chat init data for session:', sessionId);
 
     try {
-      // Get session messages
       const messages = await this.apiClient.getChatMessages(sessionId);
 
-      // Get basic session info (this would need to be implemented if needed)
       const session_info = { id: sessionId };
 
-      // Get user preferences from settings
-      let user_preferences = {};
+      let user_preferences: Record<string, unknown> = {};
       try {
         const settings = await this.apiClient.getSettings();
-        user_preferences = settings.user_preferences || {};
+        user_preferences = (settings as Record<string, unknown>).user_preferences as Record<string, unknown> || {};
       } catch (error) {
         logger.warn('Could not load user preferences:', error);
       }
 
       return {
-        messages: messages.messages || [],
+        messages: (messages as Record<string, unknown>).messages as ChatMessage[] || [],
         session_info,
         user_preferences
       };
     } catch (error) {
       logger.error('Failed to load chat init data:', error);
-      // Return default structure
       return {
         messages: [],
         session_info: { id: sessionId },
@@ -89,28 +92,16 @@ export class BatchApiService {
     }
   }
 
-  /**
-   * Extract sessions array from API response, handling multiple response formats.
-   * Backend returns {success, data: {sessions: [...]}} but ChatInterface expects a flat array.
-   */
-  private extractSessionsList(response: any): any[] {
+  private extractSessionsList(response: unknown): unknown[] {
     if (Array.isArray(response)) return response;
-    return response?.data?.sessions
-      || response?.data
-      || response?.sessions
-      || [];
+    const r = response as Record<string, unknown> | null;
+    const data = r?.data as Record<string, unknown> | undefined;
+    return (data?.sessions || data || (r as Record<string, unknown>)?.sessions || []) as unknown[];
   }
 
-  /**
-   * Fallback chat initialization using PARALLEL API calls with graceful error handling
-   * Issue #671: Changed from sequential to parallel calls to reduce load time
-   */
   async fallbackChatInitialization(): Promise<FallbackResults> {
     logger.info('Using parallel chat initialization with individual API calls');
 
-    // Issue #671: Run all API calls in parallel using Promise.allSettled
-    // This reduces worst-case load time from 4x timeout to 1x timeout
-    // Note: service health monitoring is handled by SLM, not the backend
     const [
       chatSessionsResult,
       systemHealthResult,
@@ -121,22 +112,20 @@ export class BatchApiService {
       this.apiClient.getSettings()
     ]);
 
-    // Process results with graceful error handling
     const results: FallbackResults = {
       chat_sessions: chatSessionsResult.status === 'fulfilled'
         ? this.extractSessionsList(chatSessionsResult.value)
         : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load', sessions: [] },
 
       system_health: systemHealthResult.status === 'fulfilled'
-        ? systemHealthResult.value
+        ? systemHealthResult.value as Record<string, unknown>
         : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', status: 'unknown' },
 
       settings: settingsResult.status === 'fulfilled'
-        ? settingsResult.value
+        ? settingsResult.value as Record<string, unknown>
         : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
     };
 
-    // Log any failures
     if (chatSessionsResult.status === 'rejected') {
       logger.warn('Failed to load chat sessions:', (chatSessionsResult as PromiseRejectedResult).reason?.message);
     }
@@ -151,19 +140,14 @@ export class BatchApiService {
     return results;
   }
 
-  /**
-   * Batch multiple API requests using Promise.allSettled
-   * This replaces the non-existent batch endpoints with parallel individual calls
-   */
-  async batchRequests(requests: BatchRequest[]): Promise<any[]> {
+  async batchRequests(requests: BatchRequest[]): Promise<BatchResult[]> {
     logger.info(`Processing ${requests.length} requests in parallel`);
 
-    const promises = requests.map(async (request) => {
-      // Issue #156 Fix: Move destructuring outside try block so catch block can access variables
+    const promises = requests.map(async (request): Promise<BatchResult> => {
       const { endpoint, method, data } = request;
 
       try {
-        let response;
+        let response: unknown;
 
         switch (method.toUpperCase()) {
           case 'GET':
@@ -188,13 +172,13 @@ export class BatchApiService {
           success: true,
           data: response
         };
-      } catch (error: any) {
-        logger.warn(`Failed request ${method} ${endpoint}:`, error.message);
+      } catch (error: unknown) {
+        logger.warn(`Failed request ${method} ${endpoint}:`, extractErrorMessage(error, 'Unknown error'));
         return {
           endpoint,
           method,
           success: false,
-          error: error.message
+          error: extractErrorMessage(error, 'Unknown error')
         };
       }
     });
@@ -215,20 +199,13 @@ export class BatchApiService {
     });
   }
 
-  /**
-   * Add request to queue for batch processing
-   */
-  queueRequest(endpoint: string, method: string, data?: any, priority: number = 0): void {
+  queueRequest(endpoint: string, method: string, data?: unknown, priority: number = 0): void {
     this.requestQueue.push({ endpoint, method, data, priority });
 
-    // Sort by priority (higher priority first)
     this.requestQueue.sort((a, b) => (b.priority || 0) - (a.priority || 0));
   }
 
-  /**
-   * Process queued requests in batch
-   */
-  async processQueue(): Promise<any[]> {
+  async processQueue(): Promise<BatchResult[]> {
     if (this.processing || this.requestQueue.length === 0) {
       return [];
     }
@@ -245,16 +222,10 @@ export class BatchApiService {
     }
   }
 
-  /**
-   * Clear the request queue
-   */
   clearQueue(): void {
     this.requestQueue = [];
   }
 
-  /**
-   * Get queue status
-   */
   getQueueStatus(): { length: number; processing: boolean } {
     return {
       length: this.requestQueue.length,
@@ -262,10 +233,7 @@ export class BatchApiService {
     };
   }
 
-  /**
-   * Optimized method to load essential chat data with graceful degradation
-   */
-  async loadEssentialChatData(): Promise<any> {
+  async loadEssentialChatData(): Promise<Record<string, unknown>> {
     const essentialRequests: BatchRequest[] = [
       { endpoint: '/api/chats', method: 'GET', priority: 3 },
       { endpoint: '/api/chat/health', method: 'GET', priority: 2 },
@@ -281,12 +249,8 @@ export class BatchApiService {
     };
   }
 
-  /**
-   * Load chat interface with health checks and graceful degradation
-   */
-  async loadChatWithHealthChecks(): Promise<any> {
+  async loadChatWithHealthChecks(): Promise<Record<string, unknown>> {
     try {
-      // First, check if the system is healthy
       const healthCheck = await this.apiClient.checkHealth();
 
       const isHealthy = healthCheck === true;
@@ -300,7 +264,6 @@ export class BatchApiService {
         };
       }
 
-      // If healthy, load full chat data
       return await this.loadEssentialChatData();
     } catch (error) {
       logger.error('Failed to load chat with health checks:', error);

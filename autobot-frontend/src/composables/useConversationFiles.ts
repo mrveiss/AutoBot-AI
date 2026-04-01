@@ -8,6 +8,7 @@
 import { ref, computed } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { extractApiErrorMessage } from '@/utils/errorExtract'
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
@@ -38,6 +39,11 @@ export interface FileStats {
   total_size_bytes: number
   uploads_count: number
   generated_count: number
+}
+
+export interface UploadProgressEvent {
+  loaded: number
+  total?: number
 }
 
 /**
@@ -91,9 +97,6 @@ export function useConversationFiles(sessionId: string) {
 
   const API = `/api/conversation-files/conversation/${sessionId}`
 
-  /**
-   * Load all files for the current conversation
-   */
   const loadFiles = async (): Promise<void> => {
     if (!sessionId) {
       error.value = 'No session ID provided'
@@ -117,19 +120,14 @@ export function useConversationFiles(sessionId: string) {
           generated_count: 0
         }
       }
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Failed to load files'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Failed to load files')
       logger.error('Load error:', err)
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Upload files to conversation
-   *
-   * @param fileList - Files to upload
-   */
   const uploadFiles = async (fileList: FileList | File[]): Promise<boolean> => {
     if (!sessionId) {
       error.value = 'No session ID provided'
@@ -160,7 +158,7 @@ export function useConversationFiles(sessionId: string) {
           headers: {
             'Content-Type': 'multipart/form-data'
           },
-          onUploadProgress: (progressEvent: any) => {
+          onUploadProgress: (progressEvent: UploadProgressEvent) => {
             if (progressEvent.total) {
               uploadProgress.value = Math.round((progressEvent.loaded * 100) / progressEvent.total)
             }
@@ -181,8 +179,8 @@ export function useConversationFiles(sessionId: string) {
       error.value = 'Upload failed'
       return false
 
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Upload failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Upload failed')
       logger.error('Upload error:', err)
       return false
     } finally {
@@ -194,11 +192,6 @@ export function useConversationFiles(sessionId: string) {
     }
   }
 
-  /**
-   * Delete a file from conversation
-   *
-   * @param fileId - File ID to delete
-   */
   const deleteFile = async (fileId: string): Promise<boolean> => {
     if (!sessionId || !fileId) {
       error.value = 'Missing session ID or file ID'
@@ -219,8 +212,8 @@ export function useConversationFiles(sessionId: string) {
 
       return true
 
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Failed to delete file'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Failed to delete file')
       logger.error('Delete error:', err)
       return false
     } finally {
@@ -228,12 +221,6 @@ export function useConversationFiles(sessionId: string) {
     }
   }
 
-  /**
-   * Download a file from conversation
-   *
-   * @param fileId - File ID to download
-   * @param filename - Optional filename for download
-   */
   const downloadFile = async (fileId: string, filename?: string): Promise<void> => {
     if (!sessionId || !fileId) {
       error.value = 'Missing session ID or file ID'
@@ -265,17 +252,12 @@ export function useConversationFiles(sessionId: string) {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Download failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Download failed')
       logger.error('Download error:', err)
     }
   }
 
-  /**
-   * Preview a file (opens in new tab or shows preview modal)
-   *
-   * @param fileId - File ID to preview
-   */
   const previewFile = async (fileId: string): Promise<void> => {
     if (!sessionId || !fileId) {
       error.value = 'Missing session ID or file ID'
@@ -299,15 +281,12 @@ export function useConversationFiles(sessionId: string) {
         await downloadFile(fileId, file.filename)
       }
 
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Preview failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Preview failed')
       logger.error('Preview error:', err)
     }
   }
 
-  /**
-   * Check if a MIME type is previewable in browser
-   */
   const isPreviewable = (mimeType: string): boolean => {
     const previewableTypes = [
       'image/',
@@ -321,9 +300,6 @@ export function useConversationFiles(sessionId: string) {
     return previewableTypes.some(type => mimeType.startsWith(type))
   }
 
-  /**
-   * Get Font Awesome icon class for file MIME type
-   */
   const getFileIcon = (mimeType: string): string => {
     if (mimeType.startsWith('image/')) return 'fas fa-image'
     if (mimeType.startsWith('video/')) return 'fas fa-video'
@@ -338,9 +314,6 @@ export function useConversationFiles(sessionId: string) {
     return 'fas fa-file'
   }
 
-  /**
-   * Format file size in human-readable format
-   */
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes'
 
@@ -363,8 +336,8 @@ export function useConversationFiles(sessionId: string) {
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Failed to create file'
       return false
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Failed to create file'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Failed to create file')
       logger.error('Create file error:', err)
       return false
     } finally { loading.value = false }
@@ -383,8 +356,8 @@ export function useConversationFiles(sessionId: string) {
       }
       error.value = 'Rename failed'
       return false
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Rename failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Rename failed')
       logger.error('Rename error:', err)
       return false
     }
@@ -396,8 +369,8 @@ export function useConversationFiles(sessionId: string) {
       const response = await api.get(`${API}/files/${fileId}/content`)
       const data = await response.json()
       return data?.content ?? null
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Failed to read file'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Failed to read file')
       logger.error('Get content error:', err)
       return null
     }
@@ -412,8 +385,8 @@ export function useConversationFiles(sessionId: string) {
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Save failed'
       return false
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Save failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Save failed')
       logger.error('Update content error:', err)
       return false
     }
@@ -429,8 +402,8 @@ export function useConversationFiles(sessionId: string) {
       if (data?.success) { await loadFiles(); return true }
       error.value = 'Copy failed'
       return false
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || err.message || 'Copy failed'
+    } catch (err: unknown) {
+      error.value = extractApiErrorMessage(err, 'Copy failed')
       logger.error('Copy error:', err)
       return false
     } finally { loading.value = false }

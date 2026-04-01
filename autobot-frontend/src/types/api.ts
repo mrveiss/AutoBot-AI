@@ -1,5 +1,5 @@
 // API Types - TypeScript definitions for backend API integration
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
@@ -63,7 +63,7 @@ export interface ChatMessage {
     model?: string;
     tokens?: number;
     duration?: number;
-    [key: string]: any;
+    [key: string]: string | number | boolean | undefined;
   };
 }
 
@@ -99,7 +99,7 @@ export interface FileUploadResponse {
 // WebSocket Types
 export interface WebSocketMessage {
   type: string;
-  payload?: any;
+  payload?: Record<string, unknown>;
   timestamp?: string;
 }
 
@@ -108,7 +108,7 @@ export interface LLMResponse {
   sender?: string;
   content?: string;
   message_type?: string;
-  sources?: any[];
+  sources?: Record<string, unknown>[];
 }
 
 // System Health Types
@@ -138,7 +138,7 @@ export interface ServiceStatus {
   consecutiveFailures?: number;
   error?: string;
   timestamp?: number | string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface SystemAlert {
@@ -164,7 +164,7 @@ export interface WorkflowStep {
   id: string;
   description: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: any;
+  result?: Record<string, unknown>;
 }
 
 export interface Workflow {
@@ -194,7 +194,7 @@ export interface TestResult {
 export interface TestStep {
   description: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: any;
+  result?: Record<string, unknown>;
 }
 
 // Knowledge Base Types
@@ -259,7 +259,7 @@ export interface ApiError {
   message: string;
   code?: string;
   status?: number;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 // Environment Configuration
