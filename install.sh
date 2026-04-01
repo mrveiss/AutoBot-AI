@@ -468,7 +468,8 @@ SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}
 EOF
-        chmod 600 "${SECRETS_FILE}"
+        chown root:autobot "${SECRETS_FILE}"
+        chmod 640 "${SECRETS_FILE}"
         success "  Secrets written to ${SECRETS_FILE}"
     else
         ADMIN_PASSWORD=$(grep -oP 'SLM_ADMIN_PASSWORD=\K.*' "${SECRETS_FILE}" 2>/dev/null || echo "${ADMIN_PASSWORD}")
