@@ -55,7 +55,15 @@ interface MetricSummary {
 
 const systemHealth = ref<SystemHealth | null>(null)
 const errorStats = ref<ErrorStats | null>(null)
-const recentErrors = ref<any[]>([])
+interface MonitoringError {
+  id: string
+  level: string
+  component: string
+  message: string
+  timestamp: string
+}
+
+const recentErrors = ref<MonitoringError[]>([])
 const metrics = ref<MetricSummary[]>([])
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null

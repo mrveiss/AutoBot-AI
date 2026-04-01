@@ -172,7 +172,7 @@ async function fetchSettings(): Promise<void> {
       const data: Setting[] = await settingsRes.json()
       data.forEach((s) => {
         if (s.value !== null && s.key in settings.value) {
-          (settings.value as Record<string, any>)[s.key] = s.value
+          (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
         }
       })
     }

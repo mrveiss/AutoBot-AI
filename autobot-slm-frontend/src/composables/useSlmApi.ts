@@ -1489,26 +1489,26 @@ export function useSlmApi() {
   }
 
   // Security (Issue #813)
-  async function getSecurityOverview(): Promise<any> {
+  async function getSecurityOverview(): Promise<unknown> {
     const response = await client.get('/security/overview')
     return response.data
   }
 
-  async function getAuditLogs(page: number = 1, perPage: number = 50, category?: string): Promise<any> {
+  async function getAuditLogs(page: number = 1, perPage: number = 50, category?: string): Promise<unknown> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     if (category) params.append('category', category)
     const response = await client.get(`/security/audit-logs?${params}`)
     return response.data
   }
 
-  async function getSecurityEvents(page: number = 1, perPage: number = 50, severity?: string): Promise<any> {
+  async function getSecurityEvents(page: number = 1, perPage: number = 50, severity?: string): Promise<unknown> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     if (severity) params.append('severity', severity)
     const response = await client.get(`/security/events?${params}`)
     return response.data
   }
 
-  async function getThreatSummary(hours: number = 24): Promise<any> {
+  async function getThreatSummary(hours: number = 24): Promise<unknown> {
     const response = await client.get(`/security/events/summary?hours=${hours}`)
     return response.data
   }
@@ -1516,7 +1516,7 @@ export function useSlmApi() {
   async function acknowledgeSecurityEvent(
     eventId: string,
     data?: { acknowledged_by?: string; notes?: string }
-  ): Promise<any> {
+  ): Promise<unknown> {
     const response = await client.post(`/security/events/${eventId}/acknowledge`, data || {})
     return response.data
   }
@@ -1524,31 +1524,39 @@ export function useSlmApi() {
   async function resolveSecurityEvent(
     eventId: string,
     data: { resolved_by?: string; resolution_notes: string }
-  ): Promise<any> {
+  ): Promise<unknown> {
     const response = await client.post(`/security/events/${eventId}/resolve`, data)
     return response.data
   }
 
-  async function getSecurityPolicies(page: number = 1, perPage: number = 50): Promise<any> {
+  async function getSecurityPolicies(page: number = 1, perPage: number = 50): Promise<unknown> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     const response = await client.get(`/security/policies?${params}`)
     return response.data
   }
 
-  async function activateSecurityPolicy(policyId: string): Promise<any> {
+  async function activateSecurityPolicy(policyId: string): Promise<unknown> {
     const response = await client.post(`/security/policies/${policyId}/activate`)
     return response.data
   }
 
-  async function deactivateSecurityPolicy(policyId: string): Promise<any> {
+  async function deactivateSecurityPolicy(policyId: string): Promise<unknown> {
     const response = await client.post(`/security/policies/${policyId}/deactivate`)
     return response.data
   }
 
   // Fleet cert expiry (Issue #926 Phase 7)
-  async function getFleetCerts(nodeId?: string): Promise<any[]> {
+  interface FleetCert {
+    node_id: string
+    hostname: string
+    certificate: string
+    expiry: string
+    status: string
+  }
+
+  async function getFleetCerts(nodeId?: string): Promise<FleetCert[]> {
     const params = nodeId ? `?node_id=${nodeId}` : ''
-    const response = await client.get<any[]>(`/security/certificates${params}`)
+    const response = await client.get<FleetCert[]>(`/security/certificates${params}`)
     return response.data
   }
 

@@ -13,14 +13,13 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import type { ActiveProvider } from '@/composables/useSsoApi'
+import type { ActiveProvider, useSsoApi } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 // Issue #1016: SSO module lazy-loaded only when providers exist
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let ssoApi: Record<string, any> | null = null
+let ssoApi: ReturnType<typeof useSsoApi> | null = null
 
 const username = ref('')
 const password = ref('')

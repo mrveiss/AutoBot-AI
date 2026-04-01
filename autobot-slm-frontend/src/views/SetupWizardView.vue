@@ -431,6 +431,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type { NodeRole } from '@/types/slm'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -792,7 +793,7 @@ async function saveRoles() {
   try {
     for (const node of nodes.value) {
       const roles = nodeRoles.value[node.node_id] || []
-      await updateNodeRoles(node.node_id, roles as any)
+      await updateNodeRoles(node.node_id, roles as NodeRole[])
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)

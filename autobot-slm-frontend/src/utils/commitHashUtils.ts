@@ -87,10 +87,7 @@ export function isFullHash(hash: string | null | undefined): boolean {
  */
 export function getCommitUrl(hash: string | null | undefined): string | null {
   if (!hash || hash.trim() === '') return null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const envBase = (import.meta as Record<string, any>).env?.VITE_GITHUB_REPO_URL as
-    | string
-    | undefined
+  const envBase = import.meta.env?.VITE_GITHUB_REPO_URL as string | undefined
   const base = envBase || 'https://github.com/mrveiss/AutoBot-AI'
   return `${base.replace(/\/$/, '')}/commit/${hash.trim()}`
 }

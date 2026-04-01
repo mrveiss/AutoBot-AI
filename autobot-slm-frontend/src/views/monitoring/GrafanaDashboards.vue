@@ -157,7 +157,7 @@ function openInGrafana() {
       <div :class="[isFullscreen ? 'flex-1' : 'flex-1 min-h-[600px]']">
         <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden h-full">
           <GrafanaDashboard
-            :dashboard="(selectedDashboard as any)"
+            :dashboard="(selectedDashboard as 'overview' | 'system' | 'performance' | 'nodes' | 'redis' | 'api-health')"
             :height="isFullscreen ? 'calc(100vh - 150px)' : 600"
             :showControls="true"
           />

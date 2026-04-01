@@ -46,7 +46,7 @@ async function fetchSettings(): Promise<void> {
           if (typeof notifications.value[key] === 'boolean') {
             (notifications.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
           } else {
-            (notifications.value as Record<string, any>)[key] = s.value
+            (notifications.value as Record<string, string | number | boolean>)[key] = s.value
           }
         }
       })

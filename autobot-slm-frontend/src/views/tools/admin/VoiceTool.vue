@@ -42,9 +42,40 @@ const settings = ref<VoiceSettings>({
 const availableVoices = ref<string[]>(['default'])
 const conversationHistory = ref<{ role: 'user' | 'assistant'; text: string; timestamp: Date }[]>([])
 
-// Speech Recognition (using any to avoid missing lib types for SpeechRecognition)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let recognition: any = null
+// Speech Recognition browser API types
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly [index: number]: { readonly transcript: string }
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  readonly [index: number]: SpeechRecognitionResult
+}
+
+interface SpeechRecognitionEvent {
+  readonly resultIndex: number
+  readonly results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent {
+  readonly error: string
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onend: (() => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
+let recognition: SpeechRecognitionInstance | null = null
 
 function initSpeechRecognition(): void {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -52,8 +83,9 @@ function initSpeechRecognition(): void {
     return
   }
 
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  recognition = new SpeechRecognition()
+  const SpeechRecognitionCtor = (window as unknown as Record<string, new () => SpeechRecognitionInstance>).SpeechRecognition
+    || (window as unknown as Record<string, new () => SpeechRecognitionInstance>).webkitSpeechRecognition
+  recognition = new SpeechRecognitionCtor()
 
   recognition.continuous = false
   recognition.interimResults = true
@@ -65,8 +97,7 @@ function initSpeechRecognition(): void {
     error.value = null
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onresult = (event: any) => {
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
     let interimTranscript = ''
     let finalTranscript = ''
 
@@ -89,8 +120,7 @@ function initSpeechRecognition(): void {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onerror = (event: any) => {
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     isListening.value = false
     error.value = `Speech recognition error: ${event.error}`
   }

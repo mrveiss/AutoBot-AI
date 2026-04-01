@@ -169,7 +169,7 @@ async function runHealthCheck(): Promise<void> {
       `Memory: ${data.memory_percent?.toFixed(1) || 'N/A'}%\n` +
       `Disk: ${data.disk_percent?.toFixed(1) || 'N/A'}%\n` +
       `Last Heartbeat: ${data.last_heartbeat || 'N/A'}\n\n` +
-      `Services:\n${(data.services || []).map((s: any) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
+      `Services:\n${(data.services || []).map((s: { name: string; status: string }) => `  - ${s.name}: ${s.status}`).join('\n') || '  No services found'}`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Health check failed'
   } finally {
