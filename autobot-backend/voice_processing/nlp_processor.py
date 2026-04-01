@@ -279,7 +279,7 @@ class NaturalLanguageProcessor:
                     transcription, context, task_context
                 )
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Voice command analysis failed"})
                 logger.error("Voice command analysis failed: %s", e)
                 raise
 

@@ -431,7 +431,7 @@ class SecurityRiskJudge(BaseLLMJudge):
         except Exception as e:
             logger.error("Error evaluating network operation security: %s", e)
             return {
-                "error": str(e),
+                "error": "Security evaluation failed",
                 "recommendation": "REJECT",
                 "network_risks": ["Evaluation error - assume high risk"],
             }

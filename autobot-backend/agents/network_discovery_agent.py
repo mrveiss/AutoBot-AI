@@ -73,7 +73,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Network discovery failed: %s", e)
-            return {"status": "error", "message": f"Network discovery failed: {str(e)}"}
+            return {"status": "error", "message": "Network discovery failed"}
 
     async def _network_scan(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Scan network for active hosts"""
@@ -110,7 +110,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Network scan failed: %s", e)
-            return {"status": "error", "message": f"Network scan failed: {str(e)}"}
+            return {"status": "error", "message": "Network scan failed"}
 
     async def _host_discovery(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Discover hosts using multiple methods"""
@@ -158,7 +158,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Host discovery failed: %s", e)
-            return {"status": "error", "message": f"Host discovery failed: {str(e)}"}
+            return {"status": "error", "message": "Host discovery failed"}
 
     async def _arp_scan(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform ARP scan on local network"""
@@ -192,7 +192,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("ARP scan failed: %s", e)
-            return {"status": "error", "message": f"ARP scan failed: {str(e)}"}
+            return {"status": "error", "message": "ARP scan failed"}
 
     async def _traceroute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Perform traceroute to target"""
@@ -229,7 +229,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Traceroute failed: %s", e)
-            return {"status": "error", "message": f"Traceroute failed: {str(e)}"}
+            return {"status": "error", "message": "Traceroute failed"}
 
     async def _create_network_map(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Create a network map"""
@@ -283,7 +283,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Network mapping failed: %s", e)
-            return {"status": "error", "message": f"Network mapping failed: {str(e)}"}
+            return {"status": "error", "message": "Network mapping failed"}
 
     def _resolve_hostname(self, ip: str) -> str | None:
         """Resolve IP to hostname (Issue #334 - extracted helper)."""
@@ -370,7 +370,7 @@ class NetworkDiscoveryAgent:
 
         except Exception as e:
             logger.error("Asset inventory failed: %s", e)
-            return {"status": "error", "message": f"Asset inventory failed: {str(e)}"}
+            return {"status": "error", "message": "Asset inventory failed"}
 
     async def _ping_sweep(self, network: str) -> Dict[str, Any]:
         """Perform ping sweep"""

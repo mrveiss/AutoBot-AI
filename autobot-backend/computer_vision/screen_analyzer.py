@@ -172,7 +172,7 @@ class ScreenAnalyzer:
                 return screen_state
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Screen analysis failed"})
                 logger.error("Screen analysis failed: %s", e)
                 raise
 
@@ -564,7 +564,7 @@ class ScreenAnalyzer:
 
         except Exception as e:
             logger.error("Change detection failed: %s", e)
-            return {"changes_detected": False, "error": str(e)}
+            return {"changes_detected": False, "error": "Change detection failed"}
 
     async def _identify_change_regions(
         self, diff_image: np.ndarray

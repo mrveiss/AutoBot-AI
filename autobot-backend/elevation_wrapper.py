@@ -84,7 +84,7 @@ class ElevationWrapper:
             logger.error("Elevation request failed: %s", e)
             return {
                 "success": False,
-                "error": f"Failed to request elevation: {str(e)}",
+                "error": "Failed to request elevation",
                 "needs_elevation": True,
             }
 
@@ -165,7 +165,8 @@ class ElevationWrapper:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e), "return_code": -1}
+            logger.error("Normal execution failed: %s", e)
+            return {"success": False, "error": "Command execution failed", "return_code": -1}
 
     async def _execute_elevated(self, command: str, session_token: str) -> Dict:
         """Execute command with elevation using session token"""
@@ -185,7 +186,7 @@ class ElevationWrapper:
 
         except Exception as e:
             logger.error("Elevated execution failed: %s", e)
-            return {"success": False, "error": str(e), "return_code": -1}
+            return {"success": False, "error": "Elevated command execution failed", "return_code": -1}
 
     def clear_session(self):
         """Clear the current elevation session"""

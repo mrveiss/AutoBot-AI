@@ -116,7 +116,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to create collection '%s': %s", name, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def get_collection(self, collection_id: str) -> Dict[str, Any]:
         """
@@ -145,7 +145,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to get collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def _fetch_all_collections(self) -> List[Dict[str, Any]]:
         """Fetch all collections from Redis (Issue #398: extracted)."""
@@ -196,7 +196,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to list collections: %s", e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     def _build_collection_updates(
         self,
@@ -258,7 +258,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to update collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def _remove_facts_from_deleted_collection(
         self, collection_id: str, fact_ids: set, delete_facts: bool
@@ -320,7 +320,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to delete collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     # =========================================================================
     # COLLECTION MEMBERSHIP OPERATIONS (Issue #412)
@@ -404,7 +404,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to add facts to collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def _process_facts_for_remove(
         self, collection_id: str, fact_ids: List[str]
@@ -466,7 +466,7 @@ class CollectionsMixin:
             logger.error(
                 "Failed to remove facts from collection '%s': %s", collection_id, e
             )
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def _fetch_fact_for_collection(
         self, fid: str, include_content: bool
@@ -542,7 +542,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to get facts in collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def get_fact_collections(self, fact_id: str) -> Dict[str, Any]:
         """
@@ -590,7 +590,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to get collections for fact '%s': %s", fact_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     # =========================================================================
     # COLLECTION BULK OPERATIONS (Issue #412)
@@ -676,7 +676,7 @@ class CollectionsMixin:
 
         except Exception as e:
             logger.error("Failed to export collection '%s': %s", collection_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     async def _get_bulk_delete_preview(self, collection_id: str) -> Dict[str, Any]:
         """Get preview of bulk delete operation (Issue #398: extracted)."""
@@ -756,7 +756,7 @@ class CollectionsMixin:
             logger.error(
                 "Failed to bulk delete facts in collection '%s': %s", collection_id, e
             )
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Collection operation failed"}
 
     # =========================================================================
     # PRIVATE HELPER METHODS (Issue #412)

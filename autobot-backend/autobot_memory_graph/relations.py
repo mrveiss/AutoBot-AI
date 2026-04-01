@@ -132,7 +132,7 @@ class RelationOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to create relation: %s", e)
-            raise RuntimeError(f"Relation creation failed: {str(e)}")
+            raise RuntimeError("Relation creation failed") from e
 
     def _build_relation_by_id_objects(
         self: AutoBotMemoryGraphCore,

@@ -662,7 +662,7 @@ class CodeGenerationEngine:
 
         except Exception as e:
             logger.error("LLM call failed: %s", str(e))
-            raise RuntimeError(f"LLM code generation failed: {str(e)}")
+            raise RuntimeError("LLM code generation failed") from e
 
     async def generate_code(
         self, request: CodeGenerationRequest

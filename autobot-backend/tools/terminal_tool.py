@@ -102,7 +102,7 @@ class TerminalTool:
 
         except Exception as e:
             logger.error("Error creating terminal session: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Terminal session creation failed"}
 
     async def _create_new_session(self, conversation_id: str) -> str:
         """Create a new terminal session for a conversation. Returns session_id."""
@@ -210,7 +210,7 @@ class TerminalTool:
             return self._format_execution_result(result, command, description)
         except Exception as e:
             logger.error("Error executing command: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e), "command": command}
+            return {"status": "error", "error": "Command execution failed", "command": command}
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
         """
@@ -255,7 +255,7 @@ class TerminalTool:
             logger.error("Error getting session info: %s", e, exc_info=True)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Failed to retrieve session info",
             }
 
     async def _list_terminal_sessions(self, backend_url: str) -> tuple:
@@ -332,7 +332,7 @@ class TerminalTool:
 
         except Exception as e:
             logger.error("Error getting user command history: %s", e, exc_info=True)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Failed to retrieve command history"}
 
     async def close_session(self, conversation_id: str) -> Dict[str, Any]:
         """
@@ -382,7 +382,7 @@ class TerminalTool:
             logger.error("Error closing session: %s", e, exc_info=True)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Failed to close session",
             }
 
     async def _query_agent_terminal_sessions(self, conversation_id: str) -> list:

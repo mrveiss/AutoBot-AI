@@ -519,7 +519,7 @@ class SecureWebResearch:
             logger.error("Error testing security components: %s", e)
             return {
                 "overall_status": "error",
-                "error": str(e),
+                "error": "Security component test failed",
                 "components": test_results.get("components", {}),
                 "timestamp": datetime.now().isoformat(),
             }

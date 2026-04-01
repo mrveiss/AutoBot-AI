@@ -826,7 +826,7 @@ class LLMCostTracker:
         except Exception as e:
             logger.error("Failed to get cost summary: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve cost summary",
                 "period": {
                     "start": start_date.isoformat(),
                     "end": end_date.isoformat(),
@@ -858,7 +858,7 @@ class LLMCostTracker:
 
         except Exception as e:
             logger.error("Failed to get session cost: %s", e)
-            return {"session_id": session_id, "error": str(e)}
+            return {"session_id": session_id, "error": "Failed to retrieve session cost"}
 
     async def get_cost_trends(self, days: int = 30) -> Dict[str, Any]:
         """
@@ -946,7 +946,7 @@ class LLMCostTracker:
             }
         except Exception as e:
             logger.error("Failed to get agent cost: %s", e)
-            return {"agent_id": agent_id, "error": str(e)}
+            return {"agent_id": agent_id, "error": "Failed to retrieve agent cost"}
 
     async def get_all_agent_costs(self) -> List[Dict[str, Any]]:
         """Get cost breakdown for all agents (#1401)."""
@@ -1023,7 +1023,7 @@ class LLMCostTracker:
             }
         except Exception as e:
             logger.error("Failed to set agent budget: %s", e)
-            return {"agent_id": agent_id, "error": str(e)}
+            return {"agent_id": agent_id, "error": "Failed to set agent budget"}
 
     async def get_agent_budget(self, agent_id: str) -> Optional[Dict[str, Any]]:
         """Get budget config for an agent (#1401)."""

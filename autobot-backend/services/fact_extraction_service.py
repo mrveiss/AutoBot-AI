@@ -189,7 +189,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error in fact extraction and storage: %s", e)
-            return self._build_extraction_error_response(str(e))
+            return self._build_extraction_error_response("Fact extraction failed")
 
     def _build_extraction_success_response(
         self,
@@ -339,7 +339,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error processing chunks for fact extraction: %s", e)
-            return self._build_chunks_error_response(str(e), len(chunks))
+            return self._build_chunks_error_response("Chunk fact extraction failed", len(chunks))
 
     async def _deduplicate_facts(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """
@@ -899,7 +899,7 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error getting extraction statistics: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve extraction statistics"}
 
     async def _handle_temporal_invalidation(self, new_facts: List[AtomicFact]):
         """

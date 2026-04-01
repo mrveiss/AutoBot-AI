@@ -224,7 +224,7 @@ class GPUAccelerationOptimizer:
 
         except Exception as e:
             self.logger.error("Multi-modal optimization failed: %s", e)
-            return GPUOptimizationResult.create_failed("multimodal_workload", str(e))
+            return GPUOptimizationResult.create_failed("multimodal_workload", "Multi-modal optimization failed")
 
     async def _collect_performance_baseline(self) -> Dict[str, float]:
         """Collect current performance metrics as baseline."""

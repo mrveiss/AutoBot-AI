@@ -187,7 +187,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Export failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     def _apply_category_filter(
         self, facts: List[Dict[str, Any]], category: Optional[str]
@@ -631,7 +631,7 @@ class BulkOperationsMixin:
             return {"status": "error", "message": f"Invalid JSON: {e}"}
         except Exception as e:
             logger.error("Import failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     def _validate_fact_for_import(
         self,
@@ -815,7 +815,7 @@ class BulkOperationsMixin:
                     "fact_id": fact_data.get("fact_id"),
                     "action": "error",
                     "status": "error",
-                    "message": str(e),
+                    "message": "Bulk operation failed",
                 }
 
     async def _handle_existing_fact(
@@ -988,7 +988,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Duplicate detection failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     def _find_duplicates_by_hash(
         self, facts: List[Dict[str, Any]]
@@ -1234,7 +1234,7 @@ class BulkOperationsMixin:
                     try:
                         return await self.delete_fact(fact_id, _skip_bm25_refresh=True)
                     except Exception as e:
-                        return {"status": "error", "message": str(e)}
+                        return {"status": "error", "message": "Bulk operation failed"}
 
             results = await asyncio.gather(
                 *[bounded_delete(fact_id) for fact_id in fact_ids],
@@ -1266,7 +1266,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Bulk delete failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     def _count_bulk_update_results(self, results: List[Any]) -> tuple[int, int]:
         """Count bulk update results (Issue #398: extracted)."""
@@ -1292,7 +1292,7 @@ class BulkOperationsMixin:
                             fact_id, metadata={"category": new_category}
                         )
                     except Exception as e:
-                        return {"status": "error", "message": str(e)}
+                        return {"status": "error", "message": "Bulk operation failed"}
 
             results = await asyncio.gather(
                 *[bounded_update(fid) for fid in fact_ids], return_exceptions=True
@@ -1308,7 +1308,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Bulk category update failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     async def cleanup(
         self, remove_orphaned_vectors: bool = True, verify_integrity: bool = True
@@ -1335,7 +1335,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Cleanup failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     # Method references needed from other mixins
     async def get_all_facts(self):
@@ -1431,7 +1431,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Backup failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     def _get_backup_dir(self, backup_dir: Optional[str]) -> str:
         """
@@ -1580,7 +1580,7 @@ class BulkOperationsMixin:
             return {"status": "error", "message": f"Invalid backup JSON: {e}"}
         except Exception as e:
             logger.error("Restore failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     async def _read_backup_file(self, backup_file: str) -> Dict[str, Any]:
         """
@@ -1727,7 +1727,7 @@ class BulkOperationsMixin:
                 )
 
             except Exception as e:
-                return {"action": "error", "reason": str(e)}
+                return {"action": "error", "reason": "Bulk operation failed"}
 
     async def _handle_existing_restore(
         self,
@@ -1895,7 +1895,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to list backups: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     async def delete_backup(
         self,
@@ -1938,7 +1938,7 @@ class BulkOperationsMixin:
 
         except Exception as e:
             logger.error("Failed to delete backup: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Bulk operation failed"}
 
     async def get_stats(self) -> Dict[str, Any]:
         """Get stats - implemented in stats mixin"""

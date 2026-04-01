@@ -353,7 +353,7 @@ class LibrarianAssistant:
             return self._parse_assessment_response(response, content_data)
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
-            return self._build_fallback_assessment(content_data, str(e))
+            return self._build_fallback_assessment(content_data, "Content quality assessment failed")
 
     async def store_in_knowledge_base(
         self, content_data: Dict[str, Any], assessment: Dict[str, Any]
@@ -649,7 +649,7 @@ class LibrarianAssistant:
 
         except Exception as e:
             logger.error("Error creating research summary: %s", e)
-            return f"Research completed but summary generation failed: {str(e)}"
+            return "Research completed but summary generation failed"
 
 
 # Singleton instance (thread-safe)

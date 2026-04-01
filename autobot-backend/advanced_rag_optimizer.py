@@ -803,7 +803,7 @@ class AdvancedRAGOptimizer:
 
         except Exception as e:
             logger.error("Context optimization failed: %s", e)
-            return f"Error retrieving context: {str(e)}", RAGMetrics()
+            return "Error retrieving context", RAGMetrics()
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the RAG optimizer."""

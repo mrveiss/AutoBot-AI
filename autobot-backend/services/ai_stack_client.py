@@ -229,13 +229,14 @@ class AIStackClient:
                     continue
 
                 raise AIStackError(
-                    f"Failed to connect to AI Stack: {str(e)}",
-                    details={"error": str(e), "url": url},
+                    "Failed to connect to AI Stack",
+                    details={"error": type(e).__name__, "url": url},
                 )
             except Exception as e:
                 logger.error("Unexpected error in AI Stack request: %s", e)
                 raise AIStackError(
-                    f"Unexpected error: {str(e)}", details={"error": str(e), "url": url}
+                    "Unexpected error during AI Stack request",
+                    details={"error": type(e).__name__, "url": url},
                 )
 
         raise AIStackError("All retry attempts failed")

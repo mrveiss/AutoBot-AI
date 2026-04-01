@@ -442,7 +442,8 @@ class AgentLoop:
                 result = await self._dispatch_tool(tool)
                 results[tool_name] = result
             except Exception as e:
-                results[tool_name] = {"error": str(e)}
+                logger.error("Tool %s execution failed: %s", tool_name, e)
+                results[tool_name] = {"error": "Tool execution failed"}
 
         return results
 

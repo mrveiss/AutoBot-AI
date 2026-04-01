@@ -313,7 +313,7 @@ class ParallelToolExecutor:
             return None, False, error
         except Exception as e:
             logger.error("Tool %s failed: %s", call.tool_name, e)
-            return None, False, str(e)
+            return None, False, "Tool execution failed"
 
     async def _publish_observation_event(
         self,

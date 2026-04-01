@@ -229,8 +229,8 @@ class MonitoringAndAlertingTester:
             except Exception as e:
                 response_time = time.time() - start_time
                 status = "FAIL"
-                message = f"Health endpoint error: {str(e)}"
-                details = {"error": str(e)}
+                message = "Health endpoint error"
+                details = {"error": "Health endpoint check failed"}
 
             self.log_result(
                 f"Health Endpoint - {service_name}",
@@ -318,8 +318,8 @@ class MonitoringAndAlertingTester:
             except Exception as e:
                 response_time = time.time() - start_time
                 status = "FAIL"
-                message = f"Metrics collection error: {str(e)}"
-                details = {"error": str(e)}
+                message = "Metrics collection error"
+                details = {"error": "Metrics collection failed"}
 
             self.log_result(
                 f"Metrics Collection - {service_name}",
@@ -391,9 +391,9 @@ class MonitoringAndAlertingTester:
             except Exception as e:
                 response_time = time.time() - start_time
                 status = "FAIL"
-                message = f"Alert threshold test error: {str(e)}"
+                message = "Alert threshold test error"
                 severity = "critical"
-                details = {"error": str(e)}
+                details = {"error": "Alert threshold test failed"}
 
             self.log_result(
                 test_config["name"],
@@ -624,11 +624,11 @@ class MonitoringAndAlertingTester:
                     data_accuracy=False,
                     response_time=response_time,
                     widget_count=0,
-                    error_details=str(e),
+                    error_details="Dashboard access failed",
                 )
 
                 status = "FAIL"
-                message = f"Dashboard access error: {str(e)}"
+                message = "Dashboard access error"
                 severity = "critical"
 
             dashboard_results.append(dashboard_result)
@@ -777,11 +777,11 @@ class MonitoringAndAlertingTester:
             except Exception as e:
                 response_time = time.time() - start_time
                 status = "FAIL"
-                message = f"Log analysis error: {str(e)}"
+                message = "Log analysis error"
                 severity = "critical"
                 log_analysis_results[log_source["name"]] = {
                     "accessible": False,
-                    "error": str(e),
+                    "error": "Log analysis failed",
                 }
 
             details = log_analysis_results.get(log_source["name"], {})
@@ -863,9 +863,9 @@ class MonitoringAndAlertingTester:
             except Exception as e:
                 response_time = time.time() - start_time
                 status = "FAIL"
-                message = f"Incident response test error: {str(e)}"
+                message = "Incident response test error"
                 severity = "critical"
-                details = {"error": str(e)}
+                details = {"error": "Incident response test failed"}
 
             self.log_result(
                 scenario["name"],

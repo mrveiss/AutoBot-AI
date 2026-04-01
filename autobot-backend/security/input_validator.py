@@ -285,7 +285,7 @@ class WebResearchInputValidator:
             return None, {
                 "safe": False,
                 "threats_detected": ["INVALID_URL_FORMAT"],
-                "metadata": {"error": str(e)},
+                "metadata": {"error": "URL parse failed"},
             }
 
     def _validate_url_scheme(self, parsed) -> Dict[str, Any]:

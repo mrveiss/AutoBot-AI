@@ -432,7 +432,7 @@ class AgentOrchestrator:
         except Exception as e:
             logger.error("Error getting orchestrator statistics: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve orchestrator statistics",
                 "orchestrator_id": self.orchestrator_id,
                 "is_running": self.is_running,
             }

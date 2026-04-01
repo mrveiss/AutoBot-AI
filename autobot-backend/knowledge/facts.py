@@ -149,7 +149,7 @@ async def warmup_npu_connection() -> Dict[str, Any]:
         result.update(
             status="error",
             warmup_time_ms=(time.time() - start_time) * 1000,
-            message=f"NPU warmup failed: {e}",
+            message="NPU warmup failed",
         )
         logger.warning("NPU warmup failed: %s", e)
 
@@ -723,7 +723,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to store fact: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Knowledge operation failed"}
 
     async def _get_fact_for_vectorization(
         self, fact_id: str
@@ -774,7 +774,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to vectorize fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Knowledge operation failed"}
 
     def get_fact(self, fact_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -1010,7 +1010,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to update fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Knowledge operation failed"}
 
     async def _cleanup_fact_mappings(
         self, fact_id: str, content: str, metadata: Dict[str, Any]
@@ -1100,7 +1100,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Knowledge operation failed"}
 
     # Method references needed from other mixins
     async def _scan_redis_keys_async(self, pattern: str):
@@ -1299,7 +1299,8 @@ class FactsMixin:
                 )
 
         except Exception as e:
-            result["errors"].append({"fact_id": fact_id, "error": str(e)})
+            logger.error("Failed to delete fact %s: %s", fact_id, e)
+            result["errors"].append({"fact_id": fact_id, "error": "Fact deletion failed"})
 
     async def _process_session_facts_deletion(
         self,
@@ -1375,7 +1376,7 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete facts for session %s: %s", session_id, e)
-            result["errors"].append({"session_id": session_id, "error": str(e)})
+            result["errors"].append({"session_id": session_id, "error": "Session facts deletion failed"})
             return result
 
     async def _cleanup_session_tracking(
@@ -1440,7 +1441,8 @@ class FactsMixin:
                 await self._share_single_fact(fact_id, shared_with, shared_by)
                 shared_count += 1
             except Exception as e:
-                errors.append({"fact_id": fact_id, "error": str(e)})
+                logger.error("Failed to share fact %s: %s", fact_id, e)
+                errors.append({"fact_id": fact_id, "error": "Fact sharing failed"})
 
         return {
             "shared_count": shared_count,

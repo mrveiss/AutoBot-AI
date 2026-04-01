@@ -131,7 +131,7 @@ class VoiceProcessingSystem:
                 return response
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Voice command processing failed"})
                 logger.error("Voice command processing failed: %s", e)
                 raise
 

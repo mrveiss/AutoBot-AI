@@ -164,9 +164,8 @@ class TaskExecutionTracker:
             await self._finalize_task(task_id, task_context)
 
         except Exception as e:
-            error_msg = f"{type(e).__name__}: {str(e)}"
-            self.memory_manager.fail_task(task_id, error_msg)
-            logger.error("Task %s failed: %s", task_id, error_msg)
+            logger.error("Task %s failed: %s", task_id, e)
+            self.memory_manager.fail_task(task_id, f"Task failed: {type(e).__name__}")
             self.active_tasks.pop(task_id, None)
             await self._execute_task_callbacks(task_id, "completed")
             raise

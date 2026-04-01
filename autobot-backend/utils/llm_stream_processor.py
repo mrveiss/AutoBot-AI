@@ -112,7 +112,7 @@ class LLMStreamingInterface:
 
         except Exception as e:
             logger.error("Ollama request exception: %s", e)
-            return f"Error: {str(e)}", False
+            return "Error: LLM request failed", False
 
     async def cleanup(self):
         """No-op: HTTP session is managed by singleton HTTPClientManager"""

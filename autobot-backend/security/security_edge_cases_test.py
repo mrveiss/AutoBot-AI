@@ -382,7 +382,7 @@ class TestSecurityEdgeCases:
                 results.append(result)
             except Exception as e:
                 # Should handle gracefully
-                results.append({"error": str(e)})
+                results.append({"error": "Command execution failed"})
 
         end_time = time.time()
 

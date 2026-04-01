@@ -99,7 +99,7 @@ class TextToSpeechEngine:
                 return audio_data
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Speech synthesis failed"})
                 logger.error("Speech synthesis failed: %s", e)
                 return b""
 

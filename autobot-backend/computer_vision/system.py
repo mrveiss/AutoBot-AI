@@ -110,7 +110,7 @@ class ComputerVisionSystem:
                 return results
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Computer vision analysis failed"})
                 logger.error("Computer vision analysis failed: %s", e)
                 raise
 

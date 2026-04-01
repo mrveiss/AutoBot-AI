@@ -250,7 +250,7 @@ class StatsMixin:
 
         except Exception as e:
             logger.error("Stats consistency check failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Stats operation failed"}
 
     async def _get_fact_categories(self, fact_keys_sample: List[bytes]) -> List[str]:
         """Extract categories from sampled facts (Issue #298 - extracted helper)."""
@@ -407,7 +407,7 @@ class StatsMixin:
                 "categories": [],
                 "db_size": 0,
                 "status": "error",
-                "error": str(e),
+                "error": "Failed to retrieve knowledge base stats",
                 "last_updated": datetime.now().isoformat(),
             }
 
@@ -506,7 +506,7 @@ class StatsMixin:
 
         except Exception as e:
             logger.error("Error generating detailed stats: %s", e)
-            return {**basic_stats, "detailed_stats": False, "error": str(e)}
+            return {**basic_stats, "detailed_stats": False, "error": "Failed to generate detailed stats"}
 
     async def _calc_all_quality_dimensions(
         self, facts: List[Dict[str, Any]]

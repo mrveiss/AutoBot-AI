@@ -93,7 +93,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to add tags to fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     async def remove_tags_from_fact(
         self, fact_id: str, tags: List[str]
@@ -125,7 +125,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to remove tags from fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     async def get_fact_tags(self, fact_id: str) -> Dict[str, Any]:
         """
@@ -153,7 +153,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get tags for fact %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     async def search_facts_by_tags(
         self, tags: List[str], match_all: bool = True
@@ -184,7 +184,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to search facts by tags: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     async def list_all_tags(self) -> Dict[str, Any]:
         """
@@ -225,7 +225,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to list all tags: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     def _build_bulk_tag_result(
         self, fact_id: str, result: Any, operation: str
@@ -301,7 +301,7 @@ class TagsMixin:
             }
         except Exception as e:
             logger.error("Bulk tag operation failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Tag operation failed"}
 
     # =========================================================================
     # TAG MANAGEMENT CRUD OPERATIONS (Issue #409)
@@ -417,7 +417,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to rename tag '%s' to '%s': %s", old_tag, new_tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def _remove_tag_from_fact_metadata(self, fact_id: str, tag: str) -> bool:
         """Remove a single tag from a fact's metadata (Issue #398: extracted)."""
@@ -474,7 +474,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to delete tag '%s' globally: %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def _collect_fact_ids_from_tags(self, tags: List[str]) -> tuple:
         """Collect fact IDs from multiple tags (Issue #398: extracted)."""
@@ -603,7 +603,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to merge tags into '%s': %s", target_tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def _get_paginated_fact_ids_for_tag(
         self, tag_key: str, offset: int, limit: int
@@ -685,7 +685,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get facts by tag '%s': %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def get_tag_info(self, tag: str) -> Dict[str, Any]:
         """
@@ -720,7 +720,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get tag info for '%s': %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     # =========================================================================
     # TAG STYLING OPERATIONS (Issue #410)
@@ -790,7 +790,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to update tag '%s' style: %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def get_tag_style(self, tag: str) -> Dict[str, Any]:
         """
@@ -834,7 +834,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get tag '%s' style: %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def get_tag_with_style(self, tag: str) -> Dict[str, Any]:
         """
@@ -866,7 +866,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to get tag '%s' with style: %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     async def delete_tag_style(self, tag: str) -> Dict[str, Any]:
         """
@@ -901,7 +901,7 @@ class TagsMixin:
 
         except Exception as e:
             logger.error("Failed to delete tag '%s' style: %s", tag, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Tag operation failed"}
 
     # =========================================================================
     # HELPER METHODS

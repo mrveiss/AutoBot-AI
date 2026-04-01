@@ -236,7 +236,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             logger.error("Error detecting agent conflicts: %s", e)
             return {
                 "has_conflicts": False,
-                "error": str(e),
+                "error": "Conflict detection failed",
                 "conflict_severity": "unknown",
             }
 
@@ -335,7 +335,7 @@ class MultiAgentArbitrator(BaseLLMJudge):
             logger.error("Error coordinating agent consensus: %s", e)
             return {
                 "consensus_response": None,
-                "error": str(e),
+                "error": "Consensus coordination failed",
                 "consensus_confidence": 0.0,
             }
 

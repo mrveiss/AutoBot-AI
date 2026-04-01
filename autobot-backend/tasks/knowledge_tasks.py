@@ -108,8 +108,8 @@ def refresh_system_knowledge(self) -> Metadata:
         logger.exception("System knowledge refresh task failed: %s", e)
         return {
             "status": "failed",
-            "error": str(e),
-            "message": f"Knowledge refresh failed: {str(e)}",
+            "error": "Knowledge refresh failed",
+            "message": "Knowledge refresh failed",
         }
 
 
@@ -171,8 +171,8 @@ def reindex_knowledge_base(self) -> Metadata:
         logger.exception("Knowledge base reindex task failed: %s", e)
         return {
             "status": "failed",
-            "error": str(e),
-            "message": f"Reindex failed: {str(e)}",
+            "error": "Knowledge base reindex failed",
+            "message": "Reindex failed",
         }
 
 
@@ -308,7 +308,7 @@ async def _scan_man_page_changes_async(
         logger.error("Man page change scan failed: %s", e)
         return {
             "status": "failed",
-            "error": str(e),
+            "error": "Man page scan failed",
             "items_stored": 0,
         }
 
@@ -366,8 +366,8 @@ def scan_man_page_changes(self, limit: int | None = None) -> Metadata:
         logger.exception("Man page change scan task failed: %s", e)
         return {
             "status": "failed",
-            "error": str(e),
-            "message": f"Scan failed: {str(e)}",
+            "error": "Man page scan task failed",
+            "message": "Scan failed",
         }
 
 
@@ -484,8 +484,8 @@ def full_man_page_index(
         logger.exception("Full man page index task failed: %s", e)
         return {
             "status": "failed",
-            "error": str(e),
-            "message": f"Index failed: {str(e)}",
+            "error": "Full man page index failed",
+            "message": "Index failed",
         }
 
 

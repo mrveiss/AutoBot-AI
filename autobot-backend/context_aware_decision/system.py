@@ -92,7 +92,7 @@ class ContextAwareDecisionSystem:
                 return decision
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Contextual decision making failed"})
                 logger.error("Contextual decision making failed: %s", e)
                 raise
 
