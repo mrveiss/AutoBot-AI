@@ -194,6 +194,21 @@
           <span>{{ $t('workflow.views.orchestration') }}</span>
         </div>
 
+        <!-- Issue #2155: Live Execution Dashboard -->
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'live-dashboard' }"
+          @click="activeSection = 'live-dashboard'"
+          role="button"
+          :aria-label="$t('workflow.views.liveDashboardAriaLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <span>{{ $t('workflow.views.liveDashboard') }}</span>
+        </button>
+
         <div
           class="category-item"
           :class="{ active: activeSection === 'orchestration' }"
@@ -519,6 +534,20 @@
           />
         </section>
 
+        <!-- Live Dashboard Section (#2155) -->
+        <section v-if="activeSection === 'live-dashboard'" class="section-live-dashboard">
+          <WorkflowLiveDashboard
+            :active-workflows="activeWorkflows"
+            :agent-performance="agentPerformance"
+            :agent-capabilities="agentCapabilities"
+            :loading="loading"
+            :loading-capabilities="loadingCapabilities"
+            @refresh="refreshAll"
+            @refresh-agents="handleRefreshAgents"
+            @select-workflow="handleViewWorkflow"
+          />
+        </section>
+
         <!-- Orchestration Visualizer Section -->
         <section v-if="activeSection === 'orchestration'" class="section-orchestration">
           <OrchestrationVisualizer
@@ -636,6 +665,7 @@ import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
 import WorkflowNotificationConfig from '@/components/workflow/WorkflowNotificationConfig.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
+import WorkflowLiveDashboard from '@/components/workflow/WorkflowLiveDashboard.vue';
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue';
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
 import VideoProcessor from '@/components/vision/VideoProcessor.vue';
@@ -667,7 +697,8 @@ type SectionType =
   | 'video-processing'
   | 'media-gallery'
   | 'orchestration'
-  | 'agents';
+  | 'agents'
+  | 'live-dashboard';
 
 // Composable
 const {
@@ -682,6 +713,7 @@ const {
   orchestrationStatus,
   executionStrategies,
   agentCapabilities,
+  agentPerformance,
   exampleWorkflows,
   workflowNodes,
   selectedNodeId,
@@ -690,6 +722,7 @@ const {
   loadOrchestrationStatus,
   loadExecutionStrategies,
   loadAgentCapabilities,
+  loadAgentPerformance,
   loadExampleWorkflows,
   loadActiveWorkflows,
   loadCompletedWorkflows,
@@ -805,6 +838,7 @@ const sectionTitle = computed(() => {
     runner: t('workflow.views.sectionTitleRunner'),
     history: t('workflow.views.sectionTitleHistory'),
     notifications: t('workflow.notifications.sectionTitle'),
+    'live-dashboard': t('workflow.views.sectionTitleLiveDashboard'),
     orchestration: t('workflow.views.sectionTitleOrchestration'),
     agents: t('workflow.views.sectionTitleAgents'),
     'gui-automation': t('workflow.views.sectionTitleGuiAutomation'),
@@ -824,6 +858,7 @@ const sectionDescription = computed(() => {
     runner: t('workflow.views.sectionDescRunner'),
     history: t('workflow.views.sectionDescHistory'),
     notifications: t('workflow.notifications.sectionDesc'),
+    'live-dashboard': t('workflow.views.sectionDescLiveDashboard'),
     orchestration: t('workflow.views.sectionDescOrchestration'),
     agents: t('workflow.views.sectionDescAgents'),
     'gui-automation': t('workflow.views.sectionDescGuiAutomation'),
@@ -859,6 +894,11 @@ function getStrategyIcon(strategy: string): string {
     adaptive: 'fas fa-random',
   };
   return icons[strategy] || 'fas fa-cog';
+}
+
+/** Refresh agent performance and capabilities (#2155). */
+async function handleRefreshAgents(): Promise<void> {
+  await Promise.all([loadAgentPerformance(), loadAgentCapabilities()]);
 }
 
 async function refreshAll(): Promise<void> {
