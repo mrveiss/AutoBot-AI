@@ -20,6 +20,7 @@ from services.autoresearch.models import (
     Experiment,
     ExperimentResult,
     ExperimentState,
+    HyperParams,
 )
 from services.autoresearch.store import ExperimentStore
 
@@ -367,3 +368,101 @@ class TestSaveExperimentIndexing:
         await store.save_experiment(exp, old_state=ExperimentState.PENDING)
 
         store._redis.srem.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Enriched indexing tests (Task 8 — Issue #3199)
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichedIndexing:
+    """Tests for enriched _build_document and _build_metadata (Task 8)."""
+
+    def test_build_document_includes_hyperparams(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test hypothesis",
+            description="Test description",
+            hyperparams=HyperParams(learning_rate=1e-4, dropout=0.1),
+            result=ExperimentResult(val_bpb=4.5),
+            baseline_val_bpb=5.0,
+            state=ExperimentState.KEPT,
+            tags=["session:s1", "attention"],
+        )
+
+        doc = store._build_document(exp)
+        assert "learning_rate" in doc
+        assert "1e-4" in doc or "0.0001" in doc
+        assert "dropout" in doc
+        assert "Baseline: 5.0" in doc
+        assert "Improvement: 0.5" in doc
+
+    def test_build_document_includes_session_context(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["session:mysession", "lr_sweep"],
+        )
+        doc = store._build_document(exp)
+        assert "Session: mysession" in doc
+
+    def test_build_document_no_session_tag(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["lr_sweep"],
+        )
+        doc = store._build_document(exp)
+        assert "Session:" not in doc
+
+    def test_build_metadata_includes_hyperparams(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(learning_rate=1e-4),
+            result=ExperimentResult(val_bpb=4.5),
+            state=ExperimentState.KEPT,
+            tags=["session:s1"],
+        )
+
+        meta = store._build_metadata(exp)
+        assert "learning_rate" in meta
+        assert meta["learning_rate"] == 1e-4
+        assert "session_id" in meta
+        assert meta["session_id"] == "s1"
+
+    def test_build_metadata_key_hyperparams_present(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(
+                learning_rate=3e-4,
+                dropout=0.2,
+                batch_size=64,
+                n_layer=6,
+                n_head=6,
+            ),
+            state=ExperimentState.COMPLETED,
+            tags=[],
+        )
+        meta = store._build_metadata(exp)
+        assert meta["learning_rate"] == 3e-4
+        assert meta["dropout"] == 0.2
+        assert meta["batch_size"] == 64
+        assert meta["n_layer"] == 6
+        assert meta["n_head"] == 6
+
+    def test_build_metadata_no_session_when_no_session_tag(self):
+        store = _make_store()
+        exp = Experiment(
+            hypothesis="Test",
+            hyperparams=HyperParams(),
+            state=ExperimentState.COMPLETED,
+            tags=["lr_sweep"],
+        )
+        meta = store._build_metadata(exp)
+        assert "session_id" not in meta
