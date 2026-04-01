@@ -283,6 +283,7 @@ class LLMInterface:
             "vllm": self._handle_vllm_request,
             "mock": self._handle_mock_request,
             "local": self._handle_local_request,
+            "layer_inference": self._handle_layer_inference_request,
         }
 
     def _init_backward_compatibility(self) -> None:
@@ -1271,6 +1272,17 @@ class LLMInterface:
     async def _handle_local_request(self, request: LLMRequest) -> LLMResponse:
         """Handle local requests via handler."""
         return await self._local_handler.chat_completion(request)
+
+    async def _handle_layer_inference_request(
+        self, request: LLMRequest
+    ) -> LLMResponse:
+        """Handle layer-by-layer inference requests via adapter (#3104)."""
+        adapter = self._adapter_registry.get("layer_inference")
+        if not adapter:
+            raise ValueError(
+                "LayerInferenceAdapter not registered in adapter registry"
+            )
+        return await adapter.execute(request)
 
     # Utility methods
     async def get_available_models(self, provider: str = "ollama") -> list[str]:
