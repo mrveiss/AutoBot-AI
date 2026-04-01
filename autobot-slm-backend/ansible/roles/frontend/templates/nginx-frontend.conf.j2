@@ -134,6 +134,22 @@ server {
         proxy_next_upstream_timeout 10s;
     }
 
+    # Issue #3105: WebSocket proxy for /api/ws/ — must be BEFORE /api/ to take priority.
+    # The /api/ block does not set Upgrade/Connection headers, so WebSocket
+    # requests to /api/ws/live would fail with 403 if they matched /api/.
+    location /api/ws/ {
+        proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+        proxy_ssl_verify off;
+    }
+
     # API proxy to user backend
     location /api/ {
         proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
@@ -158,6 +174,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
         proxy_ssl_verify off;
     }
@@ -170,11 +188,13 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
         proxy_ssl_verify off;
     }
 
-    # WebSocket proxy for terminal/chat
+    # WebSocket proxy for terminal/chat (#3105: add X-Forwarded-* headers)
     location /api/ws {
         proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
         proxy_http_version 1.1;
@@ -182,6 +202,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
         proxy_ssl_verify off;
     }
@@ -193,6 +215,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 300s;
         proxy_ssl_verify off;
     }
@@ -204,6 +228,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
         proxy_ssl_verify off;
     }
