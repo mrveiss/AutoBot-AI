@@ -134,18 +134,32 @@ class ExperimentStore:
             f"Hypothesis: {experiment.hypothesis}",
             f"Description: {experiment.description}",
         ]
+        # Include hyperparams for richer search
+        hp_dict = experiment.hyperparams.to_dict()
+        parts.append(f"Hyperparams: {', '.join(f'{k}={v}' for k, v in hp_dict.items())}")
+
         if experiment.result:
             parts.append(f"val_bpb: {experiment.result.val_bpb}")
             if (
-                experiment.improvement is not None
-                and experiment.improvement_pct is not None
+                experiment.baseline_val_bpb is not None
+                and experiment.result.val_bpb is not None
             ):
+                improvement = experiment.baseline_val_bpb - experiment.result.val_bpb
+                pct = (
+                    (improvement / experiment.baseline_val_bpb * 100)
+                    if experiment.baseline_val_bpb != 0
+                    else 0
+                )
                 parts.append(
-                    f"Improvement: {experiment.improvement:.4f} "
-                    f"({experiment.improvement_pct:.2f}%)"
+                    f"Baseline: {experiment.baseline_val_bpb}, "
+                    f"Improvement: {improvement:.4f} ({pct:.2f}%)"
                 )
         if experiment.code_diff:
             parts.append(f"Code change:\n{experiment.code_diff[:500]}")
+        # Session context from tags
+        session_tags = [t for t in experiment.tags if t.startswith("session:")]
+        if session_tags:
+            parts.append(f"Session: {session_tags[0].split(':', 1)[1]}")
         return "\n".join(parts)
 
     def _build_metadata(self, experiment: Experiment) -> Dict[str, Any]:
@@ -160,6 +174,16 @@ class ExperimentStore:
             meta["improvement"] = experiment.improvement
         if experiment.tags:
             meta["tags"] = ",".join(experiment.tags)
+        # Include key hyperparams for filtering
+        hp_dict = experiment.hyperparams.to_dict()
+        for key in ("learning_rate", "dropout", "batch_size", "n_layer", "n_head"):
+            if key in hp_dict:
+                meta[key] = hp_dict[key]
+        # Extract session ID from tags
+        for tag in experiment.tags:
+            if tag.startswith("session:"):
+                meta["session_id"] = tag.split(":", 1)[1]
+                break
         return meta
 
     async def get_experiment(self, experiment_id: str) -> Optional[Experiment]:
