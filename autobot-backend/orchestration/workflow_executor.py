@@ -896,6 +896,13 @@ class WorkflowExecutor:
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
+        # Issue #3099: Auto-inject prior agent findings from shared memory.
+        shared_memory = execution_context.get("shared_memory")
+        if shared_memory:
+            prior_findings = shared_memory.get_all()
+            if prior_findings:
+                context["prior_agent_findings"] = prior_findings
+
         try:
             result = await self._simulate_step_execution(step, context)
             if interaction:

@@ -317,3 +317,82 @@ class TestWorkflowMemoryLazyRedis:
             mock_factory.assert_called_once_with(
                 async_client=False, database="workflows"
             )
+
+
+# ---------------------------------------------------------------------------
+# Issue #3099: Auto-injection into agent context
+# ---------------------------------------------------------------------------
+
+
+class TestWorkflowMemoryAutoInjection:
+    """Verify that _execute_coordinated_step injects shared_memory findings."""
+
+    def test_prior_findings_injected_into_context(self):
+        """When shared_memory has data, it appears in context['prior_agent_findings']."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from orchestration.workflow_executor import WorkflowExecutor
+
+        executor = WorkflowExecutor.__new__(WorkflowExecutor)
+        executor.logger = MagicMock()
+
+        mock_memory = MagicMock()
+        mock_memory.get_all.return_value = {"step1": "found data"}
+
+        execution_context = {
+            "shared_memory": mock_memory,
+            "agents_involved": set(),
+            "interactions": [],
+        }
+        context: dict = {}
+        step = {"id": "step2", "assigned_agent": None}
+
+        # _simulate_step_execution raises NotImplementedError; we just need
+        # to verify the context was updated before the call.
+        executor._simulate_step_execution = AsyncMock(
+            side_effect=NotImplementedError("stub")
+        )
+        executor._create_agent_interaction = MagicMock(return_value=None)
+
+        import asyncio
+
+        with pytest.raises(NotImplementedError):
+            asyncio.get_event_loop().run_until_complete(
+                executor._execute_coordinated_step(step, execution_context, context)
+            )
+
+        assert context["prior_agent_findings"] == {"step1": "found data"}
+
+    def test_empty_memory_not_injected(self):
+        """When shared_memory is empty, no prior_agent_findings key is added."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from orchestration.workflow_executor import WorkflowExecutor
+
+        executor = WorkflowExecutor.__new__(WorkflowExecutor)
+        executor.logger = MagicMock()
+
+        mock_memory = MagicMock()
+        mock_memory.get_all.return_value = {}
+
+        execution_context = {
+            "shared_memory": mock_memory,
+            "agents_involved": set(),
+            "interactions": [],
+        }
+        context: dict = {}
+        step = {"id": "step2", "assigned_agent": None}
+
+        executor._simulate_step_execution = AsyncMock(
+            side_effect=NotImplementedError("stub")
+        )
+        executor._create_agent_interaction = MagicMock(return_value=None)
+
+        import asyncio
+
+        with pytest.raises(NotImplementedError):
+            asyncio.get_event_loop().run_until_complete(
+                executor._execute_coordinated_step(step, execution_context, context)
+            )
+
+        assert "prior_agent_findings" not in context
