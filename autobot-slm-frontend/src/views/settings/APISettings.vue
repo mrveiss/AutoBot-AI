@@ -60,7 +60,7 @@ function copyToClipboard(text: string): void {
 <template>
   <div class="p-6">
     <!-- Connection Test Card -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold">Connection Status</h2>
         <button
@@ -100,7 +100,7 @@ function copyToClipboard(text: string): void {
     </div>
 
     <!-- API Endpoints -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
       <h2 class="text-lg font-semibold mb-6">API Endpoints</h2>
 
       <div class="space-y-4">
@@ -112,7 +112,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(apiUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +129,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(wsUrl)"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -146,7 +146,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getGrafanaUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getPrometheusUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +180,7 @@ function copyToClipboard(text: string): void {
           </div>
           <button
             @click="copyToClipboard(origin + getBackendUrl())"
-            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
             title="Copy to clipboard"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,7 +192,7 @@ function copyToClipboard(text: string): void {
     </div>
 
     <!-- Configuration Reference -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold mb-4">Configuration Reference</h2>
       <p class="text-sm text-gray-500 mb-4">
         These settings are defined in the SSOT configuration file.

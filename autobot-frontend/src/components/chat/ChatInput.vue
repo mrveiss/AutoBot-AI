@@ -903,6 +903,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* CRITICAL FIX: Enforce sticky positioning with !important and solid background */
 .chat-input-container {
   @apply relative bg-autobot-bg-card border-t border-autobot-border p-4;
@@ -987,7 +988,7 @@ onUnmounted(() => {
 }
 
 .message-input {
-  @apply w-full px-4 py-3 resize-none border-none outline-none min-h-[44px] max-h-[150px];
+  @apply w-full px-4 py-3 resize-none border-none outline-hidden min-h-[44px] max-h-[150px];
   line-height: 1.5;
 }
 

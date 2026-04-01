@@ -190,23 +190,23 @@ onUnmounted(() => {
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
         <p class="text-sm text-gray-500">Total Alerts</p>
         <p class="text-2xl font-bold text-gray-900">{{ alertCounts.total }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-red-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
         <p class="text-sm text-red-600">Critical</p>
         <p class="text-2xl font-bold text-red-700">{{ alertCounts.critical }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-orange-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-orange-200 p-4">
         <p class="text-sm text-orange-600">High</p>
         <p class="text-2xl font-bold text-orange-700">{{ alertCounts.high }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-yellow-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-yellow-200 p-4">
         <p class="text-sm text-yellow-600">Warning</p>
         <p class="text-2xl font-bold text-yellow-700">{{ alertCounts.warning }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-blue-200 p-4">
         <p class="text-sm text-blue-600">Info</p>
         <p class="text-2xl font-bold text-blue-700">{{ alertCounts.info }}</p>
       </div>
@@ -266,7 +266,7 @@ onUnmounted(() => {
         >
           <div class="flex items-start justify-between">
             <div class="flex items-start gap-3">
-              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getSeverityIcon(alert.severity)" />
               </svg>
               <div>
@@ -281,11 +281,11 @@ onUnmounted(() => {
             <button
               v-if="!isAcknowledged(index)"
               @click="acknowledgeAlert(index)"
-              class="px-3 py-1 text-xs font-medium bg-white bg-opacity-50 rounded hover:bg-opacity-75 transition-colors"
+              class="px-3 py-1 text-xs font-medium bg-white bg-opacity-50 rounded-sm hover:bg-opacity-75 transition-colors"
             >
               Acknowledge
             </button>
-            <span v-else class="px-3 py-1 text-xs font-medium bg-white bg-opacity-30 rounded">
+            <span v-else class="px-3 py-1 text-xs font-medium bg-white bg-opacity-30 rounded-sm">
               Acknowledged
             </span>
           </div>
@@ -310,7 +310,7 @@ onUnmounted(() => {
         <div class="flex items-start justify-between">
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-2">
-              <span :class="['px-2 py-0.5 text-xs font-medium rounded', getPriorityBadgeClass(rec.priority)]">
+              <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getPriorityBadgeClass(rec.priority)]">
                 {{ rec.priority.toUpperCase() }}
               </span>
               <span class="text-xs text-gray-500">{{ rec.category }}</span>

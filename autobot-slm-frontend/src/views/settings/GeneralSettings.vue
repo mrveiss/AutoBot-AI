@@ -341,7 +341,7 @@ onMounted(() => {
       </div>
 
       <!-- General Settings Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <h2 class="text-lg font-semibold mb-6">General Settings</h2>
 
         <div class="space-y-6">
@@ -382,7 +382,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.dark_mode" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -394,7 +394,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.auto_refresh" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -435,7 +435,7 @@ onMounted(() => {
       </div>
 
       <!-- NTP / Time Sync Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-6">
           <div>
             <h2 class="text-lg font-semibold">Fleet Time Synchronization</h2>
@@ -497,7 +497,7 @@ onMounted(() => {
         </div>
       </div>
       <!-- Setup Wizard Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h2 class="text-lg font-semibold">Setup Wizard</h2>

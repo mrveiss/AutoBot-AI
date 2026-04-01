@@ -1,5 +1,5 @@
 <template>
-  <div class="z-10 flex border-b border-autobot-border bg-autobot-bg-card flex-shrink-0 overflow-x-auto">
+  <div class="z-10 flex border-b border-autobot-border bg-autobot-bg-card shrink-0 overflow-x-auto">
     <button
       v-for="tab in tabs"
       :key="tab.key"

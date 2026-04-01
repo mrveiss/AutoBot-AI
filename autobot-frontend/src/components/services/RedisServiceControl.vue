@@ -1,7 +1,7 @@
 <template>
   <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden" data-testid="redis-service-container">
     <!-- Service Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-red-50 to-red-100" data-testid="redis-service-header">
+    <div class="flex items-center justify-between px-6 py-4 border-b bg-linear-to-r from-red-50 to-red-100" data-testid="redis-service-header">
       <div class="flex items-center space-x-3">
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
@@ -180,7 +180,7 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card bg-opacity-75 flex items-center justify-center" data-testid="redis-service-loading-overlay">
+    <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card/75 flex items-center justify-center" data-testid="redis-service-loading-overlay">
       <div class="text-center">
         <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
         <p class="text-sm text-autobot-text-secondary">{{ $t('redis.processing') }}</p>

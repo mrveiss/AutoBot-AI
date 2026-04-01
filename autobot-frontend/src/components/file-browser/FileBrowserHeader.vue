@@ -102,6 +102,7 @@ const getPathUpTo = (index: number): string => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .file-browser-header {
   @apply flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-autobot-border;
 }
@@ -116,7 +117,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb {
-  @apply flex items-center flex-wrap gap-1 flex-shrink min-w-0;
+  @apply flex items-center flex-wrap gap-1 shrink min-w-0;
 }
 
 .breadcrumb-item {
@@ -136,11 +137,11 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-field {
-  @apply px-3 py-1.5 text-sm border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px];
+  @apply px-3 py-1.5 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 min-w-[200px];
 }
 
 .file-actions {
-  @apply flex gap-2 flex-shrink-0 ml-auto;
+  @apply flex gap-2 shrink-0 ml-auto;
 }
 
 /* Button styling handled by BaseButton component */

@@ -212,7 +212,7 @@ onUnmounted(() => {
       <div class="flex items-center gap-4">
         <!-- Auto-refresh toggle -->
         <label class="flex items-center gap-2 text-sm">
-          <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh" class="rounded" />
+          <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh" class="rounded-sm" />
           <span class="text-gray-600">Auto-refresh ({{ refreshInterval }}s)</span>
         </label>
 
@@ -258,7 +258,7 @@ onUnmounted(() => {
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
       <!-- System Resources -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm text-gray-500">CPU Usage</span>
           <span :class="[
@@ -281,7 +281,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm text-gray-500">Memory Usage</span>
           <span :class="[
@@ -304,7 +304,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm text-gray-500">Disk Usage</span>
           <span :class="[
@@ -327,7 +327,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Total Errors (24h)</p>
@@ -345,7 +345,7 @@ onUnmounted(() => {
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Recent Errors -->
-      <div class="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200">
+      <div class="lg:col-span-2 bg-white rounded-lg shadow-xs border border-gray-200">
         <div class="px-6 py-4 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -370,7 +370,7 @@ onUnmounted(() => {
               <div class="flex items-start justify-between">
                 <div class="flex-1">
                   <div class="flex items-center gap-2 mb-1">
-                    <span :class="['px-2 py-0.5 text-xs font-medium rounded', getErrorLevelClass(err.level)]">
+                    <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getErrorLevelClass(err.level)]">
                       {{ err.level }}
                     </span>
                     <span class="text-xs text-gray-500">{{ err.component }}</span>
@@ -387,7 +387,7 @@ onUnmounted(() => {
       <!-- Error Stats & Services -->
       <div class="space-y-6">
         <!-- Error Breakdown -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">Error Breakdown</h2>
           </div>
@@ -398,7 +398,7 @@ onUnmounted(() => {
                 :key="stat.level"
                 class="flex items-center justify-between"
               >
-                <span :class="['px-2 py-1 text-xs font-medium rounded', getErrorLevelClass(stat.level)]">
+                <span :class="['px-2 py-1 text-xs font-medium rounded-sm', getErrorLevelClass(stat.level)]">
                   {{ stat.level }}
                 </span>
                 <span class="font-bold text-gray-900">{{ stat.count }}</span>
@@ -411,7 +411,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Services Status -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold text-gray-900">Services</h2>
           </div>

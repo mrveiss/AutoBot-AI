@@ -115,6 +115,7 @@ const cancelLoading = () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .unified-loading-view {
   @apply relative h-full;
   /* CRITICAL FIX: Remove w-full to prevent width override issues */

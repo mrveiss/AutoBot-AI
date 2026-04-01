@@ -184,7 +184,7 @@ onMounted(async () => {
               </div>
               <span
                 :class="[
-                  'ml-2 flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
+                  'ml-2 shrink-0 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                   agent.status === 'connected'
                     ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                     : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
@@ -262,7 +262,7 @@ onMounted(async () => {
               <div class="flex-1 min-w-0">
                 <h3 class="text-sm font-semibold text-primary truncate">{{ agent.name }}</h3>
               </div>
-              <div class="ml-2 flex items-center gap-1.5 flex-shrink-0">
+              <div class="ml-2 flex items-center gap-1.5 shrink-0">
                 <span
                   v-if="agent.model"
                   :class="[

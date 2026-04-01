@@ -619,6 +619,7 @@ const copyDocument = async () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .knowledge-search {
   @apply p-4 bg-autobot-bg-card rounded-lg shadow-sm border;
 }
@@ -788,7 +789,7 @@ const copyDocument = async () => {
 
 /* RAG Synthesis */
 .rag-synthesis {
-  @apply mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200;
+  @apply mb-6 p-4 bg-linear-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200;
 }
 
 .synthesis-header {

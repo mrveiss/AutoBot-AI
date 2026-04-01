@@ -118,6 +118,7 @@ const getFileIcon = (item: TreeItem): string => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .tree-panel {
   @apply bg-autobot-bg-card border border-autobot-border rounded-lg flex flex-col h-full;
 }

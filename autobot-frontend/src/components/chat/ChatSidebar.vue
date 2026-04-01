@@ -1,12 +1,12 @@
 <template>
   <div
-    class="bg-autobot-bg-secondary border-r border-autobot-border flex flex-col h-full overflow-hidden transition-all duration-300 flex-shrink-0"
+    class="bg-autobot-bg-secondary border-r border-autobot-border flex flex-col h-full overflow-hidden transition-all duration-300 shrink-0"
     :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
   >
     <!-- Toggle Button -->
     <BaseButton
       variant="ghost"
-      class="p-3 border-b border-autobot-border text-autobot-text-secondary flex-shrink-0"
+      class="p-3 border-b border-autobot-border text-autobot-text-secondary shrink-0"
       @click="controller.toggleSidebar()"
       :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
     >
@@ -18,7 +18,7 @@
 
       <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
       <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
-        <div class="flex items-center justify-between mb-3 flex-shrink-0">
+        <div class="flex items-center justify-between mb-3 shrink-0">
           <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('chat.sidebar.chatHistory') }}</h3>
           <BaseButton
             v-if="!selectionMode"
@@ -66,7 +66,7 @@
             @focus="focusedIndex = index"
           >
             <!-- Selection checkbox -->
-            <div v-if="selectionMode" class="absolute start-1 top-1">
+            <div v-if="selectionMode" class="absolute inset-s-1 top-1">
               <input
                 type="checkbox"
                 :checked="selectedSessions.has(session.id)"
@@ -79,7 +79,7 @@
               <span class="text-sm text-autobot-text-primary truncate flex-1 leading-tight">
                 {{ session.title || getSessionPreview(session) }}
               </span>
-              <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 <BaseButton
                   variant="ghost"
                   size="xs"
@@ -129,7 +129,7 @@
         </div>
 
         <!-- Chat Actions - FIXED: More compact, stays at bottom of scrollable area -->
-        <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-autobot-border flex-shrink-0">
+        <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-autobot-border shrink-0">
           <BaseButton
             variant="primary"
             size="xs"
@@ -175,7 +175,7 @@
         </div>
 
         <!-- Selection Mode Actions -->
-        <div v-else class="pt-2 border-t border-autobot-border flex-shrink-0">
+        <div v-else class="pt-2 border-t border-autobot-border shrink-0">
           <BaseButton
             variant="danger"
             size="xs"
@@ -191,7 +191,7 @@
       </section>
 
       <!-- Display Settings Section - FIXED: More compact -->
-      <section class="border-t border-autobot-border p-4 pb-3 flex-shrink-0">
+      <section class="border-t border-autobot-border p-4 pb-3 shrink-0">
         <h3 class="text-base font-semibold text-autobot-text-primary mb-2">{{ $t('chat.sidebar.messageDisplay') }}</h3>
         <div class="space-y-2">
           <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
@@ -207,7 +207,7 @@
       </section>
 
       <!-- System Control Section - FIXED: More compact -->
-      <section class="border-t border-autobot-border p-4 pb-4 flex-shrink-0">
+      <section class="border-t border-autobot-border p-4 pb-4 shrink-0">
         <h3 class="text-base font-semibold text-autobot-text-primary mb-2">{{ $t('chat.sidebar.systemControl') }}</h3>
         <div class="space-y-1.5">
           <BaseButton
@@ -261,7 +261,7 @@
     <input
       v-model="editingName"
       type="text"
-      class="w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500"
+      class="w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-electric-500"
       :placeholder="$t('chat.sidebar.enterChatName')"
       @keyup.enter="saveSessionName"
       @keyup.escape="cancelEdit"

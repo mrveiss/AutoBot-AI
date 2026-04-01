@@ -188,7 +188,7 @@ async function handleDelete(): Promise<void> {
       <div
         v-for="slo in slos"
         :key="slo.slo_id"
-        class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+        class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
       >
         <div class="flex items-start justify-between mb-3">
           <div>
@@ -366,7 +366,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.enabled"
                 type="checkbox"
                 id="slo-enabled"
-                class="rounded border-gray-300"
+                class="rounded-sm border-gray-300"
               />
               <label for="slo-enabled" class="text-sm text-gray-700">Enabled</label>
             </div>

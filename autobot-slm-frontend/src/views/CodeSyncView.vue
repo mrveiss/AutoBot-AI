@@ -600,7 +600,7 @@ onUnmounted(() => {
             <input
               type="checkbox"
               v-model="restartAfterSync"
-              class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
             />
             <span class="text-sm text-gray-700">Restart service after sync</span>
           </label>
@@ -663,7 +663,7 @@ onUnmounted(() => {
                 :checked="allSelected"
                 :indeterminate="someSelected"
                 @change="toggleSelectAll"
-                class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
               />
             </th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hostname</th>
@@ -684,7 +684,7 @@ onUnmounted(() => {
                 type="checkbox"
                 :checked="selectedNodes.has(node.node_id)"
                 @change="toggleNode(node.node_id)"
-                class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
               />
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -764,7 +764,7 @@ onUnmounted(() => {
             <span class="font-medium text-gray-900">{{ role.display_name || role.name }}</span>
             <span
               v-if="role.auto_restart"
-              class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded"
+              class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-sm"
             >
               auto-restart
             </span>
@@ -852,13 +852,13 @@ onUnmounted(() => {
               <button
                 @click="handleToggleSchedule(schedule)"
                 :class="[
-                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden',
                   schedule.enabled ? 'bg-primary-600' : 'bg-gray-200',
                 ]"
               >
                 <span
                   :class="[
-                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
                     schedule.enabled ? 'translate-x-5' : 'translate-x-0',
                   ]"
                 />

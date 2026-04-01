@@ -1,7 +1,7 @@
 <template>
   <div class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
     <!-- Header -->
-    <div class="flex items-center justify-between p-3 border-b border-autobot-border flex-shrink-0">
+    <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
         <div class="voice-panel__icon">
           <i class="fas fa-headset"></i>
@@ -115,7 +115,7 @@
           @input="voiceConversation.silenceThreshold.value = Number(($event.target as HTMLInputElement).value)"
           class="voice-panel__slider flex-1"
         />
-        <span class="text-xs text-autobot-text-secondary tabular-nums min-w-[2rem] text-end">
+        <span class="text-xs text-autobot-text-secondary tabular-nums min-w-8 text-end">
           {{ (voiceConversation.silenceThreshold.value / 1000).toFixed(1) }}s
         </span>
       </div>
@@ -260,6 +260,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .voice-panel {
   width: 280px;
   max-width: 280px;

@@ -479,16 +479,16 @@ export function showSubtleErrorNotification(title: string, message: string, seve
 
   notification.innerHTML = `
     <div style="display: flex; align-items: flex-start; gap: 8px;">
-      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${iconColor}; flex-shrink: 0; margin-top: 2px;">
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" style="color: ${iconColor}; shrink: 0; margin-top: 2px;">
         ${iconSvg}
       </svg>
-      <div style="flex-grow: 1; min-width: 0;">
+      <div style="grow: 1; min-width: 0;">
         <div style="font-weight: 600; margin-bottom: 2px;">${title}</div>
         <div style="font-size: 12px; opacity: 0.9; line-height: 1.4;">${message}</div>
       </div>
       <button
         onclick="this.parentElement.parentElement.remove()"
-        style="background: none; border: none; color: ${textColor}; opacity: 0.7; cursor: pointer; font-size: 16px; padding: 2px; line-height: 1; flex-shrink: 0;"
+        style="background: none; border: none; color: ${textColor}; opacity: 0.7; cursor: pointer; font-size: 16px; padding: 2px; line-height: 1; shrink: 0;"
         title="Dismiss"
       >×</button>
     </div>

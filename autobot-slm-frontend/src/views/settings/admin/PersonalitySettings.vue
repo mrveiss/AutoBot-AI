@@ -223,7 +223,7 @@ onMounted(async () => {
     <!-- ================================================================
          LEFT PANEL — Profile List
     ================================================================ -->
-    <div class="w-64 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col">
+    <div class="w-64 shrink-0 border-r border-gray-200 bg-white flex flex-col">
       <!-- Header + toggle -->
       <div class="px-4 py-4 border-b border-gray-100">
         <div class="flex items-center justify-between mb-3">
@@ -232,7 +232,7 @@ onMounted(async () => {
           <button
             type="button"
             :class="[
-              'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
               enabled ? 'bg-indigo-600' : 'bg-gray-300'
             ]"
             role="switch"
@@ -242,7 +242,7 @@ onMounted(async () => {
           >
             <span
               :class="[
-                'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200',
+                'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200',
                 enabled ? 'translate-x-4' : 'translate-x-0'
               ]"
             />
@@ -267,11 +267,11 @@ onMounted(async () => {
           <span class="flex-1 truncate font-medium">{{ p.name }}</span>
           <span
             v-if="p.active"
-            class="px-1.5 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700 font-medium"
+            class="px-1.5 py-0.5 rounded-sm text-xs bg-indigo-100 text-indigo-700 font-medium"
           >Active</span>
           <span
             v-if="p.is_system"
-            class="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-500"
+            class="px-1.5 py-0.5 rounded-sm text-xs bg-gray-100 text-gray-500"
           >System</span>
         </li>
       </ul>
@@ -280,13 +280,13 @@ onMounted(async () => {
       <div class="px-4 py-3 border-t border-gray-100 flex gap-2">
         <button
           type="button"
-          class="flex-1 text-xs px-2 py-1.5 rounded border border-indigo-300 text-indigo-700 hover:bg-indigo-50 transition-colors"
+          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 transition-colors"
           @click="showNewDialog = true"
         >+ New</button>
         <button
           type="button"
           :disabled="!selectedId"
-          class="flex-1 text-xs px-2 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          class="flex-1 text-xs px-2 py-1.5 rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
           @click="handleDuplicate"
         >Duplicate</button>
       </div>
@@ -298,10 +298,10 @@ onMounted(async () => {
     <div class="flex-1 overflow-y-auto bg-gray-50 px-6 py-6">
 
       <!-- Error / success banners -->
-      <div v-if="error" class="mb-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-red-700">
+      <div v-if="error" class="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-red-700">
         {{ error }}
       </div>
-      <div v-if="successMsg" class="mb-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-green-700">
+      <div v-if="successMsg" class="mb-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-green-700">
         {{ successMsg }}
       </div>
 
@@ -329,22 +329,22 @@ onMounted(async () => {
             <button
               v-if="!isActive"
               type="button"
-              class="text-xs px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              class="text-xs px-3 py-1.5 rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
               @click="handleActivate"
             >Set Active</button>
             <span
               v-else
-              class="text-xs px-3 py-1.5 rounded bg-indigo-100 text-indigo-700 font-medium"
+              class="text-xs px-3 py-1.5 rounded-sm bg-indigo-100 text-indigo-700 font-medium"
             >Currently Active</span>
             <button
               type="button"
-              class="text-xs px-3 py-1.5 rounded border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
+              class="text-xs px-3 py-1.5 rounded-sm border border-amber-300 text-amber-700 hover:bg-amber-50 transition-colors"
               @click="handleReset"
             >Reset to Default</button>
             <button
               v-if="!editForm.is_system"
               type="button"
-              class="text-xs px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
+              class="text-xs px-3 py-1.5 rounded-sm border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
               @click="confirmDeleteId = selectedId"
             >Delete</button>
           </div>
@@ -359,7 +359,7 @@ onMounted(async () => {
               <input
                 v-model="editForm.name"
                 type="text"
-                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
               />
             </div>
             <div>
@@ -368,7 +368,7 @@ onMounted(async () => {
                 v-model="editForm.tagline"
                 type="text"
                 placeholder="One-line description"
-                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
               />
             </div>
           </div>
@@ -410,12 +410,12 @@ onMounted(async () => {
                 v-model="traitInput"
                 type="text"
                 placeholder="Add a trait…"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addTrait"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addTrait"
               >Add</button>
             </div>
@@ -439,12 +439,12 @@ onMounted(async () => {
                 v-model="styleInput"
                 type="text"
                 placeholder="Add a style guideline…"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addStyle"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addStyle"
               >Add</button>
             </div>
@@ -468,12 +468,12 @@ onMounted(async () => {
                 v-model="limitInput"
                 type="text"
                 placeholder="Add a hard limit…"
-                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                class="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
                 @keydown.enter.prevent="addLimit"
               />
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                class="px-3 py-1.5 text-xs rounded-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                 @click="addLimit"
               >Add</button>
             </div>
@@ -486,7 +486,7 @@ onMounted(async () => {
               v-model="editForm.custom_notes"
               rows="4"
               placeholder="Any additional freeform instructions…"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400 resize-none"
             />
           </div>
 
@@ -495,7 +495,7 @@ onMounted(async () => {
             <label class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
             <select
               v-model="editForm.voice_id"
-              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-400"
             >
               <option value="">None (use user's voice setting)</option>
               <option
@@ -541,19 +541,19 @@ onMounted(async () => {
             type="text"
             placeholder="Profile name"
             autofocus
-            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400 mb-4"
+            class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-hidden focus:ring-2 focus:ring-indigo-400 mb-4"
             @keydown.enter="handleNewProfile"
           />
           <div class="flex justify-end gap-2">
             <button
               type="button"
-              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded border border-gray-200"
+              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
               @click="showNewDialog = false"
             >Cancel</button>
             <button
               type="button"
               :disabled="!newName.trim()"
-              class="px-4 py-1.5 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
+              class="px-4 py-1.5 text-sm rounded-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40"
               @click="handleNewProfile"
             >Create</button>
           </div>
@@ -578,12 +578,12 @@ onMounted(async () => {
           <div class="flex justify-end gap-2">
             <button
               type="button"
-              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded border border-gray-200"
+              class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-sm border border-gray-200"
               @click="confirmDeleteId = null"
             >Cancel</button>
             <button
               type="button"
-              class="px-4 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
+              class="px-4 py-1.5 text-sm rounded-sm bg-red-600 text-white hover:bg-red-700"
               @click="handleDelete"
             >Delete</button>
           </div>

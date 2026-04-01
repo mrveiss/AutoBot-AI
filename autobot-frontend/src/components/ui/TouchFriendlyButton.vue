@@ -29,7 +29,7 @@ import { computed, ref, nextTick } from 'vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
+  variant?: 'primary' | 'secondary' | 'outline-solid' | 'ghost' | 'danger'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   loading?: boolean
   disabled?: boolean
@@ -127,8 +127,9 @@ const createRipple = (event: TouchEvent) => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .touch-friendly-button {
-  @apply relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 font-medium;
+  @apply relative overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-offset-2 transition-all duration-200 font-medium;
   min-height: 44px; /* iOS/Android minimum touch target */
   min-width: 44px;
   -webkit-tap-highlight-color: transparent;
@@ -149,7 +150,7 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .ripple-effect {
-  @apply absolute w-12 h-12 bg-white bg-opacity-30 rounded-full;
+  @apply absolute w-12 h-12 bg-white/30 rounded-full;
   animation: ripple 0.6s ease-out;
   pointer-events: none;
 }

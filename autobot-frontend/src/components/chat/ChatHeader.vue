@@ -82,6 +82,7 @@ const connectionStatusIcon = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .chat-header {
   @apply flex-shrink-0;
 }

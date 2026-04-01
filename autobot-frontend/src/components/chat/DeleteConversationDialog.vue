@@ -178,7 +178,7 @@
                 <input
                   v-model="kbCategories"
                   type="text"
-                  class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+                  class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-autobot-primary"
                   placeholder="e.g., research, documentation"
                 />
               </div>
@@ -204,7 +204,7 @@
                 <input
                   v-model="sharedPath"
                   type="text"
-                  class="w-full px-3 py-2 text-sm border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  class="w-full px-3 py-2 text-sm border border-green-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-green-500"
                   placeholder="e.g., archive/2025/"
                 />
               </div>
@@ -240,14 +240,14 @@
     <template #actions>
       <button
         @click="handleCancel"
-        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-border"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-autobot-border"
         :disabled="isDeleting"
       >
         {{ $t('common.cancel') }}
       </button>
       <button
         @click="handleConfirm"
-        class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
+        class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2"
         :disabled="isDeleting"
       >
         <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
@@ -406,6 +406,7 @@ const handleCancel = () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* Custom radio button styling */
 input[type="radio"] {
   @apply w-4 h-4 cursor-pointer;

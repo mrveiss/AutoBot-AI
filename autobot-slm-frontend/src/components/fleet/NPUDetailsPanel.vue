@@ -223,19 +223,19 @@ onMounted(async () => {
           <div v-if="liveMetrics" class="bg-gray-50 rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Live Metrics</h3>
             <div class="grid grid-cols-2 gap-3">
-              <div class="text-center p-2 bg-white rounded border border-gray-100">
+              <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.inference_count }}</p>
                 <p class="text-xs text-gray-500">Inferences</p>
               </div>
-              <div class="text-center p-2 bg-white rounded border border-gray-100">
+              <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.avg_latency_ms.toFixed(1) }}ms</p>
                 <p class="text-xs text-gray-500">Avg Latency</p>
               </div>
-              <div class="text-center p-2 bg-white rounded border border-gray-100">
+              <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold text-gray-900">{{ liveMetrics.throughput_rps.toFixed(1) }}</p>
                 <p class="text-xs text-gray-500">Throughput (req/s)</p>
               </div>
-              <div class="text-center p-2 bg-white rounded border border-gray-100">
+              <div class="text-center p-2 bg-white rounded-sm border border-gray-100">
                 <p class="text-lg font-semibold" :class="tempColor">
                   {{ liveMetrics.temperature_celsius != null ? `${liveMetrics.temperature_celsius}°C` : 'N/A' }}
                 </p>
@@ -296,26 +296,26 @@ onMounted(async () => {
               <li
                 v-for="model in availableModels"
                 :key="model"
-                class="flex items-center justify-between p-2 bg-gray-50 rounded"
+                class="flex items-center justify-between p-2 bg-gray-50 rounded-sm"
               >
                 <div class="flex items-center gap-2">
                   <input
                     type="checkbox"
                     :checked="workerConfig.assigned_models.includes(model)"
                     @change="toggleModel(model)"
-                    class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span class="text-sm text-gray-900">{{ model }}</span>
                 </div>
                 <span
                   v-if="loadedModels.includes(model)"
-                  class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded"
+                  class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-sm"
                 >
                   Loaded
                 </span>
                 <span
                   v-else
-                  class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded"
+                  class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-sm"
                 >
                   Available
                 </span>
@@ -347,7 +347,7 @@ onMounted(async () => {
                   <input
                     v-model.number="workerConfig.priority"
                     type="number" min="1" max="10"
-                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
                 <div>
@@ -355,7 +355,7 @@ onMounted(async () => {
                   <input
                     v-model.number="workerConfig.weight"
                     type="number" min="1" max="100"
-                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -366,7 +366,7 @@ onMounted(async () => {
                   <input
                     v-model.number="workerConfig.max_concurrent"
                     type="number" min="1"
-                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
                 <div>
@@ -374,7 +374,7 @@ onMounted(async () => {
                   <input
                     v-model.number="workerConfig.max_retries"
                     type="number" min="0" max="10"
-                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -383,7 +383,7 @@ onMounted(async () => {
                 <label class="block text-xs font-medium text-gray-600 mb-1">Failure Action</label>
                 <select
                   v-model="workerConfig.failure_action"
-                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-sm focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="retry">Retry on Same Worker</option>
                   <option value="failover">Failover to Another Worker</option>

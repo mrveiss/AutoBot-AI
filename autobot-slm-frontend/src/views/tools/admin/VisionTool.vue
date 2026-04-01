@@ -158,7 +158,7 @@ function loadFromHistory(item: AnalysisHistory): void {
   <div class="p-6 h-full flex flex-col">
     <div class="flex gap-6 flex-1 overflow-hidden">
       <!-- Main Panel -->
-      <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+      <div class="flex-1 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
         <!-- Tabs -->
         <div class="border-b border-gray-200">
           <nav class="flex">
@@ -316,7 +316,7 @@ function loadFromHistory(item: AnalysisHistory): void {
                   </button>
                   <button
                     @click="activeTab = 'analyze'"
-                    class="px-3 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+                    class="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-sm hover:bg-primary-700"
                   >
                     Analyze
                   </button>

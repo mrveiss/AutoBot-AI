@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
         v-if="notification"
         class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2"
       >
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         {{ notification }}
@@ -298,7 +298,7 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Strategy Configuration</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -336,7 +336,7 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Task Distribution Bar Chart                                   -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Task Distribution</h2>
 
       <div v-if="workerMetrics.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
@@ -350,7 +350,7 @@ onBeforeUnmount(() => {
           class="flex items-center gap-4"
         >
           <!-- Worker label -->
-          <div class="w-36 flex-shrink-0 text-sm">
+          <div class="w-36 shrink-0 text-sm">
             <span class="font-medium text-gray-900 truncate block">
               {{ getWorkerHostname(worker.node_id) }}
             </span>
@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Worker Load Overview                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Worker Load Overview</h2>
 
       <div v-if="sortedWorkers.length === 0 && !loading" class="text-sm text-gray-500 text-center py-8">
@@ -428,11 +428,11 @@ onBeforeUnmount(() => {
 
           <!-- Stats grid -->
           <div class="grid grid-cols-2 gap-2 text-center">
-            <div class="p-2 bg-gray-50 rounded">
+            <div class="p-2 bg-gray-50 rounded-sm">
               <p class="text-sm font-semibold text-gray-900">{{ worker.queue_depth }}</p>
               <p class="text-xs text-gray-500">Queue Depth</p>
             </div>
-            <div class="p-2 bg-gray-50 rounded">
+            <div class="p-2 bg-gray-50 rounded-sm">
               <p class="text-sm font-semibold text-gray-900">
                 {{ getWorkerConfig(worker.node_id)?.assigned_models?.length ?? 0 }}
               </p>
@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
     <!-- ============================================================ -->
     <!-- Rebalancing Controls                                          -->
     <!-- ============================================================ -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Rebalancing Controls</h2>
 
       <div class="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
               class="sr-only peer"
             />
             <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
-            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4" />
           </div>
           <span class="text-sm text-gray-700">Auto-rebalance</span>
         </label>
@@ -514,7 +514,7 @@ onBeforeUnmount(() => {
           v-if="autoRebalanceRecommendation"
           class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-2"
         >
-          <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>{{ autoRebalanceRecommendation }}</span>

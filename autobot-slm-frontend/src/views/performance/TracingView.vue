@@ -290,7 +290,7 @@ onMounted(() => {
     </div>
 
     <!-- Traces Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 mb-4">
       <div v-if="traces.length === 0 && !loading" class="p-8 text-center text-gray-400">
         No traces found for the current filters
       </div>
@@ -385,24 +385,24 @@ onMounted(() => {
                       class="flex items-center gap-2"
                       :style="{ paddingLeft: `${span.depth * 20}px` }"
                     >
-                      <span class="text-xs text-gray-500 w-32 truncate flex-shrink-0">
+                      <span class="text-xs text-gray-500 w-32 truncate shrink-0">
                         {{ span.service_name }}
                       </span>
-                      <span class="text-xs text-gray-700 w-40 truncate flex-shrink-0">
+                      <span class="text-xs text-gray-700 w-40 truncate shrink-0">
                         {{ span.name }}
                       </span>
-                      <div class="flex-1 h-5 bg-gray-200 rounded relative">
+                      <div class="flex-1 h-5 bg-gray-200 rounded-sm relative">
                         <div
-                          :class="['h-full rounded', spanBarColor(span.status)]"
+                          :class="['h-full rounded-sm', spanBarColor(span.status)]"
                           :style="{ width: `${spanWidthPercent(span, expandedDetail!.duration_ms)}%` }"
                         ></div>
                       </div>
-                      <span class="text-xs font-mono text-gray-600 w-16 text-right flex-shrink-0">
+                      <span class="text-xs font-mono text-gray-600 w-16 text-right shrink-0">
                         {{ formatDuration(span.duration_ms) }}
                       </span>
                       <span
                         :class="[
-                          'px-1.5 py-0.5 text-xs font-medium rounded',
+                          'px-1.5 py-0.5 text-xs font-medium rounded-sm',
                           statusBadgeClass(span.status)
                         ]"
                       >
@@ -430,28 +430,28 @@ onMounted(() => {
         <button
           @click="goToPage(1)"
           :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           First
         </button>
         <button
           @click="goToPage(page - 1)"
           :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Prev
         </button>
         <button
           @click="goToPage(page + 1)"
           :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Next
         </button>
         <button
           @click="goToPage(totalPages)"
           :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Last
         </button>

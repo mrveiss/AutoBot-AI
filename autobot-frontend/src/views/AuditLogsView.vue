@@ -338,6 +338,7 @@ async function performCleanup() {
 </script>
 
 <style scoped>
+@reference "../assets/tailwind.css";
 .audit-logs-view {
   display: flex;
   flex-direction: column;

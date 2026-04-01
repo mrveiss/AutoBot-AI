@@ -275,7 +275,7 @@ onUnmounted(() => {
   <div class="p-6 space-y-6">
     <!-- Messages -->
     <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
@@ -287,14 +287,14 @@ onUnmounted(() => {
     </div>
 
     <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ success }}
     </div>
 
     <!-- Header -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <div class="flex items-center justify-between mb-6">
         <div>
           <h2 class="text-lg font-semibold text-gray-900">NPU Worker Management</h2>
@@ -333,7 +333,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Load Balancing Configuration -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
@@ -388,13 +388,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Workers List -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 class="font-semibold text-gray-900">Registered Workers ({{ workers.length }})</h3>
         <button
           @click="fetchWorkers"
           :disabled="loading"
-          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+          class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
         >
           <svg :class="['w-5 h-5', loading && 'animate-spin']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -481,13 +481,13 @@ onUnmounted(() => {
                   <span
                     v-for="cap in worker.capabilities?.slice(0, 3)"
                     :key="cap"
-                    class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                    class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-sm text-xs"
                   >
                     {{ cap }}
                   </span>
                   <span
                     v-if="(worker.capabilities?.length || 0) > 3"
-                    class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                    class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-sm text-xs"
                   >
                     +{{ (worker.capabilities?.length || 0) - 3 }}
                   </span>
@@ -505,7 +505,7 @@ onUnmounted(() => {
                   <button
                     @click="testWorker(worker)"
                     :disabled="testingWorker[worker.id]"
-                    class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded disabled:opacity-50"
+                    class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-sm disabled:opacity-50"
                     title="Test connection"
                   >
                     <svg v-if="testingWorker[worker.id]" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -518,7 +518,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     @click="viewMetrics(worker)"
-                    class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded"
+                    class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-sm"
                     title="View metrics"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -527,7 +527,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     @click="restartWorker(worker)"
-                    class="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded"
+                    class="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-sm"
                     title="Restart"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -536,7 +536,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     @click="openEditModal(worker)"
-                    class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded"
+                    class="p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-sm"
                     title="Edit"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -545,7 +545,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     @click="confirmDelete(worker)"
-                    class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                    class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-sm"
                     title="Remove"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -698,7 +698,7 @@ onUnmounted(() => {
               <span
                 v-for="cap in selectedWorkerMetrics.capabilities"
                 :key="cap"
-                class="px-2 py-1 bg-white border border-gray-200 rounded text-sm"
+                class="px-2 py-1 bg-white border border-gray-200 rounded-sm text-sm"
               >
                 {{ cap }}
               </span>

@@ -243,6 +243,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .async-loading {
   @apply flex items-center justify-center min-h-64 p-8;
 }

@@ -378,11 +378,11 @@ function getStatusColor(status: string): string {
                         <span
                           v-for="host in playbook.target_hosts"
                           :key="host"
-                          class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                          class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                         >
                           {{ host }}
                         </span>
-                        <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded">
+                        <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-sm">
                           ~{{ playbook.estimated_duration }}
                         </span>
                       </div>
@@ -461,7 +461,7 @@ function getStatusColor(status: string): string {
                     <input
                       v-model="confirmationChecked"
                       type="checkbox"
-                      class="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      class="rounded-sm border-amber-300 text-amber-600 focus:ring-amber-500"
                     />
                     <span class="text-sm text-amber-800">
                       I understand the changes and want to proceed

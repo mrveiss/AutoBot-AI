@@ -803,12 +803,12 @@ onUnmounted(() => {
               type="checkbox"
               :checked="selectedUpdateIds.includes(update.id)"
               @change="toggleUpdateSelection(update.id)"
-              class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
             />
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
                 <span class="font-medium text-gray-900">v{{ update.version }}</span>
-                <span :class="['px-2 py-0.5 text-xs font-medium rounded', getUpdateSeverityClass(update.severity)]">
+                <span :class="['px-2 py-0.5 text-xs font-medium rounded-sm', getUpdateSeverityClass(update.severity)]">
                   {{ update.severity }}
                 </span>
               </div>
@@ -932,7 +932,7 @@ onUnmounted(() => {
 
             <!-- Event Type -->
             <td class="px-4 py-3">
-              <div class="inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded text-sm font-medium text-gray-700">
+              <div class="inline-flex items-center gap-2 px-2 py-1 bg-gray-100 rounded-sm text-sm font-medium text-gray-700">
                 <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getEventIcon(event.event_type)" />
                 </svg>
@@ -950,7 +950,7 @@ onUnmounted(() => {
                 <span
                   v-for="(value, key) in event.details"
                   :key="key"
-                  class="inline-flex px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                  class="inline-flex px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                 >
                   {{ formatDetailKey(String(key)) }}: {{ value }}
                 </span>
@@ -995,7 +995,7 @@ onUnmounted(() => {
         <input
           type="checkbox"
           v-model="autoRefresh"
-          class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+          class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />
         Auto-refresh (every {{ Math.round(autoRefreshInterval / 1000) }}s)
       </label>

@@ -136,7 +136,7 @@ onUnmounted(() => {
     />
 
     <!-- Performance Metrics Panel -->
-    <div v-if="performanceOverview" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="performanceOverview" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h3 class="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">
@@ -173,7 +173,7 @@ onUnmounted(() => {
     </div>
 
     <!-- NPU Metrics Panel (conditional) -->
-    <div v-if="showNPUMetrics && npuFleetMetrics" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="showNPUMetrics && npuFleetMetrics" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h3 class="text-lg font-semibold text-gray-900 mb-4">NPU Fleet Metrics</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="space-y-2">

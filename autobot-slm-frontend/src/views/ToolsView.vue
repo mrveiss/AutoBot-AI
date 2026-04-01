@@ -351,7 +351,7 @@ onMounted(async () => {
           :aria-label="`${tool.name}: ${tool.description}`"
           :aria-pressed="activeTool === tool.id"
           :class="[
-            'bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-left transition-all',
+            'bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-left transition-all',
             tool.available
               ? 'hover:shadow-md hover:border-primary-300 cursor-pointer'
               : 'opacity-50 cursor-not-allowed',
@@ -394,7 +394,7 @@ onMounted(async () => {
       </div>
 
       <!-- Tool Interface Panel -->
-      <div v-if="activeTool" class="bg-white rounded-lg shadow-sm border border-gray-200" role="region" :aria-label="tools.find(t => t.id === activeTool)?.name || 'Tool panel'">
+      <div v-if="activeTool" class="bg-white rounded-lg shadow-xs border border-gray-200" role="region" :aria-label="tools.find(t => t.id === activeTool)?.name || 'Tool panel'">
         <!-- Panel Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 class="text-lg font-semibold text-gray-900">

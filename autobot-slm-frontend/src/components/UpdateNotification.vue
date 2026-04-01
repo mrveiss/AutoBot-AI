@@ -77,7 +77,7 @@ function goToCodeSync(): void {
       <div class="flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <!-- Warning icon -->
-          <div class="flex-shrink-0" aria-hidden="true">
+          <div class="shrink-0" aria-hidden="true">
             <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"

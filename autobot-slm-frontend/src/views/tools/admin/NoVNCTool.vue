@@ -194,7 +194,7 @@ onUnmounted(() => {
 <template>
   <div class="p-6 h-full flex flex-col">
     <!-- VNC Container -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="bg-gray-100 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -227,7 +227,7 @@ onUnmounted(() => {
           <button
             @click="fetchDynamicEndpoints"
             :disabled="loadingEndpoints || isConnected"
-            class="p-1.5 text-gray-500 hover:bg-gray-200 rounded transition-colors disabled:opacity-50"
+            class="p-1.5 text-gray-500 hover:bg-gray-200 rounded-sm transition-colors disabled:opacity-50"
             title="Refresh VNC endpoints"
           >
             <svg
@@ -253,7 +253,7 @@ onUnmounted(() => {
           <!-- Dynamic Badge -->
           <span
             v-if="currentHost?.source === 'dynamic'"
-            class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded"
+            class="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-sm"
           >
             SLM
           </span>
@@ -411,10 +411,10 @@ onUnmounted(() => {
             <img v-if="screenshotData" :src="screenshotData" alt="Desktop Screenshot" class="max-w-full h-auto rounded-lg shadow-lg" />
           </div>
           <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
-            <button @click="downloadScreenshot" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+            <button @click="downloadScreenshot" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors">
               💾 Download
             </button>
-            <button @click="showScreenshotModal = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors">
+            <button @click="showScreenshotModal = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-sm transition-colors">
               Close
             </button>
           </div>
@@ -437,10 +437,10 @@ onUnmounted(() => {
             ></textarea>
           </div>
           <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
-            <button @click="handleTypeText" :disabled="!textToType.trim()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button @click="handleTypeText" :disabled="!textToType.trim()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               ⌨️ Type
             </button>
-            <button @click="showTypeDialog = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors">
+            <button @click="showTypeDialog = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-sm transition-colors">
               Cancel
             </button>
           </div>
@@ -451,6 +451,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+@reference "../../../assets/styles/main.css";
 .action-btn {
   @apply px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded border border-blue-300 transition-colors;
 }

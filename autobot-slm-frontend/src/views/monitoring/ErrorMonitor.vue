@@ -311,27 +311,27 @@ onUnmounted(() => {
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
         <p class="text-sm text-gray-500">Total Errors</p>
         <p class="text-2xl font-bold text-gray-900">{{ stats.total_errors }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-red-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4">
         <p class="text-sm text-red-600">Last 24 Hours</p>
         <p class="text-2xl font-bold text-red-700">{{ stats.errors_24h }}</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-orange-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-orange-200 p-4">
         <p class="text-sm text-orange-600">Unresolved</p>
         <p class="text-2xl font-bold text-orange-700">
           {{ stats.unresolved_count }}
         </p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-green-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4">
         <p class="text-sm text-green-600">Resolved</p>
         <p class="text-2xl font-bold text-green-700">
           {{ stats.resolved_count }}
         </p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-4">
+      <div class="bg-white rounded-lg shadow-xs border border-blue-200 p-4">
         <p class="text-sm text-blue-600">Trend</p>
         <p class="text-2xl font-bold" :class="getTrendColor(stats.trend)">
           {{ getTrendIcon(stats.trend) }}
@@ -344,7 +344,7 @@ onUnmounted(() => {
       <!-- Main Error List -->
       <div class="lg:col-span-2 space-y-4">
         <!-- Filters -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <div class="flex flex-wrap items-center gap-4">
             <div class="flex-1 min-w-[200px]">
               <input
@@ -377,7 +377,7 @@ onUnmounted(() => {
 
         <!-- Error List -->
         <div
-          class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden"
         >
           <div class="max-h-[500px] overflow-y-auto divide-y divide-gray-200">
             <div
@@ -391,7 +391,7 @@ onUnmounted(() => {
                   <div class="flex items-center gap-2 mb-1">
                     <span
                       :class="[
-                        'px-2 py-0.5 text-xs font-medium rounded',
+                        'px-2 py-0.5 text-xs font-medium rounded-sm',
                         getStatusClass(error.resolved),
                       ]"
                     >
@@ -453,14 +453,14 @@ onUnmounted(() => {
               <button
                 @click="prevPage"
                 :disabled="currentPage === 1"
-                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 @click="nextPage"
                 :disabled="currentPage * perPage >= totalErrors"
-                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
               >
                 Next
               </button>
@@ -472,7 +472,7 @@ onUnmounted(() => {
       <!-- Sidebar -->
       <div class="space-y-4">
         <!-- Top Errors -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <h3 class="text-sm font-semibold text-gray-900 mb-3">
             Recent Unresolved
           </h3>
@@ -507,7 +507,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Errors by Category -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <h3 class="text-sm font-semibold text-gray-900 mb-3">By Category</h3>
           <div class="space-y-2">
             <div
@@ -530,7 +530,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Errors by Component -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <h3 class="text-sm font-semibold text-gray-900 mb-3">By Node</h3>
           <div class="space-y-2">
             <div
@@ -588,7 +588,7 @@ onUnmounted(() => {
             <div class="flex items-center gap-2">
               <span
                 :class="[
-                  'px-2 py-1 text-xs font-medium rounded',
+                  'px-2 py-1 text-xs font-medium rounded-sm',
                   getStatusClass(selectedError.resolved),
                 ]"
               >

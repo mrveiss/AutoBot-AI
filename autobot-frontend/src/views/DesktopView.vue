@@ -9,6 +9,7 @@ import DesktopInterface from '@/components/desktop/DesktopInterface.vue'
 </script>
 
 <style scoped>
+@reference "../assets/tailwind.css";
 /* View-specific styles - layout provided by .view-container-full (Issue #548) */
 .desktop-view {
   @apply bg-autobot-bg-secondary;

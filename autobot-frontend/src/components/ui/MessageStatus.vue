@@ -105,6 +105,7 @@ const statusTooltip = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .message-status {
   @apply flex items-center gap-1 text-xs transition-all duration-200;
 }
@@ -179,7 +180,7 @@ const statusTooltip = computed(() => {
 
 /* Accessibility improvements */
 .retry-button:focus {
-  @apply outline-none ring-2 ring-blue-500 ring-offset-1;
+  @apply outline-hidden ring-2 ring-blue-500 ring-offset-1;
 }
 
 /* Mobile optimizations */

@@ -201,7 +201,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-4">
       <div class="flex flex-wrap items-center gap-4">
         <!-- Search -->
         <div class="flex-1 min-w-[200px]">
@@ -247,7 +247,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Log Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden">
       <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50 sticky top-0">
@@ -277,7 +277,7 @@ onUnmounted(() => {
                 <div class="text-gray-400">{{ formatDate(log.timestamp) }}</div>
               </td>
               <td class="px-4 py-2 whitespace-nowrap">
-                <span :class="['px-2 py-0.5 text-xs rounded', getLevelClass(log.level)]">
+                <span :class="['px-2 py-0.5 text-xs rounded-sm', getLevelClass(log.level)]">
                   {{ log.level.toUpperCase() }}
                 </span>
               </td>

@@ -23,7 +23,7 @@
 import { computed, ref } from 'vue'
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline' | 'ghost' | 'link'
+  variant?: 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark' | 'outline-solid' | 'ghost' | 'link'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   disabled?: boolean
   loading?: boolean
