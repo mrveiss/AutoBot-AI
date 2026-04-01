@@ -70,8 +70,8 @@ EXEMPT_PATHS: List[str] = [
     "/api/monitoring",
     "/api/metrics",
     "/api/analytics",
-    # WebSocket connections
-    "/ws",
+    # WebSocket connections (api.websockets router mounted at /api prefix)
+    "/api/ws",
     # API documentation
     "/docs",
     "/openapi.json",
