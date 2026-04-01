@@ -174,7 +174,7 @@
  * Issue #1458
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -209,6 +209,12 @@ const loading = ref(false)
 const showAddModal = ref(false)
 const syncingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
+
+// Polling state for syncing cards (#3092)
+const _pollTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const _pollDeadline = ref<number>(0)
+const POLL_INTERVAL_MS = 4000
+const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 // ---- API helpers ----------------------------------------------------------
 
@@ -353,17 +359,75 @@ async function deleteSource(source: CodeSource) {
   }
 }
 
+// ---- Polling (#3092) -------------------------------------------------------
+
+function _hasSyncingSource(): boolean {
+  return sources.value.some((s) => s.status === 'syncing')
+}
+
+function _stopPolling(): void {
+  if (_pollTimer.value !== null) {
+    clearInterval(_pollTimer.value)
+    _pollTimer.value = null
+    logger.info('Status polling stopped')
+  }
+}
+
+async function _pollTick(): Promise<void> {
+  if (Date.now() > _pollDeadline.value) {
+    logger.warn('Status polling timed out after 5 minutes — stopping')
+    _stopPolling()
+    return
+  }
+  try {
+    const backendUrl = await getBackendUrl()
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
+    if (!response.ok) {
+      logger.warn('Poll request failed, HTTP %d', response.status)
+      return
+    }
+    const data = await response.json()
+    sources.value = data.sources ?? []
+    if (!_hasSyncingSource()) {
+      _stopPolling()
+      await loadSummaries()
+      logger.info('All sources resolved — polling complete')
+    }
+  } catch (err: unknown) {
+    logger.error('Poll error:', err instanceof Error ? err.message : String(err))
+  }
+}
+
+function _startPolling(): void {
+  _stopPolling()
+  _pollDeadline.value = Date.now() + POLL_TIMEOUT_MS
+  _pollTimer.value = setInterval(_pollTick, POLL_INTERVAL_MS)
+  logger.info('Status polling started (interval %dms, timeout 5min)', POLL_INTERVAL_MS)
+}
+
 // ---- Modal Handlers -------------------------------------------------------
 
 function handleSourceSaved() {
   showAddModal.value = false
-  loadSources()
+  loadSources().then(() => {
+    if (_hasSyncingSource()) {
+      _startPolling()
+    }
+  })
 }
 
 // ---- Lifecycle ------------------------------------------------------------
 
 onMounted(() => {
-  loadSources()
+  loadSources().then(() => {
+    if (_hasSyncingSource()) {
+      _startPolling()
+    }
+  })
+})
+
+onUnmounted(() => {
+  _stopPolling()
 })
 </script>
 

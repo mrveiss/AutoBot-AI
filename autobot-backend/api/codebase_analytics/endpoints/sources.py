@@ -67,8 +67,15 @@ def _build_clone_url(repo: str, token: Optional[str]) -> str:
     return f"https://github.com/{repo}"
 
 
+_GIT_TIMEOUT_SECONDS = 120
+
+
 async def _run_git_clone(url: str, dest: str, branch: str) -> str:
-    """Clone a repo shallowly. Returns stderr on failure."""
+    """Clone a repo shallowly. Returns stderr on failure.
+
+    A 120-second timeout prevents the background task from hanging
+    indefinitely on large repos or network issues (#3092).
+    """
     proc = await asyncio.create_subprocess_exec(
         "git",
         "clone",
@@ -79,14 +86,23 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
         dest,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return f"git clone timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
     return ""
 
 
 async def _run_git_pull(clone_path: str) -> str:
-    """Pull latest changes in an existing clone. Returns stderr on failure."""
+    """Pull latest changes in an existing clone. Returns stderr on failure.
+
+    A 120-second timeout prevents the background task from hanging
+    indefinitely on network issues (#3092).
+    """
     proc = await asyncio.create_subprocess_exec(
         "git",
         "-C",
@@ -95,7 +111,12 @@ async def _run_git_pull(clone_path: str) -> str:
         "--ff-only",
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return f"git pull timed out after {_GIT_TIMEOUT_SECONDS}s"
     if proc.returncode != 0:
         return stderr.decode("utf-8", errors="replace")
     return ""
