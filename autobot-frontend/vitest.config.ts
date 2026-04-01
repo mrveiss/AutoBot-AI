@@ -66,7 +66,9 @@ export default mergeConfig(
       testTimeout: 10000,
       hookTimeout: 10000,
 
-      // Mock options
+      // Mock options — WARNING (#3070): mockReset wipes vi.mock() factory
+      // implementations between tests.  Always re-apply mocks in beforeEach,
+      // not in the factory.  Use regular functions for constructor mocks.
       clearMocks: true,
       mockReset: true,
       restoreMocks: true,
