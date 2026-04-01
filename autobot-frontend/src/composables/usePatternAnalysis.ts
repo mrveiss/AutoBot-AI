@@ -13,6 +13,7 @@ import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { extractErrorMessage } from '@/utils/errorExtract'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 
 const logger = createLogger('usePatternAnalysis')
@@ -82,6 +83,17 @@ export interface RefactoringSuggestion {
   benefits: string[]
 }
 
+/** Generic pattern record from backend modularization/other analysis */
+export interface GenericPattern {
+  pattern_type: string
+  severity: string
+  description: string
+  locations?: CodeLocation[]
+  suggestion?: string
+  confidence?: number
+  [key: string]: unknown
+}
+
 export interface PatternAnalysisReport {
   analysis_summary: {
     scan_path: string
@@ -98,8 +110,8 @@ export interface PatternAnalysisReport {
   duplicate_patterns: DuplicatePattern[]
   regex_opportunities: RegexOpportunity[]
   complexity_hotspots: ComplexityHotspot[]
-  modularization_suggestions: any[]
-  other_patterns: any[]
+  modularization_suggestions: GenericPattern[]
+  other_patterns: GenericPattern[]
 }
 
 export interface PatternStorageStats {
@@ -109,10 +121,10 @@ export interface PatternStorageStats {
 }
 
 export interface PartialResults {
-  regex?: any[]
-  complexity?: any[]
-  modularization?: any[]
-  other_patterns?: any[]
+  regex?: RegexOpportunity[]
+  complexity?: ComplexityHotspot[]
+  modularization?: GenericPattern[]
+  other_patterns?: GenericPattern[]
   files_processed?: number
   total_files?: number
 }
@@ -126,6 +138,15 @@ export interface AnalysisTaskStatus {
   error?: string
   reason?: string  // orphaned, timeout, manual (#1250)
   partial_results?: PartialResults
+}
+
+/** Task list entry returned by the tasks endpoint */
+export interface AnalysisTaskEntry {
+  task_id: string
+  status: string
+  progress?: number
+  created_at?: string
+  [key: string]: unknown
 }
 
 /**
@@ -320,8 +341,8 @@ export function usePatternAnalysis() {
       }
 
       throw new Error('Unexpected response format')
-    } catch (e: any) {
-      error.value = e.message || 'Analysis failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Analysis failed')
       logger.error('Pattern analysis failed:', e)
       analyzing.value = false
       return false
@@ -440,10 +461,11 @@ export function usePatternAnalysis() {
           }
 
           // Still running — interval continues automatically
-        } catch (e: any) {
+        } catch (e: unknown) {
           consecutiveErrors++
+          const msg = extractErrorMessage(e, 'Unknown poll error')
           logger.warn(
-            `Task status poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${e.message}`
+            `Task status poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${msg}`
           )
 
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -500,8 +522,8 @@ export function usePatternAnalysis() {
         return true
       }
       return false
-    } catch (e: any) {
-      logger.debug('Cached summary not available:', e.message)
+    } catch (e: unknown) {
+      logger.debug('Cached summary not available:', extractErrorMessage(e, 'unknown'))
       return false
     }
   }
@@ -554,8 +576,8 @@ export function usePatternAnalysis() {
           other_patterns: []
         }
       }
-    } catch (e: any) {
-      error.value = e.message || 'Summary fetch failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Summary fetch failed')
       logger.error('Pattern summary fetch failed:', e)
     } finally {
       loading.value = false
@@ -591,8 +613,8 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         duplicatePatterns.value = data.duplicates || []
       }
-    } catch (e: any) {
-      error.value = e.message || 'Duplicates fetch failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Duplicates fetch failed')
       logger.error('Duplicate patterns fetch failed:', e)
     } finally {
       loading.value = false
@@ -624,8 +646,8 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         regexOpportunities.value = data.opportunities || []
       }
-    } catch (e: any) {
-      error.value = e.message || 'Regex opportunities fetch failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Regex opportunities fetch failed')
       logger.error('Regex opportunities fetch failed:', e)
     } finally {
       loading.value = false
@@ -661,8 +683,8 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         complexityHotspots.value = data.hotspots || []
       }
-    } catch (e: any) {
-      error.value = e.message || 'Complexity hotspots fetch failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Complexity hotspots fetch failed')
       logger.error('Complexity hotspots fetch failed:', e)
     } finally {
       loading.value = false
@@ -694,8 +716,8 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         refactoringSuggestions.value = data.suggestions || []
       }
-    } catch (e: any) {
-      error.value = e.message || 'Refactoring suggestions fetch failed'
+    } catch (e: unknown) {
+      error.value = extractErrorMessage(e, 'Refactoring suggestions fetch failed')
       logger.error('Refactoring suggestions fetch failed:', e)
     } finally {
       loading.value = false
@@ -720,7 +742,7 @@ export function usePatternAnalysis() {
       if (data.status === 'success') {
         storageStats.value = data.stats
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Storage stats fetch failed:', e)
     } finally {
       loading.value = false
@@ -749,7 +771,7 @@ export function usePatternAnalysis() {
         return true
       }
       return false
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Clear storage failed:', e)
       return false
     } finally {
@@ -777,7 +799,7 @@ export function usePatternAnalysis() {
         return data.report
       }
       return null
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Report fetch failed:', e)
       return null
     } finally {
@@ -819,7 +841,7 @@ export function usePatternAnalysis() {
       ])
 
       return hasCachedSummary
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Failed to load cached data:', e)
       return false
     } finally {
@@ -860,7 +882,7 @@ export function usePatternAnalysis() {
       const result = await response.json()
       logger.info('Cleared stuck tasks:', result)
       return { cleared: result.cleared_count, message: result.message }
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Failed to clear stuck tasks:', e)
       throw e
     }
@@ -870,7 +892,7 @@ export function usePatternAnalysis() {
    * List all analysis tasks
    * Issue #647: View task status for debugging
    */
-  const listTasks = async (): Promise<{ total: number; running: number; tasks: any[] }> => {
+  const listTasks = async (): Promise<{ total: number; running: number; tasks: AnalysisTaskEntry[] }> => {
     try {
       const backendUrl = await getBackendUrl()
       const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
@@ -880,7 +902,7 @@ export function usePatternAnalysis() {
       }
 
       return await response.json()
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Failed to list tasks:', e)
       throw e
     }

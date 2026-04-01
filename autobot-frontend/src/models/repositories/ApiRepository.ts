@@ -1,5 +1,6 @@
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { extractErrorMessage } from '@/utils/errorExtract'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
 
@@ -10,7 +11,7 @@ export interface ApiConfig {
 }
 
 export interface CacheEntry {
-  data: any
+  data: unknown
   expires: number
   endpoint: string
 }
@@ -67,11 +68,11 @@ export class ApiRepository {
   }
 
   // Cache management
-  private getCacheKey(endpoint: string, params?: Record<string, any>): string {
+  private getCacheKey(endpoint: string, params?: Record<string, unknown>): string {
     return `${endpoint}:${JSON.stringify(params || {})}`
   }
 
-  private getCachedData(cacheKey: string): any | null {
+  private getCachedData(cacheKey: string): unknown | null {
     const entry = this.cache.get(cacheKey)
     if (!entry) return null
 
@@ -83,7 +84,7 @@ export class ApiRepository {
     return entry.data
   }
 
-  private setCachedData(cacheKey: string, data: any, endpoint: string): void {
+  private setCachedData(cacheKey: string, data: unknown, endpoint: string): void {
     const ttl = this.cacheConfig.endpoints[endpoint] || this.cacheConfig.defaultTTL
     const expires = Date.now() + ttl
 
@@ -100,20 +101,20 @@ export class ApiRepository {
 
   private trackApiCall(method: string, endpoint: string, startTime: number, endTime: number, status: number | string, error?: Error): void {
     // Fix TypeScript error with proper window.rum type checking
-    if (typeof window !== 'undefined' && (window as any).rum && typeof (window as any).rum.trackApiCall === 'function') {
-      (window as any).rum.trackApiCall(method, endpoint, startTime, endTime, status, error)
+    if (typeof window !== 'undefined' && (window as Record<string, unknown>).rum && typeof ((window as Record<string, unknown>).rum as Record<string, unknown>)?.trackApiCall === 'function') {
+      ((window as Record<string, unknown>).rum as { trackApiCall: (...args: unknown[]) => void }).trackApiCall(method, endpoint, startTime, endTime, status, error)
     }
   }
 
   // Core request method
-  async request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
+  async request<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`
     const method = options.method || 'GET'
     const startTime = performance.now()
 
     // Check cache for GET requests
     if (method === 'GET' && !options.skipCache) {
-      const cacheKey = this.getCacheKey(endpoint, options.params)
+      const cacheKey = this.getCacheKey(endpoint, options.params as Record<string, unknown>)
       const cachedData = this.getCachedData(cacheKey)
 
       if (cachedData) {
@@ -180,7 +181,7 @@ export class ApiRepository {
 
       // Cache successful GET responses
       if (method === 'GET' && !options.skipCache) {
-        const cacheKey = this.getCacheKey(endpoint, options.params)
+        const cacheKey = this.getCacheKey(endpoint, options.params as Record<string, unknown>)
         this.setCachedData(cacheKey, data, endpoint)
       }
 
@@ -194,33 +195,35 @@ export class ApiRepository {
         headers: response.headers
       } as ApiResponse<T>
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       const endTime = performance.now()
       clearTimeout(timeoutId)
 
-      if (error.name === 'AbortError') {
+      if (error instanceof Error && error.name === 'AbortError') {
         const timeoutError = new Error(`Request timeout: ${method} ${endpoint} took longer than ${this.timeout}ms`)
         this.trackApiCall(method, endpoint, startTime, endTime, 'timeout', timeoutError)
         throw timeoutError
       }
 
-      if (error.message === 'Failed to fetch') {
+      const errMsg = extractErrorMessage(error, 'Unknown error')
+      if (errMsg === 'Failed to fetch') {
         const networkError = new Error(`Network error: Cannot connect to ${this.baseUrl}`)
         this.trackApiCall(method, endpoint, startTime, endTime, 'network_error', networkError)
         throw networkError
       }
 
-      this.trackApiCall(method, endpoint, startTime, endTime, 'error', error)
+      const errorObj = error instanceof Error ? error : new Error(errMsg)
+      this.trackApiCall(method, endpoint, startTime, endTime, 'error', errorObj)
       throw error
     }
   }
 
   // HTTP methods
-  async get<T = any>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<ApiResponse<T>> {
+  async get<T = unknown>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'GET' })
   }
 
-  async post<T = any>(endpoint: string, data?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async post<T = unknown>(endpoint: string, data?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     const config: RequestOptions = { ...options, method: 'POST' }
 
     if (data) {
@@ -238,7 +241,7 @@ export class ApiRepository {
     return this.request<T>(endpoint, config)
   }
 
-  async put<T = any>(endpoint: string, data?: any, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
+  async put<T = unknown>(endpoint: string, data?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<ApiResponse<T>> {
     const config: RequestOptions = { ...options, method: 'PUT' }
     if (data) {
       config.body = JSON.stringify(data)
@@ -246,7 +249,7 @@ export class ApiRepository {
     return this.request<T>(endpoint, config)
   }
 
-  async delete<T = any>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<ApiResponse<T>> {
+  async delete<T = unknown>(endpoint: string, options: Omit<RequestOptions, 'method'> = {}): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' })
   }
 
@@ -299,10 +302,10 @@ export class ApiRepository {
         latency,
         message: `Connected (${latency}ms)`
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         connected: false,
-        message: `Connection failed: ${error.message}`
+        message: `Connection failed: ${extractErrorMessage(error, 'Unknown error')}`
       }
     }
   }
