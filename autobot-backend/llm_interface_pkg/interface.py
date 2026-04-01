@@ -247,6 +247,7 @@ class LLMInterface:
         from .adapters import (
             AIStackAdapter,
             AnthropicAdapter,
+            LayerInferenceAdapter,
             OllamaAdapter,
             OpenAIAdapter,
             ProcessAdapter,
@@ -259,6 +260,7 @@ class LLMInterface:
         registry.register(OpenAIAdapter())
         registry.register(AnthropicAdapter())
         registry.register(ProcessAdapter())
+        registry.register(LayerInferenceAdapter())
 
         registry.set_fallback_chain(self._provider_priority)
         self._adapter_registry = registry
