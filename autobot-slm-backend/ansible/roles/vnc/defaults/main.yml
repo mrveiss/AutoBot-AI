@@ -30,7 +30,4 @@ websockify_service_name: vnc-websockify
 vnc_register_credentials: true
 slm_api_url: "https://{{ slm_host | default('127.0.0.1') }}"
 slm_admin_user: "admin"
-slm_admin_password: >-
-  {{ slm_admin_password
-     | default(lookup('env', 'SLM_ADMIN_PASSWORD'))
-     | default('admin') }}
+slm_admin_password: "{{ lookup('env', 'SLM_ADMIN_PASSWORD') | default('admin', true) }}"
