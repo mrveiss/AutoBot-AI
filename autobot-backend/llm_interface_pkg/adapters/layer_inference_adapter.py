@@ -6,8 +6,10 @@ Layer Inference Adapter - Wraps LayerInferenceEngine for the adapter registry.
 
 Issue #3104: Registers the layer-by-layer inference engine as a selectable
 LLM provider so it can be accessed via the unified adapter API.
+Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -26,21 +28,19 @@ logger = logging.getLogger(__name__)
 
 
 class LayerInferenceAdapter(AdapterBase):
-    """Adapter that wraps LayerInferenceEngine for the registry (#3104)."""
+    """Adapter that uses LayerInferencePipeline for end-to-end generation (#3140)."""
 
     def __init__(self, config: Optional[AdapterConfig] = None):
         super().__init__("layer_inference", config)
-        self._engine = None
+        self._pipeline = None
+        self._prepared = None
 
-    def _get_engine(self):
-        """Lazy-init the engine on first use."""
-        if self._engine is not None:
-            return self._engine
+    def _get_pipeline(self):
+        """Lazy-init the pipeline on first use."""
+        if self._pipeline is not None:
+            return self._pipeline
         try:
-            from ..optimization.layer_inference import (
-                LayerInferenceConfig,
-                LayerInferenceEngine,
-            )
+            from ..optimization.pipeline import LayerInferencePipeline, PipelineConfig
 
             model_name = self.config.settings.get(
                 "model_name",
@@ -48,63 +48,95 @@ class LayerInferenceAdapter(AdapterBase):
             )
             if not model_name:
                 return None
-            engine_config = LayerInferenceConfig(model_name=model_name)
-            self._engine = LayerInferenceEngine(engine_config)
-            return self._engine
+            pipeline_cfg = PipelineConfig(model_name=model_name)
+            self._pipeline = LayerInferencePipeline(pipeline_cfg)
+            return self._pipeline
         except ImportError:
             logger.debug("Layer inference dependencies not available")
             return None
+
+    def _get_prepared(self):
+        """Lazy-init the prepared pipeline components on first use."""
+        if self._prepared is not None:
+            return self._prepared
+        pipeline = self._get_pipeline()
+        if pipeline is None:
+            return None
+        try:
+            self._prepared = pipeline.prepare()
+        except Exception:
+            logger.exception("Pipeline prepare() failed")
+            return None
+        return self._prepared
+
+    @staticmethod
+    def _build_prompt(messages: List[Dict[str, Any]]) -> str:
+        """Concatenate chat messages into a single prompt string."""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            parts.append("%s: %s" % (role, content))
+        return "\n".join(parts)
 
     async def execute(
         self,
         request: LLMRequest,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Execute a generation request via LayerInferenceEngine."""
-        engine = self._get_engine()
-        if engine is None:
+        """Execute a generation request via the end-to-end LayerInferencePipeline."""
+        prepared = self._get_prepared()
+        if prepared is None:
             return LLMResponse(
                 content="Layer inference engine not available",
                 model="layer_inference",
                 provider="layer_inference",
                 tokens_used=0,
-                latency_ms=0,
-                error="Engine not initialized — set LAYER_INFERENCE_MODEL",
+                processing_time=0.0,
+                error="Pipeline not initialized — set LAYER_INFERENCE_MODEL",
             )
 
-        prompt = ""
-        for msg in request.messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            prompt += f"{role}: {content}\n"
-
+        prompt = self._build_prompt(request.messages)
         start = time.monotonic()
         max_tokens = request.max_tokens or 256
-        result = engine.generate(prompt, max_new_tokens=max_tokens)
-        latency = (time.monotonic() - start) * 1000
+
+        try:
+            result = await asyncio.to_thread(
+                self._pipeline.execute, prompt, prepared, max_new_tokens=max_tokens,
+            )
+        except Exception:
+            logger.exception("LayerInference generation failed")
+            return LLMResponse(
+                content="",
+                model=self.config.settings.get("model_name", "layer_inference"),
+                provider="layer_inference",
+                tokens_used=0,
+                processing_time=time.monotonic() - start,
+                error="Generation failed — check logs",
+            )
 
         return LLMResponse(
             content=result,
             model=self.config.settings.get("model_name", "layer_inference"),
             provider="layer_inference",
-            tokens_used=max_tokens,
-            latency_ms=latency,
+            tokens_used=len(result.split()) if result else 0,
+            processing_time=time.monotonic() - start,
         )
 
     async def test_environment(self) -> EnvironmentTestResult:
-        """Test if layer inference is available."""
+        """Test if layer inference pipeline is available."""
         messages: List[DiagnosticMessage] = []
         try:
-            from ..optimization.layer_inference import LayerInferenceEngine  # noqa: F401
+            from ..optimization.pipeline import LayerInferencePipeline  # noqa: F401
 
             messages.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.OK,
-                    message="LayerInferenceEngine importable",
+                    message="LayerInferencePipeline importable",
                 )
             )
-            engine = self._get_engine()
-            if engine is None:
+            pipeline = self._get_pipeline()
+            if pipeline is None:
                 messages.append(
                     DiagnosticMessage(
                         level=DiagnosticLevel.WARNING,
@@ -117,15 +149,15 @@ class LayerInferenceAdapter(AdapterBase):
             messages.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
-                    message=f"Import failed: {exc}",
+                    message="Import failed: %s" % exc,
                 )
             )
             return EnvironmentTestResult(available=False, diagnostics=messages)
 
     async def list_models(self) -> List[Dict[str, Any]]:
         """List available models for layer inference."""
-        engine = self._get_engine()
-        if engine is None:
+        pipeline = self._get_pipeline()
+        if pipeline is None:
             return []
         model_name = self.config.settings.get("model_name", "layer_inference")
         return [{"id": model_name, "name": model_name, "provider": "layer_inference"}]
