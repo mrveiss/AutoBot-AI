@@ -36,12 +36,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from autobot_shared.ssot_config import config as _ssot_config
+
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
 
-# Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
+# Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
+# Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
-_CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
+_CHROMADB_PORT = _ssot_config.ports.chromadb
 
 logger = logging.getLogger(__name__)
 

@@ -27,6 +27,8 @@ import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from autobot_shared.ssot_config import config as _ssot_config
+
 # Re-export async utilities for convenient imports
 from utils.async_chromadb_client import (
     AsyncChromaClient,
@@ -40,9 +42,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
+# Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
+# Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
-_CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
+_CHROMADB_PORT = _ssot_config.ports.chromadb
 
 # Module exports
 __all__ = [

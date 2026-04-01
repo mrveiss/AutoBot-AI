@@ -131,7 +131,7 @@ class PortConfig(BaseSettings):
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
-    chromadb: int = Field(default=8000, alias="AUTOBOT_CHROMADB_PORT")
+    chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
     tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
