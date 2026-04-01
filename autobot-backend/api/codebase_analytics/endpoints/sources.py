@@ -255,6 +255,25 @@ async def create_code_source(request: CodeSourceCreateRequest):
     return JSONResponse(source.model_dump(), status_code=201)
 
 
+@router.get("/sources/summary")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_source_summary",
+    error_code_prefix="CODEBASE",
+)
+async def get_all_source_summaries():
+    """Return summaries for all sources in one request (#1468).
+
+    Replaces N+1 per-source /summary calls from the landing page.
+    Registered before /sources/{source_id} to avoid the literal
+    string "summary" being captured by the {source_id} path parameter (#2654, #3107).
+    """
+    sources = await list_sources()
+    results = await asyncio.gather(*[_build_summary(s) for s in sources])
+    summaries = {r["source_id"]: r for r in results}
+    return JSONResponse({"summaries": summaries})
+
+
 @router.get("/sources/{source_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -311,25 +330,6 @@ async def delete_code_source(source_id: str):
     ok = await delete_source(source_id)
     logger.info("Deleted code source %s", source_id)
     return JSONResponse({"success": ok, "source_id": source_id})
-
-
-@router.get("/sources/summary")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="batch_source_summary",
-    error_code_prefix="CODEBASE",
-)
-async def get_all_source_summaries():
-    """Return summaries for all sources in one request (#1468).
-
-    Replaces N+1 per-source /summary calls from the landing page.
-    Registered before /sources/{source_id}/summary to avoid the literal
-    string "summary" being captured by the {source_id} path parameter (#2654).
-    """
-    sources = await list_sources()
-    results = await asyncio.gather(*[_build_summary(s) for s in sources])
-    summaries = {r["source_id"]: r for r in results}
-    return JSONResponse({"summaries": summaries})
 
 
 @router.post("/sources/{source_id}/sync")
