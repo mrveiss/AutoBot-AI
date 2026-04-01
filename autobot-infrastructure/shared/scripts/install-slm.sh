@@ -504,10 +504,10 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # AutoBot Backend API (main backend at 172.16.168.20:8001)
+    # AutoBot Backend API (main backend at ${DEV_HOST}:8001)
     # Issue #729 - Proxy for migrated admin functionality
     location /autobot-api/ {
-        proxy_pass http://172.16.168.20:8001/api/;
+        proxy_pass http://${DEV_HOST}:8001/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -522,7 +522,7 @@ server {
 
     # AutoBot Backend WebSocket (terminal, etc.)
     location /autobot-api/ws/ {
-        proxy_pass http://172.16.168.20:8001/api/ws/;
+        proxy_pass http://${DEV_HOST}:8001/api/ws/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
