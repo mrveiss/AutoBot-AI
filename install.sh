@@ -466,6 +466,7 @@ SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
+SLM_HOST=${local_ip}
 EOF
         chmod 600 "${SECRETS_FILE}"
         success "  Secrets written to ${SECRETS_FILE}"
