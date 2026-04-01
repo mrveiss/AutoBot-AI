@@ -8,7 +8,7 @@ npu_user: autobot-npu
 npu_group: autobot-npu
 npu_install_dir: /opt/autobot/autobot-npu-worker
 npu_log_dir: /var/log/autobot
-npu_models_dir: /var/lib/autobot/models
+npu_models_dir: /var/lib/autobot-npu/models
 
 # OpenVINO
 npu_install_openvino: true
