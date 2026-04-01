@@ -142,7 +142,7 @@ function getMetricColor(value: number): string {
       </div>
 
       <!-- Dashboard Container -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden min-h-[600px]">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden min-h-[600px]">
         <GrafanaDashboard
           :dashboard="activeDashboard"
           :height="600"
@@ -158,19 +158,19 @@ function getMetricColor(value: number): string {
     <div v-else-if="viewMode === 'details'" class="space-y-6">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <p class="text-sm text-gray-500">CPU Usage</p>
           <p class="text-2xl font-bold" :class="getMetricColor(cpuUsage)">{{ cpuUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Memory Usage</p>
           <p class="text-2xl font-bold" :class="getMetricColor(memoryUsage)">{{ memoryUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <p class="text-sm text-gray-500">Disk Usage</p>
           <p class="text-2xl font-bold" :class="getMetricColor(diskUsage)">{{ diskUsage.toFixed(1) }}%</p>
         </div>
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <p class="text-sm text-gray-500">System Health</p>
           <p class="text-2xl font-bold capitalize" :class="{
             'text-success-600': systemHealth === 'healthy',
@@ -186,7 +186,7 @@ function getMetricColor(value: number): string {
         <div
           v-for="node in nodeMetrics"
           :key="node.node_id"
-          class="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+          class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
           <div class="flex items-center gap-3 mb-4">
             <div :class="['w-3 h-3 rounded-full', getStatusColor(node.status)]"></div>

@@ -479,7 +479,7 @@ onUnmounted(() => {
             type="checkbox"
             :checked="autoRefresh"
             @change="toggleAutoRefresh"
-            class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
           />
           Auto-refresh
         </label>
@@ -698,7 +698,7 @@ onUnmounted(() => {
             <button
               @click.stop="handleRestartAllServices(node.nodeId, node.hostname)"
               :disabled="isRestartingAll && restartAllNodeId === node.nodeId"
-              class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-sm hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               title="Restart all services on this node (SLM agent restarts last)"
             >
               <svg
@@ -746,7 +746,7 @@ onUnmounted(() => {
                     <button
                       @click.stop="toggleCategoryMenu(`${node.nodeId}-${service.service_name}`)"
                       :class="[
-                        'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded cursor-pointer hover:opacity-80',
+                        'inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-sm cursor-pointer hover:opacity-80',
                         getCategoryBadgeClass(service.category)
                       ]"
                     >
@@ -791,7 +791,7 @@ onUnmounted(() => {
                       v-if="service.status !== 'running'"
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'start')"
                       :disabled="isActionInProgress"
-                      class="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                      class="p-1 text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50"
                       title="Start"
                     >
                       <svg
@@ -813,7 +813,7 @@ onUnmounted(() => {
                       v-if="service.status === 'running'"
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'stop')"
                       :disabled="isActionInProgress"
-                      class="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                      class="p-1 text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50"
                       title="Stop"
                     >
                       <svg
@@ -834,7 +834,7 @@ onUnmounted(() => {
                     <button
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'restart')"
                       :disabled="isActionInProgress"
-                      class="p-1 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                      class="p-1 text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50"
                       title="Restart"
                     >
                       <svg
@@ -879,7 +879,7 @@ onUnmounted(() => {
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-start gap-4">
               <!-- Warning Icon -->
-              <div class="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+              <div class="shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
                 <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>

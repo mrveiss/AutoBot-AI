@@ -472,7 +472,7 @@
   >
     <textarea
       v-model="editingContent"
-      class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500 resize-none"
+      class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-electric-500 resize-none"
       :placeholder="$t('chat.messages.enterMessage')"
       @keydown.ctrl.enter="saveEditedMessage"
       @keydown.meta.enter="saveEditedMessage"
@@ -1358,6 +1358,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200 relative;
   max-width: 85%;
@@ -1878,7 +1879,7 @@ onMounted(async () => {
 }
 
 .typing-wave {
-  @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-blue-400 to-transparent rounded-full;
+  @apply absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-transparent via-blue-400 to-transparent rounded-full;
   animation: typingWave 2s ease-in-out infinite;
 }
 
@@ -2062,7 +2063,7 @@ onMounted(async () => {
 }
 
 .comment-textarea {
-  @apply w-full px-3 py-2 border border-autobot-border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply w-full px-3 py-2 border border-autobot-border rounded-md resize-none focus:outline-hidden focus:ring-2 focus:ring-blue-500;
 }
 
 .comment-actions {

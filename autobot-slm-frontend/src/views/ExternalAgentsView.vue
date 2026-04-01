@@ -274,7 +274,7 @@ onMounted(() => {
                 <span
                   v-for="tag in agent.tags"
                   :key="tag"
-                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded text-xs"
+                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-sm text-xs"
                 >
                   {{ tag }}
                 </span>
@@ -331,7 +331,7 @@ onMounted(() => {
             <label class="block text-xs text-gray-400 mb-1">Name *</label>
             <input
               v-model="form.name"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-primary-500"
+              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
               placeholder="My External Agent"
             />
           </div>
@@ -339,7 +339,7 @@ onMounted(() => {
             <label class="block text-xs text-gray-400 mb-1">Base URL *</label>
             <input
               v-model="form.base_url"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-primary-500 font-mono"
+              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
               placeholder="https://agent.example.com"
               :disabled="modalMode === 'edit'"
             />
@@ -348,7 +348,7 @@ onMounted(() => {
             <label class="block text-xs text-gray-400 mb-1">Description</label>
             <input
               v-model="form.description"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-primary-500"
+              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
               placeholder="Optional description"
             />
           </div>
@@ -356,7 +356,7 @@ onMounted(() => {
             <label class="block text-xs text-gray-400 mb-1">Tags (comma-separated)</label>
             <input
               v-model="form.tags"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-primary-500"
+              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
               placeholder="finance, analysis"
             />
           </div>
@@ -368,7 +368,7 @@ onMounted(() => {
             <input
               v-model="form.api_key"
               type="password"
-              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-primary-500 font-mono"
+              class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
               placeholder="sk-..."
             />
           </div>
@@ -386,7 +386,7 @@ onMounted(() => {
 
         <div
           v-if="saveError"
-          class="p-2 bg-danger-900/30 border border-danger-700 rounded text-danger-300 text-xs"
+          class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs"
         >
           {{ saveError }}
         </div>
@@ -455,7 +455,7 @@ onMounted(() => {
                 <span
                   v-for="tag in detailAgent.tags"
                   :key="tag"
-                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded text-xs"
+                  class="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded-sm text-xs"
                 >
                   {{ tag }}
                 </span>
@@ -464,7 +464,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded text-danger-300 text-xs">
+          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs">
             Card error: {{ detailAgent.card_error }}
           </div>
 

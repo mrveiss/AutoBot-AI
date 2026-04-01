@@ -238,7 +238,7 @@ function categoryIcon(category: string): string {
         <div class="flex gap-1">
           <button
             :class="[
-              'px-4 py-2 rounded text-sm border transition-colors',
+              'px-4 py-2 rounded-sm text-sm border transition-colors',
               activeTab === 'active'
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
@@ -249,7 +249,7 @@ function categoryIcon(category: string): string {
           </button>
           <button
             :class="[
-              'px-4 py-2 rounded text-sm border transition-colors flex items-center gap-2',
+              'px-4 py-2 rounded-sm text-sm border transition-colors flex items-center gap-2',
               activeTab === 'approvals'
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
@@ -266,7 +266,7 @@ function categoryIcon(category: string): string {
           </button>
           <button
             :class="[
-              'px-4 py-2 rounded text-sm border transition-colors',
+              'px-4 py-2 rounded-sm text-sm border transition-colors',
               activeTab === 'repos'
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
@@ -277,7 +277,7 @@ function categoryIcon(category: string): string {
           </button>
           <button
             :class="[
-              'px-4 py-2 rounded text-sm border transition-colors',
+              'px-4 py-2 rounded-sm text-sm border transition-colors',
               activeTab === 'drafts'
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
@@ -319,7 +319,7 @@ function categoryIcon(category: string): string {
     <template v-if="activeTab === 'active'">
     <div
       v-if="error"
-      class="mb-4 p-3 bg-red-900/30 border border-red-500/30 rounded text-red-300 text-sm"
+      class="mb-4 p-3 bg-red-900/30 border border-red-500/30 rounded-sm text-red-300 text-sm"
     >
       {{ error }}
     </div>
@@ -349,14 +349,14 @@ function categoryIcon(category: string): string {
           type="text"
           placeholder="Search skills by name, description, or tags..."
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2
-                 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                 text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500"
         />
       </div>
       <div class="flex gap-2 flex-wrap">
         <button
           @click="selectCategory(null)"
           :class="[
-            'px-3 py-1.5 rounded text-sm transition-colors border',
+            'px-3 py-1.5 rounded-sm text-sm transition-colors border',
             !activeCategory
               ? 'bg-blue-600 border-blue-500 text-white'
               : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
@@ -369,7 +369,7 @@ function categoryIcon(category: string): string {
           :key="cat"
           @click="selectCategory(cat)"
           :class="[
-            'px-3 py-1.5 rounded text-sm transition-colors border',
+            'px-3 py-1.5 rounded-sm text-sm transition-colors border',
             activeCategory === cat
               ? 'bg-blue-600 border-blue-500 text-white'
               : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
@@ -427,7 +427,7 @@ function categoryIcon(category: string): string {
         <!-- Status & Meta -->
         <div class="flex items-center justify-between">
           <span
-            :class="['text-xs px-2 py-0.5 rounded border', statusBadge(skill.status)]"
+            :class="['text-xs px-2 py-0.5 rounded-sm border', statusBadge(skill.status)]"
           >
             {{ skill.status }}
           </span>
@@ -442,7 +442,7 @@ function categoryIcon(category: string): string {
           <span
             v-for="tag in skill.tags.slice(0, 3)"
             :key="tag"
-            class="text-xs px-1.5 py-0.5 bg-gray-700 rounded text-gray-400"
+            class="text-xs px-1.5 py-0.5 bg-gray-700 rounded-sm text-gray-400"
           >
             {{ tag }}
           </span>
@@ -558,7 +558,7 @@ function categoryIcon(category: string): string {
               <div
                 v-for="(schema, key) in selectedSkill.config_schema"
                 :key="key"
-                class="bg-gray-900 rounded p-3"
+                class="bg-gray-900 rounded-sm p-3"
               >
                 <label class="block text-sm text-gray-300 mb-1">
                   {{ key }}
@@ -570,7 +570,7 @@ function categoryIcon(category: string): string {
                   v-if="schema.choices"
                   v-model="configEditing[key]"
                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-none focus:border-blue-500"
+                         text-white text-sm focus:outline-hidden focus:border-blue-500"
                 >
                   <option v-for="c in schema.choices" :key="c" :value="c">{{ c }}</option>
                 </select>
@@ -598,7 +598,7 @@ function categoryIcon(category: string): string {
                   v-model.number="configEditing[key]"
                   type="number"
                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-none focus:border-blue-500"
+                         text-white text-sm focus:outline-hidden focus:border-blue-500"
                 />
 
                 <!-- Text input -->
@@ -607,7 +607,7 @@ function categoryIcon(category: string): string {
                   v-model="configEditing[key]"
                   type="text"
                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5
-                         text-white text-sm focus:outline-none focus:border-blue-500"
+                         text-white text-sm focus:outline-hidden focus:border-blue-500"
                 />
               </div>
             </div>
@@ -625,7 +625,7 @@ function categoryIcon(category: string): string {
           <!-- Health -->
           <div>
             <h3 class="text-sm font-semibold text-gray-300 mb-2">Health</h3>
-            <div class="bg-gray-900 rounded p-3 text-sm">
+            <div class="bg-gray-900 rounded-sm p-3 text-sm">
               <div class="flex items-center gap-2">
                 <span
                   :class="[

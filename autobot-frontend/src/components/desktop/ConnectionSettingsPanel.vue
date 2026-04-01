@@ -124,6 +124,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .connection-settings-panel {
   @apply bg-autobot-bg-secondary rounded-lg border border-autobot-border p-4;
 }

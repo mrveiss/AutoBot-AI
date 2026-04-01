@@ -10,7 +10,7 @@
         @loading-complete="handleSidebarLoadingComplete"
         @loading-error="handleSidebarLoadingError"
         @loading-timeout="handleSidebarLoadingTimeout"
-        class="sidebar-loading-view h-full w-80 flex-shrink-0"
+        class="sidebar-loading-view h-full w-80 shrink-0"
       >
         <ChatSidebar />
       </UnifiedLoadingView>
@@ -27,7 +27,7 @@
           :is-connected="isConnected"
           @export-session="exportSession"
           @clear-session="clearSession"
-          class="flex-shrink-0"
+          class="shrink-0"
         >
           <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
@@ -65,7 +65,7 @@
         <ChatTabs
           :active-tab="activeTab"
           @tab-change="handleTabChange"
-          class="flex-shrink-0"
+          class="shrink-0"
         />
 
         <!-- Scrollable Content Area (Header scrolls away, input stays) -->
@@ -969,6 +969,7 @@ function _extractCompleteSentences(text: string): string[] {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 /* IMPROVED: Better overflow handling for chat interface */
 .chat-interface {
   /* Removed height: 100vh - now relies on parent container */

@@ -114,7 +114,7 @@ function navigateTo(path: string): void {
           <button
             @click="fetchOverview"
             :disabled="loading"
-            class="p-1.5 text-gray-400 hover:text-gray-600 rounded transition-colors"
+            class="p-1.5 text-gray-400 hover:text-gray-600 rounded-sm transition-colors"
             aria-label="Refresh performance data"
           >
             <svg

@@ -13,11 +13,11 @@
     >
       <div
         v-show="showNotification && notificationLevel === 'toast'"
-        class="fixed bottom-4 right-4 max-w-md w-full bg-autobot-bg-card shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-[9999]"
+        class="fixed bottom-4 right-4 max-w-md w-full bg-autobot-bg-card shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-9999"
       >
         <div class="p-4">
           <div class="flex items-start">
-            <div class="flex-shrink-0">
+            <div class="shrink-0">
               <component
                 :is="statusIcon"
                 :class="[
@@ -33,10 +33,10 @@
               <p class="text-sm font-medium text-autobot-text-primary">{{ notificationData.title }}</p>
               <p class="mt-1 text-sm text-autobot-text-muted">{{ notificationData.message }}</p>
             </div>
-            <div class="ml-4 flex-shrink-0 flex">
+            <div class="ml-4 shrink-0 flex">
               <button
                 @click="dismissNotification"
-                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 :title="t('ui.systemStatus.dismissNotification')"
               >
                 <span class="sr-only">{{ t('ui.systemStatus.close') }}</span>
@@ -59,7 +59,7 @@
     >
       <div
         v-show="showNotification && notificationLevel === 'overlay'"
-        class="fixed inset-0 z-[9999] bg-black bg-opacity-25 backdrop-blur-sm flex items-center justify-center p-4"
+        class="fixed inset-0 z-9999 bg-black/25 backdrop-blur-xs flex items-center justify-center p-4"
         @click.self="dismissNotification"
       >
         <div class="bg-autobot-bg-card rounded-lg shadow-xl max-w-md w-full mx-auto border border-autobot-border overflow-hidden">
@@ -162,7 +162,7 @@
             <button
               @click="dismissNotification"
               :class="[
-                'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+                'px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2',
                 notificationData.severity === 'error' ? 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500' :
                 notificationData.severity === 'warning' ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500' :
                 notificationData.severity === 'info' ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500' :

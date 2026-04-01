@@ -5,7 +5,7 @@
       <BaseButton
         v-for="cat in categories"
         :key="cat.value ?? 'all'"
-        :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
+        :variant="selectedCategory === cat.value ? 'primary' : 'outline-solid'"
         size="sm"
         @click="$emit('select-category', cat.value)"
         class="category-tab"

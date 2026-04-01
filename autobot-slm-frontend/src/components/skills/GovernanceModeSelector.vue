@@ -9,7 +9,7 @@
         v-for="m in modes"
         :key="m.value"
         :class="[
-          'px-3 py-1.5 rounded text-sm border transition-colors',
+          'px-3 py-1.5 rounded-sm text-sm border transition-colors',
           modelValue === m.value
             ? 'bg-blue-600 border-blue-500 text-white'
             : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',

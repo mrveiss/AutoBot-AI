@@ -24,7 +24,7 @@
         <label class="text-gray-300">{{ $t('terminal.theme') }}</label>
         <select
           v-model="settings.theme"
-          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
+          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-hidden"
           data-testid="theme-select"
         >
           <option value="dark">{{ $t('terminal.dark') }}</option>
@@ -37,7 +37,7 @@
         <label class="text-gray-300">{{ $t('terminal.cursorStyle') }}</label>
         <select
           v-model="settings.cursorStyle"
-          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
+          class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-hidden"
           data-testid="cursor-style-select"
         >
           <option value="block">{{ $t('terminal.block') }}</option>
@@ -60,7 +60,7 @@
 
     <button
       @click="saveSettings"
-      class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+      class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
       data-testid="save-settings-button"
     >
       {{ $t('terminal.saveSettings') }}

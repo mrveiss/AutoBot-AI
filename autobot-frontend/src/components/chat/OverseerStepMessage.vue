@@ -203,6 +203,7 @@ const formatDuration = (seconds: number): string => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .overseer-step {
   @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4;
   transition: all 0.3s ease;

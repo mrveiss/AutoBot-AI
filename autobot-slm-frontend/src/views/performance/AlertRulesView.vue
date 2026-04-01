@@ -245,7 +245,7 @@ async function handleDelete(): Promise<void> {
     </div>
 
     <!-- Rules Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200">
       <div v-if="alertRules.length === 0 && !loading" class="p-8 text-center text-gray-400">
         No alert rules configured. Create one to start monitoring.
       </div>
@@ -446,7 +446,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.enabled"
                 type="checkbox"
                 id="rule-enabled"
-                class="rounded border-gray-300"
+                class="rounded-sm border-gray-300"
               />
               <label for="rule-enabled" class="text-sm text-gray-700">Enabled</label>
             </div>

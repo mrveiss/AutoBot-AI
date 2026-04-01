@@ -373,7 +373,7 @@ function getNodeHostname(nodeId: string): string {
                 </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                <span class="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-sm">
                   {{ replication.service_type }}
                 </span>
               </td>
@@ -528,7 +528,7 @@ function getNodeHostname(nodeId: string): string {
           <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p class="text-sm text-blue-700">
               This will configure the target node as a replica of the source using the
-              <code class="bg-blue-100 px-1 rounded">REPLICAOF</code> command via Ansible.
+              <code class="bg-blue-100 px-1 rounded-sm">REPLICAOF</code> command via Ansible.
               The replica will sync all data from the primary and stay in read-only mode.
             </p>
           </div>

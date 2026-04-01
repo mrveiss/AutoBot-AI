@@ -95,7 +95,7 @@ const dismissAll = () => {
             ]"
           >
             <!-- Icon -->
-            <div class="flex-shrink-0 mt-0.5">
+            <div class="shrink-0 mt-0.5">
               <i :class="`bi bi-${getSecretIcon(notification.secretType)}`" />
             </div>
 
@@ -111,7 +111,7 @@ const dismissAll = () => {
             </div>
 
             <!-- Timestamp -->
-            <div class="flex-shrink-0 text-xs opacity-50">
+            <div class="shrink-0 text-xs opacity-50">
               {{ formatTime(notification.timestamp) }}
             </div>
           </div>

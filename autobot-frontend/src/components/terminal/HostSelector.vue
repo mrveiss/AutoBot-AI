@@ -173,6 +173,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .host-selector {
   @apply flex flex-col gap-2;
 }

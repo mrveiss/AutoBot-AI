@@ -95,7 +95,7 @@ function isExecuting(
       :disabled="executingAction !== null"
       :title="action.command || action.label"
       :class="[
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
         getStyle(action.category).bg,
         getStyle(action.category).text,
         getStyle(action.category).hoverBg,

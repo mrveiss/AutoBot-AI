@@ -113,8 +113,8 @@ function openInGrafana() {
 
     <div :class="[isFullscreen ? 'flex gap-4 h-[calc(100vh-100px)]' : 'flex flex-col lg:flex-row gap-4']">
       <!-- Dashboard Selector Panel -->
-      <div :class="[isFullscreen ? 'w-64 flex-shrink-0 overflow-y-auto' : 'lg:w-64']">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div :class="[isFullscreen ? 'w-64 shrink-0 overflow-y-auto' : 'lg:w-64']">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
           <!-- Category Filter -->
           <div class="mb-4">
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
@@ -141,7 +141,7 @@ function openInGrafana() {
                   : 'hover:bg-gray-50 text-gray-700'
               ]"
             >
-              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="dash.icon" />
               </svg>
               <div>
@@ -155,7 +155,7 @@ function openInGrafana() {
 
       <!-- Dashboard Viewer -->
       <div :class="[isFullscreen ? 'flex-1' : 'flex-1 min-h-[600px]']">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden h-full">
+        <div class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden h-full">
           <GrafanaDashboard
             :dashboard="(selectedDashboard as any)"
             :height="isFullscreen ? 'calc(100vh - 150px)' : 600"

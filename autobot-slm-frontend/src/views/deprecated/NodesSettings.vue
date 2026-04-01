@@ -368,19 +368,19 @@ onMounted(() => {
 
     <!-- Stats Bar -->
     <div class="grid grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 text-center">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 text-center">
         <p class="text-2xl font-bold text-gray-900">{{ stats.total }}</p>
         <p class="text-sm text-gray-500">Total</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-green-200 p-4 text-center">
+      <div class="bg-white rounded-lg shadow-xs border border-green-200 p-4 text-center">
         <p class="text-2xl font-bold text-green-700">{{ stats.online }}</p>
         <p class="text-sm text-green-600">Online</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-yellow-200 p-4 text-center">
+      <div class="bg-white rounded-lg shadow-xs border border-yellow-200 p-4 text-center">
         <p class="text-2xl font-bold text-yellow-700">{{ stats.pending }}</p>
         <p class="text-sm text-yellow-600">Pending</p>
       </div>
-      <div class="bg-white rounded-lg shadow-sm border border-red-200 p-4 text-center">
+      <div class="bg-white rounded-lg shadow-xs border border-red-200 p-4 text-center">
         <p class="text-2xl font-bold text-red-700">{{ stats.error }}</p>
         <p class="text-sm text-red-600">Error</p>
       </div>
@@ -423,7 +423,7 @@ onMounted(() => {
       <div
         v-for="node in nodes"
         :key="node.id"
-        class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+        class="bg-white rounded-lg shadow-xs border border-gray-200 overflow-hidden"
         :class="{ 'border-primary-300': expandedNodeId === node.id }"
       >
         <!-- Node Header -->
@@ -445,7 +445,7 @@ onMounted(() => {
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <p class="font-medium text-gray-900 truncate">{{ node.name }}</p>
-              <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+              <span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm">
                 {{ getRoleLabel(node.role) }}
               </span>
             </div>
@@ -474,7 +474,7 @@ onMounted(() => {
               v-if="node.status !== 'enrolling'"
               @click.stop="testNodeConnection(node)"
               :disabled="testingNodeId === node.id"
-              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-50"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm disabled:opacity-50"
               title="Test Connection"
             >
               <svg v-if="testingNodeId === node.id" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -487,7 +487,7 @@ onMounted(() => {
             </button>
             <button
               @click.stop="toggleNodeExpand(node.id)"
-              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
             >
               <svg
                 class="w-5 h-5 transition-transform"
@@ -671,7 +671,7 @@ onMounted(() => {
                   v-model="newNode.auto_enroll"
                   type="checkbox"
                   id="auto_enroll"
-                  class="rounded border-gray-300"
+                  class="rounded-sm border-gray-300"
                 />
                 <label for="auto_enroll" class="text-sm text-gray-700">
                   Automatically start enrollment after adding
@@ -726,7 +726,7 @@ onMounted(() => {
                   v-model="forceRemove"
                   type="checkbox"
                   id="force_remove"
-                  class="rounded border-gray-300"
+                  class="rounded-sm border-gray-300"
                 />
                 <label for="force_remove" class="text-sm text-gray-700">
                   Force remove (skip safety checks)

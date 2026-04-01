@@ -150,7 +150,7 @@ const roleOptions = computed(() => [
   <Transition name="modal-backdrop">
     <div
       v-if="props.modelValue"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4"
       @click.self="closeDialog"
     >
       <!-- Modal content -->
@@ -190,7 +190,7 @@ const roleOptions = computed(() => [
                   v-model="searchQuery"
                   type="text"
                   :placeholder="$t('collaboration.invite.searchPlaceholder')"
-                  class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   autocomplete="off"
                 >
               </div>

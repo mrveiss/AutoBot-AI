@@ -366,11 +366,11 @@ onMounted(() => {
           </div>
           <div class="flex items-center gap-4 pt-6">
             <label class="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" v-model="formData.auto_restart" class="rounded" />
+              <input type="checkbox" v-model="formData.auto_restart" class="rounded-sm" />
               Auto Restart on Deploy
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" v-model="formData.required" class="rounded" />
+              <input type="checkbox" v-model="formData.required" class="rounded-sm" />
               Required Role
             </label>
           </div>
@@ -427,7 +427,7 @@ onMounted(() => {
               <div class="flex items-center gap-2">
                 <p class="text-sm font-medium text-gray-900">{{ role.display_name || role.name }}</p>
                 <span v-if="role.required"
-                  class="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-700 font-medium">Required</span>
+                  class="px-1.5 py-0.5 text-xs rounded-sm bg-red-100 text-red-700 font-medium">Required</span>
               </div>
               <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
             </td>
@@ -442,11 +442,11 @@ onMounted(() => {
             </td>
             <td class="px-4 py-3 text-right space-x-1">
               <button @click="openEditForm(role)"
-                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">Edit</button>
+                class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200">Edit</button>
               <button v-if="role.ansible_playbook" @click="openMigrateDialog(role)"
-                class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200">Migrate</button>
+                class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-sm hover:bg-purple-200">Migrate</button>
               <button @click="deleteRole(role.name)"
-                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">Delete</button>
+                class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200">Delete</button>
             </td>
           </tr>
         </tbody>
@@ -470,7 +470,7 @@ onMounted(() => {
         </div>
         <div class="p-6 space-y-4">
           <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
-            Playbook: <code class="bg-gray-100 px-1 rounded">{{ migratingRole.ansible_playbook }}</code>
+            Playbook: <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Target Node *</label>
@@ -481,13 +481,13 @@ onMounted(() => {
               </option>
             </select>
           </div>
-          <div v-if="migratingRole?.degraded_without?.length" class="text-xs text-yellow-700 bg-yellow-50 p-2 rounded">
+          <div v-if="migratingRole?.degraded_without?.length" class="text-xs text-yellow-700 bg-yellow-50 p-2 rounded-sm">
             ⚠ Optional role. Without it: {{ migratingRole.degraded_without.join('; ') }}
           </div>
           <!-- Output -->
           <div v-if="migrateOutput" class="mt-2">
             <p class="text-xs font-medium text-gray-600 mb-1">Playbook Output:</p>
-            <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded overflow-auto max-h-48">{{ migrateOutput }}</pre>
+            <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
           </div>
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-2">

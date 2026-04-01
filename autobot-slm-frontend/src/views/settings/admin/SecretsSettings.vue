@@ -140,7 +140,7 @@ onMounted(fetchSecrets)
       v-if="error"
       class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3"
     >
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -160,7 +160,7 @@ onMounted(fetchSecrets)
       v-if="success"
       class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3"
     >
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -320,7 +320,7 @@ onMounted(fetchSecrets)
                     v-model="editValue"
                     type="password"
                     placeholder="New value"
-                    class="w-48 px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                    class="w-48 px-2 py-1 border border-gray-300 rounded-sm text-sm font-mono"
                   />
                   <button
                     :disabled="!editValue || saving"
@@ -358,7 +358,7 @@ onMounted(fetchSecrets)
     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
       <div class="flex gap-3">
         <svg
-          class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
+          class="w-5 h-5 text-blue-500 shrink-0 mt-0.5"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"

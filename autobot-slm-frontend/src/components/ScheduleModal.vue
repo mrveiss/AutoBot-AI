@@ -290,7 +290,7 @@ const isFormValid = computed(() => {
                   <input
                     type="checkbox"
                     :checked="targetNodes.includes(node.node_id)"
-                    class="w-4 h-4 text-primary-600 rounded"
+                    class="w-4 h-4 text-primary-600 rounded-sm"
                     :aria-label="`Select ${node.hostname}`"
                     @click.stop
                     @change="toggleNodeSelection(node.node_id)"
@@ -322,7 +322,7 @@ const isFormValid = computed(() => {
                     type="checkbox"
                     :checked="targetRoles.includes(role.name)"
                     :value="role.name"
-                    class="w-4 h-4 text-primary-600 rounded border-gray-300"
+                    class="w-4 h-4 text-primary-600 rounded-sm border-gray-300"
                     :aria-label="`Select ${role.display_name || role.name}`"
                     @click.stop
                     @change="toggleRoleSelection(role.name)"
@@ -360,7 +360,7 @@ const isFormValid = computed(() => {
                 <input
                   type="checkbox"
                   v-model="restartAfterSync"
-                  class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                  class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
                 />
                 <span class="text-sm text-gray-700">Restart service after sync</span>
               </label>
@@ -369,7 +369,7 @@ const isFormValid = computed(() => {
                 <input
                   type="checkbox"
                   v-model="enabled"
-                  class="w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+                  class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
                 />
                 <span class="text-sm text-gray-700">Schedule enabled</span>
               </label>

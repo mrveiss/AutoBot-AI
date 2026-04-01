@@ -224,6 +224,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+@reference "../../assets/styles/main.css";
 .grafana-embed {
   position: relative;
   width: 100%;

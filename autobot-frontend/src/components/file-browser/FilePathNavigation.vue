@@ -63,6 +63,7 @@ const getPathUpTo = (index: number): string => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .path-navigation {
   @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4 flex flex-wrap items-center gap-4;
 }
@@ -88,10 +89,10 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-field {
-  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500;
 }
 
 .path-go-btn {
-  @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500;
 }
 </style>

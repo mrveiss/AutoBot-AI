@@ -178,7 +178,7 @@ onMounted(() => {
   <div class="p-6 h-full flex flex-col">
     <div class="flex gap-6 flex-1 overflow-hidden">
       <!-- File Browser Panel -->
-      <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+      <div class="flex-1 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
         <!-- Toolbar -->
         <div class="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center gap-4">
           <!-- Navigation buttons -->
@@ -328,7 +328,7 @@ onMounted(() => {
       </div>
 
       <!-- File Viewer/Editor Panel -->
-      <div v-if="showEditor" class="w-1/2 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+      <div v-if="showEditor" class="w-1/2 bg-white rounded-lg shadow-xs border border-gray-200 flex flex-col overflow-hidden">
         <!-- Header -->
         <div class="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div class="flex items-center gap-2">

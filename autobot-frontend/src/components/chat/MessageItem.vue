@@ -311,6 +311,7 @@ const formattedContent = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .message-wrapper {
   @apply rounded-lg shadow-sm border transition-all duration-200;
   max-width: 85%;

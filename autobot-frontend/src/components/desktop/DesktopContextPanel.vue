@@ -167,6 +167,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .desktop-context-panel {
   @apply bg-autobot-bg-secondary rounded-lg border border-autobot-border p-4;
 }

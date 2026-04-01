@@ -268,7 +268,7 @@ function getCategoryIcon(category: string): string {
               <input
                 v-model="manualMode"
                 type="checkbox"
-                class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                class="rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               <span class="text-gray-700">Enter IP address manually</span>
             </label>
@@ -340,7 +340,7 @@ function getCategoryIcon(category: string): string {
                 <span
                   v-for="role in node.roles"
                   :key="role"
-                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded"
+                  class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-sm"
                 >
                   {{ role }}
                 </span>
@@ -380,7 +380,7 @@ function getCategoryIcon(category: string): string {
                   <div class="flex items-start gap-3">
                     <div
                       :class="[
-                        'w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center transition-colors',
+                        'w-5 h-5 mt-0.5 rounded-sm border-2 flex items-center justify-center transition-colors',
                         isRoleSelected(role.name)
                           ? 'border-primary-500 bg-primary-500'
                           : 'border-gray-300',

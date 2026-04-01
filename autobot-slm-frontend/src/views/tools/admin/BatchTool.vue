@@ -246,7 +246,7 @@ onUnmounted(() => {
   <div class="p-6">
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Total Jobs</p>
@@ -260,7 +260,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Running</p>
@@ -274,7 +274,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Completed</p>
@@ -288,7 +288,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Failed</p>
@@ -304,7 +304,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Toolbar -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
           <select
@@ -368,7 +368,7 @@ onUnmounted(() => {
       <p class="mt-4 text-gray-600">Loading jobs...</p>
     </div>
 
-    <div v-else-if="filteredJobs.length === 0" class="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
+    <div v-else-if="filteredJobs.length === 0" class="text-center py-12 bg-white rounded-lg shadow-xs border border-gray-200">
       <svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
@@ -379,7 +379,7 @@ onUnmounted(() => {
       <div
         v-for="job in filteredJobs"
         :key="job.id"
-        class="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+        class="bg-white rounded-lg shadow-xs border border-gray-200 p-6"
       >
         <!-- Job Header -->
         <div class="flex items-start justify-between mb-4">

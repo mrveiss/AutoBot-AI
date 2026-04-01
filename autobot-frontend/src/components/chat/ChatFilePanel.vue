@@ -1,7 +1,7 @@
 <template>
   <div class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
     <!-- Header -->
-    <div class="flex items-center justify-between p-3 border-b border-autobot-border flex-shrink-0">
+    <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
         <i class="fas fa-folder text-autobot-text-secondary"></i>
         <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h3>
@@ -20,7 +20,7 @@
     </div>
 
     <!-- File Statistics & Search -->
-    <div class="px-3 py-2 border-b border-autobot-border flex-shrink-0 space-y-2">
+    <div class="px-3 py-2 border-b border-autobot-border shrink-0 space-y-2">
       <div v-if="stats.total_files > 0" class="flex justify-between text-xs text-autobot-text-secondary">
         <span>{{ stats.total_files }} file{{ stats.total_files > 1 ? 's' : '' }}</span>
         <span>{{ totalSizeFormatted }}</span>
@@ -32,7 +32,7 @@
           v-model="searchQuery"
           type="text"
           :placeholder="$t('chat.filePanel.searchFiles')"
-          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary bg-autobot-bg-tertiary"
+          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary bg-autobot-bg-tertiary"
         />
       </div>
       <!-- Sort -->
@@ -62,7 +62,7 @@
     </div>
 
     <!-- Upload Area -->
-    <div class="p-3 border-b border-autobot-border flex-shrink-0">
+    <div class="p-3 border-b border-autobot-border shrink-0">
       <div
         class="upload-area border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer"
         :class="[
@@ -105,7 +105,7 @@
     </div>
 
     <!-- Error Display -->
-    <div v-if="error" class="px-3 py-2 bg-red-50 border-b border-red-200 flex-shrink-0">
+    <div v-if="error" class="px-3 py-2 bg-red-50 border-b border-red-200 shrink-0">
       <div class="flex items-start gap-2">
         <i class="fas fa-exclamation-circle text-red-500 text-sm mt-0.5"></i>
         <div class="flex-1 min-w-0">
@@ -113,7 +113,7 @@
         </div>
         <button
           @click="clearError"
-          class="text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+          class="text-red-400 hover:text-red-600 transition-colors shrink-0"
         >
           <i class="fas fa-times text-xs"></i>
         </button>
@@ -152,11 +152,11 @@
             type="checkbox"
             :checked="selectedFileIds.has(file.file_id)"
             @change="toggleFileSelection(file.file_id)"
-            class="mt-1 flex-shrink-0 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
+            class="mt-1 shrink-0 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
           />
 
           <!-- File Icon -->
-          <div class="file-icon flex-shrink-0">
+          <div class="file-icon shrink-0">
             <i :class="getFileIcon(file.mime_type)" class="text-autobot-text-secondary text-lg"></i>
           </div>
 
@@ -168,7 +168,7 @@
                 v-model="renameValue"
                 @keyup.enter="handleRename"
                 @keyup.escape="renamingFileId = null"
-                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
+                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-hidden"
               />
               <button @click="handleRename" class="action-btn" :title="$t('common.save')">
                 <i class="fas fa-check text-xs text-green-600"></i>
@@ -193,7 +193,7 @@
           </div>
 
           <!-- File Actions -->
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
             <button
               v-if="isPreviewable(file.mime_type)"
               @click="handlePreview(file.file_id)"
@@ -261,14 +261,14 @@
           <input
             v-model="newFileName"
             :placeholder="$t('chat.filePanel.filenamePlaceholder')"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-2"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary mb-2"
             @keyup.enter="handleCreateFile"
           />
           <textarea
             v-model="newFileContent"
             :placeholder="$t('chat.filePanel.contentPlaceholder')"
             rows="4"
-            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary mb-3 resize-none font-mono"
           ></textarea>
           <div class="flex justify-end gap-2">
             <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
@@ -288,7 +288,7 @@
           </div>
           <textarea
             v-model="editingContent"
-            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
+            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-hidden focus:border-autobot-primary resize-none font-mono min-h-[200px]"
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
             <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
@@ -505,6 +505,7 @@ watch(() => props.sessionId, (newSessionId) => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .chat-file-panel {
   width: 280px;
   max-width: 280px;

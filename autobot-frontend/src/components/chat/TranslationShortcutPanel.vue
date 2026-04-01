@@ -206,6 +206,7 @@ const detectLanguage = async () => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .translation-panel {
   @apply border border-autobot-border rounded-lg bg-autobot-bg-card
     shadow-lg mb-3;

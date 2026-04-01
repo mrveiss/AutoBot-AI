@@ -889,7 +889,7 @@ onUnmounted(() => {
             type="checkbox"
             :checked="autoRefresh"
             @change="toggleAutoRefresh"
-            class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+            class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
           />
           Auto-refresh
         </label>
@@ -919,7 +919,7 @@ onUnmounted(() => {
     <!-- ERROR DISPLAY -->
     <div v-if="orchestration.error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
       <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
         </svg>
         <div class="flex-1">
@@ -1058,7 +1058,7 @@ onUnmounted(() => {
                 <span
                   v-for="roleItem in nodeRolesCache[node.nodeId]?.roles"
                   :key="roleItem.role_name"
-                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                  class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium"
                   :class="{
                     'bg-green-100 text-green-700': roleItem.status === 'active',
                     'bg-gray-100 text-gray-500': roleItem.status === 'inactive',
@@ -1112,7 +1112,7 @@ onUnmounted(() => {
                     <td class="px-4 py-2">
                       <span
                         :class="[
-                          'px-1.5 py-0.5 text-xs font-medium rounded',
+                          'px-1.5 py-0.5 text-xs font-medium rounded-sm',
                           service.category === 'autobot'
                             ? 'bg-blue-100 text-blue-700'
                             : 'bg-gray-100 text-gray-700'
@@ -1192,14 +1192,14 @@ onUnmounted(() => {
               <span
                 v-for="r in roles.fleetHealth.required_down"
                 :key="r"
-                class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium"
+                class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded-sm font-medium"
               >{{ r }} (required)</span>
             </div>
             <div v-if="roles.fleetHealth.optional_down.length > 0" class="mt-1 flex flex-wrap gap-1">
               <span
                 v-for="r in roles.fleetHealth.optional_down"
                 :key="r"
-                class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded"
+                class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-sm"
               >{{ r }}</span>
             </div>
           </div>
@@ -1306,7 +1306,7 @@ onUnmounted(() => {
                     <div class="flex items-center gap-2">
                       <button
                         @click="toggleFleetService(service.service_name)"
-                        class="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                        class="text-gray-400 hover:text-gray-600 shrink-0"
                         :title="expandedFleetServices.has(service.service_name) ? 'Collapse' : 'Expand nodes'"
                       >
                         <svg
@@ -1324,7 +1324,7 @@ onUnmounted(() => {
                   <td class="px-4 py-2">
                     <span
                       :class="[
-                        'px-1.5 py-0.5 text-xs font-medium rounded',
+                        'px-1.5 py-0.5 text-xs font-medium rounded-sm',
                         service.category === 'autobot'
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-700'
@@ -1340,17 +1340,17 @@ onUnmounted(() => {
                     <div class="flex items-center justify-end gap-1">
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'start')"
-                        class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                        class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-sm hover:bg-green-200"
                         title="Start on all nodes"
                       >Start</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'stop')"
-                        class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                        class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200"
                         title="Stop on all nodes"
                       >Stop</button>
                       <button
                         @click="handleFleetServiceAction(service.service_name, 'restart')"
-                        class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200"
                         title="Restart on all nodes"
                       >Restart</button>
                     </div>
@@ -1503,7 +1503,7 @@ onUnmounted(() => {
                   id="auto-restart"
                   type="checkbox"
                   v-model="roleFormData.auto_restart"
-                  class="rounded"
+                  class="rounded-sm"
                 />
                 <label for="auto-restart" class="text-sm text-gray-700"
                   >Auto Restart on Deploy</label
@@ -1514,7 +1514,7 @@ onUnmounted(() => {
                   id="required-role"
                   type="checkbox"
                   v-model="roleFormData.required"
-                  class="rounded"
+                  class="rounded-sm"
                 />
                 <label for="required-role" class="text-sm text-gray-700"
                   >Required (critical if offline)</label
@@ -1581,7 +1581,7 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-2">
                   <span
-                    class="px-1.5 py-0.5 text-xs font-medium rounded"
+                    class="px-1.5 py-0.5 text-xs font-medium rounded-sm"
                     :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
                   >
                     {{ role.required ? 'Required' : 'Optional' }}
@@ -1597,13 +1597,13 @@ onUnmounted(() => {
                 <td class="px-4 py-2 text-right">
                   <button
                     @click="openEditRoleForm(role)"
-                    class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 mr-1"
+                    class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1"
                   >
                     Edit
                   </button>
                   <button
                     @click="deleteRole(role.name)"
-                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200"
                   >
                     Delete
                   </button>
@@ -1665,18 +1665,18 @@ onUnmounted(() => {
                     on {{ getRoleOwnerLabel(role.name) }}
                   </p>
                 </div>
-                <div class="flex-shrink-0">
+                <div class="shrink-0">
                   <button
                     v-if="!isRoleAssigned(assignNodeId, role.name)"
                     @click="assignRoleToNode(assignNodeId, role.name)"
-                    class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 whitespace-nowrap"
+                    class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200 whitespace-nowrap"
                   >
                     Assign
                   </button>
                   <button
                     v-else
                     @click="removeRoleFromNode(assignNodeId, role.name)"
-                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 whitespace-nowrap"
+                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-sm hover:bg-red-200 whitespace-nowrap"
                   >
                     Remove
                   </button>
@@ -1708,7 +1708,7 @@ onUnmounted(() => {
               <div class="flex items-center gap-2">
                 <span class="font-medium text-gray-900 text-sm">{{ role.display_name || role.name }}</span>
                 <span
-                  class="px-1.5 py-0.5 text-xs rounded font-medium"
+                  class="px-1.5 py-0.5 text-xs rounded-sm font-medium"
                   :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'"
                 >
                   {{ role.required ? 'Required' : 'Optional' }}
@@ -1718,7 +1718,7 @@ onUnmounted(() => {
                 {{ role.systemd_service || 'No systemd service' }}
               </div>
               <div class="flex items-center gap-2 mt-1">
-                <span class="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">
+                <span class="text-xs bg-gray-100 text-gray-600 rounded-sm px-1.5 py-0.5">
                   {{ role.sync_type || 'full' }}
                 </span>
                 <span class="text-xs text-gray-400">
@@ -1814,7 +1814,7 @@ onUnmounted(() => {
             <!-- Options -->
             <div class="flex flex-col gap-2 pt-1">
               <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" v-model="migrationRestart" class="rounded" />
+                <input type="checkbox" v-model="migrationRestart" class="rounded-sm" />
                 <span>Restart services on target node after sync</span>
               </label>
               <label
@@ -1825,7 +1825,7 @@ onUnmounted(() => {
                   type="checkbox"
                   v-model="migrationRemoveFromSource"
                   :disabled="!migrationSourceNode"
-                  class="rounded"
+                  class="rounded-sm"
                 />
                 <span>Remove role assignment from source node after migration</span>
               </label>
@@ -1886,7 +1886,7 @@ onUnmounted(() => {
           </p>
           <pre
             v-if="playbookMigrateResult.output"
-            class="text-xs bg-gray-900 text-gray-100 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap"
+            class="text-xs bg-gray-900 text-gray-100 rounded-sm p-3 overflow-auto max-h-48 whitespace-pre-wrap"
           >{{ playbookMigrateResult.output }}</pre>
         </div>
 
@@ -2029,7 +2029,7 @@ onUnmounted(() => {
                     <span
                       v-for="role in (node.roles as string[])"
                       :key="role"
-                      class="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded"
+                      class="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-sm"
                     >{{ role }}</span>
                     <span v-if="!node.roles || node.roles.length === 0" class="text-xs text-gray-400">—</span>
                   </div>

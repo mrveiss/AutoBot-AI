@@ -522,7 +522,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
   <div class="p-6 space-y-6">
     <!-- Messages -->
     <div v-if="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ error }}
@@ -534,14 +534,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       {{ success }}
     </div>
 
     <!-- Authentication Status -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Authentication Status</h2>
 
       <div v-if="authStore.isAuthenticated" class="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -576,7 +576,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <!-- User Preferences -->
-    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">User Preferences</h2>
 
       <div class="space-y-4">
@@ -612,7 +612,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="preferences.enableNotifications" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
           </label>
         </div>
 
@@ -623,7 +623,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="preferences.autoSaveSettings" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
           </label>
         </div>
       </div>
@@ -640,7 +640,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <!-- Security Settings -->
-    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="authStore.isAuthenticated" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Security</h2>
 
       <div class="space-y-4">
@@ -659,7 +659,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="securitySettings.requireReauth" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
           </label>
         </div>
 
@@ -689,7 +689,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <!-- User Management (Admin Only) - Tabbed Interface -->
-    <div v-if="isAdmin" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="isAdmin" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <!-- Tab Navigation -->
       <div class="border-b border-gray-200 mb-6">
         <nav class="flex gap-1">
@@ -979,7 +979,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
     </div>
 
     <!-- RBAC Management (Admin Only) -->
-    <div v-if="isAdmin" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div v-if="isAdmin" class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Role-Based Access Control</h2>
 
       <div class="p-4 rounded-lg mb-4" :class="rbacStatus.initialized ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'">
@@ -1129,7 +1129,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
           <div class="flex gap-3">
-            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
@@ -1143,7 +1143,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
         <div class="space-y-4">
           <div class="flex items-center gap-3">
-            <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+            <input id="create-admin" v-model="rbacInitOptions.createAdmin" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
             <label for="create-admin" class="text-sm text-gray-700">Create initial admin user</label>
           </div>
 
@@ -1199,11 +1199,11 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
             <input v-model="(newProviderForm.config as Record<string, string>).client_secret" type="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500" />
           </div>
           <div class="flex items-center gap-3">
-            <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+            <input id="sso-active" v-model="newProviderForm.is_active" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
             <label for="sso-active" class="text-sm text-gray-700">Active</label>
           </div>
           <div class="flex items-center gap-3">
-            <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+            <input id="sso-provision" v-model="newProviderForm.allow_user_creation" type="checkbox" class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500" />
             <label for="sso-provision" class="text-sm text-gray-700">Allow automatic user creation (JIT provisioning)</label>
           </div>
         </div>

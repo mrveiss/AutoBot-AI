@@ -106,6 +106,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 </script>
 
 <style scoped>
+@reference "../../assets/tailwind.css";
 .overseer-plan {
   @apply bg-autobot-bg-secondary border border-indigo-600/50 rounded-lg p-4 mb-4;
 }
@@ -123,7 +124,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .progress-bar {
-  @apply h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300;
+  @apply h-full bg-linear-to-r from-indigo-500 to-purple-500 transition-all duration-300;
 }
 
 .progress-text {
