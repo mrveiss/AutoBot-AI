@@ -988,12 +988,20 @@ class WorkflowExecutor:
         if agent_id:
             interaction = self._create_agent_interaction(step, execution_context)
 
-        # Issue #3099: Auto-inject prior agent findings from shared memory.
+        # Issue #3099: Auto-inject prior agent findings from shared memory
+        # into both the context dict and the step command/prompt so downstream
+        # agents receive the information without needing to read context explicitly.
         shared_memory = execution_context.get("shared_memory")
         if shared_memory:
             prior_findings = shared_memory.get_all()
             if prior_findings:
                 context["prior_agent_findings"] = prior_findings
+                findings_section = "\n\n## Prior Agent Findings\n"
+                for key, value in prior_findings.items():
+                    findings_section += f"- **{key}**: {value}\n"
+                command = step.get("command", "")
+                if isinstance(command, str) and command:
+                    step["command"] = command + findings_section
 
         try:
             result = await self._simulate_step_execution(step, context)
