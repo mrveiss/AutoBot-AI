@@ -270,7 +270,10 @@ class PromptOptimizer:
                     },
                 )
                 variant.scores[scorer_name] = result.score
-                variant.final_score = result.score
+                # Final score = average across all scorers so far
+                variant.final_score = (
+                    sum(variant.scores.values()) / len(variant.scores)
+                )
 
             # Keep top-K for next scorer
             candidates = sorted(

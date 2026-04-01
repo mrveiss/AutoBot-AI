@@ -10,6 +10,7 @@ Issue #2597: Endpoints for managing experiments, viewing results, and stats.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -342,11 +343,15 @@ async def get_variants(
     return {"variants": data.get("all_variants", [])}
 
 
+_UUID_PATTERN = re.compile(r"^[a-f0-9-]{1,64}$")
+
+
 @router.post("/prompt-optimizer/variants/{variant_id}/score")
 async def submit_variant_score(
     request: Request,
     variant_id: str,
     body: SubmitScoreRequest,
+    session_id: str = Query(..., min_length=1, max_length=64),
     _admin: bool = Depends(check_admin_permission),
 ):
     """Submit a human score for a prompt variant."""
@@ -354,9 +359,11 @@ async def submit_variant_score(
 
     from autobot_shared.redis_client import get_redis_client
 
+    # Validate key components to prevent Redis key injection
+    if not _UUID_PATTERN.match(session_id) or not _UUID_PATTERN.match(variant_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id or variant_id format")
+
     redis = get_redis_client(async_client=True, database="main")
-    # HumanReviewScorer polls this key; session_id provided as query param
-    session_id = request.query_params.get("session_id", "unknown")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
     await redis.set(
         key,

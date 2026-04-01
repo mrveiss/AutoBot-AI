@@ -831,7 +831,7 @@ class AutoResearchAgent:
                 config=self._get_notification_config(session.id),
             )
         except Exception:
-            logger.warning(
+            logger.exception(
                 "Failed to send approval notification for experiment %s",
                 experiment.id,
             )
