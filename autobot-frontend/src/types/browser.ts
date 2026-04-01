@@ -28,7 +28,7 @@ export interface TestData {
 export interface TestStep {
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
   description: string;
-  result?: any;
+  result?: Record<string, unknown>;
 }
 
 export interface MessageData {
@@ -69,8 +69,8 @@ export interface AutomationTask {
   status: TaskStatus;
   name: string;
   description?: string;
-  params: Record<string, any>;
-  result?: any;
+  params: Record<string, string | number | boolean>;
+  result?: Record<string, unknown>;
   error?: string;
   createdAt: Date;
   startedAt?: Date;

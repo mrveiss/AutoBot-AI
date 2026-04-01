@@ -6,6 +6,7 @@
 
 import { ref, computed } from 'vue'
 import { ApiClient } from '@/utils/ApiClient'
+import { extractErrorMessage } from '@/utils/errorExtract'
 
 export interface KnowledgeScope {
   scope: string
@@ -17,7 +18,7 @@ export interface KnowledgeFact {
   content: string
   title: string
   visibility: string
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
 }
 
 export interface ShareRequest {
@@ -44,15 +45,27 @@ export interface AccessInfo {
   has_access: boolean
 }
 
+export interface ScopedSearchOptions {
+  top_k?: number
+  mode?: string
+  category?: string
+  tags?: string[]
+  min_score?: number
+  enable_rag?: boolean
+  enable_reranking?: boolean
+}
+
+export interface ScopedSearchResult {
+  results: unknown[]
+  total: number
+}
+
 export function useKnowledgeCollaboration() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
   const apiClient = new ApiClient()
 
-  /**
-   * Get facts filtered by scope
-   */
   const getFactsByScope = async (
     scope?: string,
     limit: number = 100,
@@ -71,22 +84,19 @@ export function useKnowledgeCollaboration() {
         params.append('scope', scope)
       }
 
-      const response = await apiClient.get(
+      const response = await apiClient.get<{ facts: KnowledgeFact[]; count: number; total: number }>(
         `/knowledge/collaboration/facts?${params.toString()}`
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch facts'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to fetch facts')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Get facts for a specific organization
-   */
   const getOrganizationFacts = async (
     organizationId: string,
     limit: number = 100,
@@ -101,22 +111,19 @@ export function useKnowledgeCollaboration() {
         offset: offset.toString(),
       })
 
-      const response = await apiClient.get(
+      const response = await apiClient.get<{ facts: KnowledgeFact[]; count: number }>(
         `/knowledge/collaboration/facts/organization/${organizationId}?${params.toString()}`
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch organization facts'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to fetch organization facts')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Get facts for a specific group/team
-   */
   const getGroupFacts = async (
     groupId: string,
     limit: number = 100,
@@ -131,118 +138,103 @@ export function useKnowledgeCollaboration() {
         offset: offset.toString(),
       })
 
-      const response = await apiClient.get(
+      const response = await apiClient.get<{ facts: KnowledgeFact[]; count: number }>(
         `/knowledge/collaboration/facts/group/${groupId}?${params.toString()}`
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to fetch group facts'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to fetch group facts')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Share a knowledge fact with users and/or groups
-   */
   const shareKnowledge = async (
     factId: string,
     shareRequest: ShareRequest
-  ): Promise<any> => {
+  ): Promise<Record<string, unknown>> => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.post(
+      const response = await apiClient.post<Record<string, unknown>>(
         `/knowledge/collaboration/facts/${factId}/share`,
         shareRequest
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to share knowledge'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to share knowledge')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Revoke access from a user or group
-   */
   const unshareKnowledge = async (
     factId: string,
     entityId: string,
     entityType: 'user' | 'group'
-  ): Promise<any> => {
+  ): Promise<Record<string, unknown>> => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.delete(
+      const response = await apiClient.delete<Record<string, unknown>>(
         `/knowledge/collaboration/facts/${factId}/share/${entityId}?entity_type=${entityType}`
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to unshare knowledge'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to unshare knowledge')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Update knowledge permissions
-   */
   const updatePermissions = async (
     factId: string,
     permissionsRequest: PermissionsRequest
-  ): Promise<any> => {
+  ): Promise<Record<string, unknown>> => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.put(
+      const response = await apiClient.put<Record<string, unknown>>(
         `/knowledge/collaboration/facts/${factId}/permissions`,
         permissionsRequest
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to update permissions'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to update permissions')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Get access information for a fact
-   */
   const getAccessInfo = async (factId: string): Promise<AccessInfo> => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.get(
+      const response = await apiClient.get<AccessInfo>(
         `/knowledge/collaboration/facts/${factId}/access`
       )
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to get access information'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to get access information')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Get accessible scopes for the current user
-   */
   const getAccessibleScopes = async (): Promise<{
     user_id: string
     organization_id?: string
@@ -253,37 +245,31 @@ export function useKnowledgeCollaboration() {
     error.value = null
 
     try {
-      const response = await apiClient.get('/knowledge/search/accessible-scopes')
+      const response = await apiClient.get<{
+        user_id: string
+        organization_id?: string
+        group_count: number
+        accessible_scopes: KnowledgeScope[]
+      }>('/knowledge/search/accessible-scopes')
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Failed to get accessible scopes'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Failed to get accessible scopes')
       throw err
     } finally {
       loading.value = false
     }
   }
 
-  /**
-   * Perform scoped search
-   */
   const scopedSearch = async (
     query: string,
-    options: {
-      top_k?: number
-      mode?: string
-      category?: string
-      tags?: string[]
-      min_score?: number
-      enable_rag?: boolean
-      enable_reranking?: boolean
-    } = {}
-  ): Promise<any> => {
+    options: ScopedSearchOptions = {}
+  ): Promise<ScopedSearchResult> => {
     loading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.post('/knowledge/search/scoped', {
+      const response = await apiClient.post<ScopedSearchResult>('/knowledge/search/scoped', {
         query,
         top_k: options.top_k || 10,
         mode: options.mode || 'hybrid',
@@ -295,8 +281,8 @@ export function useKnowledgeCollaboration() {
       })
 
       return response
-    } catch (err: any) {
-      error.value = err.message || 'Search failed'
+    } catch (err: unknown) {
+      error.value = extractErrorMessage(err, 'Search failed')
       throw err
     } finally {
       loading.value = false

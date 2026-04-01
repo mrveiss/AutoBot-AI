@@ -44,9 +44,6 @@ export function useVncConnection(sessionId: string = 'default') {
   const settings = ref<ConnectionSettings | null>(null)
   const metrics = ref<ConnectionMetrics | null>(null)
 
-  /**
-   * Load connection settings
-   */
   async function loadSettings(): Promise<void> {
     loading.value = true
     errors.value = []
@@ -56,7 +53,7 @@ export function useVncConnection(sessionId: string = 'default') {
         `/vnc/connection/settings?session_id=${sessionId}`
       )
       settings.value = data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to load connection settings:', err)
       errors.value = [...errors.value, 'Failed to load connection settings']
     } finally {
@@ -64,9 +61,6 @@ export function useVncConnection(sessionId: string = 'default') {
     }
   }
 
-  /**
-   * Update connection settings
-   */
   async function updateSettings(newSettings: ConnectionSettings): Promise<boolean> {
     loading.value = true
     errors.value = []
@@ -78,7 +72,7 @@ export function useVncConnection(sessionId: string = 'default') {
       )
       settings.value = newSettings
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to update connection settings:', err)
       errors.value = [...errors.value, 'Failed to update connection settings']
       return false
@@ -87,21 +81,15 @@ export function useVncConnection(sessionId: string = 'default') {
     }
   }
 
-  /**
-   * Load connection quality metrics
-   */
   async function loadMetrics(): Promise<void> {
     try {
       const data = await ApiClient.get<ConnectionMetrics>('/vnc/connection/quality-metrics')
       metrics.value = data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to load connection metrics:', err)
     }
   }
 
-  /**
-   * Update quality preset (quick settings)
-   */
   async function setQualityPreset(preset: 'low' | 'medium' | 'high' | 'best'): Promise<boolean> {
     if (!settings.value) {
       await loadSettings()

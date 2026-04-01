@@ -38,14 +38,17 @@ export interface VncActionResponse {
   image_data?: string
 }
 
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'string') return err
+  return fallback
+}
+
 export function useVncControls() {
   const client: AxiosInstance = axios.create({ baseURL: getSlmApiBase() })
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  /**
-   * Perform mouse click at coordinates
-   */
   async function mouseClick(params: MouseClickParams): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -53,9 +56,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/click', params)
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Mouse click failed:', err)
-      error.value = err.message || 'Mouse click failed'
+      error.value = extractErrorMessage(err, 'Mouse click failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -65,9 +68,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Type text via keyboard
-   */
   async function keyboardType(text: string): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -75,9 +75,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/type', { text })
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Keyboard type failed:', err)
-      error.value = err.message || 'Keyboard type failed'
+      error.value = extractErrorMessage(err, 'Keyboard type failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -87,9 +87,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Send special key or key combination
-   */
   async function specialKey(key: string): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -97,9 +94,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/key', { key })
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Special key failed:', err)
-      error.value = err.message || 'Special key failed'
+      error.value = extractErrorMessage(err, 'Special key failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -109,9 +106,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Scroll mouse wheel
-   */
   async function mouseScroll(params: MouseScrollParams): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -119,9 +113,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/scroll', params)
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Mouse scroll failed:', err)
-      error.value = err.message || 'Mouse scroll failed'
+      error.value = extractErrorMessage(err, 'Mouse scroll failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -131,9 +125,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Perform mouse drag operation
-   */
   async function mouseDrag(params: MouseDragParams): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -141,9 +132,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/drag', params)
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Mouse drag failed:', err)
-      error.value = err.message || 'Mouse drag failed'
+      error.value = extractErrorMessage(err, 'Mouse drag failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -153,9 +144,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Capture desktop screenshot
-   */
   async function captureScreenshot(): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -163,9 +151,9 @@ export function useVncControls() {
     try {
       const response = await client.get<VncActionResponse>('/vnc/screenshot')
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Screenshot capture failed:', err)
-      error.value = err.message || 'Screenshot capture failed'
+      error.value = extractErrorMessage(err, 'Screenshot capture failed')
       return {
         status: 'error',
         message: error.value ?? '',
@@ -176,9 +164,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Sync clipboard content to remote desktop
-   */
   async function syncClipboard(content: string): Promise<VncActionResponse> {
     loading.value = true
     error.value = null
@@ -186,9 +171,9 @@ export function useVncControls() {
     try {
       const response = await client.post<VncActionResponse>('/vnc/clipboard', { content })
       return response.data
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Clipboard sync failed:', err)
-      error.value = err.message || 'Clipboard sync failed'
+      error.value = extractErrorMessage(err, 'Clipboard sync failed')
       return {
         status: 'error',
         message: error.value ?? ''
@@ -198,9 +183,6 @@ export function useVncControls() {
     }
   }
 
-  /**
-   * Send Ctrl+Alt+Del
-   */
   async function sendCtrlAltDel(): Promise<VncActionResponse> {
     return specialKey('ctrl+alt+Delete')
   }

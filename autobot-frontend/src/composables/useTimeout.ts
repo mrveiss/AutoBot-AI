@@ -101,32 +101,19 @@ export interface UseIntervalReturn {
   resume: () => void
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
 export interface DebouncedFunction<T extends (...args: any[]) => any> {
-  /**
-   * The debounced function
-   */
   (...args: Parameters<T>): void
 
-  /**
-   * Cancel any pending execution
-   */
   cancel: () => void
 
-  /**
-   * Execute immediately and cancel any pending execution
-   */
   flush: () => void
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
 export interface ThrottledFunction<T extends (...args: any[]) => any> {
-  /**
-   * The throttled function
-   */
   (...args: Parameters<T>): void
 
-  /**
-   * Cancel any pending execution
-   */
   cancel: () => void
 }
 
@@ -166,19 +153,12 @@ export interface ThrottledFunction<T extends (...args: any[]) => any> {
  * debounced.cancel() // Cancel scheduled execution
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
 export function useDebounce<T extends (...args: any[]) => any>(
   fn: T,
   delay: number = 300,
   options: {
-    /**
-     * Execute on the leading edge (first call) instead of trailing edge
-     * Default: false
-     */
     leading?: boolean
-    /**
-     * Maximum time fn is allowed to be delayed before it's invoked
-     * Useful for ensuring function executes at least once per maxWait period
-     */
     maxWait?: number
   } = {}
 ): DebouncedFunction<T> {
@@ -198,7 +178,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null
   let lastCallTime: number | null = null
   let lastArgs: Parameters<T> | null = null
-  let lastThis: any = null
+  let lastThis: unknown = null
 
   const cancel = (): void => {
     if (timeoutId) {
@@ -235,7 +215,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
     cancel()
   }
 
-  const debounced = function (this: any, ...args: Parameters<T>): void {
+  const debounced = function (this: unknown, ...args: Parameters<T>): void {
     const now = Date.now()
     const isFirstCall = lastCallTime === null
 
@@ -332,19 +312,12 @@ export function useDebounce<T extends (...args: any[]) => any>(
  * }, 1000, { trailing: false }) // Only leading edge
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic callable constraint
 export function useThrottle<T extends (...args: any[]) => any>(
   fn: T,
   delay: number = 300,
   options: {
-    /**
-     * Execute on the leading edge (first call)
-     * Default: true
-     */
     leading?: boolean
-    /**
-     * Execute on the trailing edge (after delay)
-     * Default: true
-     */
     trailing?: boolean
   } = {}
 ): ThrottledFunction<T> {
@@ -378,7 +351,7 @@ export function useThrottle<T extends (...args: any[]) => any>(
     }
   }
 
-  const throttled = function (this: any, ...args: Parameters<T>): void {
+  const throttled = function (this: unknown, ...args: Parameters<T>): void {
     const now = Date.now()
     const timeSinceLastCall = lastCallTime ? now - lastCallTime : Infinity
 
@@ -469,9 +442,6 @@ export function useTimeout(
   callback: () => void,
   delay: number,
   options: {
-    /**
-     * Start timeout immediately on creation (default: true)
-     */
     immediate?: boolean
   } = {}
 ): UseTimeoutReturn {
@@ -574,13 +544,7 @@ export function useInterval(
   callback: () => void,
   delay: number,
   options: {
-    /**
-     * Start interval immediately on creation (default: true)
-     */
     immediate?: boolean
-    /**
-     * Execute callback immediately before starting interval (default: false)
-     */
     immediateCallback?: boolean
   } = {}
 ): UseIntervalReturn {
@@ -707,14 +671,8 @@ export function useSleep(ms: number): Promise<void> {
 // ========================================
 
 export interface CancelableSleep {
-  /**
-   * Promise that resolves after delay
-   */
   promise: Promise<void>
 
-  /**
-   * Cancel the sleep (rejects the promise)
-   */
   cancel: () => void
 }
 
@@ -749,7 +707,7 @@ export function useCancelableSleep(ms: number): CancelableSleep {
   }
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null
-  let rejectFn: ((reason?: any) => void) | null = null
+  let rejectFn: ((reason?: unknown) => void) | null = null
 
   const promise = new Promise<void>((resolve, reject) => {
     rejectFn = reject

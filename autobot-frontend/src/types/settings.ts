@@ -65,36 +65,36 @@ export interface DeveloperSettings {
 
 // Backend Settings Interface
 export interface BackendSettings {
-  [key: string]: any;
+  [key: string]: unknown;
   llm?: {
     provider_type?: string;
     local?: {
       provider?: string;
-      providers?: Record<string, any>;
+      providers?: Record<string, unknown>;
     };
     cloud?: {
       provider?: string;
-      providers?: Record<string, any>;
+      providers?: Record<string, unknown>;
     };
   };
-  memory?: Record<string, any>;
-  agents?: Record<string, any>;
+  memory?: Record<string, unknown>;
+  agents?: Record<string, unknown>;
 }
 
 // Health Status Interface (updated to match BackendSettings component expectations)
 export interface HealthStatus {
   status?: string;
   message?: string;
-  basic_health?: any;
+  basic_health?: Record<string, unknown>;
   detailed_available?: boolean;
   backend?: {
     llm_provider?: {
       status?: string;
       message?: string;
     };
-    [key: string]: any;
+    [key: string]: unknown;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Cache Activity Item Interface (updated to include required properties)
