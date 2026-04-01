@@ -55,7 +55,7 @@ async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
   try {
     if (provider.provider_type === 'ldap' || provider.provider_type === 'active_directory') {
       const response = await ssoApi.loginWithLDAP(provider.id, username.value, password.value)
-      localStorage.setItem('slm_access_token', response.access_token)
+      sessionStorage.setItem('slm_access_token', response.access_token)
       await authStore.checkAuth()
       router.push('/')
     } else {

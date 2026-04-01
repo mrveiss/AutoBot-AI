@@ -82,7 +82,7 @@ export function useOrchestrationManagement() {
 
   // Add auth token to all requests
   client.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

@@ -228,7 +228,7 @@ export const createDefaultCacheConfig = (): CacheConfig => ({
 
 // Helper function to create CacheActivity items with required fields
 export const createCacheActivityItem = (data: Partial<CacheActivityItem>): CacheActivityItem => ({
-  id: data.id || Math.random().toString(36).substr(2, 9),
+  id: data.id || crypto.randomUUID(),
   timestamp: data.timestamp || new Date().toISOString(),
   operation: data.operation || 'unknown',
   key: data.key || '',

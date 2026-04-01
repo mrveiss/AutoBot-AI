@@ -96,7 +96,7 @@ async function fetchRoles(): Promise<void> {
   try {
     const response = await fetch('/api/deployments/roles', {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
     if (response.ok) {

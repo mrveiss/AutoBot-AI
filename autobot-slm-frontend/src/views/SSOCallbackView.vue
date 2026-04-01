@@ -30,7 +30,7 @@ onMounted(async () => {
 
   if (token) {
     // Store token and fetch user info
-    localStorage.setItem('slm_access_token', token)
+    sessionStorage.setItem('slm_access_token', token)
     await authStore.checkAuth()
     router.push('/')
   } else {
