@@ -633,6 +633,31 @@ async def _init_heartbeat_scheduler(app: FastAPI) -> None:
         app.state.heartbeat_scheduler = None
 
 
+async def _init_trigger_service(app: FastAPI) -> None:
+    """Start TriggerService background loops for event-driven triggers (#3100)."""
+    logger.info("Triggers: Starting trigger service...")
+    try:
+        from api.triggers import get_trigger_service
+
+        trigger_service = get_trigger_service()
+
+        async def _launch_workflow(workflow_id: str, payload: dict) -> None:
+            """Launcher callback invoked by TriggerService when a trigger fires."""
+            from services.workflow_automation import get_workflow_manager
+
+            logger.info("Trigger fired for workflow %s", workflow_id)
+            mgr = get_workflow_manager()
+            if mgr:
+                await mgr.start_workflow_execution(workflow_id)
+
+        await trigger_service.start(launcher=_launch_workflow)
+        app.state.trigger_service = trigger_service
+        logger.info("Triggers: Service started")
+    except Exception as trigger_error:
+        logger.warning("Trigger service initialization failed: %s", trigger_error)
+        app.state.trigger_service = None
+
+
 async def _init_slm_reconciler(app: FastAPI):
     """
     Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
@@ -1071,6 +1096,7 @@ async def initialize_background_services(app: FastAPI):
         await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_heartbeat_scheduler(app)
+        await _init_trigger_service(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
         await _recover_index_queue()
@@ -1105,6 +1131,11 @@ async def cleanup_services(app: FastAPI):
             await app.state.background_llm_sync.stop()
         if hasattr(app.state, "memory_graph") and app.state.memory_graph:
             await app.state.memory_graph.close()
+
+        # Issue #3100: Stop trigger service background loops
+        if hasattr(app.state, "trigger_service") and app.state.trigger_service:
+            await app.state.trigger_service.stop()
+            logger.info("Trigger service stopped")
 
         # Issue #165: Stop documentation watcher
         try:
