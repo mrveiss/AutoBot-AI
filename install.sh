@@ -142,7 +142,7 @@ detect_local_ip() {
             fatal "Invalid selection"
         fi
         detected_ip="${ips[$choice]}"
-        success "Using ${ifaces[$choice]}: ${detected_ip}"
+        success "Using ${ifaces[$choice]}: ${detected_ip}" >&2
     fi
 
     echo "${detected_ip}" > "${cache_file}"
