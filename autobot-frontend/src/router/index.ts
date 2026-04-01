@@ -521,6 +521,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #1521: Agent Heartbeat Panel — real-time agent run status
+  {
+    path: '/agents/heartbeat',
+    name: 'agent-heartbeat',
+    component: () => import('@/components/agents/HeartbeatPanel.vue'),
+    meta: {
+      title: 'Agent Heartbeat',
+      icon: 'fas fa-heartbeat',
+      description: 'Monitor agent heartbeat and real-time run status',
+      requiresAuth: true
+    }
+  },
   // Issue #899: Code Intelligence — merged into /analytics/codebase
   {
     path: '/code-intelligence',
