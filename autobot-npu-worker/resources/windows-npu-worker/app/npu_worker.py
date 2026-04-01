@@ -1587,8 +1587,10 @@ class WindowsNPUWorker:
             service_config = config.get("service", {})
 
             # Issue #640: Pass our persistent worker_id to prevent duplicates
+            # Issue #3084: Use AUTOBOT_BACKEND_HOST env var; fallback to localhost (no hardcoded IPs)
+            default_backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
             bootstrap = await fetch_bootstrap_config(
-                backend_host=backend_config.get("host", "172.16.168.20"),
+                backend_host=backend_config.get("host") or default_backend_host,
                 backend_port=backend_config.get("port", 8001),
                 worker_port=service_config.get("port", 8082),
                 platform="windows",

@@ -1,6 +1,6 @@
 # AutoBot NPU Worker Configuration - Windows Deployment
 # This configuration is for the optional Windows NPU worker installation
-# Separate from the VM-based NPU worker on 172.16.168.22:8081
+# Separate from the VM-based NPU worker on the configured AutoBot network
 
 # Service Configuration
 service:
@@ -19,7 +19,9 @@ service:
 # Backend Integration
 backend:
   # Main AutoBot backend server
-  host: "172.16.168.20"
+  # Set host to null here and provide AUTOBOT_BACKEND_HOST env var at runtime,
+  # or configure via the installer wizard. Do NOT hardcode IPs. (#3084)
+  host: null
   port: 8001
   protocol: "http"
 
