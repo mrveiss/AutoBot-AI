@@ -112,8 +112,8 @@ export function useAutoResearch() {
     error.value = null
     try {
       const query = new URLSearchParams()
-      if (params?.limit) query.set('limit', String(params.limit))
-      if (params?.offset) query.set('offset', String(params.offset))
+      if (params?.limit != null) query.set('limit', String(params.limit))
+      if (params?.offset != null) query.set('offset', String(params.offset))
       if (params?.state) query.set('state', params.state)
       const response = await api.get(`/api/autoresearch/experiments?${query}`)
       experiments.value = response.experiments ?? []

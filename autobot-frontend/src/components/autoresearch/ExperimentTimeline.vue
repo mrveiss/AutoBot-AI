@@ -94,8 +94,8 @@ function getApproval(experimentId: string) {
             : undefined,
         }"
         class="mt-3"
-        @approve="emit('approve', $event, exp.id)"
-        @reject="emit('reject', $event, exp.id)"
+        @approve="(sid: string, eid: string) => emit('approve', sid, eid)"
+        @reject="(sid: string, eid: string) => emit('reject', sid, eid)"
       />
     </div>
   </div>
