@@ -255,7 +255,7 @@
 
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
-    cmd: "grep -Ev '^-e.*autobot_shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+    cmd: "grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
   become_user: "{{ backend_user }}"
 
 # (#2872) Removed failed_when: false — pip install failures must surface.
