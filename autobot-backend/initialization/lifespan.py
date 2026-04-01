@@ -645,10 +645,13 @@ async def _init_trigger_service(app: FastAPI) -> None:
             """Launcher callback invoked by TriggerService when a trigger fires."""
             from services.workflow_automation import get_workflow_manager
 
-            logger.info("Trigger fired for workflow %s", workflow_id)
+            logger.info("Trigger fired for workflow %s with payload keys=%s",
+                        workflow_id, list(payload.keys()) if payload else [])
             mgr = get_workflow_manager()
             if mgr:
-                await mgr.start_workflow_execution(workflow_id)
+                await mgr.start_workflow_execution(
+                    workflow_id, trigger_payload=payload
+                )
 
         await trigger_service.start(launcher=_launch_workflow)
         app.state.trigger_service = trigger_service

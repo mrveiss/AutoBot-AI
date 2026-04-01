@@ -155,13 +155,24 @@ class WorkflowAutomationManager:
         logger.info("Created automated workflow %s: %s", workflow_id, name)
         return workflow_id
 
-    async def start_workflow_execution(self, workflow_id: str) -> bool:
-        """Start executing automated workflow"""
+    async def start_workflow_execution(
+        self, workflow_id: str, trigger_payload: Optional[dict] = None
+    ) -> bool:
+        """Start executing automated workflow.
+
+        Args:
+            workflow_id: ID of the workflow to execute.
+            trigger_payload: Optional event data from the trigger that
+                fired this workflow (#3138). Injected into the workflow's
+                execution context as ``trigger_payload``.
+        """
         if workflow_id not in self.active_workflows:
             logger.error("Workflow %s not found", workflow_id)
             return False
 
         workflow = self.active_workflows[workflow_id]
+        if trigger_payload:
+            workflow.trigger_payload = trigger_payload
         return await self.executor.start_execution(workflow, self.active_workflows)
 
     async def handle_workflow_control(
