@@ -12,11 +12,8 @@ all:
     ansible_python_interpreter: /usr/bin/python3
 
     # Service discovery — read from install-time secrets (set by install.sh).
-    # Priority: SLM_HOST env > SLM_HOST in secrets > extract from SLM_EXTERNAL_URL > fallback.
-    slm_host: >-
-      {{ lookup('env', 'SLM_HOST')
-         | default(lookup('pipe', 'grep -oP "SLM_HOST=\\K.*" /etc/autobot/slm-secrets.env 2>/dev/null || true'), true)
-         | default(lookup('pipe', 'grep -oP "SLM_EXTERNAL_URL=https?://\\K[^:/]+" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}
+    # Priority: SLM_HOST env > SLM_HOST in secrets > fallback.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
 
   children:
     slm_nodes:

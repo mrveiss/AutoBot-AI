@@ -32,10 +32,7 @@ all:
     # Backend uses network_address since ansible_host is 127.0.0.1 (local connection).
     # slm_host: read from install-time secrets (set by install.sh), not hostvars
     #           which gets polluted by gathered facts on multi-interface hosts.
-    slm_host: >-
-      {{ lookup('env', 'SLM_HOST')
-         | default(lookup('pipe', 'grep -oP "SLM_HOST=\\K.*" /etc/autobot/slm-secrets.env 2>/dev/null || true'), true)
-         | default(lookup('pipe', 'grep -oP "SLM_EXTERNAL_URL=https?://\\K[^:/]+" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
     slm_port: 8000
     backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
     backend_port: 8443
