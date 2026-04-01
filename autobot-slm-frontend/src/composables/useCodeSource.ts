@@ -39,7 +39,7 @@ export function useCodeSource() {
   // Use relative path for same-origin SLM backend API (Issue #860)
   const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
   api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('slm_access_token')
+    const token = sessionStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }

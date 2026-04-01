@@ -818,7 +818,7 @@ function toggleAutoRefresh(): void {
 
 onMounted(async () => {
   logger.info('OrchestrationView mounted - checking auth')
-  const token = localStorage.getItem('slm_access_token')
+  const token = sessionStorage.getItem('slm_access_token')
   logger.info('Auth token present:', !!token)
   if (!token) {
     logger.error('NO AUTH TOKEN - Please log in first')

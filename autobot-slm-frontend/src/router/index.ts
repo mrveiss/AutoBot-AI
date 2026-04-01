@@ -505,7 +505,7 @@ router.beforeEach(async (to, _from) => {
   if (!wizardCheckDone && to.name !== 'setup') {
     wizardCheckDone = true
     try {
-      const token = localStorage.getItem('slm_access_token')
+      const token = sessionStorage.getItem('slm_access_token')
       const { data } = await axios.get('/api/setup/status', {
         headers: { Authorization: `Bearer ${token}` },
       })

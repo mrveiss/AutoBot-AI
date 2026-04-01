@@ -43,7 +43,7 @@ const error = ref<string | null>(null)
 // Minimal axios client for code-source POST (Issue #860)
 const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('slm_access_token')
+  const token = sessionStorage.getItem('slm_access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }

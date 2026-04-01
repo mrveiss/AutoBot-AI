@@ -132,7 +132,7 @@ async function loadPlaybooks(): Promise<void> {
   try {
     const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
     if (response.ok) {
@@ -159,7 +159,7 @@ async function execute(): Promise<void> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
       body: JSON.stringify({
         playbook_id: selectedPlaybookId.value,
@@ -196,7 +196,7 @@ async function pollExecutionStatus(executionId: string): Promise<void> {
   try {
     const response = await fetch(`${getSlmApiBase()}/infrastructure/executions/${executionId}`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
     })
 
@@ -224,7 +224,7 @@ async function cancelExecution(): Promise<void> {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('slm_access_token')}`,
+          Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
         },
       }
     )
