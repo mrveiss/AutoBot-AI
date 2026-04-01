@@ -631,7 +631,7 @@ async def _run_ssh_service_action(
             action,
             str(e),
         )
-        return False, f"Error: {str(e)[:200]}"
+        return False, "Service action failed"
 
 
 @fleet_router.get("/services", response_model=FleetServicesResponse)

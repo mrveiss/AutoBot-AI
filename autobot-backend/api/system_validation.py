@@ -63,7 +63,7 @@ async def validation_health():
         }
     except Exception as e:
         logger.error("Validation health check failed: %s", e)
-        raise_server_error("API_0003", f"Health check failed: {str(e)}")
+        raise_server_error("API_0003", "Health check failed")
 
 
 @with_error_handling(
@@ -83,9 +83,7 @@ async def run_comprehensive_validation(
         result = await validator.run_comprehensive_validation()
 
         if not result["success"]:
-            raise_server_error(
-                "API_0003", f"Validation failed: {result.get('error', 'Unknown error')}"
-            )
+            raise_server_error("API_0003", "Validation failed")
 
         # Format response
         validation_result = ValidationResult(
@@ -103,7 +101,7 @@ async def run_comprehensive_validation(
 
     except Exception as e:
         logger.error("Comprehensive validation failed: %s", e)
-        raise_server_error("API_0003", f"Validation error: {str(e)}")
+        raise_server_error("API_0003", "Validation error")
 
 
 @with_error_handling(
@@ -170,7 +168,7 @@ async def run_quick_validation():
 
     except Exception as e:
         logger.error("Quick validation failed: %s", e)
-        raise_server_error("API_0003", f"Quick validation error: {str(e)}")
+        raise_server_error("API_0003", "Quick validation error")
 
 
 @with_error_handling(
@@ -218,7 +216,7 @@ async def validate_component(component_name: str):
         raise
     except Exception as e:
         logger.error("Component validation failed for %s: %s", component_name, e)
-        raise_server_error("API_0003", f"Component validation error: {str(e)}")
+        raise_server_error("API_0003", "Component validation error")
 
 
 @with_error_handling(
@@ -283,7 +281,7 @@ async def get_optimization_recommendations():
 
     except Exception as e:
         logger.error("Failed to get recommendations: %s", e)
-        raise_server_error("API_0003", f"Recommendations error: {str(e)}")
+        raise_server_error("API_0003", "Recommendations error")
 
 
 @with_error_handling(
@@ -315,7 +313,7 @@ async def get_validation_status():
 
     except Exception as e:
         logger.error("Failed to get validation status: %s", e)
-        raise_server_error("API_0003", f"Status error: {str(e)}")
+        raise_server_error("API_0003", "Status error")
 
 
 @with_error_handling(
@@ -363,4 +361,4 @@ async def run_performance_benchmark():
 
     except Exception as e:
         logger.error("Performance benchmark failed: %s", e)
-        raise_server_error("API_0003", f"Benchmark error: {str(e)}")
+        raise_server_error("API_0003", "Benchmark error")

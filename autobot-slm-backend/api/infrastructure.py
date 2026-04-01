@@ -653,7 +653,7 @@ async def _run_playbook(
     except Exception as e:
         execution.status = PlaybookStatus.FAILED
         execution.error = "Internal server error"
-        execution.output.append(f"[ERROR] {str(e)}")
+        execution.output.append("[ERROR] Playbook execution failed")
         logger.exception("Playbook execution failed: %s", execution_id)
 
     finally:

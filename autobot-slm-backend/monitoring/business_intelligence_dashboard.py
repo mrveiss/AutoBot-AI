@@ -905,7 +905,7 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error(f"Error generating dashboard report: {e}")
             return {
-                "error": str(e),
+                "error": "Failed to generate dashboard report",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 

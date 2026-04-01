@@ -484,7 +484,7 @@ class MonitorControl:
             self.logger.error(f"Error getting current status: {e}")
             return {
                 "timestamp": datetime.now().isoformat(),
-                "error": str(e),
+                "error": "Failed to get monitoring status",
                 "monitoring": {"running": self.running},
             }
 

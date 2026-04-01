@@ -508,7 +508,7 @@ class SLMAgent:
             return web.json_response({"error": "invalid JSON"}, status=400)
         except Exception as e:
             logger.error("Error handling code change: %s", e)
-            return web.json_response({"error": str(e)}, status=500)
+            return web.json_response({"error": "Internal server error"}, status=500)
 
     async def _notify_code_change(self, commit: str) -> None:
         """Send immediate notification to SLM server about code change."""

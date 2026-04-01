@@ -536,7 +536,8 @@ class PerformanceDashboard:
                 metrics, dumps=lambda obj: json.dumps(obj, default=str)
             )
         except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
+            logger.error("Error getting current metrics: %s", e)
+            return web.json_response({"error": "Internal server error"}, status=500)
 
     async def get_metrics_history(self, request):
         """Get historical performance metrics."""
@@ -566,7 +567,8 @@ class PerformanceDashboard:
             return web.json_response(parsed_history)
 
         except Exception as e:
-            return web.json_response({"error": str(e), "history": []}, status=500)
+            logger.error("Error getting metrics history: %s", e)
+            return web.json_response({"error": "Internal server error", "history": []}, status=500)
 
     async def get_system_status(self, request):
         """Get overall system status summary."""
@@ -605,7 +607,8 @@ class PerformanceDashboard:
             return web.json_response(status_summary)
 
         except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
+            logger.error("Error getting system status: %s", e)
+            return web.json_response({"error": "Internal server error"}, status=500)
 
     async def get_alerts(self, request):
         """Get current performance alerts."""
@@ -627,7 +630,8 @@ class PerformanceDashboard:
             )
 
         except Exception as e:
-            return web.json_response({"error": str(e)}, status=500)
+            logger.error("Error getting alerts: %s", e)
+            return web.json_response({"error": "Internal server error"}, status=500)
 
     async def websocket_handler(self, request):
         """Handle WebSocket connections for real-time updates."""

@@ -71,7 +71,7 @@ async def get_settings():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error("Error getting settings: %s", str(e))
-        raise_server_error("API_0003", f"Error getting settings: {str(e)}")
+        raise_server_error("API_0003", "Error getting settings")
 
 
 @with_error_handling(
@@ -86,7 +86,7 @@ async def get_settings_explicit():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error("Error getting settings: %s", str(e))
-        raise_server_error("API_0003", f"Error getting settings: {str(e)}")
+        raise_server_error("API_0003", "Error getting settings")
 
 
 @with_error_handling(
@@ -120,7 +120,7 @@ async def save_settings(
         return result
     except Exception as e:
         logger.error("Error saving settings: %s", str(e))
-        raise_server_error("API_0003", f"Error saving settings: {str(e)}")
+        raise_server_error("API_0003", "Error saving settings")
 
 
 @with_error_handling(
@@ -153,7 +153,7 @@ async def save_settings_explicit(
         return result
     except Exception as e:
         logger.error("Error saving settings: %s", str(e))
-        raise_server_error("API_0003", f"Error saving settings: {str(e)}")
+        raise_server_error("API_0003", "Error saving settings")
 
 
 @with_error_handling(
@@ -168,7 +168,7 @@ async def get_backend_settings():
         return ConfigService.get_backend_settings()
     except Exception as e:
         logger.error("Error getting backend settings: %s", str(e))
-        raise_server_error("API_0003", f"Error getting backend settings: {str(e)}")
+        raise_server_error("API_0003", "Error getting backend settings")
 
 
 @with_error_handling(
@@ -197,7 +197,7 @@ async def save_backend_settings(
         return result
     except Exception as e:
         logger.error("Error saving backend settings: %s", str(e))
-        raise_server_error("API_0003", f"Error saving backend settings: {str(e)}")
+        raise_server_error("API_0003", "Error saving backend settings")
 
 
 @with_error_handling(
@@ -212,7 +212,7 @@ async def get_full_config():
         return ConfigService.get_full_config()
     except Exception as e:
         logger.error("Error getting full config: %s", str(e))
-        raise_server_error("API_0003", f"Error getting full config: {str(e)}")
+        raise_server_error("API_0003", "Error getting full config")
 
 
 @with_error_handling(
@@ -241,7 +241,7 @@ async def save_full_config(
         return result
     except Exception as e:
         logger.error("Error saving full config: %s", str(e))
-        raise_server_error("API_0003", f"Error saving full config: {str(e)}")
+        raise_server_error("API_0003", "Error saving full config")
 
 
 @with_error_handling(
@@ -271,7 +271,7 @@ async def clear_cache():
         }
     except Exception as e:
         logger.error("Error in clear-cache endpoint: %s", str(e))
-        raise_server_error("API_0003", f"Error in clear-cache endpoint: {str(e)}")
+        raise_server_error("API_0003", "Error clearing cache")
 
 
 # ==================== RBAC Management Endpoints (Issue #687) ====================
@@ -323,7 +323,7 @@ async def initialize_rbac_endpoint(
 
     except Exception as e:
         logger.error("Error queuing RBAC initialization: %s", str(e))
-        raise_server_error("RBAC_0001", f"Error queuing RBAC initialization: {str(e)}")
+        raise_server_error("RBAC_0001", "Error queuing RBAC initialization")
 
 
 @with_error_handling(
@@ -370,7 +370,7 @@ async def get_rbac_task_status(
 
     except Exception as e:
         logger.error("Error getting RBAC task status: %s", str(e))
-        raise_server_error("RBAC_0002", f"Error getting task status: {str(e)}")
+        raise_server_error("RBAC_0002", "Error getting task status")
 
 
 @with_error_handling(
@@ -406,7 +406,7 @@ async def get_rbac_status(
 
     except Exception as e:
         logger.error("Error checking RBAC status: %s", str(e))
-        raise_server_error("RBAC_0003", f"Error checking RBAC status: {str(e)}")
+        raise_server_error("RBAC_0003", "Error checking RBAC status")
 
 
 # ==================== System Updates Endpoints (Issue #544) ====================
@@ -494,7 +494,7 @@ async def run_system_update_endpoint(
         raise
     except Exception as e:
         logger.error("Error queuing system update: %s", str(e))
-        raise_server_error("UPDATES_0001", f"Error queuing system update: {str(e)}")
+        raise_server_error("UPDATES_0001", "Error queuing system update")
 
 
 @with_error_handling(
@@ -541,7 +541,7 @@ async def get_update_task_status(
 
     except Exception as e:
         logger.error("Error getting update task status: %s", str(e))
-        raise_server_error("UPDATES_0002", f"Error getting task status: {str(e)}")
+        raise_server_error("UPDATES_0002", "Error getting task status")
 
 
 def _check_celery_worker_available() -> tuple[bool, str]:
@@ -658,7 +658,7 @@ async def check_updates_endpoint(
         raise
     except Exception as e:
         logger.error("Error queuing update check: %s", str(e))
-        raise_server_error("UPDATES_0003", f"Error queuing update check: {str(e)}")
+        raise_server_error("UPDATES_0003", "Error queuing update check")
 
 
 @with_error_handling(
@@ -699,4 +699,4 @@ async def get_update_status(
 
     except Exception as e:
         logger.error("Error checking update status: %s", str(e))
-        raise_server_error("UPDATES_0004", f"Error checking update status: {str(e)}")
+        raise_server_error("UPDATES_0004", "Error checking update status")

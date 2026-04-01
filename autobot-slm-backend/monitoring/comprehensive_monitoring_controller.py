@@ -560,7 +560,7 @@ class ComprehensiveMonitoringController:
         except Exception as e:
             self.logger.error(f"Error generating instant report: {e}")
             return {
-                "error": str(e),
+                "error": "Failed to generate instant report",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
