@@ -190,7 +190,7 @@ async def process_image(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Image processing failed",
         )
 
 
@@ -262,7 +262,7 @@ async def process_audio(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Audio processing failed",
         )
 
 
@@ -321,7 +321,7 @@ async def process_text(
             processing_time=processing_time,
             confidence=0.0,
             result_data={},
-            error_message=str(e),
+            error_message="Text processing failed",
         )
 
 

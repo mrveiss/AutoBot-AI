@@ -1257,7 +1257,7 @@ class WindowsNPUWorker:
 
         except Exception as e:
             logger.error(f"Pairing failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Pairing failed")
 
     def _handle_pairing_status(self) -> Dict[str, Any]:
         """Return current pairing status for GET /pairing-status (Issue #641)."""
@@ -1296,7 +1296,7 @@ class WindowsNPUWorker:
 
         except Exception as e:
             logger.error(f"Unpair failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Unpair failed")
 
     def _register_device_routes(self):
         """Register /device-info route (Issue #640)."""
@@ -1452,7 +1452,7 @@ class WindowsNPUWorker:
             }
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Embedding generation failed")
 
     async def _handle_semantic_search(
         self,
@@ -1484,7 +1484,7 @@ class WindowsNPUWorker:
             }
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail="Semantic search failed")
 
     def _register_model_routes(self):
         """Register /model/optimize and /performance/benchmark routes."""
@@ -1502,7 +1502,7 @@ class WindowsNPUWorker:
                 }
             except Exception as e:
                 logger.error(f"Model optimization failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Model optimization failed")
 
         @self.app.get("/performance/benchmark")
         async def benchmark():
@@ -1515,7 +1515,7 @@ class WindowsNPUWorker:
                 }
             except Exception as e:
                 logger.error(f"Benchmark failed: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                raise HTTPException(status_code=500, detail="Benchmark failed")
 
     async def initialize(self):
         """

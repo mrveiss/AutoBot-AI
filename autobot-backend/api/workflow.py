@@ -1007,7 +1007,8 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             await _handle_fallback_step(ctx, agent_type)
 
     except Exception as e:
-        step["result"] = f"Error executing step: {str(e)}"
+        logger.error("Error executing step %s: %s", step_id, e)
+        step["result"] = "Error executing step"
         step["status"] = "failed"
 
         # End step timing with failure

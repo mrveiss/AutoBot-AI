@@ -253,4 +253,4 @@ async def validate_service_auth(request: Request) -> Dict:
         logger.error(
             "Service auth validation error", error=str(e), path=request.url.path
         )
-        raise_server_error("API_0003", f"Authentication service error: {str(e)}")
+        raise_server_error("API_0003", "Authentication service error")

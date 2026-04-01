@@ -283,7 +283,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
             job.error = "Internal server error"
             job.completed_at = datetime.utcnow()
             await db.commit()
-            await _broadcast_job_update(job_id, "failed", job.progress, str(e))
+            await _broadcast_job_update(job_id, "failed", job.progress, "Update job failed")
 
 
 def _parse_discover_output(output: str) -> List[dict]:
@@ -636,9 +636,9 @@ async def _run_discover_job(
     except Exception as e:
         logger.exception("Discover job failed: %s", job_id)
         job["status"] = "failed"
-        job["message"] = str(e)
+        job["message"] = "Discover job failed"
         job["completed_at"] = datetime.utcnow().isoformat()
-        await _broadcast_job_update(job_id, "failed", job.get("progress", 0), str(e))
+        await _broadcast_job_update(job_id, "failed", job.get("progress", 0), "Discover job failed")
 
 
 @router.post("/discover", response_model=UpdateDiscoverResponse)

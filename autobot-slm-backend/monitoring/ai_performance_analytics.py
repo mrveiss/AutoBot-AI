@@ -826,7 +826,7 @@ else:
             self.logger.error(f"Error generating AI performance report: {e}")
             self.logger.error(traceback.format_exc())
             return {
-                "error": str(e),
+                "error": "Failed to generate AI performance report",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 

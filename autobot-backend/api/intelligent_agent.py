@@ -353,7 +353,7 @@ async def websocket_stream(websocket: WebSocket):
             except Exception as e:
                 logger.error("Error processing WebSocket goal: %s", e)
                 await websocket.send_json(
-                    {"type": "error", "content": f"Error processing goal: {str(e)}"}
+                    {"type": "error", "content": "Error processing goal"}
                 )
     except WebSocketDisconnect:
         logger.info("WebSocket connection closed")
@@ -361,7 +361,7 @@ async def websocket_stream(websocket: WebSocket):
         logger.error("WebSocket error: %s", e)
         try:
             await websocket.send_json(
-                {"type": "error", "content": f"WebSocket error: {str(e)}"}
+                {"type": "error", "content": "WebSocket error"}
             )
         except Exception as conn_error:
             logger.debug("Connection error: %s", conn_error)  # Connection closed

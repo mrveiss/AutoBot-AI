@@ -149,7 +149,7 @@ class SSOService(BaseService):
             return {"success": True, "message": "LDAP connection successful"}
         except Exception as e:
             logger.error("LDAP connection test failed: %s", e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "LDAP connection test failed"}
 
     def _generate_oauth_state(self, provider_id: uuid.UUID) -> str:
         """Generate OAuth2 state token and store provider mapping."""

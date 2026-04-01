@@ -174,7 +174,8 @@ class OperationIntegrationManager:
             )
             return {"operation_id": operation_id, "status": "created"}
         except ValueError as e:
-            raise_validation_error("API_0001", str(e))
+            logger.warning("Operation creation validation error: %s", e)
+            raise_validation_error("API_0001", "Invalid operation parameters")
         except Exception as e:
             logger.error("Failed to create operation: %s", e)
             raise_server_error("API_0003", "Internal server error")
@@ -281,7 +282,7 @@ class OperationIntegrationManager:
             }
         except Exception as e:
             logger.error("Failed to resume operation: %s", e)
-            raise_server_error("API_0003", str(e))
+            raise_server_error("API_0003", "Failed to resume operation")
 
     async def _handle_update_progress(
         self, operation_id: str, request: ProgressUpdateRequest
@@ -312,7 +313,7 @@ class OperationIntegrationManager:
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
             logger.error("Failed to start codebase indexing: %s", e)
-            raise_server_error("API_0003", str(e))
+            raise_server_error("API_0003", "Failed to start codebase indexing")
 
     async def _handle_start_testing(
         self, test_suite_path: str, test_patterns: Optional[List[str]] = None
@@ -325,7 +326,7 @@ class OperationIntegrationManager:
             return {"operation_id": operation_id, "status": "started"}
         except Exception as e:
             logger.error("Failed to start comprehensive testing: %s", e)
-            raise_server_error("API_0003", str(e))
+            raise_server_error("API_0003", "Failed to start comprehensive testing")
 
     def _setup_routes(self):
         """Setup FastAPI routes for operation management. Issue #620."""

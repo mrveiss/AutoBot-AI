@@ -956,7 +956,7 @@ async def database_describe_schema_mcp(request: SchemaRequest) -> Metadata:
 
     except ValueError as e:
         logger.warning("Invalid table identifier in describe_schema request: %s", e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid table identifier")
     except sqlite3.Error as e:
         logger.error("SQLite error describing schema: %s", e)
         raise HTTPException(status_code=500, detail="Error describing schema")

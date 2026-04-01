@@ -28,7 +28,6 @@ import asyncio
 import importlib
 import logging
 import sys
-import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -164,9 +163,10 @@ class StartupValidator:
                 importlib.import_module(module_name)
                 logger.debug("✅ Critical import: %s", module_name)
             except ImportError as e:
+                logger.error("Critical import failed: %s: %s", module_name, e)
                 self.result.add_error(
                     f"Critical import failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()},
+                    {"error": type(e).__name__},
                 )
 
     def _validate_autobot_modules(self):
@@ -178,15 +178,17 @@ class StartupValidator:
                 importlib.import_module(module_name)
                 logger.debug("✅ AutoBot module: %s", module_name)
             except ImportError as e:
+                logger.error("AutoBot module import failed: %s: %s", module_name, e)
                 self.result.add_error(
                     f"AutoBot module import failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()},
+                    {"error": type(e).__name__},
                 )
             except Exception as e:
                 # Module imported but failed to initialize
+                logger.error("AutoBot module initialization failed: %s: %s", module_name, e)
                 self.result.add_error(
                     f"AutoBot module initialization failed: {module_name}",
-                    {"error": str(e), "traceback": traceback.format_exc()},
+                    {"error": type(e).__name__},
                 )
 
     def _validate_optional_modules(self):
@@ -198,13 +200,15 @@ class StartupValidator:
                 importlib.import_module(module_name)
                 logger.debug("✅ Optional module: %s", module_name)
             except ImportError as e:
+                logger.debug("Optional module not available: %s: %s", module_name, e)
                 self.result.add_warning(
-                    f"Optional module not available: {module_name}", {"error": str(e)}
+                    f"Optional module not available: {module_name}", {"error": type(e).__name__}
                 )
             except Exception as e:
+                logger.debug("Optional module initialization failed: %s: %s", module_name, e)
                 self.result.add_warning(
                     f"Optional module initialization failed: {module_name}",
-                    {"error": str(e)},
+                    {"error": type(e).__name__},
                 )
 
     async def _validate_configuration(self):
@@ -231,9 +235,10 @@ class StartupValidator:
             logger.debug("✅ Configuration validation passed")
 
         except Exception as e:
+            logger.error("Configuration system failed: %s", e)
             self.result.add_error(
                 "Configuration system failed",
-                {"error": str(e), "traceback": traceback.format_exc()},
+                {"error": type(e).__name__},
             )
 
     async def _validate_service_connectivity(self):

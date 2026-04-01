@@ -188,7 +188,7 @@ class DatabaseService:
             return {"status": "healthy", "database": "postgresql"}
         except Exception as e:
             logger.error("Database health check failed: %s", e)
-            return {"status": "unhealthy", "error": str(e)}
+            return {"status": "unhealthy", "error": "Health check failed"}
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:

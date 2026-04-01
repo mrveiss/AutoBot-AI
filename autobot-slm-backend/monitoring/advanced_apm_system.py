@@ -793,7 +793,7 @@ class AdvancedAPMSystem:
 
         except Exception as e:
             self.logger.error(f"Error generating performance summary: {e}")
-            return {"error": str(e)}
+            return {"error": "Failed to generate performance summary"}
 
     async def generate_apm_report(self) -> Dict[str, Any]:
         """Generate comprehensive APM report."""
@@ -826,7 +826,7 @@ class AdvancedAPMSystem:
 
         except Exception as e:
             self.logger.error(f"Error generating APM report: {e}")
-            return {"error": str(e)}
+            return {"error": "Failed to generate APM report"}
 
     async def _store_apm_report(self, report: Dict[str, Any]):
         """Store APM report."""

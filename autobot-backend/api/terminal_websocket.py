@@ -67,7 +67,7 @@ class TerminalWebSocketHandler:
                 {
                     "type": "error",
                     "message": "Failed to initialize terminal session",
-                    "details": str(e),
+                    "details": "Terminal session initialization failed",
                 },
             )
 
@@ -120,11 +120,12 @@ class TerminalWebSocketHandler:
                 except WebSocketDisconnect:
                     break
                 except json.JSONDecodeError as e:
-                    await self._send_error(websocket, f"Invalid JSON: {str(e)}")
+                    logger.warning("Invalid JSON received in WebSocket message: %s", e)
+                    await self._send_error(websocket, "Invalid JSON")
                 except Exception as e:
                     logger.error(f"Error handling WebSocket message: {e}")
                     await self._send_error(
-                        websocket, f"Error processing message: {str(e)}"
+                        websocket, "Error processing message"
                     )
 
         except Exception as e:
@@ -162,7 +163,8 @@ class TerminalWebSocketHandler:
                     history_service.add_command(chat_id, user_input.strip())
                 )
         except ValueError as e:
-            await self._send_error_to_chat(chat_id, str(e))
+            logger.warning("Input error for chat %s: %s", chat_id, e)
+            await self._send_error_to_chat(chat_id, "Invalid input request")
 
     async def _handle_control_action(self, chat_id: str, action: str) -> None:
         """Handle take_control or return_control messages. Issue #620."""
@@ -172,7 +174,8 @@ class TerminalWebSocketHandler:
             else:
                 await system_command_agent.return_control_of_session(chat_id)
         except ValueError as e:
-            await self._send_error_to_chat(chat_id, str(e))
+            logger.warning("Control action error for chat %s: %s", chat_id, e)
+            await self._send_error_to_chat(chat_id, "Control action failed")
 
     async def _handle_signal(self, chat_id: str, data: Dict[str, Any]) -> None:
         """Handle signal message. Issue #620."""
@@ -180,7 +183,8 @@ class TerminalWebSocketHandler:
         try:
             await system_command_agent.send_signal_to_session(chat_id, signal_type)
         except ValueError as e:
-            await self._send_error_to_chat(chat_id, str(e))
+            logger.warning("Signal error for chat %s: %s", chat_id, e)
+            await self._send_error_to_chat(chat_id, "Signal failed")
 
     async def _handle_resize(self, chat_id: str, data: Dict[str, Any]) -> None:
         """Handle resize message. Issue #620."""
