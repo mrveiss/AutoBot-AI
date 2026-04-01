@@ -3,12 +3,18 @@
 // Author: mrveiss
 
 import { globalIgnores } from 'eslint/config'
-import tseslint from '@typescript-eslint/eslint-plugin'
-import tsparser from '@typescript-eslint/parser'
+import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import vueParser from 'vue-eslint-parser'
 
-export default [
+const tsRuleOverrides = {
+  '@typescript-eslint/no-explicit-any': 'warn',
+  '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+  'no-unused-vars': 'off',
+  'no-undef': 'off',
+}
+
+export default tseslint.config(
   {
     name: 'app/files-to-lint',
     files: ['**/*.{ts,mts,tsx,vue}'],
@@ -27,50 +33,34 @@ export default [
   // Vue 3 essential rules
   ...pluginVue.configs['flat/essential'],
 
-  // TypeScript rules for .ts files
+  // TypeScript recommended rules for .ts files
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['**/*.{ts,tsx}'],
+  })),
   {
     files: ['**/*.{ts,tsx}'],
-    plugins: {
-      '@typescript-eslint': tseslint,
-    },
-    languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-      },
-    },
-    rules: {
-      ...tseslint.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'no-unused-vars': 'off',
-      'no-undef': 'off',
-    },
+    rules: tsRuleOverrides,
   },
 
   // TypeScript rules for .vue files
   {
     files: ['**/*.vue'],
     plugins: {
-      '@typescript-eslint': tseslint,
+      '@typescript-eslint': tseslint.plugin,
     },
     languageOptions: {
       parser: vueParser,
       parserOptions: {
-        parser: tsparser,
+        parser: tseslint.parser,
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
     },
     rules: {
-      ...tseslint.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      ...tsRuleOverrides,
       'vue/multi-word-component-names': 'off',
       'no-console': 'error',
-      'no-unused-vars': 'off',
-      'no-undef': 'off',
     },
   },
-]
+)
