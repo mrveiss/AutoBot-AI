@@ -26,6 +26,59 @@
             <span>{{ $t('analytics.views.tabs.codebase') }}</span>
           </router-link>
           <router-link
+            to="/analytics/code-quality"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isCodeQualityActive }"
+            role="tab"
+            :aria-selected="isCodeQualityActive"
+            :aria-label="$t('analytics.views.tabs.codeQualityAria')"
+          >
+            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>{{ $t('analytics.views.tabs.codeQuality') }}</span>
+          </router-link>
+          <router-link
+            to="/analytics/code-review"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isCodeReviewActive }"
+            role="tab"
+            :aria-selected="isCodeReviewActive"
+            :aria-label="$t('analytics.views.tabs.codeReviewAria')"
+          >
+            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+            <span>{{ $t('analytics.views.tabs.codeReview') }}</span>
+          </router-link>
+          <router-link
+            to="/analytics/code-generation"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isCodeGenerationActive }"
+            role="tab"
+            :aria-selected="isCodeGenerationActive"
+            :aria-label="$t('analytics.views.tabs.codeGenerationAria')"
+          >
+            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <span>{{ $t('analytics.views.tabs.codeGeneration') }}</span>
+          </router-link>
+          <router-link
+            to="/analytics/evolution"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isEvolutionActive }"
+            role="tab"
+            :aria-selected="isEvolutionActive"
+            :aria-label="$t('analytics.views.tabs.evolutionAria')"
+          >
+            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+            <span>{{ $t('analytics.views.tabs.evolution') }}</span>
+          </router-link>
+          <router-link
             to="/analytics/bi"
             class="nav-tab"
             :class="{ 'nav-tab-active': isBIActive }"
@@ -51,6 +104,19 @@
             </svg>
             <span>{{ $t('analytics.views.tabs.security') }}</span>
           </router-link>
+          <router-link
+            to="/analytics/audit"
+            class="nav-tab"
+            :class="{ 'nav-tab-active': isAuditActive }"
+            role="tab"
+            :aria-selected="isAuditActive"
+            :aria-label="$t('analytics.views.tabs.auditAria')"
+          >
+            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+            </svg>
+            <span>{{ $t('analytics.views.tabs.audit') }}</span>
+          </router-link>
         </nav>
       </div>
 
@@ -72,12 +138,32 @@ const isCodebaseActive = computed(() => {
   return route.path === '/analytics' || route.path === '/analytics/codebase' || route.path.startsWith('/analytics/codebase/')
 })
 
+const isCodeQualityActive = computed(() => {
+  return route.path === '/analytics/code-quality' || route.path.startsWith('/analytics/code-quality/')
+})
+
+const isCodeReviewActive = computed(() => {
+  return route.path === '/analytics/code-review' || route.path.startsWith('/analytics/code-review/')
+})
+
+const isCodeGenerationActive = computed(() => {
+  return route.path === '/analytics/code-generation' || route.path.startsWith('/analytics/code-generation/')
+})
+
+const isEvolutionActive = computed(() => {
+  return route.path === '/analytics/evolution' || route.path.startsWith('/analytics/evolution/')
+})
+
 const isBIActive = computed(() => {
   return route.path === '/analytics/bi' || route.path.startsWith('/analytics/bi/')
 })
 
 const isSecurityActive = computed(() => {
   return route.path === '/analytics/security' || route.path.startsWith('/analytics/security/')
+})
+
+const isAuditActive = computed(() => {
+  return route.path === '/analytics/audit' || route.path.startsWith('/analytics/audit/')
 })
 </script>
 
@@ -140,6 +226,7 @@ const isSecurityActive = computed(() => {
   padding: 0 32px;
   max-width: 1400px;
   margin: 0 auto;
+  overflow-x: auto;
 }
 
 .nav-tab {
@@ -155,6 +242,7 @@ const isSecurityActive = computed(() => {
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   top: 1px;
+  white-space: nowrap;
 }
 
 .nav-tab:hover {
