@@ -634,9 +634,23 @@ def _fallback_html_strip(html_content: str) -> tuple:
     """
     import re
     from html import unescape
+    from html.parser import HTMLParser
+    from io import StringIO
 
-    text = re.sub(r"<[^>]+>", " ", html_content)
-    text = unescape(text)
+    class _TagStripper(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+
+        def handle_data(self, data: str):
+            self._parts.append(data)
+
+        def get_text(self) -> str:
+            return " ".join(self._parts)
+
+    stripper = _TagStripper()
+    stripper.feed(html_content)
+    text = unescape(stripper.get_text())
     return re.sub(r"\s+", " ", text).strip(), ""
 
 
