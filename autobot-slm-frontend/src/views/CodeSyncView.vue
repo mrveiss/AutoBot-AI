@@ -898,8 +898,8 @@ onUnmounted(() => {
     <!-- Schedule Modal -->
     <ScheduleModal
       :show="showScheduleModal"
-      :schedule="(editingSchedule as any)"
-      :nodes="(codeSync.pendingNodes.value as any)"
+      :schedule="(editingSchedule as UpdateSchedule | null)"
+      :nodes="(codeSync.pendingNodes.value as PendingNode[])"
       @close="closeScheduleModal"
       @save="handleSaveSchedule"
     />

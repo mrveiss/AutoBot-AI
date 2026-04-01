@@ -6,7 +6,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import type { SLMNode } from '@/types/slm'
+import type { SLMNode, NodeRole } from '@/types/slm'
 
 interface RoleInfo {
   name: string
@@ -180,7 +180,7 @@ async function deploy(): Promise<void> {
 
     const deployment = await api.createDeployment({
       node_id: nodeId,
-      roles: selectedRoles.value as any,
+      roles: selectedRoles.value as NodeRole[],
     })
 
     emit('deployed', deployment.deployment_id)

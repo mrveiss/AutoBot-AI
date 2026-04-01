@@ -534,7 +534,7 @@ async function handleReenroll(nodeId: string): Promise<void> {
     <AddNodeModal
       :visible="showAddNodeModal"
       :mode="editingNode ? 'edit' : 'add'"
-      :existing-node="(editingNode as any)"
+      :existing-node="(editingNode as SLMNode | null)"
       @close="closeAddNodeModal"
       @added="handleNodeSaved"
       @updated="handleNodeSaved"

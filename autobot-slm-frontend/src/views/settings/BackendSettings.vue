@@ -49,9 +49,9 @@ async function fetchSettings(): Promise<void> {
           if (typeof settings.value[key] === 'boolean') {
             (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
           } else if (typeof settings.value[key] === 'number') {
-            (settings.value as Record<string, any>)[key] = parseInt(s.value)
+            (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
           } else {
-            (settings.value as Record<string, any>)[key] = s.value
+            (settings.value as Record<string, string | number | boolean>)[key] = s.value
           }
         }
       })

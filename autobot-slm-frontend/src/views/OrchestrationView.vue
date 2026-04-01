@@ -645,7 +645,7 @@ function openCreateRoleForm(): void {
   showRoleForm.value = true
 }
 
-function openEditRoleForm(role: any): void {
+function openEditRoleForm(role: Role): void {
   editingRole.value = role.name
   roleFormData.value = {
     name: role.name,
@@ -1035,7 +1035,7 @@ onUnmounted(() => {
               :nodeId="node.nodeId"
               :hostname="node.hostname"
               :ipAddress="node.ipAddress"
-              :status="node.status as any"
+              :status="(node.status as 'online' | 'offline' | 'unknown')"
               :runningCount="node.runningCount"
               :stoppedCount="node.stoppedCount"
               :failedCount="node.failedCount"
@@ -1122,13 +1122,13 @@ onUnmounted(() => {
                       </span>
                     </td>
                     <td class="px-4 py-2">
-                      <ServiceStatusBadge :status="service.status as any" />
+                      <ServiceStatusBadge :status="service.status" />
                     </td>
                     <td class="px-4 py-2">
                       <ServiceActionButtons
                         :serviceName="service.service_name"
                         :nodeId="node.nodeId"
-                        :status="service.status as any"
+                        :status="(service.status as 'running' | 'stopped' | 'failed' | 'unknown')"
                         :isActionInProgress="orchestration.actionInProgress"
                         :activeAction="orchestration.activeAction"
                         @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
@@ -1374,13 +1374,13 @@ onUnmounted(() => {
                             <span class="text-xs text-gray-400 ml-1.5 font-mono">{{ nodeStatus.node_id }}</span>
                           </td>
                           <td class="px-4 py-1.5 w-28">
-                            <ServiceStatusBadge :status="nodeStatus.status as any" />
+                            <ServiceStatusBadge :status="nodeStatus.status" />
                           </td>
                           <td class="px-4 py-1.5 text-right">
                             <ServiceActionButtons
                               :serviceName="service.service_name"
                               :nodeId="nodeStatus.node_id"
-                              :status="nodeStatus.status as any"
+                              :status="(nodeStatus.status as 'running' | 'stopped' | 'failed' | 'unknown')"
                               :isActionInProgress="orchestration.actionInProgress"
                               :activeAction="orchestration.activeAction"
                               @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
@@ -2011,7 +2011,7 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600 font-mono">{{ node.ip_address }}</td>
                 <td class="px-4 py-2">
-                  <ServiceStatusBadge :status="node.status as any" />
+                  <ServiceStatusBadge :status="node.status" />
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">
                   {{
