@@ -28,10 +28,10 @@
  * const data = await parseApiResponse(response)
  * ```
  */
-export async function parseApiResponse(response: any): Promise<any> {
+export async function parseApiResponse(response: Response | Record<string, unknown>): Promise<unknown> {
   // Check if response has .json() method (it's a Response object)
-  if (typeof response.json === 'function') {
-    return await response.json()
+  if (typeof (response as Response).json === 'function') {
+    return await (response as Response).json()
   }
 
   // Already parsed or direct data
@@ -44,8 +44,8 @@ export async function parseApiResponse(response: any): Promise<any> {
  * @param data - Parsed response data
  * @returns True if response indicates success
  */
-export function isSuccessResponse(data: any): boolean {
-  return data?.status === 'success'
+export function isSuccessResponse(data: unknown): boolean {
+  return (data as Record<string, unknown>)?.status === 'success'
 }
 
 /**
@@ -55,6 +55,7 @@ export function isSuccessResponse(data: any): boolean {
  * @param fallback - Fallback error message
  * @returns Error message string
  */
-export function getErrorMessage(data: any, fallback = 'Unknown error'): string {
-  return data?.message || data?.error || fallback
+export function getErrorMessage(data: unknown, fallback = 'Unknown error'): string {
+  const record = data as Record<string, unknown> | null
+  return (record?.message as string) || (record?.error as string) || fallback
 }

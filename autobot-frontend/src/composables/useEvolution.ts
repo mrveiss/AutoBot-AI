@@ -10,6 +10,7 @@
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { createLogger } from '@/utils/debugUtils'
+import { extractApiErrorMessage, extractErrorMessage } from '@/utils/errorExtract'
 
 const logger = createLogger('useEvolution')
 
@@ -46,7 +47,7 @@ export interface TimelineData {
   complexity?: number
   security?: number
   performance?: number
-  [key: string]: any
+  [key: string]: string | number | undefined
 }
 
 export interface PatternEvolutionData {
@@ -123,9 +124,8 @@ export function useEvolution() {
 
       logger.info('Evolution analysis complete', response.data)
       return true
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.message || e.message || 'Analysis failed'
-      error.value = errorMsg
+    } catch (e: unknown) {
+      error.value = extractApiErrorMessage(e, 'Analysis failed')
       logger.error('Evolution analysis failed:', e)
       return false
     } finally {
@@ -146,7 +146,7 @@ export function useEvolution() {
     error.value = null
 
     try {
-      const params: any = { granularity, metrics }
+      const params: Record<string, string> = { granularity, metrics }
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
@@ -157,9 +157,8 @@ export function useEvolution() {
       }
 
       logger.info('Timeline data fetched', { count: timelineData.value.length })
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.message || e.message || 'Failed to fetch timeline'
-      error.value = errorMsg
+    } catch (e: unknown) {
+      error.value = extractApiErrorMessage(e, 'Failed to fetch timeline')
       logger.error('Failed to fetch timeline:', e)
     } finally {
       loading.value = false
@@ -178,7 +177,7 @@ export function useEvolution() {
     error.value = null
 
     try {
-      const params: any = {}
+      const params: Record<string, string> = {}
       if (pattern_type) params.pattern_type = pattern_type
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
@@ -190,9 +189,8 @@ export function useEvolution() {
       }
 
       logger.info('Pattern evolution data fetched', { count: Object.keys(patternData.value).length })
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.message || e.message || 'Failed to fetch pattern data'
-      error.value = errorMsg
+    } catch (e: unknown) {
+      error.value = extractApiErrorMessage(e, 'Failed to fetch pattern data')
       logger.error('Failed to fetch pattern evolution:', e)
     } finally {
       loading.value = false
@@ -209,7 +207,7 @@ export function useEvolution() {
         trendsData.value = response.data.trends
       }
       logger.info('Trends data fetched', { count: Object.keys(trendsData.value).length })
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Failed to fetch trends:', e)
     }
   }
@@ -224,7 +222,7 @@ export function useEvolution() {
         summary.value = response.data.summary
       }
       logger.info('Evolution summary fetched')
-    } catch (e: any) {
+    } catch (e: unknown) {
       logger.error('Failed to fetch summary:', e)
     }
   }
@@ -238,7 +236,7 @@ export function useEvolution() {
     end_date?: string
   ): Promise<void> {
     try {
-      const params: any = { format }
+      const params: Record<string, string> = { format }
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
@@ -267,9 +265,8 @@ export function useEvolution() {
         URL.revokeObjectURL(url)
       }
       logger.info('Evolution data exported as', format)
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.message || e.message || 'Export failed'
-      error.value = errorMsg
+    } catch (e: unknown) {
+      error.value = extractApiErrorMessage(e, 'Export failed')
       logger.error('Export failed:', e)
     }
   }
