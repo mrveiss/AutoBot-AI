@@ -64,7 +64,7 @@ _DYNAMIC_SEGMENT_PATTERNS = [
     re.compile(r"^\d+$"),
     # Alphanumeric slugs that look generated: starts with alpha/digit, contains
     # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
-    re.compile(r"^[a-z0-9_-]{8,}$", re.I),
+    re.compile(r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I),
 ]
 
 
