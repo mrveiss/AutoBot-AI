@@ -472,10 +472,11 @@ async def get_pending_approval(
 # =========================================================================
 
 
-def _find_workflow(workflow_id: str):
+def _find_workflow(workflow_id: str, current_user: dict = None):
     """Look up a workflow in active or completed stores.
 
-    Returns the ActiveWorkflow dataclass or raises 404.
+    Returns the ActiveWorkflow dataclass or raises 404/403.
+    Verifies ownership when current_user is provided.
     """
     mgr = get_workflow_manager()
     wf = mgr.active_workflows.get(workflow_id)
@@ -483,6 +484,10 @@ def _find_workflow(workflow_id: str):
         wf = mgr.completed_workflows.get(workflow_id)
     if wf is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    if current_user and hasattr(wf, "owner_id") and wf.owner_id:
+        user_id = current_user.get("user_id", current_user.get("sub"))
+        if user_id and wf.owner_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
     return wf
 
 
@@ -498,7 +503,7 @@ async def get_notification_config(
 ):
     """Return the notification configuration for a workflow (#3139)."""
     try:
-        wf = _find_workflow(workflow_id)
+        wf = _find_workflow(workflow_id, current_user)
         config_dict = None
         if wf.notification_config is not None:
             config_dict = asdict(wf.notification_config)
@@ -532,12 +537,14 @@ async def update_notification_config(
     executor skips notification delivery.
     """
     try:
-        wf = _find_workflow(workflow_id)
+        wf = _find_workflow(workflow_id, current_user)
         if not request.enabled:
             wf.notification_config = None
         else:
+            user_id = current_user.get("user_id", current_user.get("sub", ""))
             wf.notification_config = NotificationConfig(
                 workflow_id=workflow_id,
+                user_id=user_id,
                 channels=request.channels,
                 templates=request.templates,
                 email_recipients=request.email_recipients,
