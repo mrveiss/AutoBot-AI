@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 
 from enhanced_orchestrator import get_orchestrator
 from orchestrator import Orchestrator
+from services.notification_service import NotificationService
 from type_defs.common import Metadata
 
 from .controller import WorkflowController
@@ -43,7 +44,11 @@ class WorkflowAutomationManager:
 
         # Composition: delegate to specialized components
         self.messenger = WorkflowMessenger()
-        self.executor = WorkflowExecutor(self.messenger)
+        # Issue #3101: Wire notification service into executor.
+        self._notification_service = NotificationService()
+        self.executor = WorkflowExecutor(
+            self.messenger, notification_service=self._notification_service
+        )
         # Issue #1367: Archive finished workflows to completed history
         self.executor.on_workflow_finished = self.archive_completed_workflow
         self.controller = WorkflowController(self.messenger, self.executor)
