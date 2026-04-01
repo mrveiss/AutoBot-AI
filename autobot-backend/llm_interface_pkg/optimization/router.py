@@ -13,7 +13,7 @@ Issue #717: Efficient Inference Design implementation.
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Set
+from typing import Any, Dict, Optional, Set
 
 from ..types import ProviderType
 
@@ -247,6 +247,53 @@ class OptimizationRouter:
             enabled = applicable and self._is_optimization_enabled(opt)
             summary[opt.value] = enabled
         return summary
+
+    def get_quantization_kwargs(
+        self, model_config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Return ``from_pretrained`` kwargs for active quantization config (#1943).
+
+        When ``quantization_enabled`` is True and ``quantization_type`` is not
+        "none", delegates to :class:`HfQuantizerWrapper` to produce the correct
+        ``BitsAndBytesConfig``, GPTQ, or AWQ kwargs.  Returns an empty dict
+        when quantization is disabled.
+
+        Args:
+            model_config: Optional model config dict for auto-detection. When
+                provided and ``quantization_type`` is "none", attempts to
+                detect quantization from the model itself.
+        """
+        if not self.config.quantization_enabled:
+            return {}
+
+        from .hf_quantizer import HfQuantizerWrapper, QuantizerConfig, QuantizationType
+
+        quant_type_str = self.config.quantization_type
+        type_map = {
+            "int4": QuantizationType.BITSANDBYTES,
+            "int8": QuantizationType.BITSANDBYTES,
+            "gptq": QuantizationType.GPTQ,
+            "awq": QuantizationType.AWQ,
+            "none": QuantizationType.NONE,
+        }
+
+        quant_type = type_map.get(quant_type_str, QuantizationType.NONE)
+        if quant_type == QuantizationType.NONE and model_config:
+            wrapper = HfQuantizerWrapper.from_config(model_config)
+        else:
+            load_in_4bit = quant_type_str == "int4"
+            cfg = QuantizerConfig(
+                quantization_type=quant_type, load_in_4bit=load_in_4bit
+            )
+            wrapper = HfQuantizerWrapper(cfg)
+
+        kwargs = wrapper.preprocess_model()
+        logger.info(
+            "Quantization kwargs for type=%s: %s",
+            quant_type_str,
+            list(kwargs.keys()),
+        )
+        return kwargs
 
     def log_optimization_status(self, provider: ProviderType) -> None:
         """Log optimization status for debugging."""
