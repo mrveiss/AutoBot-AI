@@ -208,10 +208,13 @@
             (
               'frontend' in (node_roles | default([])) or
               'autobot-frontend' in (node_roles | default([])) or
-              inventory_hostname in groups.get('frontend', [])
+              inventory_hostname in groups.get('frontend', []) or
+              inventory_hostname in groups.get('02-Frontend', [])
             ) and (
+              'slm-backend' in (node_roles | default([])) or
               'slm_manager' in (node_roles | default([])) or
-              inventory_hostname in groups.get('slm', [])
+              inventory_hostname in groups.get('slm', []) or
+              inventory_hostname in groups.get('00-SLM-Manager', [])
             )
           }}
       tags: ['frontend', 'slm-nginx', 'provision']
