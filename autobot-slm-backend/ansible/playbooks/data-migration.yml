@@ -263,6 +263,7 @@
     migration_backup_dir: "/tmp/autobot-migration-{{ hostvars['localhost']['migration_timestamp'] }}"
 
   tasks:
+    # Issue #3097: model dirs under /var/lib/autobot-ai (ai-stack owned)
     - name: Create model directories
       file:
         path: "{{ item }}"
@@ -271,16 +272,16 @@
         group: "{{ autobot.group }}"
         mode: '0755'
       loop:
-        - "/var/lib/autobot/models"
-        - "/var/lib/autobot/models/cache"
-        - "/var/lib/autobot/models/embeddings"
-        - "/var/lib/autobot/models/llm"
-        - "/var/lib/autobot/models/vision"
+        - "/var/lib/autobot-ai/models"
+        - "/var/lib/autobot-ai/models/cache"
+        - "/var/lib/autobot-ai/models/embeddings"
+        - "/var/lib/autobot-ai/models/llm"
+        - "/var/lib/autobot-ai/models/vision"
 
     - name: Transfer model files to AI/ML VM
       synchronize:
         src: "{{ hostvars['localhost']['migration_backup_dir'] }}/models/"
-        dest: "/var/lib/autobot/models/"
+        dest: "/var/lib/autobot-ai/models/"
         delete: false
         owner: false
         group: false
@@ -289,7 +290,7 @@
 
     - name: Set correct permissions for model files
       file:
-        path: "/var/lib/autobot/models"
+        path: "/var/lib/autobot-ai/models"
         owner: "{{ autobot.user }}"
         group: "{{ autobot.group }}"
         mode: '0755'
@@ -297,7 +298,7 @@
 
     - name: Count migrated model files
       find:
-        paths: "/var/lib/autobot/models"
+        paths: "/var/lib/autobot-ai/models"
         recurse: true
         file_type: file
       register: model_files
@@ -388,7 +389,7 @@
 
     - name: Check model files on AI/ML VM
       find:
-        paths: "/var/lib/autobot/models"
+        paths: "/var/lib/autobot-ai/models"
         patterns: "*"
         file_type: file
       register: migrated_models

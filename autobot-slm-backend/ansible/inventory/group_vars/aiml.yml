@@ -73,9 +73,11 @@ ai_stack:
     log_level: "INFO"
 
   # Model configuration
+  # Issue #3097: ai-stack data under /var/lib/autobot-ai to avoid
+  # ownership conflict with /var/lib/autobot (backend).
   models:
-    base_path: "/var/lib/autobot/models"
-    cache_path: "/var/lib/autobot/models/cache"
+    base_path: "/var/lib/autobot-ai/models"
+    cache_path: "/var/lib/autobot-ai/models/cache"
     temp_path: "/tmp/autobot/models"
 
   # Environment variables
@@ -86,7 +88,7 @@ ai_stack:
     AI_SERVER_WORKERS: 2
     REDIS_HOST: "{{ redis_host }}"
     REDIS_PORT: "{{ redis_port }}"
-    CHROMA_DB_PATH: "/var/lib/autobot/chroma_db"
+    CHROMA_DB_PATH: "/var/lib/autobot-ai/chroma_db"
     DISABLE_EXTERNAL_APIS: "false"  # Enable external APIs in production
     TF_USE_LEGACY_KERAS: 1
     KERAS_BACKEND: "tensorflow"
@@ -282,24 +284,25 @@ hardware:
 
 model_management:
   # Model categories and configurations
+  # Issue #3097: model paths under /var/lib/autobot-ai (ai-stack owned)
   categories:
     language_models:
-      path: "/var/lib/autobot/models/llm"
+      path: "/var/lib/autobot-ai/models/llm"
       formats: ["gguf", "safetensors", "bin"]
       optimization_target: "npu"  # Prefer NPU for language models
 
     embedding_models:
-      path: "/var/lib/autobot/models/embeddings"
+      path: "/var/lib/autobot-ai/models/embeddings"
       formats: ["safetensors", "bin", "onnx"]
       optimization_target: "gpu"  # GPU good for embeddings
 
     vision_models:
-      path: "/var/lib/autobot/models/vision"
+      path: "/var/lib/autobot-ai/models/vision"
       formats: ["onnx", "pb", "tflite"]
       optimization_target: "npu"  # NPU optimized for vision
 
     audio_models:
-      path: "/var/lib/autobot/models/audio"
+      path: "/var/lib/autobot-ai/models/audio"
       formats: ["onnx", "wav2vec2"]
       optimization_target: "cpu"  # CPU fallback for audio
 
@@ -503,7 +506,7 @@ performance:
 
 backup_paths:
   # Model files (large, less frequent backup)
-  - path: "/var/lib/autobot/models"
+  - path: "/var/lib/autobot-ai/models"
     type: "directory"
     frequency: "weekly"
     compress: true

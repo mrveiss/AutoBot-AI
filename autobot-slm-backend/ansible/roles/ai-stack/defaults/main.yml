@@ -8,14 +8,16 @@ ai_user: autobot-ai
 ai_group: autobot-ai
 ai_install_dir: /opt/autobot/autobot-ai-stack
 ai_log_dir: /var/log/autobot
-ai_data_dir: /var/lib/autobot
+# Issue #3097: ai-stack gets its own /var/lib/autobot-ai to avoid ownership
+# conflict with /var/lib/autobot (owned by autobot:autobot for the backend).
+ai_data_dir: /var/lib/autobot-ai
 
 # Server settings
 ai_host: "0.0.0.0"
 ai_port: 8080
 
 # ChromaDB
-chromadb_persist_dir: /var/lib/autobot/chromadb
+chromadb_persist_dir: /var/lib/autobot-ai/chromadb
 chromadb_host: "0.0.0.0"
 chromadb_port: 8100
 

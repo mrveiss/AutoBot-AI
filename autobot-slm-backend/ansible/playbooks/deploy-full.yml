@@ -334,7 +334,7 @@
           - ""
           - "3. 💾 Data Verification:"
           - "   - Verify Redis data: redis-cli -h {{ _redis_ip }}"
-          - "   - Check model files: ls -la /var/lib/autobot/models"
+          - "   - Check model files: ls -la /var/lib/autobot-ai/models"
           - "   - Validate knowledge base: API call to /api/knowledge"
           - ""
           - "4. 🔐 Security Review:"

@@ -24,7 +24,9 @@
     ai_stack_user: autobot
     ai_stack_group: autobot
     chromadb_port: 8100
-    chromadb_data_dir: /var/lib/autobot/chromadb
+    # Issue #3097: ai-stack data under /var/lib/autobot-ai to avoid
+    # ownership conflict with /var/lib/autobot (backend).
+    chromadb_data_dir: /var/lib/autobot-ai/chromadb
     ollama_port: 11434
     enable_ollama: false
 
