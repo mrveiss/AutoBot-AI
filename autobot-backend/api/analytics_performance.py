@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from autobot_shared.security.path_validator import validate_path
 
 logger = logging.getLogger(__name__)
 
@@ -542,8 +543,10 @@ async def analyze_path(
     """
     start_time = datetime.now()
 
+    # Validate path stays within allowed roots before analysis (#3164)
+    safe_path = validate_path(path)
     # Issue #398: Use extracted helper
-    files_to_analyze = await _get_files_to_analyze(Path(path))
+    files_to_analyze = await _get_files_to_analyze(safe_path)
 
     # Return no_data response if no files to analyze
     if not files_to_analyze:
