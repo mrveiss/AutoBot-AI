@@ -1316,14 +1316,13 @@ class ToolHandlerMixin:
             )
 
         except Exception as e:
-            error_msg = f"Browser tool '{tool_name}' failed: {e}"
-            logger.error("[Issue #1368] %s", error_msg)
+            logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
             execution_results.append(
-                {"tool": tool_name, "status": "error", "error": str(e)}
+                {"tool": tool_name, "status": "error", "error": "Browser tool execution failed"}
             )
             yield WorkflowMessage(
                 type="error",
-                content=error_msg,
+                content=f"Browser tool '{tool_name}' execution failed",
                 metadata={"tool": tool_name, "error": True},
             )
 
@@ -1465,14 +1464,13 @@ class ToolHandlerMixin:
                 },
             )
         except Exception as e:
-            error_msg = f"Web search failed: {e}"
-            logger.error("[Issue #2306] %s", error_msg)
+            logger.error("[Issue #2306] Web search failed: %s", e)
             execution_results.append(
-                {"tool": "web_search", "status": "error", "error": str(e)}
+                {"tool": "web_search", "status": "error", "error": "Web search failed"}
             )
             yield WorkflowMessage(
                 type="error",
-                content=error_msg,
+                content="Web search failed",
                 metadata={"tool": "web_search", "error": True},
             )
 

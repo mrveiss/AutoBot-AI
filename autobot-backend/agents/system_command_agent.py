@@ -292,8 +292,8 @@ class SystemCommandAgent:
             logger.error("Error executing command: %s", e)
             return {
                 "status": "error",
-                "error": str(e),
-                "message": f"Command execution failed: {e}",
+                "error": "Command execution failed",
+                "message": "Command execution failed",
             }
         finally:
             if session_id in self.active_sessions and not self._is_persistent_session(

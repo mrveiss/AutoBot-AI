@@ -249,5 +249,5 @@ async def check_database_health() -> dict:
         return {
             "status": "unhealthy",
             "mode": config.mode.value,
-            "error": str(e),
+            "error": "Database health check failed",
         }

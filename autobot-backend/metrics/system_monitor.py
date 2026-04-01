@@ -203,7 +203,7 @@ class SystemResourceMonitor:
             logger.error("Failed to collect system metrics: %s", e)
             return {
                 "timestamp": datetime.now().isoformat(),
-                "error": str(e),
+                "error": "Failed to collect system metrics",
                 "cpu": {"percent": 0},
                 "memory": {"percent": 0, "used_mb": 0},
                 "disk": {"percent": 0},
@@ -232,7 +232,7 @@ class SystemResourceMonitor:
             }
         except Exception as e:
             logger.error("Failed to get current metrics: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve current metrics"}
 
     def _filter_recent_data(self, minutes: int) -> List[Dict[str, Any]]:
         """
@@ -375,7 +375,7 @@ class SystemResourceMonitor:
 
         except Exception as e:
             logger.error("Failed to generate resource summary: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to generate resource summary"}
 
     def check_resource_thresholds(self) -> Dict[str, Any]:
         """Check if system resources are within acceptable thresholds"""
@@ -412,7 +412,7 @@ class SystemResourceMonitor:
 
         except Exception as e:
             logger.error("Failed to check resource thresholds: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Failed to check resource thresholds"}
 
     def export_resource_data(self, format: str = "json") -> str:
         """Export resource monitoring data"""
@@ -435,7 +435,7 @@ class SystemResourceMonitor:
 
         except Exception as e:
             logger.error("Failed to export resource data: %s", e)
-            return f"Export failed: {str(e)}"
+            return "Export failed"
 
 
 # Global system monitor instance

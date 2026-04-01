@@ -378,9 +378,8 @@ class PromptKnowledgeSync:
                 await self._process_single_prompt(prompt_key, force_update, results)
             except Exception as e:
                 results["errors"] += 1
-                error_detail = f"Error processing {prompt_key}: {str(e)}"
-                results["error_details"].append(error_detail)
-                logger.error(error_detail)
+                logger.error("Error processing prompt '%s': %s", prompt_key, e)
+                results["error_details"].append(f"Error processing {prompt_key}")
 
         logger.info(
             "Prompt sync completed: %d imported, %d updated, %d skipped, %d errors",
@@ -491,7 +490,7 @@ class PromptKnowledgeSync:
 
         except Exception as e:
             logger.error("Error getting sync status: %s", e)
-            return {"error": str(e)}
+            return {"error": "Failed to retrieve sync status"}
 
 
 # Global instance

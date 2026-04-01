@@ -226,7 +226,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("OpenAI GPT-4 text generation failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     def _build_openai_image_content(
         self, prompt: str, images: List[str]
@@ -301,7 +301,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("OpenAI GPT-4V image analysis failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
         """Multi-modal chat with GPT-4V"""
@@ -372,7 +372,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("Anthropic Claude text generation failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     def _build_anthropic_image_content(
         self, prompt: str, images: List[str]
@@ -449,7 +449,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("Anthropic Claude image analysis failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
         """Multi-modal chat with Claude-3"""
@@ -529,7 +529,7 @@ class GoogleGeminiProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("Google Gemini text generation failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     def _prepare_image_content(self, request: AIRequest) -> List[Any]:
         """
@@ -603,7 +603,7 @@ class GoogleGeminiProvider(BaseAIProvider):
 
         except Exception as e:
             logger.error("Google Gemini image analysis failed: %s", e)
-            return self._create_error_response(request, str(e))
+            return self._create_error_response(request, "AI provider request failed")
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
         """Multi-modal chat with Gemini"""
@@ -943,7 +943,7 @@ class ModernAIIntegration:
                 return response
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "AI processing failed"})
                 logger.error("AI processing failed: %s", e)
                 raise
 

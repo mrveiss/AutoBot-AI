@@ -245,7 +245,7 @@ class BaseAgent(ABC):
             }
         except Exception as e:
             logger.warning("Could not get resource usage: %s", e)
-            return {"error": str(e)}
+            return {"error": "Resource usage unavailable"}
 
     async def execute_with_tracking(self, request: AgentRequest) -> AgentResponse:
         """
@@ -370,7 +370,7 @@ class BaseAgent(ABC):
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.ERROR),
                 payload=MessagePayload(
-                    content={"error": str(e), "error_type": type(e).__name__}
+                    content={"error": "Communication request failed", "error_type": type(e).__name__}
                 ),
             )
 

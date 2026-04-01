@@ -198,7 +198,7 @@ class PlaywrightService:
             }
         except Exception as e:
             logger.error("Web search error: %s", e)
-            return {"success": False, "error": str(e), "query": query, "results": []}
+            return {"success": False, "error": "Web search failed", "query": query, "results": []}
 
     async def test_frontend(
         self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL
@@ -317,7 +317,7 @@ class PlaywrightService:
             }
         except Exception as e:
             logger.error("Test message error: %s", e)
-            return {"success": False, "error": str(e), "message": message, "steps": []}
+            return {"success": False, "error": "Test message failed", "message": message, "steps": []}
 
     async def capture_screenshot(
         self, url: str, full_page: bool = True, wait_timeout: int = 5000
@@ -368,12 +368,12 @@ class PlaywrightService:
             logger.error("Screenshot HTTP error: %s", e)
             return {
                 "success": False,
-                "error": f"Connection error: {str(e)}",
+                "error": "Screenshot connection failed",
                 "url": url,
             }
         except Exception as e:
             logger.error("Screenshot error: %s", e)
-            return {"success": False, "error": str(e), "url": url}
+            return {"success": False, "error": "Screenshot failed", "url": url}
 
     async def get_service_status(self) -> Metadata:
         """Get detailed service status"""
@@ -417,18 +417,20 @@ class PlaywrightService:
             return status
 
         except aiohttp.ClientError as e:
+            logger.error("Playwright service status connection error: %s", e)
             return {
                 "service": "playwright",
                 "status": "error",
-                "error": f"Connection error: {str(e)}",
+                "error": "Service connection failed",
                 "ready": False,
                 "integration_type": "embedded_docker",
             }
         except Exception as e:
+            logger.error("Playwright service status error: %s", e)
             return {
                 "service": "playwright",
                 "status": "error",
-                "error": str(e),
+                "error": "Service status check failed",
                 "ready": False,
                 "integration_type": "embedded_docker",
             }

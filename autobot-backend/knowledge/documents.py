@@ -70,7 +70,7 @@ class DocumentsMixin:
             return {"status": "timeout", "message": "Document addition timed out"}
         except Exception as e:
             logger.error("Document addition failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Document operation failed"}
 
     async def _add_document_internal(
         self,
@@ -121,7 +121,7 @@ class DocumentsMixin:
 
         except Exception as e:
             logger.error("Export failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Document operation failed"}
 
     def extract_category_names(self, facts: List[Dict[str, Any]]) -> List[str]:
         """Extract unique category names from facts"""
@@ -169,7 +169,7 @@ class DocumentsMixin:
 
         except Exception as e:
             logger.error("Failed to add document from file %s: %s", file_path, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Document operation failed"}
 
     async def _validate_directory(self, dir_path: str) -> Optional[Path]:
         """Validate directory exists and is accessible (Issue #398: extracted)."""
@@ -188,7 +188,7 @@ class DocumentsMixin:
                     str(file_path), category=category
                 )
             except Exception as e:
-                return {"status": "error", "message": str(e)}
+                return {"status": "error", "message": "Document operation failed"}
 
     def _count_results(self, results: List[Any]) -> tuple:
         """Count success and error results (Issue #398: extracted)."""
@@ -234,7 +234,7 @@ class DocumentsMixin:
 
         except Exception as e:
             logger.error("Failed to add documents from directory %s: %s", dir_path, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Document operation failed"}
 
     async def get_librarian(self) -> Dict[str, Any]:
         """
@@ -253,7 +253,7 @@ class DocumentsMixin:
             }
         except Exception as e:
             logger.error("Failed to get librarian info: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Document operation failed"}
 
     # Method references needed from other mixins
     async def store_fact(self, content: str, metadata: Dict[str, Any], fact_id: str):

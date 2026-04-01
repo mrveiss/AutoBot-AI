@@ -906,7 +906,7 @@ class AuditLogger:
         except Exception as e:
             logger.error("Failed to get audit statistics: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve audit statistics",
                 "total_logged": self._total_logged,
                 "total_failed": self._total_failed,
             }

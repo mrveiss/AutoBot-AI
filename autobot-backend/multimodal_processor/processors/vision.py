@@ -397,8 +397,8 @@ class VisionProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
             return {
                 "type": "image_analysis",
-                "error": str(e),
-                "caption": f"Processing failed: {str(e)}",
+                "error": "Image processing failed",
+                "caption": "Processing failed",
                 "confidence": 0.0,
                 "processing_device": str(self.device),
             }

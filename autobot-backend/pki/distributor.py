@@ -303,7 +303,7 @@ class CertificateDistributor:
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
-                    message=f"SSH error: {e}",
+                    message="SSH connection error",
                 )
             except Exception as e:
                 logger.error(f"Error distributing to {vm_info.name}: {e}")
@@ -311,7 +311,7 @@ class CertificateDistributor:
                 return DistributionResult(
                     vm_name=vm_info.name,
                     success=False,
-                    message=str(e),
+                    message="Certificate distribution failed",
                 )
 
     async def _copy_file(

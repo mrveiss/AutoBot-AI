@@ -879,7 +879,7 @@ class DeploymentService:
             logger.error("Enrollment failed for node %s: %s", node_id, e)
             node.status = NodeStatus.ERROR.value
             await db.commit()
-            return False, str(e)
+            return False, "Node enrollment failed"
 
     def _build_enrollment_command(
         self,

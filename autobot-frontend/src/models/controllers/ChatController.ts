@@ -4,8 +4,39 @@ import { chatRepository } from '@/models/repositories'
 import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
+import { extractErrorMessage, extractApiErrorMessage } from '@/utils/errorExtract'
+import type { ChatMessageDisplayType } from '@/types/api'
 
 const logger = createLogger('ChatController')
+
+/** Shape of a buffered (non-streaming) JSON response from the chat backend */
+interface ChatJsonResponseData {
+  response?: string
+  content?: string
+  model?: string
+  tokens_used?: number
+  response_time?: number
+  processing_time?: number
+  message_type?: string
+  knowledge_status?: string
+  sources?: unknown
+  librarian_engaged?: boolean
+  mcp_used?: boolean
+  workflow_messages?: Array<{
+    text?: string
+    content?: string
+    sender?: string
+    type?: string
+    metadata?: Record<string, unknown>
+  }>
+}
+
+/** Shape of a message-send request passed internally */
+interface SendMessageRequest {
+  message: string
+  chatId: string
+  options: Record<string, unknown>
+}
 
 export class ChatController {
   // FIXED: Lazy initialization - stores only created when accessed, not at module load
@@ -18,8 +49,8 @@ export class ChatController {
   private _pendingStreamUpdate: {
     messageId: string
     content: string
-    type: any
-    metadata: any
+    type: ChatMessageDisplayType | string | undefined
+    metadata: Record<string, unknown>
   } | null = null
   private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
   private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
@@ -52,7 +83,7 @@ export class ChatController {
   }
 
   // Enhanced message operations with comprehensive error handling
-  async sendMessage(content: string, options?: Record<string, any>): Promise<string> {
+  async sendMessage(content: string, options?: Record<string, unknown>): Promise<string> {
     try {
       this.getAppStore()?.setLoading(true, 'Sending message...')
       this.chatStore.setTyping(true)
@@ -102,9 +133,9 @@ export class ChatController {
 
           return userMessageId // Success, exit retry loop
 
-        } catch (error: any) {
-          lastError = error
-          logger.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, error.message)
+        } catch (error: unknown) {
+          lastError = error instanceof Error ? error : new Error(extractErrorMessage(error, 'Unknown error'))
+          logger.warn(`Message send attempt ${attempt}/${this.retryAttempts} failed:`, lastError.message)
 
           if (attempt < this.retryAttempts) {
             // Wait before retrying
@@ -131,9 +162,9 @@ export class ChatController {
 
       throw lastError || new Error('Failed to send message')
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Enhanced error handling with user-friendly messages
-      const userFriendlyMessage = this.getUfriendlyErrorMessage(error)
+      const userFriendlyMessage = this.getUserFriendlyErrorMessage(error)
       this.getAppStore()?.setGlobalError(userFriendlyMessage)
       throw error
     } finally {
@@ -142,28 +173,35 @@ export class ChatController {
     }
   }
 
-  private async sendMessageWithRetry(request: any, attempt: number): Promise<any> {
+  private async sendMessageWithRetry(
+    request: SendMessageRequest,
+    attempt: number
+  ): Promise<{ type: string; response?: Response; data?: ChatJsonResponseData }> {
     try {
       // FIXED: Pass options parameter to preserve attachments and metadata
       return await chatRepository.sendMessage(request.message, request.chatId, request.options)
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = extractErrorMessage(error, 'Unknown error')
+      const errStatus = (error as { status?: number }).status
       // Enhanced error context for debugging
       logger.error(`Chat message send attempt ${attempt} failed:`, {
-        error: error.message,
-        status: error.status,
+        error: errMsg,
+        status: errStatus,
         chatId: request.chatId,
         messageLength: request.message?.length,
-        hasAttachments: request.options?.attachments?.length > 0,
+        hasAttachments: Array.isArray((request.options as Record<string, unknown>)?.attachments),
         attempt
       })
 
       // If it's a 422 validation error, don't retry
-      if (error.status === 422) {
-        throw new Error(`Invalid message format: ${error.message}. Please check your input and try again.`)
+      if (errStatus === 422) {
+        throw new Error(`Invalid message format: ${errMsg}. Please check your input and try again.`)
       }
 
       // If it's a network error, add context
-      if (error.name === 'NetworkError' || error.code === 'NETWORK_ERROR') {
+      const errName = (error as { name?: string }).name
+      const errCode = (error as { code?: string }).code
+      if (errName === 'NetworkError' || errCode === 'NETWORK_ERROR') {
         throw new Error(`Network connection failed. Please check your internet connection and try again.`)
       }
 
@@ -171,24 +209,28 @@ export class ChatController {
     }
   }
 
-  private getUfriendlyErrorMessage(error: any): string {
-    if (error.status === 422) {
+  private getUserFriendlyErrorMessage(error: unknown): string {
+    const status = (error as { status?: number }).status
+    const name = (error as { name?: string }).name
+    const message = extractErrorMessage(error, 'Unknown error')
+
+    if (status === 422) {
       return 'Invalid message format. Please check your input and try again.'
     }
-    if (error.status === 404) {
+    if (status === 404) {
       return 'Chat service not available. Please refresh the page and try again.'
     }
-    if (error.status === 500) {
+    if (status === 500) {
       return 'Server error occurred. Please try again in a moment.'
     }
-    if (error.name === 'NetworkError') {
+    if (name === 'NetworkError') {
       return 'Network connection failed. Please check your internet connection.'
     }
-    if (error.message?.includes('timeout')) {
+    if (message.includes('timeout')) {
       return 'Request timed out. Please try again with a shorter message.'
     }
 
-    return `Failed to send message: ${error.message || 'Unknown error'}`
+    return `Failed to send message: ${message}`
   }
 
   /**
@@ -210,8 +252,8 @@ export class ChatController {
   private scheduleStreamUpdate(
     messageId: string,
     content: string,
-    type: any,
-    metadata: any
+    type: ChatMessageDisplayType | string | undefined,
+    metadata: Record<string, unknown>
   ): void {
     this._pendingStreamUpdate = { messageId, content, type, metadata }
     if (!this._streamFlushTimer) {
@@ -309,7 +351,7 @@ export class ChatController {
                   sender: 'assistant'
                 })
                 this.chatStore.updateMessage(errorMsgId, {
-                  content: `⚠️ Error: ${data.content || 'Stream error'}`,
+                  content: `Error: ${data.content || 'Stream error'}`,
                   status: 'error'
                 })
                 continue
@@ -476,9 +518,9 @@ export class ChatController {
 
     // Add type-specific prefix for context
     if (messageType === 'thought') {
-      return `💭 ${result}`
+      return `Thinking: ${result}`
     } else if (messageType === 'planning') {
-      return `📋 ${result}`
+      return `Planning: ${result}`
     }
 
     return result
@@ -508,13 +550,14 @@ export class ChatController {
     return 'response'
   }
 
-  private handleJsonResponse(data: any): void {
+  private handleJsonResponse(data: ChatJsonResponseData | undefined): void {
+    if (!data) return
     // Add workflow messages first (thoughts, planning, debug, utility, sources)
     if (data.workflow_messages && Array.isArray(data.workflow_messages)) {
-      data.workflow_messages.forEach((msg: any) => {
+      data.workflow_messages.forEach((msg) => {
         this.chatStore.addMessage({
-          content: msg.text || msg.content,
-          sender: msg.sender || 'assistant',
+          content: msg.text || msg.content || '',
+          sender: (msg.sender as 'user' | 'assistant' | 'system') || 'assistant',
           type: msg.type, // This enables filtering
           metadata: msg.metadata || {}
         })
@@ -565,8 +608,8 @@ export class ChatController {
 
       return sessionId
 
-    } catch (error: any) {
-      this.getAppStore()?.setGlobalError(`Failed to create chat: ${error.message}`)
+    } catch (error: unknown) {
+      this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     } finally {
       this.getAppStore()?.setLoading(false)
@@ -592,10 +635,10 @@ export class ChatController {
         logger.warn('getChatList() returned non-array value:', sessions)
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
-      this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${error.message}`)
+      this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
       this.getAppStore()?.setLoading(false)
     }
@@ -641,8 +684,8 @@ export class ChatController {
             lastExisting?.content !== lastNew?.content
 
           if (hasChanges) {
-            logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
-            session.messages = messages as any
+            logger.debug(`Updating messages (${session.messages.length} -> ${messages.length})`)
+            session.messages = messages as typeof session.messages
           } else {
             logger.debug(`No message changes, skipping update`)
           }
@@ -656,9 +699,9 @@ export class ChatController {
         logger.error(`Session ${sessionId} not found in store`)
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
-      this.getAppStore()?.setGlobalError(`Failed to load messages: ${error.message}`)
+      this.getAppStore()?.setGlobalError(`Failed to load messages: ${extractErrorMessage(error, 'Unknown error')}`)
     } finally {
       this.getAppStore()?.setLoading(false)
     }
@@ -681,9 +724,9 @@ export class ChatController {
 
       logger.debug('Chat session saved successfully:', targetSessionId)
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to save chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to save chat: ${error.message}`)
+      this.getAppStore()?.setGlobalError(`Failed to save chat: ${extractErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -698,7 +741,7 @@ export class ChatController {
   async getSessionFacts(sessionId: string) {
     try {
       return await chatRepository.getSessionFacts(sessionId)
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
       throw error
     }
@@ -711,7 +754,7 @@ export class ChatController {
   async preserveSessionFacts(sessionId: string, factIds: string[], preserve: boolean = true) {
     try {
       return await chatRepository.preserveSessionFacts(sessionId, factIds, preserve)
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
       throw error
     }
@@ -720,7 +763,7 @@ export class ChatController {
   async deleteChatSession(
     sessionId: string,
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
-    fileOptions?: any
+    fileOptions?: Record<string, unknown>
   ): Promise<void> {
     try {
       this.getAppStore()?.setLoading(true, 'Deleting chat...')
@@ -737,18 +780,19 @@ export class ChatController {
         }
         backendDeleteSucceeded = true
         logger.debug('Chat successfully deleted from backend:', sessionId)
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error('Backend deletion failed:', error)
         // Don't throw yet - we'll handle this based on error type
 
         // If it's a 404 (chat not found), still proceed with local deletion
-        if (error.status === 404) {
+        const errStatus = (error as { status?: number }).status
+        if (errStatus === 404) {
           logger.warn('Chat not found on backend, proceeding with local deletion')
           backendDeleteSucceeded = true // Treat as success since it's already gone
         } else {
           // For other errors, show user error but still try local deletion
           logger.warn('Backend deletion failed, but proceeding with local deletion to maintain consistency')
-          this.getAppStore()?.setGlobalError(`Backend deletion failed: ${error.message}. Chat removed locally.`)
+          this.getAppStore()?.setGlobalError(`Backend deletion failed: ${extractErrorMessage(error, 'Unknown error')}. Chat removed locally.`)
         }
       }
 
@@ -775,7 +819,9 @@ export class ChatController {
             const persistedData = localStorage.getItem('autobot-chat-store')
             if (persistedData) {
               const parsed = JSON.parse(persistedData)
-              const persistedSession = parsed.sessions?.find((s: any) => s.id === sessionId)
+              const persistedSession = parsed.sessions?.find(
+                (s: { id?: string }) => s.id === sessionId
+              )
               if (!persistedSession) {
                 logger.debug('Chat deletion confirmed in localStorage')
               } else {
@@ -790,9 +836,9 @@ export class ChatController {
           logger.warn('Store deletion did not reduce session count - session may not have existed')
           storeDeleteSucceeded = true // If it wasn't there, consider it a success
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         logger.error('Store deletion failed:', error)
-        throw new Error(`Failed to delete chat from local storage: ${error.message}`)
+        throw new Error(`Failed to delete chat from local storage: ${extractErrorMessage(error, 'Unknown error')}`)
       }
 
       // Step 3: Report final status
@@ -802,9 +848,9 @@ export class ChatController {
         throw new Error('Failed to delete chat from local storage')
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to delete chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to delete chat: ${error.message}`)
+      this.getAppStore()?.setGlobalError(`Failed to delete chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error // Re-throw to let caller handle
     } finally {
       this.getAppStore()?.setLoading(false)
@@ -812,7 +858,7 @@ export class ChatController {
   }
 
   // Settings operations
-  updateChatSettings(settings: Partial<any>): void {
+  updateChatSettings(settings: Partial<Record<string, unknown>>): void {
     this.chatStore.updateSettings(settings)
   }
 
@@ -845,8 +891,8 @@ export class ChatController {
         }
       }
 
-    } catch (error: any) {
-      this.getAppStore()?.setGlobalError(`Failed to reset chat: ${error.message}`)
+    } catch (error: unknown) {
+      this.getAppStore()?.setGlobalError(`Failed to reset chat: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     }
   }
@@ -879,8 +925,8 @@ export class ChatController {
 
       logger.debug('All chats cleared successfully')
 
-    } catch (error: any) {
-      this.getAppStore()?.setGlobalError(`Failed to clear chats: ${error.message}`)
+    } catch (error: unknown) {
+      this.getAppStore()?.setGlobalError(`Failed to clear chats: ${extractErrorMessage(error, 'Unknown error')}`)
       throw error
     } finally {
       this.getAppStore()?.setLoading(false)

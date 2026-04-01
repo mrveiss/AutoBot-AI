@@ -6,6 +6,7 @@ export { SystemRepository } from './SystemRepository'
 
 // Repository instances (singletons) - Import directly for better initialization
 import { ApiRepository } from './ApiRepository'
+import type { ApiConfig } from './ApiRepository'
 import { ChatRepository } from './ChatRepository'
 import { KnowledgeRepository } from './KnowledgeRepository'
 import { SystemRepository } from './SystemRepository'
@@ -17,15 +18,15 @@ export const systemRepository = new SystemRepository()
 
 // Repository factory for creating instances with custom config
 export class RepositoryFactory {
-  static createChatRepository(config?: any) {
-    return new ChatRepository(config)
+  static createChatRepository(baseUrl?: string) {
+    return new ChatRepository(baseUrl)
   }
 
-  static createKnowledgeRepository(config?: any) {
+  static createKnowledgeRepository(config?: Partial<ApiConfig>) {
     return new KnowledgeRepository(config)
   }
 
-  static createSystemRepository(config?: any) {
+  static createSystemRepository(config?: Partial<ApiConfig>) {
     return new SystemRepository(config)
   }
 }

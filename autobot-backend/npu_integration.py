@@ -208,7 +208,7 @@ class NPUWorkerClient:
                 "NPU worker not available (optional service - configure at /settings/infrastructure): %s",
                 e,
             )
-            return {"status": "unavailable", "error": str(e)}
+            return {"status": "unavailable", "error": "NPU worker unavailable"}
 
     async def get_available_models(self) -> Dict[str, Any]:
         """Get list of available models on NPU worker"""
@@ -221,7 +221,7 @@ class NPUWorkerClient:
                     return {"loaded_models": {}, "error": f"HTTP {response.status}"}
         except Exception as e:
             logger.error("Failed to get NPU models: %s", e)
-            return {"loaded_models": {}, "error": str(e)}
+            return {"loaded_models": {}, "error": "Failed to retrieve NPU models"}
 
     async def load_model(self, model_id: str, device: str = "CPU") -> Dict[str, Any]:
         """Load a model on the NPU worker"""
@@ -234,7 +234,7 @@ class NPUWorkerClient:
                 return await response.json()
         except Exception as e:
             logger.error("Failed to load model %s: %s", model_id, e)
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": "Model loading failed"}
 
     async def run_inference(
         self,
@@ -268,7 +268,7 @@ class NPUWorkerClient:
                     }
         except Exception as e:
             logger.error("NPU inference failed: %s", e)
-            return {"error": str(e), "success": False}
+            return {"error": "NPU inference failed", "success": False}
 
     async def offload_heavy_processing(
         self, task_type: str, data: Dict[str, Any]
@@ -322,7 +322,7 @@ class NPUWorkerClient:
 
         except Exception as e:
             logger.error("Heavy processing offload failed: %s", e)
-            return {"success": False, "error": str(e), "fallback": True}
+            return {"success": False, "error": "Processing offload failed", "fallback": True}
 
     async def close(self):
         """No-op: HTTP client is managed by singleton HTTPClientManager"""

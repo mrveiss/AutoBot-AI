@@ -201,4 +201,4 @@ class ContextAnalyzer:
 
         except Exception as e:
             logger.error("Context analysis failed: %s", e)
-            return {"error": str(e)}
+            return {"error": "Context analysis failed"}

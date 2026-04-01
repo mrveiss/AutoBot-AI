@@ -239,16 +239,17 @@ class ExecuteShellCommandHandler(TaskHandler):
             )
 
         except Exception as e:
+            logger.error("Shell command execution error: %s", e)
             result = {
                 "status": "error",
-                "message": f"Command execution error: {str(e)}",
+                "message": "Command execution error",
             }
             ctx.audit_log(
                 "execute_shell_command",
                 "error",
                 {
                     "command": command,
-                    "error": str(e),
+                    "error": type(e).__name__,
                     "validation_passed": True,
                 },
             )

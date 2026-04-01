@@ -468,7 +468,7 @@ async def get_pattern_stats(collection=None) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("Failed to get pattern stats: %s", e)
-        return {"error": str(e)}
+        return {"error": "Failed to retrieve pattern stats"}
 
 
 async def clear_patterns(collection=None) -> bool:

@@ -84,7 +84,7 @@ class ToolRegistry:
             return result
         except Exception as e:
             self.logger.error("Error executing task %s: %s", task.get("task_id"), e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Task execution failed"}
 
     # System Integration Tools
 

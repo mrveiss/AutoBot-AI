@@ -152,9 +152,8 @@ class MarkdownReferenceSystem:
                     updated_files += 1
 
             except Exception as e:
-                error_msg = f"Error processing {md_file}: {str(e)}"
-                logger.error(error_msg)
-                errors.append(error_msg)
+                logger.error("Error processing %s: %s", md_file, e)
+                errors.append(f"Error processing {md_file}")
 
         # Update cross-references
         self._update_cross_references()

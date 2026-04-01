@@ -758,7 +758,7 @@ class ConsolidatedOrchestrator:
                 execution_order.append(agent_name)
             except Exception as e:
                 logger.warning("Agent %s failed: %s", agent_name, e)
-                agent_results[agent_name] = {"error": str(e)}
+                agent_results[agent_name] = {"error": "Agent execution failed"}
 
         return agent_results, execution_order
 

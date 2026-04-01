@@ -781,10 +781,11 @@ class UnifiedLLMInterface:
                     health["overall_healthy"] = False
 
             except Exception as e:
+                logger.error("Health check failed for provider %s: %s", provider_type.value, e)
                 health["providers"][provider_type.value] = {
                     "available": False,
                     "enabled": provider.config.enabled,
-                    "error": str(e),
+                    "error": "Health check failed",
                 }
                 if provider.config.enabled:
                     health["overall_healthy"] = False

@@ -775,7 +775,7 @@ class ServiceOrchestrator:
             return False, "SSH command timed out"
         except Exception as e:
             logger.exception("SSH command error: %s", e)
-            return False, f"SSH error: {str(e)[:200]}"
+            return False, "SSH command error"
 
     async def _systemctl_action(
         self, host: str, service: str, action: str, requires_sudo: bool = True

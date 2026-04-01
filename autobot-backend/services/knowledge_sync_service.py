@@ -467,7 +467,7 @@ async def trigger_manual_sync(
 
     except Exception as e:
         logger.error("Manual sync API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 @router.get("/status")
@@ -480,7 +480,7 @@ async def get_sync_status():
 
     except Exception as e:
         logger.error("Sync status API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 @router.get("/metrics")
@@ -493,7 +493,7 @@ async def get_performance_metrics():
 
     except Exception as e:
         logger.error("Performance metrics API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 @router.post("/daemon/start")
@@ -527,7 +527,7 @@ async def start_sync_daemon(interval_minutes: int = 15):
 
     except Exception as e:
         logger.error("Start daemon API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 @router.post("/daemon/stop")
@@ -553,7 +553,7 @@ async def stop_sync_daemon():
 
     except Exception as e:
         logger.error("Stop daemon API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 @router.get("/history")
@@ -578,7 +578,7 @@ async def get_sync_history(limit: int = 20):
 
     except Exception as e:
         logger.error("Sync history API error: %s", e)
-        raise_kb_error("KB_0004", str(e))
+        raise_kb_error("KB_0004")
 
 
 # Integration with AutoBot's main application

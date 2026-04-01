@@ -92,7 +92,7 @@ class OllamaAdapter(AdapterBase):
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
-                    message=f"Connection failed: {e}",
+                    message="Connection failed",
                 )
             )
 

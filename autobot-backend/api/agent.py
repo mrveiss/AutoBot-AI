@@ -316,7 +316,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
             },
         )
         raise SubprocessError(
-            message=f"Failed to execute command: {e}",
+            message="Failed to execute command",
             command=command[:200],
         ) from e
 

@@ -411,7 +411,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         except Exception as e:
             self.logger.error("Codebase indexing failed: %s", e)
-            return {"status": "error", "error": str(e), "indexed_files": indexed_files}
+            return {"status": "error", "error": "Codebase indexing failed", "indexed_files": indexed_files}
 
     def _build_file_index_data(
         self, relative_path: str, language: str, content: str, elements: Dict[str, List]
@@ -1461,7 +1461,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
             deleted = await asyncio.to_thread(_clear_cache)
             return {"status": "success", "keys_deleted": deleted}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to clear cache: %s", e)
+            return {"status": "error", "error": "Cache clear failed"}
 
     async def get_index_status(self) -> Dict[str, Any]:
         """Get indexing status information"""
@@ -1500,7 +1501,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
             }
 
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            logger.error("Failed to get index status: %s", e)
+            return {"status": "error", "error": "Failed to retrieve index status"}
 
 
 # Singleton instance (thread-safe)

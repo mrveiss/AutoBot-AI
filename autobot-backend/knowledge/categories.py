@@ -166,7 +166,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to create category '%s': %s", name, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def get_category(self, category_id: str) -> Dict[str, Any]:
         """
@@ -195,7 +195,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get category '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def get_category_by_path(self, path: str) -> Dict[str, Any]:
         """
@@ -226,7 +226,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get category by path '%s': %s", path, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def _handle_category_rename(
         self,
@@ -318,7 +318,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to update category '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def _reassign_category_facts(
         self, categories: List[str], reassign_to: Optional[str]
@@ -430,7 +430,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to delete category '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     # =========================================================================
     # CATEGORY TREE OPERATIONS (Issue #411)
@@ -482,7 +482,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get category tree: %s", e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def get_children(self, category_id: str) -> Dict[str, Any]:
         """
@@ -531,7 +531,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get children for '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def get_ancestors(self, category_id: str) -> Dict[str, Any]:
         """
@@ -574,7 +574,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get ancestors for '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     # =========================================================================
     # CATEGORY-FACT OPERATIONS (Issue #411)
@@ -639,7 +639,7 @@ class CategoriesMixin:
                 category_id,
                 e,
             )
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     async def _gather_category_fact_ids(self, category_ids: List[str]) -> set:
         """Gather all fact IDs from multiple categories (Issue #398: extracted)."""
@@ -710,7 +710,7 @@ class CategoriesMixin:
 
         except Exception as e:
             logger.error("Failed to get facts for category '%s': %s", category_id, e)
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     def _build_redis_path_pattern(self, path_pattern: str) -> str:
         """Build Redis SCAN pattern from path pattern (Issue #398: extracted)."""
@@ -833,7 +833,7 @@ class CategoriesMixin:
             logger.error(
                 "Failed to search categories by path '%s': %s", path_pattern, e
             )
-            return {"success": False, "message": str(e)}
+            return {"success": False, "message": "Category operation failed"}
 
     # =========================================================================
     # PRIVATE HELPER METHODS (Issue #411)

@@ -128,9 +128,9 @@ class HierarchicalAgent:
             sub_context = self.context.create_subordinate_context(subordinate_id)
         except ValueError as e:
             raise RepairableException(
-                message=str(e),
+                message="Cannot create subordinate agent context",
                 suggestion="Complete this task directly instead of delegating further",
-            )
+            ) from e
 
         subordinate = HierarchicalAgent(
             context=sub_context,

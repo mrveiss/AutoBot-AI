@@ -649,7 +649,7 @@ class RAGService:
 
         except Exception as e:
             logger.error("Failed to get optimized context: %s", e)
-            return f"Error: {str(e)}", RAGMetrics()
+            return "Error: RAG context retrieval failed", RAGMetrics()
 
     async def rerank_results(
         self,

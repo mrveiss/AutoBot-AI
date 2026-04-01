@@ -557,8 +557,8 @@ class ApprovalMemoryManager:
             }
 
         except Exception as e:
-            logger.error(f"Failed to get memory stats: {e}")
-            return {"enabled": True, "error": str(e)}
+            logger.error("Failed to get memory stats: %s", e)
+            return {"enabled": True, "error": "Failed to retrieve memory stats"}
 
 
 # Singleton instance for easy access

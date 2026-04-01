@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from autobot_shared.security.path_validator import validate_path
 from constants.path_constants import PATH
 
 
@@ -130,24 +131,24 @@ async def _validate_and_get_path(
 
         return source.clone_path
     if request and request.root_path:
-        target_path = Path(request.root_path)
         try:
-            path_exists = target_path.exists()
-            path_is_dir = target_path.is_dir() if path_exists else False
+            safe_path_str = validate_path(request.root_path, must_exist=True)
+            target_path = Path(safe_path_str)
+        except (ValueError, PermissionError):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or inaccessible path",
+            )
+        try:
+            if not target_path.is_dir():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Path is not a directory",
+                )
         except OSError:
             raise HTTPException(
                 status_code=400,
-                detail="Cannot access path '{request.root_path}'",
-            )
-        if not path_exists:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Path does not exist: {request.root_path}",
-            )
-        if not path_is_dir:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Path is not a directory: {request.root_path}",
+                detail="Cannot access path",
             )
         return str(target_path.resolve())
     return str(PATH.PROJECT_ROOT)

@@ -760,7 +760,7 @@ class DomainSecurityManager:
         except Exception as e:
             logger.error("Failed to get threat intel status: %s", e)
             return {
-                "error": str(e),
+                "error": "Failed to retrieve threat intelligence status",
                 "virustotal": {"configured": False},
                 "urlvoid": {"configured": False},
             }

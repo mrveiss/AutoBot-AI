@@ -600,7 +600,7 @@ class AgentCommunicationProtocol:
                             ),
                             payload=MessagePayload(
                                 content={
-                                    "error": str(e),
+                                    "error": "Message handling failed",
                                     "error_type": type(e).__name__,
                                 }
                             ),

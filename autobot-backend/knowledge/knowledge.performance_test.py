@@ -397,7 +397,7 @@ class KnowledgePerformanceTest:
                     fail_count=1,
                     duration=0.0,
                     target_ms=self.STATUS_LOAD_TARGET_MS,
-                    metadata={"error": str(e)},
+                    metadata={"error": "Vectorization status load failed"},
                 )
 
         if not fact_ids:

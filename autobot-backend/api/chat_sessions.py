@@ -1984,3 +1984,28 @@ async def get_share_preview(
         message="Share preview retrieved",
         request_id=request_id,
     )
+
+
+@router.delete("/sessions/{session_id}/checkpoints")
+async def clear_session_checkpoints(session_id: str):
+    """Clear LangGraph checkpoints for a session (#1482).
+
+    Admin-only endpoint for recovering broken sessions whose checkpoints
+    are corrupted or stuck.  Delegates to ``delete_thread_checkpoints``
+    which removes the Redis-backed LangGraph checkpoint data.
+    """
+    try:
+        from chat_workflow.graph import delete_thread_checkpoints
+
+        await delete_thread_checkpoints(session_id)
+        logger.info("Cleared checkpoints for session %s (#1482)", session_id)
+        return create_success_response(
+            data={"session_id": session_id},
+            message=f"Checkpoints cleared for session {session_id}",
+        )
+    except Exception:
+        logger.exception("Failed to clear checkpoints for %s", session_id)
+        return create_error_response(
+            error="Failed to clear checkpoints",
+            status_code=500,
+        )

@@ -206,7 +206,7 @@ class IndexMixin:
 
         except Exception as e:
             logger.error("ChromaDB index rebuild failed: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Index operation failed"}
 
     def _build_index_info_result(
         self, chroma_path: Path, vector_count: int, metadata: Dict
@@ -257,7 +257,7 @@ class IndexMixin:
 
         except Exception as e:
             logger.error("Failed to get ChromaDB index info: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Index operation failed"}
 
     async def rebuild_search_index(self) -> Dict[str, Any]:
         """
@@ -285,7 +285,7 @@ class IndexMixin:
 
         except Exception as e:
             logger.error("Failed to rebuild search index: %s", e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Index operation failed"}
 
     def ensure_initialized(self):
         """

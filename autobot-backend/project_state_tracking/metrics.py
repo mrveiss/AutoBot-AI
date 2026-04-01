@@ -179,4 +179,4 @@ async def get_metrics_summary(
         }
     except Exception as e:
         logger.error("Error getting metrics summary: %s", e)
-        return {"error": str(e)}
+        return {"error": "Failed to retrieve metrics summary"}

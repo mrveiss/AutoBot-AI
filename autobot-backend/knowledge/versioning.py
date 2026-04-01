@@ -117,7 +117,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to create version for %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Versioning operation failed"}
 
     async def _find_version_by_number(self, version_list_key: str, version: int) -> str:
         """Find specific version JSON by version number (Issue #398: extracted)."""
@@ -162,7 +162,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to get version for %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Versioning operation failed"}
 
     def _parse_version_summary(self, v_raw: bytes) -> Dict[str, Any]:
         """Parse version data into summary format (Issue #398: extracted)."""
@@ -208,7 +208,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to list versions for %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e), "versions": []}
+            return {"status": "error", "message": "Versioning operation failed", "versions": []}
 
     async def _apply_version_to_fact(
         self, fact_id: str, target_version: Dict[str, Any]
@@ -263,7 +263,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to revert %s to version %d: %s", fact_id, version, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Versioning operation failed"}
 
     def _compare_metadata(self, meta_a: Dict, meta_b: Dict) -> Dict[str, List[str]]:
         """Compare metadata between two versions (Issue #398: extracted)."""
@@ -329,7 +329,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to compare versions for %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Versioning operation failed"}
 
     async def get_version_count(self, fact_id: str) -> int:
         """Get the number of versions for a fact."""
@@ -373,7 +373,7 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to delete version history for %s: %s", fact_id, e)
-            return {"status": "error", "message": str(e)}
+            return {"status": "error", "message": "Versioning operation failed"}
 
     def ensure_initialized(self):
         """Ensure the knowledge base is initialized. Implemented in composed class."""

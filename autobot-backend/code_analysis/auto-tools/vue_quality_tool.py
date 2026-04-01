@@ -82,7 +82,7 @@ class VueSpecificFixAgent:
 
         except Exception as e:
             logger.error(f"Error analyzing {file_path}: {e}")
-            return {"file": str(file_path), "error": str(e)}
+            return {"file": str(file_path), "error": "File analysis failed"}
 
     def find_vfor_index_keys(self, content: str) -> List[Dict[str, Any]]:
         """Find v-for loops using index as key."""
@@ -338,7 +338,7 @@ beforeDestroy() {{
             error_info = {
                 "file": str(file_path),
                 "fix": fix,
-                "error": str(e),
+                "error": "Fix application failed",
                 "status": "failed",
             }
             self.errors.append(error_info)

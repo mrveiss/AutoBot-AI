@@ -238,7 +238,7 @@ Active capabilities ({context['current_capabilities']['count']}):"""
             return await self.awareness.get_phase_aware_response(query)
         except Exception as e:
             logger.error("Error analyzing capability relevance: %s", e)
-            return {"error": str(e), "relevant_capabilities": []}
+            return {"error": "Capability analysis failed", "relevant_capabilities": []}
 
 
 # Global injector instance (thread-safe)

@@ -253,7 +253,8 @@ class StartupValidator:
                 logger.debug("✅ Service connectivity: %s", service_name)
                 return service_name, None
             except Exception as e:
-                return service_name, str(e)
+                logger.error("Service connectivity check failed for %s: %s", service_name, e)
+                return service_name, "Service connectivity check failed"
 
         results = await asyncio.gather(
             *[
@@ -362,7 +363,8 @@ def validate_import_quickly(module_name: str) -> Tuple[bool, Optional[str]]:
         importlib.import_module(module_name)
         return True, None
     except Exception as e:
-        return False, str(e)
+        logger.error("Failed to import module %s: %s", module_name, e)
+        return False, "Module import failed"
 
 
 async def validate_service_health(service_name: str) -> Tuple[bool, Optional[str]]:
@@ -374,7 +376,8 @@ async def validate_service_health(service_name: str) -> Tuple[bool, Optional[str
             await validator.services[service_name]()
             return True, None
         except Exception as e:
-            return False, str(e)
+            logger.error("Service health check failed for %s: %s", service_name, e)
+            return False, "Service health check failed"
     else:
         return False, f"Unknown service: {service_name}"
 

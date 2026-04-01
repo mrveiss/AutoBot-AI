@@ -95,7 +95,7 @@ class DecisionEngine:
                 return validated_decision
 
             except Exception as e:
-                task_context.set_outputs({"error": str(e)})
+                task_context.set_outputs({"error": "Decision making failed"})
                 logger.error("Decision making failed: %s", e)
                 raise
 

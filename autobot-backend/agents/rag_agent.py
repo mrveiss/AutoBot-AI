@@ -199,7 +199,7 @@ class RAGAgent(StandardizedAgent):
                 "synthesized_response": (
                     "I encountered an error while synthesizing information from the documents."
                 ),
-                "error": str(e),
+                "error": "RAG synthesis failed",
                 "agent_type": "rag",
                 "model_used": self.model_name,
             }
@@ -251,7 +251,7 @@ class RAGAgent(StandardizedAgent):
                 "status": "error",
                 "original_query": original_query,
                 "reformulated_queries": [original_query],
-                "error": str(e),
+                "error": "Query reformulation failed",
             }
 
     async def rank_documents(

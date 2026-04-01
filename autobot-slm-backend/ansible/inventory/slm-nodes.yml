@@ -11,8 +11,9 @@ all:
     ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     ansible_python_interpreter: /usr/bin/python3
 
-    # Service discovery — must match production.yml (#799)
-    slm_host: "{{ hostvars['00-SLM-Manager']['ansible_host'] }}"
+    # Service discovery — read from install-time secrets (set by install.sh).
+    # Priority: SLM_HOST env > SLM_HOST in secrets > fallback.
+    slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
 
   children:
     slm_nodes:

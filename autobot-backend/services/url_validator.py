@@ -106,12 +106,12 @@ class URLValidator:
                 # If hostname doesn't resolve, it might be invalid
                 return False, f"Cannot resolve hostname: {hostname}"
             except Exception as e:
-                return False, f"Error validating hostname: {str(e)}"
+                return False, "Error validating hostname"
 
             return True, ""
 
         except Exception as e:
-            return False, f"Invalid URL: {str(e)}"
+            return False, "Invalid URL"
 
     def sanitize_url(self, url: str) -> Optional[str]:
         """

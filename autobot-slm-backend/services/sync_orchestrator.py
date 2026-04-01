@@ -448,7 +448,7 @@ class SyncOrchestrator:
             return False, "Pull timed out", None
         except Exception as e:
             logger.error("Pull error: %s", e)
-            return False, str(e), None
+            return False, "Pull operation failed", None
 
     def _is_local_source(self, node_ip: str) -> bool:
         """Return True if the code-source node is this machine (#1194, #2759).
@@ -485,7 +485,7 @@ class SyncOrchestrator:
             return False, "git pull timed out"
         except Exception as e:
             logger.error("git pull error in %s: %s", repo_path, e)
-            return False, str(e)
+            return False, "git pull failed"
 
     async def _get_local_git_commit(self, repo_path: str) -> Optional[str]:
         """Get git HEAD commit from a local repo without SSH. Helper for #1194."""

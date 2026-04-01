@@ -45,7 +45,7 @@ def _read_pty_data(fd: int) -> tuple:
         if e.errno == 5:  # Input/output error - PTY closed
             return ("error", "PTY closed", True)
         logger.error("PTY read error: %s", e)
-        return ("error", str(e), False)
+        return ("error", "PTY read error", False)
 
 
 class SimplePTY:

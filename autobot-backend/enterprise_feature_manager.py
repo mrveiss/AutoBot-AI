@@ -598,7 +598,8 @@ class EnterpriseFeatureManager:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Failed to enable advanced research capabilities: %s", e)
+            return {"success": False, "error": "Feature enablement failed"}
 
     async def _enable_cross_vm_load_balancing(
         self, feature: EnterpriseFeature
@@ -628,7 +629,8 @@ class EnterpriseFeatureManager:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Failed to enable cross-VM load balancing: %s", e)
+            return {"success": False, "error": "Feature enablement failed"}
 
     async def _enable_intelligent_task_routing(
         self, feature: EnterpriseFeature
@@ -660,7 +662,8 @@ class EnterpriseFeatureManager:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Failed to enable intelligent task routing: %s", e)
+            return {"success": False, "error": "Feature enablement failed"}
 
     async def _enable_comprehensive_health_monitoring(
         self, feature: EnterpriseFeature
@@ -695,7 +698,8 @@ class EnterpriseFeatureManager:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Failed to enable comprehensive health monitoring: %s", e)
+            return {"success": False, "error": "Feature enablement failed"}
 
     async def _enable_graceful_degradation(
         self, feature: EnterpriseFeature
@@ -733,7 +737,8 @@ class EnterpriseFeatureManager:
             }
 
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Failed to enable graceful degradation: %s", e)
+            return {"success": False, "error": "Feature enablement failed"}
 
     async def enable_all_enterprise_features(self) -> Dict[str, Any]:
         """Enable all enterprise features in dependency order"""
@@ -762,8 +767,9 @@ class EnterpriseFeatureManager:
                         {"feature": feature_name, "error": result["message"]}
                     )
             except Exception as e:
+                logger.error("Failed to enable feature %s: %s", feature_name, e)
                 results["failed_features"].append(
-                    {"feature": feature_name, "error": str(e)}
+                    {"feature": feature_name, "error": "Feature enablement failed"}
                 )
 
         logger.info(

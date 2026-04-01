@@ -10,6 +10,8 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 import logging
 from typing import List, Optional, Set
 
+from .optimization.model_inspector import ModelInfo, inspect_model
+
 logger = logging.getLogger(__name__)
 
 # Check for PyTorch availability
@@ -145,8 +147,74 @@ class HardwareDetector:
         """Select CPU backend if available."""
         return "cpu" if "cpu" in detected_hardware else None
 
+    def get_available_vram_gb(self) -> float:
+        """
+        Return free VRAM in gigabytes for the first CUDA device.
+
+        Returns 0.0 when CUDA is unavailable or no free memory is reported.
+        """
+        if not TORCH_AVAILABLE:
+            return 0.0
+        try:
+            import torch  # noqa: PLC0415
+
+            if not torch.cuda.is_available():
+                return 0.0
+            free_bytes, _ = torch.cuda.mem_get_info(0)
+            return free_bytes / (1024**3)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not query VRAM: %s", exc)
+            return 0.0
+
+    def select_backend_for_model(self, model_name: str) -> str:
+        """
+        Select optimal backend after verifying the model fits in available VRAM.
+
+        Inspects the model architecture at zero memory cost using
+        ``inspect_model()``.  When the estimated fp32 size exceeds free VRAM
+        the method falls back to CPU rather than risking an OOM error.
+
+        Args:
+            model_name: HuggingFace model ID or local path.
+
+        Returns:
+            Selected backend name.
+        """
+        model_info: Optional[ModelInfo] = inspect_model(model_name)
+        preferred = self.select_backend()
+
+        if model_info is None:
+            logger.debug(
+                "No model info for %s — using default backend %s",
+                model_name,
+                preferred,
+            )
+            return preferred
+
+        if preferred in ("cuda", "openvino_gpu"):
+            vram_gb = self.get_available_vram_gb()
+            if model_info.estimated_size_gb > vram_gb:
+                logger.warning(
+                    "Model %s requires ~%.1f GB but only %.1f GB VRAM free — "
+                    "falling back to cpu",
+                    model_name,
+                    model_info.estimated_size_gb,
+                    vram_gb,
+                )
+                return "cpu"
+
+        logger.info(
+            "Model %s (~%.1f GB) fits — routing to %s",
+            model_name,
+            model_info.estimated_size_gb,
+            preferred,
+        )
+        return preferred
+
 
 __all__ = [
     "HardwareDetector",
     "TORCH_AVAILABLE",
+    "ModelInfo",
+    "inspect_model",
 ]
