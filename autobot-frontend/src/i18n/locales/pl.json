@@ -810,7 +810,13 @@
         "redisOptimizations": "Sugestie optymalizacji Redis",
         "loadingRedisOptimizations": "Ładowanie optymalizacji Redis...",
         "noRedisOptimizations": "Brak sugestii optymalizacji Redis.",
-        "noScoresData": "Brak dostępnych wyników analizy kodu. Przeprowadź analizę, aby wygenerować wyniki."
+        "noScoresData": "Brak dostępnych wyników analizy kodu. Przeprowadź analizę, aby wygenerować wyniki.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Wykrywanie duplikatów kodu",
@@ -6071,7 +6077,6 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
-    "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel"
+    "agentRegistry": "Agents"
   }
 }

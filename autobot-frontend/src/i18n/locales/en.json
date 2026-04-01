@@ -820,7 +820,13 @@
         "redisOptimizations": "Redis Optimization Suggestions",
         "loadingRedisOptimizations": "Loading Redis optimizations...",
         "noRedisOptimizations": "No Redis optimization suggestions.",
-        "noScoresData": "No code intelligence scores available. Run analysis to generate scores."
+        "noScoresData": "No code intelligence scores available. Run analysis to generate scores.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Duplicate Code Detection",
@@ -6103,7 +6109,6 @@
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
     "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
     "profileSettings": "Profile Settings"

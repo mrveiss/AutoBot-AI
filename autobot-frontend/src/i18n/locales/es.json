@@ -810,7 +810,13 @@
         "redisOptimizations": "Sugerencias de optimización de Redis",
         "loadingRedisOptimizations": "Cargando optimizaciones de Redis...",
         "noRedisOptimizations": "No hay sugerencias de optimización de Redis.",
-        "noScoresData": "No hay puntuaciones de inteligencia de código disponibles. Ejecute análisis para generar puntuaciones."
+        "noScoresData": "No hay puntuaciones de inteligencia de código disponibles. Ejecute análisis para generar puntuaciones.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Detección de código duplicado",
@@ -6071,7 +6077,6 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
-    "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel"
+    "agentRegistry": "Agents"
   }
 }

@@ -810,7 +810,13 @@
         "redisOptimizations": "Vorschläge zur Redis-Optimierung",
         "loadingRedisOptimizations": "Redis-Optimierungen werden geladen...",
         "noRedisOptimizations": "Keine Redis-Optimierungsvorschläge.",
-        "noScoresData": "Es sind keine Code-Intelligence-Scores verfügbar. Führen Sie eine Analyse durch, um Ergebnisse zu generieren."
+        "noScoresData": "Es sind keine Code-Intelligence-Scores verfügbar. Führen Sie eine Analyse durch, um Ergebnisse zu generieren.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Erkennung doppelter Codes",
@@ -6071,7 +6077,6 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
-    "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel"
+    "agentRegistry": "Agents"
   }
 }

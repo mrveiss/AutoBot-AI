@@ -250,6 +250,10 @@
         :redis-error="redisHealthError"
         :redis-optimizations="redisOptimizations"
         :redis-optimizations-loading="loadingRedisOptimizations"
+        :health-score="codeIntelHealthScore"
+        :quality-score="codeIntelQualityScore"
+        :suggestions="codeIntelSuggestions"
+        :analysis-history="codeIntelAnalysisHistory"
         @refresh-all="() => { loadSecurityScore(); loadPerformanceScore(); loadRedisHealth() }"
         @refresh-security="loadSecurityScore"
         @refresh-performance="loadPerformanceScore"
@@ -257,6 +261,9 @@
         @load-security-findings="loadSecurityFindings"
         @load-performance-findings="loadPerformanceFindings"
         @load-redis-optimizations="loadRedisOptimizations"
+        @load-health-score="codeIntelGetHealthScore"
+        @load-quality-score="() => codeIntelGetQualityScore(rootPath, 'python')"
+        @load-analysis-history="codeIntelGetAnalysisHistory"
       />
 
             <!-- Issue #538: Environment Analysis Section (#1469: extracted to CodebaseEnvironmentPanel) -->
@@ -506,6 +513,13 @@ const {
   codeIntelRedisFindings,
   codeIntelFindingsLoading,
   codeIntelTotalFindings,
+  codeIntelHealthScore,
+  codeIntelQualityScore,
+  codeIntelAnalysisHistory,
+  codeIntelSuggestions,
+  codeIntelGetHealthScore,
+  codeIntelGetQualityScore,
+  codeIntelGetAnalysisHistory,
   runCodeIntelligenceAnalysis,
   handleFileScan,
   codeSmellsReport,

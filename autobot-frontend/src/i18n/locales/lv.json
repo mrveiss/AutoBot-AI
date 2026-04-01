@@ -810,7 +810,13 @@
         "redisOptimizations": "Redis optimizācijas ieteikumi",
         "loadingRedisOptimizations": "Notiek Redis optimizācijas ielāde...",
         "noRedisOptimizations": "Nav Redis optimizācijas ieteikumu.",
-        "noScoresData": "Nav pieejami koda izlūkošanas rādītāji. Palaidiet analīzi, lai iegūtu punktu skaitu."
+        "noScoresData": "Nav pieejami koda izlūkošanas rādītāji. Palaidiet analīzi, lai iegūtu punktu skaitu.",
+        "healthScore": "Health Score",
+        "qualityScore": "Quality Score",
+        "refreshHealthScore": "Refresh health score",
+        "refreshQualityScore": "Refresh quality score",
+        "suggestionsTitle": "Code Suggestions",
+        "analysisHistoryTitle": "Analysis History"
       },
       "duplicates": {
         "title": "Dublikāta koda noteikšana",
@@ -6071,7 +6077,6 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
-    "agentRegistry": "Agents",
-    "codeIntelligence": "Code Intel"
+    "agentRegistry": "Agents"
   }
 }
