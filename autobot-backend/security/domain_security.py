@@ -183,7 +183,9 @@ class DomainSecurityManager:
         for pattern in self.config.config.get("domain_security", {}).get(
             "blacklist", []
         ):
-            regex_pattern = pattern.replace("*", ".*").replace(".", "\\.")
+            # Split on wildcards, escape each literal part, rejoin with .*
+            parts = pattern.split("*")
+            regex_pattern = ".*".join(re.escape(p) for p in parts)
             self.blacklist_patterns.append(
                 re.compile(f"^{regex_pattern}$", re.IGNORECASE)
             )
@@ -192,7 +194,8 @@ class DomainSecurityManager:
         for pattern in self.config.config.get("domain_security", {}).get(
             "whitelist", []
         ):
-            regex_pattern = pattern.replace("*", ".*").replace(".", "\\.")
+            parts = pattern.split("*")
+            regex_pattern = ".*".join(re.escape(p) for p in parts)
             self.whitelist_patterns.append(
                 re.compile(f"^{regex_pattern}$", re.IGNORECASE)
             )

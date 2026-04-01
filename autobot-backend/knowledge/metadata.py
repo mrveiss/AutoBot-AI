@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 FIELD_TYPES = {"string", "number", "date", "boolean", "list", "url", "email"}
 
 # Validation pattern for email
-EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$")
 
 # Validation pattern for URL
 URL_PATTERN = re.compile(
-    r"^https?://[a-zA-Z0-9][-a-zA-Z0-9]*(\.[a-zA-Z0-9][-a-zA-Z0-9]*)+.*$"
+    r"^https?://[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+(?::\d{1,5})?(?:[/?#]\S*)?$"
 )
 
 
