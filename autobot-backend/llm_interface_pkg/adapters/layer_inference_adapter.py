@@ -9,6 +9,7 @@ LLM provider so it can be accessed via the unified adapter API.
 Issue #3140: Updated to use LayerInferencePipeline for end-to-end generation.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -61,8 +62,22 @@ class LayerInferenceAdapter(AdapterBase):
         pipeline = self._get_pipeline()
         if pipeline is None:
             return None
-        self._prepared = pipeline.prepare()
+        try:
+            self._prepared = pipeline.prepare()
+        except Exception:
+            logger.exception("Pipeline prepare() failed")
+            return None
         return self._prepared
+
+    @staticmethod
+    def _build_prompt(messages: List[Dict[str, Any]]) -> str:
+        """Concatenate chat messages into a single prompt string."""
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            parts.append("%s: %s" % (role, content))
+        return "\n".join(parts)
 
     async def execute(
         self,
@@ -81,23 +96,31 @@ class LayerInferenceAdapter(AdapterBase):
                 error="Pipeline not initialized — set LAYER_INFERENCE_MODEL",
             )
 
-        prompt = ""
-        for msg in request.messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            prompt += "%s: %s\n" % (role, content)
-
+        prompt = self._build_prompt(request.messages)
         start = time.monotonic()
         max_tokens = request.max_tokens or 256
-        result = self._pipeline.execute(prompt, prepared, max_new_tokens=max_tokens)
-        elapsed = time.monotonic() - start
+
+        try:
+            result = await asyncio.to_thread(
+                self._pipeline.execute, prompt, prepared, max_new_tokens=max_tokens,
+            )
+        except Exception:
+            logger.exception("LayerInference generation failed")
+            return LLMResponse(
+                content="",
+                model=self.config.settings.get("model_name", "layer_inference"),
+                provider="layer_inference",
+                tokens_used=0,
+                processing_time=time.monotonic() - start,
+                error="Generation failed — check logs",
+            )
 
         return LLMResponse(
             content=result,
             model=self.config.settings.get("model_name", "layer_inference"),
             provider="layer_inference",
-            tokens_used=max_tokens,
-            processing_time=elapsed,
+            tokens_used=len(result.split()) if result else 0,
+            processing_time=time.monotonic() - start,
         )
 
     async def test_environment(self) -> EnvironmentTestResult:

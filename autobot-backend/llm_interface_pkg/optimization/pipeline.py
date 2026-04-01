@@ -164,23 +164,16 @@ class LayerInferencePipeline:
         engine = self._build_engine()
         model_cfg = engine.load_model_config(self._config.model_name)
 
-        quantizer = self._build_quantizer(model_cfg)
-        attn_backend = self._select_attention_backend(model_cfg)
-        kv_cache = self._allocate_kv_cache(model_cfg)
+        quantizer = self._try_build_quantizer(model_cfg)
+        attn_backend = self._try_select_attention(model_cfg)
+        kv_cache = self._try_allocate_kv_cache(model_cfg)
         eviction_manager = MetaDeviceEvictionManager()
 
-        from_pretrained_kwargs = quantizer.preprocess_model()
+        from_pretrained_kwargs = {}
+        if quantizer is not None:
+            from_pretrained_kwargs = quantizer.preprocess_model()
 
-        elapsed = time.monotonic() - t0
-        logger.info(
-            "LayerInferencePipeline.prepare: done in %.3fs "
-            "quant=%s attn=%s kv_layers=%d",
-            elapsed,
-            quantizer._config.quantization_type,
-            attn_backend,
-            kv_cache.config.num_layers,
-        )
-        return PreparedPipeline(
+        prepared = PreparedPipeline(
             engine=engine,
             quantizer=quantizer,
             attention_backend=attn_backend,
@@ -189,6 +182,8 @@ class LayerInferencePipeline:
             model_cfg=model_cfg,
             from_pretrained_kwargs=from_pretrained_kwargs,
         )
+        self._log_prepare_result(prepared, time.monotonic() - t0)
+        return prepared
 
     def execute(
         self,
@@ -220,6 +215,41 @@ class LayerInferencePipeline:
         clean_memory()
         logger.debug("LayerInferencePipeline.execute: memory cleaned after generation")
         return result
+
+    def _log_prepare_result(self, prepared: PreparedPipeline, elapsed: float) -> None:
+        """Log the outcome of prepare() in a single info line."""
+        quant_type = "none"
+        if prepared.quantizer is not None:
+            quant_type = str(getattr(prepared.quantizer, "_config", None))
+        kv_layers = prepared.kv_cache.config.num_layers if prepared.kv_cache else 0
+        logger.info(
+            "Pipeline.prepare: done in %.3fs quant=%s attn=%s kv_layers=%d",
+            elapsed, quant_type, prepared.attention_backend, kv_layers,
+        )
+
+    def _try_build_quantizer(self, model_cfg):
+        """Build quantizer with graceful fallback to None."""
+        try:
+            return self._build_quantizer(model_cfg)
+        except Exception as exc:
+            logger.warning("Quantizer unavailable, skipping: %s", exc)
+            return None
+
+    def _try_select_attention(self, model_cfg):
+        """Select attention backend with graceful fallback to None."""
+        try:
+            return self._select_attention_backend(model_cfg)
+        except Exception as exc:
+            logger.warning("Attention backend selection failed, using default: %s", exc)
+            return None
+
+    def _try_allocate_kv_cache(self, model_cfg):
+        """Allocate KV cache with graceful fallback to None."""
+        try:
+            return self._allocate_kv_cache(model_cfg)
+        except Exception as exc:
+            logger.warning("KV cache allocation failed, skipping: %s", exc)
+            return None
 
     # ------------------------------------------------------------------
     # Private construction helpers (each <=30 lines)
