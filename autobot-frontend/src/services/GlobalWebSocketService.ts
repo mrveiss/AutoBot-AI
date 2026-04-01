@@ -435,7 +435,7 @@ class GlobalWebSocketService {
       this.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
       this.maxDelay
     )
-    const jitter = Math.random() * 1000
+    const jitter = crypto.getRandomValues(new Uint16Array(1))[0] % 1000
     const delay = backoffDelay + jitter
 
     logger.debug(

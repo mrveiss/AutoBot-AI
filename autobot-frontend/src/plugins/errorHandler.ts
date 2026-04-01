@@ -210,7 +210,7 @@ class GlobalErrorHandler {
       this.notifications = []
     }
 
-    const id = `error_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    const id = `error_${crypto.randomUUID()}`
     const fullNotification: ErrorNotification = {
       ...notification,
       id,

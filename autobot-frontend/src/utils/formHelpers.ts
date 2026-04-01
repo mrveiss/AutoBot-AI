@@ -5,6 +5,8 @@
  * Provides reusable form reset, validation, and state manipulation.
  */
 
+const _UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 /**
  * Reset all fields in a reactive form object to default values
  *
@@ -26,6 +28,7 @@ export function resetFormFields<T extends Record<string, any>>(
   defaults: Partial<T> = {}
 ): void {
   ;(Object.keys(form) as Array<keyof T>).forEach((key) => {
+    if (_UNSAFE_KEYS.has(key as string)) return
     const defaultValue = defaults[key]
 
     if (defaultValue !== undefined) {
@@ -173,6 +176,7 @@ export function isFormModified<T extends Record<string, any>>(
  */
 export function trimFormFields<T extends Record<string, any>>(form: T): void {
   ;(Object.keys(form) as Array<keyof T>).forEach((key) => {
+    if (_UNSAFE_KEYS.has(key as string)) return
     if (typeof form[key] === 'string') {
       form[key] = (form[key] as string).trim() as T[keyof T]
     }

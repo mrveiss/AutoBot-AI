@@ -271,7 +271,7 @@ async function handleDelete(): Promise<void> {
                 </div>
               </td>
               <td class="px-4 py-3 text-sm text-gray-600 capitalize">
-                {{ rule.metric_type.replace('_', ' ') }}
+                {{ rule.metric_type.replaceAll('_', ' ') }}
               </td>
               <td class="px-4 py-3 text-sm font-mono text-gray-700">
                 {{ formatCondition(rule.condition) }} {{ rule.threshold }}

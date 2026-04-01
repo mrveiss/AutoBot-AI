@@ -175,7 +175,7 @@ class LiveEventService {
     }
     this.reconnectAttempts++
     const delay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
+      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) + (crypto.getRandomValues(new Uint16Array(1))[0] % 1000),
       this.maxDelay
     )
     logger.debug(

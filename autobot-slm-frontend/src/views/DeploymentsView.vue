@@ -841,7 +841,7 @@ function getNodeHostname(nodeId: string): string {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getStatusIcon(deployment.status)" />
                     </svg>
                     <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(deployment.status)]">
-                      {{ deployment.status.replace('_', ' ') }}
+                      {{ deployment.status.replaceAll('_', ' ') }}
                     </span>
                   </div>
                 </td>
@@ -1031,7 +1031,7 @@ function getNodeHostname(nodeId: string): string {
               <tr v-for="deployment in bgDeployments" :key="deployment.bg_deployment_id" class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(deployment.status)]">
-                    {{ deployment.status.replace('_', ' ') }}
+                    {{ deployment.status.replaceAll('_', ' ') }}
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -1515,7 +1515,7 @@ function getNodeHostname(nodeId: string): string {
               <div class="flex items-center gap-3">
                 <h3 class="text-lg font-semibold text-gray-900">Deployment Details</h3>
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedDeployment.status)]">
-                  {{ selectedDeployment.status.replace('_', ' ') }}
+                  {{ selectedDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
               <button @click="closeDetails" class="text-gray-400 hover:text-gray-600">
@@ -1619,7 +1619,7 @@ function getNodeHostname(nodeId: string): string {
               <div class="flex items-center gap-3">
                 <h3 class="text-lg font-semibold text-gray-900">Blue-Green Deployment Details</h3>
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusClass(selectedBgDeployment.status)]">
-                  {{ selectedBgDeployment.status.replace('_', ' ') }}
+                  {{ selectedBgDeployment.status.replaceAll('_', ' ') }}
                 </span>
               </div>
               <button @click="closeBgDetails" class="text-gray-400 hover:text-gray-600">

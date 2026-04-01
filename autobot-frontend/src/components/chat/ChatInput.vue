@@ -774,7 +774,7 @@ const getFileIcon = (type: string): string => {
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2)
+  return crypto.randomUUID()
 }
 
 // Real file upload implementation
