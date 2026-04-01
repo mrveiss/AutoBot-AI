@@ -3414,6 +3414,50 @@
       "defaultModel": "default",
       "moreCount": "+{count} more",
       "summaryStats": "{backend} backend • {specialized} specialized agents"
+    },
+    "settings": {
+      "tabTitle": "Settings",
+      "loading": "Loading settings...",
+      "save": "Save Settings",
+      "saving": "Saving...",
+      "saveSuccess": "Agent settings saved successfully.",
+      "resetDefaults": "Reset to Defaults",
+      "unsavedChanges": "You have unsaved changes",
+      "concurrency": {
+        "title": "Concurrency",
+        "maxAgents": "Max Concurrent Agents",
+        "maxAgentsHint": "Number of agents that can run simultaneously (1-20)"
+      },
+      "timeouts": {
+        "title": "Timeouts",
+        "agentTimeout": "Agent Timeout",
+        "agentTimeoutHint": "Maximum time an agent can run before being terminated (30-3600)",
+        "seconds": "seconds"
+      },
+      "memory": {
+        "title": "Memory",
+        "enableLabel": "Enable Agent Memory",
+        "enableHint": "Allow agents to retain context across invocations"
+      },
+      "logging": {
+        "title": "Logging",
+        "levelLabel": "Log Level",
+        "levelHint": "Controls verbosity of agent log output"
+      },
+      "retry": {
+        "title": "Retry",
+        "attemptsLabel": "Retry Attempts",
+        "attemptsHint": "Number of retry attempts on failure (0-10)",
+        "delayLabel": "Retry Delay",
+        "delayHint": "Delay between retry attempts (100-30000)"
+      },
+      "execution": {
+        "title": "Execution",
+        "parallelLabel": "Parallel Execution",
+        "parallelHint": "Allow multiple agents to execute tasks in parallel",
+        "priorityLabel": "Priority Queue",
+        "priorityHint": "Use priority-based task scheduling for agents"
+      }
     }
   },
   "errors": {
