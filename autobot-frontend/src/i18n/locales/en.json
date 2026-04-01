@@ -3339,6 +3339,33 @@
       "addStepAriaLabel": "Add step",
       "cancel": "Cancel",
       "cancelAriaLabel": "Cancel"
+    },
+    "notifications": {
+      "sidebarLabel": "Notifications",
+      "sectionTitle": "Notification Settings",
+      "sectionDesc": "Configure per-workflow notification routing",
+      "selectWorkflow": "Workflow",
+      "chooseWorkflow": "-- Select a workflow --",
+      "loading": "Loading configuration...",
+      "enableNotifications": "Enable notifications for this workflow",
+      "emailRecipients": "Email Recipients",
+      "emailPlaceholder": "user@example.com, team@example.com",
+      "emailHint": "Comma-separated email addresses",
+      "slackWebhookUrl": "Slack Webhook URL",
+      "webhookUrl": "Generic Webhook URL",
+      "eventRouting": "Event Routing",
+      "eventRoutingHint": "Choose which channels receive each event type",
+      "channelEmail": "Email",
+      "channelSlack": "Slack",
+      "channelWebhook": "Webhook",
+      "channelInApp": "In-App",
+      "eventCompleted": "Workflow Completed",
+      "eventFailed": "Workflow Failed",
+      "eventStepFailed": "Step Failed",
+      "eventApprovalNeeded": "Approval Needed",
+      "save": "Save",
+      "saving": "Saving...",
+      "saved": "Saved successfully"
     }
   },
   "agent": {

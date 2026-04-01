@@ -204,6 +204,14 @@ class ActiveWorkflow:
     phase: Optional[str] = None
     active_service: Optional[str] = None
 
+    def _serialize_notification_config(self) -> Optional[Metadata]:
+        """Serialize notification_config to a plain dict for API responses."""
+        if self.notification_config is None:
+            return None
+        from dataclasses import asdict
+
+        return asdict(self.notification_config)
+
     def to_status_dict(self) -> Metadata:
         """Convert workflow to status dictionary (Issue #372 - reduces feature envy)."""
         return {
@@ -225,6 +233,7 @@ class ActiveWorkflow:
             ),
             "steps": [step.to_status_dict() for step in self.steps],
             "user_interventions": self.user_interventions,
+            "notification_config": self._serialize_notification_config(),
         }
 
 
@@ -290,3 +299,19 @@ class PlanPresentationRequest(BaseModel):
     approval_mode: str = "full_plan"
     include_risk_assessment: bool = True
     timeout_seconds: int = 300
+
+
+# Issue #3139: Per-workflow notification configuration API model
+class NotificationConfigRequest(BaseModel):
+    """
+    Request model for updating per-workflow notification routing.
+
+    Issue #3139: Maps notification events to delivery channels.
+    """
+
+    enabled: bool = True
+    email_recipients: List[str] = []
+    slack_webhook_url: Optional[str] = None
+    webhook_url: Optional[str] = None
+    channels: Dict[str, List[str]] = {}
+    templates: Dict[str, str] = {}

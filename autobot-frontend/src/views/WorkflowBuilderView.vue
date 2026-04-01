@@ -107,6 +107,22 @@
           <span>{{ $t('workflow.views.history') }}</span>
         </div>
 
+        <!-- Issue #3139: Per-workflow notification configuration -->
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'notifications' }"
+          @click="activeSection = 'notifications'"
+          role="button"
+          :aria-label="$t('workflow.notifications.sidebarLabel')"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span>{{ $t('workflow.notifications.sidebarLabel') }}</span>
+        </button>
+
         <button
           class="category-item"
           :class="{ active: activeSection === 'gui-automation' }"
@@ -495,6 +511,14 @@
           />
         </section>
 
+        <!-- Issue #3139: Per-Workflow Notification Configuration -->
+        <section v-if="activeSection === 'notifications'" class="section-notifications">
+          <WorkflowNotificationConfig
+            :workflows="allWorkflowsForNotificationPicker"
+            @saved="handleNotificationConfigSaved"
+          />
+        </section>
+
         <!-- Orchestration Visualizer Section -->
         <section v-if="activeSection === 'orchestration'" class="section-orchestration">
           <OrchestrationVisualizer
@@ -610,6 +634,7 @@ import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
+import WorkflowNotificationConfig from '@/components/workflow/WorkflowNotificationConfig.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue';
 import ScreenCaptureViewer from '@/components/vision/ScreenCaptureViewer.vue';
@@ -636,6 +661,7 @@ type SectionType =
   | 'natural-language'
   | 'runner'
   | 'history'
+  | 'notifications'
   | 'gui-automation'
   | 'screen-analysis'
   | 'video-processing'
@@ -778,6 +804,7 @@ const sectionTitle = computed(() => {
     'natural-language': t('workflow.views.sectionTitleNaturalLanguage'),
     runner: t('workflow.views.sectionTitleRunner'),
     history: t('workflow.views.sectionTitleHistory'),
+    notifications: t('workflow.notifications.sectionTitle'),
     orchestration: t('workflow.views.sectionTitleOrchestration'),
     agents: t('workflow.views.sectionTitleAgents'),
     'gui-automation': t('workflow.views.sectionTitleGuiAutomation'),
@@ -796,6 +823,7 @@ const sectionDescription = computed(() => {
     'natural-language': t('workflow.views.sectionDescNaturalLanguage'),
     runner: t('workflow.views.sectionDescRunner'),
     history: t('workflow.views.sectionDescHistory'),
+    notifications: t('workflow.notifications.sectionDesc'),
     orchestration: t('workflow.views.sectionDescOrchestration'),
     agents: t('workflow.views.sectionDescAgents'),
     'gui-automation': t('workflow.views.sectionDescGuiAutomation'),
@@ -804,6 +832,21 @@ const sectionDescription = computed(() => {
     'media-gallery': t('workflow.views.sectionDescMediaGallery'),
   };
   return descriptions[activeSection.value] || '';
+});
+
+/** Combine active + completed workflows for the notification config picker (#3139). */
+const allWorkflowsForNotificationPicker = computed(() => {
+  const combined = [
+    ...activeWorkflows.value,
+    ...completedWorkflows.value,
+  ];
+  // Deduplicate by workflow_id
+  const seen = new Set<string>();
+  return combined.filter((wf) => {
+    if (seen.has(wf.workflow_id)) return false;
+    seen.add(wf.workflow_id);
+    return true;
+  });
 });
 
 // Methods
@@ -932,7 +975,7 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
 
 async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
   let full = template as WorkflowTemplate;
-  // Issue #1367: API summaries lack steps — fetch full detail
+  // Issue #1367: API summaries lack steps -- fetch full detail
   if (!full.steps?.length) {
     const detail = await fetchTemplateDetail(template.id);
     if (!detail?.steps?.length) {
@@ -1054,6 +1097,12 @@ async function handleReRunWorkflow(workflowId: string): Promise<void> {
   } else {
     showToast('Failed to re-run workflow', 'error');
   }
+}
+
+/** Handle notification config saved event (#3139). */
+function handleNotificationConfigSaved(workflowId: string): void {
+  showToast('Notification settings saved', 'success');
+  logger.info('Notification config saved for workflow %s', workflowId);
 }
 
 // Lifecycle
