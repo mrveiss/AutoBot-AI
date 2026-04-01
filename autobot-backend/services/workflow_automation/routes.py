@@ -29,6 +29,7 @@ from .models import (
     WorkflowControlRequest,
     WorkflowStep,
 )
+from .persistence import load_notification_config, save_notification_config
 
 logger = logging.getLogger(__name__)
 
@@ -501,9 +502,11 @@ async def get_notification_config(
     workflow_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Return the notification configuration for a workflow (#3139)."""
+    """Return the notification configuration for a workflow (#3139, #3166)."""
     try:
         wf = _find_workflow(workflow_id, current_user)
+        if wf.notification_config is None:
+            wf.notification_config = await load_notification_config(workflow_id)
         config_dict = None
         if wf.notification_config is not None:
             config_dict = asdict(wf.notification_config)
@@ -531,10 +534,11 @@ async def update_notification_config(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Create or update the notification configuration for a workflow (#3139).
+    Create or update the notification configuration for a workflow (#3139, #3166).
 
     When ``enabled`` is false the config is removed entirely so the
-    executor skips notification delivery.
+    executor skips notification delivery.  The config is persisted to
+    Redis so it survives a backend restart.
     """
     try:
         wf = _find_workflow(workflow_id, current_user)
@@ -551,6 +555,7 @@ async def update_notification_config(
                 slack_webhook_url=request.slack_webhook_url,
                 webhook_url=request.webhook_url,
             )
+        await save_notification_config(workflow_id, wf.notification_config)
         config_dict = None
         if wf.notification_config is not None:
             config_dict = asdict(wf.notification_config)
