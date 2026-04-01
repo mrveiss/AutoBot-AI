@@ -423,6 +423,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["triggers", "workflow"],
         "triggers",
     ),
+    # Issue #1808: Conversation export and import
+    (
+        "api.conversation_export",
+        "/conversations",
+        ["conversation-export"],
+        "conversation_export",
+    ),
 ]
 
 
