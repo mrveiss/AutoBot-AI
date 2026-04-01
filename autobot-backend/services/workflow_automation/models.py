@@ -7,10 +7,15 @@ Workflow Automation Models
 Enums, dataclasses, and Pydantic models for workflow automation.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from services.notification_service import NotificationConfig
 
 from pydantic import BaseModel, Field
 
@@ -183,6 +188,8 @@ class ActiveWorkflow:
     owner_id: Optional[str] = None
     # Issue #2601: Store step execution results keyed by step_id for reference passing.
     step_results: Dict[str, Metadata] = field(default_factory=dict)
+    # Issue #3101: Per-workflow notification routing configuration.
+    notification_config: Optional[NotificationConfig] = None
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""

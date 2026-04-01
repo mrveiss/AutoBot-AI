@@ -37,7 +37,23 @@ from .step_evaluator import WorkflowStepEvaluator
 from .vision_step_handler import VISION_STEP_TYPES, execute_vision_step
 
 if TYPE_CHECKING:
+    from services.notification_service import NotificationService
+
     from .messaging import WorkflowMessenger
+
+# Lazy import to avoid circular dependency at module level.
+_notification_event_mod: Optional[type] = None
+
+
+def _get_notification_event():
+    """Return NotificationEvent enum, importing lazily on first call."""
+    global _notification_event_mod  # noqa: PLW0603
+    if _notification_event_mod is None:
+        from services.notification_service import NotificationEvent
+
+        _notification_event_mod = NotificationEvent
+    return _notification_event_mod
+
 
 logger = logging.getLogger(__name__)
 
@@ -169,9 +185,15 @@ def _resolve_step_references(config: dict, step_results: dict) -> dict:
 class WorkflowExecutor:
     """Handles workflow step execution and processing"""
 
-    def __init__(self, messenger: "WorkflowMessenger"):
+    def __init__(
+        self,
+        messenger: "WorkflowMessenger",
+        notification_service: Optional["NotificationService"] = None,
+    ):
         """Initialize executor with messenger and step evaluator."""
         self.messenger = messenger
+        # Issue #3101: Notification service for workflow lifecycle events.
+        self._notification_service = notification_service
         self.step_evaluator = WorkflowStepEvaluator()
         self.prometheus_metrics = get_metrics_manager()
         # Issue #390: Track pending plan approvals
@@ -185,6 +207,28 @@ class WorkflowExecutor:
         self.limits = WorkflowLimits()
         self.cost_tracker = CostTracker()
         self._timeout_enforcer = StepTimeoutEnforcer()
+
+    async def _notify(
+        self,
+        workflow: ActiveWorkflow,
+        event_name: str,
+        extra: Dict[str, Any],
+    ) -> None:
+        """Fire a notification if the service is wired and workflow has config (#3101)."""
+        if self._notification_service is None:
+            return
+        config = getattr(workflow, "notification_config", None)
+        if config is None:
+            return
+        try:
+            NE = _get_notification_event()
+            event = NE(event_name)
+            payload = {"workflow_id": workflow.workflow_id, **extra}
+            await self._notification_service.send(
+                event, workflow.workflow_id, payload, config
+            )
+        except Exception:
+            logger.exception("Notification delivery failed for %s", event_name)
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
@@ -356,6 +400,12 @@ class WorkflowExecutor:
             },
         )
 
+        # Issue #3101: Notify configured channels that approval is needed.
+        if step.requires_confirmation:
+            await self._notify(workflow, "approval_needed", {
+                "step_name": step.step_id,
+            })
+
     def _check_step_dependencies(
         self, workflow: ActiveWorkflow, step: WorkflowStep
     ) -> bool:
@@ -479,6 +529,12 @@ class WorkflowExecutor:
                 "error": str(error),
             },
         )
+
+        # Issue #3101: Notify configured channels on step failure.
+        await self._notify(workflow, "step_failed", {
+            "step_name": step_id,
+            "error": str(error),
+        })
 
     async def approve_and_execute_step(
         self,
@@ -719,6 +775,12 @@ class WorkflowExecutor:
             workflow.session_id, self._build_completion_message(workflow)
         )
 
+        # Issue #3101: Notify configured channels on workflow completion.
+        await self._notify(workflow, "workflow_completed", {
+            "status": "completed",
+            "total_steps": len(workflow.steps),
+        })
+
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:
             self.on_workflow_finished(workflow.workflow_id)
@@ -775,6 +837,11 @@ class WorkflowExecutor:
             workflow.session_id,
             {"type": "workflow_cancelled", "workflow_id": workflow.workflow_id},
         )
+
+        # Issue #3101: Notify configured channels on workflow cancellation/failure.
+        await self._notify(workflow, "workflow_failed", {
+            "error": "cancelled",
+        })
 
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:
