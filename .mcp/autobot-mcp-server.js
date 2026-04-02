@@ -794,14 +794,20 @@ class AutoBotMCPServer {
       throw new Error('Command must be a non-empty string');
     }
     try {
-      // lgtm[js/shell-command-injection-from-environment] — all callers pass
-      // hardcoded command strings; this is a local dev MCP server.
-      // cwd is pinned to PROJECT_ROOT after the spread so callers cannot override it.
+      // Allow caller-supplied cwd only when it is PROJECT_ROOT itself or a
+      // direct subdirectory of it (e.g. frontendDir for npm build/test).
+      // Any path outside PROJECT_ROOT is silently clamped to PROJECT_ROOT.
+      const requested = options.cwd ? path.resolve(String(options.cwd)) : PROJECT_ROOT;
+      const rootPrefix = PROJECT_ROOT.endsWith(path.sep) ? PROJECT_ROOT : PROJECT_ROOT + path.sep;
+      const safeCwd = (requested === PROJECT_ROOT || requested.startsWith(rootPrefix))
+        ? requested
+        : PROJECT_ROOT;
+      // codeql[js/shell-command-injection-from-environment] — callers pass hardcoded strings; local dev server only
       const result = execSync(command, {
         encoding: 'utf8',
         maxBuffer: 1024 * 1024,
         ...options,
-        cwd: PROJECT_ROOT,
+        cwd: safeCwd,
       });
       return result.toString().trim();
     } catch (error) {
