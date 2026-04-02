@@ -76,6 +76,14 @@ slm_admin_password: ""
 # Set via Ansible Vault or inventory; injected into nginx proxy.
 autobot_internal_api_key: ""
 
+# Host and port for the user-facing AutoBot backend (HTTPS).
+# Defaults to the inventory-derived backend host so no IP is hardcoded here.
+autobot_backend_host: "{{ infrastructure.hosts.backend }}"
+autobot_backend_port: 8443
+
+# noVNC proxy port (used by /tools/novnc/ location)
+novnc_port: 6080
+
 # ==========================================================
 # Grafana Configuration
 # Issue #853: Support both local and external Grafana
