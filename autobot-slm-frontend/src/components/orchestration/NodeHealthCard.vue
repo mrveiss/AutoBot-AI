@@ -10,12 +10,13 @@
  * Used across orchestration views for consistent node status display.
  */
 
+import type { NodeStatus } from '@/types/slm'
 
 interface Props {
   nodeId: string
   hostname: string
   ipAddress?: string
-  status: 'online' | 'offline' | 'unknown'
+  status: NodeStatus
   runningCount: number
   stoppedCount: number
   failedCount: number

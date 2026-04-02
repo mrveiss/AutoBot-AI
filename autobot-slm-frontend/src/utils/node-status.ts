@@ -10,7 +10,7 @@
  * Issue #737 Phase 3: Unified data models
  */
 
-import type { NodeStatus, HealthStatus } from '@/types/slm'
+import type { NodeStatus, HealthStatus, ServiceStatus } from '@/types/slm'
 
 /**
  * Status categories for styling purposes.
@@ -155,4 +155,57 @@ export function getMetricBarColor(value: number): string {
   if (value >= 90) return 'bg-red-500'
   if (value >= 70) return 'bg-yellow-500'
   return 'bg-green-500'
+}
+
+/**
+ * Normalize a full NodeStatus value to the three-value display union used by
+ * NodeHealthCard ('online' | 'offline' | 'unknown').
+ *
+ * Mapping rationale:
+ *   online / healthy / degraded                  -> 'online'  (reachable, serving)
+ *   offline / unhealthy / error / decommissioned -> 'offline' (unreachable or broken)
+ *   registered / pending / enrolling / maintenance -> 'unknown' (transitional)
+ *
+ * Issue #3195
+ */
+export function normalizeNodeStatus(status: NodeStatus | string): 'online' | 'offline' | 'unknown' {
+  switch (status) {
+    case 'online':
+    case 'healthy':
+    case 'degraded':
+      return 'online'
+    case 'offline':
+    case 'unhealthy':
+    case 'error':
+    case 'decommissioned':
+      return 'offline'
+    case 'registered':
+    case 'pending':
+    case 'enrolling':
+    case 'maintenance':
+    default:
+      return 'unknown'
+  }
+}
+
+/**
+ * Normalize a service status string to the four-value union used by
+ * ServiceActionButtons ('running' | 'stopped' | 'failed' | 'unknown').
+ *
+ * ServiceStatus is already this union; this helper provides a type-safe
+ * conversion when the value arrives as a plain string from the API.
+ *
+ * Issue #3195
+ */
+export function normalizeServiceStatus(status: ServiceStatus | string): 'running' | 'stopped' | 'failed' | 'unknown' {
+  switch (status) {
+    case 'running':
+      return 'running'
+    case 'stopped':
+      return 'stopped'
+    case 'failed':
+      return 'failed'
+    default:
+      return 'unknown'
+  }
 }
