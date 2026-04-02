@@ -337,9 +337,15 @@ class SLMAgent:
 
         try:
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/v1/slm/events/sync"
+                url = f"{self.admin_url}/api/events/sync"
                 payload = [
-                    {"id": e[0], "type": e[1], "data": json.loads(e[2])} for e in events
+                    {
+                        "id": e[0],
+                        "type": e[1],
+                        "data": json.loads(e[2]),
+                        "node_id": self.node_id,
+                    }
+                    for e in events
                 ]
                 async with session.post(
                     url,
@@ -348,17 +354,22 @@ class SLMAgent:
                     ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
-                        # Mark as synced
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        # Safe: placeholders constructed from "?" chars
                         query = (
-                            f"UPDATE event_buffer SET synced = 1 "  # nosec B608
+                            "UPDATE event_buffer SET synced = 1 "
                             f"WHERE id IN ({placeholders})"
                         )
                         conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
+                    else:
+                        body = await response.text()
+                        logger.warning(
+                            "Event sync rejected: %s %s",
+                            response.status,
+                            body[:200],
+                        )
         except aiohttp.ClientError as e:
             logger.warning("Failed to sync events: %s", e)
         finally:
