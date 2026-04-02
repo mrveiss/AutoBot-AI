@@ -28,7 +28,7 @@ try:
     )
 except ImportError:
     # Fallback for standalone usage - use environment variable
-    AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "http://172.16.168.20:8001")
+    AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "")
 
 # Configure logging
 logging.basicConfig(

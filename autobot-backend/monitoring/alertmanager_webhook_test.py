@@ -86,7 +86,7 @@ class TestAlertManagerWebhook:
             "commonAnnotations": {
                 "summary": "Redis Server Down: main",
                 "description": "Redis server main is unavailable",
-                "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)",
+                "recommendation": "Check Redis service on VM3 (10.0.0.4:6379)",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -102,7 +102,7 @@ class TestAlertManagerWebhook:
                     "annotations": {
                         "summary": "Redis Server Down: main",
                         "description": "Redis server main is unavailable",
-                        "recommendation": "Check Redis service on VM3 (172.16.168.23:6379)",
+                        "recommendation": "Check Redis service on VM3 (10.0.0.4:6379)",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
@@ -134,7 +134,7 @@ class TestAlertManagerWebhook:
             "commonAnnotations": {
                 "summary": "NPU Circuit Breaker OPEN",
                 "description": "NPU worker circuit breaker opened - hardware acceleration unavailable",
-                "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status",
+                "recommendation": "Check NPU Worker VM2 (10.0.0.3:8081) and OpenVINO status",
             },
             "externalURL": "http://localhost:9093",
             "alerts": [
@@ -149,7 +149,7 @@ class TestAlertManagerWebhook:
                     "annotations": {
                         "summary": "NPU Circuit Breaker OPEN",
                         "description": "NPU worker circuit breaker opened - hardware acceleration unavailable",
-                        "recommendation": "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status",
+                        "recommendation": "Check NPU Worker VM2 (10.0.0.3:8081) and OpenVINO status",
                     },
                     "startsAt": "2025-01-01T12:00:00.000Z",
                     "endsAt": None,
@@ -722,7 +722,7 @@ class TestAlertManagerConfig:
         for receiver in alertmanager_config["receivers"]:
             if "webhook_configs" in receiver:
                 for webhook in receiver["webhook_configs"]:
-                    assert "172.16.168.20:8001" in webhook["url"]
+                    assert "10.0.0.1:8001" in webhook["url"]
                     assert "/api/webhook/alertmanager" in webhook["url"]
 
     def test_inhibition_rules_defined(self, alertmanager_config):

@@ -40,7 +40,7 @@ class TestPhase1Configuration:
         config = RedisConfig(
             name="test",
             db=0,
-            host="172.16.168.23",
+            host="10.0.0.4",
             port=6379,
             max_connections=100,
         )

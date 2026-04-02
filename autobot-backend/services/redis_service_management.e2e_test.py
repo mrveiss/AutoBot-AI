@@ -519,7 +519,7 @@ class TestErrorScenarios:
         # Verify VM info is displayed
         vm_info = page.locator('[data-testid="vm-info"]')
         if await vm_info.is_visible():
-            await expect(vm_info).to_contain_text("172.16.168.23")
+            await expect(vm_info).to_contain_text("10.0.0.4")
             logger.info("✓ VM connection details displayed")
 
         logger.info("=== Test 4.2: PASSED ===\n")

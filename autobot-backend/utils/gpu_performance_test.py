@@ -234,7 +234,7 @@ async def npu_assessment():
             # Test NPU worker health
             try:
                 async with session.get(
-                    "http://172.16.168.22:8081/health", timeout=5
+                    "http://10.0.0.3:8081/health", timeout=5
                 ) as resp:
                     health_data = await resp.json()
                     print(  # noqa: print

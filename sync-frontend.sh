@@ -82,7 +82,7 @@ if [[ "$DEV_MODE" == "true" ]]; then
 
     # Check if dependencies need repopulation
     echo -e "${YELLOW}🔍 Checking dependencies status...${NC}"
-    if ssh -i ~/.ssh/autobot_key autobot@"${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "test -f /home/autobot/autobot-slm-frontend/node_modules/.vite/deps/vue.js" 2>/dev/null; then
+    if ssh -i ~/.ssh/autobot_key autobot@"${AUTOBOT_FRONTEND_HOST:-localhost}" "test -f /home/autobot/autobot-slm-frontend/node_modules/.vite/deps/vue.js" 2>/dev/null; then
         echo -e "${GREEN}✅ Dependencies are current, skipping sync${NC}"
     else
         echo -e "${YELLOW}📦 Dependencies missing or outdated, syncing...${NC}"
@@ -99,12 +99,12 @@ if [[ "$DEV_MODE" == "true" ]]; then
     echo "=================================="
     echo -e "${BLUE}Summary:${NC}"
     echo "  • Mode: 🧪 Development source sync"
-    echo "  • Target: Frontend VM (${AUTOBOT_FRONTEND_HOST:-172.16.168.21})"
+    echo "  • Target: Frontend VM (${AUTOBOT_FRONTEND_HOST:-localhost})"
     echo "  • Status: ✅ Source files synced"
     echo ""
     echo -e "${BLUE}Next steps:${NC}"
     echo "  • Frontend dev server will auto-reload changes"
-    echo "  • Open browser: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
+    echo "  • Open browser: http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}"
     echo "  • Check console for any errors"
     exit 0
 else

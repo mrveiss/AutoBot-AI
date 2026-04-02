@@ -174,14 +174,8 @@ security:
   require_authentication: false  # Set to true for production
   api_key: null  # Set API key if authentication enabled
 
-  # Network security
+  # Network security — allowed_hosts populated from AUTOBOT_*_HOST env vars at runtime
   allowed_hosts:
-    - "172.16.168.20"  # Backend
-    - "172.16.168.21"  # Frontend
-    - "172.16.168.22"  # VM NPU worker
-    - "172.16.168.23"  # Redis
-    - "172.16.168.24"  # AI Stack
-    - "172.16.168.25"  # Browser service
     - "localhost"
     - "127.0.0.1"
 

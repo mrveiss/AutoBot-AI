@@ -27,21 +27,21 @@ describe('SSOT Config Types', () => {
     it('should have all required VM properties', () => {
       // Type check - this validates the interface structure
       const vmConfig = {
-        main: '172.16.168.20',
-        frontend: '172.16.168.21',
-        npu: '172.16.168.22',
-        redis: '172.16.168.23',
-        aistack: '172.16.168.24',
-        browser: '172.16.168.25',
+        main: '10.0.0.1',
+        frontend: '10.0.0.2',
+        npu: '10.0.0.3',
+        redis: '10.0.0.4',
+        aistack: '10.0.0.5',
+        browser: '10.0.0.6',
         ollama: '127.0.0.1',
       };
 
-      expect(vmConfig.main).toBe('172.16.168.20');
-      expect(vmConfig.frontend).toBe('172.16.168.21');
-      expect(vmConfig.npu).toBe('172.16.168.22');
-      expect(vmConfig.redis).toBe('172.16.168.23');
-      expect(vmConfig.aistack).toBe('172.16.168.24');
-      expect(vmConfig.browser).toBe('172.16.168.25');
+      expect(vmConfig.main).toBe('10.0.0.1');
+      expect(vmConfig.frontend).toBe('10.0.0.2');
+      expect(vmConfig.npu).toBe('10.0.0.3');
+      expect(vmConfig.redis).toBe('10.0.0.4');
+      expect(vmConfig.aistack).toBe('10.0.0.5');
+      expect(vmConfig.browser).toBe('10.0.0.6');
       expect(vmConfig.ollama).toBe('127.0.0.1');
     });
   });
@@ -112,25 +112,25 @@ describe('SSOT Config Types', () => {
     it('should have desktop, terminal, and playwright configs', () => {
       const vncConfig = {
         desktop: {
-          host: '172.16.168.20',
+          host: '10.0.0.1',
           port: 6080,
           password: 'autobot',
         },
         terminal: {
-          host: '172.16.168.20',
+          host: '10.0.0.1',
           port: 6080,
           password: 'autobot',
         },
         playwright: {
-          host: '172.16.168.25',
+          host: '10.0.0.6',
           port: 6081,
           password: 'playwright',
         },
       };
 
-      expect(vncConfig.desktop.host).toBe('172.16.168.20');
+      expect(vncConfig.desktop.host).toBe('10.0.0.1');
       expect(vncConfig.desktop.port).toBe(6080);
-      expect(vncConfig.playwright.host).toBe('172.16.168.25');
+      expect(vncConfig.playwright.host).toBe('10.0.0.6');
       expect(vncConfig.playwright.port).toBe(6081);
     });
   });
@@ -177,7 +177,7 @@ describe('SSOT Config Helper Functions', () => {
         return String(value);
       };
 
-      expect(getEnv('VITE_BACKEND_HOST', '172.16.168.20')).toBe('10.0.0.1');
+      expect(getEnv('VITE_BACKEND_HOST', '10.0.0.1')).toBe('10.0.0.1');
     });
   });
 
@@ -295,58 +295,58 @@ describe('SSOT Config Helper Functions', () => {
 
 describe('SSOT Config URL Computation', () => {
   it('should compute backend URL correctly', () => {
-    const vm = { main: '172.16.168.20' };
+    const vm = { main: '10.0.0.1' };
     const port = { backend: 8001 };
     const protocol = 'http';
 
     const backendUrl = `${protocol}://${vm.main}:${port.backend}`;
-    expect(backendUrl).toBe('http://172.16.168.20:8001');
+    expect(backendUrl).toBe('http://10.0.0.1:8001');
   });
 
   it('should compute WebSocket URL correctly', () => {
-    const vm = { main: '172.16.168.20' };
+    const vm = { main: '10.0.0.1' };
     const port = { backend: 8001 };
     const httpProtocol: string = 'http';
 
     const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
     const websocketUrl = `${wsProtocol}://${vm.main}:${port.backend}/ws`;
-    expect(websocketUrl).toBe('ws://172.16.168.20:8001/ws');
+    expect(websocketUrl).toBe('ws://10.0.0.1:8001/ws');
   });
 
   it('should compute Redis URL correctly', () => {
-    const vm = { redis: '172.16.168.23' };
+    const vm = { redis: '10.0.0.4' };
     const port = { redis: 6379 };
 
     const redisUrl = `redis://${vm.redis}:${port.redis}`;
-    expect(redisUrl).toBe('redis://172.16.168.23:6379');
+    expect(redisUrl).toBe('redis://10.0.0.4:6379');
   });
 
   it('should compute VNC URL correctly', () => {
-    const vm = { main: '172.16.168.20' };
+    const vm = { main: '10.0.0.1' };
     const port = { vnc: 6080 };
     const protocol = 'http';
 
     const vncUrl = `${protocol}://${vm.main}:${port.vnc}/vnc.html`;
-    expect(vncUrl).toBe('http://172.16.168.20:6080/vnc.html');
+    expect(vncUrl).toBe('http://10.0.0.1:6080/vnc.html');
   });
 
   it('should use wss for https protocol', () => {
-    const vm = { main: '172.16.168.20' };
+    const vm = { main: '10.0.0.1' };
     const port = { backend: 8001 };
     const httpProtocol = 'https';
 
     const wsProtocol = httpProtocol === 'https' ? 'wss' : 'ws';
     const websocketUrl = `${wsProtocol}://${vm.main}:${port.backend}/ws`;
-    expect(websocketUrl).toBe('wss://172.16.168.20:8001/ws');
+    expect(websocketUrl).toBe('wss://10.0.0.1:8001/ws');
   });
 });
 
 describe('SSOT Config Service Lookup', () => {
   it('should look up service URLs by name', () => {
     const urls: Record<string, string> = {
-      backend: 'http://172.16.168.20:8001',
-      frontend: 'http://172.16.168.21:5173',
-      redis: 'redis://172.16.168.23:6379',
+      backend: 'http://10.0.0.1:8001',
+      frontend: 'http://10.0.0.2:5173',
+      redis: 'redis://10.0.0.4:6379',
       ollama: 'http://127.0.0.1:11434',
     };
 
@@ -354,28 +354,28 @@ describe('SSOT Config Service Lookup', () => {
       return urls[name.toLowerCase()];
     };
 
-    expect(getServiceUrl('backend')).toBe('http://172.16.168.20:8001');
-    expect(getServiceUrl('BACKEND')).toBe('http://172.16.168.20:8001');
-    expect(getServiceUrl('redis')).toBe('redis://172.16.168.23:6379');
+    expect(getServiceUrl('backend')).toBe('http://10.0.0.1:8001');
+    expect(getServiceUrl('BACKEND')).toBe('http://10.0.0.1:8001');
+    expect(getServiceUrl('redis')).toBe('redis://10.0.0.4:6379');
     expect(getServiceUrl('unknown')).toBeUndefined();
   });
 
   it('should look up VM IPs by name', () => {
     const vms: Record<string, string> = {
-      main: '172.16.168.20',
-      frontend: '172.16.168.21',
-      npu: '172.16.168.22',
-      redis: '172.16.168.23',
-      aistack: '172.16.168.24',
-      browser: '172.16.168.25',
+      main: '10.0.0.1',
+      frontend: '10.0.0.2',
+      npu: '10.0.0.3',
+      redis: '10.0.0.4',
+      aistack: '10.0.0.5',
+      browser: '10.0.0.6',
     };
 
     const getVmIp = (name: string): string | undefined => {
       return vms[name.toLowerCase()];
     };
 
-    expect(getVmIp('main')).toBe('172.16.168.20');
-    expect(getVmIp('redis')).toBe('172.16.168.23');
+    expect(getVmIp('main')).toBe('10.0.0.1');
+    expect(getVmIp('redis')).toBe('10.0.0.4');
     expect(getVmIp('unknown')).toBeUndefined();
   });
 });

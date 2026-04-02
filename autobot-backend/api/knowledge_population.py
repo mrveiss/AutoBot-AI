@@ -885,7 +885,7 @@ Network Layout:
 
 Key Commands:
 - Setup: bash setup.sh [--full|--minimal|--distributed]
-- Run: SLM GUI (https://172.16.168.19/orchestration) or scripts/start-services.sh  # noqa
+- Run: SLM GUI (https://<SLM_HOST>/orchestration) or scripts/start-services.sh
 
 Critical Rules:
 - NEVER edit code directly on remote VMs (VM1-VM5)

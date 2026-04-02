@@ -7,7 +7,7 @@
 # This is a convenience CLI wrapper around systemctl
 #
 # For full control, use:
-#   - SLM GUI: https://172.16.168.19/orchestration
+#   - SLM GUI: https://${AUTOBOT_SLM_HOST}/orchestration
 #   - systemctl commands directly
 
 set -e
@@ -54,7 +54,7 @@ Examples:
   $0 gui             # Open SLM GUI in browser
 
 ${YELLOW}For production deployment, use:${NC}
-  - SLM GUI: https://172.16.168.19/orchestration
+  - SLM GUI: https://\${AUTOBOT_SLM_HOST}/orchestration
   - Ansible playbooks in autobot-slm-backend/ansible/
 
 ${BLUE}Documentation:${NC} docs/developer/SERVICE_MANAGEMENT.md
@@ -168,7 +168,7 @@ show_logs() {
 }
 
 open_gui() {
-    local url="https://172.16.168.19/orchestration"
+    local url="https://${AUTOBOT_SLM_HOST:-localhost}/orchestration"
     echo -e "${GREEN}Opening SLM Orchestration GUI...${NC}"
     echo -e "${BLUE}URL: $url${NC}"
 

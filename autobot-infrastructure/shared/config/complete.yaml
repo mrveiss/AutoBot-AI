@@ -5,14 +5,15 @@
 # Infrastructure Settings
 infrastructure:
   # Host IP addresses for all services
+  # Values are set at deploy time via .env.network — do not hardcode here
   hosts:
-    backend: "172.16.168.20"
-    frontend: "172.16.168.21"
-    npu_worker: "172.16.168.22"
-    redis: "172.16.168.23"
-    ai_stack: "172.16.168.24"
-    browser_service: "172.16.168.25"
-    ollama: "127.0.0.1"  # Ollama runs on backend host (localhost)
+    backend: ""
+    frontend: ""
+    npu_worker: ""
+    redis: ""
+    ai_stack: ""
+    browser_service: ""
+    ollama: ""
 
   # Service ports
   ports:
@@ -407,13 +408,12 @@ security:
     loopback: "127.0.0.0/8"
 
   # Allowed origins for CORS
+  # Network-specific origins are set via CORS_ORIGINS env var at deploy time
   cors_origins:
     - "http://localhost:5173"
     - "http://localhost:3000"
     - "http://127.0.0.1:5173"
     - "http://127.0.0.1:3000"
-    - "http://172.16.168.20:8001"
-    - "http://172.16.168.21:5173"
 
   # Session settings
   session:

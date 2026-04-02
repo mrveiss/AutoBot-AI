@@ -9,7 +9,7 @@ Tests validate:
 - Performance metrics (P95 latency targets)
 
 Requirements:
-- Redis server running at 172.16.168.23:6379
+- Redis server running at 10.0.0.4:6379
 - pytest-asyncio for async test support
 - Real AsyncRedisManager (no mocks)
 """
@@ -35,7 +35,7 @@ class TestKnowledgeBaseRedisIntegration:
 
         # Verify Redis is actually connected
         if not kb.aioredis_client:
-            pytest.skip("Redis not available at 172.16.168.23:6379")
+            pytest.skip("Redis not available at 10.0.0.4:6379")
 
         yield kb
 

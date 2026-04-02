@@ -124,7 +124,7 @@ class TestConfigRegistryBasic:
             with patch.dict(
                 os.environ, {"AUTOBOT_REDIS_HOST": "10.0.0.99"}, clear=True
             ):
-                result = ConfigRegistry.get("redis.host", default="172.16.168.23")
+                result = ConfigRegistry.get("redis.host", default="10.0.0.4")
                 assert result == "10.0.0.99"
 
     def test_env_var_key_conversion(self):
@@ -214,7 +214,7 @@ class TestConfigRegistrySections:
 
         # Pre-populate cache with section values
         ConfigRegistry._cache = {
-            "redis.host": "172.16.168.23",
+            "redis.host": "10.0.0.4",
             "redis.port": "6379",
             "redis.database": "0",
             "backend.port": "8001",
@@ -225,7 +225,7 @@ class TestConfigRegistrySections:
 
         result = ConfigRegistry.get_section("redis")
         assert result == {
-            "host": "172.16.168.23",
+            "host": "10.0.0.4",
             "port": "6379",
             "database": "0",
         }
@@ -237,7 +237,7 @@ class TestConfigRegistrySections:
         ConfigRegistry.clear_cache()
 
         ConfigRegistry._cache = {
-            "redis.host": "172.16.168.23",
+            "redis.host": "10.0.0.4",
         }
         ConfigRegistry._cache_timestamps = {
             k: time.time() for k in ConfigRegistry._cache
@@ -337,7 +337,7 @@ class TestConfigRegistryDefaults:
             with patch.dict(os.environ, {}, clear=True):
                 # Should get default from registry_defaults
                 result = ConfigRegistry.get("redis.host")
-                assert result == "172.16.168.23"
+                assert result == "10.0.0.4"
 
     def test_get_uses_registry_defaults_for_port(self):
         """Test that get() uses registry defaults for port values."""
@@ -393,12 +393,12 @@ class TestConfigRegistryDefaults:
 
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
-                assert ConfigRegistry.get("vm.main") == "172.16.168.20"
-                assert ConfigRegistry.get("vm.frontend") == "172.16.168.21"
-                assert ConfigRegistry.get("vm.npu") == "172.16.168.22"
-                assert ConfigRegistry.get("vm.redis") == "172.16.168.23"
-                assert ConfigRegistry.get("vm.aistack") == "172.16.168.24"
-                assert ConfigRegistry.get("vm.browser") == "172.16.168.25"
+                assert ConfigRegistry.get("vm.main") == "10.0.0.1"
+                assert ConfigRegistry.get("vm.frontend") == "10.0.0.2"
+                assert ConfigRegistry.get("vm.npu") == "10.0.0.3"
+                assert ConfigRegistry.get("vm.redis") == "10.0.0.4"
+                assert ConfigRegistry.get("vm.aistack") == "10.0.0.5"
+                assert ConfigRegistry.get("vm.browser") == "10.0.0.6"
 
     def test_llm_defaults_available(self):
         """Test that LLM defaults are available."""

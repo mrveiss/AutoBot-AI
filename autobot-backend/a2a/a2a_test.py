@@ -76,16 +76,16 @@ class TestAgentCardTypes:
 
 class TestBuildAgentCard:
     def test_build_returns_agent_card(self):
-        card = build_agent_card("https://172.16.168.20:8443")
+        card = build_agent_card("https://10.0.0.1:8443")
         assert isinstance(card, AgentCard)
 
     def test_card_name_is_autobot(self):
-        card = build_agent_card("https://172.16.168.20:8443")
+        card = build_agent_card("https://10.0.0.1:8443")
         assert card.name == "AutoBot"
 
     def test_card_url_uses_base(self):
-        card = build_agent_card("https://172.16.168.20:8443")
-        assert card.url == "https://172.16.168.20:8443/api/a2a"
+        card = build_agent_card("https://10.0.0.1:8443")
+        assert card.url == "https://10.0.0.1:8443/api/a2a"
 
     def test_card_has_skills_or_empty_on_missing_stack(self):
         # Skills may be empty in dev environments without the full agent stack

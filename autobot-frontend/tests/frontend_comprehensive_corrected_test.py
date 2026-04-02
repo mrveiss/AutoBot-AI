@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AutoBot Frontend Comprehensive Testing Suite - Corrected Version
-Tests all major frontend components at http://172.16.168.21:5173
+Tests all major frontend components. Set AUTOBOT_BACKEND_HOST / AUTOBOT_FRONTEND_HOST env vars.
 """
 
 import asyncio
@@ -27,8 +27,14 @@ class TestResult:
 
 class AutoBotComprehensiveFrontendTester:
     def __init__(self):
-        self.backend_base = "http://172.16.168.20:8001"
-        self.frontend_base = "http://172.16.168.21:5173"
+        import os
+
+        backend_host = os.environ.get("AUTOBOT_BACKEND_HOST", "localhost")
+        backend_port = os.environ.get("AUTOBOT_BACKEND_PORT", "8001")
+        frontend_host = os.environ.get("AUTOBOT_FRONTEND_HOST", "localhost")
+        frontend_port = os.environ.get("AUTOBOT_FRONTEND_PORT", "5173")
+        self.backend_base = f"http://{backend_host}:{backend_port}"
+        self.frontend_base = f"http://{frontend_host}:{frontend_port}"
         self.results: List[TestResult] = []
         self.session: Optional[aiohttp.ClientSession] = None
 
@@ -105,9 +111,11 @@ class AutoBotComprehensiveFrontendTester:
                                     message="Endpoint working, returned JSON data",
                                     details={
                                         "status": resp.status,
-                                        "keys": list(data.keys())
-                                        if isinstance(data, dict)
-                                        else "list_data",
+                                        "keys": (
+                                            list(data.keys())
+                                            if isinstance(data, dict)
+                                            else "list_data"
+                                        ),
                                     },
                                     response_time=response_time,
                                 )
@@ -144,7 +152,9 @@ class AutoBotComprehensiveFrontendTester:
     async def test_websocket_connections(self) -> TestResult:
         """Test WebSocket connectivity for real-time features"""
         try:
-            ws_url = "ws://172.16.168.20:8001/api/websocket/chat"
+            ws_url = (
+                self.backend_base.replace("http://", "ws://") + "/api/websocket/chat"
+            )
 
             start_time = time.time()
             async with websockets.connect(ws_url, timeout=10) as websocket:
@@ -176,7 +186,7 @@ class AutoBotComprehensiveFrontendTester:
         except Exception as e:
             # Try alternative WebSocket endpoint
             try:
-                ws_url_alt = "ws://172.16.168.20:8001/ws"
+                ws_url_alt = self.backend_base.replace("http://", "ws://") + "/ws"
                 async with websockets.connect(ws_url_alt, timeout=5) as websocket:
                     return TestResult(
                         name="WebSocket Real-time Communication",
@@ -207,9 +217,11 @@ class AutoBotComprehensiveFrontendTester:
                             success=True,
                             message="Chat API accessible for UI component",
                             details={
-                                "chat_count": len(data)
-                                if isinstance(data, list)
-                                else "dict_response"
+                                "chat_count": (
+                                    len(data)
+                                    if isinstance(data, list)
+                                    else "dict_response"
+                                )
                             },
                         )
                     )
@@ -583,9 +595,11 @@ class AutoBotComprehensiveFrontendTester:
                             success=True,
                             message="Chat list accessible",
                             details={
-                                "chat_count": len(data)
-                                if isinstance(data, list)
-                                else "dict_response"
+                                "chat_count": (
+                                    len(data)
+                                    if isinstance(data, list)
+                                    else "dict_response"
+                                )
                             },
                         )
                     )
@@ -961,9 +975,7 @@ class AutoBotComprehensiveFrontendTester:
                 status_icon = (
                     "✅"
                     if cat_success_rate == 100
-                    else "⚠️"
-                    if cat_success_rate >= 50
-                    else "❌"
+                    else "⚠️" if cat_success_rate >= 50 else "❌"
                 )
                 print(
                     f"{status_icon} {category}: {passed}/{total} ({cat_success_rate:.0f}%)"
