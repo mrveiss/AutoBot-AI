@@ -622,10 +622,11 @@ async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
 
 def _fallback_html_strip(html_content: str) -> tuple:
     """
-    Fallback HTML stripping using regex when the primary HTMLParser fails.
+    Fallback HTML stripping using HTMLParser when _HtmlTextExtractor fails.
 
-    Removes script and style blocks (including their content) before stripping
-    remaining HTML tags, so script/style text never leaks into output.
+    Uses the same _in_script/_in_style suppression pattern as
+    _HtmlTextExtractor so script/style content never leaks into output.
+    Avoids bare ``<[^>]+>`` regex (CodeQL py/bad-tag-filter).
 
     Issue #3214.
 
@@ -637,11 +638,39 @@ def _fallback_html_strip(html_content: str) -> tuple:
     """
     import re
     from html import unescape
+    from html.parser import HTMLParser
 
-    text = re.sub(r"<script[^>]*>.*?</script>", " ", html_content, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = unescape(text)
+    class _TagStripper(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+            self._in_script = False
+            self._in_style = False
+
+        def handle_starttag(self, tag, attrs):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = True
+            elif tag_lower == "style":
+                self._in_style = True
+
+        def handle_endtag(self, tag):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = False
+            elif tag_lower == "style":
+                self._in_style = False
+
+        def handle_data(self, data: str):
+            if not self._in_script and not self._in_style:
+                self._parts.append(data)
+
+        def get_text(self) -> str:
+            return " ".join(self._parts)
+
+    stripper = _TagStripper()
+    stripper.feed(html_content)
+    text = unescape(stripper.get_text())
     return re.sub(r"\s+", " ", text).strip(), ""
 
 
