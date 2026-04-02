@@ -6,7 +6,7 @@
   "main": "autobot-mcp-server.js",
   "scripts": {
     "start": "node autobot-mcp-server.js",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "node --test autobot-mcp-server.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0"

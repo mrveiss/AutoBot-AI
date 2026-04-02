@@ -1489,59 +1489,177 @@ export function useSlmApi() {
   }
 
   // Security (Issue #813)
-  async function getSecurityOverview(): Promise<unknown> {
-    const response = await client.get('/security/overview')
+
+  interface SecurityEventResponse {
+    id: number
+    event_id: string
+    timestamp: string
+    event_type: string
+    severity: string
+    category: string | null
+    source_ip: string | null
+    source_user: string | null
+    source_node_id: string | null
+    target_resource: string | null
+    target_node_id: string | null
+    title: string
+    description: string | null
+    threat_indicator: string | null
+    threat_score: number | null
+    mitre_technique: string | null
+    is_acknowledged: boolean
+    acknowledged_by: string | null
+    acknowledged_at: string | null
+    is_resolved: boolean
+    resolved_by: string | null
+    resolved_at: string | null
+    resolution_notes: string | null
+    created_at: string
+  }
+
+  interface SecurityOverviewResponse {
+    security_score: number
+    active_threats: number
+    failed_logins_24h: number
+    policy_violations: number
+    total_events_24h: number
+    critical_events: number
+    certificates_expiring: number
+    recent_events: SecurityEventResponse[]
+  }
+
+  interface AuditLogResponse {
+    id: number
+    log_id: string
+    timestamp: string
+    user_id: string | null
+    username: string | null
+    ip_address: string | null
+    category: string
+    action: string
+    resource_type: string | null
+    resource_id: string | null
+    description: string | null
+    request_method: string | null
+    request_path: string | null
+    response_status: number | null
+    success: boolean
+    error_message: string | null
+    created_at: string
+  }
+
+  interface AuditLogListResponse {
+    logs: AuditLogResponse[]
+    total: number
+    page: number
+    per_page: number
+  }
+
+  interface SecurityEventListResponse {
+    events: SecurityEventResponse[]
+    total: number
+    page: number
+    per_page: number
+    unacknowledged_count: number
+    critical_count: number
+  }
+
+  interface ThreatSummary {
+    total_threats: number
+    critical: number
+    high: number
+    medium: number
+    low: number
+    acknowledged: number
+    resolved: number
+    by_type: Record<string, number>
+    by_source_ip: Record<string, number>
+    trend_24h: Array<Record<string, unknown>>
+  }
+
+  interface SecurityPolicyResponse {
+    id: number
+    policy_id: string
+    name: string
+    description: string | null
+    category: string
+    policy_type: string
+    rules: unknown[]
+    parameters: Record<string, unknown>
+    applies_to_nodes: unknown[]
+    applies_to_roles: unknown[]
+    status: string
+    is_enforced: boolean
+    last_evaluated: string | null
+    compliance_score: number | null
+    violations_count: number
+    version: number
+    created_by: string | null
+    updated_by: string | null
+    created_at: string
+    updated_at: string
+  }
+
+  interface SecurityPolicyListResponse {
+    policies: SecurityPolicyResponse[]
+    total: number
+    page: number
+    per_page: number
+  }
+
+  async function getSecurityOverview(): Promise<SecurityOverviewResponse> {
+    const response = await client.get<SecurityOverviewResponse>('/security/overview')
     return response.data
   }
 
-  async function getAuditLogs(page: number = 1, perPage: number = 50, category?: string): Promise<unknown> {
+  async function getAuditLogs(page: number = 1, perPage: number = 50, category?: string): Promise<AuditLogListResponse> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     if (category) params.append('category', category)
-    const response = await client.get(`/security/audit-logs?${params}`)
+    const response = await client.get<AuditLogListResponse>(`/security/audit-logs?${params}`)
     return response.data
   }
 
-  async function getSecurityEvents(page: number = 1, perPage: number = 50, severity?: string): Promise<unknown> {
+  async function getSecurityEvents(page: number = 1, perPage: number = 50, severity?: string): Promise<SecurityEventListResponse> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
     if (severity) params.append('severity', severity)
-    const response = await client.get(`/security/events?${params}`)
+    const response = await client.get<SecurityEventListResponse>(`/security/events?${params}`)
     return response.data
   }
 
-  async function getThreatSummary(hours: number = 24): Promise<unknown> {
-    const response = await client.get(`/security/events/summary?hours=${hours}`)
+  async function getThreatSummary(hours: number = 24): Promise<ThreatSummary> {
+    const response = await client.get<ThreatSummary>(`/security/events/summary?hours=${hours}`)
     return response.data
   }
 
   async function acknowledgeSecurityEvent(
     eventId: string,
     data?: { acknowledged_by?: string; notes?: string }
-  ): Promise<unknown> {
-    const response = await client.post(`/security/events/${eventId}/acknowledge`, data || {})
+  ): Promise<SecurityEventResponse> {
+    const response = await client.post<SecurityEventResponse>(`/security/events/${eventId}/acknowledge`, data || {})
     return response.data
   }
 
   async function resolveSecurityEvent(
     eventId: string,
     data: { resolved_by?: string; resolution_notes: string }
-  ): Promise<unknown> {
-    const response = await client.post(`/security/events/${eventId}/resolve`, data)
+  ): Promise<SecurityEventResponse> {
+    const response = await client.post<SecurityEventResponse>(`/security/events/${eventId}/resolve`, data)
     return response.data
   }
 
-  async function getSecurityPolicies(page: number = 1, perPage: number = 50): Promise<unknown> {
+  async function getSecurityPolicies(page: number = 1, perPage: number = 50): Promise<SecurityPolicyListResponse> {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
-    const response = await client.get(`/security/policies?${params}`)
+    const response = await client.get<SecurityPolicyListResponse>(`/security/policies?${params}`)
     return response.data
   }
 
-  async function activateSecurityPolicy(policyId: string): Promise<unknown> {
-    const response = await client.post(`/security/policies/${policyId}/activate`)
+  async function activateSecurityPolicy(policyId: string): Promise<SecurityPolicyResponse> {
+    const response = await client.post<SecurityPolicyResponse>(`/security/policies/${policyId}/activate`)
     return response.data
   }
 
-  async function deactivateSecurityPolicy(policyId: string): Promise<unknown> {
-    const response = await client.post(`/security/policies/${policyId}/deactivate`)
+  async function deactivateSecurityPolicy(policyId: string): Promise<SecurityPolicyResponse> {
+    const response = await client.post<SecurityPolicyResponse>(`/security/policies/${policyId}/deactivate`)
     return response.data
   }
 

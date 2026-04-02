@@ -622,9 +622,13 @@ async def _store_fact_in_kb(kb, content: str, metadata: dict) -> str:
 
 def _fallback_html_strip(html_content: str) -> tuple:
     """
-    Fallback HTML stripping using regex when parser fails.
+    Fallback HTML stripping using HTMLParser when _HtmlTextExtractor fails.
 
-    Issue #620.
+    Uses the same _in_script/_in_style suppression pattern as
+    _HtmlTextExtractor so script/style content never leaks into output.
+    Avoids bare ``<[^>]+>`` regex (CodeQL py/bad-tag-filter).
+
+    Issue #3214.
 
     Args:
         html_content: Raw HTML content
@@ -635,15 +639,31 @@ def _fallback_html_strip(html_content: str) -> tuple:
     import re
     from html import unescape
     from html.parser import HTMLParser
-    from io import StringIO
 
     class _TagStripper(HTMLParser):
         def __init__(self):
             super().__init__()
             self._parts: list[str] = []
+            self._in_script = False
+            self._in_style = False
+
+        def handle_starttag(self, tag, attrs):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = True
+            elif tag_lower == "style":
+                self._in_style = True
+
+        def handle_endtag(self, tag):
+            tag_lower = tag.lower()
+            if tag_lower == "script":
+                self._in_script = False
+            elif tag_lower == "style":
+                self._in_style = False
 
         def handle_data(self, data: str):
-            self._parts.append(data)
+            if not self._in_script and not self._in_style:
+                self._parts.append(data)
 
         def get_text(self) -> str:
             return " ".join(self._parts)

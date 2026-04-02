@@ -428,3 +428,89 @@ class TestWorkflowExecutorDebugMode:
         assert "workflow_id" in result
         assert "step_results" in result
         assert "status" in result
+
+    def test_notification_config_injected_into_execution_context(self) -> None:
+        """Issue #3172: notification_config passed to execute_coordinated_workflow
+        must appear in the returned execution_context so _resolve_notification_config
+        can locate it and fire notifications.
+        """
+        executor = _make_executor()
+        steps = _make_steps(1)
+        cfg = {"workflow_id": "wf_nc", "channels": {}}
+
+        result = asyncio.get_event_loop().run_until_complete(
+            executor.execute_coordinated_workflow(
+                "wf_nc",
+                steps,
+                context={},
+                notification_config=cfg,
+            )
+        )
+
+        assert result.get("notification_config") is cfg
+
+    def test_notification_config_defaults_to_none(self) -> None:
+        """Issue #3172: when notification_config is not supplied the key is
+        present in execution_context with value None so the resolver can safely
+        call .get() without a KeyError.
+        """
+        executor = _make_executor()
+        steps = _make_steps(1)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            executor.execute_coordinated_workflow(
+                "wf_no_nc",
+                steps,
+                context={},
+            )
+        )
+
+        assert "notification_config" in result
+        assert result["notification_config"] is None
+
+    def test_dag_path_fires_send_workflow_notification(self) -> None:
+        """Issue #3172: DAG execution path must call _send_workflow_notification.
+
+        Before the fix, execute_coordinated_workflow returned early from
+        _execute_dag_workflow without reaching the notification calls in the
+        linear path, so notifications were silently dropped for any workflow
+        that used condition nodes.
+        """
+        import unittest.mock
+
+        executor = _make_executor()
+        # A condition-type node + edges triggers workflow_has_condition_nodes → DAG path.
+        steps = [
+            {
+                "id": "cond",
+                "type": "condition",
+                "action": "check",
+                "assigned_agent": "a0",
+                "inputs": {},
+                "dependencies": [],
+            },
+            {
+                "id": "step_a",
+                "type": "step",
+                "action": "act",
+                "assigned_agent": "a1",
+                "inputs": {},
+                "dependencies": ["cond"],
+            },
+        ]
+        edges = [{"from": "cond", "to": "step_a", "condition": "true"}]
+        cfg = {"workflow_id": "wf_dag_notif", "channels": {}}
+
+        mock_notify = unittest.mock.AsyncMock()
+        with unittest.mock.patch.object(executor, "_send_workflow_notification", mock_notify):
+            asyncio.get_event_loop().run_until_complete(
+                executor.execute_coordinated_workflow(
+                    "wf_dag_notif",
+                    steps,
+                    context={},
+                    edges=edges,
+                    notification_config=cfg,
+                )
+            )
+
+        mock_notify.assert_called_once()

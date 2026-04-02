@@ -4,6 +4,11 @@
 
 import { ref, type Ref } from 'vue'
 import { useApi } from './useApi'
+import { createLogger } from '@/utils/debugUtils'
+import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { showSubtleErrorNotification } from '@/utils/cacheManagement'
+
+const logger = createLogger('useAutoResearch')
 
 // --- Types ---
 
@@ -118,7 +123,10 @@ export function useAutoResearch() {
       const response = await api.get(`/api/autoresearch/experiments?${query}`)
       experiments.value = response.experiments ?? []
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err)
+      const msg = extractApiErrorMessage(err, 'Failed to fetch experiments')
+      logger.error('fetchExperiments failed:', err)
+      error.value = msg
+      showSubtleErrorNotification('AutoResearch', msg, 'warning')
     } finally {
       loading.value = false
     }
@@ -129,7 +137,10 @@ export function useAutoResearch() {
       const response = await api.get('/api/autoresearch/experiments/stats')
       stats.value = response
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err)
+      const msg = extractApiErrorMessage(err, 'Failed to fetch experiment stats')
+      logger.error('fetchStats failed:', err)
+      error.value = msg
+      showSubtleErrorNotification('AutoResearch', msg, 'warning')
     }
   }
 
@@ -140,7 +151,10 @@ export function useAutoResearch() {
       const response = await api.get('/api/autoresearch/prompt-optimizer/status')
       optimizerStatus.value = response.session ?? null
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err)
+      const msg = extractApiErrorMessage(err, 'Failed to fetch optimizer status')
+      logger.error('fetchOptimizerStatus failed:', err)
+      error.value = msg
+      showSubtleErrorNotification('AutoResearch', msg, 'warning')
     }
   }
 

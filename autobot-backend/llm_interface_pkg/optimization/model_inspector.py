@@ -5,15 +5,21 @@
 Empty-weight model inspection for hardware routing decisions.
 
 Uses HuggingFace Accelerate's ``init_empty_weights()`` context manager to load
-a model's *architecture* onto the meta device at zero memory cost.  Architecture
-attributes (layer count, hidden size, attention heads, parameter count) are
-extracted from the config and used by hardware routing to decide whether a model
-fits in available VRAM before any weights are loaded.
+a model's *architecture* onto the meta device at zero memory cost.  The model
+skeleton is instantiated via ``AutoModelForCausalLM.from_config()`` inside the
+context so that no real tensors are allocated.  Parameter counts are read directly
+from the skeleton with ``sum(p.numel() for p in model.parameters())``, giving
+accurate counts for GQA (Llama 2/3, Mistral) and MoE (Mixtral) architectures.
+
+Architecture attributes (layer count, hidden size, attention heads, parameter count)
+are used by hardware routing to decide whether a model fits in available VRAM before
+any weights are loaded.
 
 Results are cached in a process-level dict with TTL to avoid repeated HuggingFace
 Hub round-trips.
 
 Issue #1945: Empty-weight model inspection for hardware routing.
+Issue #3186: Actually call init_empty_weights() for accurate param counts.
 """
 
 import logging
@@ -124,11 +130,16 @@ def _cache_put(model_name: str, info: ModelInfo) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _extract_from_config(cfg: Any) -> ModelInfo:
+def _extract_from_config(cfg: Any, param_count_override: Optional[int] = None) -> ModelInfo:
     """
     Build a ModelInfo from a transformers PretrainedConfig object.
 
     Handles the two common attribute layouts (decoder-only and encoder-decoder).
+
+    Args:
+        cfg: A transformers PretrainedConfig (or any object with matching attrs).
+        param_count_override: When provided (e.g. from an empty-weight skeleton),
+            this value is used instead of the formula-based estimate.
     """
     num_layers = (
         getattr(cfg, "num_hidden_layers", None)
@@ -149,7 +160,10 @@ def _extract_from_config(cfg: Any) -> ModelInfo:
     )
     vocab_size = getattr(cfg, "vocab_size", 0) or 0
 
-    param_count = _estimate_param_count(num_layers, hidden_size, vocab_size)
+    if param_count_override is not None:
+        param_count = param_count_override
+    else:
+        param_count = _estimate_param_count(num_layers, hidden_size, vocab_size)
     estimated_size_gb = (param_count * _BYTES_PER_FP32) / (1024**3)
 
     return ModelInfo(
@@ -168,12 +182,40 @@ def _estimate_param_count(num_layers: int, hidden_size: int, vocab_size: int) ->
     Uses the standard transformer block formula:
       - Embedding: vocab_size * hidden_size
       - Per layer: 4 * hidden_size^2  (attention) + 8 * hidden_size^2 (MLP)
+
+    This formula underestimates GQA (Llama 2/3, Mistral) and MoE (Mixtral)
+    models.  It is only used as a fallback when ``init_empty_weights()`` fails.
     """
     if num_layers == 0 or hidden_size == 0:
         return 0
     embedding_params = vocab_size * hidden_size
     per_layer_params = 12 * (hidden_size**2)
     return embedding_params + num_layers * per_layer_params
+
+
+def _count_params_via_skeleton(cfg: Any, transformers: Any, accelerate: Any) -> Optional[int]:
+    """
+    Instantiate an empty-weight model skeleton and return its exact param count.
+
+    Uses ``accelerate.init_empty_weights()`` so no real tensors are allocated —
+    all parameters live on the PyTorch meta device.  Returns ``None`` on any
+    failure so the caller can fall back to the formula-based estimate.
+
+    Args:
+        cfg: A transformers PretrainedConfig.
+        transformers: The transformers module.
+        accelerate: The accelerate module.
+
+    Returns:
+        Total parameter count from the skeleton, or None on failure.
+    """
+    try:
+        with accelerate.init_empty_weights():
+            model = transformers.AutoModelForCausalLM.from_config(cfg)
+        return sum(p.numel() for p in model.parameters())
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("model_inspector: skeleton param count failed — %s", exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -211,21 +253,27 @@ def inspect_model(model_name: str) -> Optional[ModelInfo]:
 
 def _inspect_via_config(model_name: str) -> Optional[ModelInfo]:
     """
-    Fetch model config and return ModelInfo; return None on any failure.
+    Fetch model config, build an empty-weight skeleton, and return ModelInfo.
 
     Separating this from ``inspect_model`` keeps the public function's
     caching logic and this function each under 30 lines.
+
+    Tries to get exact param counts via ``init_empty_weights()``; falls back to
+    the formula-based estimate if skeleton instantiation fails.
     """
     try:
         transformers = _import_transformers()
-        _import_accelerate()  # validate accelerate is present
+        accelerate = _import_accelerate()
     except ImportError as exc:
         logger.warning("model_inspector: dependency missing for %s — %s", model_name, exc)
         return None
 
     try:
         cfg = transformers.AutoConfig.from_pretrained(model_name)
-        info = _extract_from_config(cfg)
+        param_count = _count_params_via_skeleton(cfg, transformers, accelerate)
+        if param_count is None:
+            logger.debug("model_inspector: using formula fallback for %s", model_name)
+        info = _extract_from_config(cfg, param_count_override=param_count)
         logger.info(
             "model_inspector: %s — layers=%d hidden=%d heads=%d params=~%dM size=~%.1fGB",
             model_name,
