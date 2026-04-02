@@ -52,6 +52,7 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/openapi.json",
     "/api/api-keys/scopes",  # public endpoint — no auth required
     "/api/nodes/",  # agent heartbeats — no browser auth, endpoints have own guards
+    "/api/events/sync",  # agent event sync — node_id validated in endpoint (#3193)
 )
 
 

@@ -40,6 +40,7 @@ _routes = [
     Route("/api/auth/login", _ok, methods=["POST"]),
     Route("/api/health", _ok, methods=["GET"]),
     Route("/api/api-keys/scopes", _ok, methods=["GET"]),
+    Route("/api/events/sync", _ok, methods=["POST"]),
 ]
 
 _app = Starlette(routes=_routes)
@@ -95,6 +96,11 @@ class TestExemptPaths:
 
     def test_scopes_get_passes(self):
         response = _client.get("/api/api-keys/scopes")
+        assert response.status_code == 200
+
+    def test_events_sync_post_without_auth_passes(self):
+        """Agent event sync must not be blocked — node_id validated in endpoint (#3193)."""
+        response = _client.post("/api/events/sync")
         assert response.status_code == 200
 
 
