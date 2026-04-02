@@ -266,35 +266,14 @@ async def _load_full_session_data(
     chat_history_manager, session_id: str
 ) -> Optional[Dict[str, Any]]:
     """
-    Load the full session file data dict (not just the messages list).
+    Load the full session data dict (not just the messages list).
 
+    Delegates to the public :meth:`ChatHistoryManager.load_full_session` API
+    so that this service has no dependency on internal implementation details.
     Returns None when the session does not exist or loading fails.
     """
     try:
-        chats_directory = chat_history_manager._get_chats_directory()
-        import os
-
-        import aiofiles
-
-        from autobot_shared.security.path_validator import validate_relative_path
-
-        for filename_template in (
-            f"{session_id}_chat.json",
-            f"chat_{session_id}.json",
-        ):
-            try:
-                chat_file = str(
-                    validate_relative_path(filename_template, chats_directory)
-                )
-            except ValueError:
-                continue
-            if not os.path.exists(chat_file):
-                continue
-            async with aiofiles.open(chat_file, "r", encoding="utf-8") as fh:
-                raw = await fh.read()
-            return chat_history_manager._decrypt_data(raw)
-        logger.warning("Session file not found for %s", session_id)
-        return None
+        return await chat_history_manager.load_full_session(session_id)
     except Exception as exc:
         logger.error("Error loading full session data for %s: %s", session_id, exc)
         return None
