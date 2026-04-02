@@ -428,3 +428,42 @@ class TestWorkflowExecutorDebugMode:
         assert "workflow_id" in result
         assert "step_results" in result
         assert "status" in result
+
+    def test_notification_config_injected_into_execution_context(self) -> None:
+        """Issue #3172: notification_config passed to execute_coordinated_workflow
+        must appear in the returned execution_context so _resolve_notification_config
+        can locate it and fire notifications.
+        """
+        executor = _make_executor()
+        steps = _make_steps(1)
+        cfg = {"workflow_id": "wf_nc", "channels": {}}
+
+        result = asyncio.get_event_loop().run_until_complete(
+            executor.execute_coordinated_workflow(
+                "wf_nc",
+                steps,
+                context={},
+                notification_config=cfg,
+            )
+        )
+
+        assert result.get("notification_config") is cfg
+
+    def test_notification_config_defaults_to_none(self) -> None:
+        """Issue #3172: when notification_config is not supplied the key is
+        present in execution_context with value None so the resolver can safely
+        call .get() without a KeyError.
+        """
+        executor = _make_executor()
+        steps = _make_steps(1)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            executor.execute_coordinated_workflow(
+                "wf_no_nc",
+                steps,
+                context={},
+            )
+        )
+
+        assert "notification_config" in result
+        assert result["notification_config"] is None

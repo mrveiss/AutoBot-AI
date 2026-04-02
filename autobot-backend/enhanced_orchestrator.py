@@ -325,8 +325,13 @@ class EnhancedOrchestrator:
                 return rejection
 
         executor = self._get_executor()
+        # Issue #3172: forward notification_config from context so the executor
+        # can inject it into execution_context and fire notifications.
         execution_result = await executor.execute_coordinated_workflow(
-            workflow_id, enhanced_steps, context
+            workflow_id,
+            enhanced_steps,
+            context,
+            notification_config=context.get("notification_config"),
         )
 
         self._update_workflow_metrics(
