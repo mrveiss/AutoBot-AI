@@ -105,7 +105,12 @@ detect_local_ip() {
     # (#3010). Shell variables set inside $() are lost when the subshell exits,
     # so every $(detect_local_ip) call would re-run the interactive prompt and
     # garble any curl command that interpolates the result.
+    # On reinstall, always clear the cache so the interface prompt re-runs
+    # and the user can select the correct interface (#3194).
     local cache_file="/tmp/.autobot_detected_ip"
+    if [[ "${REINSTALL}" == true ]]; then
+        rm -f "${cache_file}"
+    fi
     if [[ -f "${cache_file}" ]]; then
         cat "${cache_file}"
         return

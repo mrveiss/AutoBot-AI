@@ -221,7 +221,12 @@ async def _ensure_local_node() -> None:
     can be silently skipped when HTTPS is not ready in time (e.g. nginx cert path
     issues on a fresh install).  This function is an idempotent fallback that runs
     every startup so the node is always present regardless of install.sh outcome.
+
+    Also self-heals a stale IP: if slm-secrets.env was corrected after a reinstall
+    picked the wrong interface (#3194), the next backend restart updates the DB
+    record to match the current SLM_EXTERNAL_URL.
     """
+    import re
     import socket
 
     from sqlalchemy import select
@@ -231,29 +236,39 @@ async def _ensure_local_node() -> None:
     _SLM_NODE_ID = "00-SLM-Manager"
     _SLM_ROLES = ["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"]
 
+    # Derive IP from SLM_EXTERNAL_URL (written by install.sh) or fall back to probe.
+    external_url = os.getenv("SLM_EXTERNAL_URL", "")
+    ip_match = re.search(r"https?://([^/:]+)", external_url)
+    if ip_match:
+        local_ip = ip_match.group(1)
+    else:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.connect(("8.8.8.8", 80))
+                local_ip = sock.getsockname()[0]
+        except OSError:
+            local_ip = "127.0.0.1"
+
+    hostname = socket.gethostname()
+
     async with db_service.session() as session:
         existing = (
             await session.execute(select(Node).where(Node.node_id == _SLM_NODE_ID))
         ).scalar_one_or_none()
+
         if existing:
+            # Heal stale IP — happens when slm-secrets.env has a wrong IP from
+            # a previous install (e.g. wrong interface selected) and was corrected.
+            if existing.ip_address != local_ip:
+                logger.info(
+                    "Updating SLM manager IP: %s -> %s (slm-secrets.env changed)",
+                    existing.ip_address,
+                    local_ip,
+                )
+                existing.ip_address = local_ip
+                await session.commit()
             return
 
-        # Derive IP from SLM_EXTERNAL_URL env var written by install.sh, or probe.
-        import re
-
-        external_url = os.getenv("SLM_EXTERNAL_URL", "")
-        ip_match = re.search(r"https?://([^/:]+)", external_url)
-        if ip_match:
-            local_ip = ip_match.group(1)
-        else:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                    sock.connect(("8.8.8.8", 80))
-                    local_ip = sock.getsockname()[0]
-            except OSError:
-                local_ip = "127.0.0.1"
-
-        hostname = socket.gethostname()
         node = Node(
             node_id=_SLM_NODE_ID,
             ansible_name=_SLM_NODE_ID,
