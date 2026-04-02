@@ -285,11 +285,8 @@
           </div>
         </div>
 
-        <button class="btn-secondary" @click="saveRoles" :disabled="savingRoles">
-          {{ savingRoles ? 'Saving...' : 'Save Role Assignments' }}
-        </button>
-        <button class="btn-primary" @click="completeStep('assign_roles')">
-          Continue
+        <button class="btn-primary" @click="saveAndContinueRoles" :disabled="savingRoles">
+          {{ savingRoles ? 'Saving...' : 'Save & Continue' }}
         </button>
       </div>
 
@@ -797,9 +794,15 @@ async function saveRoles() {
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)
+    throw err
   } finally {
     savingRoles.value = false
   }
+}
+
+async function saveAndContinueRoles() {
+  await saveRoles()
+  await completeStep('assign_roles')
 }
 
 let provisionPollTimer: ReturnType<typeof setInterval> | null = null
