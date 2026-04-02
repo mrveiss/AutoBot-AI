@@ -8,8 +8,8 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const slmTarget = env.VITE_SLM_PROXY_TARGET || 'https://172.16.168.19'
-  const autobotTarget = env.VITE_AUTOBOT_PROXY_TARGET || 'http://172.16.168.20:8001'
+  const slmTarget = env.VITE_SLM_PROXY_TARGET || 'https://localhost'
+  const autobotTarget = env.VITE_AUTOBOT_PROXY_TARGET || 'http://localhost:8001'
 
   return {
     base: '/slm/',

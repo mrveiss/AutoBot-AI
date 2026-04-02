@@ -92,13 +92,13 @@ function getWsBaseUrl(): string {
 
 // VM IP addresses — env var names match autobot-frontend convention (#3049)
 const vm: SLMConfig['vm'] = {
-  main: getEnv('VITE_BACKEND_HOST', '172.16.168.20'),
-  frontend: getEnv('VITE_FRONTEND_HOST', '172.16.168.21'),
-  npu: getEnv('VITE_NPU_WORKER_HOST', '172.16.168.22'),
-  redis: getEnv('VITE_REDIS_HOST', '172.16.168.23'),
-  ai: getEnv('VITE_AI_STACK_HOST', '172.16.168.24'),
-  browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
-  slm: getEnv('VITE_SLM_HOST', '172.16.168.19'),
+  main: getEnv('VITE_BACKEND_HOST', ''),
+  frontend: getEnv('VITE_FRONTEND_HOST', ''),
+  npu: getEnv('VITE_NPU_WORKER_HOST', ''),
+  redis: getEnv('VITE_REDIS_HOST', ''),
+  ai: getEnv('VITE_AI_STACK_HOST', ''),
+  browser: getEnv('VITE_BROWSER_HOST', ''),
+  slm: getEnv('VITE_SLM_HOST', ''),
 }
 
 const config: SLMConfig = {

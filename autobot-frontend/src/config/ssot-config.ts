@@ -342,13 +342,13 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 function buildConfig(): AutoBotConfig {
   // VM IP addresses
   const vm: VMConfig = {
-    main: getEnv('VITE_BACKEND_HOST', '172.16.168.20'),
-    frontend: getEnv('VITE_FRONTEND_HOST', '172.16.168.21'),
-    npu: getEnv('VITE_NPU_WORKER_HOST', '172.16.168.22'),
-    redis: getEnv('VITE_REDIS_HOST', '172.16.168.23'),
-    aistack: getEnv('VITE_AI_STACK_HOST', '172.16.168.24'),
-    browser: getEnv('VITE_BROWSER_HOST', '172.16.168.25'),
-    ollama: getEnv('VITE_OLLAMA_HOST', '127.0.0.1'),
+    main: getEnv('VITE_BACKEND_HOST', ''),
+    frontend: getEnv('VITE_FRONTEND_HOST', ''),
+    npu: getEnv('VITE_NPU_WORKER_HOST', ''),
+    redis: getEnv('VITE_REDIS_HOST', ''),
+    aistack: getEnv('VITE_AI_STACK_HOST', ''),
+    browser: getEnv('VITE_BROWSER_HOST', ''),
+    ollama: getEnv('VITE_OLLAMA_HOST', ''),
     slm: getEnv('VITE_SLM_HOST', ''),
   };
 
