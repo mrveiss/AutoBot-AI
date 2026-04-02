@@ -291,16 +291,22 @@ class OSAwareToolSelector:
         """Format command with parameters."""
         formatted = command
 
-        # Get default network from environment or use fallback
+        # Get default network from environment; DEFAULT_SCAN_NETWORK="" until configured
         import os
 
         default_network = os.getenv(
             "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
         )
+        resolved_network = parameters.get("network", default_network)
+        if "{network}" in command and not resolved_network:
+            logger.warning(
+                "Tool command contains {network} placeholder but no network is configured. "
+                "Set NETWORK_SUBNET env var or pass 'network' in parameters."
+            )
 
         # Replace common placeholders
         replacements = {
-            "{network}": parameters.get("network", default_network),
+            "{network}": resolved_network,
             "{target}": parameters.get(
                 "target_ip",
                 parameters.get("target_host", NetworkConstants.LOCALHOST_IP),
