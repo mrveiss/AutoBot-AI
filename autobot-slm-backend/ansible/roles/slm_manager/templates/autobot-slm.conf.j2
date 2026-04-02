@@ -329,7 +329,7 @@ server {
 {% if slm_colocated_frontend | default(false) | bool %}
     # User frontend SPA fallback — serves index.html for client-side routes
     location / {
-        root {{ frontend_dist_dir }};
+        root {{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') }};
         try_files $uri $uri/ /index.html;
 
         add_header Cache-Control "no-cache, no-store, must-revalidate";
