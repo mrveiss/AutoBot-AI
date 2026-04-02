@@ -114,6 +114,13 @@ export interface RUMMetrics {
   timestamp: string
 }
 
+export interface VoiceSpeakResponse {
+  response?: string
+  text?: string
+  status?: string
+  error?: string
+}
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -584,11 +591,11 @@ export function useAutobotApi() {
     return response.data
   }
 
-  async function voiceSpeak(text: string, userRole: string = 'admin'): Promise<Record<string, unknown>> {
+  async function voiceSpeak(text: string, userRole: string = 'admin'): Promise<VoiceSpeakResponse> {
     const formData = new FormData()
     formData.append('text', text)
     formData.append('user_role', userRole)
-    const response = await client.post('/voice/speak', formData, {
+    const response = await client.post<VoiceSpeakResponse>('/voice/speak', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return response.data
