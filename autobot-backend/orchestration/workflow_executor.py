@@ -801,6 +801,9 @@ class WorkflowExecutor:
         dag_ctx = await executor.execute(dag, workflow_id, context)
         result = self._dag_ctx_to_execution_context(dag_ctx)
         result["notification_config"] = notification_config
+        # Issue #3172: fire notification for terminal states, mirroring the
+        # linear execution path (execute_coordinated_workflow lines 727/738).
+        await self._send_workflow_notification(workflow_id, result)
         return result
 
     async def _dag_step_adapter(
