@@ -21,8 +21,6 @@ Test matrix:
 """
 
 import logging
-import re
-from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -315,8 +313,8 @@ class TestCompilePatternsDefaultConfig:
     def test_default_whitelist_wikipedia_subdomain(self):
         assert self.mgr._is_whitelisted("en.wikipedia.org") is True
 
-    def test_default_whitelist_bare_wikipedia_does_not_match_wildcard(self):
-        """wikipedia.org itself is not in the default whitelist via wildcard pattern."""
+    def test_default_whitelist_bare_wikipedia_is_whitelisted(self):
+        """wikipedia.org is a literal entry in the default whitelist."""
         assert self.mgr._is_whitelisted("wikipedia.org") is True
 
     def test_default_blacklist_malware_subdomain(self):
