@@ -15,12 +15,26 @@ vi.mock('../useApi', () => ({
   }),
 }))
 
+vi.mock('@/utils/debugUtils', () => ({
+  createLogger: () => ({
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+  }),
+}))
+
+const mockShowSubtleErrorNotification = vi.fn()
+vi.mock('@/utils/cacheManagement', () => ({
+  showSubtleErrorNotification: (...args: unknown[]) =>
+    mockShowSubtleErrorNotification(...args),
+}))
+
 describe('useAutoResearch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Re-apply mocks (mockReset: true wipes vi.mock factories)
     mockGet.mockReset()
     mockPost.mockReset()
+    mockShowSubtleErrorNotification.mockReset()
   })
 
   it('fetchExperiments populates experiments ref', async () => {
@@ -60,5 +74,53 @@ describe('useAutoResearch', () => {
       '/api/autoresearch/approvals/s1/e1',
       { decision: 'approved' },
     )
+  })
+
+  it('fetchExperiments sets error ref and shows notification on failure', async () => {
+    mockGet.mockRejectedValue(new Error('network timeout'))
+
+    const { error, fetchExperiments } = useAutoResearch()
+    await fetchExperiments()
+
+    expect(error.value).toBe('network timeout')
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledOnce()
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledWith(
+      'AutoResearch',
+      'network timeout',
+      'warning',
+    )
+  })
+
+  it('fetchStats sets error ref and shows notification on failure', async () => {
+    mockGet.mockRejectedValue(new Error('stats unavailable'))
+
+    const { error, fetchStats } = useAutoResearch()
+    await fetchStats()
+
+    expect(error.value).toBe('stats unavailable')
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledOnce()
+    expect(mockShowSubtleErrorNotification).toHaveBeenCalledWith(
+      'AutoResearch',
+      'stats unavailable',
+      'warning',
+    )
+  })
+
+  it('fetchExperiments resets loading to false after failure', async () => {
+    mockGet.mockRejectedValue(new Error('err'))
+
+    const { loading, fetchExperiments } = useAutoResearch()
+    await fetchExperiments()
+
+    expect(loading.value).toBe(false)
+  })
+
+  it('fetchExperiments resets loading to false on success', async () => {
+    mockGet.mockResolvedValue({ experiments: [] })
+
+    const { loading, fetchExperiments } = useAutoResearch()
+    await fetchExperiments()
+
+    expect(loading.value).toBe(false)
   })
 })
