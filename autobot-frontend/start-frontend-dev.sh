@@ -35,7 +35,7 @@ fi
 
 # Check for .env file
 # Define centralized defaults (should match defaults.js)
-DEFAULT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+DEFAULT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 DEFAULT_BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 
 if [ ! -f ".env" ]; then
@@ -77,11 +77,10 @@ fi
 echo -e "${GREEN}🚀 Starting Vue.js development server...${NC}"
 echo -e "${GREEN}   Available at:${NC}"
 echo -e "${GREEN}   - http://localhost:5173/${NC}"
-echo -e "${GREEN}   - http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:5173/${NC}"
-echo -e "${GREEN}   - http://192.168.168.17:5173/${NC}"
+echo -e "${GREEN}   - http://${AUTOBOT_BACKEND_HOST:-localhost}:5173/${NC}"
 echo ""
 echo -e "${BLUE}The desktop interface will be available at:${NC}"
-echo -e "${BLUE}   http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:5173/desktop${NC}"
+echo -e "${BLUE}   http://${AUTOBOT_BACKEND_HOST:-localhost}:5173/desktop${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
 

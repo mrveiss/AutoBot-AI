@@ -93,23 +93,23 @@ class MonitoringAndAlertingTester:
         # AutoBot service endpoints for monitoring
         self.services = {
             "backend": {
-                "host": "172.16.168.20",
+                "host": "10.0.0.1",
                 "port": 8001,
                 "metrics_endpoint": "/api/metrics",
             },
             "frontend": {
-                "host": "172.16.168.21",
+                "host": "10.0.0.2",
                 "port": 5173,
                 "metrics_endpoint": "/metrics",
             },
-            "redis": {"host": "172.16.168.23", "port": 6379, "metrics_endpoint": None},
+            "redis": {"host": "10.0.0.4", "port": 6379, "metrics_endpoint": None},
             "ai_stack": {
-                "host": "172.16.168.24",
+                "host": "10.0.0.5",
                 "port": 8080,
                 "metrics_endpoint": "/metrics",
             },
             "npu_worker": {
-                "host": "172.16.168.22",
+                "host": "10.0.0.3",
                 "port": 8081,
                 "metrics_endpoint": "/metrics",
             },
@@ -190,11 +190,11 @@ class MonitoringAndAlertingTester:
         logger.info("🏥 Testing Health Monitoring Endpoints...")
 
         health_endpoints = [
-            ("backend", "http://172.16.168.20:8001/api/health"),
-            ("backend_system", "http://172.16.168.20:8001/api/system/status"),
+            ("backend", "http://10.0.0.1:8001/api/health"),
+            ("backend_system", "http://10.0.0.1:8001/api/system/status"),
             (
                 "backend_monitoring",
-                "http://172.16.168.20:8001/api/monitoring/services",
+                "http://10.0.0.1:8001/api/monitoring/services",
             ),
             ("ollama", "http://127.0.0.1:11434/api/tags"),
         ]
@@ -409,7 +409,7 @@ class MonitoringAndAlertingTester:
         """Simulate a threshold breach and check if alert is triggered"""
         try:
             # Try to send test metric to monitoring endpoint
-            backend_url = "http://172.16.168.20:8001"
+            backend_url = "http://10.0.0.1:8001"
 
             # Check if there's a test metrics endpoint
             test_endpoints = [
@@ -471,9 +471,7 @@ class MonitoringAndAlertingTester:
         for i in range(5):
             start_time = time.time()
             try:
-                response = requests.get(
-                    "http://172.16.168.20:8001/api/health", timeout=10
-                )
+                response = requests.get("http://10.0.0.1:8001/api/health", timeout=10)
                 response_time = time.time() - start_time
 
                 if response.status_code == 200:
@@ -538,10 +536,10 @@ class MonitoringAndAlertingTester:
 
         # Test main monitoring endpoints that might serve dashboards
         dashboard_urls = [
-            ("System Status", "http://172.16.168.20:8001/api/system/status"),
-            ("Service Health", "http://172.16.168.20:8001/api/monitoring/services"),
-            ("Metrics Summary", "http://172.16.168.20:8001/api/metrics/summary"),
-            ("Frontend Dashboard", "http://172.16.168.21:5173/dashboard"),
+            ("System Status", "http://10.0.0.1:8001/api/system/status"),
+            ("Service Health", "http://10.0.0.1:8001/api/monitoring/services"),
+            ("Metrics Summary", "http://10.0.0.1:8001/api/metrics/summary"),
+            ("Frontend Dashboard", "http://10.0.0.2:5173/dashboard"),
         ]
 
         for dashboard_name, url in dashboard_urls:
@@ -881,7 +879,7 @@ class MonitoringAndAlertingTester:
         """Simulate an incident scenario"""
         try:
             # Try to trigger incident via test endpoint
-            backend_url = "http://172.16.168.20:8001"
+            backend_url = "http://10.0.0.1:8001"
 
             incident_endpoints = [
                 "/api/monitoring/incident/simulate",
@@ -921,7 +919,7 @@ class MonitoringAndAlertingTester:
         """Check if incident response was initiated"""
         try:
             # Check for incident response via monitoring endpoint
-            backend_url = "http://172.16.168.20:8001"
+            backend_url = "http://10.0.0.1:8001"
 
             response_endpoints = [
                 "/api/monitoring/incidents/recent",

@@ -15,7 +15,7 @@ done
 source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 
 BASE_DIR="/home/kali/Desktop/AutoBot"
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 KB_API="http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base/add_text"
 

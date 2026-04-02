@@ -17,10 +17,10 @@ source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
-REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 ENV_FILE="/home/kali/Desktop/AutoBot/.env"
 

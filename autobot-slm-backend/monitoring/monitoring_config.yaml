@@ -48,74 +48,76 @@ alert_thresholds:
   npu_utilization: 85.0  # percentage
 
 # Distributed VM Configuration
+# IPs are discovered at runtime via SLM node registry — not hardcoded here
 distributed_vms:
   main:
-    ip: "172.16.168.20"
+    ip: ""  # Set via AUTOBOT_BACKEND_HOST env var
     services: ["backend", "ollama"]
     monitoring_priority: "critical"
 
   frontend:
-    ip: "172.16.168.21"
+    ip: ""  # Set via AUTOBOT_FRONTEND_HOST env var
     services: ["frontend"]
     monitoring_priority: "high"
 
   npu_worker:
-    ip: "172.16.168.22"
+    ip: ""  # Set via AUTOBOT_NPU_WORKER_HOST env var
     services: ["npu-worker"]
     monitoring_priority: "high"
     hardware_monitoring: true
 
   redis:
-    ip: "172.16.168.23"
+    ip: ""  # Set via AUTOBOT_REDIS_HOST env var
     services: ["redis"]
     monitoring_priority: "critical"
     database_monitoring: true
 
   ai_stack:
-    ip: "172.16.168.24"
+    ip: ""  # Set via AUTOBOT_AI_STACK_HOST env var
     services: ["ai-stack"]
     monitoring_priority: "high"
     hardware_monitoring: true
 
   browser:
-    ip: "172.16.168.25"
+    ip: ""  # Set via AUTOBOT_BROWSER_SERVICE_HOST env var
     services: ["browser-service"]
     monitoring_priority: "medium"
 
 # Service Monitoring Configuration
+# health_url values are constructed at runtime from env vars — not hardcoded here
 service_endpoints:
   backend:
-    health_url: "http://172.16.168.20:8001/api/health"
+    health_url: ""  # http://${AUTOBOT_BACKEND_HOST}:${AUTOBOT_BACKEND_PORT}/api/health
     timeout: 10.0
     critical_service: true
 
   frontend:
-    health_url: "http://172.16.168.21:5173/"
+    health_url: ""  # http://${AUTOBOT_FRONTEND_HOST}:${AUTOBOT_FRONTEND_PORT}/
     timeout: 5.0
     critical_service: true
 
   npu_worker:
-    health_url: "http://172.16.168.22:8081/health"
+    health_url: ""  # http://${AUTOBOT_NPU_WORKER_HOST}:${AUTOBOT_NPU_WORKER_PORT}/health
     timeout: 10.0
     critical_service: false
 
   ai_stack:
-    health_url: "http://172.16.168.24:8080/health"
+    health_url: ""  # http://${AUTOBOT_AI_STACK_HOST}:${AUTOBOT_AI_STACK_PORT}/health
     timeout: 15.0
     critical_service: false
 
   browser_service:
-    health_url: "http://172.16.168.25:3000/health"
+    health_url: ""  # http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT}/health
     timeout: 10.0
     critical_service: false
 
   ollama:
-    health_url: "http://172.16.168.20:11434/api/version"
+    health_url: ""  # http://${AUTOBOT_OLLAMA_HOST}:${AUTOBOT_OLLAMA_PORT}/api/version
     timeout: 15.0
     critical_service: true
 
   redis:
-    host: "172.16.168.23"
+    host: ""  # Set via AUTOBOT_REDIS_HOST env var
     port: 6379
     timeout: 5.0
     critical_service: true

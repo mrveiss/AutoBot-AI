@@ -1,11 +1,11 @@
 # AutoBot Distributed Architecture Configuration
-# Main WSL Coordinator (172.16.168.20) configuration for distributed 6-VM setup
+# Distributed 6-VM setup — IPs set at deploy time via Ansible inventory
 # SSOT: IPs derived from complete.yaml → .env.network → ssot-config.sh (#808)
 
 # Deployment Architecture
 deployment:
   mode: "distributed"
-  coordinator_host: "172.16.168.20"
+  coordinator_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
   total_vms: 6
   architecture: "6-vm-distributed"
 
@@ -13,64 +13,64 @@ deployment:
 infrastructure:
   vms:
     coordinator:
-      host: "172.16.168.20"
+      host: ""  # Set via AUTOBOT_BACKEND_HOST env var
       role: "backend-coordinator"
       services: ["backend-api", "ollama-llm", "vnc-desktop"]
       description: "Main WSL machine - Backend API coordination"
 
     frontend:
-      host: "172.16.168.21"
+      host: ""  # Set via AUTOBOT_FRONTEND_HOST env var
       port: 5173
       role: "frontend-ui"
       services: ["vue-frontend", "web-interface"]
       description: "Vue.js frontend serving"
 
     npu_worker:
-      host: "172.16.168.22"
+      host: ""  # Set via AUTOBOT_NPU_WORKER_HOST env var
       port: 8081
       role: "ai-acceleration"
       services: ["npu-worker", "intel-openvino", "hardware-acceleration"]
       description: "Intel NPU + OpenVINO acceleration"
 
     redis:
-      host: "172.16.168.23"
+      host: ""  # Set via AUTOBOT_REDIS_HOST env var
       port: 6379
       role: "data-layer"
       services: ["redis-stack", "redis-insight", "vector-storage"]
       description: "Redis Stack with RedisInsight dashboard"
 
     ai_stack:
-      host: "172.16.168.24"
+      host: ""  # Set via AUTOBOT_AI_STACK_HOST env var
       port: 8080
       role: "ai-processing"
       services: ["ai-stack", "multimodal-processing"]
       description: "AI processing and multimodal services"
 
     browser:
-      host: "172.16.168.25"
+      host: ""  # Set via AUTOBOT_BROWSER_SERVICE_HOST env var
       port: 3000
       role: "browser-automation"
       services: ["playwright", "web-automation"]
       description: "Playwright browser automation"
 
-# Service URLs (Computed from infrastructure)
+# Service URLs (Computed from infrastructure — populated by generate-env-files.py)
 services:
-  backend_api: "http://172.16.168.20:8001"
-  frontend: "http://172.16.168.21:5173"
-  redis: "redis://172.16.168.23:6379"
-  redis_insight: "http://172.16.168.23:8002"
-  npu_worker: "http://172.16.168.22:8081"
-  ai_stack: "http://172.16.168.24:8080"
-  browser: "http://172.16.168.25:3000"
-  ollama: "http://127.0.0.1:11434"
-  vnc_desktop: "http://127.0.0.1:6080"
+  backend_api: ""
+  frontend: ""
+  redis: ""
+  redis_insight: ""
+  npu_worker: ""
+  ai_stack: ""
+  browser: ""
+  ollama: ""
+  vnc_desktop: ""
 
-# Network Configuration
+# Network Configuration — set at install time via slm-secrets.env
 network:
-  subnet: "172.16.168.0/24"
-  gateway: "172.16.168.1"
-  coordinator_ip: "172.16.168.20"
-  vm_range: "172.16.168.21-25"
+  subnet: ""  # Detected by install.sh → NETWORK_SUBNET
+  gateway: ""  # Detected by install.sh → NETWORK_GATEWAY
+  coordinator_ip: ""  # Set via AUTOBOT_BACKEND_HOST env var
+  vm_range: ""  # Informational only — not used by code
 
 # Hardware Optimization
 hardware:
@@ -103,7 +103,7 @@ performance:
 # Security Configuration
 security:
   ssh_key_file: "~/.ssh/autobot_distributed"
-  allowed_networks: ["172.16.168.0/24", "127.0.0.0/8"]
+  allowed_networks: ["${network.subnet}", "127.0.0.0/8"]  # subnet from network block above
   firewall_enabled: true
 
 # Monitoring Configuration
@@ -116,26 +116,26 @@ monitoring:
   logging:
     level: "INFO"
     distributed_collection: true
-    aggregation_host: "172.16.168.20"
+    aggregation_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
 
 # Backup Configuration
 backup:
   strategy: "distributed"
-  collection_host: "172.16.168.20"
+  collection_host: ""  # Set via AUTOBOT_BACKEND_HOST env var
   schedule: "daily"
   retention_days: 7
 
   targets:
     - name: "redis_data"
-      host: "172.16.168.23"
+      host: ""  # Set via AUTOBOT_REDIS_HOST env var
       path: "/var/lib/redis/"
 
     - name: "knowledge_base"
-      host: "172.16.168.20"
+      host: ""  # Set via AUTOBOT_BACKEND_HOST env var
       path: "./data/"
 
     - name: "logs"
-      hosts: ["172.16.168.21", "172.16.168.22", "172.16.168.23", "172.16.168.24", "172.16.168.25"]
+      hosts: []  # Populated dynamically from Ansible inventory
       path: "/var/log/autobot/"
 
 # Feature Flags for Distributed Mode

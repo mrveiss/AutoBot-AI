@@ -66,7 +66,7 @@ def test_create_host():
     """Test 5: Create Test Host"""
     form_data = {
         "hostname": "test-integration-host",
-        "ip_address": "172.16.168.99",
+        "ip_address": "10.0.0.99",
         "role": "frontend",
         "ssh_port": "22",
         "ssh_user": "autobot",

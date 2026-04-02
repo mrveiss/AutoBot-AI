@@ -15,7 +15,7 @@ while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
 done
 source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-REMOTE_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 REMOTE_PATH="/home/autobot/slm-admin"
 

@@ -4,7 +4,7 @@
 
 redis:
   enabled: true
-  host: 172.16.168.23
+  host: ""  # Set via AUTOBOT_REDIS_HOST env var at deploy time
   port: 6379
   password: null
   timeout: 5
@@ -38,11 +38,11 @@ redis:
     worker_capabilities: worker_capabilities
 
 networking:
-  backend_host: 172.16.168.20
+  backend_host: ""  # Set via AUTOBOT_BACKEND_HOST env var at deploy time
   backend_port: 8001
-  frontend_host: 172.16.168.21
+  frontend_host: ""  # Set via AUTOBOT_FRONTEND_HOST env var at deploy time
   frontend_port: 5173
-  ollama_host: 172.16.168.20
+  ollama_host: ""  # Set via AUTOBOT_OLLAMA_HOST env var at deploy time
   ollama_port: 11434
 
 databases:
