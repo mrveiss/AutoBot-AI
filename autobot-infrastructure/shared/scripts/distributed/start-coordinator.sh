@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start AutoBot Backend Coordinator for Distributed 6-VM Architecture
-# This script runs on the main WSL machine (172.16.168.20) as the coordinator
+# This script runs on the main WSL machine (${AUTOBOT_BACKEND_HOST}) as the coordinator
 
 set -e
 
@@ -17,7 +17,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${GREEN}🚀 Starting AutoBot Backend Coordinator${NC}"
-echo -e "${BLUE}Coordinator Node: ${AUTOBOT_BACKEND_HOST:-172.16.168.20}${NC}"
+echo -e "${BLUE}Coordinator Node: ${AUTOBOT_BACKEND_HOST:-localhost}${NC}"
 echo -e "${CYAN}Architecture: 6-VM Distributed System${NC}"
 echo ""
 
@@ -35,12 +35,12 @@ fi
 
 # Set distributed mode environment variables (SSOT provides defaults)
 export AUTOBOT_DEPLOYMENT_MODE=distributed
-export AUTOBOT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
-export AUTOBOT_REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-export AUTOBOT_FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-export AUTOBOT_AI_STACK_HOST="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
-export AUTOBOT_NPU_WORKER_HOST="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
-export AUTOBOT_BROWSER_SERVICE_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+export AUTOBOT_BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
+export AUTOBOT_REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
+export AUTOBOT_FRONTEND_HOST="${AUTOBOT_FRONTEND_HOST:-localhost}"
+export AUTOBOT_AI_STACK_HOST="${AUTOBOT_AI_STACK_HOST:-localhost}"
+export AUTOBOT_NPU_WORKER_HOST="${AUTOBOT_NPU_WORKER_HOST:-localhost}"
+export AUTOBOT_BROWSER_SERVICE_HOST="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 
 echo -e "${CYAN}🔧 Distributed Configuration:${NC}"
 echo "  Backend Coordinator: ${AUTOBOT_BACKEND_HOST}:${AUTOBOT_BACKEND_PORT:-8001}"

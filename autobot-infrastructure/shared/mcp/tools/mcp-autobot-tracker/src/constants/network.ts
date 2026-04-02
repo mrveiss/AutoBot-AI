@@ -15,14 +15,14 @@
  */
 export const NetworkConstants = {
   // Main machine (WSL)
-  MAIN_MACHINE_IP: process.env.MAIN_MACHINE_IP || '172.16.168.20',
+  MAIN_MACHINE_IP: process.env.MAIN_MACHINE_IP || '',
 
   // VM Infrastructure IPs
-  FRONTEND_VM_IP: process.env.FRONTEND_VM_IP || '172.16.168.21',
-  NPU_WORKER_VM_IP: process.env.NPU_WORKER_VM_IP || '172.16.168.22',
-  REDIS_VM_IP: process.env.REDIS_VM_IP || '172.16.168.23',
-  AI_STACK_VM_IP: process.env.AI_STACK_VM_IP || '172.16.168.24',
-  BROWSER_VM_IP: process.env.BROWSER_VM_IP || '172.16.168.25',
+  FRONTEND_VM_IP: process.env.FRONTEND_VM_IP || '',
+  NPU_WORKER_VM_IP: process.env.NPU_WORKER_VM_IP || '',
+  REDIS_VM_IP: process.env.REDIS_VM_IP || '',
+  AI_STACK_VM_IP: process.env.AI_STACK_VM_IP || '',
+  BROWSER_VM_IP: process.env.BROWSER_VM_IP || '',
 
   // Local/Localhost addresses
   LOCALHOST_IP: '127.0.0.1',

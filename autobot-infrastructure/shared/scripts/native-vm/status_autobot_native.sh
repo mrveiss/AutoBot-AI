@@ -28,11 +28,11 @@ NC='\033[0m'
 
 # VM Configuration (from unified config, with SSOT fallback)
 declare -A VMS
-VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}")
-VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}")
-VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}")
-VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}")
-VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}")
+VMS[frontend]=$(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "${AUTOBOT_FRONTEND_HOST:-localhost}")
+VMS[npu-worker]=$(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "${AUTOBOT_NPU_WORKER_HOST:-localhost}")
+VMS[redis]=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "${AUTOBOT_REDIS_HOST:-localhost}")
+VMS[ai-stack]=$(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "${AUTOBOT_AI_STACK_HOST:-localhost}")
+VMS[browser]=$(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}")
 
 # Service Configuration
 declare -A SERVICES
@@ -44,11 +44,11 @@ SERVICES[browser]="autobot-browser-service.service"
 
 # Health Check URLs
 declare -A HEALTH_URLS
-HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}/"
-HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
-HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}"
-HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
-HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
+HEALTH_URLS[frontend]="http://${AUTOBOT_FRONTEND_HOST:-localhost}/"
+HEALTH_URLS[npu-worker]="http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health"
+HEALTH_URLS[redis]="${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}"
+HEALTH_URLS[ai-stack]="http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health"
+HEALTH_URLS[browser]="http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health"
 
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
@@ -177,7 +177,7 @@ test_health_endpoint() {
 
     if [ "$vm_name" = "redis" ]; then
         # Special case for Redis
-        if timeout 3 bash -c "echo 'PING' | nc -w 2 ${AUTOBOT_REDIS_HOST:-172.16.168.23} ${AUTOBOT_REDIS_PORT:-6379}" | grep -q "PONG" 2>/dev/null; then
+        if timeout 3 bash -c "echo 'PING' | nc -w 2 ${AUTOBOT_REDIS_HOST:-localhost} ${AUTOBOT_REDIS_PORT:-6379}" | grep -q "PONG" 2>/dev/null; then
             echo -e "${GREEN}Healthy${NC}"
             return 0
         else
@@ -198,7 +198,7 @@ test_health_endpoint() {
 }
 
 check_wsl_backend() {
-    echo -e "${CYAN}WSL Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}):${NC}"
+    echo -e "${CYAN}WSL Backend (${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}):${NC}"
 
     local backend_pids=$(pgrep -f "main.py\|uvicorn.*api.main:app" 2>/dev/null || true)
 

@@ -15,9 +15,9 @@ all:
     ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
     ansible_python_interpreter: /usr/bin/python3
 
-    # Global network configuration - UPDATED FOR 172.16.168.x SUBNET
-    network_subnet: "172.16.168.0/24"
-    network_gateway: "172.16.168.1"
+    # Global network configuration - set per-install in .env or override vars
+    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') | default('0.0.0.0/0', true) }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('0.0.0.0', true) }}"
     dns_servers:
       - "{{ dns_nameservers[0] }}"
       - "{{ dns_nameservers[1] }}"
@@ -52,7 +52,7 @@ all:
     slm:
       hosts:
         autobot-slm:
-          ansible_host: 172.16.168.19  # SLM Server
+          ansible_host: "{{ lookup('env', 'AUTOBOT_SLM_HOST') | default('127.0.0.1', true) }}"  # SLM Server
           vm_id: "autobot-slm-server"
           vm_role: "slm"
           vm_hostname: "autobot-slm"
@@ -65,7 +65,7 @@ all:
     frontend:
       hosts:
         autobot-frontend:
-          ansible_host: 172.16.168.21  # Frontend VM
+          ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"  # Frontend VM
           vm_id: "autobot-frontend-vm"
           vm_role: "frontend"
           vm_hostname: "autobot-frontend"
@@ -91,7 +91,7 @@ all:
         autobot-host:
           ansible_connection: local    # This is the local WSL machine
           ansible_host: 127.0.0.1      # Local connection
-          network_address: 172.16.168.20  # IP used by other VMs to reach this host
+          network_address: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"  # IP used by other VMs to reach this host
           ansible_become: no           # Issue #700: Disable become for local host by default
           # Enable become when needed with: --extra-vars "ansible_become=yes"
           # Or use: --ask-become-pass for operations requiring sudo
@@ -121,7 +121,7 @@ all:
     npu:
       hosts:
         autobot-npu:
-          ansible_host: 172.16.168.22  # NPU Worker VM
+          ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"  # NPU Worker VM
           vm_id: "autobot-npu-vm"
           vm_role: "npu"
           vm_hostname: "autobot-npu"
@@ -155,7 +155,7 @@ all:
     database:
       hosts:
         autobot-database:
-          ansible_host: 172.16.168.23  # Database VM
+          ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"  # Database VM
           vm_id: "autobot-database-vm"
           vm_role: "database"
           vm_hostname: "autobot-database"
@@ -178,7 +178,7 @@ all:
     aiml:
       hosts:
         autobot-aiml:
-          ansible_host: 172.16.168.24  # AI/ML VM
+          ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"  # AI/ML VM
           vm_id: "autobot-aiml-vm"
           vm_role: "aiml"
           vm_hostname: "autobot-aiml"
@@ -204,7 +204,7 @@ all:
     browser:
       hosts:
         autobot-browser:
-          ansible_host: 172.16.168.25  # Browser VM - headless Playwright worker
+          ansible_host: "{{ lookup('env', 'AUTOBOT_BROWSER_SERVICE_HOST') | default('127.0.0.1', true) }}"  # Browser VM - headless Playwright worker
           vm_id: "autobot-browser-vm"
           vm_role: "browser"
           vm_hostname: "autobot-browser"
@@ -228,7 +228,7 @@ all:
     llm:
       hosts:
         autobot-llm:
-          ansible_host: 172.16.168.26  # LLM CPU node (#1040) -- also VNC desktop (#1525)
+          ansible_host: "{{ lookup('env', 'AUTOBOT_LLM_HOST') | default('127.0.0.1', true) }}"  # LLM CPU node (#1040) -- also VNC desktop (#1525)
           vm_id: "autobot-llm-vm"
           vm_role: "llm"
           vm_hostname: "autobot-llm"
@@ -254,7 +254,7 @@ all:
     reserved:
       hosts:
         autobot-reserved:
-          ansible_host: 172.16.168.27  # Reserved node - pending role assignment
+          ansible_host: "{{ lookup('env', 'AUTOBOT_RESERVED_HOST') | default('127.0.0.1', true) }}"  # Reserved node - pending role assignment
           vm_id: "autobot-reserved-vm"
           vm_role: "reserved"
           vm_hostname: "autobot-reserved"

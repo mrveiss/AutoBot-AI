@@ -100,7 +100,7 @@ main() {
     fi
 
     # Backend URL (from SSOT)
-    BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}}"
+    BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}}"
 
     print_status "Checking AutoBot backend availability..."
     if check_service "$BACKEND_URL" "AutoBot Backend"; then
@@ -259,9 +259,9 @@ main() {
     echo
 
     print_status "Enterprise web interface available at:"
-    echo "  🌐 http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173} (Frontend VM)"
-    echo "  🔧 http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/docs (Backend API docs)"
-    echo "  🖥️  http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_VNC_PORT:-6080}/vnc.html (Desktop access)"
+    echo "  🌐 http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173} (Frontend VM)"
+    echo "  🔧 http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/docs (Backend API docs)"
+    echo "  🖥️  http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_VNC_PORT:-6080}/vnc.html (Desktop access)"
     echo
 
     print_success "AutoBot has been transformed into an enterprise-grade AI platform!"

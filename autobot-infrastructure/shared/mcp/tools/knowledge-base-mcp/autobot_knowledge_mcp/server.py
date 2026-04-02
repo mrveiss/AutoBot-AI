@@ -15,7 +15,7 @@ Usage:
     autobot-knowledge-mcp
 
 Configuration (environment variables):
-    AUTOBOT_BACKEND_HOST: Backend API host (default: 172.16.168.20)
+    AUTOBOT_BACKEND_HOST: Backend API host (default: 10.0.0.1)
     AUTOBOT_BACKEND_PORT: Backend API port (default: 8001)
     AUTOBOT_KB_TIMEOUT: Request timeout in seconds (default: 30)
 """
@@ -27,10 +27,11 @@ import sys
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, Field
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
-from pydantic import BaseModel, Field
 
 # Configure logging to stderr (stdout is for MCP protocol)
 logging.basicConfig(
@@ -41,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger("autobot-knowledge-mcp")
 
 # Configuration from environment
-BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "172.16.168.20")
+BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "10.0.0.1")
 BACKEND_PORT = os.getenv("AUTOBOT_BACKEND_PORT", "8001")
 KB_TIMEOUT = int(os.getenv("AUTOBOT_KB_TIMEOUT", "30"))
 BASE_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}/api/knowledge"
@@ -308,9 +309,9 @@ class KnowledgeBaseMCPServer:
             json={
                 "query": request.query,
                 "top_k": request.top_k,
-                "filters": {"threshold": request.threshold}
-                if request.threshold > 0
-                else None,
+                "filters": (
+                    {"threshold": request.threshold} if request.threshold > 0 else None
+                ),
             },
         )
         response.raise_for_status()

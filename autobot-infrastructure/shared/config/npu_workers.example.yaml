@@ -48,7 +48,7 @@ npu:
     # ═══════════════════════════════════════════════════════════════════
     - id: "vm-npu-1"
       name: "VM NPU Worker (Primary)"
-      host: "172.16.168.22"
+      host: "${AUTOBOT_NPU_WORKER_HOST}"
       port: 8081
       enabled: true
 
@@ -79,7 +79,7 @@ npu:
     # ═══════════════════════════════════════════════════════════════════
     - id: "windows-npu-1"
       name: "Windows Native NPU Worker"
-      host: "172.16.168.20"  # Windows host machine
+      host: "${AUTOBOT_BACKEND_HOST}"  # Windows host machine
       port: 8082
       enabled: false  # Set to true when worker is ready
 
@@ -177,4 +177,4 @@ npu:
 #   - CIRCUIT_OPEN: Circuit breaker opened due to failures
 
 # To reload configuration without restart:
-#   curl -X POST http://172.16.168.20:8001/api/npu/config/reload
+#   curl -X POST http://${AUTOBOT_BACKEND_HOST}:8001/api/npu/config/reload

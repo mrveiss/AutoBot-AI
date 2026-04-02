@@ -8,6 +8,6 @@ source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/
 
 echo "Running AutoBot MCP Tracker in development mode..."
 export NODE_ENV=development
-export REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+export REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 export REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 npm run dev

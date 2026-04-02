@@ -107,7 +107,7 @@ groups:
         annotations:
           summary: "Redis Database Unavailable"
           description: "Redis database is not accessible"
-          recommendation: "Check Redis service on VM3 (172.16.168.23)"
+          recommendation: "Check Redis service on VM3 (${AUTOBOT_REDIS_HOST})"
 
       - alert: OllamaDown
         expr: autobot_service_status{service_name="ollama",status="offline"} == 1
@@ -119,7 +119,7 @@ groups:
         annotations:
           summary: "Ollama LLM Service Down"
           description: "Ollama LLM service is not responding"
-          recommendation: "Check AI Stack VM4 (172.16.168.24)"
+          recommendation: "Check AI Stack VM4 (${AUTOBOT_AI_STACK_HOST})"
 
       - alert: ServiceHighResponseTime
         expr: autobot_service_response_time_seconds > 5.0
@@ -321,7 +321,7 @@ groups:
         annotations:
           summary: "Redis Server Down: {{ $labels.database }}"
           description: "Redis server {{ $labels.database }} is unavailable"
-          recommendation: "Check Redis service on VM3 (172.16.168.23:6379)"
+          recommendation: "Check Redis service on VM3 (${AUTOBOT_REDIS_HOST}:6379)"
 
       # Redis connection errors
       - alert: RedisConnectionErrors
@@ -385,7 +385,7 @@ groups:
         annotations:
           summary: "NPU Circuit Breaker OPEN"
           description: "NPU worker circuit breaker opened - hardware acceleration unavailable"
-          recommendation: "Check NPU Worker VM2 (172.16.168.22:8081) and OpenVINO status"
+          recommendation: "Check NPU Worker VM2 (${AUTOBOT_NPU_WORKER_HOST}:8081) and OpenVINO status"
 
       # NPU worker high failure rate
       - alert: NPUHighFailureRate

@@ -42,14 +42,14 @@ echo ""
 
 # Check connections to dependencies
 echo "Dependency Connections:"
-echo -n "  Redis (${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}): "
-if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-172.16.168.23}/${AUTOBOT_REDIS_PORT:-6379}" 2>/dev/null; then
+echo -n "  Redis (${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}): "
+if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-localhost}/${AUTOBOT_REDIS_PORT:-6379}" 2>/dev/null; then
     echo "OK"
 else
     echo "UNREACHABLE"
 fi
-echo -n "  ChromaDB (${AUTOBOT_REDIS_HOST:-172.16.168.23}:8000): "
-if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-172.16.168.23}/8000" 2>/dev/null; then
+echo -n "  ChromaDB (${AUTOBOT_REDIS_HOST:-localhost}:8000): "
+if timeout 2 bash -c "echo > /dev/tcp/${AUTOBOT_REDIS_HOST:-localhost}/8000" 2>/dev/null; then
     echo "OK"
 else
     echo "UNREACHABLE"

@@ -75,7 +75,7 @@ class PerformanceOptimizationTester:
     def __init__(self):
         self.results: List[BenchmarkResult] = []
         self.start_time = time.time()
-        self.backend_host = "172.16.168.20"
+        self.backend_host = "10.0.0.1"
         self.backend_port = 8001
         self.base_url = f"http://{self.backend_host}:{self.backend_port}"
 
@@ -321,7 +321,7 @@ class PerformanceOptimizationTester:
         try:
             import requests
 
-            npu_url = "http://172.16.168.22:8081"
+            npu_url = "http://10.0.0.3:8081"
 
             start_time = time.time()
             response = requests.get(f"{npu_url}/health", timeout=10)

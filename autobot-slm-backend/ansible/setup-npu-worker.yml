@@ -14,7 +14,7 @@
 #
 # Usage:
 #   ansible-playbook setup-npu-worker.yml --limit npu-worker
-#   ansible-playbook setup-npu-worker.yml --limit 172.16.168.22
+#   ansible-playbook setup-npu-worker.yml --limit ${AUTOBOT_NPU_WORKER_HOST}
 #
 # Requirements:
 #   - Target: Ubuntu 22.04 Server (blank or existing)

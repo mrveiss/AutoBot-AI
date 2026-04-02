@@ -21,7 +21,7 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="${PROJECT_ROOT}/bootstrap-slm-${TIMESTAMP}.log"
 
 # Defaults
-TARGET_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+TARGET_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 SSH_USER=""
 SSH_KEY=""
 SSH_PASSWORD=""
@@ -85,7 +85,7 @@ Required:
   -u, --user USER       SSH user with sudo access
 
 Options:
-  -h, --host HOST       Target host (default: 172.16.168.19)
+  -h, --host HOST       Target host (default: ${AUTOBOT_SLM_HOST})
   -k, --key PATH        SSH private key path
   -p, --password        Prompt for SSH password
   --admin-password      Prompt for SLM admin password (default: random)
@@ -94,7 +94,7 @@ Options:
   --help                Show this help message
 
 Examples:
-  $(basename "$0") -u root -h 172.16.168.19
+  $(basename "$0") -u root -h ${AUTOBOT_SLM_HOST}
   $(basename "$0") -u root -p --admin-password
   $(basename "$0") -u admin -k ~/.ssh/autobot_key
 

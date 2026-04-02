@@ -11,7 +11,7 @@ To start the backend:
     cd autobot-user-backend && uvicorn main:app --host 0.0.0.0 --port 8001
 
 Or use SLM orchestration:
-    SLM GUI: https://172.16.168.19/orchestration
+    SLM GUI: https://10.0.0.9/orchestration
     CLI: scripts/start-services.sh start
 """
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     print()
     print("To start the backend, use one of:")
     print("  cd autobot-user-backend && uvicorn main:app --host 0.0.0.0 --port 8001")
-    print("  SLM GUI: https://172.16.168.19/orchestration")
+    print("  SLM GUI: https://10.0.0.9/orchestration")
     print("  CLI: scripts/start-services.sh start")
     print()
     print("See Issue #781 for the new folder structure.")

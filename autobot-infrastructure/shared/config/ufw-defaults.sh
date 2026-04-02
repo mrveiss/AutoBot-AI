@@ -16,7 +16,7 @@
 #
 # CRITICAL: This script configures UFW to allow:
 #   1. SSH access (port 22) - CRITICAL to avoid lockout
-#   2. Infrastructure subnet (172.16.168.0/24) - CRITICAL for VM communication
+#   2. Infrastructure subnet (from NETWORK_SUBNET env var) - CRITICAL for VM communication
 #   3. Service-specific ports - Backend, Frontend, Redis, etc.
 
 set -euo pipefail
@@ -86,8 +86,13 @@ apply_rules() {
     ufw allow 22/tcp comment 'SSH access'
 
     # CRITICAL: Allow infrastructure subnet (fixes Issue #887)
-    log_info "  → Allowing infrastructure subnet (172.16.168.0/24)"
-    ufw allow from 172.16.168.0/24 comment 'AutoBot infrastructure subnet'
+    local infra_subnet="${NETWORK_SUBNET:-}"
+    if [ -n "$infra_subnet" ]; then
+        log_info "  → Allowing infrastructure subnet ($infra_subnet)"
+        ufw allow from "$infra_subnet" comment 'AutoBot infrastructure subnet'
+    else
+        log_info "  → NETWORK_SUBNET not set; skipping infrastructure subnet rule"
+    fi
 
     # Backend API (HTTPS)
     log_info "  → Allowing Backend API (port 8443)"

@@ -8,10 +8,11 @@ Tests the standalone Redis client implementation with connection pooling,
 retry logic, and health monitoring for the Windows NPU worker.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Add app directory to path for imports
 app_dir = Path(__file__).parent.parent / "app"
@@ -26,7 +27,7 @@ class TestRedisConnectionManager:
         """Sample configuration for testing"""
         return {
             "redis": {
-                "host": "172.16.168.23",
+                "host": "10.0.0.4",
                 "port": 6379,
                 "password": None,
                 "db": 0,
@@ -42,7 +43,7 @@ class TestRedisConnectionManager:
         """Configuration with password authentication"""
         return {
             "redis": {
-                "host": "172.16.168.23",
+                "host": "10.0.0.4",
                 "port": 6379,
                 "password": "secret_password",
                 "db": 1,
@@ -91,7 +92,7 @@ class TestRedisConnectionManager:
 
         # Verify pool is created with correct config
         assert pool is not None
-        assert pool.connection_kwargs["host"] == "172.16.168.23"
+        assert pool.connection_kwargs["host"] == "10.0.0.4"
         assert pool.connection_kwargs["port"] == 6379
         assert pool.connection_kwargs["db"] == 0
         assert pool.max_connections == 20
@@ -240,7 +241,7 @@ class TestGetRedisClient:
     def sample_config(self):
         return {
             "redis": {
-                "host": "172.16.168.23",
+                "host": "10.0.0.4",
                 "port": 6379,
                 "db": 0,
                 "max_connections": 20,

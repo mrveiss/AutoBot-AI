@@ -14,7 +14,7 @@
 #
 # Usage:
 #   ansible-playbook setup-user-backend.yml --limit main
-#   ansible-playbook setup-user-backend.yml --limit 172.16.168.20
+#   ansible-playbook setup-user-backend.yml --limit ${AUTOBOT_BACKEND_HOST}
 
 - name: Setup User Backend Node
   hosts: main

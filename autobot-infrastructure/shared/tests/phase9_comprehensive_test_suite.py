@@ -6,7 +6,7 @@ AutoBot Phase 9 Comprehensive Testing Suite
 This comprehensive test suite validates all Phase 9 features including:
 1. Multi-Agent Coordination System
 2. ConsolidatedChatWorkflow with hot reload
-3. Distributed VM Architecture (172.16.168.20-25)
+3. Distributed VM Architecture (10.0.0.1-25)
 4. Knowledge Base Integration (13,383 vectors)
 5. Ollama LLM Integration with NPU acceleration
 6. Frontend-Backend Integration (Vue 3 + FastAPI)
@@ -63,17 +63,17 @@ class TestResult:
 class TestSuiteConfig:
     """Test suite configuration"""
 
-    backend_host: str = "172.16.168.20"
+    backend_host: str = "10.0.0.1"
     backend_port: int = 8001
-    frontend_host: str = "172.16.168.21"
+    frontend_host: str = "10.0.0.2"
     frontend_port: int = 5173
-    redis_host: str = "172.16.168.23"
+    redis_host: str = "10.0.0.4"
     redis_port: int = 6379
-    ai_stack_host: str = "172.16.168.24"
+    ai_stack_host: str = "10.0.0.5"
     ai_stack_port: int = 8080
-    npu_worker_host: str = "172.16.168.22"
+    npu_worker_host: str = "10.0.0.3"
     npu_worker_port: int = 8081
-    browser_host: str = "172.16.168.25"
+    browser_host: str = "10.0.0.6"
     browser_port: int = 3000
     vnc_host: str = "localhost"
     vnc_port: int = 6080
@@ -274,9 +274,11 @@ class Phase9TestSuite:
                         status = "PASS"
                         message = f"{description} successful"
                         details = {
-                            "data_keys": list(data.keys())
-                            if isinstance(data, dict)
-                            else "non-dict"
+                            "data_keys": (
+                                list(data.keys())
+                                if isinstance(data, dict)
+                                else "non-dict"
+                            )
                         }
                     except json.JSONDecodeError:
                         status = "WARNING"

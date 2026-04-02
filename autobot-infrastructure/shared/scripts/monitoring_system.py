@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import psutil
+
 from config import API_BASE_URL
 from constants import ServiceURLs
 from constants.threshold_constants import TimingConstants
@@ -78,8 +79,7 @@ class SystemMonitor:
     def _init_metrics_db(self):
         """Initialize metrics database"""
         with sqlite3.connect(self.metrics_db) as conn:
-            conn.executescript(
-                """
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS system_metrics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -131,8 +131,7 @@ class SystemMonitor:
                 CREATE INDEX IF NOT EXISTS idx_application_metrics_timestamp ON application_metrics(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON alerts(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_health_checks_timestamp ON health_checks(timestamp);
-            """
-            )
+            """)
 
     def _collect_resource_metrics(self) -> Dict[str, Any]:
         """
@@ -289,7 +288,7 @@ class SystemMonitor:
                 "name": "frontend",
                 "url": ServiceURLs.FRONTEND_VM,
                 "port": 5173,
-            },  # FIXED: Frontend on VM1 (172.16.168.21)
+            },  # FIXED: Frontend on VM1 (10.0.0.2)
             {"name": "redis", "url": None, "port": 6379},
         ]
 
@@ -643,8 +642,7 @@ class SystemMonitor:
 
         Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT
                 AVG(cpu_percent) as avg_cpu,
                 AVG(memory_percent) as avg_memory,
@@ -654,8 +652,7 @@ class SystemMonitor:
                 COUNT(*) as data_points
             FROM system_metrics
             WHERE timestamp > datetime('now', '-24 hours')
-        """
-        )
+        """)
         row = cursor.fetchone()
         if row:
             return {
@@ -674,8 +671,7 @@ class SystemMonitor:
 
         Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT
                 service_name,
                 AVG(response_time_ms) as avg_response_time,
@@ -685,8 +681,7 @@ class SystemMonitor:
             FROM application_metrics
             WHERE timestamp > datetime('now', '-1 hour')
             GROUP BY service_name
-        """
-        )
+        """)
         status = {}
         for row in cursor.fetchall():
             service_name = row[0]
@@ -707,15 +702,13 @@ class SystemMonitor:
 
         Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT alert_type, severity, message, timestamp
             FROM alerts
             WHERE timestamp > datetime('now', '-24 hours')
             ORDER BY timestamp DESC
             LIMIT 10
-        """
-        )
+        """)
         return [
             {
                 "type": row[0],
@@ -732,8 +725,7 @@ class SystemMonitor:
 
         Issue #281: Extracted from generate_monitoring_dashboard to reduce function length.
         """
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT
                 strftime('%Y-%m-%d %H:00:00', sm.timestamp) as hour,
                 AVG(sm.cpu_percent) as avg_cpu,
@@ -750,8 +742,7 @@ class SystemMonitor:
             WHERE sm.timestamp > datetime('now', '-7 days')
             GROUP BY strftime('%Y-%m-%d %H:00:00', sm.timestamp)
             ORDER BY hour
-        """
-        )
+        """)
         trends = []
         for row in cursor.fetchall():
             trends.append(
@@ -864,7 +855,9 @@ class SystemMonitor:
 
             # Perform health checks
             health_results = await self.perform_health_checks()
-            logger.info("🏥 Health: %s", health_results.get("overall_status", "unknown"))
+            logger.info(
+                "🏥 Health: %s", health_results.get("overall_status", "unknown")
+            )
 
             # Generate dashboard
             dashboard = self.generate_monitoring_dashboard()

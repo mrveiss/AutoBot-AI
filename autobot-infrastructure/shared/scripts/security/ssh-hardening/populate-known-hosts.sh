@@ -22,12 +22,12 @@ echo ""
 
 # AutoBot VM configuration
 declare -A AUTOBOT_HOSTS=(
-    ["WSL-Host"]="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
-    ["Frontend-VM"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-    ["NPU-Worker-VM"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
-    ["Redis-VM"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-    ["AI-Stack-VM"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
-    ["Browser-VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+    ["WSL-Host"]="${AUTOBOT_BACKEND_HOST:-localhost}"
+    ["Frontend-VM"]="${AUTOBOT_FRONTEND_HOST:-localhost}"
+    ["NPU-Worker-VM"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}"
+    ["Redis-VM"]="${AUTOBOT_REDIS_HOST:-localhost}"
+    ["AI-Stack-VM"]="${AUTOBOT_AI_STACK_HOST:-localhost}"
+    ["Browser-VM"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 )
 
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
@@ -153,7 +153,7 @@ main() {
         log_info "MITM attacks will be detected and rejected"
         echo ""
         log_info "Next steps:"
-        echo "  1. Test SSH connection: ssh -i $SSH_KEY ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+        echo "  1. Test SSH connection: ssh -i $SSH_KEY ${AUTOBOT_SSH_USER:-autobot}@${AUTOBOT_FRONTEND_HOST:-localhost}"
         echo "  2. Run verification tests: ./scripts/security/ssh-hardening/verify-ssh-security.sh"
         echo ""
         return 0

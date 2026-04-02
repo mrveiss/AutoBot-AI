@@ -2,15 +2,15 @@
 # Defines which services can access which endpoints
 #
 # AutoBot VM Architecture:
-# - main-backend (172.16.168.20:8001) - Primary API server
-# - frontend (172.16.168.21:5173) - Vue.js web interface
-# - npu-worker (172.16.168.22:8081) - NPU hardware acceleration
-# - redis-stack (172.16.168.23:6379) - Data layer
-# - ai-stack (172.16.168.24:8080) - AI processing and inference
-# - browser-service (172.16.168.25:3000) - Playwright automation
+# - main-backend (${AUTOBOT_BACKEND_HOST}:8001) - Primary API server
+# - frontend (${AUTOBOT_FRONTEND_HOST}:5173) - Vue.js web interface
+# - npu-worker (${AUTOBOT_NPU_WORKER_HOST}:8081) - NPU hardware acceleration
+# - redis-stack (${AUTOBOT_REDIS_HOST}:6379) - Data layer
+# - ai-stack (${AUTOBOT_AI_STACK_HOST}:8080) - AI processing and inference
+# - browser-service (${AUTOBOT_BROWSER_SERVICE_HOST}:3000) - Playwright automation
 
 authorization_matrix:
-  # Main Backend Service (172.16.168.20:8001)
+  # Main Backend Service (${AUTOBOT_BACKEND_HOST}:8001)
   # Primary API server - coordinates all other services
   main-backend:
     allowed_services:
@@ -48,7 +48,7 @@ authorization_matrix:
         endpoints:
           - "/api/*"  # All API endpoints
 
-  # Frontend Service (172.16.168.21:5173)
+  # Frontend Service (${AUTOBOT_FRONTEND_HOST}:5173)
   # Vue.js web interface - only receives requests, doesn't make authenticated calls
   frontend:
     allowed_services:
@@ -57,7 +57,7 @@ authorization_matrix:
         endpoints:
           - "ALL"  # Frontend has no protected endpoints
 
-  # NPU Worker Service (172.16.168.22:8081)
+  # NPU Worker Service (${AUTOBOT_NPU_WORKER_HOST}:8081)
   # Hardware AI acceleration service
   npu-worker:
     allowed_services:
@@ -82,7 +82,7 @@ authorization_matrix:
           - "/vectors/*"
           - "/health"
 
-  # Redis Stack Service (172.16.168.23:6379)
+  # Redis Stack Service (${AUTOBOT_REDIS_HOST}:6379)
   # Data layer - all services need Redis access
   redis-stack:
     allowed_services:
@@ -106,7 +106,7 @@ authorization_matrix:
         endpoints:
           - "ALL"
 
-  # AI Stack Service (172.16.168.24:8080)
+  # AI Stack Service (${AUTOBOT_AI_STACK_HOST}:8080)
   # AI processing and inference service
   ai-stack:
     allowed_services:
@@ -132,7 +132,7 @@ authorization_matrix:
           - "/models/*"
           - "/embeddings/*"
 
-  # Browser Service (172.16.168.25:3000)
+  # Browser Service (${AUTOBOT_BROWSER_SERVICE_HOST}:3000)
   # Playwright web automation service
   browser-service:
     allowed_services:

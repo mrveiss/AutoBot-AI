@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-slm-frontend"
 
 # Remote Configuration
-FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-localhost}"
 FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
@@ -202,7 +202,7 @@ restart_frontend_service() {
         cd /opt/autobot/src/autobot-slm-frontend
 
         # Set environment variables
-        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-localhost}
         export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 

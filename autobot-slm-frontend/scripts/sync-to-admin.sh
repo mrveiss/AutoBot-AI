@@ -4,7 +4,7 @@
 # Author: mrveiss
 
 # SLM Admin Sync Script
-# Syncs slm-admin to the management node (172.16.168.19)
+# Syncs slm-admin to the management node (${AUTOBOT_SLM_HOST})
 
 set -e
 

@@ -5,7 +5,7 @@
 
 # SLM Management Plane Sync & Deploy Script (Issue #814)
 #
-# Phase 1: Rsync code to the SLM server (172.16.168.19)
+# Phase 1: Rsync code to the SLM server (${AUTOBOT_SLM_HOST})
 # Phase 2: Run Ansible playbook to configure services (certs, nginx, build, systemd)
 #
 # The SLM then handles distributing code to fleet nodes via its code-sync agents.
@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration (from SSOT)
-REMOTE_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"

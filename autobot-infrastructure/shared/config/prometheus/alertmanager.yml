@@ -103,7 +103,7 @@ receivers:
   # Default receiver - WebSocket broadcast to frontend
   - name: 'default'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
         http_config:
           follow_redirects: true
@@ -112,7 +112,7 @@ receivers:
   # Critical alerts - WebSocket + optional email/Slack
   - name: 'critical-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
     # Uncomment when email is configured:
     # email_configs:
@@ -130,19 +130,19 @@ receivers:
   # High severity alerts
   - name: 'high-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
   # Medium severity alerts
   - name: 'medium-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
   # Circuit breaker alerts (Issue #69)
   - name: 'circuit-breaker-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
     # Uncomment for Slack notifications:
     # slack_configs:
@@ -154,19 +154,19 @@ receivers:
   # Redis alerts (Issue #69)
   - name: 'redis-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
   # NPU alerts (Issue #69)
   - name: 'npu-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
   # Security alerts (Issue #69) - high priority
   - name: 'security-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
     # Uncomment for email notifications:
     # email_configs:
@@ -178,13 +178,13 @@ receivers:
   # Service alerts
   - name: 'service-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
   # Error alerts
   - name: 'error-alerts'
     webhook_configs:
-      - url: 'http://172.16.168.20:8001/api/webhook/alertmanager'
+      - url: 'http://localhost:8001/api/webhook/alertmanager'
         send_resolved: true
 
 # Inhibition rules - suppress alerts when other alerts are firing

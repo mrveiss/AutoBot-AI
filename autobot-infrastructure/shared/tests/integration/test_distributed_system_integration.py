@@ -46,25 +46,25 @@ class DistributedSystemTester:
     def __init__(self):
         # AutoBot distributed infrastructure based on CLAUDE.md
         self.services = {
-            "main": {"host": "172.16.168.20", "port": 8001, "name": "Backend API"},
+            "main": {"host": "10.0.0.1", "port": 8001, "name": "Backend API"},
             "frontend": {
-                "host": "172.16.168.21",
+                "host": "10.0.0.2",
                 "port": 5173,
                 "name": "Web Interface",
             },
-            "npu_worker": {"host": "172.16.168.22", "port": 8081, "name": "NPU Worker"},
+            "npu_worker": {"host": "10.0.0.3", "port": 8081, "name": "NPU Worker"},
             "redis": {
-                "host": "172.16.168.23",
+                "host": "10.0.0.4",
                 "port": 6379,
                 "name": "Redis Data Layer",
             },
             "ai_stack": {
-                "host": "172.16.168.24",
+                "host": "10.0.0.5",
                 "port": 8080,
                 "name": "AI Processing",
             },
             "browser": {
-                "host": "172.16.168.25",
+                "host": "10.0.0.6",
                 "port": 3000,
                 "name": "Web Automation",
             },

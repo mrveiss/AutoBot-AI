@@ -81,12 +81,12 @@ done
 
 # VM Configuration
 declare -a VMS=(
-    "main-host:${AUTOBOT_BACKEND_HOST:-172.16.168.20}:autobot-backend"
-    "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:autobot-frontend"
-    "npu-worker:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:autobot-npu-worker"
-    "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}:autobot-redis"
-    "ai-stack:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:autobot-ai-stack"
-    "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:autobot-browser"
+    "main-host:${AUTOBOT_BACKEND_HOST:-localhost}:autobot-backend"
+    "frontend:${AUTOBOT_FRONTEND_HOST:-localhost}:autobot-frontend"
+    "npu-worker:${AUTOBOT_NPU_WORKER_HOST:-localhost}:autobot-npu-worker"
+    "redis:${AUTOBOT_REDIS_HOST:-localhost}:autobot-redis"
+    "ai-stack:${AUTOBOT_AI_STACK_HOST:-localhost}:autobot-ai-stack"
+    "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:autobot-browser"
 )
 
 ################################################################################

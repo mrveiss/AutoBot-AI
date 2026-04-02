@@ -4,7 +4,7 @@
 # Author: mrveiss
 #
 # Fix Backend Worker Deadlock (Issue #876)
-# Run this script on the backend server (172.16.168.20)
+# Run this script on the backend server (${AUTOBOT_BACKEND_HOST})
 
 set -e
 
@@ -96,7 +96,7 @@ sleep 10
 
 # Check health
 echo "Checking backend health..."
-if curl -k -s -f --max-time 10 https://172.16.168.20:8443/api/health > /dev/null 2>&1; then
+if curl -k -s -f --max-time 10 https://${AUTOBOT_BACKEND_HOST}:8443/api/health > /dev/null 2>&1; then
     echo "✓ Backend health check passed"
 else
     echo "⚠ Health check timeout (backend may still be initializing)"
@@ -136,7 +136,7 @@ echo "========================================="
 echo "Backup: $BACKUP_FILE"
 echo "Workers: Single worker mode (no deadlock)"
 echo ""
-echo "Login should now work at https://172.16.168.21/"
+echo "Login should now work at https://${AUTOBOT_FRONTEND_HOST}/"
 echo ""
 echo "To rollback if needed:"
 echo "  sudo cp $BACKUP_FILE $SERVICE_FILE"

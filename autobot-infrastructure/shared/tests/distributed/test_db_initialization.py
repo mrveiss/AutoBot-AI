@@ -4,12 +4,12 @@ Distributed Integration Tests for ConversationFileManager Database Initializatio
 Tests cross-VM database initialization scenarios for AutoBot's distributed architecture.
 
 Environment Setup:
-- Main Machine (VM0): 172.16.168.20 - Backend API + Desktop/Terminal VNC
-- VM1 Frontend: 172.16.168.21:5173 - Web interface
-- VM2 NPU Worker: 172.16.168.22:8081 - Hardware AI acceleration
-- VM3 Redis: 172.16.168.23:6379 - Data layer
-- VM4 AI Stack: 172.16.168.24:8080 - AI processing
-- VM5 Browser: 172.16.168.25:3000 - Web automation
+- Main Machine (VM0): 10.0.0.1 - Backend API + Desktop/Terminal VNC
+- VM1 Frontend: 10.0.0.2:5173 - Web interface
+- VM2 NPU Worker: 10.0.0.3:8081 - Hardware AI acceleration
+- VM3 Redis: 10.0.0.4:6379 - Data layer
+- VM4 AI Stack: 10.0.0.5:8080 - AI processing
+- VM5 Browser: 10.0.0.6:3000 - Web automation
 
 These tests validate:
 - Fresh VM deployment creates database automatically
@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 import pytest
+
 from conversation_file_manager import ConversationFileManager
 
 # Configure logging for tests
@@ -274,7 +275,7 @@ class TestNPUWorkerIntegration:
             uploaded_by="npu_worker_vm2",
             metadata={
                 "source": "npu_worker",
-                "vm_id": "172.16.168.22",
+                "vm_id": "10.0.0.3",
                 "processing_time_ms": 150,
             },
         )
@@ -302,7 +303,7 @@ class TestNPUWorkerIntegration:
 
         metadata = {row[0]: row[1] for row in rows}
         assert metadata["source"] == "npu_worker"
-        assert metadata["vm_id"] == "172.16.168.22"
+        assert metadata["vm_id"] == "10.0.0.3"
         logger.info("✓ Metadata correctly recorded")
 
         # Cleanup
@@ -362,7 +363,7 @@ class TestBrowserScreenshotSave:
             uploaded_by="browser_vm5",
             metadata={
                 "source": "playwright_browser",
-                "vm_id": "172.16.168.25",
+                "vm_id": "10.0.0.6",
                 "url": "https://example.com",
                 "viewport": "1920x1080",
             },
@@ -453,7 +454,7 @@ class TestFrontendFileUpload:
             message_id=message_id,
             metadata={
                 "upload_source": "frontend_web",
-                "vm_id": "172.16.168.21",
+                "vm_id": "10.0.0.2",
                 "ip_address": "192.168.1.100",
             },
         )
@@ -520,12 +521,12 @@ class TestConcurrentVMInitialization:
 
         # Create manager instances for all 6 VMs
         vm_names = [
-            "VM0_Main_172.16.168.20",
-            "VM1_Frontend_172.16.168.21",
-            "VM2_NPU_172.16.168.22",
-            "VM3_Redis_172.16.168.23",
-            "VM4_AIStack_172.16.168.24",
-            "VM5_Browser_172.16.168.25",
+            "VM0_Main_10.0.0.1",
+            "VM1_Frontend_10.0.0.2",
+            "VM2_NPU_10.0.0.3",
+            "VM3_Redis_10.0.0.4",
+            "VM4_AIStack_10.0.0.5",
+            "VM5_Browser_10.0.0.6",
         ]
 
         managers = {

@@ -37,7 +37,7 @@ class MultiAgentWorkflowValidator:
 
     def __init__(self):
         self.results = []
-        self.backend_host = "172.16.168.20"
+        self.backend_host = "10.0.0.20"
         self.backend_port = 8001
         self.base_url = f"http://{self.backend_host}:{self.backend_port}"
 
@@ -203,7 +203,11 @@ class MultiAgentWorkflowValidator:
                     "success": 200 <= response.status_code < 400,
                 }
             except Exception as e:
-                return {"endpoint": endpoint, "error": "Request failed", "success": False}
+                return {
+                    "endpoint": endpoint,
+                    "error": "Request failed",
+                    "success": False,
+                }
 
         # Run parallel requests
         async def run_parallel_tests():

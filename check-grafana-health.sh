@@ -67,7 +67,7 @@ echo ""
 
 # 5. Test Dashboard Access (via proxy if available)
 echo "5. Dashboard Access (via nginx proxy):"
-PROXY_BASE="https://172.16.168.19/grafana"
+PROXY_BASE="https://${AUTOBOT_SLM_HOST}/grafana"
 for dash in autobot-system autobot-overview autobot-performance autobot-multi-machine autobot-redis autobot-api-health; do
     STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "${PROXY_BASE}/d/${dash}?kiosk=tv" 2>/dev/null)
     if [ "$STATUS" = "200" ]; then

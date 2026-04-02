@@ -6,13 +6,13 @@ set -e  # Exit on error
 
 # Define components and their targets
 declare -A SYNC_MAP
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-backend"]="172.16.168.20:/opt/autobot/autobot-backend"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-frontend"]="172.16.168.21:/opt/autobot/autobot-frontend"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-backend"]="172.16.168.19:/opt/autobot/autobot-slm-backend"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-frontend"]="172.16.168.19:/opt/autobot/autobot-slm-frontend"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot_shared"]="172.16.168.19,172.16.168.20,172.16.168.21,172.16.168.22,172.16.168.23,172.16.168.24,172.16.168.25:/opt/autobot/autobot_shared"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-npu-worker"]="172.16.168.22:/opt/autobot/autobot-npu-worker"
-SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-browser-worker"]="172.16.168.25:/opt/autobot/autobot-browser-worker"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-backend"]="${AUTOBOT_BACKEND_HOST:-localhost}:/opt/autobot/autobot-backend"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-frontend"]="${AUTOBOT_FRONTEND_HOST:-localhost}:/opt/autobot/autobot-frontend"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-backend"]="${AUTOBOT_SLM_HOST:-localhost}:/opt/autobot/autobot-slm-backend"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-slm-frontend"]="${AUTOBOT_SLM_HOST:-localhost}:/opt/autobot/autobot-slm-frontend"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot_shared"]="${AUTOBOT_SLM_HOST:-localhost},${AUTOBOT_BACKEND_HOST:-localhost},${AUTOBOT_FRONTEND_HOST:-localhost},${AUTOBOT_NPU_WORKER_HOST:-localhost},${AUTOBOT_REDIS_HOST:-localhost},${AUTOBOT_AI_STACK_HOST:-localhost},${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:/opt/autobot/autobot_shared"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}:/opt/autobot/autobot-npu-worker"
+SYNC_MAP["/home/kali/Desktop/AutoBot/autobot-browser-worker"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:/opt/autobot/autobot-browser-worker"
 
 # Use array for rsync options to avoid quote escaping issues
 RSYNC_OPTS=(

@@ -32,13 +32,13 @@ get_config() {
     else
         # Fallback to hardcoded critical values if yq unavailable
         case "$key" in
-            "infrastructure.hosts.backend") echo "${AUTOBOT_BACKEND_HOST:-172.16.168.20}" ;;
-            "infrastructure.hosts.frontend") echo "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" ;;
-            "infrastructure.hosts.redis") echo "${AUTOBOT_REDIS_HOST:-172.16.168.23}" ;;
+            "infrastructure.hosts.backend") echo "${AUTOBOT_BACKEND_HOST:-localhost}" ;;
+            "infrastructure.hosts.frontend") echo "${AUTOBOT_FRONTEND_HOST:-localhost}" ;;
+            "infrastructure.hosts.redis") echo "${AUTOBOT_REDIS_HOST:-localhost}" ;;
             "infrastructure.hosts.ollama") echo "${AUTOBOT_OLLAMA_HOST:-localhost}" ;;
-            "infrastructure.hosts.ai_stack") echo "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" ;;
-            "infrastructure.hosts.npu_worker") echo "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" ;;
-            "infrastructure.hosts.browser_service") echo "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}" ;;
+            "infrastructure.hosts.ai_stack") echo "${AUTOBOT_AI_STACK_HOST:-localhost}" ;;
+            "infrastructure.hosts.npu_worker") echo "${AUTOBOT_NPU_WORKER_HOST:-localhost}" ;;
+            "infrastructure.hosts.browser_service") echo "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}" ;;
             "infrastructure.ports.backend") echo "8001" ;;
             "infrastructure.ports.frontend") echo "5173" ;;
             "infrastructure.ports.redis") echo "6379" ;;

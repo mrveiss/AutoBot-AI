@@ -99,22 +99,22 @@ fi
 
 echo ""
 echo -e "${BLUE}🏗️  Architecture Overview:${NC}"
-echo "  WSL Backend:  $(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "172.16.168.20"):$(get_config "infrastructure.ports.backend" 2>/dev/null || echo "8001") (This machine)"
-echo "  Frontend:     $(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "172.16.168.21")      (VM1 - Nginx + Vue.js)"
-echo "  NPU Worker:   $(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "172.16.168.22"):$(get_config "infrastructure.ports.npu_worker" 2>/dev/null || echo "8081") (VM2 - Hardware detection)"
-echo "  Redis Stack:  $(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23"):$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379") (VM3 - Data layer)"
-echo "  AI Stack:     $(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "172.16.168.24"):$(get_config "infrastructure.ports.ai_stack" 2>/dev/null || echo "8080") (VM4 - AI processing)"
-echo "  Browser:      $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "172.16.168.25"):$(get_config "infrastructure.ports.browser_service" 2>/dev/null || echo "3000") (VM5 - Playwright automation)"
+echo "  WSL Backend:  $(get_config "infrastructure.hosts.backend" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.backend" 2>/dev/null || echo "8001") (This machine)"
+echo "  Frontend:     $(get_config "infrastructure.hosts.frontend" 2>/dev/null || echo "localhost")      (VM1 - Nginx + Vue.js)"
+echo "  NPU Worker:   $(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.npu_worker" 2>/dev/null || echo "8081") (VM2 - Hardware detection)"
+echo "  Redis Stack:  $(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379") (VM3 - Data layer)"
+echo "  AI Stack:     $(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.ai_stack" 2>/dev/null || echo "8080") (VM4 - AI processing)"
+echo "  Browser:      $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.browser_service" 2>/dev/null || echo "3000") (VM5 - Playwright automation)"
 echo ""
 
 echo -e "${YELLOW}🔍 Testing Individual VM Services...${NC}"
 
 # Test all VM services
-test_service "Frontend VM1" "$(get_service_url "frontend" 2>/dev/null || echo "http://172.16.168.21")/" ""
-test_service "NPU Worker VM2" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://172.16.168.22:8081")/health" "healthy"
-test_redis "Redis Stack VM3" "$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")" "$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")"
-test_service "AI Stack VM4" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://172.16.168.24:8080")/health" "healthy"
-test_service "Browser VM5" "$(get_service_url "browser_service" 2>/dev/null || echo "http://172.16.168.25:3000")/health" "healthy"
+test_service "Frontend VM1" "$(get_service_url "frontend" 2>/dev/null || echo "http://${AUTOBOT_FRONTEND_HOST}")/" ""
+test_service "NPU Worker VM2" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://${AUTOBOT_NPU_WORKER_HOST}:8081")/health" "healthy"
+test_redis "Redis Stack VM3" "$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "localhost")" "$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")"
+test_service "AI Stack VM4" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://${AUTOBOT_AI_STACK_HOST}:8080")/health" "healthy"
+test_service "Browser VM5" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:3000")/health" "healthy"
 
 echo ""
 echo -e "${YELLOW}🔗 Testing Inter-VM Communication...${NC}"
@@ -122,7 +122,7 @@ echo -e "${YELLOW}🔗 Testing Inter-VM Communication...${NC}"
 # Test NPU Worker device detection
 SERVICES_TESTED=$((SERVICES_TESTED + 1))
 echo -n "  NPU Worker device detection... "
-device_response=$(timeout 5 curl -s "$(get_service_url "npu_worker" 2>/dev/null || echo "http://172.16.168.22:8081")/devices" 2>/dev/null)
+device_response=$(timeout 5 curl -s "$(get_service_url "npu_worker" 2>/dev/null || echo "http://${AUTOBOT_NPU_WORKER_HOST}:8081")/devices" 2>/dev/null)
 if echo "$device_response" | grep -q "available_devices"; then
     echo -e "${GREEN}✅ PASS${NC}"
     SERVICES_PASSED=$((SERVICES_PASSED + 1))
@@ -135,7 +135,7 @@ fi
 # Test AI Stack status
 SERVICES_TESTED=$((SERVICES_TESTED + 1))
 echo -n "  AI Stack status endpoint... "
-ai_response=$(timeout 5 curl -s "$(get_service_url "ai_stack" 2>/dev/null || echo "http://172.16.168.24:8080")/api/ai/status" 2>/dev/null)
+ai_response=$(timeout 5 curl -s "$(get_service_url "ai_stack" 2>/dev/null || echo "http://${AUTOBOT_AI_STACK_HOST}:8080")/api/ai/status" 2>/dev/null)
 if echo "$ai_response" | grep -q "ai_stack"; then
     echo -e "${GREEN}✅ PASS${NC}"
     SERVICES_PASSED=$((SERVICES_PASSED + 1))
@@ -148,7 +148,7 @@ fi
 # Test Redis connectivity from different VMs (simulate backend connection)
 SERVICES_TESTED=$((SERVICES_TESTED + 1))
 echo -n "  Redis multi-database access... "
-local redis_host=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "172.16.168.23")
+local redis_host=$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "localhost")
 local redis_port=$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")
 if echo "SELECT 0" | nc -w 2 "$redis_host" "$redis_port" | grep -q "OK"; then
     echo -e "${GREEN}✅ PASS${NC}"
@@ -183,10 +183,10 @@ test_response_time() {
     fi
 }
 
-test_response_time "Frontend" "$(get_service_url "frontend" 2>/dev/null || echo "http://172.16.168.21")/"
-test_response_time "NPU Worker" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://172.16.168.22:8081")/health"
-test_response_time "AI Stack" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://172.16.168.24:8080")/health"
-test_response_time "Browser" "$(get_service_url "browser_service" 2>/dev/null || echo "http://172.16.168.25:3000")/health"
+test_response_time "Frontend" "$(get_service_url "frontend" 2>/dev/null || echo "http://${AUTOBOT_FRONTEND_HOST}")/"
+test_response_time "NPU Worker" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://${AUTOBOT_NPU_WORKER_HOST}:8081")/health"
+test_response_time "AI Stack" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://${AUTOBOT_AI_STACK_HOST}:8080")/health"
+test_response_time "Browser" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:3000")/health"
 
 echo ""
 echo -e "${BLUE}📊 Validation Summary${NC}"
@@ -209,8 +209,8 @@ if [ $SERVICES_PASSED -eq $SERVICES_TESTED ]; then
     echo -e "${GREEN}✅ AutoBot Native VM Deployment is fully functional!${NC}"
     echo ""
     echo -e "${BLUE}🌐 Access your AutoBot installation at:${NC}"
-    echo -e "  Frontend: ${YELLOW}$(get_service_url "frontend" 2>/dev/null || echo "http://172.16.168.21")/${NC}"
-    echo -e "  Backend:  ${YELLOW}$(get_service_url "backend" 2>/dev/null || echo "http://172.16.168.20:8001")/${NC}"
+    echo -e "  Frontend: ${YELLOW}$(get_service_url "frontend" 2>/dev/null || echo "http://${AUTOBOT_FRONTEND_HOST}")/${NC}"
+    echo -e "  Backend:  ${YELLOW}$(get_service_url "backend" 2>/dev/null || echo "http://${AUTOBOT_BACKEND_HOST}:8001")/${NC}"
     echo ""
     echo -e "${YELLOW}🚀 Ready to start AutoBot with: ./run_agent_native.sh${NC}"
     exit 0

@@ -29,7 +29,7 @@ echo "==========================================================================
 echo ""
 
 # Backend configuration from environment or defaults
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
 

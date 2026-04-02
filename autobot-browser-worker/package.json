@@ -1,7 +1,7 @@
 {
   "name": "autobot-browser-worker",
   "version": "1.0.0",
-  "description": "AutoBot Browser Automation Worker - Deploys to 172.16.168.25",
+  "description": "AutoBot Browser Automation Worker - Deploys to ${AUTOBOT_BROWSER_SERVICE_HOST}",
   "private": true,
   "scripts": {
     "start": "node playwright-server.js",

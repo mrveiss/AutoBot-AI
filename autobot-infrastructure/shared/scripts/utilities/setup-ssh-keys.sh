@@ -43,11 +43,11 @@ log_header() {
 
 # AutoBot VM configuration - Using SSOT env vars
 declare -A VMS=(
-    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
-    ["redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
-    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+    ["frontend"]="${AUTOBOT_FRONTEND_HOST:-localhost}"
+    ["npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}"
+    ["redis"]="${AUTOBOT_REDIS_HOST:-localhost}"
+    ["ai-stack"]="${AUTOBOT_AI_STACK_HOST:-localhost}"
+    ["browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 )
 
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
@@ -179,4 +179,4 @@ fi
 
 echo
 log_info "SSH Key Location: $SSH_KEY"
-log_info "Usage Example: ssh -i $SSH_KEY $REMOTE_USER@${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+log_info "Usage Example: ssh -i $SSH_KEY $REMOTE_USER@${AUTOBOT_FRONTEND_HOST:-localhost}"

@@ -3,7 +3,7 @@
 # Author: mrveiss
 """AutoBot NPU Worker - Hardware AI acceleration service.
 
-Deploys to: 172.16.168.22 (NPU VM)
+Deploys to: 10.0.0.3 (NPU VM)
 
 This is a stub for Phase 1. NPU-specific code will be extracted
 from autobot-user-backend in a future phase.

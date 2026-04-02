@@ -35,7 +35,7 @@ DEFAULT_BRANCH="main"
 DEFAULT_ADMIN_USER="admin"
 DEFAULT_SLM_PORT=8000
 DEFAULT_UI_PORT=5174
-DEFAULT_DEV_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+DEFAULT_DEV_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 
 # Runtime variables
 UNATTENDED=false
@@ -87,7 +87,7 @@ Options:
   --unattended          Run without prompts, use defaults
   --git-source=SOURCE   Code source: github or sync (default: github)
   --branch=BRANCH       Git branch (default: main)
-  --dev-host=HOST       Dev machine IP for sync (default: 172.16.168.20)
+  --dev-host=HOST       Dev machine IP for sync (default: localhost)
   --admin-user=USER     Admin username (default: admin)
   --admin-pass=PASS     Admin password (auto-generated if not set)
   --expose-grafana      Expose Grafana directly (default: proxied)
@@ -97,7 +97,7 @@ Options:
 Examples:
   $0                                    # Interactive installation
   $0 --unattended                       # Use all defaults
-  $0 --git-source=sync --dev-host=172.16.168.20
+  $0 --git-source=sync --dev-host=localhost
 EOF
 }
 

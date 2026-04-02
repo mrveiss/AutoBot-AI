@@ -54,7 +54,7 @@ fi
 
 # Set default Celery configuration if not in .env
 # Redis password must be URL-encoded if present
-REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 REDIS_PASSWORD="${AUTOBOT_REDIS_PASSWORD:-}"
 # DB numbers from env vars — defaults match redis-databases.yaml SSOT (#2670)

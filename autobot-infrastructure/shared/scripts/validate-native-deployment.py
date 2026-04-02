@@ -6,8 +6,8 @@
 AutoBot Native VM Deployment Validation Script
 
 Tests connectivity and health of all services across 6 machines:
-- 5 Hyper-V VMs (172.16.168.21-25)
-- 1 WSL machine (172.16.168.20) running backend + terminal + noVNC
+- 5 Hyper-V VMs (10.0.0.2-25)
+- 1 WSL machine (10.0.0.1) running backend + terminal + noVNC
 All services run natively (no Docker containers).
 """
 
@@ -47,17 +47,17 @@ class ServiceCheck:
 def _build_service_definitions():
     """Build the list of services to validate (#1228)."""
     return [
-        ServiceCheck("WSL Backend", "172.16.168.20", 8001, "http", "/api/health"),
-        ServiceCheck("WSL Terminal", "172.16.168.20", 7681, "http", "/"),
-        ServiceCheck("WSL noVNC", "172.16.168.20", 6080, "http", "/"),
-        ServiceCheck("Frontend", "172.16.168.21", 80, "http", "/"),
-        ServiceCheck("NPU Worker", "172.16.168.22", 8081, "http", "/health", None, 15),
-        ServiceCheck("Redis Stack", "172.16.168.23", 6379, "redis", None, "PONG", 5),
-        ServiceCheck("RedisInsight", "172.16.168.23", 8002, "http", "/"),
-        ServiceCheck("AI Stack", "172.16.168.24", 8080, "http", "/health", None, 15),
+        ServiceCheck("WSL Backend", "10.0.0.1", 8001, "http", "/api/health"),
+        ServiceCheck("WSL Terminal", "10.0.0.1", 7681, "http", "/"),
+        ServiceCheck("WSL noVNC", "10.0.0.1", 6080, "http", "/"),
+        ServiceCheck("Frontend", "10.0.0.2", 80, "http", "/"),
+        ServiceCheck("NPU Worker", "10.0.0.3", 8081, "http", "/health", None, 15),
+        ServiceCheck("Redis Stack", "10.0.0.4", 6379, "redis", None, "PONG", 5),
+        ServiceCheck("RedisInsight", "10.0.0.4", 8002, "http", "/"),
+        ServiceCheck("AI Stack", "10.0.0.5", 8080, "http", "/health", None, 15),
         # Issue #1214: Ollama runs on .20 (autobot-llm-gpu), not .24
-        ServiceCheck("Ollama", "172.16.168.20", 11434, "http", "/api/tags", None, 20),
-        ServiceCheck("Browser Service", "172.16.168.25", 3000, "http", "/health"),
+        ServiceCheck("Ollama", "10.0.0.1", 11434, "http", "/api/tags", None, 20),
+        ServiceCheck("Browser Service", "10.0.0.6", 3000, "http", "/health"),
     ]
 
 
@@ -204,11 +204,11 @@ class DeploymentValidator:
         connectivity_tests.append(redis_result)
 
         http_services = [
-            ("AI Stack", "172.16.168.24", 8080, "/health"),
-            ("NPU Worker", "172.16.168.22", 8081, "/health"),
+            ("AI Stack", "10.0.0.5", 8080, "/health"),
+            ("NPU Worker", "10.0.0.3", 8081, "/health"),
             # Issue #1214: Ollama on .20 (autobot-llm-gpu)
-            ("Ollama", "172.16.168.20", 11434, "/api/tags"),
-            ("Browser Service", "172.16.168.25", 3000, "/health"),
+            ("Ollama", "10.0.0.1", 11434, "/api/tags"),
+            ("Browser Service", "10.0.0.6", 3000, "/health"),
         ]
 
         for name, host, port, endpoint in http_services:
@@ -268,7 +268,7 @@ def _test_redis_connectivity() -> Dict:
     """Test Redis connection from backend perspective (#1228)."""
     try:
         r = redis.Redis(
-            host="172.16.168.23",
+            host="10.0.0.4",
             port=6379,
             password=os.environ.get(
                 "REDIS_PASSWORD",

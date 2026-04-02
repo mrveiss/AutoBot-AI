@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-BROWSER_VM_IP="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+BROWSER_VM_IP="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 BROWSER_USER="${AUTOBOT_SSH_USER:-autobot}"
 

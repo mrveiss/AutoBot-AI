@@ -156,8 +156,8 @@ check_service_keys() {
     echo ""
 
     # Check if Redis is accessible
-    if ! redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping > /dev/null 2>&1; then
-        echo -e "${RED}❌ Cannot connect to Redis at ${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}${NC}"
+    if ! redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping > /dev/null 2>&1; then
+        echo -e "${RED}❌ Cannot connect to Redis at ${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}${NC}"
         return 1
     fi
 
@@ -165,7 +165,7 @@ check_service_keys() {
     local services=("main-backend" "frontend" "npu-worker" "redis-stack" "ai-stack" "browser-service")
 
     for service in "${services[@]}"; do
-        local key_exists=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" exists "service:key:$service")
+        local key_exists=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_PORT:-6379}" exists "service:key:$service")
         if [ "$key_exists" -eq 1 ]; then
             echo -e "${GREEN}✅ $service: Key exists${NC}"
         else
@@ -180,7 +180,7 @@ check_vm_auth_logs() {
     echo ""
 
     # Check local backend logs
-    echo -e "${BLUE}=== Main Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}) ===${NC}"
+    echo -e "${BLUE}=== Main Backend (${AUTOBOT_BACKEND_HOST:-localhost}) ===${NC}"
     if [ -f /var/log/autobot/backend.log ]; then
         tail -20 /var/log/autobot/backend.log | grep -i "auth" || echo "No auth logs yet"
     elif [ -f "$PROJECT_ROOT/logs/backend.log" ]; then
@@ -193,11 +193,11 @@ check_vm_auth_logs() {
     # Check each remote VM
     local ssh_key="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
     local ssh_user="${AUTOBOT_SSH_USER:-autobot}"
-    for vm in "frontend:${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" \
-              "npu:${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" \
-              "redis:${AUTOBOT_REDIS_HOST:-172.16.168.23}" \
-              "aiml:${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" \
-              "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"; do
+    for vm in "frontend:${AUTOBOT_FRONTEND_HOST:-localhost}" \
+              "npu:${AUTOBOT_NPU_WORKER_HOST:-localhost}" \
+              "redis:${AUTOBOT_REDIS_HOST:-localhost}" \
+              "aiml:${AUTOBOT_AI_STACK_HOST:-localhost}" \
+              "browser:${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"; do
         IFS=':' read -r name ip <<< "$vm"
         echo -e "${BLUE}=== ${name^} ($ip) ===${NC}"
         ssh -i "$ssh_key" "$ssh_user@$ip" \

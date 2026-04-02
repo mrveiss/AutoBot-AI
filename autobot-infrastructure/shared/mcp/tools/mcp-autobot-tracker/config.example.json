@@ -1,6 +1,6 @@
 {
   "redis": {
-    "host": "172.16.168.23",
+    "host": "",
     "port": 6379,
     "tracking_db": 10,
     "knowledge_db": 1,

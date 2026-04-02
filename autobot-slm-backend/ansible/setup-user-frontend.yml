@@ -13,7 +13,7 @@
 #
 # Usage:
 #   ansible-playbook setup-user-frontend.yml --limit frontend
-#   ansible-playbook setup-user-frontend.yml --limit 172.16.168.21
+#   ansible-playbook setup-user-frontend.yml --limit ${AUTOBOT_FRONTEND_HOST}
 
 - name: Setup User Frontend Node
   hosts: frontend

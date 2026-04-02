@@ -32,12 +32,12 @@ class TestVMConfig:
         # Create fresh instance without .env
         with patch.dict(os.environ, {}, clear=True):
             config = VMConfig()
-            assert config.main == "172.16.168.20"
-            assert config.frontend == "172.16.168.21"
-            assert config.npu == "172.16.168.22"
-            assert config.redis == "172.16.168.23"
-            assert config.aistack == "172.16.168.24"
-            assert config.browser == "172.16.168.25"
+            assert config.main == "10.0.0.20"
+            assert config.frontend == "10.0.0.21"
+            assert config.npu == "10.0.0.22"
+            assert config.redis == "10.0.0.23"
+            assert config.aistack == "10.0.0.24"
+            assert config.browser == "10.0.0.25"
             assert config.ollama == "127.0.0.1"
 
     def test_vm_config_from_env(self):
@@ -189,7 +189,7 @@ class TestAutoBotConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig()
-            assert config.backend_url == "http://172.16.168.20:8001"
+            assert config.backend_url == "http://10.0.0.20:8001"
 
     def test_computed_redis_url(self):
         """Test that Redis URL is computed correctly."""
@@ -197,7 +197,7 @@ class TestAutoBotConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig()
-            assert config.redis_url == "redis://172.16.168.23:6379"
+            assert config.redis_url == "redis://10.0.0.23:6379"
 
     def test_computed_redis_url_with_password(self):
         """Test that Redis URL includes password when set."""
@@ -207,7 +207,7 @@ class TestAutoBotConfig:
         with patch.dict(os.environ, test_env, clear=True):
             config = AutoBotConfig()
             assert "secret123" in config.redis_url_with_auth
-            assert config.redis_url_with_auth == "redis://:secret123@172.16.168.23:6379"
+            assert config.redis_url_with_auth == "redis://:secret123@10.0.0.23:6379"
 
     def test_computed_websocket_url(self):
         """Test that WebSocket URL is computed correctly."""
@@ -215,7 +215,7 @@ class TestAutoBotConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig()
-            assert config.websocket_url == "ws://172.16.168.20:8001/ws"
+            assert config.websocket_url == "ws://10.0.0.20:8001/ws"
 
     def test_get_service_url(self):
         """Test the get_service_url helper method."""
@@ -223,8 +223,8 @@ class TestAutoBotConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig()
-            assert config.get_service_url("backend") == "http://172.16.168.20:8001"
-            assert config.get_service_url("redis") == "redis://172.16.168.23:6379"
+            assert config.get_service_url("backend") == "http://10.0.0.20:8001"
+            assert config.get_service_url("redis") == "redis://10.0.0.23:6379"
             assert config.get_service_url("unknown") is None
 
     def test_get_vm_ip(self):
@@ -233,8 +233,8 @@ class TestAutoBotConfig:
 
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig()
-            assert config.get_vm_ip("main") == "172.16.168.20"
-            assert config.get_vm_ip("redis") == "172.16.168.23"
+            assert config.get_vm_ip("main") == "10.0.0.20"
+            assert config.get_vm_ip("redis") == "10.0.0.23"
             assert config.get_vm_ip("unknown") is None
 
     def test_get_redis_url_for_db(self):

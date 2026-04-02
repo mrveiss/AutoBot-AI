@@ -37,11 +37,11 @@ class AutoBotSystemValidator:
     def __init__(self):
         self.results = []
         self.start_time = time.time()
-        self.backend_host = "172.16.168.20"
+        self.backend_host = "10.0.0.20"
         self.backend_port = 8001
-        self.frontend_host = "172.16.168.21"
+        self.frontend_host = "10.0.0.21"
         self.frontend_port = 5173
-        self.redis_host = "172.16.168.23"
+        self.redis_host = "10.0.0.23"
         self.redis_port = 6379
 
     def log_result(
@@ -108,9 +108,9 @@ class AutoBotSystemValidator:
             (self.backend_host, self.backend_port, "Backend API"),
             (self.redis_host, self.redis_port, "Redis Database"),
             (self.frontend_host, self.frontend_port, "Frontend Server"),
-            ("172.16.168.22", 8081, "NPU Worker"),
-            ("172.16.168.24", 8080, "AI Stack"),
-            ("172.16.168.25", 3000, "Browser Service"),
+            ("10.0.0.22", 8081, "NPU Worker"),
+            ("10.0.0.24", 8080, "AI Stack"),
+            ("10.0.0.25", 3000, "Browser Service"),
         ]
 
         connectivity_results = []

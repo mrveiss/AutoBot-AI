@@ -12,7 +12,6 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from backend.security.service_auth import ServiceAuthManager
+
 from utils.redis_client import get_redis_client
 
 logger = structlog.get_logger()
@@ -32,32 +32,32 @@ logger = structlog.get_logger()
 SERVICES = [
     {
         "id": "main-backend",
-        "host": "172.16.168.20",
+        "host": "10.0.0.1",
         "description": "Main backend API server",
     },
     {
         "id": "frontend",
-        "host": "172.16.168.21",
+        "host": "10.0.0.2",
         "description": "Vue.js frontend web interface",
     },
     {
         "id": "npu-worker",
-        "host": "172.16.168.22",
+        "host": "10.0.0.3",
         "description": "NPU hardware acceleration worker",
     },
     {
         "id": "redis-stack",
-        "host": "172.16.168.23",
+        "host": "10.0.0.4",
         "description": "Redis Stack database",
     },
     {
         "id": "ai-stack",
-        "host": "172.16.168.24",
+        "host": "10.0.0.5",
         "description": "AI/ML processing stack",
     },
     {
         "id": "browser-service",
-        "host": "172.16.168.25",
+        "host": "10.0.0.6",
         "description": "Playwright browser automation",
     },
 ]
@@ -69,7 +69,7 @@ async def export_service_configs():
     logger.info("🔐 AutoBot Service Key Export")
     logger.info("=" * 60)
     logger.info(f"Timestamp: {datetime.now().isoformat()}")
-    logger.info("Redis Host: 172.16.168.23:6379")
+    logger.info("Redis Host: 10.0.0.4:6379")
     logger.info("Export Directory: /tmp/service-keys/")
     logger.info("")
 
@@ -115,7 +115,7 @@ async def export_service_configs():
             f.write(f"SERVICE_ID={service_id}\n")
             # lgtm[py/clear-text-storage-sensitive-data]
             f.write(f"SERVICE_KEY={service_key}\n")
-            f.write("REDIS_HOST=172.16.168.23\n")
+            f.write("REDIS_HOST=10.0.0.4\n")
             f.write("REDIS_PORT=6379\n")
             f.write("AUTH_TIMESTAMP_WINDOW=300\n")
 
