@@ -20,7 +20,7 @@ source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 HEALTH_ENDPOINT="http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
-ENV_FILE="/home/kali/Desktop/AutoBot/.env"
+ENV_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env"
 STARTUP_WAIT_SECONDS=5
 SSH_KEY="${AUTOBOT_SSH_KEY:-${HOME}/.ssh/autobot_key}"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
@@ -79,7 +79,7 @@ restart_backend() {
     sleep 1
 
     # Start backend in background from the project directory
-    cd /home/kali/Desktop/AutoBot
+    cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
     nohup python -m uvicorn autobot_user_backend.main:app \
         --host 0.0.0.0 --port "${BACKEND_PORT}" \
         > /tmp/autobot-backend-rollback.log 2>&1 &

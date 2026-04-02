@@ -114,7 +114,7 @@ def search_queries_batch(queries: list, max_workers: int = 4) -> list:
 
 def upload_docs_as_searchable_facts():
     """Upload docs as facts that can be searched via simple text matching."""
-    project_root = "/home/kali/Desktop/AutoBot"
+    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 
     # Find all documentation files
     doc_files = []

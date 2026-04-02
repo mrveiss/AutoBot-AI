@@ -517,7 +517,7 @@ class TestProcessFilesParallel:
         from api.codebase_analytics.scanner import _process_files_parallel
 
         # Use actual files from the project
-        project_root = Path("/home/kali/Desktop/AutoBot")
+        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         test_files = list(project_root.glob("backend/api/codebase_analytics/*.py"))[:3]
 
         if not test_files:
@@ -541,7 +541,7 @@ class TestAnalyzeSingleFile:
         """Test _analyze_single_file returns FileAnalysisResult."""
         from api.codebase_analytics.scanner import _analyze_single_file
 
-        project_root = Path("/home/kali/Desktop/AutoBot")
+        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         test_file = project_root / "backend" / "api" / "codebase_analytics" / "types.py"
 
         if not test_file.exists():
@@ -562,7 +562,7 @@ class TestAnalyzeSingleFile:
         """Test nonexistent file returns base result without processing."""
         from api.codebase_analytics.scanner import _analyze_single_file
 
-        project_root = Path("/home/kali/Desktop/AutoBot")
+        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         fake_file = project_root / "nonexistent_file_12345.py"
 
         result = await _analyze_single_file(

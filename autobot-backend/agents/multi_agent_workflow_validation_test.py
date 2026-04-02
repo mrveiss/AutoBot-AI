@@ -16,7 +16,7 @@ from typing import Dict, List
 import requests
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 
 @dataclass
@@ -547,7 +547,9 @@ class MultiAgentWorkflowValidator:
 
     def save_workflow_results(self, report: Dict):
         """Save workflow validation results"""
-        results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

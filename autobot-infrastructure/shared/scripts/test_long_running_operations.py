@@ -29,7 +29,7 @@ import sys
 from datetime import datetime
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
 logging.basicConfig(
@@ -94,8 +94,7 @@ class LongRunningOperationsDemo:
         logger.info("DEMO: Codebase Indexing with Intelligent Timeouts")
         logger.info("=" * 60)
 
-        print(
-            """
+        print("""
         BEFORE (Problematic):
         - Fixed 30-second timeout regardless of codebase size
         - No progress visibility
@@ -107,8 +106,7 @@ class LongRunningOperationsDemo:
         - Real-time progress tracking with file details
         - Checkpoint every 100 files processed
         - Resume from checkpoint on failure/timeout
-        """
-        )
+        """)
 
         # Start enhanced indexing operation
         operation_id = await self.migrator.migrate_knowledge_base_indexing()
@@ -133,8 +131,7 @@ class LongRunningOperationsDemo:
         logger.info("DEMO: Comprehensive Test Suite with Checkpoint/Resume")
         logger.info("=" * 60)
 
-        print(
-            """
+        print("""
         BEFORE (Problematic):
         - Fixed 10-minute timeout regardless of test count
         - No visibility into which tests are running
@@ -146,8 +143,7 @@ class LongRunningOperationsDemo:
         - Real-time test progress and results
         - Resume from last completed test
         - Parallel execution with resource management
-        """
-        )
+        """)
 
         # Start enhanced test suite
         operation_id = await self.migrator.migrate_comprehensive_test_suite()
@@ -171,8 +167,7 @@ class LongRunningOperationsDemo:
         logger.info("DEMO: Security Scanning with Incremental Progress")
         logger.info("=" * 60)
 
-        print(
-            """
+        print("""
         BEFORE (Problematic):
         - Fixed 5-minute timeout regardless of codebase size
         - No progress visibility
@@ -184,8 +179,7 @@ class LongRunningOperationsDemo:
         - Real-time scan progress with vulnerability tracking
         - Resume from last scanned file
         - Incremental scanning with result aggregation
-        """
-        )
+        """)
 
         # Start enhanced security scan
         operation_id = await self.migrator.migrate_security_scan_operation()
@@ -326,13 +320,17 @@ class LongRunningOperationsDemo:
 
         # Quick indexing operation
         indexing_op = await execute_codebase_indexing(
-            "/home/kali/Desktop/AutoBot/src/utils", self.manager, ["*.py"]
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/src/utils",
+            self.manager,
+            ["*.py"],
         )
         operations.append(("Indexing", indexing_op))
 
         # Test suite operation
         test_op = await execute_comprehensive_test_suite(
-            "/home/kali/Desktop/AutoBot/tests/unit", self.manager, ["test_*.py"]
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit",
+            self.manager,
+            ["test_*.py"],
         )
         operations.append(("Testing", test_op))
 
@@ -484,8 +482,7 @@ class LongRunningOperationsDemo:
             logger.info("\n" + "=" * 60)
             logger.info("DEMONSTRATION COMPLETE")
             logger.info("=" * 60)
-            print(
-                """
+            print("""
             Key Benefits Demonstrated:
 
             1. ✅ INTELLIGENT TIMEOUTS
@@ -515,8 +512,7 @@ class LongRunningOperationsDemo:
 
             The framework transforms unreliable timeout-prone operations
             into robust, resumable, and user-friendly experiences.
-            """
-            )
+            """)
 
         finally:
             await self.shutdown()

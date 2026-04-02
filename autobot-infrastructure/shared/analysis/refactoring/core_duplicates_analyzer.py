@@ -213,7 +213,7 @@ def analyze_core_duplicates():
     """Analyze duplicates in core AutoBot files only (Issue #560: decomposed)."""
     # Load the full analysis results
     with open(
-        "/home/kali/Desktop/AutoBot/analysis/refactoring/duplicate_analysis_results.json",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/analysis/refactoring/duplicate_analysis_results.json",
         "r",
     ) as f:
         results = json.load(f)
@@ -263,9 +263,7 @@ def analyze_core_duplicates():
         core_api_duplicates,
     )
 
-    output_file = (
-        "/home/kali/Desktop/AutoBot/analysis/refactoring/core_duplicates_analysis.json"
-    )
+    output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/analysis/refactoring/core_duplicates_analysis.json"
     with open(output_file, "w") as f:
         json.dump(core_results, f, indent=2)
 

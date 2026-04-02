@@ -2,7 +2,7 @@
   "mcpServers": {
     "filesystem": {
       "command": "mcp-server-filesystem",
-      "args": ["/home/kali/Desktop/AutoBot"],
+      "args": ["${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"],
       "description": "Enhanced file system operations for AutoBot codebase",
       "enabled": true
     },
@@ -20,7 +20,7 @@
     },
     "autobot-custom": {
       "command": "node",
-      "args": ["/home/kali/Desktop/AutoBot/.mcp/autobot-mcp-server.js"],
+      "args": ["${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.mcp/autobot-mcp-server.js"],
       "description": "Custom AutoBot-specific MCP server with debugging tools",
       "enabled": true
     },
@@ -31,7 +31,7 @@
       "enabled": true
     },
     "github-mcp": {
-      "command": "/home/kali/Desktop/AutoBot/.mcp/github-mcp-server",
+      "command": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.mcp/github-mcp-server",
       "args": ["stdio"],
       "description": "GitHub MCP server for repository management",
       "env": {
@@ -55,6 +55,6 @@
   "settings": {
     "logLevel": "info",
     "timeout": 30000,
-    "projectRoot": "/home/kali/Desktop/AutoBot"
+    "projectRoot": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
   }
 }

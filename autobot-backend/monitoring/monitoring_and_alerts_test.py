@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import requests
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -150,7 +150,9 @@ class MonitoringAndAlertingTester:
         ]
 
         # Create results directory
-        self.results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        self.results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         self.results_dir.mkdir(exist_ok=True)
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -657,11 +659,11 @@ class MonitoringAndAlertingTester:
         log_sources = [
             {
                 "name": "Backend Logs",
-                "path": "/home/kali/Desktop/AutoBot/logs/backend.log",
+                "path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/backend.log",
             },
             {
                 "name": "Frontend Logs",
-                "path": "/home/kali/Desktop/AutoBot/logs/frontend.log",
+                "path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/frontend.log",
             },
             {"name": "System Logs", "path": "/var/log/syslog"},
             {

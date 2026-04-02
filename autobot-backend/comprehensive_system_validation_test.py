@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 
 @dataclass
@@ -719,7 +719,9 @@ class AutoBotSystemValidator:
 
     def save_results(self, summary: Dict):
         """Save detailed test results to file"""
-        results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

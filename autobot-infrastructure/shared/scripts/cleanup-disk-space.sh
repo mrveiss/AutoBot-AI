@@ -24,7 +24,7 @@ IFS=$'\n\t'
 # CONSTANTS
 # ============================================================================
 
-readonly AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
+readonly AUTOBOT_ROOT="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 readonly BYTES_TO_MB=1048576
 readonly BYTES_TO_KB=1024
 readonly PROGRESS_THRESHOLD=100  # Show progress if >100 files
@@ -714,7 +714,7 @@ fi
 # Safety check: verify we're in AutoBot directory
 if [[ ! -f "CLAUDE.md" ]] || [[ ! -f "install.sh" ]]; then
     format_message "ERROR" "Not in AutoBot root directory!"
-    echo "Expected: /home/kali/Desktop/AutoBot/"
+    echo "Expected: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/"
     echo "Current: $(pwd)"
     exit 1
 fi

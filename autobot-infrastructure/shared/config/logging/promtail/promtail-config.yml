@@ -37,7 +37,7 @@ scrape_configs:
         labels:
           job: autobot-centralized
           host: __HOST__
-          __path__: /home/kali/Desktop/AutoBot/logs/autobot-centralized/__HOST__/**/*.log
+          __path__: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/autobot-centralized/__HOST__/**/*.log
 
   # Performance monitoring logs
   - job_name: autobot-performance
@@ -47,7 +47,7 @@ scrape_configs:
         labels:
           job: autobot-performance
           host: __HOST__
-          __path__: /home/kali/Desktop/AutoBot/logs/performance_monitor.log
+          __path__: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/performance_monitor.log
 
   # Docker container logs
   - job_name: autobot-docker

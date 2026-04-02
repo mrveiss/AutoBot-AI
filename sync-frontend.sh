@@ -48,7 +48,7 @@ fi
 if [[ ! -f "autobot-slm-frontend/package.json" ]]; then
     echo -e "${RED}❌ Error: Must run from AutoBot root directory${NC}"
     echo "Current directory: $(pwd)"
-    echo "Expected: /home/kali/Desktop/AutoBot"
+    echo "Expected: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     exit 1
 fi
 

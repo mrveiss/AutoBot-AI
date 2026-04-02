@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration
-CERT_DIR="/home/kali/Desktop/AutoBot/certs"
+CERT_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/certs"
 CA_DIR="${CERT_DIR}/ca"
 WARNING_DAYS=30
 VALIDITY_DAYS=365
@@ -245,8 +245,8 @@ if [ ${#CERTS_TO_RENEW[@]} -gt 0 ]; then
 
         # Distribute renewed certificates
         log_info "Distributing renewed certificates to VMs"
-        if [ -f "/home/kali/Desktop/AutoBot/scripts/security/distribute-certificates.sh" ]; then
-            /home/kali/Desktop/AutoBot/scripts/security/distribute-certificates.sh
+        if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/security/distribute-certificates.sh" ]; then
+            ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/security/distribute-certificates.sh
         else
             log_warn "Certificate distribution script not found"
             log_warn "Please distribute certificates manually"

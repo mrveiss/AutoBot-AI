@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration
-CERT_DIR="/home/kali/Desktop/AutoBot/certs"
+CERT_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/certs"
 CA_DIR="${CERT_DIR}/ca"
 VALIDITY_DAYS=365
 KEY_SIZE=4096
@@ -292,7 +292,7 @@ log_info "Certificate summary saved: ${SUMMARY_FILE}"
 
 log_info "Step 4: Updating .gitignore to exclude certificates"
 
-GITIGNORE_FILE="/home/kali/Desktop/AutoBot/.gitignore"
+GITIGNORE_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.gitignore"
 
 if ! grep -q "^certs/" "${GITIGNORE_FILE}" 2>/dev/null; then
     cat >> "${GITIGNORE_FILE}" <<EOF

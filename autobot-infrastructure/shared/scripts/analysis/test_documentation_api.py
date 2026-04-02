@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Add project root to Python path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def test_documentation_browser_logic():
         import hashlib
         import mimetypes
 
-        project_root = Path("/home/kali/Desktop/AutoBot")
+        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         documentation_files = []
         total_size = 0

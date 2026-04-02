@@ -148,7 +148,7 @@ async def populate_docs_knowledge():
 
         await asyncio.sleep(2)
 
-        project_root = Path("/home/kali/Desktop/AutoBot")
+        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         filtered_files = _gather_documentation_files(project_root)
 
         logger.info("Found %s documentation files to index", len(filtered_files))

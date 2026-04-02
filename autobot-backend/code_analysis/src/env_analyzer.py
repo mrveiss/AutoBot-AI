@@ -94,6 +94,19 @@ _URL_PROTOCOL_PREFIXES = (
 _WEB_PROTOCOL_PREFIXES = ("http://", "https://", "ws://", "wss://")
 _DATABASE_PROTOCOL_PREFIXES = ("postgresql://", "mysql://", "redis://", "mongodb://")
 
+# RFC 1918 private IP prefixes — deployment-agnostic (covers 10.x, 172.16-31.x, 192.168.x)
+_RFC1918_PREFIXES = (
+    "10.",
+    *[f"172.{n}." for n in range(16, 32)],
+    "192.168.",
+)
+
+
+def _is_private_ip(value: str) -> bool:
+    """Return True if value looks like an RFC 1918 private IP address."""
+    return value.startswith(_RFC1918_PREFIXES)
+
+
 # Issue #632: Directories to skip during analysis (aligned with shell script)
 _SKIP_DIRECTORIES = (
     "__pycache__",
@@ -883,8 +896,8 @@ class EnvironmentAnalyzer:
             value.startswith(_WEB_PROTOCOL_PREFIXES)
             and not any(d in value for d in example_domains),
             value in ["localhost", "127.0.0.1", "0.0.0.0"],  # nosec B104
-            # VM IPs (from shell script)
-            value.startswith("172.16.168."),
+            # Private IPs (any RFC 1918 range — not tied to a specific deployment subnet)
+            _is_private_ip(value),
             # Security (HIGH priority)
             value.startswith(
                 ("sk-", "pk_", "rk_", "api_", "API_", "Bearer ", "token_")
@@ -1039,8 +1052,8 @@ class EnvironmentAnalyzer:
         if value.startswith(("sk-", "pk_", "rk_", "api_", "API_", "Bearer ")):
             return "security", "high"
 
-        # VM IPs (from shell script SSOT_VM_IPS)
-        if value.startswith("172.16.168."):
+        # Private IPs (any RFC 1918 range — not tied to a specific deployment subnet)
+        if _is_private_ip(value):
             return "hostname", "high"
 
         # Service ports (from shell script SSOT_PORTS)

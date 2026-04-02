@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 class VueSpecificFixAgent:
     """Agent to fix Vue.js specific issues in the codebase."""
 
-    def __init__(self, project_root: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(
+        self, project_root: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    ):
         """Initialize the Vue fix agent."""
         self.project_root = Path(project_root)
         self.vue_dir = self.project_root / "autobot-vue" / "src"

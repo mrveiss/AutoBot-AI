@@ -475,7 +475,7 @@ class AutoBotSystemTester:
         print("🏗️  Analyzing Frontend Build...")
 
         # Check if frontend directory exists
-        frontend_dir = "/home/kali/Desktop/AutoBot/autobot-vue"
+        frontend_dir = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue"
         if not os.path.exists(frontend_dir):
             self.add_result(
                 "Frontend Build",
@@ -827,9 +827,7 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save to multiple formats
-    results_dir = (
-        "/home/kali/Desktop/AutoBot/tests/results/comprehensive_testing_20250909_150149"
-    )
+    results_dir = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/comprehensive_testing_20250909_150149"
     os.makedirs(results_dir, exist_ok=True)
 
     # JSON report for detailed analysis

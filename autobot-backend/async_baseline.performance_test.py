@@ -600,7 +600,9 @@ class AsyncBaselineTest:
         }
 
         # Save report to file
-        output_dir = Path("/home/kali/Desktop/AutoBot/tests/performance/results")
+        output_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/performance/results"
+        )
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -57,7 +57,7 @@ async def populate_directly():
     logger.info(f"  Embedding model: {kb.embedding_model_name}")
 
     # Find documentation files
-    project_root = Path("/home/kali/Desktop/AutoBot")
+    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
     doc_patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
 
     all_files = []

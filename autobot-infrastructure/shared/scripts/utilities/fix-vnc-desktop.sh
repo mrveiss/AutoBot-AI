@@ -15,8 +15,8 @@ pkill -9 x11vnc 2>/dev/null || true
 pkill -9 Xtigervnc 2>/dev/null || true
 
 # Create proper xstartup for XFCE
-mkdir -p /home/kali/.vnc
-cat > /home/kali/.vnc/xstartup << 'EOF'
+mkdir -p /home/${USER:-autobot}/.vnc
+cat > /home/${USER:-autobot}/.vnc/xstartup << 'EOF'
 #!/bin/bash
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
@@ -31,15 +31,15 @@ xsetroot -solid "#2E3440" &
 # Start XFCE desktop
 exec startxfce4
 EOF
-chmod +x /home/kali/.vnc/xstartup
-chown kali:kali /home/kali/.vnc/xstartup
+chmod +x /home/${USER:-autobot}/.vnc/xstartup
+chown kali:kali /home/${USER:-autobot}/.vnc/xstartup
 
 # Create VNC password (random, displayed once)
 VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
-echo "$VNC_PASS" | vncpasswd -f > /home/kali/.vnc/passwd
+echo "$VNC_PASS" | vncpasswd -f > /home/${USER:-autobot}/.vnc/passwd
 echo "Generated VNC password: $VNC_PASS"
-chmod 600 /home/kali/.vnc/passwd
-chown kali:kali /home/kali/.vnc/passwd
+chmod 600 /home/${USER:-autobot}/.vnc/passwd
+chown kali:kali /home/${USER:-autobot}/.vnc/passwd
 
 # Create TigerVNC service (runs its own X server with desktop)
 cat > /etc/systemd/system/tigervnc.service << 'EOF'
@@ -53,7 +53,7 @@ User=kali
 Group=kali
 Environment=HOME=/home/kali
 WorkingDirectory=/home/kali
-ExecStart=/usr/bin/tigervncserver -fg -geometry 1920x1080 -depth 24 -SecurityTypes VncAuth -passwd /home/kali/.vnc/passwd -xstartup /home/kali/.vnc/xstartup :1
+ExecStart=/usr/bin/tigervncserver -fg -geometry 1920x1080 -depth 24 -SecurityTypes VncAuth -passwd /home/${USER:-autobot}/.vnc/passwd -xstartup /home/${USER:-autobot}/.vnc/xstartup :1
 ExecStop=/usr/bin/tigervncserver -kill :1
 Restart=on-failure
 RestartSec=5

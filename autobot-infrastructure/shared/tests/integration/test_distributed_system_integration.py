@@ -738,7 +738,7 @@ def main():
 
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results_file = f"/home/kali/Desktop/AutoBot/tests/results/distributed_system_test_{timestamp}.json"
+        results_file = f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/distributed_system_test_{timestamp}.json"
 
         with open(results_file, "w") as f:
             json.dump(results, f, indent=2)

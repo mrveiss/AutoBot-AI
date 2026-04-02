@@ -131,7 +131,9 @@ class PortConfig(BaseSettings):
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
-    chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
+    chromadb: int = Field(
+        default=8100, alias="AUTOBOT_CHROMADB_PORT"
+    )  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
     tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
@@ -839,8 +841,8 @@ class TLSMode(str, Enum):
 class TLSConfig(BaseSettings):
     """TLS/PKI Configuration for secure communications.
 
-    Issue #164: Added frontend TLS support for HTTPS on 172.16.168.21.
-    TLS certificates are managed and deployed via SLM (172.16.168.19).
+    Issue #164: Added frontend TLS support for HTTPS on the frontend VM.
+    TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
 
     model_config = SettingsConfigDict(
@@ -981,8 +983,8 @@ class AutoBotConfig(BaseSettings):
         from autobot_shared.ssot_config import get_config
 
         config = get_config()
-        backend = config.backend_url  # http://172.16.168.20:8001
-        redis = config.redis_url  # redis://172.16.168.23:6379
+        backend = config.backend_url  # e.g. http://<AUTOBOT_BACKEND_HOST>:8001
+        redis = config.redis_url  # e.g. redis://<AUTOBOT_REDIS_HOST>:6379
         model = config.llm.default_model  # qwen3.5:9b
     """
 

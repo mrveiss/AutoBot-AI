@@ -8,9 +8,9 @@
   },
   "monitoring": {
     "log_files": {
-      "backend": "/home/kali/Desktop/AutoBot/data/logs/backend.log",
-      "frontend": "/home/kali/Desktop/AutoBot/data/logs/frontend.log",
-      "redis": "/home/kali/Desktop/AutoBot/data/logs/redis.log"
+      "backend": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/logs/backend.log",
+      "frontend": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/logs/frontend.log",
+      "redis": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/logs/redis.log"
     },
     "docker_services": [
       "autobot-backend",

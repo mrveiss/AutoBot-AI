@@ -7,7 +7,7 @@ import asyncio
 import sys
 from datetime import datetime, timedelta
 
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 

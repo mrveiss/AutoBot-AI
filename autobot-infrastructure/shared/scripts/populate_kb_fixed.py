@@ -100,7 +100,7 @@ async def populate_knowledge_base_chromadb():
         return False
 
     logger.info("Knowledge base initialized with ChromaDB")
-    project_root = Path("/home/kali/Desktop/AutoBot")
+    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
     filtered_files = _find_documentation_files(project_root)
     logger.info("Found %s documentation files", len(filtered_files))
 

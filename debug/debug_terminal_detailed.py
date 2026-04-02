@@ -19,7 +19,7 @@ import websockets
 logger = logging.getLogger(__name__)
 
 # Import centralized network configuration
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 from constants.network_constants import NetworkConstants
 
 # Build URLs from centralized configuration
@@ -197,7 +197,7 @@ def test_system_command_agent_direct():
         # Try to import and test directly
         import sys
 
-        sys.path.append("/home/kali/Desktop/AutoBot")
+        sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         from agents.system_command_agent import SystemCommandAgent
 

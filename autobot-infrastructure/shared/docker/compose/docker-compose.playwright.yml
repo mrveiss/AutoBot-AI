@@ -6,7 +6,7 @@ services:
     working_dir: /app
     environment:
       - DISPLAY=${DISPLAY:-:0}
-      - XAUTHORITY=${XAUTHORITY:-/home/kali/.Xauthority}
+      - XAUTHORITY=${XAUTHORITY:-/home/${USER:-autobot}/.Xauthority}
       - HEADLESS=${HEADLESS:-false}
     volumes:
       - ./playwright-server.js:/app/server.js

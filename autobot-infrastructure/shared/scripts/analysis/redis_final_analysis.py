@@ -13,7 +13,7 @@ import os
 import sys
 from typing import Any, Dict, List, Tuple
 
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 from constants import ServiceURLs
 from constants.network_constants import NetworkConstants
 
@@ -317,15 +317,15 @@ class AutoBotVectorStoreAnalysis:
                         return {
                             "field_name": attrs[i + 1],
                             "type": attrs[i + 2] if i + 2 < len(attrs) else "unknown",
-                            "algorithm": attrs[i + 3]
-                            if i + 3 < len(attrs)
-                            else "unknown",
-                            "data_type": attrs[i + 4]
-                            if i + 4 < len(attrs)
-                            else "unknown",
-                            "dimensions": attrs[i + 5]
-                            if i + 5 < len(attrs)
-                            else "unknown",
+                            "algorithm": (
+                                attrs[i + 3] if i + 3 < len(attrs) else "unknown"
+                            ),
+                            "data_type": (
+                                attrs[i + 4] if i + 4 < len(attrs) else "unknown"
+                            ),
+                            "dimensions": (
+                                attrs[i + 5] if i + 5 < len(attrs) else "unknown"
+                            ),
                         }
         except Exception as e:
             logger.warning("Could not extract vector config: %s", e)
@@ -510,9 +510,7 @@ class AutoBotVectorStoreAnalysis:
             "recommendation": recommendation,
         }
 
-        output_file = (
-            "/home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json"
-        )
+        output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/vector_store_final_analysis.json"
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(full_report, f, indent=2)
@@ -687,7 +685,7 @@ async def main():
 
     logger.info(
         "\nComplete analysis saved to:"
-        " /home/kali/Desktop/AutoBot/reports/vector_store_final_analysis.json"
+        " ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/vector_store_final_analysis.json"
     )
 
 

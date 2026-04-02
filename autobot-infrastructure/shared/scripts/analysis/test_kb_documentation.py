@@ -10,7 +10,7 @@ import asyncio
 import logging
 import sys
 
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

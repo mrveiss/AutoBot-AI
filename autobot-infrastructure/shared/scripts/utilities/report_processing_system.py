@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
     handlers=[
         logging.FileHandler(
-            f"/home/kali/Desktop/AutoBot/report_processing_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/report_processing_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         ),
         logging.StreamHandler(),
     ],
@@ -442,7 +442,9 @@ class ArchiveOrganizationAgent:
 class ReportProcessingCoordinator:
     """Main coordinator for multi-agent report processing"""
 
-    def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
+    def __init__(
+        self, base_path: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+    ):
         self.base_path = base_path
         self.logger = logging.getLogger("Coordinator")
         self.processing_start = datetime.datetime.now()

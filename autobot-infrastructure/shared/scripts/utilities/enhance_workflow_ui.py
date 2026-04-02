@@ -766,7 +766,7 @@ def main():
     notification_component = create_workflow_notification_component()
 
     with open(
-        "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowNotifications.vue",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowNotifications.vue",
         "w",
     ) as f:
         f.write(notification_component)
@@ -781,7 +781,7 @@ def main():
     progress_widget = create_workflow_progress_widget()
 
     with open(
-        "/home/kali/Desktop/AutoBot/autobot-vue/src/components/WorkflowProgressWidget.vue",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowProgressWidget.vue",
         "w",
     ) as f:
         f.write(progress_widget)

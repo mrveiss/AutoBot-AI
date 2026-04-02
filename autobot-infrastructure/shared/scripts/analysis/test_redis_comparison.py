@@ -19,7 +19,7 @@ from constants import ServiceURLs
 _DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 # Add the project root to the Python path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +34,9 @@ async def test_redis_connection():
     try:
         import redis
 
-        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+        client = redis.Redis(
+            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True
+        )
         client.ping()
         logger.info("✅ Redis connection successful")
 
@@ -231,7 +233,9 @@ async def test_langchain_redis():
             vector_store.similarity_search, "test document", k=3
         )
 
-        logger.info(f"✅ LangChain similarity search successful: {len(results)} results")
+        logger.info(
+            f"✅ LangChain similarity search successful: {len(results)} results"
+        )
         for i, doc in enumerate(results[:2]):
             logger.info(f"  Result {i+1}: {doc.page_content[:100]}...")
 
@@ -292,7 +296,9 @@ async def analyze_existing_data():
     try:
         import redis
 
-        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+        client = redis.Redis(
+            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True
+        )
 
         # Get sample documents
         sample_keys = list(client.scan_iter(match="llama_index/vector*", count=5))

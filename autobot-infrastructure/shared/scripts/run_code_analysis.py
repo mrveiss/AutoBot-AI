@@ -239,7 +239,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run code analysis suite")
     parser.add_argument(
         "--target",
-        default="/home/kali/Desktop/AutoBot",
+        default="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
         help="Target path to analyze",
     )
     parser.add_argument(

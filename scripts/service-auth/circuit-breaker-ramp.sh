@@ -25,7 +25,7 @@ source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 HEALTH_ENDPOINT="http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
-ENV_FILE="/home/kali/Desktop/AutoBot/.env"
+ENV_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env"
 HEALTH_CHECK_INTERVAL=30  # seconds between health checks during stage
 STARTUP_WAIT=5
 
@@ -174,7 +174,7 @@ restart_backend() {
     else
         pkill -f "uvicorn.*8001" 2>/dev/null || true
         sleep 1
-        cd /home/kali/Desktop/AutoBot
+        cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
         nohup python -m uvicorn autobot_user_backend.main:app \
             --host 0.0.0.0 --port "${BACKEND_PORT}" \
             > /tmp/autobot-backend-ramp.log 2>&1 &

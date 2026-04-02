@@ -830,7 +830,9 @@ class KnowledgePerformanceTest:
         }
 
         # Save report to proper directory (NOT root!)
-        output_dir = Path("/home/kali/Desktop/AutoBot/reports/performance")
+        output_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/performance"
+        )
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")

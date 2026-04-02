@@ -8,7 +8,7 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/autobot-slm-frontend"
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}/autobot-slm-frontend"
 
 # Remote Configuration
 FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-localhost}"

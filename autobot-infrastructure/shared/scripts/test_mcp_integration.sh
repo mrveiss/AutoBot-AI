@@ -35,7 +35,7 @@ test_mcp "Project Analysis" "node autobot-mcp-server.js" \
 
 # 2. Test Filesystem MCP Server
 echo -e "\n${YELLOW}2. Filesystem MCP Server${NC}"
-test_mcp "File Operations" "mcp-server-filesystem /home/kali/Desktop/AutoBot" \
+test_mcp "File Operations" "mcp-server-filesystem ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}" \
     '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
 # 3. Test SQLite MCP Server

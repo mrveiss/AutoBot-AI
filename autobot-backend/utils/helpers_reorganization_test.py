@@ -28,7 +28,7 @@ class TestReorganizeRedisHelpers:
         # Import locally to avoid module-level import issues
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key(b"test_key")
@@ -38,7 +38,7 @@ class TestReorganizeRedisHelpers:
         """Test _decode_key with string input."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key("already_string")
@@ -48,7 +48,7 @@ class TestReorganizeRedisHelpers:
         """Test _decode_key with unicode bytes."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _decode_key
 
         result = _decode_key("unicode_тест".encode("utf-8"))
@@ -58,7 +58,7 @@ class TestReorganizeRedisHelpers:
         """Test _determine_target_db routes facts to DB1."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("fact:user_preferences") == 1
@@ -68,7 +68,7 @@ class TestReorganizeRedisHelpers:
         """Test _determine_target_db routes workflows to DB2."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("workflow_rules") == 2
@@ -78,7 +78,7 @@ class TestReorganizeRedisHelpers:
         """Test _determine_target_db routes other keys to DB3."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import _determine_target_db
 
         assert _determine_target_db("random_key") == 3
@@ -88,7 +88,7 @@ class TestReorganizeRedisHelpers:
         """Test explicit database index to name mapping."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from analysis.reorganize_redis_databases import DB_INDEX_TO_NAME
 
         assert DB_INDEX_TO_NAME[0] == "main"
@@ -105,7 +105,7 @@ class TestMCPClientHelpers:
         """Test error creation for 400 status."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -118,7 +118,7 @@ class TestMCPClientHelpers:
         """Test error creation for 404 status."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -134,7 +134,7 @@ class TestMCPClientHelpers:
         """Test error creation for 500 status."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(log_requests=False)
@@ -147,7 +147,7 @@ class TestMCPClientHelpers:
         """Test NON_RETRYABLE_STATUS_CODES constant."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import NON_RETRYABLE_STATUS_CODES
 
         assert 400 in NON_RETRYABLE_STATUS_CODES
@@ -160,7 +160,7 @@ class TestMCPClientHelpers:
         """Test _RetrySignal exception class exists."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import _RetrySignal
 
         # Should be able to instantiate and raise
@@ -172,7 +172,7 @@ class TestMCPClientHelpers:
         """Test _should_retry returns True on first attempt."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
@@ -187,7 +187,7 @@ class TestMCPClientHelpers:
         """Test _should_retry returns False when max attempts exceeded."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
@@ -373,7 +373,7 @@ class TestWorkflowResult:
         """Test WorkflowResult initialization."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -387,7 +387,7 @@ class TestWorkflowResult:
         """Test adding successful step to WorkflowResult."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -403,7 +403,7 @@ class TestWorkflowResult:
         """Test adding error step to WorkflowResult."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
@@ -417,7 +417,7 @@ class TestWorkflowResult:
         """Test WorkflowResult to_dict conversion."""
         import sys
 
-        sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+        sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         from examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")

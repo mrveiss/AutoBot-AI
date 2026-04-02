@@ -6,7 +6,7 @@ Test the new workflow templates system
 import asyncio
 import sys
 
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from type_definitions import TaskComplexity
 from workflow_templates import TemplateCategory, workflow_template_manager

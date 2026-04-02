@@ -22,7 +22,7 @@ BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 BACKEND_URL="http://${BACKEND_HOST}:${BACKEND_PORT}"
 REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-ENV_FILE="/home/kali/Desktop/AutoBot/.env"
+ENV_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env"
 
 # Counters
 PASS_COUNT=0

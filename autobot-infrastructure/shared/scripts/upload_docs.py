@@ -71,7 +71,7 @@ def upload_files_batch(
 
 def upload_docs():
     """Upload documentation files to knowledge base via file upload API."""
-    project_root = "/home/kali/Desktop/AutoBot"
+    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     api_url = "http://localhost:8001"  # Use proper URL from config
 
     # Find documentation files

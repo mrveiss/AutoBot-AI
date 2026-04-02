@@ -100,10 +100,14 @@ class NetworkConstants:
     )
 
     # === Network prefixes for IP validation (static) ===
-    VM_IP_PREFIX: str = "172.16.168."  # AutoBot VM network prefix
-    DEFAULT_SCAN_NETWORK: str = (
-        "192.168.1.0/24"  # Default network range for scanning tools
+    # All RFC 1918 private IP prefixes — deployment-agnostic
+    PRIVATE_IP_PREFIXES: tuple = (
+        "10.",
+        *[f"172.{n}." for n in range(16, 32)],
+        "192.168.",
+        "127.",
     )
+    DEFAULT_SCAN_NETWORK: str = ""  # Set via NETWORK_SUBNET env var at deploy time
     PUBLIC_DNS_IP: str = "8.8.8.8"  # Google Public DNS for connectivity testing
 
     # === Special purpose IPs (static) ===

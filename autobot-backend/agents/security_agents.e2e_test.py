@@ -6,7 +6,7 @@ Test the new security scanning agent implementations
 import asyncio
 import sys
 
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from agents.network_discovery_agent import network_discovery_agent
 from agents.security_scanner_agent import security_scanner_agent

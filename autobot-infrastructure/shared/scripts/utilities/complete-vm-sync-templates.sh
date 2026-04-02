@@ -9,7 +9,7 @@ set -e  # Exit on error
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-AUTOBOT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+AUTOBOT_ROOT="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 SSH_OPTS="-i $SSH_KEY"
 SSH_USER="${AUTOBOT_SSH_USER:-autobot}"

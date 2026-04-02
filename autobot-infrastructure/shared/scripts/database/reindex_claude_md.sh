@@ -1,7 +1,7 @@
 #!/bin/bash
 # CLAUDE.md Vector Database Re-indexing Script
 # Deletes outdated CLAUDE.md chunks and re-indexes current version
-# Location: /home/kali/Desktop/AutoBot/scripts/database/reindex_claude_md.sh
+# Location: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/database/reindex_claude_md.sh
 
 set -e  # Exit on error
 
@@ -15,8 +15,8 @@ echo ""
 
 # Step 1: Create backup directory
 echo "Step 1: Creating backup directory..."
-mkdir -p /home/kali/Desktop/AutoBot/backups/database/
-mkdir -p /home/kali/Desktop/AutoBot/logs/database/
+mkdir -p ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backups/database/
+mkdir -p ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/database/
 
 # Step 2: Find and backup CLAUDE.md chunks
 echo "Step 2: Finding CLAUDE.md chunks..."
@@ -39,7 +39,7 @@ echo ""
 # Step 3: Backup chunks
 echo "Step 3: Creating backup..."
 timestamp=$(date +%Y%m%d_%H%M%S)
-backup_file="/home/kali/Desktop/AutoBot/backups/database/claude_chunks_backup_$timestamp.json"
+backup_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backups/database/claude_chunks_backup_$timestamp.json"
 
 echo "[" > "$backup_file"
 first=true
@@ -92,7 +92,7 @@ echo ""
 
 # Step 6: Re-index CLAUDE.md via Python
 echo "Step 6: Re-indexing current CLAUDE.md..."
-cd /home/kali/Desktop/AutoBot
+cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
 
 python3 << 'PYTHON_SCRIPT'
 import asyncio
@@ -101,7 +101,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Add project to path
-sys.path.insert(0, '/home/kali/Desktop/AutoBot')
+sys.path.insert(0, '${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}')
 
 from src.knowledge_base import KnowledgeBase
 from llama_index.core import Document
@@ -111,7 +111,7 @@ async def reindex_claude_md():
         kb = KnowledgeBase()
         await kb._ensure_redis_initialized()
 
-        claude_path = Path("/home/kali/Desktop/AutoBot/CLAUDE.md")
+        claude_path = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/CLAUDE.md")
         if not claude_path.exists():
             print("ERROR: CLAUDE.md not found!")
             return

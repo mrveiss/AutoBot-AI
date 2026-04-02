@@ -132,7 +132,10 @@ def test_celery_worker_status():
     """Test 9: Celery Worker Status"""
     # Check if Celery worker is running by checking logs
     try:
-        with open("/home/kali/Desktop/AutoBot/logs/celery-worker.log", "r") as f:
+        with open(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/celery-worker.log",
+            "r",
+        ) as f:
             logs = f.read()
             if "ready" in logs and "autobot-worker" in logs:
                 print("✅ Test 9: Celery Worker - PASSED")  # noqa: print

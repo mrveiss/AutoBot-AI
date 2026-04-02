@@ -448,9 +448,7 @@ Generated: {self.report['timestamp']}
 
 ## Backup Location
 All modified files have been backed up to: `{}`
-""".format(
-            self.backup_dir
-        )
+""".format(self.backup_dir)
 
         # Save report
         if output_file:
@@ -528,7 +526,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
-        project_root = "/home/kali/Desktop/AutoBot"
+        project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
         target_dir = "autobot-vue/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")

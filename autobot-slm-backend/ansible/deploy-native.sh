@@ -151,7 +151,7 @@ update_backend_config() {
     log "INFO" "🔧 Updating backend configuration for VM connections..."
 
     # Create environment file for backend with VM endpoints
-    local env_file="/home/kali/Desktop/AutoBot/.env.native"
+    local env_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.native"
 
     cat > "$env_file" << EOF
 # AutoBot Native Configuration - Backend on Host, Services on VMs
@@ -295,7 +295,7 @@ show_summary() {
     log "INFO" "  VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): autobot-browser, autobot-vnc"
     log "INFO" ""
     log "INFO" "🚀 Next Steps:"
-    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.native"
+    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.native"
     log "INFO" "  2. Start backend on WSL: python backend/main.py"
     log "INFO" "  3. Access AutoBot: http://${AUTOBOT_FRONTEND_HOST:-localhost}"
     log "INFO" ""

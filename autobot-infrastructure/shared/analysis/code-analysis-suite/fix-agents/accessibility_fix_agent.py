@@ -19,7 +19,10 @@ from typing import List, Optional, Tuple
 
 
 class AccessibilityFixAgent:
-    def __init__(self, root_path: str = "/home/kali/Desktop/AutoBot/autobot-vue"):
+    def __init__(
+        self,
+        root_path: str = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue",
+    ):
         self.root_path = Path(root_path)
         self.backup_dir = self.root_path.parent / ".accessibility-fix-backups"
         self.report_data = {
@@ -586,7 +589,9 @@ if __name__ == "__main__":
     import sys
 
     root_path = (
-        sys.argv[1] if len(sys.argv) > 1 else "/home/kali/Desktop/AutoBot/autobot-vue"
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue"
     )
 
     agent = AccessibilityFixAgent(root_path)

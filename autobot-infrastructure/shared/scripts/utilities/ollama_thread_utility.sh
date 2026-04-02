@@ -12,7 +12,7 @@ echo ""
 
 # Copy new service file
 echo "📝 Updating Ollama systemd service file..."
-sudo cp /home/kali/Desktop/AutoBot/ollama.service.new /etc/systemd/system/ollama.service
+sudo cp ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/ollama.service.new /etc/systemd/system/ollama.service
 
 if [ $? -eq 0 ]; then
     echo "✅ Service file updated"

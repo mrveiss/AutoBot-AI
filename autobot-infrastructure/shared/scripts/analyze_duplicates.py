@@ -279,7 +279,7 @@ class DuplicateDetector:
 
 def main():
     """Main execution function"""
-    root_path = "/home/kali/Desktop/AutoBot"
+    root_path = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 
     if not os.path.exists(root_path):
         logger.error("AutoBot directory not found at %s", root_path)
@@ -290,7 +290,7 @@ def main():
     detector.generate_report(analysis)
 
     # Save detailed results
-    output_file = "/home/kali/Desktop/AutoBot/reports/duplicate_analysis_results.json"
+    output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/duplicate_analysis_results.json"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     # Prepare serializable data

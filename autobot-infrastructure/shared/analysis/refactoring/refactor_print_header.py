@@ -115,11 +115,11 @@ def refactor_print_header_script(file_path: Path):
 def main():
     """Refactor all scripts with print_header duplicates"""
     scripts_to_refactor = [
-        "/home/kali/Desktop/AutoBot/scripts/zero_downtime_deploy.py",
-        "/home/kali/Desktop/AutoBot/scripts/secrets_manager.py",
-        "/home/kali/Desktop/AutoBot/scripts/deployment_rollback.py",
-        "/home/kali/Desktop/AutoBot/scripts/log_aggregator.py",
-        "/home/kali/Desktop/AutoBot/scripts/metrics_collector.py",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/zero_downtime_deploy.py",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/secrets_manager.py",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/deployment_rollback.py",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/log_aggregator.py",
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/metrics_collector.py",
     ]
 
     logger.info("🚀 Starting print_header refactoring...")

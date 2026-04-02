@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def upload_docs_as_searchable_facts():
     """Upload docs as facts that can be searched via simple text matching."""
 
-    project_root = "/home/kali/Desktop/AutoBot"
+    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 
     # Find all documentation files
     doc_files = []
