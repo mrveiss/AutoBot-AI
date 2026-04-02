@@ -171,7 +171,7 @@ class WorkflowAutomationManager:
             return False
 
         workflow = self.active_workflows[workflow_id]
-        if trigger_payload:
+        if trigger_payload is not None:
             workflow.trigger_payload = trigger_payload
         return await self.executor.start_execution(workflow, self.active_workflows)
 
