@@ -180,3 +180,6 @@
     - vnc_register_credentials | bool
     - vnc_password_result.stdout | length > 0
     - slm_node_id is defined
+  # Registration is best-effort — VNC works without it; SLM may be unreachable
+  # from nodes on a different subnet or before its firewall rules are fully open.
+  ignore_errors: true

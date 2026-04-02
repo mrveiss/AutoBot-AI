@@ -5,7 +5,7 @@
 # Co-located user backend upstream (#2829)
 # Proxies directly to uvicorn (HTTP) — no intermediate backend nginx.
 upstream autobot_backend {
-    server {{ frontend_backend_host }}:{{ frontend_backend_port }};
+    server {{ frontend_backend_host | default('127.0.0.1') }}:{{ frontend_backend_port }};
 }
 {% endif %}
 

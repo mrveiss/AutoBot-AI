@@ -283,6 +283,7 @@ def _apply_colocation_vars(
         if node.ip_address in local_ips and roles & _frontend_roles:
             hosts[inv_name]["slm_colocated_frontend"] = True
             if roles & _backend_roles:
+                hosts[inv_name]["frontend_backend_host"] = "127.0.0.1"
                 hosts[inv_name]["frontend_backend_port"] = 8001
                 hosts[inv_name]["frontend_backend_protocol"] = "http"
 
