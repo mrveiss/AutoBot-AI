@@ -245,7 +245,20 @@ class HfQuantizerWrapper:
         }
         handler = handlers[self._config.quantization_type]
         kwargs = handler()
-        kwargs.update(self._config.extra_kwargs)
+        if self._config.quantization_type == QuantizationType.BITSANDBYTES:
+            # load_in_4bit / load_in_8bit are already consumed into
+            # BitsAndBytesConfig inside _preprocess_bitsandbytes.  Passing
+            # them again as bare top-level kwargs alongside quantization_config
+            # causes HuggingFace to raise ValueError.  Strip them here so any
+            # other (non-BNB) extra_kwargs still flow through.
+            passthrough = {
+                k: v
+                for k, v in self._config.extra_kwargs.items()
+                if k not in ("load_in_4bit", "load_in_8bit")
+            }
+            kwargs.update(passthrough)
+        else:
+            kwargs.update(self._config.extra_kwargs)
         logger.info(
             "preprocess_model produced kwargs for %s: %s",
             self._config.quantization_type,
