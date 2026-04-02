@@ -3,7 +3,7 @@
 # Author: mrveiss
 ---
 # Redis configuration defaults
-network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP "NETWORK_SUBNET=\\K.*" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
 redis_port: 6379
 redis_bind: "0.0.0.0"
 redis_password: ""

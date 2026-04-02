@@ -3,7 +3,7 @@
 # Author: mrveiss
 ---
 # Frontend configuration defaults  (#926 Phase 4: service account created, migration in Phase 7)
-network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP "NETWORK_SUBNET=\\K.*" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
 frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
 frontend_user: autobot
 frontend_group: autobot

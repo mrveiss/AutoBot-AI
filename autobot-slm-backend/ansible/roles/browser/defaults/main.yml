@@ -24,4 +24,4 @@ desktop_environment: "xfce4"
 headless_mode: false
 
 # Network
-network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP "NETWORK_SUBNET=\\K.*" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
