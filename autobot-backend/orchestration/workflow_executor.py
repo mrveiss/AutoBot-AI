@@ -599,6 +599,7 @@ class WorkflowExecutor:
         resume_from_checkpoint: bool = False,
         mode: ExecutionMode = ExecutionMode.NORMAL,
         debug_controller: Optional[DebugController] = None,
+        notification_config: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute workflow with coordinated agent management.
@@ -612,13 +613,21 @@ class WorkflowExecutor:
         already have a persisted checkpoint and continue from the first
         incomplete step.  Checkpoints are cleared on full completion.
 
+        Issue #3172: ``notification_config`` is injected into the
+        execution_context so ``_resolve_notification_config`` can find it and
+        fire notifications at terminal workflow states.  Accepts either a
+        ``NotificationConfig`` instance or a plain dict (the resolver handles
+        both).
+
         Args:
-            workflow_id:             Workflow identifier.
-            steps:                   List of enhanced workflow steps.
-            context:                 Workflow context.
-            edges:                   Optional DAG edge dicts.
-            resume_from_checkpoint:  When True, load prior checkpoints and skip
-                                     already-completed steps.
+            workflow_id:          Workflow identifier.
+            steps:                List of enhanced workflow steps.
+            context:              Workflow context.
+            edges:                Optional DAG edge dicts.
+            resume_from_checkpoint: When True, load prior checkpoints and skip
+                                  already-completed steps.
+            notification_config:  Optional NotificationConfig (or equivalent
+                                  dict) for this workflow's notifications.
 
         Returns:
             Execution context with results.
@@ -640,7 +649,8 @@ class WorkflowExecutor:
                 workflow_id,
             )
             return await self._execute_dag_workflow(
-                workflow_id, steps, effective_edges, context
+                workflow_id, steps, effective_edges, context,
+                notification_config=notification_config,
             )
 
         # Issue #2154: build a step registry so fallback resolution works.
@@ -663,6 +673,9 @@ class WorkflowExecutor:
             "step_registry": step_registry,
             # Issue #3019: shared memory for parallel-step collaboration
             "shared_memory": shared_memory,
+            # Issue #3172: notification routing config so _resolve_notification_config
+            # can fire notifications at terminal workflow states.
+            "notification_config": notification_config,
         }
 
         # Issue #2154: pre-populate results from persisted checkpoints.
@@ -770,6 +783,7 @@ class WorkflowExecutor:
         steps: List[Dict[str, Any]],
         edges: List[Dict[str, Any]],
         context: Dict[str, Any],
+        notification_config: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Execute a branching workflow via DAGExecutor.
@@ -778,11 +792,19 @@ class WorkflowExecutor:
         converts the DAGExecutionContext back into the legacy
         execution_context dict shape so callers stay oblivious to the
         execution path.  Issue #2140.
+
+        Issue #3172: ``notification_config`` is forwarded into the returned
+        execution_context so the notification helpers can locate it.
         """
         dag = build_dag(steps, edges)
         executor = DAGExecutor(step_executor_callback=self._dag_step_adapter)
         dag_ctx = await executor.execute(dag, workflow_id, context)
-        return self._dag_ctx_to_execution_context(dag_ctx)
+        result = self._dag_ctx_to_execution_context(dag_ctx)
+        result["notification_config"] = notification_config
+        # Issue #3172: fire notification for terminal states, mirroring the
+        # linear execution path (execute_coordinated_workflow lines 727/738).
+        await self._send_workflow_notification(workflow_id, result)
+        return result
 
     async def _dag_step_adapter(
         self,
