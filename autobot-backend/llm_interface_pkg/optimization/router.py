@@ -281,9 +281,14 @@ class OptimizationRouter:
         if quant_type == QuantizationType.NONE and model_config:
             wrapper = HfQuantizerWrapper.from_config(model_config)
         else:
-            load_in_4bit = quant_type_str == "int4"
+            bnb_extra: Dict[str, Any] = {}
+            if quant_type_str == "int4":
+                bnb_extra = {"load_in_4bit": True}
+            elif quant_type_str == "int8":
+                bnb_extra = {"load_in_8bit": True}
             cfg = QuantizerConfig(
-                quantization_type=quant_type, load_in_4bit=load_in_4bit
+                quantization_type=quant_type,
+                extra_kwargs=bnb_extra,
             )
             wrapper = HfQuantizerWrapper(cfg)
 
