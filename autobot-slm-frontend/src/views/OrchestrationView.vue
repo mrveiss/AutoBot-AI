@@ -31,6 +31,7 @@ import ServiceActionButtons from '@/components/orchestration/ServiceActionButton
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
 import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadges.vue'
+import type { NodeStatus, ServiceStatus } from '@/types/slm'
 
 const logger = createLogger('OrchestrationView')
 
@@ -110,11 +111,11 @@ interface NodeServiceGroup {
   nodeId: string
   hostname: string
   ipAddress: string
-  status: string
+  status: NodeStatus
   services: Array<{
     service_name: string
     category: string
-    status: string
+    status: ServiceStatus
     ip_address: string | null
     port: number | null
   }>
@@ -1035,7 +1036,7 @@ onUnmounted(() => {
               :nodeId="node.nodeId"
               :hostname="node.hostname"
               :ipAddress="node.ipAddress"
-              :status="(node.status as 'online' | 'offline' | 'unknown')"
+              :status="node.status"
               :runningCount="node.runningCount"
               :stoppedCount="node.stoppedCount"
               :failedCount="node.failedCount"
@@ -1128,7 +1129,7 @@ onUnmounted(() => {
                       <ServiceActionButtons
                         :serviceName="service.service_name"
                         :nodeId="node.nodeId"
-                        :status="(service.status as 'running' | 'stopped' | 'failed' | 'unknown')"
+                        :status="service.status"
                         :isActionInProgress="orchestration.actionInProgress"
                         :activeAction="orchestration.activeAction"
                         @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
@@ -1380,7 +1381,7 @@ onUnmounted(() => {
                             <ServiceActionButtons
                               :serviceName="service.service_name"
                               :nodeId="nodeStatus.node_id"
-                              :status="(nodeStatus.status as 'running' | 'stopped' | 'failed' | 'unknown')"
+                              :status="nodeStatus.status"
                               :isActionInProgress="orchestration.actionInProgress"
                               :activeAction="orchestration.activeAction"
                               @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
