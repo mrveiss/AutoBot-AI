@@ -158,8 +158,8 @@ dns_cache:
     forward_zones:
       - zone: "."
         forward_addr:
-          - "8.8.8.8"
-          - "1.1.1.1"
+          - "{{ dns_nameservers[0] }}"
+          - "{{ dns_nameservers[1] }}"
 
 # ==========================================
 # SYSTEMD SERVICE CONFIGURATION

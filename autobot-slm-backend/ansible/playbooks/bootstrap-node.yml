@@ -179,7 +179,7 @@
         rule: allow
         port: "5900"
         proto: tcp
-        src: "172.16.168.0/24"
+        src: "{{ network_subnet }}"
         comment: "VNC server - internal only"
 
     - name: "Allow websockify port (6080) from internal subnet"
@@ -187,7 +187,7 @@
         rule: allow
         port: "6080"
         proto: tcp
-        src: "172.16.168.0/24"
+        src: "{{ network_subnet }}"
         comment: "noVNC websockify - internal only"
 
     - name: "Enable UFW with deny-incoming default"

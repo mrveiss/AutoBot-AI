@@ -33,13 +33,13 @@
     vnc_port: 6080
 
     # Integration endpoints
-    redis_host: "172.16.168.23"
+    redis_host: "{{ infrastructure.hosts.database }}"
     redis_port: 6379
-    ai_stack_host: "172.16.168.24"
+    ai_stack_host: "{{ infrastructure.hosts.aiml }}"
     ai_stack_port: 8080
-    npu_worker_host: "172.16.168.22"
+    npu_worker_host: "{{ infrastructure.hosts.npu }}"
     npu_worker_port: 8081
-    browser_worker_host: "172.16.168.25"
+    browser_worker_host: "{{ infrastructure.hosts.browser }}"
     browser_worker_port: 3000
 
   pre_tasks:

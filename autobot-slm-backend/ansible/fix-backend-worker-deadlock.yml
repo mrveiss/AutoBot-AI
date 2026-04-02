@@ -19,7 +19,7 @@
     backend_service_file: /etc/systemd/system/autobot-backend.service
     backend_venv: /opt/autobot/autobot-user-backend/venv
     backend_workdir: /opt/autobot/autobot-user-backend
-    health_check_url: "https://172.16.168.20:8443/api/health"
+    health_check_url: "https://{{ infrastructure.hosts.backend }}:8443/api/health"
     health_check_timeout: 30
     health_check_retries: 6
 
@@ -152,4 +152,4 @@
           - "Health check: {{ 'PASSED' if health_check.status == 200 else 'N/A' }}"
           - "Backup: {{ backend_service_file }}.backup-{{ ansible_date_time.epoch if service_updated.changed else 'Not needed' }}"
           - ""
-          - "Login should now work at https://172.16.168.21/"
+          - "Login should now work at https://{{ infrastructure.hosts.frontend }}/"

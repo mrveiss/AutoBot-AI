@@ -27,6 +27,10 @@
 # hardcoded in the repo — every install detects its own subnet automatically.
 network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
 network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
+# DNS servers — override per-install via -e or inventory vars
+dns_nameservers:
+  - "{{ lookup('env', 'DNS_PRIMARY') or '8.8.8.8' }}"
+  - "{{ lookup('env', 'DNS_SECONDARY') or '1.1.1.1' }}"
 
 # ==========================================
 # INFRASTRUCTURE HOST MAP

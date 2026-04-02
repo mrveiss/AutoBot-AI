@@ -27,7 +27,7 @@
     browser_worker_group: autobot
     browser_worker_port: 3000
     browser_worker_service_name: autobot-playwright
-    backend_host: "172.16.168.20"
+    backend_host: "{{ infrastructure.hosts.backend }}"
     backend_port: 8001
 
   pre_tasks:

@@ -49,7 +49,7 @@
         pg_hba_remote_access:
           - database: autobot_users
             user: slm_app
-            address: "172.16.168.0/24"
+            address: "{{ network_subnet }}"
     - role: slm_manager
     - role: monitoring
       tags: ['monitoring']

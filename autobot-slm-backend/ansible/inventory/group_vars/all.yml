@@ -31,8 +31,8 @@ network:
   subnet: "{{ network_subnet }}"
   gateway: "{{ network_gateway }}"
   dns_servers:
-    - "8.8.8.8"
-    - "1.1.1.1"
+    - "{{ dns_nameservers[0] }}"
+    - "{{ dns_nameservers[1] }}"
   domain: "autobot.internal"
 
   # Firewall configuration

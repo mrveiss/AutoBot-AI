@@ -19,8 +19,8 @@ all:
     network_subnet: "172.16.168.0/24"
     network_gateway: "172.16.168.1"
     dns_servers:
-      - "8.8.8.8"
-      - "1.1.1.1"
+      - "{{ dns_nameservers[0] }}"
+      - "{{ dns_nameservers[1] }}"
 
     # Global AutoBot configuration
     autobot_domain: "autobot.internal"

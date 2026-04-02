@@ -14,8 +14,8 @@ all:
         network_subnet: "192.168.1.0/24"  # Adjust to your router's subnet
         network_gateway: "192.168.1.1"    # Your router's IP
         dns_servers:
-          - "8.8.8.8"
-          - "1.1.1.1"
+          - "{{ dns_nameservers[0] }}"
+          - "{{ dns_nameservers[1] }}"
 
       children:
         frontend:
@@ -29,9 +29,9 @@ all:
             autobot-backend:
               ansible_host: 192.168.1.120
               environment:
-                REDIS_HOST: "192.168.1.150"
-                AI_STACK_HOST: "192.168.1.130"
-                NPU_WORKER_HOST: "192.168.1.140"
+                REDIS_HOST: "{{ infrastructure.hosts.database }}"
+                AI_STACK_HOST: "{{ infrastructure.hosts.aiml }}"
+                NPU_WORKER_HOST: "{{ infrastructure.hosts.npu }}"
 
         ai_stack:
           hosts:

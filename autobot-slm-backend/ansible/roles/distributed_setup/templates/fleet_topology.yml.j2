@@ -25,7 +25,7 @@ fleet_nodes:
 {% endfor %}
 
 network:
-  internal_subnet: "172.16.168.0/24"
+  internal_subnet: "{{ network_subnet }}"
   coordinator_ip: "{{ coordinator_host }}"
   redis_ip: "{{ hostvars[groups['redis'][0]]['ansible_host'] if 'redis' in groups else 'N/A' }}"
 

@@ -74,8 +74,8 @@
     grafana_version: "latest"
     grafana_host: "{{ ansible_host }}"
     grafana_port: 3000
-    slm_server_ip: "172.16.168.19"
-    slm_server_domain: "172.16.168.19"
+    slm_server_ip: "{{ infrastructure.hosts.slm }}"
+    slm_server_domain: "{{ infrastructure.hosts.slm }}"
     prometheus_url: "http://{{ slm_server_ip }}:9090"
 
   tasks:

@@ -21,11 +21,11 @@
 
   vars:
     env_file: /opt/autobot/.env
-    frontend_host: "172.16.168.21"
+    frontend_host: "{{ infrastructure.hosts.frontend }}"
     frontend_port: "443"
-    npu_host: "172.16.168.22"
+    npu_host: "{{ infrastructure.hosts.npu }}"
     npu_port: "8081"
-    ai_stack_host: "172.16.168.20"
+    ai_stack_host: "{{ infrastructure.hosts.backend }}"
     ai_stack_port: "11434"
 
   tasks:
@@ -126,7 +126,7 @@
           Fixed values in {{ env_file }}:
             AUTOBOT_FRONTEND_PORT: 5173 → 443 (nginx HTTPS)
             AUTOBOT_NPU_WORKER_PORT: 8082 → 8081
-            AUTOBOT_AI_STACK_HOST: 172.16.168.24 → 172.16.168.20
+            AUTOBOT_AI_STACK_HOST: {{ infrastructure.hosts.aiml }} → {{ infrastructure.hosts.backend }}
             AUTOBOT_AI_STACK_PORT: 8080 → 11434 (Ollama)
           SLM backend health: {{ health.status | default('unknown') }}
           ═══════════════════════════════════════════════════════
