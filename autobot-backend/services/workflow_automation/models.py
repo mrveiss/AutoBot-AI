@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from services.notification_service import NotificationConfig
@@ -190,6 +190,8 @@ class ActiveWorkflow:
     step_results: Dict[str, Metadata] = field(default_factory=dict)
     # Issue #3101: Per-workflow notification routing configuration.
     notification_config: Optional[NotificationConfig] = None
+    # Issue #3178: Trigger payload from the event that fired this workflow.
+    trigger_payload: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""
@@ -234,6 +236,7 @@ class ActiveWorkflow:
             "steps": [step.to_status_dict() for step in self.steps],
             "user_interventions": self.user_interventions,
             "notification_config": self._serialize_notification_config(),
+            "trigger_payload": self.trigger_payload,
         }
 
 
