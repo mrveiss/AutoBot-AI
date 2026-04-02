@@ -336,6 +336,7 @@ import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
 import CompletionSuggestions from './CompletionSuggestions.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
+import { escapeHtml } from '@/utils/sanitize';
 
 const logger = createLogger('TerminalWindow');
 
@@ -1222,10 +1223,10 @@ export default {
       content = content
         .replace(/\x1b\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]/g, '')
         .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+        .replace(/\r/g, '\n');
+
+      // HTML escape for safety
+      content = escapeHtml(content);
 
       return content;
     };
