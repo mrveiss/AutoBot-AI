@@ -353,9 +353,20 @@ class HfQuantizerWrapper:
         }
 
     def _preprocess_bitsandbytes(self) -> Dict[str, Any]:
-        """Build from_pretrained kwargs for BitsAndBytes models."""
+        """Build from_pretrained kwargs for BitsAndBytes models.
+
+        Reads ``load_in_4bit`` / ``load_in_8bit`` from ``extra_kwargs`` so
+        callers can distinguish int4 from int8 without adding fields to
+        :class:`QuantizerConfig`.  Defaults to ``load_in_4bit=True`` when
+        neither key is present (original behaviour).
+        """
         transformers = _import_transformers()
-        bnb_config = transformers.BitsAndBytesConfig(load_in_4bit=True)
+        bnb_kwargs: Dict[str, Any] = {"load_in_4bit": True}
+        if self._config.extra_kwargs.get("load_in_8bit"):
+            bnb_kwargs = {"load_in_8bit": True}
+        elif self._config.extra_kwargs.get("load_in_4bit") is not None:
+            bnb_kwargs = {"load_in_4bit": bool(self._config.extra_kwargs["load_in_4bit"])}
+        bnb_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
         return {
             "quantization_config": bnb_config,
             "device_map": self._config.device_map,

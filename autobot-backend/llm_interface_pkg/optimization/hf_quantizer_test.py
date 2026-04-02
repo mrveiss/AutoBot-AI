@@ -488,3 +488,67 @@ class TestMissingLibraryFallback:
         ):
             with pytest.raises(ImportError, match="transformers"):
                 wrapper.preprocess_model()
+
+
+# ---------------------------------------------------------------------------
+# TestBitsAndBytesExtraKwargs (#3179)
+# ---------------------------------------------------------------------------
+
+
+class TestBitsAndBytesExtraKwargs:
+    """Tests for BitsAndBytes preprocessing with extra_kwargs (#3179).
+
+    Verifies that load_in_4bit / load_in_8bit flow from extra_kwargs into
+    BitsAndBytesConfig rather than being hard-coded or accepted as a
+    QuantizerConfig field.
+    """
+
+    def test_int4_extra_kwargs_calls_bnb_with_load_in_4bit(self):
+        """extra_kwargs={"load_in_4bit": True} must set load_in_4bit on BitsAndBytesConfig."""
+        mock_tf = _make_transformers_mock()
+        cfg = QuantizerConfig(
+            quantization_type=QuantizationType.BITSANDBYTES,
+            extra_kwargs={"load_in_4bit": True},
+        )
+        wrapper = HfQuantizerWrapper(cfg)
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
+            wrapper.preprocess_model()
+        mock_tf.BitsAndBytesConfig.assert_called_once_with(load_in_4bit=True)
+
+    def test_int8_extra_kwargs_calls_bnb_with_load_in_8bit(self):
+        """extra_kwargs={"load_in_8bit": True} must set load_in_8bit on BitsAndBytesConfig."""
+        mock_tf = _make_transformers_mock()
+        cfg = QuantizerConfig(
+            quantization_type=QuantizationType.BITSANDBYTES,
+            extra_kwargs={"load_in_8bit": True},
+        )
+        wrapper = HfQuantizerWrapper(cfg)
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
+            wrapper.preprocess_model()
+        mock_tf.BitsAndBytesConfig.assert_called_once_with(load_in_8bit=True)
+
+    def test_no_extra_kwargs_defaults_to_load_in_4bit(self):
+        """No extra_kwargs must fall back to load_in_4bit=True (default behaviour)."""
+        mock_tf = _make_transformers_mock()
+        cfg = QuantizerConfig(quantization_type=QuantizationType.BITSANDBYTES)
+        wrapper = HfQuantizerWrapper(cfg)
+        with patch(
+            "llm_interface_pkg.optimization.hf_quantizer._import_transformers",
+            return_value=mock_tf,
+        ):
+            wrapper.preprocess_model()
+        mock_tf.BitsAndBytesConfig.assert_called_once_with(load_in_4bit=True)
+
+    def test_quantizer_config_rejects_load_in_4bit_field(self):
+        """QuantizerConfig must raise TypeError if load_in_4bit is passed directly (#3179)."""
+        with pytest.raises(TypeError, match="load_in_4bit"):
+            QuantizerConfig(  # type: ignore[call-arg]
+                quantization_type=QuantizationType.BITSANDBYTES,
+                load_in_4bit=True,
+            )
