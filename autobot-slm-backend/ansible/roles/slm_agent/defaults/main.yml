@@ -11,7 +11,10 @@
 # it from hostvars['autobot-slm']['ansible_host'].  The loopback fallback
 # here is intentionally safe: it triggers an obvious connection failure
 # rather than silently routing to a different machine's IP.
-slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}"
+# When co-located frontend is active, the SLM API lives at /slm/api/ because
+# nginx routes /api/ to the user backend (#2829).  Append /slm so all agents
+# (local and remote) use the correct path prefix.
+slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}{{ '/slm' if slm_colocated_frontend | default(false) | bool else '' }}"
 slm_heartbeat_interval: 30
 
 # Agent user/group (should match common role's autobot user)
