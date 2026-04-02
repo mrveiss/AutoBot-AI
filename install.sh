@@ -490,7 +490,23 @@ EOF
         success "  Secrets written to ${SECRETS_FILE}"
     else
         ADMIN_PASSWORD=$(grep -oP 'SLM_ADMIN_PASSWORD=\K.*' "${SECRETS_FILE}" 2>/dev/null || echo "${ADMIN_PASSWORD}")
-        success "  Secrets file already exists (preserved)"
+        # Refresh IP/network fields even when preserving static secrets (#3266).
+        # Stale IPs remain when the machine's address changes between installs.
+        info "  Refreshing IP/network fields in preserved secrets file..."
+        local local_ip network_subnet network_gateway cidr
+        local_ip="$(detect_local_ip)"
+        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
+        if [[ -n "$cidr" ]]; then
+            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
+        fi
+        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
+        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
+        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
+        sed -i "s|^SLM_EXTERNAL_URL=.*|SLM_EXTERNAL_URL=https://${local_ip}|" "${SECRETS_FILE}"
+        sed -i "s|^SLM_HOST=.*|SLM_HOST=${local_ip}|" "${SECRETS_FILE}"
+        sed -i "s|^NETWORK_SUBNET=.*|NETWORK_SUBNET=${network_subnet}|" "${SECRETS_FILE}"
+        sed -i "s|^NETWORK_GATEWAY=.*|NETWORK_GATEWAY=${network_gateway}|" "${SECRETS_FILE}"
+        success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
     info "Running Ansible deployment (this may take several minutes)..."

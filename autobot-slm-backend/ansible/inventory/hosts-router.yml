@@ -10,9 +10,9 @@ all:
   children:
     autobot_cluster:
       vars:
-        # Use your existing router's network
-        network_subnet: "192.168.1.0/24"  # Adjust to your router's subnet
-        network_gateway: "192.168.1.1"    # Your router's IP
+        # Network config read from install-time secrets (no hardcoded IPs — #3266)
+        network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') | default('0.0.0.0/0', true) }}"
+        network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('0.0.0.0', true) }}"
         dns_servers:
           - "{{ dns_nameservers[0] }}"
           - "{{ dns_nameservers[1] }}"
@@ -21,32 +21,31 @@ all:
         frontend:
           hosts:
             autobot-frontend:
-              # Static IPs in your router's range, or use DHCP reservations
-              ansible_host: 192.168.1.110
+              ansible_host: "{{ lookup('env', 'AUTOBOT_FRONTEND_HOST') | default('127.0.0.1', true) }}"
 
         backend:
           hosts:
             autobot-backend:
-              ansible_host: 192.168.1.120
+              ansible_host: "{{ lookup('env', 'AUTOBOT_BACKEND_HOST') | default('127.0.0.1', true) }}"
               environment:
-                REDIS_HOST: "{{ infrastructure.hosts.database }}"
-                AI_STACK_HOST: "{{ infrastructure.hosts.aiml }}"
-                NPU_WORKER_HOST: "{{ infrastructure.hosts.npu }}"
+                REDIS_HOST: "{{ infrastructure.hosts.database if infrastructure is defined else lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
+                AI_STACK_HOST: "{{ infrastructure.hosts.aiml if infrastructure is defined else lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
+                NPU_WORKER_HOST: "{{ infrastructure.hosts.npu if infrastructure is defined else lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
 
         ai_stack:
           hosts:
             autobot-aistack:
-              ansible_host: 192.168.1.130
+              ansible_host: "{{ lookup('env', 'AUTOBOT_AI_STACK_HOST') | default('127.0.0.1', true) }}"
 
         npu_workers:
           hosts:
             autobot-npu:
-              ansible_host: 192.168.1.140
+              ansible_host: "{{ lookup('env', 'AUTOBOT_NPU_WORKER_HOST') | default('127.0.0.1', true) }}"
 
         database:
           hosts:
             autobot-redis:
-              ansible_host: 192.168.1.150
+              ansible_host: "{{ lookup('env', 'AUTOBOT_REDIS_HOST') | default('127.0.0.1', true) }}"
 
 # Cross-inventory aliases (#2515)
 # Ensure group names from production.yml resolve in hosts-router.yml.

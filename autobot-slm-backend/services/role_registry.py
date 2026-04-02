@@ -368,11 +368,12 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     # tts-worker has Phase 5c in provision-fleet-roles.yml (#2959);
     # it co-locates with npu-worker in the inventory group.
     "tts-worker": "npu-worker",
-    # SLM roles run on the manager node (#1455)
-    "slm-backend": "00-SLM-Manager",
-    "slm-frontend": "00-SLM-Manager",
-    "slm-database": "00-SLM-Manager",
-    "slm-monitoring": "00-SLM-Manager",
+    # SLM roles run on the manager node (#1455, #3266)
+    # Group name must differ from host name 00-SLM-Manager to avoid Ansible warning.
+    "slm-backend": "slm_server",
+    "slm-frontend": "slm_server",
+    "slm-database": "slm_server",
+    "slm-monitoring": "slm_server",
 }
 
 # Static dependency map: role -> infrastructure packages required.

@@ -214,7 +214,7 @@
               'slm-backend' in (node_roles | default([])) or
               'slm_manager' in (node_roles | default([])) or
               inventory_hostname in groups.get('slm', []) or
-              inventory_hostname in groups.get('00-SLM-Manager', [])
+              inventory_hostname in groups.get('slm_server', [])
             )
           }}
       tags: ['frontend', 'slm-nginx', 'provision']
