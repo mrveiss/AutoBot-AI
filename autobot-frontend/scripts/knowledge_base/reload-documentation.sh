@@ -14,7 +14,7 @@ while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
 done
 source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/null || true
 
-BASE_DIR="/home/kali/Desktop/AutoBot"
+BASE_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 KB_API="http://${BACKEND_HOST}:${BACKEND_PORT}/api/knowledge_base/add_text"

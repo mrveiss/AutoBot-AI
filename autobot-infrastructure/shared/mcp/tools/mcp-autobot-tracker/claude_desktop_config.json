@@ -2,7 +2,7 @@
     "mcpServers": {
         "autobot-tracker": {
             "command": "node",
-            "args": ["/home/kali/Desktop/AutoBot/mcp-autobot-tracker/dist/index.js"],
+            "args": ["${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/mcp-autobot-tracker/dist/index.js"],
             "env": {
                 "REDIS_HOST": "172.16.168.23",
                 "REDIS_PORT": "6379"

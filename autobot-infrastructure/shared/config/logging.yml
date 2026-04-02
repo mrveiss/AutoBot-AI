@@ -12,7 +12,7 @@ handlers:
   file:
     backupCount: 5
     class: logging.handlers.RotatingFileHandler
-    filename: /home/kali/Desktop/AutoBot/logs/system.log
+    filename: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/system.log
     formatter: json
     maxBytes: 10485760
 root:

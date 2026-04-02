@@ -42,7 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 
 @dataclass
@@ -94,7 +94,9 @@ class Phase9TestSuite:
         self.session.timeout = self.config.timeout
 
         # Create results directory
-        self.results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        self.results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         self.results_dir.mkdir(exist_ok=True)
 
         # Test execution timestamp

@@ -18,7 +18,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Follow logs with color-coded output
-tail -f /home/kali/Desktop/AutoBot/logs/backend.log | grep --line-buffered -E "(PTY_EXEC|agent_terminal|approval|Session|ERROR|WARNING)" | while read line; do
+tail -f ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/backend.log | grep --line-buffered -E "(PTY_EXEC|agent_terminal|approval|Session|ERROR|WARNING)" | while read line; do
     if echo "$line" | grep -q "ERROR"; then
         echo -e "\033[0;31m[ERROR]\033[0m $line"
     elif echo "$line" | grep -q "WARNING"; then

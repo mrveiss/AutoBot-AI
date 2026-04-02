@@ -165,7 +165,7 @@ async def sync_docs():
     removed_count = await _remove_outdated_entries(kb, all_facts)
 
     # Collect documentation files
-    project_root = "/home/kali/Desktop/AutoBot"
+    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     filtered_files = _collect_documentation_files(project_root)
     logger.info(f"Found {len(filtered_files)} documentation files to sync")
 

@@ -7,7 +7,7 @@
   tasks:
     - name: Sync SLM agent code from local repo
       ansible.builtin.synchronize:
-        src: /home/kali/Desktop/AutoBot/autobot-slm-backend/slm/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-backend/slm/
         dest: /opt/autobot/slm/
         delete: false
         recursive: true

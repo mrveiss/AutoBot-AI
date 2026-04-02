@@ -11,7 +11,7 @@ enabled_frameworks:
 
 # Audit storage configuration
 audit_storage:
-  base_path: "/home/kali/Desktop/AutoBot/logs/audit"
+  base_path: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit"
   encrypt_sensitive: true          # Encrypt PII and security incidents
   max_file_size_mb: 100           # Rotate files at 100MB
   compression_enabled: true        # Compress old audit files

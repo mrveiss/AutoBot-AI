@@ -24,7 +24,7 @@ from knowledge.search_components.reranking import RerankWeights
 # Helpers
 # ---------------------------------------------------------------------------
 
-_WORKTREE = "/home/kali/Desktop/AutoBot/.worktrees/issue-2034/autobot-backend"
+_WORKTREE = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.worktrees/issue-2034/autobot-backend"
 
 
 def _make_search_result(hybrid_score: float = 0.5, content: str = "test content"):

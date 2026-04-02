@@ -100,8 +100,8 @@ echo -e "\n${BLUE}📁 Step 6: File System Analysis${NC}"
 echo "Examining chat implementation files..."
 
 # Check if chat files exist
-CHAT_FILES=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "/home/kali/Desktop/AutoBot", "pattern": "**/[Cc]hat*.{js,vue,py}", "excludePatterns": ["node_modules/**", "venv/**"]}}}' | \
-    mcp-server-filesystem /home/kali/Desktop/AutoBot 2>&1 | parse_mcp_response)
+CHAT_FILES=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}", "pattern": "**/[Cc]hat*.{js,vue,py}", "excludePatterns": ["node_modules/**", "venv/**"]}}}' | \
+    mcp-server-filesystem ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} 2>&1 | parse_mcp_response)
 
 FILE_COUNT=$(echo "$CHAT_FILES" | jq -r '.files | length // 0' 2>/dev/null)
 echo -e "  Found ${GREEN}$FILE_COUNT${NC} chat-related files"

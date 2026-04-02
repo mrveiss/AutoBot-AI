@@ -125,12 +125,13 @@ async def populate_with_chromadb():
 
     # Import after path is set
     import chromadb
-    from constants import ServiceURLs
     from llama_index.core import Document, Settings, VectorStoreIndex
     from llama_index.core.storage.storage_context import StorageContext
     from llama_index.embeddings.ollama import OllamaEmbedding
     from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
     from llama_index.vector_stores.chroma import ChromaVectorStore
+
+    from constants import ServiceURLs
 
     # Set up LLM and embedding model with configurable URL
     ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", ServiceURLs.OLLAMA_LOCAL)
@@ -166,7 +167,7 @@ async def populate_with_chromadb():
     logger.info("ChromaDB knowledge base initialized successfully!")
 
     # Issue #281: Use extracted helpers
-    project_root = Path("/home/kali/Desktop/AutoBot")
+    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
     filtered_files = _find_documentation_files(project_root)
     logger.info("Found %d documentation files", len(filtered_files))
 

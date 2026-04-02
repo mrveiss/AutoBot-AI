@@ -6,13 +6,13 @@
 AutoBot Data Layer Diagnostic Tool
 Analyzes all database connections, data locations, and accessibility issues
 """
+
 import asyncio
+import logging
 import os
 import sqlite3
 import traceback
 from pathlib import Path
-
-import logging
 
 import aioredis
 import redis
@@ -69,7 +69,11 @@ def test_vector_database():
 
     try:
         client = redis.Redis(
-            host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=False, socket_timeout=2
+            host="localhost",
+            port=6379,
+            db=_DB_KNOWLEDGE,
+            decode_responses=False,
+            socket_timeout=2,
         )
 
         # Check for LlamaIndex keys
@@ -192,7 +196,7 @@ def test_backend_errors():
         # Test Redis database manager import
         import sys
 
-        sys.path.append("/home/kali/Desktop/AutoBot")
+        sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
         from utils.redis_database_manager import RedisDatabaseManager
 

@@ -338,8 +338,8 @@ test_file_sync_integrity() {
     local local_hash=""
     local remote_hash=""
 
-    if [ -f "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" ]; then
-        local_hash=$(sha256sum "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
+    if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/App.vue" ]; then
+        local_hash=$(sha256sum "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/App.vue" | cut -d' ' -f1)
     fi
 
     remote_hash=$(ssh -i "$SSH_KEY" "$FRONTEND_USER@$FRONTEND_VM" \

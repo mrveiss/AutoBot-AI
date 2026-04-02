@@ -342,7 +342,7 @@
 
     - name: Copy AutoBot source code for NPU Worker
       synchronize:
-        src: /home/kali/Desktop/AutoBot/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
         delete: no
         recursive: yes
@@ -486,7 +486,7 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: /home/kali/Desktop/AutoBot/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
         delete: no
         recursive: yes
@@ -677,7 +677,7 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: /home/kali/Desktop/AutoBot/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /opt/autobot/src/
         delete: no
         recursive: yes

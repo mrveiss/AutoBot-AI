@@ -11,7 +11,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
     # Fallback if lib not found
-    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    PROJECT_ROOT="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
     [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
 }
 
@@ -73,7 +73,7 @@ echo "  Browser VM (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): Playwright Auto
 
 echo ""
 echo "Testing Distributed Redis Connection:"
-cd "${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+cd "${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
 if python src/utils/distributed_redis_client.py 2>/dev/null | grep -q "connection working correctly"; then
     echo "  Redis Connection: OK"
 else

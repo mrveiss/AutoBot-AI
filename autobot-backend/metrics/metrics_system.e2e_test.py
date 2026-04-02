@@ -6,7 +6,7 @@ Test the new metrics and monitoring system
 import asyncio
 import sys
 
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics

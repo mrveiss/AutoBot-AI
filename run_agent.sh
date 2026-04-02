@@ -201,11 +201,11 @@ fi
 echo "Starting Playwright Service Docker container..."
 
 # Ensure playwright-server.js exists and is a file
-if [ ! -f "/home/kali/Desktop/AutoBot/playwright-server.js" ]; then
+if [ ! -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/playwright-server.js" ]; then
     echo "⚠️  playwright-server.js not found in project root. Checking for it..."
-    if [ -f "/home/kali/Desktop/AutoBot/tests/playwright-server.js" ]; then
+    if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/playwright-server.js" ]; then
         echo "📋 Copying playwright-server.js from tests directory..."
-        cp "/home/kali/Desktop/AutoBot/tests/playwright-server.js" "/home/kali/Desktop/AutoBot/playwright-server.js"
+        cp "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/playwright-server.js" "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/playwright-server.js"
     else
         echo "❌ playwright-server.js not found. Playwright container cannot start."
         echo "   Please ensure playwright-server.js exists in the project root."
@@ -302,10 +302,10 @@ echo "Existing Vite server terminated."
 # Start frontend (Vite with Vue)
 echo "Starting Vite frontend server..."
 echo "Cleaning frontend build artifacts and cache..."
-rm -rf /home/kali/Desktop/AutoBot/autobot-slm-frontend/node_modules /home/kali/Desktop/AutoBot/autobot-slm-frontend/.vite
-cd /home/kali/Desktop/AutoBot/autobot-slm-frontend && npm install --force && npm run build && npm run dev &
+rm -rf ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/node_modules ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/.vite
+cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend && npm install --force && npm run build && npm run dev &
 FRONTEND_PID=$!
-cd /home/kali/Desktop/AutoBot
+cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
 
 # Check if frontend started successfully
 sleep 5

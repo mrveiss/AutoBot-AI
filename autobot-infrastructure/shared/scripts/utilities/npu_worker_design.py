@@ -323,7 +323,10 @@ if __name__ == "__main__":
     architecture.print_summary()
 
     # Generate full architecture file
-    with open("/home/kali/Desktop/AutoBot/NPU_WORKER_ARCHITECTURE.json", "w") as f:
+    with open(
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/NPU_WORKER_ARCHITECTURE.json",
+        "w",
+    ) as f:
         f.write(architecture.generate_architecture_file())
 
     print("\n📄 Full architecture saved to NPU_WORKER_ARCHITECTURE.json")

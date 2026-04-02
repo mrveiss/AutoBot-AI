@@ -196,7 +196,7 @@ class ConfigMigrator:
         old_config_files = [
             self.src_dir / "async_config_manager.py",
             self.src_dir / "config_helper.py",
-            self.src_dir / "utils" / "config_manager.py"
+            self.src_dir / "utils" / "config_manager.py",
             # Keep main config.py for now until fully tested
         ]
 
@@ -253,7 +253,7 @@ def main():
     )
     parser.add_argument(
         "--project-root",
-        default="/home/kali/Desktop/AutoBot",
+        default="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
         help="Project root directory",
     )
 
@@ -265,7 +265,9 @@ def main():
     stats = migrator.run_migration(dry_run=args.dry_run)
 
     logger.info("\n🎊 CONSOLIDATION COMPLETE!")
-    logger.info(f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}")
+    logger.info(
+        f"📊 Files migrated: {stats['files_migrated']}/{stats['files_scanned']}"
+    )
     logger.info(f"🔧 Changes made: {stats['changes_made']}")
     if stats["files_failed"] > 0:
         logger.error(f"⚠️  Files failed: {stats['files_failed']}")

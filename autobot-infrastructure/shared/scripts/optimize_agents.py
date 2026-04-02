@@ -53,7 +53,9 @@ def optimize_agent_file(file_path: Path) -> tuple[bool, int, int]:
 
 def main():
     """Main optimization routine."""
-    agents_dir = Path("/home/kali/Desktop/AutoBot/.claude/agents")
+    agents_dir = Path(
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.claude/agents"
+    )
 
     if not agents_dir.exists():
         print(f"❌ Error: Agents directory not found: {agents_dir}")

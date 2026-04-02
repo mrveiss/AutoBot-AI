@@ -103,7 +103,7 @@ class LLMModelOptimizer:
 
     def __init__(self):
         """Initialize LLM optimizer with default paths and state containers."""
-        self.autobot_root = Path("/home/kali/Desktop/AutoBot")
+        self.autobot_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
         self.installed_models = {}
         self.missing_models = []
         self.optimization_results = {}
@@ -125,7 +125,8 @@ class LLMModelOptimizer:
     async def _fetch_ollama_models(self) -> dict:
         """Fetch installed models from Ollama. Returns {name: {size, status}}."""
         process = await asyncio.create_subprocess_exec(
-            "ollama", "list",
+            "ollama",
+            "list",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -183,13 +184,13 @@ class LLMModelOptimizer:
         try:
             start = time.time()
             process = await asyncio.create_subprocess_exec(
-                "ollama", "pull", model,
+                "ollama",
+                "pull",
+                model,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=1800
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=1800)
 
             if process.returncode == 0:
                 elapsed = time.time() - start
@@ -241,11 +242,13 @@ class LLMModelOptimizer:
         module (loaded from agents.yaml) — never hardcoded here (#2584).
         """
         return {
-            "src/orchestrator.py": [{
-                "find": 'llm_config.get("ollama", {}).get("model", "tinyllama:latest")',
-                "replace": f'llm_config.get("ollama", {{}}).get("model", "{_ROUTING_MODEL}")',
-                "line_context": "orchestrator_llm_model",
-            }],
+            "src/orchestrator.py": [
+                {
+                    "find": 'llm_config.get("ollama", {}).get("model", "tinyllama:latest")',
+                    "replace": f'llm_config.get("ollama", {{}}).get("model", "{_ROUTING_MODEL}")',
+                    "line_context": "orchestrator_llm_model",
+                }
+            ],
             "src/config.py": [
                 {
                     "find": f'"orchestrator": os.getenv("AUTOBOT_ORCHESTRATOR_MODEL", "llama3.2:1b")',
@@ -258,11 +261,13 @@ class LLMModelOptimizer:
                     "line_context": "models configuration — classification",
                 },
             ],
-            "backend/utils/connection_utils.py": [{
-                "find": '"qwen3.5:9b"',
-                "replace": f'"{_DEFAULT_MODEL}"',
-                "line_context": "AUTOBOT_DEFAULT_LLM_MODEL default",
-            }],
+            "backend/utils/connection_utils.py": [
+                {
+                    "find": '"qwen3.5:9b"',
+                    "replace": f'"{_DEFAULT_MODEL}"',
+                    "line_context": "AUTOBOT_DEFAULT_LLM_MODEL default",
+                }
+            ],
         }
 
     def _apply_file_updates(self, full_path: Path, updates: list) -> dict:
@@ -334,15 +339,35 @@ class LLMModelOptimizer:
             "npu_optimization": {
                 "enabled": True,
                 "target_models": [_CLASSIFICATION_MODEL, _EMBEDDING_MODEL],
-                "optimization_flags": ["int8_quantization", "dynamic_batching", "memory_pooling"],
+                "optimization_flags": [
+                    "int8_quantization",
+                    "dynamic_batching",
+                    "memory_pooling",
+                ],
             },
             "model_routing": {
-                "classification": {"model": _CLASSIFICATION_MODEL, "device": "npu", "priority": "speed"},
+                "classification": {
+                    "model": _CLASSIFICATION_MODEL,
+                    "device": "npu",
+                    "priority": "speed",
+                },
                 "chat": {"model": _CHAT_MODEL, "device": "gpu", "priority": "balanced"},
-                "research": {"model": _DEFAULT_MODEL, "device": "gpu", "priority": "quality"},
+                "research": {
+                    "model": _DEFAULT_MODEL,
+                    "device": "gpu",
+                    "priority": "quality",
+                },
                 "rag": {"model": _RAG_MODEL, "device": "gpu", "priority": "reasoning"},
-                "code": {"model": _CODE_MODEL, "device": "gpu", "priority": "specialized"},
-                "system_commands": {"model": _CLASSIFICATION_MODEL, "device": "npu", "priority": "speed"},
+                "code": {
+                    "model": _CODE_MODEL,
+                    "device": "gpu",
+                    "priority": "specialized",
+                },
+                "system_commands": {
+                    "model": _CLASSIFICATION_MODEL,
+                    "device": "npu",
+                    "priority": "speed",
+                },
             },
         }
 
@@ -388,7 +413,10 @@ class LLMModelOptimizer:
         for model in models:
             try:
                 process = await asyncio.create_subprocess_exec(
-                    "ollama", "run", model, "Hello, respond with 'OK'",
+                    "ollama",
+                    "run",
+                    model,
+                    "Hello, respond with 'OK'",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -424,7 +452,8 @@ class LLMModelOptimizer:
                 "models_installed": len(results.get("installations", {})),
                 "configs_updated": len(results.get("config_updates", {})),
                 "validation_success": sum(
-                    1 for v in results.get("validation", {}).values()
+                    1
+                    for v in results.get("validation", {}).values()
                     if v.get("status") == "success"
                 ),
             },
@@ -452,7 +481,9 @@ class LLMModelOptimizer:
 
         report = self._build_report(results_copy)
         report_path = (
-            self.autobot_root / "analysis" / "ai-ml"
+            self.autobot_root
+            / "analysis"
+            / "ai-ml"
             / f"llm_optimization_report_{int(time.time())}.json"
         )
         report_path.parent.mkdir(parents=True, exist_ok=True)

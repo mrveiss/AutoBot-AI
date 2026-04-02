@@ -22,7 +22,7 @@ echo -e "${CYAN}Architecture: 6-VM Distributed System${NC}"
 echo ""
 
 # Change to AutoBot directory
-cd /home/kali/Desktop/AutoBot
+cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
 
 # Load environment variables for distributed mode
 echo -e "${CYAN}📋 Loading distributed environment configuration...${NC}"
@@ -110,7 +110,7 @@ if pgrep -f "python.*backend/main.py" > /dev/null; then
 fi
 
 # Set Python path
-export PYTHONPATH="/home/kali/Desktop/AutoBot:$PYTHONPATH"
+export PYTHONPATH="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}:$PYTHONPATH"
 
 # Start backend with distributed configuration
 echo "Starting FastAPI backend coordinator..."

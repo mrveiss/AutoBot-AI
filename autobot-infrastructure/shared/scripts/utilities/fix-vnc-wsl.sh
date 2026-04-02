@@ -39,7 +39,7 @@ Type=simple
 User=kali
 Group=kali
 Environment=DISPLAY=:1
-ExecStart=/usr/bin/x11vnc -display :1 -forever -shared -rfbauth /home/kali/.vnc/passwd -rfbport 5900 -noxdamage -noxfixes
+ExecStart=/usr/bin/x11vnc -display :1 -forever -shared -rfbauth /home/${USER:-autobot}/.vnc/passwd -rfbport 5900 -noxdamage -noxfixes
 Restart=always
 RestartSec=5
 
@@ -72,13 +72,13 @@ WantedBy=multi-user.target
 EOF
 
 # Ensure password file exists
-mkdir -p /home/kali/.vnc
-if [ ! -f /home/kali/.vnc/passwd ]; then
+mkdir -p /home/${USER:-autobot}/.vnc
+if [ ! -f /home/${USER:-autobot}/.vnc/passwd ]; then
     VNC_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
-    x11vnc -storepasswd "$VNC_PASS" /home/kali/.vnc/passwd
+    x11vnc -storepasswd "$VNC_PASS" /home/${USER:-autobot}/.vnc/passwd
     echo "Generated VNC password: $VNC_PASS"
 fi
-chown -R kali:kali /home/kali/.vnc
+chown -R kali:kali /home/${USER:-autobot}/.vnc
 
 echo "Reloading systemd..."
 systemctl daemon-reload

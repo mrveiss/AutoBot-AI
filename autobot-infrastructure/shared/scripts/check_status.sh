@@ -11,7 +11,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || {
     # Fallback if lib not found
-    PROJECT_ROOT="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}"
+    PROJECT_ROOT="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
     [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
 }
 
@@ -74,7 +74,7 @@ echo ""
 
 # Check recent errors
 echo "Recent Errors (last 10):"
-LOG_FILE="${PROJECT_ROOT:-/home/kali/Desktop/AutoBot}/logs/backend.log"
+LOG_FILE="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}/logs/backend.log"
 ERROR_COUNT=$(tail -100 "$LOG_FILE" 2>/dev/null | grep -c "ERROR")
 if [ "$ERROR_COUNT" -eq 0 ]; then
     echo -e "  \033[0;32mNo recent errors\033[0m"

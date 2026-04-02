@@ -10,7 +10,7 @@ including index creation, schema validation, data migration, and performance ben
 
 Database: Redis Stack DB 0 (RedisSearch limitation)
 Data Prefix: memory:graph:entity:* (logical separation from knowledge base)
-Specification: /home/kali/Desktop/AutoBot/docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md
+Specification: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md
 
 IMPORTANT: RedisSearch indexes can only be created on DB 0, so we use key prefixes
 for logical database separation instead of physical database numbers.
@@ -39,10 +39,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import redis
-from constants.network_constants import NetworkConstants
 from redis.commands.search.field import NumericField, TagField, TextField, VectorField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
+
+from constants.network_constants import NetworkConstants
 
 # Configure logging
 logging.basicConfig(
@@ -51,7 +52,8 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(
-            "/home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log", mode="a"
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/database/memory_graph_init.log",
+            mode="a",
         ),
     ],
 )
@@ -673,9 +675,9 @@ class MemoryGraphInitializer:
             try:
                 info = self.redis_client.ft(self.fulltext_index).info()
                 validation_results["fulltext_index"] = True
-                validation_results["details"][
-                    "fulltext_index"
-                ] = self._parse_index_info(info)
+                validation_results["details"]["fulltext_index"] = (
+                    self._parse_index_info(info)
+                )
                 logger.info("✓ Full-text index validated: %s", self.fulltext_index)
             except redis.ResponseError as e:
                 logger.error("✗ Full-text index validation failed: %s", e)
@@ -919,7 +921,7 @@ def _execute_memory_graph_phases(initializer: MemoryGraphInitializer, args) -> b
         logger.info("=" * 80)
 
         transcript_dir = Path(
-            "/home/kali/Desktop/AutoBot/data/conversation_transcripts"
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/conversation_transcripts"
         )
         migration_stats = initializer.migrate_conversations(transcript_dir)
         logger.info("\nMigration Results:")

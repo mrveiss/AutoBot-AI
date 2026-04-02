@@ -12,7 +12,7 @@ import psutil
 import torch
 
 # Add AutoBot to path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from utils.semantic_chunker import AutoBotSemanticChunker
 

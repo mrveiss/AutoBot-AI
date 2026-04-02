@@ -10,7 +10,7 @@ import sys
 import time
 
 # Add AutoBot to path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from knowledge_base import get_knowledge_base
 

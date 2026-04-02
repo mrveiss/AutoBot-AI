@@ -1,8 +1,8 @@
 #!/bin/bash
 # AutoBot Log Rotation Script
 
-LOGS_DIR="/home/kali/Desktop/AutoBot/logs"
-ARCHIVE_DIR="/home/kali/Desktop/AutoBot/logs/archive"
+LOGS_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs"
+ARCHIVE_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/archive"
 MAX_AGE_DAYS=30
 
 # Create archive directory

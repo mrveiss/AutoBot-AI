@@ -229,7 +229,7 @@
 
     - name: Copy AutoBot source for building
       synchronize:
-        src: /home/kali/Desktop/AutoBot/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /tmp/autobot/
         delete: no
         recursive: yes
@@ -351,7 +351,7 @@
 
     - name: Copy AutoBot source for building
       synchronize:
-        src: /home/kali/Desktop/AutoBot/
+        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
         dest: /tmp/autobot/
         delete: no
         recursive: yes

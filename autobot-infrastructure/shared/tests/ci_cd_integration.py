@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -221,7 +221,9 @@ class CICDIntegrationTester:
         ]
 
         # Create results directory
-        self.results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        self.results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         self.results_dir.mkdir(exist_ok=True)
 
         self.pipeline_id = f"phase9_pipeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -285,7 +287,7 @@ class CICDIntegrationTester:
                 text=True,
                 timeout=stage.timeout,
                 env=env,
-                cwd="/home/kali/Desktop/AutoBot",
+                cwd="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
             )
 
             end_time = datetime.now()
@@ -647,7 +649,9 @@ class CICDIntegrationTester:
 
             # Check if required stage failed
             if stage.required and result.status == "FAIL":
-                logger.error(f"💥 Required stage {stage.name} failed, aborting pipeline")
+                logger.error(
+                    f"💥 Required stage {stage.name} failed, aborting pipeline"
+                )
                 pipeline_success = False
                 break
 
@@ -730,26 +734,34 @@ class CICDIntegrationTester:
                         "operator": gate.operator,
                         "severity": gate.severity,
                         "description": gate.description,
-                        "status": "PASS"
-                        if gate.name
-                        in (
-                            self.results[0].quality_gates_passed if self.results else []
-                        )
-                        else "FAIL",
+                        "status": (
+                            "PASS"
+                            if gate.name
+                            in (
+                                self.results[0].quality_gates_passed
+                                if self.results
+                                else []
+                            )
+                            else "FAIL"
+                        ),
                     }
                     for gate in self.quality_gates
                 ],
                 "summary": {
-                    "overall_status": "SUCCESS"
-                    if all(
-                        gate.severity != "blocking"
-                        or gate.name
-                        in (
-                            self.results[0].quality_gates_passed if self.results else []
+                    "overall_status": (
+                        "SUCCESS"
+                        if all(
+                            gate.severity != "blocking"
+                            or gate.name
+                            in (
+                                self.results[0].quality_gates_passed
+                                if self.results
+                                else []
+                            )
+                            for gate in self.quality_gates
                         )
-                        for gate in self.quality_gates
-                    )
-                    else "FAILED",
+                        else "FAILED"
+                    ),
                     "stages_executed": len(self.results),
                     "stages_passed": sum(1 for r in self.results if r.status == "PASS"),
                     "stages_failed": sum(1 for r in self.results if r.status == "FAIL"),
@@ -791,7 +803,12 @@ class CICDIntegrationTester:
 
             f.write("Stage Results:\n")
             for result in self.results:
-                status_icon = {"PASS": "✅", "FAIL": "❌", "WARNING": "⚠️", "SKIP": "⏭️"}
+                status_icon = {
+                    "PASS": "✅",
+                    "FAIL": "❌",
+                    "WARNING": "⚠️",
+                    "SKIP": "⏭️",
+                }
                 f.write(
                     f"  {status_icon.get(result.status, '?')} {result.stage_name}: {result.status} ({result.duration:.2f}s)\n"
                 )

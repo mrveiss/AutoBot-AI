@@ -16,7 +16,7 @@ import httpx
 import websockets
 
 # Import centralized network configuration
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

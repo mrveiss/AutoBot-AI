@@ -537,7 +537,7 @@ async def _rsync_component(
         "--delete",
         "-e",
         ssh_opts,
-        "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/kali/  # noqa
+        "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/${USER:-autobot}/  # noqa
     ]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
@@ -978,7 +978,7 @@ async def sync_node(
     if is_slm_server and request.restart:
         # SLM server cannot self-sync via the Ansible playbook because
         # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
-        # but the source path /home/kali/Desktop/AutoBot only exists on the dev  # noqa
+        # but the source path ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source} only exists on the dev  # noqa
         # machine. Instead, pull code FROM the code source node directly (#913).
         logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
         asyncio.create_task(_sync_slm_from_code_source(node_id))

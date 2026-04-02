@@ -157,7 +157,7 @@ test_no_vulnerable_scripts() {
 
     local vulnerable_count
     vulnerable_count=$(grep -r "StrictHostKeyChecking=accept-new" \
-        /home/kali/Desktop/AutoBot/scripts/ 2>/dev/null | wc -l)
+        ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/ 2>/dev/null | wc -l)
 
     if [ "$vulnerable_count" -eq 0 ]; then
         log_success "No vulnerable SSH usage found in scripts"

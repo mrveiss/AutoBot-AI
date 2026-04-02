@@ -8,7 +8,7 @@ import sys
 import time
 
 # Add AutoBot to path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 
 async def test_chunker_optimization():

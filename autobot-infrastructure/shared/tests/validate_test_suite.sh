@@ -56,28 +56,28 @@ count_ts_tests() {
 
 echo "Checking Backend Unit Tests..."
 echo "------------------------------"
-check_file "/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_categories.py"
-count_python_tests "/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_categories.py"
+check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_categories.py"
+count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_categories.py"
 
-check_file "/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_vectorization.py"
-count_python_tests "/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_vectorization.py"
+check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_vectorization.py"
+count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/unit/test_knowledge_vectorization.py"
 
 echo ""
 echo "Checking Frontend Unit Tests..."
 echo "------------------------------"
-check_file "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
-count_ts_tests "/home/kali/Desktop/AutoBot/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
+count_ts_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/src/composables/__tests__/useKnowledgeVectorization.test.ts"
 
 echo ""
 echo "Checking Integration Tests..."
 echo "------------------------------"
-check_file "/home/kali/Desktop/AutoBot/tests/integration/test_knowledge_api_integration.py"
-count_python_tests "/home/kali/Desktop/AutoBot/tests/integration/test_knowledge_api_integration.py"
+check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/integration/test_knowledge_api_integration.py"
+count_python_tests "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/integration/test_knowledge_api_integration.py"
 
 echo ""
 echo "Checking Documentation..."
 echo "------------------------------"
-check_file "/home/kali/Desktop/AutoBot/tests/TEST_SUITE_SUMMARY.md"
+check_file "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/TEST_SUITE_SUMMARY.md"
 
 echo ""
 echo "=================================================="

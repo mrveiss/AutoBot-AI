@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import psutil
 
 # Add AutoBot paths
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -90,7 +90,9 @@ class PerformanceOptimizationTester:
         }
 
         # Create results directory
-        self.results_dir = Path("/home/kali/Desktop/AutoBot/tests/results")
+        self.results_dir = Path(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results"
+        )
         self.results_dir.mkdir(exist_ok=True)
 
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

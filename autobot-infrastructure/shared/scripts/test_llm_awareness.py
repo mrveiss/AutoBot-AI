@@ -13,7 +13,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-sys.path.append("/home/kali/Desktop/AutoBot")
+sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from llm_self_awareness import get_llm_self_awareness
 from middleware.llm_awareness_middleware import get_awareness_injector

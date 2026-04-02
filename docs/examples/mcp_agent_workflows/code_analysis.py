@@ -24,7 +24,9 @@ from base import (
 )
 
 
-async def analyze_codebase(directory: str, file_pattern: str = "*.py") -> Dict[str, Any]:
+async def analyze_codebase(
+    directory: str, file_pattern: str = "*.py"
+) -> Dict[str, Any]:
     """
     Multi-step code analysis workflow:
     1. Search files matching pattern
@@ -75,7 +77,9 @@ async def analyze_codebase(directory: str, file_pattern: str = "*.py") -> Dict[s
                 "read_text_file",
                 {"path": file_path},
             )
-            file_contents[file_path] = content_result.get("content", "")[:2000]  # First 2000 chars
+            file_contents[file_path] = content_result.get("content", "")[
+                :2000
+            ]  # First 2000 chars
             print(f"   ✅ Read: {file_path.split('/')[-1]}")
         except Exception as e:
             print(f"   ❌ Failed to read {file_path}: {e}")
@@ -319,7 +323,7 @@ async def main():
     """Main entry point for code analysis workflow example"""
 
     # Example: Analyze backend API directory
-    directory = "/home/kali/Desktop/AutoBot/backend/api"
+    directory = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backend/api"
     file_pattern = "*.py"
 
     # Run code analysis workflow
@@ -337,7 +341,9 @@ async def main():
 
     # Remove report from JSON (already printed)
     results_for_json = {k: v for k, v in results.items() if k != "report"}
-    await write_file_safe(output_path, json.dumps(results_for_json, indent=2, default=str))
+    await write_file_safe(
+        output_path, json.dumps(results_for_json, indent=2, default=str)
+    )
     print(f"\nResults saved to: {output_path}")
 
 

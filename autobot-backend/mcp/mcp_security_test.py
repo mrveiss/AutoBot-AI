@@ -76,7 +76,7 @@ class TestFilesystemMCPPathTraversal:
             "../../../etc/passwd",
             "../../../../../../etc/passwd",
             "/tmp/autobot/../../../etc/passwd",
-            "/home/kali/Desktop/AutoBot/../../../../../../etc/passwd",
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/../../../../../../etc/passwd",
         ]
 
         for attack_path in traversal_attempts:
@@ -145,9 +145,9 @@ class TestFilesystemMCPPathTraversal:
     def test_allowed_paths_are_permitted(self):
         """Test that legitimate paths within allowed directories are permitted"""
         allowed_paths = [
-            "/home/kali/Desktop/AutoBot/backend/api/test.py",
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backend/api/test.py",
             "/tmp/autobot/temp_file.txt",
-            "/home/kali/Desktop/test_file.json",
+            "/home/${USER:-autobot}/Desktop/test_file.json",
         ]
 
         for path in allowed_paths:
@@ -268,9 +268,9 @@ class TestFilesystemMCPAccessControl:
 
         # Verify expected directories are in whitelist
         expected_dirs = [
-            "/home/kali/Desktop/AutoBot/",
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/",
             "/tmp/autobot/",
-            "/home/kali/Desktop/",
+            "/home/${USER:-autobot}/Desktop/",
         ]
 
         for expected in expected_dirs:
@@ -280,11 +280,11 @@ class TestFilesystemMCPAccessControl:
 
     def test_access_to_parent_of_allowed(self):
         """Test that parent directories of allowed paths are blocked"""
-        # /home/kali/Desktop/ is allowed, but /home/kali/ should be blocked
+        # /home/${USER:-autobot}/Desktop/ is allowed, but /home/${USER:-autobot}/ should be blocked
         blocked_paths = [
-            "/home/kali/private_file.txt",
-            "/home/kali/.ssh/id_rsa",
-            "/home/kali/.bashrc",
+            "/home/${USER:-autobot}/private_file.txt",
+            "${HOME}/.ssh/id_rsa",
+            "/home/${USER:-autobot}/.bashrc",
         ]
 
         for path in blocked_paths:

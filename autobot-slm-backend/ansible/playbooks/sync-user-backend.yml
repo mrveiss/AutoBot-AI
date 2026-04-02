@@ -7,7 +7,7 @@
   hosts: autobot-host
   gather_facts: no
   vars:
-    local_autobot_root: "/home/kali/Desktop/AutoBot"
+    local_autobot_root: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     backend_user: "autobot"
     backend_install_dir: "/opt/autobot"
     backend_host: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"

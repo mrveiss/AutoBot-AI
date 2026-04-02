@@ -91,7 +91,7 @@ def main():
         return
 
     # Find all documentation files
-    project_root = "/home/kali/Desktop/AutoBot"
+    project_root = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
     doc_files = []
 
     patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]

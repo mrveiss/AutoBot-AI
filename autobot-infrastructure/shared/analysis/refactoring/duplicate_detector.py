@@ -420,7 +420,7 @@ class DuplicateDetector:
 
 
 def main():
-    detector = DuplicateDetector("/home/kali/Desktop/AutoBot")
+    detector = DuplicateDetector("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
     results = detector.run_analysis()
 
     print("\n" + "=" * 60)
@@ -467,7 +467,7 @@ def main():
     # Save detailed results
     import json
 
-    output_file = "/home/kali/Desktop/AutoBot/analysis/refactoring/duplicate_analysis_results.json"
+    output_file = "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/analysis/refactoring/duplicate_analysis_results.json"
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     with open(output_file, "w") as f:

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Tuple
 from constants import ServiceURLs
 
 # Add project root to path
-sys.path.insert(0, "/home/kali/Desktop/AutoBot")
+sys.path.insert(0, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 # Configure logging
 logging.basicConfig(
@@ -437,9 +437,9 @@ class RedisVectorStoreAnalyzer:
             "langchain_migration": langchain_migration,
             "hybrid_approach": hybrid_approach,
             "existing_data_size": analysis.get("total_documents", 0),
-            "existing_data_quality": "HIGH"
-            if analysis.get("total_documents", 0) > 10000
-            else "MEDIUM",
+            "existing_data_quality": (
+                "HIGH" if analysis.get("total_documents", 0) > 10000 else "MEDIUM"
+            ),
         }
 
     async def run_comprehensive_analysis(self):
@@ -668,7 +668,7 @@ async def main():
     from pathlib import Path
 
     output_file = Path(
-        "/home/kali/Desktop/AutoBot/reports/redis_vector_recommendation.json"
+        "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/redis_vector_recommendation.json"
     )
     output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w", encoding="utf-8") as f:

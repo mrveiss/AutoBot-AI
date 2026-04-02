@@ -98,8 +98,6 @@ _SAFE_FILE_TYPES = frozenset(
 # Issue #380: Module-level tuple for collection AST types
 _COLLECTION_AST_TYPES = (ast.Dict, ast.List, ast.Set)
 
-# Issue #380: Module-level tuple for local IP prefixes
-_LOCAL_IP_PREFIXES = ("127.0.0.", "192.168.")
 
 # Issue #380: Module-level tuple for definition types (functions + classes)
 _DEFINITION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -790,10 +788,7 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
 def _check_hardcoded_ip(ip: str, line_num: int, line_content: str) -> Optional[Dict]:
     """Check if IP address is a known infrastructure IP."""
     # Issue #380: Use module-level constant for local IP prefixes
-    if not (
-        ip.startswith(NetworkConstants.VM_IP_PREFIX)
-        or ip.startswith(_LOCAL_IP_PREFIXES)
-    ):
+    if not ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
         return None
 
     return {
@@ -1468,9 +1463,7 @@ def _extract_js_hardcodes(line: str, line_num: int) -> List[Dict]:
         )
     # IP addresses (only VM/local IPs)
     for ip in _IP_ADDRESS_RE.findall(line):
-        if ip.startswith(NetworkConstants.VM_IP_PREFIX) or ip.startswith(
-            _LOCAL_IP_PREFIXES
-        ):
+        if ip.startswith(NetworkConstants.PRIVATE_IP_PREFIXES):
             hardcodes.append(
                 {"type": "ip", "value": ip, "line": line_num, "context": context}
             )

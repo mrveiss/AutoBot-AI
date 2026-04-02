@@ -168,7 +168,7 @@ async def add_documentation_to_kb():
     await kb.ainit()
 
     # Base paths for documentation
-    project_root = Path("/home/kali/Desktop/AutoBot")
+    project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
     await _add_documentation_to_kb_block_5()
 

@@ -127,7 +127,7 @@ update_backend_config() {
     log "INFO" "🔧 Updating backend configuration for VM connections..."
 
     # Create environment file for backend with VM endpoints
-    local env_file="/home/kali/Desktop/AutoBot/.env.hybrid"
+    local env_file="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.hybrid"
 
     cat > "$env_file" << EOF
 # AutoBot Hybrid Configuration - Backend on Host, Services on VMs
@@ -281,7 +281,7 @@ show_summary() {
     log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
     log "INFO" ""
     log "INFO" "Next Steps:"
-    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=/home/kali/Desktop/AutoBot/.env.hybrid"
+    log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.hybrid"
     log "INFO" "  2. Restart backend: python backend/main.py"
     log "INFO" "  3. Access frontend: http://${AUTOBOT_FRONTEND_HOST:-localhost}:5173"
     log "INFO" ""

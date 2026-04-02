@@ -351,7 +351,7 @@ setup_code() {
             --exclude '__pycache__/' \
             --exclude '.git/' \
             --exclude 'data/*.db' \
-            "autobot@$DEV_HOST:/home/kali/Desktop/AutoBot/" \
+            "autobot@$DEV_HOST:${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/" \
             "$INSTALL_DIR/"
         chown -R autobot:autobot "$INSTALL_DIR"
     fi

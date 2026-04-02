@@ -16,6 +16,7 @@ Issue: #260
 import asyncio
 import json
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -277,7 +278,7 @@ class SecurityWorkflowManager:
         from constants.network_constants import NetworkConstants
 
         manager = SecurityWorkflowManager()
-        target_network = NetworkConstants.DEFAULT_SCAN_NETWORK
+        target_network = os.environ.get("NETWORK_SUBNET", NetworkConstants.DEFAULT_SCAN_NETWORK)
 
         # Create assessment
         assessment = await manager.create_assessment(

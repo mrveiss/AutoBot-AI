@@ -21,7 +21,7 @@ FAILED=0
 START_TIME=$(date +%s)
 
 # Ensure we're in project root
-cd /home/kali/Desktop/AutoBot
+cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
 
 # Phase 1: Unit Tests
 echo "╔════════════════════════════════════════╗"

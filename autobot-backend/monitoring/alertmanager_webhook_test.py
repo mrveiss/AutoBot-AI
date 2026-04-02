@@ -582,7 +582,8 @@ class TestAlertRulesYaml:
         import yaml
 
         with open(
-            "/home/kali/Desktop/AutoBot/config/prometheus/alertmanager_rules.yml", "r"
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/prometheus/alertmanager_rules.yml",
+            "r",
         ) as f:
             return yaml.safe_load(f)
 
@@ -683,7 +684,8 @@ class TestAlertManagerConfig:
         import yaml
 
         with open(
-            "/home/kali/Desktop/AutoBot/config/prometheus/alertmanager.yml", "r"
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/config/prometheus/alertmanager.yml",
+            "r",
         ) as f:
             return yaml.safe_load(f)
 
@@ -757,7 +759,9 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_alert_config(self):
         """Verify .env.example has alert configuration section"""
-        with open("/home/kali/Desktop/AutoBot/.env.example", "r") as f:
+        with open(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
+        ) as f:
             content = f.read()
 
         assert "ALERT NOTIFICATION CONFIGURATION" in content
@@ -767,7 +771,9 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_email_config(self):
         """Verify .env.example has email notification config"""
-        with open("/home/kali/Desktop/AutoBot/.env.example", "r") as f:
+        with open(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
+        ) as f:
             content = f.read()
 
         assert "ALERT_EMAIL_USERNAME" in content
@@ -776,7 +782,9 @@ class TestEnvironmentVariables:
 
     def test_env_example_has_slack_config(self):
         """Verify .env.example has Slack notification config"""
-        with open("/home/kali/Desktop/AutoBot/.env.example", "r") as f:
+        with open(
+            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env.example", "r"
+        ) as f:
             content = f.read()
 
         assert "ALERT_SLACK_WEBHOOK_URL" in content

@@ -115,15 +115,18 @@ class TestCodeSourceValidation:
             # Mock finding similar path
             with patch(
                 "code_source_module._find_similar_paths",
-                return_value="/home/kali/Desktop/AutoBot",
+                return_value="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}",
             ):
                 with pytest.raises(HTTPException) as exc_info:
-                    await _validate_repo_path(mock_node, "/home/kali/Desktop/Autobot")
+                    await _validate_repo_path(
+                        mock_node, "/home/${USER:-autobot}/Desktop/Autobot"
+                    )
 
                 assert exc_info.value.status_code == 400
                 assert "does not exist" in exc_info.value.detail
                 assert (
-                    "Did you mean: /home/kali/Desktop/AutoBot?" in exc_info.value.detail
+                    "Did you mean: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}?"
+                    in exc_info.value.detail
                 )
 
     @pytest.mark.asyncio
@@ -171,9 +174,11 @@ class TestCodeSourceValidation:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            result = await _find_similar_paths(mock_node, "/home/kali/Desktop/autobot")
+            result = await _find_similar_paths(
+                mock_node, "/home/${USER:-autobot}/Desktop/autobot"
+            )
 
-            assert result == "/home/kali/Desktop/AutoBot"
+            assert result == "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_no_match(self, mock_node):
@@ -188,7 +193,9 @@ class TestCodeSourceValidation:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            result = await _find_similar_paths(mock_node, "/home/kali/Desktop/autobot")
+            result = await _find_similar_paths(
+                mock_node, "/home/${USER:-autobot}/Desktop/autobot"
+            )
 
             assert result is None
 
@@ -203,7 +210,9 @@ class TestCodeSourceValidation:
             mock_process.returncode = 0
             mock_exec.return_value = mock_process
 
-            result = await _find_similar_paths(mock_node, "/home/kali/Desktop/AutoBot")
+            result = await _find_similar_paths(
+                mock_node, "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+            )
 
             assert result is None
 
@@ -215,7 +224,9 @@ class TestCodeSourceValidation:
         ) as mock_exec:
             mock_exec.side_effect = OSError("Connection refused")
 
-            result = await _find_similar_paths(mock_node, "/home/kali/Desktop/autobot")
+            result = await _find_similar_paths(
+                mock_node, "/home/${USER:-autobot}/Desktop/autobot"
+            )
 
             assert result is None
 

@@ -36,7 +36,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
-AUTOBOT_ROOT="/home/kali/Desktop/AutoBot"
+AUTOBOT_ROOT="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
 TEST_MODE="full"
 VERBOSE=false
 CI_MODE=false
@@ -176,7 +176,7 @@ run_test_category() {
 
     # Extract JSON results if available
     if grep -q "Test Suite Complete" "$test_output"; then
-        local json_file=$(grep -o "/home/kali/Desktop/AutoBot/tests/results/[^[:space:]]*\.json" "$test_output" | head -1)
+        local json_file=$(grep -o "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/[^[:space:]]*\.json" "$test_output" | head -1)
         if [ -n "$json_file" ] && [ -f "$json_file" ]; then
             cp "$json_file" "$test_results"
             print_status "INFO" "Results saved to: $test_results"

@@ -25,7 +25,7 @@ ml_models:
   enable_auto_tuning: true         # Automatically tune model parameters
 
   # Model persistence
-  model_storage_path: "/home/kali/Desktop/AutoBot/data/security/models"
+  model_storage_path: "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/data/security/models"
   save_trained_models: true
   load_existing_models: true
 
