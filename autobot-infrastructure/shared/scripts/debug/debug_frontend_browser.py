@@ -4,7 +4,7 @@
 # Author: mrveiss
 """
 Frontend debugging script to run on Browser VM (visual mode with DevTools)
-Analyzes the blank page issue on http://172.16.168.21:5173
+Analyzes the blank page issue on http://10.0.0.2:5173
 
 Issue: #148 - Refactored to use shared frontend_analysis_lib
 """
@@ -26,7 +26,7 @@ def analyze_frontend_issue():
 
     # Run analysis with manual inspection time
     result = debugger.analyze_page(
-        url="http://172.16.168.21:5173",
+        url="http://10.0.0.2:5173",
         timeout=15000,
         wait_after_load=3,
         screenshot_path="/tmp/frontend_debug_screenshot.png",

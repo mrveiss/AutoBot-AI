@@ -49,13 +49,11 @@ print(
     "3. Mount rules: -v ./config/prometheus/alertmanager_rules.yml:/etc/prometheus/alertmanager_rules.yml"
 )
 print("4. Restart Prometheus to load AlertManager integration")
-print(
-    "5. Verify webhook: curl http://172.16.168.20:8001/api/webhook/alertmanager/health"
-)
+print("5. Verify webhook: curl http://10.0.0.1:8001/api/webhook/alertmanager/health")
 
 print("\n📊 Monitoring:")
 print("- AlertManager UI: http://localhost:9093")
 print("- Prometheus UI: http://localhost:9090/alerts")
-print("- Webhook endpoint: http://172.16.168.20:8001/api/webhook/alertmanager\n")
+print("- Webhook endpoint: http://10.0.0.1:8001/api/webhook/alertmanager\n")
 
 sys.exit(0)

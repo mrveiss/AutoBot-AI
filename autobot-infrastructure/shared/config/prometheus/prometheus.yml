@@ -19,7 +19,7 @@ scrape_configs:
   # AutoBot Backend Metrics
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8001']
+      - targets: ['localhost:8001']
         labels:
           instance: 'autobot-main'
           service: 'backend-api'
@@ -36,12 +36,12 @@ scrape_configs:
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: '172.16.168.20:8001'
+        replacement: 'localhost:8001'
 
   # Redis Exporter (if available)
   - job_name: 'redis'
     static_configs:
-      - targets: ['172.16.168.23:9121']
+      - targets: ['localhost:9121']
         labels:
           instance: 'redis-vm3'
           service: 'redis'
@@ -53,12 +53,12 @@ scrape_configs:
   - job_name: 'node'
     static_configs:
       - targets:
-          - '172.16.168.20:9100'  # Main machine
-          - '172.16.168.21:9100'  # Frontend VM
-          - '172.16.168.22:9100'  # NPU Worker VM
-          - '172.16.168.23:9100'  # Redis VM
-          - '172.16.168.24:9100'  # AI Stack VM
-          - '172.16.168.25:9100'  # Browser VM
+          - 'localhost:9100'  # Main machine
+          - 'localhost:9100'  # Frontend VM
+          - 'localhost:9100'  # NPU Worker VM
+          - 'localhost:9100'  # Redis VM
+          - 'localhost:9100'  # AI Stack VM
+          - 'localhost:9100'  # Browser VM
     scrape_interval: 30s
     # This assumes node_exporter is running on each VM
     # If not available, jobs will show as down

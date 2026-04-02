@@ -29,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration (from SSOT)
-TARGET_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
+TARGET_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 TARGET_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 LOCAL_DASHBOARDS="$PROJECT_ROOT/config/grafana/dashboards"

@@ -23,7 +23,7 @@ Usage:
 
     # Preferred: Use ConfigRegistry directly
     from config.registry import ConfigRegistry
-    redis_ip = ConfigRegistry.get("vm.redis", "172.16.168.23")
+    redis_ip = ConfigRegistry.get("vm.redis", "")
 """
 
 import os
@@ -70,18 +70,18 @@ class NetworkConstants:
     # === VM Infrastructure IPs (from ConfigRegistry) ===
 
     # Main machine (WSL)
-    MAIN_MACHINE_IP: str = ConfigRegistry.get("vm.main", "172.16.168.20")
+    MAIN_MACHINE_IP: str = ConfigRegistry.get("vm.main", "")
 
     # VM Infrastructure IPs
-    FRONTEND_VM_IP: str = ConfigRegistry.get("vm.frontend", "172.16.168.21")
-    NPU_WORKER_VM_IP: str = ConfigRegistry.get("vm.npu", "172.16.168.22")
-    REDIS_VM_IP: str = ConfigRegistry.get("vm.redis", "172.16.168.23")
-    AI_STACK_VM_IP: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
-    BROWSER_VM_IP: str = ConfigRegistry.get("vm.browser", "172.16.168.25")
-    SLM_VM_IP: str = ConfigRegistry.get("vm.slm", "172.16.168.19")
+    FRONTEND_VM_IP: str = ConfigRegistry.get("vm.frontend", "")
+    NPU_WORKER_VM_IP: str = ConfigRegistry.get("vm.npu", "")
+    REDIS_VM_IP: str = ConfigRegistry.get("vm.redis", "")
+    AI_STACK_VM_IP: str = ConfigRegistry.get("vm.aistack", "")
+    BROWSER_VM_IP: str = ConfigRegistry.get("vm.browser", "")
+    SLM_VM_IP: str = ConfigRegistry.get("vm.slm", "")
 
     # Backward compatibility aliases
-    AI_STACK_HOST: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
+    AI_STACK_HOST: str = ConfigRegistry.get("vm.aistack", "")
 
     # === Local/Localhost addresses (static - not from SSOT) ===
     LOCALHOST_IP: str = "127.0.0.1"
@@ -110,7 +110,7 @@ class NetworkConstants:
     DUMMY_ROUTE_IP: str = (
         "10.255.255.255"  # Dummy IP for local IP detection via socket routing
     )
-    TEST_HOST_IP: str = "172.16.168.99"  # Test host IP for unit tests (not a real VM)
+    TEST_HOST_IP: str = "10.0.0.99"  # Test host IP for unit tests (not a real VM)
 
     # === Standard ports (from ConfigRegistry) ===
     BACKEND_PORT: int = int(ConfigRegistry.get("port.backend", "8001"))
@@ -381,7 +381,7 @@ class NetworkConfig:
 
         Issue #763: Prefer using ConfigRegistry directly:
             from config.registry import ConfigRegistry
-            host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+            host = ConfigRegistry.get("vm.redis", "")
 
         Args:
             service_name: Name of the service (backend, frontend, redis, etc.)
@@ -410,7 +410,7 @@ class NetworkConfig:
 
         Issue #763: Prefer using ConfigRegistry directly:
             from config.registry import ConfigRegistry
-            ip = ConfigRegistry.get("vm.redis", "172.16.168.23")
+            ip = ConfigRegistry.get("vm.redis", "")
 
         Args:
             vm_name: Name of the VM (frontend, redis, ai_stack, etc.)

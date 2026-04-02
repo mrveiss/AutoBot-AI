@@ -22,11 +22,11 @@ SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 # VM IP addresses (from SSOT)
 VMS=(
-    "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:frontend"
-    "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:npu-worker"
-    "${AUTOBOT_REDIS_HOST:-172.16.168.23}:redis"
-    "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:ai-stack"
-    "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:browser"
+    "${AUTOBOT_FRONTEND_HOST:-localhost}:frontend"
+    "${AUTOBOT_NPU_WORKER_HOST:-localhost}:npu-worker"
+    "${AUTOBOT_REDIS_HOST:-localhost}:redis"
+    "${AUTOBOT_AI_STACK_HOST:-localhost}:ai-stack"
+    "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:browser"
 )
 
 log() {

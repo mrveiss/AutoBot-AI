@@ -21,7 +21,7 @@ class MockNode:
     def __init__(self):
         self.node_id = "test-node"
         self.hostname = "test-host"
-        self.ip_address = "172.16.168.20"
+        self.ip_address = "10.0.0.1"
         self.ssh_user = "autobot"
 
 
@@ -37,7 +37,7 @@ sys.modules["services.auth"] = MagicMock()
 sys.modules["services.database"] = MagicMock()
 sys.modules["models.database"] = MagicMock()
 _mock_config = MagicMock()
-_mock_config.settings.external_url = "http://172.16.168.19:8080"
+_mock_config.settings.external_url = "http://10.0.0.9:8080"
 sys.modules["config"] = _mock_config
 
 spec.loader.exec_module(code_source_module)
@@ -76,7 +76,7 @@ class TestCodeSourceValidation:
             mock_exec.assert_called_once()
             call_args = mock_exec.call_args[0]
             assert call_args[0] == "ssh"
-            assert "autobot@172.16.168.20" in call_args
+            assert "autobot@10.0.0.1" in call_args
             assert "test -d /opt/autobot && echo exists" in call_args
 
     @pytest.mark.asyncio
@@ -265,7 +265,7 @@ class TestLocalNodeValidation:
         # Patch shared utility so the test is deterministic regardless of host (#2759)
         with patch(
             "autobot_shared.network_utils.get_local_ips",
-            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+            return_value={"127.0.0.1", "localhost", "::1", "10.0.0.9"},
         ):
             assert _is_local_node(node) is True
 
@@ -273,10 +273,10 @@ class TestLocalNodeValidation:
     async def test_is_local_node_own_ip(self):
         """Test _is_local_node detects own IP from settings (#2721, #2759)."""
         node = MockNode()
-        node.ip_address = "172.16.168.19"
+        node.ip_address = "10.0.0.9"
         with patch(
             "autobot_shared.network_utils.get_local_ips",
-            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+            return_value={"127.0.0.1", "localhost", "::1", "10.0.0.9"},
         ):
             assert _is_local_node(node) is True
 
@@ -284,9 +284,9 @@ class TestLocalNodeValidation:
     async def test_is_local_node_remote(self):
         """Test _is_local_node returns False for remote nodes (#2721, #2759)."""
         node = MockNode()
-        node.ip_address = "172.16.168.20"
+        node.ip_address = "10.0.0.1"
         with patch(
             "autobot_shared.network_utils.get_local_ips",
-            return_value={"127.0.0.1", "localhost", "::1", "172.16.168.19"},
+            return_value={"127.0.0.1", "localhost", "::1", "10.0.0.9"},
         ):
             assert _is_local_node(node) is False

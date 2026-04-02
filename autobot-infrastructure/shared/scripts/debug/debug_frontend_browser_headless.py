@@ -4,7 +4,7 @@
 # Author: mrveiss
 """
 Frontend debugging script to run on Browser VM (headless mode)
-Analyzes the blank page issue on http://172.16.168.21:5173
+Analyzes the blank page issue on http://10.0.0.2:5173
 
 Issue: #148 - Refactored to use shared frontend_analysis_lib
 """
@@ -26,7 +26,7 @@ def analyze_frontend_issue():
 
     # Run analysis
     result = debugger.analyze_page(
-        url="http://172.16.168.21:5173",
+        url="http://10.0.0.2:5173",
         timeout=20000,
         wait_after_load=5,
         screenshot_path="/tmp/frontend_debug_screenshot.png",
@@ -61,7 +61,7 @@ def analyze_frontend_issue():
 
 if __name__ == "__main__":
     print("Starting Headless Frontend Analysis on Browser VM...")
-    print("Target: http://172.16.168.21:5173")
+    print("Target: http://10.0.0.2:5173")
     print("=" * 80)
 
     try:

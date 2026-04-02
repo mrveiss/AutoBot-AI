@@ -13,7 +13,7 @@
 #
 # Usage:
 #   ansible-playbook setup-browser-worker.yml --limit browser-worker
-#   ansible-playbook setup-browser-worker.yml --limit 172.16.168.25
+#   ansible-playbook setup-browser-worker.yml --limit ${AUTOBOT_BROWSER_SERVICE_HOST}
 
 - name: Setup Browser Worker Node
   hosts: browser

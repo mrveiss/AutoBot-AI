@@ -12,7 +12,7 @@
 #
 # Usage:
 #   ansible-playbook setup-ai-stack.yml --limit ai-stack
-#   ansible-playbook setup-ai-stack.yml --limit 172.16.168.24
+#   ansible-playbook setup-ai-stack.yml --limit ${AUTOBOT_AI_STACK_HOST}
 
 - name: Setup AI Stack Node
   hosts: ai_stack

@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# SLM Manager Role - Configures the SLM server (172.16.168.19)
+# SLM Manager Role - Configures the SLM server (${AUTOBOT_SLM_HOST})
 # Expects code to be already synced via rsync before running.
 ---
 

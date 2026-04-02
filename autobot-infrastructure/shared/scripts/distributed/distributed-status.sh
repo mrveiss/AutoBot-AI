@@ -14,7 +14,7 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 echo -e "${GREEN}🏗️  AutoBot Distributed 6-VM Architecture${NC}"
-echo -e "${BLUE}Main WSL Coordinator: ${AUTOBOT_BACKEND_HOST:-172.16.168.20}${NC}"
+echo -e "${BLUE}Main WSL Coordinator: ${AUTOBOT_BACKEND_HOST:-localhost}${NC}"
 echo "=================================================="
 
 # Quick status check
@@ -38,23 +38,23 @@ echo "  bash scripts/distributed/collect-backups.sh       # Backup all VMs"
 echo ""
 echo -e "${BLUE}Testing & Debugging:${NC}"
 echo "  python src/utils/distributed_redis_client.py      # Test Redis connection"
-echo "  curl http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health         # Test backend API"
-echo "  curl http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health            # Test NPU worker"
+echo "  curl http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/health         # Test backend API"
+echo "  curl http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health            # Test NPU worker"
 
 echo ""
 echo -e "${CYAN}🌐 Access URLs:${NC}"
 echo -e "${GREEN}User Interfaces:${NC}"
-echo "  AutoBot Frontend:    http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}"
-echo "  Backend API Docs:    http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/docs"
-echo "  Redis Dashboard:     http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002"
+echo "  AutoBot Frontend:    http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}"
+echo "  Backend API Docs:    http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/docs"
+echo "  Redis Dashboard:     http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
 echo "  VNC Desktop:         http://127.0.0.1:${AUTOBOT_VNC_PORT:-6080}"
 
 echo ""
 echo -e "${GREEN}Service APIs:${NC}"
-echo "  Backend API:         http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/"
-echo "  NPU Worker:          http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/"
-echo "  AI Stack:            http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/"
-echo "  Browser Service:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/"
+echo "  Backend API:         http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/"
+echo "  NPU Worker:          http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/"
+echo "  AI Stack:            http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/"
+echo "  Browser Service:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/"
 echo "  Ollama LLM:          http://${AUTOBOT_OLLAMA_HOST:-127.0.0.1}:${AUTOBOT_OLLAMA_PORT:-11434}/api/"
 
 echo ""

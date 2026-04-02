@@ -13,12 +13,13 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Resource, TextContent, Tool
 
 # Prometheus configuration - uses SSOT env var with fallback (#639)
-PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://172.16.168.23:9090")
+PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://10.0.0.4:9090")
 
 app = Server("prometheus-mcp")
 
@@ -60,7 +61,7 @@ _VM_METRICS_SCHEMA = {
     "properties": {
         "vm_ip": {
             "type": "string",
-            "description": "VM IP address (e.g., '172.16.168.21')",
+            "description": "VM IP address (e.g., '10.0.0.2')",
         }
     },
     "required": ["vm_ip"],

@@ -11,7 +11,6 @@ Validates that all new metrics are properly exposed.
 import logging
 import sys
 from pathlib import Path
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +128,7 @@ def test_prometheus_metrics():
     logger.info("\n" + "=" * 70)
     logger.info("✅ All Phase 1 metrics tests PASSED!")
     logger.info("=" * 70)
-    print(
-        "\nMetrics endpoint ready at: http://172.16.168.20:8001/api/monitoring/metrics"
-    )
+    print("\nMetrics endpoint ready at: http://10.0.0.1:8001/api/monitoring/metrics")
     logger.info("Configure Prometheus to scrape this endpoint.\n")
 
     return True

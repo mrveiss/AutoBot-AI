@@ -8,7 +8,7 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-localhost}"
 FRONTEND_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 TEST_RESULTS_DIR="/tmp/bulletproof-test-results"
@@ -260,7 +260,7 @@ test_service_restart_recovery() {
 
         # Start service again
         cd /opt/autobot/src/autobot-slm-frontend
-        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
+        export VITE_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-localhost}
         export VITE_BACKEND_PORT=${AUTOBOT_BACKEND_PORT:-8001}
         export NODE_ENV=development
 

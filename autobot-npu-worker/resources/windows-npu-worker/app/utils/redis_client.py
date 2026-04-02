@@ -40,7 +40,7 @@ FEATURES:
 CONFIG PARAMETERS (from npu_worker.yaml):
 =========================================
 redis:
-  host: "172.16.168.23"
+  host: "10.0.0.4"
   port: 6379
   password: null
   db: 0

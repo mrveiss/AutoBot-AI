@@ -3,7 +3,7 @@
 # Author: mrveiss
 """AutoBot Browser Worker - Playwright automation service.
 
-Deploys to: 172.16.168.25 (Browser VM)
+Deploys to: 10.0.0.6 (Browser VM)
 
 This is a stub for Phase 1. Browser-specific code will be extracted
 from autobot-user-backend in a future phase.

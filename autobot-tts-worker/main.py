@@ -3,7 +3,7 @@
 # Author: mrveiss
 """AutoBot TTS Worker - Pocket TTS text-to-speech service.
 
-Deploys to: 172.16.168.22 (NPU VM) on port 8082
+Deploys to: 10.0.0.3 (NPU VM) on port 8082
 
 The actual service implementation is in the Ansible template:
   autobot-slm-backend/ansible/roles/tts-worker/templates/tts-worker.py.j2

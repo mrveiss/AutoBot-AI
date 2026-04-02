@@ -16,7 +16,7 @@ async function testIngestion() {
         },
         {
             role: 'assistant',
-            content: 'I will help you configure Redis for the distributed VM architecture. TODO: Check Redis configuration on 172.16.168.23. FIXME: Update connection timeout from 30s to 5s. ERROR: Connection refused on port 6379. The issue appears to be network connectivity.',
+            content: 'I will help you configure Redis for the distributed VM architecture. TODO: Check Redis configuration on 10.0.0.4. FIXME: Update connection timeout from 30s to 5s. ERROR: Connection refused on port 6379. The issue appears to be network connectivity.',
             timestamp: '2025-09-09T16:52:30Z'
         }
     ];

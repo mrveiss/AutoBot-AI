@@ -37,11 +37,11 @@ def test_refactor_single_file():
 
     # Test replacement patterns (dynamically from config)
     replacements = {
-        '"172.16.168.20"': "NetworkConstants.MAIN_MACHINE_IP",
-        '"172.16.168.21"': "NetworkConstants.FRONTEND_VM_IP",
+        '"10.0.0.1"': "NetworkConstants.MAIN_MACHINE_IP",
+        '"10.0.0.2"': "NetworkConstants.FRONTEND_VM_IP",
         f'"{redis_host}"': "NetworkConstants.REDIS_VM_IP",
-        '"172.16.168.24"': "NetworkConstants.AI_STACK_VM_IP",
-        '"172.16.168.25"': "NetworkConstants.BROWSER_VM_IP",
+        '"10.0.0.5"': "NetworkConstants.AI_STACK_VM_IP",
+        '"10.0.0.6"': "NetworkConstants.BROWSER_VM_IP",
     }
 
     new_content = content

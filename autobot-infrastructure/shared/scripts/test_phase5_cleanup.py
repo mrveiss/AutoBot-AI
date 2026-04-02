@@ -331,8 +331,8 @@ def main():
         print("=" * 70)
         print("\n📋 Next Steps:")
         print("1. Run: python scripts/cleanup_redis_metrics.py --dry-run")
-        print("2. Verify Prometheus metrics at http://172.16.168.20:9090")
-        print("3. Verify Grafana dashboards at http://172.16.168.23:3000")
+        print("2. Verify Prometheus metrics at http://10.0.0.1:9090")
+        print("3. Verify Grafana dashboards at http://10.0.0.4:3000")
         print("4. After verification, run: python scripts/cleanup_redis_metrics.py")
         print("5. Close Issue #348")
         return 0

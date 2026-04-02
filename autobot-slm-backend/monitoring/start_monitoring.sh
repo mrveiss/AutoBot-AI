@@ -54,7 +54,7 @@ check_redis() {
     python3 -c "
 import redis
 try:
-    r = redis.Redis(host='${AUTOBOT_REDIS_HOST:-172.16.168.23}', port=${AUTOBOT_REDIS_PORT:-6379}, socket_timeout=3)
+    r = redis.Redis(host='${AUTOBOT_REDIS_HOST:-localhost}', port=${AUTOBOT_REDIS_PORT:-6379}, socket_timeout=3)
     r.ping()
     print('Redis connection successful')
     exit(0)
@@ -68,7 +68,7 @@ except Exception as e:
 check_vm_connectivity() {
     print_status "Checking VM connectivity..."
 
-    VMS=("${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" "${AUTOBOT_REDIS_HOST:-172.16.168.23}" "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}")
+    VMS=("${AUTOBOT_FRONTEND_HOST:-localhost}" "${AUTOBOT_NPU_WORKER_HOST:-localhost}" "${AUTOBOT_REDIS_HOST:-localhost}" "${AUTOBOT_AI_STACK_HOST:-localhost}" "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}")
     VM_NAMES=("Frontend" "NPU-Worker" "Redis" "AI-Stack" "Browser")
 
     for i in "${!VMS[@]}"; do
@@ -169,7 +169,7 @@ start_comprehensive_monitoring() {
     # Check Redis connection
     if ! check_redis; then
         print_error "❌ Redis connection failed - monitoring requires Redis"
-        print_warning "Please ensure Redis is running on ${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}"
+        print_warning "Please ensure Redis is running on ${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}"
         exit 1
     fi
     print_status "✅ Redis connection verified"

@@ -166,14 +166,14 @@ class NPUPerformanceMeasurement:
             baseline_results["cpu_info"] = self._collect_cpu_info()
             baseline_results["gpu_info"] = self._collect_gpu_info()
 
-            baseline_results[
-                "cpu_embedding_performance"
-            ] = await self._test_cpu_embedding_performance()
+            baseline_results["cpu_embedding_performance"] = (
+                await self._test_cpu_embedding_performance()
+            )
 
             if baseline_results["gpu_info"].get("gpu_available", False):
-                baseline_results[
-                    "gpu_embedding_performance"
-                ] = await self._test_gpu_embedding_performance()
+                baseline_results["gpu_embedding_performance"] = (
+                    await self._test_gpu_embedding_performance()
+                )
 
         except Exception as e:
             logger.error("Hardware baseline measurement failed: %s", e)
@@ -322,12 +322,12 @@ class NPUPerformanceMeasurement:
                     )
 
                 if npu_results["connectivity"]["success"]:
-                    npu_results[
-                        "embedding_generation"
-                    ] = await self._test_npu_embedding_generation(session)
-                    npu_results[
-                        "semantic_search"
-                    ] = await self._test_npu_semantic_search(session)
+                    npu_results["embedding_generation"] = (
+                        await self._test_npu_embedding_generation(session)
+                    )
+                    npu_results["semantic_search"] = (
+                        await self._test_npu_semantic_search(session)
+                    )
 
         except Exception as e:
             logger.error("NPU Worker direct test failed: %s", e)
@@ -584,12 +584,12 @@ class NPUPerformanceMeasurement:
                     embedding_result = await response.json()
                     doc_embeddings = embedding_result.get("embeddings", [])
 
-                    search_results[
-                        "search_tests"
-                    ] = await self._run_semantic_search_queries(
-                        session,
-                        doc_embeddings,
-                        test_documents,
+                    search_results["search_tests"] = (
+                        await self._run_semantic_search_queries(
+                            session,
+                            doc_embeddings,
+                            test_documents,
+                        )
                     )
 
                     successful = [
@@ -724,13 +724,13 @@ class NPUPerformanceMeasurement:
                     config,
                     queries,
                 )
-                engine_results["search_performance"][
-                    f"config_{i+1}"
-                ] = self._summarize_config_results(config, config_results)
+                engine_results["search_performance"][f"config_{i+1}"] = (
+                    self._summarize_config_results(config, config_results)
+                )
 
-            engine_results[
-                "hardware_utilization"
-            ] = await search_engine.get_search_statistics()
+            engine_results["hardware_utilization"] = (
+                await search_engine.get_search_statistics()
+            )
 
         except Exception as e:
             logger.error("Semantic search engine test failed: %s", e)
@@ -843,15 +843,15 @@ class NPUPerformanceMeasurement:
                 api_results["health_check"] = await self._test_api_health_check(session)
 
                 if api_results["health_check"]["success"]:
-                    api_results[
-                        "semantic_search"
-                    ] = await self._test_api_semantic_search(
-                        session,
-                        self.test_queries[:3],
+                    api_results["semantic_search"] = (
+                        await self._test_api_semantic_search(
+                            session,
+                            self.test_queries[:3],
+                        )
                     )
-                    api_results[
-                        "hardware_status"
-                    ] = await self._test_api_hardware_status(session)
+                    api_results["hardware_status"] = (
+                        await self._test_api_hardware_status(session)
+                    )
 
         except Exception as e:
             logger.error("API endpoint test failed: %s", e)
@@ -1006,7 +1006,7 @@ class NPUPerformanceMeasurement:
         if not npu_connected:
             return [
                 "CRITICAL: NPU Worker not accessible"
-                " - verify VM2 (172.16.168.22) is running"
+                " - verify VM2 (10.0.0.3) is running"
                 " and NPU Worker service is started"
             ]
         if not npu_available:

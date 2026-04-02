@@ -66,7 +66,7 @@ SyslogIdentifier=autobot-mcp-tracker
 
 # Environment variables
 Environment=NODE_ENV=production
-Environment=REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
+Environment=REDIS_HOST=${AUTOBOT_REDIS_HOST:-localhost}
 Environment=REDIS_PORT=6379
 
 [Install]
@@ -111,7 +111,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
                     "command": "'"$(which node)"'",
                     "args": ["'"$INSTALL_DIR/dist/index.js"'"],
                     "env": {
-                        "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-172.16.168.23}",
+                        "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-localhost}",
                         "REDIS_PORT": "${AUTOBOT_REDIS_PORT:-6379}"
                     }
                 }
@@ -126,7 +126,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             "command": "$(which node)",
             "args": ["$INSTALL_DIR/dist/index.js"],
             "env": {
-                "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-172.16.168.23}",
+                "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-localhost}",
                 "REDIS_PORT": "${AUTOBOT_REDIS_PORT:-6379}"
             }
         }
@@ -143,7 +143,7 @@ else
             "command": "$(which node)",
             "args": ["$INSTALL_DIR/dist/index.js"],
             "env": {
-                "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-172.16.168.23}",
+                "REDIS_HOST": "${AUTOBOT_REDIS_HOST:-localhost}",
                 "REDIS_PORT": "${AUTOBOT_REDIS_PORT:-6379}"
             }
         }
@@ -198,7 +198,7 @@ echo "🧪 Testing AutoBot MCP Tracker..."
 
 # Test Redis connection
 echo "Testing Redis connection..."
-if redis-cli -h ${AUTOBOT_REDIS_HOST:-172.16.168.23} -p ${AUTOBOT_REDIS_PORT:-6379} ping | grep -q PONG; then
+if redis-cli -h ${AUTOBOT_REDIS_HOST:-localhost} -p ${AUTOBOT_REDIS_PORT:-6379} ping | grep -q PONG; then
     echo "✅ Redis connection successful"
 else
     echo "❌ Redis connection failed"
@@ -233,7 +233,7 @@ cat > dev-run.sh << 'EOF'
 #!/bin/bash
 echo "🚀 Running AutoBot MCP Tracker in development mode..."
 export NODE_ENV=development
-export REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
+export REDIS_HOST=${AUTOBOT_REDIS_HOST:-localhost}
 export REDIS_PORT=${AUTOBOT_REDIS_PORT:-6379}
 npm run dev
 EOF

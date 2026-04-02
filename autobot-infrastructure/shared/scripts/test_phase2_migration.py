@@ -101,7 +101,7 @@ async def test_phase2_migration():
     logger.info(
         "\nAll migrated collectors are successfully dual-writing to Prometheus."
     )
-    logger.info("Metrics endpoint: http://172.16.168.20:8001/api/monitoring/metrics\n")
+    logger.info("Metrics endpoint: http://10.0.0.1:8001/api/monitoring/metrics\n")
 
     return True
 

@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}}"
+BACKEND_URL="${AUTOBOT_BACKEND_URL:-http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}}"
 MAX_WAIT_TIME=30
 EXPECTED_BRIDGES=5
 EXPECTED_MIN_TOOLS=20
@@ -231,7 +231,7 @@ echo -e "  Healthy: ${HEALTHY_BRIDGES}/${TOTAL_BRIDGES}"
 echo ""
 echo -e "${BLUE}Frontend MCP Manager URL:${NC}"
 echo -e "  http://localhost:5173/tools/mcp"
-echo -e "  http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}/tools/mcp (Frontend VM)"
+echo -e "  http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}/tools/mcp (Frontend VM)"
 echo ""
 echo -e "${BLUE}API Endpoints:${NC}"
 echo -e "  GET ${BACKEND_URL}/api/mcp/tools       - List all tools"

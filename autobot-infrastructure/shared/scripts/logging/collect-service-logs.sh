@@ -17,11 +17,11 @@ NC='\033[0m'
 
 # VM Configuration
 declare -A VMS=(
-    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}"
-    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
-    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-172.16.168.24}"
-    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"
+    ["vm1-frontend"]="${AUTOBOT_FRONTEND_HOST:-localhost}"
+    ["vm2-npu-worker"]="${AUTOBOT_NPU_WORKER_HOST:-localhost}"
+    ["vm3-redis"]="${AUTOBOT_REDIS_HOST:-localhost}"
+    ["vm4-ai-stack"]="${AUTOBOT_AI_STACK_HOST:-localhost}"
+    ["vm5-browser"]="${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"
 )
 
 collect_service_logs() {

@@ -126,7 +126,7 @@ class MTLSMigration:
 
         import asyncssh
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
         admin_user = "autobot_admin"
         admin_password = self._generate_admin_password()
 
@@ -319,7 +319,7 @@ class MTLSMigration:
         """Test both plain and TLS Redis connections."""
         import redis
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
 
         # Test plain connection
         try:
@@ -436,7 +436,7 @@ class MTLSMigration:
         """Check number of active connections on plain Redis port 6379."""
         import asyncssh
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
 
         try:
             async with asyncssh.connect(
@@ -514,7 +514,7 @@ class MTLSMigration:
         logger.info("\n[4/4] Executing final cutover...")
         import asyncssh
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
 
         try:
             async with asyncssh.connect(
@@ -604,7 +604,7 @@ class MTLSMigration:
         """Test TLS connection with current password (pre-cutover check)."""
         import redis
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
         cert_dir = self.config.cert_dir_path / "main-host"
         password = self._get_redis_password()
 
@@ -626,7 +626,7 @@ class MTLSMigration:
         """Test TLS connection without password (post-cutover check)."""
         import redis
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
         cert_dir = self.config.cert_dir_path / "main-host"
 
         # Use explicit SSL params for redis-py (Issue #725)
@@ -651,7 +651,7 @@ class MTLSMigration:
 
         import asyncssh
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
 
         try:
             async with asyncssh.connect(
@@ -698,7 +698,7 @@ class MTLSMigration:
 
         import asyncssh
 
-        redis_ip = VM_DEFINITIONS.get("redis", "172.16.168.23")
+        redis_ip = VM_DEFINITIONS.get("redis", "10.0.0.4")
 
         try:
             async with asyncssh.connect(

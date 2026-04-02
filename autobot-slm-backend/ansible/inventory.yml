@@ -10,7 +10,7 @@ all:
     slm:
       hosts:
         admin:
-          ansible_host: 172.16.168.19
+          ansible_host: ${AUTOBOT_SLM_HOST}
           ansible_user: autobot
 
     autobot:
@@ -18,35 +18,35 @@ all:
         backend:
           hosts:
             main:
-              ansible_host: 172.16.168.20
+              ansible_host: ${AUTOBOT_BACKEND_HOST}
               ansible_user: autobot
 
         frontend:
           hosts:
             vm1:
-              ansible_host: 172.16.168.21
+              ansible_host: ${AUTOBOT_FRONTEND_HOST}
               ansible_user: autobot
 
         npu:
           hosts:
             vm2:
-              ansible_host: 172.16.168.22
+              ansible_host: ${AUTOBOT_NPU_WORKER_HOST}
               ansible_user: autobot
 
         redis:
           hosts:
             vm3:
-              ansible_host: 172.16.168.23
+              ansible_host: ${AUTOBOT_REDIS_HOST}
               ansible_user: autobot
 
         ai:
           hosts:
             vm4:
-              ansible_host: 172.16.168.24
+              ansible_host: ${AUTOBOT_AI_STACK_HOST}
               ansible_user: autobot
 
         browser:
           hosts:
             vm5:
-              ansible_host: 172.16.168.25
+              ansible_host: ${AUTOBOT_BROWSER_SERVICE_HOST}
               ansible_user: autobot

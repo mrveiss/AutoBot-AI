@@ -36,7 +36,7 @@ echo -e "${GREEN}🔧 AutoBot Architecture Issue Fixes${NC}"
 echo -e "${BLUE}====================================${NC}"
 echo ""
 
-# Issue 1: Redis should ONLY run on VM3 (172.16.168.23)
+# Issue 1: Redis should ONLY run on VM3 (${AUTOBOT_REDIS_HOST})
 log "Checking Redis architecture compliance..."
 
 # Check if Redis is running locally (SHOULD NOT BE)
@@ -52,8 +52,8 @@ else
 fi
 
 # Check if Redis is running on correct VM
-echo -n "Checking Redis on VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23})... "
-if timeout 3 redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG"; then
+echo -n "Checking Redis on VM3 (${AUTOBOT_REDIS_HOST:-localhost})... "
+if timeout 3 redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG"; then
     echo -e "${GREEN}✅ Running correctly${NC}"
 else
     echo -e "${RED}❌ Not running${NC}"
@@ -68,7 +68,7 @@ SSH_USER="${AUTOBOT_SSH_USER:-autobot}"
 
 if [ -f "$SSH_KEY" ]; then
     echo -n "Checking for Nginx on frontend VM... "
-    nginx_status=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "systemctl is-active nginx 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unknown")
+    nginx_status=$(timeout 5 ssh -T -i "$SSH_KEY" -o ConnectTimeout=3 "$SSH_USER@${AUTOBOT_FRONTEND_HOST:-localhost}" "systemctl is-active nginx 2>/dev/null || echo 'inactive'" 2>/dev/null || echo "unknown")
 
     if [ "$nginx_status" = "active" ]; then
         warning "Nginx is running on frontend VM - may conflict with dev server"
@@ -84,7 +84,7 @@ fi
 # Issue 3: Verify NPU Worker service
 log "Checking NPU Worker service..."
 echo -n "NPU Worker health check... "
-if timeout 5 curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1; then
+if timeout 5 curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Healthy${NC}"
 else
     echo -e "${RED}❌ Unhealthy${NC}"
@@ -95,7 +95,7 @@ fi
 # Issue 4: Check Browser service on VM5
 log "Checking Browser service..."
 echo -n "Browser service health check... "
-if timeout 5 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1; then
+if timeout 5 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1; then
     echo -e "${GREEN}✅ Healthy${NC}"
 else
     echo -e "${RED}❌ Unhealthy${NC}"
@@ -109,12 +109,12 @@ echo ""
 echo -e "${CYAN}🏗️ AutoBot Distributed Architecture Verification:${NC}"
 echo ""
 echo -e "${BLUE}✅ CORRECT SERVICE DISTRIBUTION:${NC}"
-echo "  Main (${AUTOBOT_BACKEND_HOST:-172.16.168.20}): Backend API + VNC Desktop only"
-echo "  VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}):  Frontend web interface only"
-echo "  VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}):  NPU Worker hardware acceleration only"
-echo "  VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}):  Redis database only"
-echo "  VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}):  AI Stack processing only"
-echo "  VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}):  Browser automation only"
+echo "  Main (${AUTOBOT_BACKEND_HOST:-localhost}): Backend API + VNC Desktop only"
+echo "  VM1 (${AUTOBOT_FRONTEND_HOST:-localhost}):  Frontend web interface only"
+echo "  VM2 (${AUTOBOT_NPU_WORKER_HOST:-localhost}):  NPU Worker hardware acceleration only"
+echo "  VM3 (${AUTOBOT_REDIS_HOST:-localhost}):  Redis database only"
+echo "  VM4 (${AUTOBOT_AI_STACK_HOST:-localhost}):  AI Stack processing only"
+echo "  VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}):  Browser automation only"
 echo ""
 
 # Generate architecture compliance report
@@ -125,19 +125,19 @@ AutoBot Architecture Compliance Report
 Generated: $(date)
 
 SERVICE DISTRIBUTION:
-✅ Backend API: Running on main instance (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001})
-$(timeout 3 redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG" && echo "✅" || echo "❌") Redis: Should run ONLY on VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379})
-$(timeout 3 curl -s "http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1 && echo "✅" || echo "❌") Frontend: Running on VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173})
-$(timeout 3 curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") NPU Worker: Running on VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081})
-$(timeout 3 curl -s "http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") AI Stack: Running on VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080})
-$(timeout 3 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") Browser: Running on VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000})
+✅ Backend API: Running on main instance (${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001})
+$(timeout 3 redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG" && echo "✅" || echo "❌") Redis: Should run ONLY on VM3 (${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379})
+$(timeout 3 curl -s "http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1 && echo "✅" || echo "❌") Frontend: Running on VM1 (${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173})
+$(timeout 3 curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") NPU Worker: Running on VM2 (${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081})
+$(timeout 3 curl -s "http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") AI Stack: Running on VM4 (${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080})
+$(timeout 3 curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo "✅" || echo "❌") Browser: Running on VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000})
 
 ARCHITECTURE VIOLATIONS:
 - Local Redis instances: $(pgrep redis-server >/dev/null && echo "VIOLATION: Found local Redis" || echo "None detected")
 - Service conflicts: $(docker ps | grep -E "redis|nginx|frontend" | wc -l) containers running locally
 
 RECOMMENDATIONS:
-1. Never run Redis on main instance (${AUTOBOT_BACKEND_HOST:-172.16.168.20})
+1. Never run Redis on main instance (${AUTOBOT_BACKEND_HOST:-localhost})
 2. Use npm dev server on frontend VM for development
 3. Ensure single service per VM principle
 4. Use start-all-vms.sh for proper service orchestration
@@ -152,23 +152,23 @@ log "Architecture compliance check completed"
 # Show current service status
 echo ""
 echo -e "${YELLOW}📊 Current Service Status:${NC}"
-echo -n "  Backend (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}): "
-curl -s "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  Backend (${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}): "
+curl -s "http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  Frontend (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}): "
-curl -s "http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  Frontend (${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}): "
+curl -s "http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  Redis (${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}): "
-redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG" && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  Redis (${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}): "
+redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" -p "${AUTOBOT_REDIS_PORT:-6379}" ping 2>/dev/null | grep -q "PONG" && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  NPU Worker (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}): "
-curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  NPU Worker (${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}): "
+curl -s "http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  AI Stack (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}): "
-curl -s "http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  AI Stack (${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}): "
+curl -s "http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
-echo -n "  Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}): "
-curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
+echo -n "  Browser (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}): "
+curl -s "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}/health" >/dev/null 2>&1 && echo -e "${GREEN}✅ Running${NC}" || echo -e "${RED}❌ Down${NC}"
 
 echo ""
 success "AutoBot architecture issues addressed!"

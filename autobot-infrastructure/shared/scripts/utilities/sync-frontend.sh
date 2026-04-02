@@ -13,13 +13,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration - Using SSOT env vars with fallbacks
-REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 LOCAL_SRC="$PROJECT_ROOT/autobot-slm-frontend/src"
 REMOTE_DEST="/home/autobot/autobot-slm-frontend/src"
 FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 
 # Colors for output

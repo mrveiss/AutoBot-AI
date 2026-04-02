@@ -54,12 +54,12 @@ main() {
     echo "========================================================="
     echo "  AutoBot Native VM Infrastructure Deployment"
     echo "========================================================="
-    echo "• WSL Host (${AUTOBOT_BACKEND_HOST:-172.16.168.20}): Backend + Terminal + noVNC"
-    echo "• VM1 (${AUTOBOT_FRONTEND_HOST:-172.16.168.21}): Frontend (Vue.js + Nginx)"
-    echo "• VM2 (${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}): NPU Worker + OpenVINO"
-    echo "• VM3 (${AUTOBOT_REDIS_HOST:-172.16.168.23}): Redis Stack + RedisInsight"
-    echo "• VM4 (${AUTOBOT_AI_STACK_HOST:-172.16.168.24}): AI Stack + Ollama"
-    echo "• VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}): Browser + Playwright + VNC"
+    echo "• WSL Host (${AUTOBOT_BACKEND_HOST:-localhost}): Backend + Terminal + noVNC"
+    echo "• VM1 (${AUTOBOT_FRONTEND_HOST:-localhost}): Frontend (Vue.js + Nginx)"
+    echo "• VM2 (${AUTOBOT_NPU_WORKER_HOST:-localhost}): NPU Worker + OpenVINO"
+    echo "• VM3 (${AUTOBOT_REDIS_HOST:-localhost}): Redis Stack + RedisInsight"
+    echo "• VM4 (${AUTOBOT_AI_STACK_HOST:-localhost}): AI Stack + Ollama"
+    echo "• VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): Browser + Playwright + VNC"
     echo "========================================================="
     echo
 
@@ -101,14 +101,14 @@ main() {
     log "SUCCESS" "🎉 AutoBot Native Deployment Complete!"
     echo
     echo "========================================================="
-    echo "  PRIMARY ACCESS POINT: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+    echo "  PRIMARY ACCESS POINT: http://${AUTOBOT_FRONTEND_HOST:-localhost}"
     echo "========================================================="
-    echo "• AutoBot Application: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
-    echo "• Backend API: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}"
-    echo "• Terminal: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:7681"
-    echo "• noVNC Desktop: http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_VNC_PORT:-6080}"
-    echo "• RedisInsight: http://${AUTOBOT_REDIS_HOST:-172.16.168.23}:8002"
-    echo "• AI Stack: http://${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}"
+    echo "• AutoBot Application: http://${AUTOBOT_FRONTEND_HOST:-localhost}"
+    echo "• Backend API: http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}"
+    echo "• Terminal: http://${AUTOBOT_BACKEND_HOST:-localhost}:7681"
+    echo "• noVNC Desktop: http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_VNC_PORT:-6080}"
+    echo "• RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
+    echo "• AI Stack: http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}"
     echo "========================================================="
     echo
 }
@@ -130,7 +130,7 @@ setup_ssh_keys() {
 
     # Copy SSH keys to all VMs
     log "INFO" "Installing SSH keys on all VMs (automated after this)..."
-    for ip in "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}" "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}" "${AUTOBOT_REDIS_HOST:-172.16.168.23}" "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}" "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}"; do
+    for ip in "${AUTOBOT_FRONTEND_HOST:-localhost}" "${AUTOBOT_NPU_WORKER_HOST:-localhost}" "${AUTOBOT_REDIS_HOST:-localhost}" "${AUTOBOT_AI_STACK_HOST:-localhost}" "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}"; do
         log "INFO" "Setting up SSH key for $ip..."
         sshpass -p "$VM_PASSWORD" ssh-copy-id -i "${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}" "${AUTOBOT_SSH_USER:-autobot}@$ip" &>/dev/null
     done
@@ -184,12 +184,12 @@ configure_backend() {
     cat > ../.env.native << EOF
 # Native VM Deployment Configuration
 AUTOBOT_DEPLOYMENT_MODE=native
-AUTOBOT_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-172.16.168.20}
-AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-172.16.168.23}
-AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-172.16.168.24}
-AUTOBOT_NPU_WORKER_HOST=${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}
-AUTOBOT_BROWSER_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}
-AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-172.16.168.21}
+AUTOBOT_BACKEND_HOST=${AUTOBOT_BACKEND_HOST:-localhost}
+AUTOBOT_REDIS_HOST=${AUTOBOT_REDIS_HOST:-localhost}
+AUTOBOT_AI_STACK_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
+AUTOBOT_NPU_WORKER_HOST=${AUTOBOT_NPU_WORKER_HOST:-localhost}
+AUTOBOT_BROWSER_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}
+AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-localhost}
 
 # Service Ports
 BACKEND_PORT=8001
@@ -214,11 +214,11 @@ validate_deployment() {
     # Test service endpoints
     log "INFO" "Testing service endpoints..."
     local services=(
-        "${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:80:Frontend"
-        "${AUTOBOT_REDIS_HOST:-172.16.168.23}:${AUTOBOT_REDIS_PORT:-6379}:Redis"
-        "${AUTOBOT_AI_STACK_HOST:-172.16.168.24}:${AUTOBOT_AI_STACK_PORT:-8080}:AI-Stack"
-        "${AUTOBOT_NPU_WORKER_HOST:-172.16.168.22}:${AUTOBOT_NPU_WORKER_PORT:-8081}:NPU-Worker"
-        "${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}:Browser"
+        "${AUTOBOT_FRONTEND_HOST:-localhost}:80:Frontend"
+        "${AUTOBOT_REDIS_HOST:-localhost}:${AUTOBOT_REDIS_PORT:-6379}:Redis"
+        "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT:-8080}:AI-Stack"
+        "${AUTOBOT_NPU_WORKER_HOST:-localhost}:${AUTOBOT_NPU_WORKER_PORT:-8081}:NPU-Worker"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000}:Browser"
     )
 
     for service in "${services[@]}"; do

@@ -13,7 +13,7 @@
 #
 # Usage:
 #   ansible-playbook setup-redis-stack.yml --limit redis
-#   ansible-playbook setup-redis-stack.yml --limit 172.16.168.23
+#   ansible-playbook setup-redis-stack.yml --limit ${AUTOBOT_REDIS_HOST}
 
 - name: Setup Redis Stack Node
   hosts: redis

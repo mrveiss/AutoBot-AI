@@ -20,13 +20,13 @@ mkdir -p /home/kali/Desktop/AutoBot/logs/database/
 
 # Step 2: Find and backup CLAUDE.md chunks
 echo "Step 2: Finding CLAUDE.md chunks..."
-redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" --scan --pattern "doc:*" > /tmp/all_docs.txt
+redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" --scan --pattern "doc:*" > /tmp/all_docs.txt
 
 # Count CLAUDE.md chunks
 claude_count=0
 > /tmp/claude_docs_to_delete.txt
 while IFS= read -r key; do
-    title=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" HGET "$key" title 2>/dev/null)
+    title=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" HGET "$key" title 2>/dev/null)
     if [ "$title" = "AutoBot Development Instructions & Project Reference" ]; then
         echo "$key" >> /tmp/claude_docs_to_delete.txt
         claude_count=$((claude_count + 1))
@@ -50,7 +50,7 @@ while read key; do
     else
         echo "," >> "$backup_file"
     fi
-    redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" HGETALL "$key" 2>/dev/null | \
+    redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" HGETALL "$key" 2>/dev/null | \
     python3 -c "
 import sys, json
 data = {}
@@ -75,7 +75,7 @@ echo ""
 echo "Step 4: Deleting $claude_count old CLAUDE.md chunks..."
 deleted_count=0
 while read key; do
-    redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" DEL "$key" >/dev/null 2>&1
+    redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" DEL "$key" >/dev/null 2>&1
     deleted_count=$((deleted_count + 1))
     if [ $((deleted_count % 20)) -eq 0 ]; then
         echo "  Deleted $deleted_count/$claude_count chunks..."
@@ -87,7 +87,7 @@ echo ""
 
 # Step 5: Drop and rebuild search index
 echo "Step 5: Rebuilding search index..."
-redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" FT.DROPINDEX llama_index 2>/dev/null && echo "Index dropped successfully" || echo "Index already dropped or doesn't exist"
+redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" FT.DROPINDEX llama_index 2>/dev/null && echo "Index dropped successfully" || echo "Index already dropped or doesn't exist"
 echo ""
 
 # Step 6: Re-index CLAUDE.md via Python
@@ -156,20 +156,20 @@ echo "===================="
 echo ""
 
 echo "Checking new stats..."
-curl -s "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/knowledge_base/stats" 2>/dev/null | jq '{total_documents, indexed_documents, total_facts}' 2>/dev/null || echo "API not responding or jq not available"
+curl -s "http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/knowledge_base/stats" 2>/dev/null | jq '{total_documents, indexed_documents, total_facts}' 2>/dev/null || echo "API not responding or jq not available"
 
 echo ""
 echo "Testing search for new workflow content..."
-curl -s "http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1" 2>/dev/null | \
+curl -s "http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1" 2>/dev/null | \
   jq -r '.results[0].content' 2>/dev/null | head -10 || echo "Search test failed or jq not available"
 
 echo ""
 echo "Checking new CLAUDE.md chunk timestamps..."
-redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" --scan --pattern "doc:*" 2>/dev/null | head -50 | \
+redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" --scan --pattern "doc:*" 2>/dev/null | head -50 | \
 while IFS= read -r key; do
-    title=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" HGET "$key" title 2>/dev/null)
+    title=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" HGET "$key" title 2>/dev/null)
     if [ "$title" = "AutoBot Development Instructions & Project Reference" ]; then
-        stored_at=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-172.16.168.23}" HGET "$key" stored_at 2>/dev/null)
+        stored_at=$(redis-cli -h "${AUTOBOT_REDIS_HOST:-localhost}" HGET "$key" stored_at 2>/dev/null)
         echo "$key : $stored_at"
     fi
 done | head -5

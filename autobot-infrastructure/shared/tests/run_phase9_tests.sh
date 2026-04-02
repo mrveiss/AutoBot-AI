@@ -95,14 +95,14 @@ check_prerequisites() {
     print_status "INFO" "Checking AutoBot services..."
 
     # Check backend
-    if curl -s http://${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001}/api/health >/dev/null 2>&1; then
+    if curl -s http://${AUTOBOT_BACKEND_HOST:-localhost}:${AUTOBOT_BACKEND_PORT:-8001}/api/health >/dev/null 2>&1; then
         print_status "SUCCESS" "Backend API accessible"
     else
         print_status "WARNING" "Backend API not accessible - some tests may fail"
     fi
 
     # Check Redis
-    if redis-cli -h ${AUTOBOT_REDIS_HOST:-172.16.168.23} -p ${AUTOBOT_REDIS_PORT:-6379} ping >/dev/null 2>&1; then
+    if redis-cli -h ${AUTOBOT_REDIS_HOST:-localhost} -p ${AUTOBOT_REDIS_PORT:-6379} ping >/dev/null 2>&1; then
         print_status "SUCCESS" "Redis accessible"
     else
         print_status "WARNING" "Redis not accessible - database tests may fail"

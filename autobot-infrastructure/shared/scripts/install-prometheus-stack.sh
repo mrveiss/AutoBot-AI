@@ -4,7 +4,7 @@
 # Author: mrveiss
 #
 # Prometheus + Grafana + AlertManager Installation Script (Epic #80)
-# Installs complete monitoring stack on VM3 (Redis VM - 172.16.168.23)
+# Installs complete monitoring stack on VM3 (Redis VM - ${AUTOBOT_REDIS_HOST})
 
 set -e
 
@@ -23,7 +23,7 @@ PROMETHEUS_VERSION="2.47.0"
 ALERTMANAGER_VERSION="0.26.0"
 GRAFANA_VERSION="10.2.0"
 
-TARGET_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+TARGET_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
 TARGET_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 
@@ -323,7 +323,7 @@ main() {
     echo "Next steps:"
     echo "  1. Access Grafana at http://$TARGET_HOST:3000"
     echo "  2. Import AutoBot dashboards from config/grafana/"
-    echo "  3. Access dashboards in AutoBot UI: http://${AUTOBOT_FRONTEND_HOST:-172.16.168.21}:${AUTOBOT_FRONTEND_PORT:-5173}/monitoring/dashboards"
+    echo "  3. Access dashboards in AutoBot UI: http://${AUTOBOT_FRONTEND_HOST:-localhost}:${AUTOBOT_FRONTEND_PORT:-5173}/monitoring/dashboards"
     echo ""
 }
 
