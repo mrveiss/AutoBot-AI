@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
+import { escapeHtml } from '@/utils/sanitize'
 
 interface OutputLine {
   content: string
@@ -118,12 +119,11 @@ const formatTerminalLine = (line: OutputLine): string => {
     // Clean up carriage returns and newlines
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '')
-    // HTML escape for safety
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    // Clean up extra whitespace but preserve intentional spacing
-    .replace(/\n+$/, '') // Remove trailing newlines
+    // Remove trailing newlines
+    .replace(/\n+$/, '')
+
+  // HTML escape for safety
+  content = escapeHtml(content)
 
   return content
 }

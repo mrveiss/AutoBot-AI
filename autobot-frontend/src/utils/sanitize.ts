@@ -74,3 +74,27 @@ export function sanitizeHtml(
 ): string {
   return DOMPurify.sanitize(html, config ?? CHAT_SANITIZE_CONFIG)
 }
+
+/**
+ * Escape special HTML characters in a plain-text string so it can be safely
+ * embedded in an HTML context without being interpreted as markup.
+ *
+ * Escapes: & < > " '
+ *
+ * Use this when constructing raw HTML strings (e.g. innerHTML / v-html
+ * templates).  For full sanitization of rich HTML, use sanitizeChatHtml or
+ * sanitizeHtml instead.
+ *
+ * @param text - Plain-text string to escape
+ * @returns HTML-safe string
+ */
+export function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  }
+  return text.replace(/[&<>"']/g, (m) => map[m])
+}

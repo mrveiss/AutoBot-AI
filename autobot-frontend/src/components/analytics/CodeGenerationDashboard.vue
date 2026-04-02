@@ -328,6 +328,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { escapeHtml } from '@/utils/sanitize'
 
 const logger = createLogger('CodeGenerationDashboard')
 
@@ -455,17 +456,6 @@ const formatDiff = (diff: string): string => {
       return escapeHtml(line)
     })
     .join('\n')
-}
-
-const escapeHtml = (text: string): string => {
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }
-  return text.replace(/[&<>"']/g, m => map[m])
 }
 
 const copyCode = async () => {
