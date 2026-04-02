@@ -443,6 +443,7 @@ const {
   enrollNode,
   updateNodeRoles,
   upsertSecret,
+  getSecretValue,
   getWizardStatus,
   completeWizardStep,
   skipWizardSetup,
@@ -561,6 +562,13 @@ function roleState(node: Node, roleName: string): RoleState {
 const secretValues = ref<Record<string, string>>({ hf_token: '' })
 const savingSecrets = ref(false)
 const secretsSaved = ref(false)
+
+async function loadExistingSecrets() {
+  for (const key of Object.keys(secretValues.value)) {
+    const val = await getSecretValue(key)
+    if (val) secretValues.value[key] = val
+  }
+}
 
 async function saveSecrets() {
   savingSecrets.value = true
@@ -1004,6 +1012,7 @@ onMounted(async () => {
   await loadWizardStatus()
   await loadNodes()
   await loadRoles()
+  await loadExistingSecrets()
 })
 </script>
 

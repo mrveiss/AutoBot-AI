@@ -1594,6 +1594,15 @@ export function useSlmApi() {
     await client.delete(`/secrets/${key}`)
   }
 
+  async function getSecretValue(key: string): Promise<string | null> {
+    try {
+      const response = await client.get<{ key: string; value: string }>(`/secrets/${key}/value`)
+      return response.data.value
+    } catch {
+      return null
+    }
+  }
+
   // Setup Wizard (Issue #1294)
   interface WizardStatusResponse {
     completed: boolean
@@ -1807,6 +1816,7 @@ export function useSlmApi() {
     listSecrets,
     upsertSecret,
     deleteSecret,
+    getSecretValue,
     // Setup Wizard (Issue #1294)
     getWizardStatus,
     completeWizardStep,
