@@ -280,7 +280,10 @@ def _apply_colocation_vars(
         if inv_name not in hosts:
             continue
         roles = set(hosts[inv_name].get("node_roles", []))
-        if node.ip_address in local_ips and roles & _frontend_roles:
+        # Match by IP or by the fixed SLM manager node_id (#3227): the registered
+        # IP may be stale (e.g. SLM_EXTERNAL_URL not updated after reinstall).
+        is_local = node.ip_address in local_ips or node.node_id == "00-SLM-Manager"
+        if is_local and roles & _frontend_roles:
             hosts[inv_name]["slm_colocated_frontend"] = True
             if roles & _backend_roles:
                 hosts[inv_name]["frontend_backend_host"] = "127.0.0.1"

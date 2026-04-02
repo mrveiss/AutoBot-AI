@@ -174,12 +174,22 @@
   when: websockify_enabled | bool
 
 # --- Auto-register VNC credentials in SLM database (#2926) ---
-- name: Register VNC credentials in SLM
-  ansible.builtin.include_tasks: register-credentials.yml
+# Registration is best-effort: VNC works without it. SLM may be unreachable from
+# nodes on a different subnet or before firewall rules are open. block/rescue is
+# used here because ignore_errors on include_tasks does not propagate into the
+# included tasks themselves.
+- name: Register VNC credentials in SLM (best-effort)
   when:
     - vnc_register_credentials | bool
     - vnc_password_result.stdout | length > 0
     - slm_node_id is defined
-  # Registration is best-effort — VNC works without it; SLM may be unreachable
-  # from nodes on a different subnet or before its firewall rules are fully open.
-  ignore_errors: true
+  block:
+    - name: Register VNC credentials in SLM
+      ansible.builtin.include_tasks: register-credentials.yml
+  rescue:
+    - name: VNC credential registration skipped (SLM unreachable)
+      ansible.builtin.debug:
+        msg: >-
+          VNC credential auto-registration failed for {{ inventory_hostname }}
+          (SLM at {{ slm_api_url }} unreachable — register credentials manually
+          via SLM UI > Nodes > VNC Credentials)
