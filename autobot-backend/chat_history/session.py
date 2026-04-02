@@ -908,6 +908,25 @@ class SessionMixin:
 
         logger.info("Chat session '%s' name updated to '%s'", session_id, name)
 
+    async def load_full_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Load the complete session data dictionary for a given session.
+
+        Returns the full raw data dict (messages, metadata, name, timestamps),
+        or None when the session does not exist.
+
+        This is the public API for callers that need more than just the messages
+        list returned by :meth:`load_session`.  Issue #3189.
+
+        Args:
+            session_id: The session identifier.
+
+        Returns:
+            Full session data dict, or None if the session does not exist.
+        """
+        self._sanitize_session_id(session_id)
+        return await self._load_session_from_file(session_id)
+
     async def get_session_owner(self, session_id: str) -> Optional[str]:
         """
         Get the owner/creator of a specific session.
