@@ -1987,7 +1987,10 @@ async def get_share_preview(
 
 
 @router.delete("/sessions/{session_id}/checkpoints")
-async def clear_session_checkpoints(session_id: str):
+async def clear_session_checkpoints(
+    session_id: str,
+    _current_user: Dict = Depends(get_current_user),
+):
     """Clear LangGraph checkpoints for a session (#1482).
 
     Admin-only endpoint for recovering broken sessions whose checkpoints
