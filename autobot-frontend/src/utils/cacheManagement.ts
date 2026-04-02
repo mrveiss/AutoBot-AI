@@ -5,10 +5,7 @@
 
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
+import { escapeHtml } from '@/utils/sanitize'
 
 // Create scoped logger for cacheManagement
 const logger = createLogger('cacheManagement')
