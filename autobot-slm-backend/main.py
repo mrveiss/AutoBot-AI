@@ -162,6 +162,7 @@ async def lifespan(app: FastAPI):
     await _ensure_admin_user()
     await _seed_default_roles()
     await _seed_default_agents()
+    await _ensure_local_node()
 
     # Reconcile stale fleet sync jobs from prior crash (#1729)
     try:
@@ -211,6 +212,71 @@ async def lifespan(app: FastAPI):
     logger.info("Schedule executor stopped")
     await reconciler_service.stop()
     await db_service.close()
+
+
+async def _ensure_local_node() -> None:
+    """Self-register the SLM manager node on startup if not already in the DB.
+
+    install.sh's register_local_node() is the primary registration path, but it
+    can be silently skipped when HTTPS is not ready in time (e.g. nginx cert path
+    issues on a fresh install).  This function is an idempotent fallback that runs
+    every startup so the node is always present regardless of install.sh outcome.
+    """
+    import socket
+
+    from sqlalchemy import select
+
+    from models.database import Node, NodeRole, NodeStatus
+
+    _SLM_NODE_ID = "00-SLM-Manager"
+    _SLM_ROLES = ["slm-backend", "slm-frontend", "slm-database", "slm-monitoring"]
+
+    async with db_service.session() as session:
+        existing = (
+            await session.execute(select(Node).where(Node.node_id == _SLM_NODE_ID))
+        ).scalar_one_or_none()
+        if existing:
+            return
+
+        # Derive IP from SLM_EXTERNAL_URL env var written by install.sh, or probe.
+        import re
+
+        external_url = os.getenv("SLM_EXTERNAL_URL", "")
+        ip_match = re.search(r"https?://([^/:]+)", external_url)
+        if ip_match:
+            local_ip = ip_match.group(1)
+        else:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    sock.connect(("8.8.8.8", 80))
+                    local_ip = sock.getsockname()[0]
+            except OSError:
+                local_ip = "127.0.0.1"
+
+        hostname = socket.gethostname()
+        node = Node(
+            node_id=_SLM_NODE_ID,
+            ansible_name=_SLM_NODE_ID,
+            hostname=hostname,
+            ip_address=local_ip,
+            ssh_user="autobot",
+            ssh_port=22,
+            auth_method="key",
+            status=NodeStatus.ONLINE.value,
+            roles=_SLM_ROLES,
+        )
+        session.add(node)
+        for role_name in _SLM_ROLES:
+            session.add(
+                NodeRole(
+                    node_id=_SLM_NODE_ID,
+                    role_name=role_name,
+                    status="active",
+                    assignment_type="auto",
+                )
+            )
+        await session.commit()
+        logger.info("Auto-registered SLM manager node (%s / %s)", hostname, local_ip)
 
 
 async def _ensure_admin_user():
