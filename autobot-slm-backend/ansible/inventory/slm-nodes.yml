@@ -11,16 +11,19 @@ all:
     ansible_ssh_private_key_file: /etc/autobot/ssh/autobot_key
     ansible_python_interpreter: /usr/bin/python3
 
-    # Service discovery — read from install-time secrets (set by install.sh).
-    # Priority: SLM_HOST env > SLM_HOST in secrets > fallback.
+    # Network and service-discovery — read from install-time secrets.
+    # install.sh writes SLM_HOST, NETWORK_SUBNET, NETWORK_GATEWAY to
+    # /etc/autobot/slm-secrets.env so these values are never hardcoded here.
     slm_host: "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe', 'grep -oP \"SLM_HOST=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || echo 127.0.0.1'), true) }}"
+    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
 
   children:
     slm_nodes:
       hosts:
         # SLM Manager - main admin machine
         00-SLM-Manager:
-          ansible_host: 172.16.168.19
+          ansible_host: 127.0.0.1
           slm_node_id: "00-SLM-Manager"
           slm_node_role: "slm-manager"
           slm_services_to_monitor:

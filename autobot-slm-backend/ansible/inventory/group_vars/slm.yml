@@ -13,7 +13,7 @@ security:
     - rule: allow
       port: 8000
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "SLM Backend API"
     # Web UI (public access)
     - rule: allow
@@ -28,21 +28,21 @@ security:
     - rule: allow
       port: 9090
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Prometheus"
     - rule: allow
       port: 3000
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Grafana"
     - rule: allow
       port: 9100
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Node Exporter"
     # PostgreSQL (infrastructure only)
     - rule: allow
       port: 5432
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "PostgreSQL"

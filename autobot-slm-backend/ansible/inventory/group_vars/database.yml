@@ -13,19 +13,19 @@ security:
     - rule: allow
       port: 6379
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Redis Stack"
     # PostgreSQL (infrastructure only)
     - rule: allow
       port: 5432
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "PostgreSQL"
     # Redis Insight (infrastructure only - web UI)
     - rule: allow
       port: 8001
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Redis Insight UI"
 
   # Redis security
@@ -354,21 +354,21 @@ ufw_rules:
   - rule: allow
     port: 6379
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Redis Stack database"
 
   # RedisInsight web interface
   - rule: allow
     port: 8002
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "RedisInsight web interface"
 
   # Model storage HTTP API (if enabled)
   - rule: allow
     port: 8003
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Model storage API"
 
 # ==========================================

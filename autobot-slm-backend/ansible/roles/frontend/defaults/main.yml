@@ -3,7 +3,7 @@
 # Author: mrveiss
 ---
 # Frontend configuration defaults  (#926 Phase 4: service account created, migration in Phase 7)
-network_subnet: "172.16.168.0/24"
+network_subnet: "172.16.168.0/24"  # Override per-install
 frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
 frontend_user: autobot
 frontend_group: autobot

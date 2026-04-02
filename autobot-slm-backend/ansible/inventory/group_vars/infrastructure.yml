@@ -21,10 +21,12 @@
 # NETWORK TOPOLOGY
 # ==========================================
 
-# Canonical network configuration - referenced by all group_vars
-# Override these in inventory vars for different environments
-network_subnet: "172.16.168.0/24"
-network_gateway: "172.16.168.1"
+# Canonical network configuration - referenced by all group_vars.
+# Written by install.sh into /etc/autobot/slm-secrets.env as NETWORK_SUBNET
+# and NETWORK_GATEWAY.  Loaded here via env lookup so values are never
+# hardcoded in the repo — every install detects its own subnet automatically.
+network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
+network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') or lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
 
 # ==========================================
 # INFRASTRUCTURE HOST MAP
@@ -35,15 +37,15 @@ network_gateway: "172.16.168.1"
 
 infrastructure:
   hosts:
-    slm: "172.16.168.19"
-    backend: "172.16.168.20"
-    frontend: "172.16.168.21"
-    npu: "172.16.168.22"
-    database: "172.16.168.23"
-    aiml: "172.16.168.24"
-    browser: "172.16.168.25"
-    reserved_1: "172.16.168.26"
-    reserved_2: "172.16.168.27"
+    slm: "{{ hostvars[groups['slm'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    backend: "{{ hostvars[groups['backend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    frontend: "{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    npu: "{{ hostvars[groups['npu'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    database: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    aiml: "{{ hostvars[groups['aiml'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    browser: "{{ hostvars[groups['browser'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    reserved_1: "{{ hostvars[groups['vnc_nodes'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    reserved_2: "127.0.0.1"
 
   ports:
     slm: 8000

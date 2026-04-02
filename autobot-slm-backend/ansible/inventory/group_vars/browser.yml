@@ -13,13 +13,13 @@ security:
     - rule: allow
       port: 3000
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Browser Worker API"
     # Playwright debug port (infrastructure only)
     - rule: allow
       port: 3001
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Playwright Debug"
 
   # VNC security
@@ -30,7 +30,7 @@ security:
 
     # Access control
     allowed_hosts:
-      - "172.16.168.0/24"
+      - "{{ network_subnet }}"
 
     # Encryption (if supported)
     encryption_enabled: false  # TightVNC doesn't support encryption
@@ -365,28 +365,28 @@ ufw_rules:
   - rule: allow
     port: 5901
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "VNC server"
 
   # Web VNC (if enabled)
   - rule: allow
     port: 6080
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Web VNC interface"
 
   # Playwright API
   - rule: allow
     port: 3000
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Playwright automation API"
 
   # Browser debugging ports (development)
   - rule: allow
     port: "9222:9223"
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Browser debugging ports"
 
 # ==========================================

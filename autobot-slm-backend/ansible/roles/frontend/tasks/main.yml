@@ -100,7 +100,7 @@
     -days 365
     -keyout {{ frontend_tls_key }}
     -out {{ frontend_tls_cert }}
-    -subj "/CN={{ ansible_host | default('172.16.168.21') }}/O=AutoBot/C=US"
+    -subj "/CN={{ ansible_host | default('127.0.0.1') }}/O=AutoBot/C=US"
   become: yes
   when: not _tls_cert.stat.exists
   notify: restart nginx

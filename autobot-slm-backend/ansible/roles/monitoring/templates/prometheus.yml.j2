@@ -41,7 +41,7 @@ scrape_configs:
   # AutoBot backend metrics (HTTPS with self-signed cert, issue #944)
   - job_name: "autobot-backend"
     static_configs:
-      - targets: ["172.16.168.20:8443"]
+      - targets: ["{{ backend_host | default(infrastructure.hosts.backend) }}:8443"]
     metrics_path: /api/metrics/prometheus
     scheme: https
     tls_config:
@@ -50,5 +50,5 @@ scrape_configs:
   # Redis exporter (if available)
   - job_name: "redis"
     static_configs:
-      - targets: ["172.16.168.23:9121"]
+      - targets: ["{{ redis_host | default(infrastructure.hosts.database) }}:9121"]
     scheme: http

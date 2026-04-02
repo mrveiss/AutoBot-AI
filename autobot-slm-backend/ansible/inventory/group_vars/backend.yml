@@ -13,23 +13,23 @@ security:
     - rule: allow
       port: 8443
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Backend API HTTPS"
     - rule: allow
       port: 8001
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Backend API HTTP"
     # VNC/noVNC (infrastructure only)
     - rule: allow
       port: 6080
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "noVNC web console"
     - rule: allow
       port: 5900
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "VNC"
     # Redis connection (outbound, stateful firewall handles return)
     # PostgreSQL connection (outbound, stateful firewall handles return)
@@ -39,7 +39,7 @@ security:
     rate_limiting: true
     cors_enabled: true
     cors_origins:
-      - "http://172.16.168.21"  # Frontend VM
+      - "http://{{ frontend_host | default(infrastructure.hosts.frontend) }}"
       - "http://autobot.internal"
 
   # File permissions
@@ -303,28 +303,28 @@ ufw_rules:
   - rule: allow
     port: 8001
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "FastAPI backend API"
 
   # Log aggregation
   - rule: allow
     port: 514
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Rsyslog aggregation"
 
   # Prometheus metrics (if enabled)
   - rule: allow
     port: 9090
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Prometheus metrics"
 
   # WebSocket connections
   - rule: allow
     port: 8001
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "WebSocket connections"
 
 # ==========================================

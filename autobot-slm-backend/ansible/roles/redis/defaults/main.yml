@@ -3,7 +3,7 @@
 # Author: mrveiss
 ---
 # Redis configuration defaults
-network_subnet: "172.16.168.0/24"
+network_subnet: "172.16.168.0/24"  # Override per-install
 redis_port: 6379
 redis_bind: "0.0.0.0"
 redis_password: ""
@@ -42,4 +42,4 @@ redis_tls_server_key: "{{ redis_tls_local_cert_dir }}/redis/server-key.pem"
 # Redis Exporter (Prometheus metrics)
 redis_exporter_version: "1.62.0"
 redis_exporter_port: 9121
-slm_admin_url: "https://{{ slm_host | default('172.16.168.19') }}"
+slm_admin_url: "https://{{ slm_host | default('127.0.0.1') }}"

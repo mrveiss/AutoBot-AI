@@ -24,4 +24,4 @@ desktop_environment: "xfce4"
 headless_mode: false
 
 # Network
-network_subnet: "172.16.168.0/24"
+network_subnet: "172.16.168.0/24"  # Override per-install

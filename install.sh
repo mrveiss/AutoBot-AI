@@ -460,18 +460,30 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key local_ip
+        local secret_key encryption_key local_ip network_subnet network_gateway
         secret_key=$(openssl rand -hex 32)
         encryption_key=$(openssl rand -hex 32)
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
         local_ip="$(detect_local_ip)"
+        # Detect subnet and gateway from the selected interface so Ansible
+        # firewall rules use the correct network range for any installation.
+        local cidr
+        cidr=$(ip -4 addr show | awk '/inet / {print $2}' | grep "^${local_ip%.*}" | head -1)
+        if [[ -n "$cidr" ]]; then
+            network_subnet=$(python3 -c "import ipaddress; print(str(ipaddress.ip_interface('$cidr').network))" 2>/dev/null)
+        fi
+        network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
+        [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
+        [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}
+NETWORK_SUBNET=${network_subnet}
+NETWORK_GATEWAY=${network_gateway}
 EOF
         chown root:autobot "${SECRETS_FILE}"
         chmod 640 "${SECRETS_FILE}"

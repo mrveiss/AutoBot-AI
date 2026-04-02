@@ -28,8 +28,8 @@ autobot:
 # ==========================================
 
 network:
-  subnet: "172.16.168.0/24"
-  gateway: "172.16.168.1"
+  subnet: "{{ network_subnet }}"
+  gateway: "{{ network_gateway }}"
   dns_servers:
     - "8.8.8.8"
     - "1.1.1.1"
@@ -110,7 +110,7 @@ security:
     # SSH access from gateway (CRITICAL - prevents lockout)
     - rule: allow
       port: 22
-      src: "172.16.168.1"
+      src: "{{ network_gateway }}"
       comment: "SSH from gateway"
     # Allow established connections (stateful firewall)
     # Note: UFW handles this automatically, no explicit rule needed
@@ -123,7 +123,7 @@ logging:
   # Log aggregation (centralized on backend VM)
   aggregation:
     enabled: true
-    server: "172.16.168.20"
+    server: "{{ infrastructure.hosts.backend }}"
     port: 514
     protocol: "tcp"
 

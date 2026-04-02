@@ -13,19 +13,19 @@ security:
     - rule: allow
       port: 8080
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "AI Stack API"
     # NPU Worker service (infrastructure only)
     - rule: allow
       port: 8081
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "NPU Worker API"
     # Ollama API (infrastructure only)
     - rule: allow
       port: 11434
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "{{ network_subnet }}"
       comment: "Ollama API"
 
   # Model security
@@ -49,8 +49,8 @@ security:
 
     # CORS configuration
     cors_origins:
-      - "http://172.16.168.21"  # Frontend VM
-      - "http://172.16.168.20:8001"  # Backend VM
+      - "http://{{ frontend_host | default(infrastructure.hosts.frontend) }}"
+      - "http://{{ backend_host | default(infrastructure.hosts.backend) }}:8001"
 
 # ==========================================
 # AI STACK CONFIGURATION
@@ -401,21 +401,21 @@ ufw_rules:
   - rule: allow
     port: 8080
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "AI Stack API"
 
   # NPU Worker API
   - rule: allow
     port: 8081
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "NPU Worker API"
 
   # Model serving endpoints
   - rule: allow
     port: "8090:8099"
     protocol: tcp
-    src: "172.16.168.0/24"
+    src: "{{ network_subnet }}"
     comment: "Model serving endpoints"
 
 # ==========================================
