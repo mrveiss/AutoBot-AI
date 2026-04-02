@@ -17,6 +17,7 @@ import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import { generateChatId } from '@/utils/ChatIdGenerator.js'
 import { apiService } from '@/services/api'
 import apiClient from '@/utils/ApiClient'
+import { escapeHtml } from '@/utils/sanitize'
 
 // Chat Interface Composable
 export function useChatInterface() {
@@ -175,7 +176,7 @@ export function useChatInterface() {
   }
 
   const formatSingleMessage = (text: string, type: string): string => {
-    const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const escapedText = escapeHtml(text)
 
     switch (type) {
       case 'thought':
