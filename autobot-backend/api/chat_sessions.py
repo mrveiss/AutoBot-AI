@@ -23,6 +23,7 @@ from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
 from utils.chat_utils import (
+    create_error_response,
     create_success_response,
     generate_chat_session_id,
     generate_request_id,
@@ -1987,13 +1988,26 @@ async def get_share_preview(
 
 
 @router.delete("/sessions/{session_id}/checkpoints")
-async def clear_session_checkpoints(session_id: str):
+async def clear_session_checkpoints(
+    session_id: str,
+    current_user: Dict = Depends(get_current_user),
+):
     """Clear LangGraph checkpoints for a session (#1482).
 
     Admin-only endpoint for recovering broken sessions whose checkpoints
     are corrupted or stuck.  Delegates to ``delete_thread_checkpoints``
     which removes the Redis-backed LangGraph checkpoint data.
     """
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        (
+            _AutoBotError,
+            _InternalError,
+            _ResourceNotFoundError,
+            ValidationError,
+            _get_error_code,
+        ) = get_exceptions_lazy()
+        raise ValidationError("Admin role required to clear session checkpoints")
     try:
         from chat_workflow.graph import delete_thread_checkpoints
 
