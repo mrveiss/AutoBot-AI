@@ -232,6 +232,12 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    - name: "SLM | Load slm_manager defaults for nginx re-render"
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../roles/slm_manager/defaults/main.yml"
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
       ansible.builtin.template:
         src: "{{ role_path | default(playbook_dir + '/../roles/slm_manager') }}/templates/autobot-slm.conf.j2"
