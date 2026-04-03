@@ -75,7 +75,7 @@ The AutoBot project has achieved remarkable progress in just 2 months, building 
 
 ### Recommendations Consolidated
 - `suggested_improvements.md` - Security, testing, and architecture improvements
-- `AutoBot_Phase_9_Refactoring_Opportunities.md` - Multi-modal integration and testing
+- `REFACTORING_OPPORTUNITIES.md` - Multi-modal integration and testing
 - `decisions.md` - Legacy architecture decisions (historical context)
 - Various feature docs - Specific recommendations integrated into roadmap
 

@@ -41,7 +41,7 @@ Bot: Hello! It looks like we've reached the end of our conversation...
 ## Root Cause Analysis
 
 ### Primary Cause
-**Location**: `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py` (lines 258-280)
+**Location**: `src/chat_workflow_manager.py` (lines 258-280)
 
 The system had a hardcoded system prompt that:
 1. ❌ **No Exit Instructions**: Lacked explicit conversation continuation rules

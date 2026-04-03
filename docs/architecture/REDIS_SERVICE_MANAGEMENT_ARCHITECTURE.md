@@ -251,7 +251,7 @@ redis_service_management:
 
 **Purpose:** RESTful API endpoints for service management
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-backend/api/service_management.py`
+**Location:** `autobot-backend/api/service_management.py`
 
 **Endpoints:**
 
@@ -956,7 +956,7 @@ autobot-frontend/src/
 
 **Purpose:** Main UI for Redis service management
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/components/services/RedisServiceControl.vue`
+**Location:** `autobot-frontend/src/components/services/RedisServiceControl.vue`
 
 **Features:**
 - Real-time service status display
@@ -1358,7 +1358,7 @@ const formatUptime = (seconds) => {
 
 **Purpose:** Reusable service management logic
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/composables/useServiceManagement.js`
+**Location:** `autobot-frontend/src/composables/useServiceManagement.js`
 
 ```javascript
 import { ref, onMounted, onUnmounted } from 'vue';

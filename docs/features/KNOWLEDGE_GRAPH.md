@@ -282,4 +282,4 @@ Potential future improvements:
 
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
 - [Architecture Overview](../architecture/AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md)
-- [Developer Setup](../developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Developer Setup](../developer/DEVELOPER_SETUP.md)

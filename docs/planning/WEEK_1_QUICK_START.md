@@ -34,7 +34,7 @@ Task(
     prompt="""**WEEK 1 - TASKS 1.1, 1.2, 1.3: Database Schema Initialization**
 
 **Read the complete implementation guide:**
-File: /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+File: planning/tasks/week-1-database-initialization-detailed-guide.md
 
 **Your Tasks:**
 
@@ -66,7 +66,7 @@ File: /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-d
 - Health check reports DB status
 - Idempotent execution (safe to run multiple times)
 
-**Reference Guide:** /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+**Reference Guide:** planning/tasks/week-1-database-initialization-detailed-guide.md
 """
 )
 ```
@@ -80,7 +80,7 @@ Task(
     prompt="""**WEEK 1 - TASK 1.4: Backend Startup Integration**
 
 **Read the complete implementation guide:**
-File: /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+File: planning/tasks/week-1-database-initialization-detailed-guide.md
 
 **Your Task:**
 
@@ -110,7 +110,7 @@ See guide for complete implementations of both options.
 - Clear startup progress logging
 - Health check accessible after startup
 
-**Reference Guide:** /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+**Reference Guide:** planning/tasks/week-1-database-initialization-detailed-guide.md
 """
 )
 ```
@@ -124,7 +124,7 @@ Task(
     prompt="""**WEEK 1 - TASKS 1.5, 1.6: Comprehensive Testing**
 
 **Read the complete implementation guide:**
-File: /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+File: planning/tasks/week-1-database-initialization-detailed-guide.md
 
 **Your Tasks:**
 
@@ -158,7 +158,7 @@ Integration Tests:
 
 **Coverage Target:** 100% for initialization code
 
-**Reference Guide:** /home/kali/Desktop/AutoBot/planning/tasks/week-1-database-initialization-detailed-guide.md
+**Reference Guide:** planning/tasks/week-1-database-initialization-detailed-guide.md
 """
 )
 ```
@@ -238,16 +238,16 @@ After implementation, run these to verify success:
 
 ```bash
 # 1. Test fresh database initialization
-rm -f /home/kali/Desktop/AutoBot/data/conversation_files.db
+rm -f data/conversation_files.db
 sudo systemctl restart autobot-backend
 # Check logs for "Database initialized with schema version 1.0.0"
 
 # 2. Verify all tables created
-sqlite3 /home/kali/Desktop/AutoBot/data/conversation_files.db ".tables"
+sqlite3 data/conversation_files.db ".tables"
 # Should show: conversation_files, file_access_log, file_cleanup_queue, file_metadata, schema_version, session_file_associations
 
 # 3. Check schema version
-sqlite3 /home/kali/Desktop/AutoBot/data/conversation_files.db "SELECT * FROM schema_version;"
+sqlite3 data/conversation_files.db "SELECT * FROM schema_version;"
 # Should show: 1.0.0
 
 # 4. Test health check

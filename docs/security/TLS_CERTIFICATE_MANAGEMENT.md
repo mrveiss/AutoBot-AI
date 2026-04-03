@@ -47,7 +47,7 @@ AutoBot Internal CA (Root)
 ### Directory Structure
 
 ```
-/home/kali/Desktop/AutoBot/certs/
+certs/
 ├── ca/
 │   ├── ca-key.pem          # CA private key (600 permissions) - BACKUP REQUIRED
 │   ├── ca-cert.pem         # CA certificate (644 permissions)
@@ -85,7 +85,7 @@ All VMs store certificates in: `/etc/autobot/certs/`
 Generate all certificates for the first time:
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 ./scripts/security/generate-tls-certificates.sh
 ```
 
@@ -104,7 +104,7 @@ After generation, verify certificates:
 
 ```bash
 # View certificate summary
-cat /home/kali/Desktop/AutoBot/certs/certificate-summary.txt
+cat certs/certificate-summary.txt
 
 # Verify CA certificate
 openssl x509 -in certs/ca/ca-cert.pem -noout -text
@@ -194,7 +194,7 @@ openssl verify -CAfile certs/ca/ca-cert.pem certs/${SERVICE_NAME}/server-cert.pe
 Distribute certificates to all VMs:
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 ./scripts/security/distribute-certificates.sh
 ```
 
@@ -301,7 +301,7 @@ Set up automated renewal check (add to crontab):
 
 ```bash
 # Check certificates weekly, renew if within 30 days of expiry
-0 2 * * 0 /home/kali/Desktop/AutoBot/scripts/security/renew-certificates.sh >> /home/kali/Desktop/AutoBot/logs/certificate-renewal.log 2>&1
+0 2 * * 0 scripts/security/renew-certificates.sh >> logs/certificate-renewal.log 2>&1
 ```
 
 ### Renewal Notifications
@@ -310,7 +310,7 @@ Set up expiration warnings (add to crontab):
 
 ```bash
 # Daily check with email notification
-0 8 * * * /home/kali/Desktop/AutoBot/scripts/security/renew-certificates.sh --check-only | mail -s "AutoBot Certificate Status" admin@example.com
+0 8 * * * scripts/security/renew-certificates.sh --check-only | mail -s "AutoBot Certificate Status" admin@example.com
 ```
 
 ---

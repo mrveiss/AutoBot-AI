@@ -45,7 +45,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Implementation Steps**:
 
 1. **Analyze conversation transcript** (2 hours)
-   - Read `/home/kali/Desktop/AutoBot/data/conversation_transcripts/c09d53ab-6119-408a-8d26-d948d271ec65.json`
+   - Read `data/conversation_transcripts/c09d53ab-6119-408a-8d26-d948d271ec65.json`
    - Identify where context was lost (message 5 → 6 transition)
    - Document expected vs actual behavior
 
@@ -60,7 +60,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Test context retrieval for multi-turn conversations
 
 4. **Document root cause findings** (2 hours)
-   - Create detailed analysis document in `/home/kali/Desktop/AutoBot/reports/`
+   - Create detailed analysis document in `reports/`
    - Include classification failure patterns
    - Propose fix strategies
 
@@ -73,7 +73,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 - **Unit Tests**: Test classification with short continuation phrases
 - **Integration Tests**: Multi-turn conversation with context verification
 - **E2E Tests**: Full conversation flow with context preservation
-- **Test File**: `/home/kali/Desktop/AutoBot/tests/automated/test_conversation_context.py`
+- **Test File**: `tests/automated/test_conversation_context.py`
 
 **Effort Estimate**: 10 hours
 
@@ -289,11 +289,11 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Categorize by document type (code, markdown, config)
 
 2. **Check for AutoBot documentation** (3 hours)
-   - Search for files from `/home/kali/Desktop/AutoBot/docs/`
+   - Search for files from `docs/`
    - Verify presence of key documents:
-     - `PHASE_5_DEVELOPER_SETUP.md`
+     - `DEVELOPER_SETUP.md`
      - `COMPREHENSIVE_API_DOCUMENTATION.md`
-     - `PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+     - `DISTRIBUTED_ARCHITECTURE.md`
      - `CLAUDE.md`
    - List missing critical documents
 
@@ -311,7 +311,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 **Files to Analyze**:
 - Redis DB 8 (`llama_index/vector_*` keys)
-- `/home/kali/Desktop/AutoBot/docs/` (all subdirectories)
+- `docs/` (all subdirectories)
 - `src/knowledge_base_v2.py` (indexing logic)
 
 **Testing Requirements**:
@@ -352,7 +352,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Add document type tagging (guide, reference, troubleshooting)
 
 3. **Run full documentation indexing** (3 hours)
-   - Index `/home/kali/Desktop/AutoBot/docs/` recursively
+   - Index `docs/` recursively
    - Monitor GPU utilization during embedding generation
    - Verify chunk count and vector storage
 
@@ -451,7 +451,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 **Implementation Steps**:
 
 1. **Create file system watcher** (6 hours)
-   - Monitor `/home/kali/Desktop/AutoBot/docs/` for changes
+   - Monitor `docs/` for changes
    - Detect new, modified, and deleted files
    - Queue files for re-indexing
 
@@ -537,7 +537,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
    - Add syntax highlighting for code blocks
 
 3. **Add documentation caching** (4 hours)
-   - Cache frequently accessed documents (CLAUDE.md, PHASE_5_DEVELOPER_SETUP.md)
+   - Cache frequently accessed documents (CLAUDE.md, DEVELOPER_SETUP.md)
    - Redis cache with 5-minute TTL
    - Invalidate cache on documentation updates
 
@@ -639,9 +639,9 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 1. **Add documentation suggestion logic** (6 hours)
    - Analyze user query for documentation relevance
-   - If installation/setup question → suggest PHASE_5_DEVELOPER_SETUP.md
+   - If installation/setup question → suggest DEVELOPER_SETUP.md
    - If API question → suggest COMPREHENSIVE_API_DOCUMENTATION.md
-   - If architecture question → suggest PHASE_5_DISTRIBUTED_ARCHITECTURE.md
+   - If architecture question → suggest DISTRIBUTED_ARCHITECTURE.md
 
 2. **Implement documentation references in responses** (6 hours)
    - Add "See documentation: [link]" to responses
@@ -737,7 +737,7 @@ Track 4: Security Implementation    [Week 1-4]  ←─ No dependencies (parallel
 
 **Risk Mitigation**:
 - **Risk**: Installation process may change
-- **Mitigation**: Pull information from PHASE_5_DEVELOPER_SETUP.md
+- **Mitigation**: Pull information from DEVELOPER_SETUP.md
 - **Risk**: User environment may differ from documentation
 - **Mitigation**: System detection and customized guidance
 

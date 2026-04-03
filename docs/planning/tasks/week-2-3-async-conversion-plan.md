@@ -95,7 +95,7 @@ were already completed by previous work.
 4. Update all code that references `self.redis_client`
 
 **Files Modified:**
-- `/home/kali/Desktop/AutoBot/src/knowledge_base.py`
+- `src/knowledge_base.py`
 
 **Acceptance Criteria:**
 - No references to `self.redis_client` remain
@@ -230,7 +230,7 @@ results = await asyncio.wait_for(
 ```
 
 **Files Modified:**
-- `/home/kali/Desktop/AutoBot/src/knowledge_base.py`
+- `src/knowledge_base.py`
 - Any files calling `get_fact()` (must be updated to `await get_fact()`)
 
 **Acceptance Criteria:**
@@ -449,7 +449,7 @@ self.vector_index = await asyncio.wait_for(
 **Agent**: testing-engineer
 
 **Actions:**
-1. Create `/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_base_async.py`
+1. Create `tests/unit/test_knowledge_base_async.py`
 2. Test coverage for:
    - Async Redis operations with timeout
    - get_fact() async behavior
@@ -493,7 +493,7 @@ class TestKnowledgeBaseAsync:
 **Agent**: testing-engineer
 
 **Actions:**
-1. Create `/home/kali/Desktop/AutoBot/tests/integration/test_knowledge_base_integration.py`
+1. Create `tests/integration/test_knowledge_base_integration.py`
 2. Test real Redis connections
 3. Test real LlamaIndex operations
 4. Test concurrent operations (50+ simultaneous calls)
@@ -555,12 +555,12 @@ bash tests/performance/run_baseline.sh
 **Agent**: documentation-engineer
 
 **Files to Update:**
-1. `/home/kali/Desktop/AutoBot/docs/api/KNOWLEDGE_BASE_API.md`
+1. `docs/api/KNOWLEDGE_BASE_API.md`
    - Update get_fact() to show async
    - Add timeout documentation
    - Update code examples to use await
 
-2. `/home/kali/Desktop/AutoBot/docs/developer/ASYNC_PATTERNS.md`
+2. `docs/developer/ASYNC_PATTERNS.md`
    - Document knowledge_base.py conversion
    - Add as reference implementation
    - Include timeout patterns
@@ -695,7 +695,7 @@ bash tests/performance/run_baseline.sh
 
 ## Reference Implementation
 
-**Gold Standard**: `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py`
+**Gold Standard**: `src/chat_workflow_manager.py`
 
 **Key Patterns to Follow:**
 - AsyncRedisManager usage (lines 335-341)
@@ -703,7 +703,7 @@ bash tests/performance/run_baseline.sh
 - Async file I/O (lines 241-253)
 - Atomic file writes (lines 272-284)
 
-**Baseline Results**: `/home/kali/Desktop/AutoBot/tests/performance/results/async_baseline_20251009_214400.json`
+**Baseline Results**: `tests/performance/results/async_baseline_20251009_214400.json`
 
 ---
 

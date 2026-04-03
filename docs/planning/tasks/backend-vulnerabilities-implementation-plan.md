@@ -1748,5 +1748,5 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
 
 **Document Status:** READY FOR EXECUTION
 **Next Action:** User approval to begin implementation
-**Storage Location:** `/home/kali/Desktop/AutoBot/planning/tasks/backend-vulnerabilities-implementation-plan.md`
+**Storage Location:** `planning/tasks/backend-vulnerabilities-implementation-plan.md`
 **Memory MCP:** Task entities ready for creation upon approval

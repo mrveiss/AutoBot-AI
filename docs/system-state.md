@@ -520,7 +520,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - Frontend WebSocket connections failing with timeout errors
 - Process showing 99% CPU during initialization
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+**Root Cause:** `src/knowledge_base_v2.py`
 - `VectorStoreIndex.from_vector_store()` loading 545,255 vectors synchronously during initialization
 - Even with `asyncio.to_thread()`, the operation blocked the entire event loop
 - Line 392-394 created index during first search, freezing backend for minutes
@@ -581,7 +581,7 @@ async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 - Errors in: `backend/services/ai_stack_client.py`, `autobot-backend/api/services.py`
 - Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py` (Lines 652-677)
+**Fix Applied:** `src/unified_config_manager.py` (Lines 652-677)
 ```python
 def get_distributed_services_config(self) -> Dict[str, Any]:
     """Get distributed services configuration from NetworkConstants"""
@@ -598,13 +598,13 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 
 **2. AI Stack Client Configuration**
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/backend/services/ai_stack_client.py` (Lines 46-57)
+**Fix Applied:** `backend/services/ai_stack_client.py` (Lines 46-57)
 - Replaced missing config call with direct NetworkConstants usage
 - Uses `NetworkConstants.AI_STACK_HOST` and `NetworkConstants.AI_STACK_PORT`
 
 **3. VM Status Endpoint**
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/autobot-backend/api/services.py` (Lines 239-298)
+**Fix Applied:** `autobot-backend/api/services.py` (Lines 239-298)
 - Replaced config method calls with NetworkConstants
 - Returns VM status for all 5 infrastructure VMs (frontend, npu-worker, redis, ai-stack, browser)
 
@@ -638,7 +638,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 - **4.17 MILLION Redis SCAN operations** causing severe performance degradation
 - Redis slowlog showing 10-74ms KEYS operations
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py:675` - Category+title duplicate checking
+**Root Cause:** `src/knowledge_base_v2.py:675` - Category+title duplicate checking
 
 **Fix Applied:** (Lines 756-822)
 - **Replaced SCAN with O(1) Redis SET indexing:**
@@ -657,7 +657,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 - Errors: `TypeError: response.json is not a function` throughout frontend
 - Every API call failing with this error
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts:21-38`
+**Root Cause:** `autobot-frontend/src/services/api.ts:21-38`
 - `ApiClient.get/post/put/delete()` already return parsed JSON (confirmed in `ApiClient.js:243`)
 - api.ts was calling `.json()` again on already-parsed JSON objects
 - Can't call `.json()` method on plain JavaScript objects
@@ -677,7 +677,7 @@ async get<T>(endpoint: string): Promise<T> {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts` (Lines 21-38)
+- `autobot-frontend/src/services/api.ts` (Lines 21-38)
 
 ---
 
@@ -689,8 +689,8 @@ async get<T>(endpoint: string): Promise<T> {
 - Components falling back to stub methods
 
 **Root Cause:** **Vue 3 composable lifecycle violation**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts:8-9`
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts:8`
+- `autobot-frontend/src/models/controllers/KnowledgeController.ts:8-9`
+- `autobot-frontend/src/models/controllers/ChatController.ts:8`
 - Controllers called `useKnowledgeStore()` and `useAppStore()` during class construction
 - Singletons created at module load: `const knowledgeController = reactive(new KnowledgeController())`
 - **Vue composables can ONLY be called inside setup() or component lifecycle**
@@ -726,8 +726,8 @@ export class KnowledgeController {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
+- `autobot-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
+- `autobot-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
 
 **Synced to Frontend VM:**
 - `api.ts`
@@ -960,13 +960,13 @@ docs/
 ├── api/
 │   └── COMPREHENSIVE_API_DOCUMENTATION.md      # 518+ endpoints fully documented
 ├── architecture/
-│   └── PHASE_5_DISTRIBUTED_ARCHITECTURE.md    # 6-VM distributed system explained
+│   └── DISTRIBUTED_ARCHITECTURE.md    # 6-VM distributed system explained
 ├── developer/
-│   └── PHASE_5_DEVELOPER_SETUP.md             # Complete onboarding guide (25min setup)
+│   └── DEVELOPER_SETUP.md             # Complete onboarding guide (25min setup)
 ├── features/
 │   └── MULTIMODAL_AI_INTEGRATION.md           # Multi-modal AI capabilities guide
 ├── security/
-│   └── PHASE_5_SECURITY_IMPLEMENTATION.md     # Enterprise security framework
+│   └── SECURITY_FRAMEWORK.md     # Enterprise security framework
 └── troubleshooting/
     └── COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md # Complete problem resolution guide
 ```
@@ -981,14 +981,14 @@ docs/
 - Multi-modal AI processing examples
 - Python/JavaScript SDK usage examples
 
-🏗️ **Architecture Documentation** (`docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`):
+🏗️ **Architecture Documentation** (`docs/architecture/DISTRIBUTED_ARCHITECTURE.md`):
 - **6-VM distributed system** design rationale and implementation
 - Hardware optimization (Intel NPU + RTX 4070 + 22-core CPU)
 - Network security and firewall configuration
 - Service mesh communication patterns
 - Performance benchmarks and scalability plans
 
-👨‍💻 **Developer Setup Guide** (`docs/developer/PHASE_5_DEVELOPER_SETUP.md`):
+👨‍💻 **Developer Setup Guide** (`docs/developer/DEVELOPER_SETUP.md`):
 - **~25 minute automated setup** (down from hours of manual work)
 - Complete environment configuration and troubleshooting
 - Hot reload development workflow
@@ -1002,7 +1002,7 @@ docs/
 - Performance benchmarks and hardware requirements
 - Complete integration examples with code
 
-🔒 **Security Implementation** (`docs/security/PHASE_5_SECURITY_IMPLEMENTATION.md`):
+🔒 **Security Implementation** (`docs/security/SECURITY_FRAMEWORK.md`):
 - Enterprise-grade security architecture
 - Multi-layer defense system (6 security layers)
 - PII detection and automatic redaction
@@ -1500,7 +1500,7 @@ Desktop access is **enabled by default** on all modes:
 - **NO** multiple frontend instances permitted
 
 ### **Development Workflow:**
-1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-frontend/`
+1. **Edit Code Locally**: Make all changes in `autobot-frontend/`
 2. **Sync to Frontend VM**: Use `./sync-frontend.sh` or `./scripts/utilities/sync-to-vm.sh frontend`
 3. **Frontend VM Runs**: Either dev or production mode via systemd services
 
@@ -1748,7 +1748,7 @@ curl -X POST https://localhost:8443/api/knowledge_base/rebuild
 - **ALWAYS use sync scripts to push changes** to remote machines after local edits
 
 **🔄 MANDATORY WORKFLOW AFTER ANY CODE CHANGES:**
-1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
+1. **Edit locally** - Make ALL changes in `/opt/autobot`
 2. **Immediately sync** - Use appropriate sync script after each edit session
 3. **Never skip sync** - Remote machines must stay synchronized with local changes
 
@@ -1802,7 +1802,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 - ~~`sshpass -p "autobot" scp`~~ → Use `scp -i ~/.ssh/autobot_key`
 
 **🔄 MANDATORY WORKFLOW FOR REMOTE CHANGES (STRICTLY ENFORCED)**:
-1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
+1. **Edit locally** - Make ALL changes in `/opt/autobot`
 2. **Test locally** - Verify changes work on local development environment
 3. **IMMEDIATELY sync to remote** - Use `./sync-frontend.sh` or appropriate sync script
 4. **Verify on remote** - Check that changes are applied correctly

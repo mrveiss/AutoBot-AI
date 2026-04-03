@@ -136,7 +136,7 @@ Scalability: Millions of vectors
 
 ### Migration Script
 
-Location: `/home/kali/Desktop/AutoBot/scripts/utilities/migrate_redis_to_chromadb.py`
+Location: `scripts/utilities/migrate_redis_to_chromadb.py`
 
 **What it does:**
 1. Connects to Redis and exports all vectors
@@ -346,7 +346,7 @@ redis:
 
 ### 3. Documentation Updates
 
-- Update `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- Update `docs/developer/DEVELOPER_SETUP.md`
 - Update `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - Update `CLAUDE.md` with new vector store info
 

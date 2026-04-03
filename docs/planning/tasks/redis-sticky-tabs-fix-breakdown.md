@@ -508,8 +508,8 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `documentation-engineer`
 - **Description:** Update all relevant documentation
 - **Documentation Updates:**
-  1. `/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md` - Add Redis service user section
-  2. `/docs/developer/PHASE_5_DEVELOPER_SETUP.md` - Update Redis setup instructions
+  1. `/docs/architecture/DISTRIBUTED_ARCHITECTURE.md` - Add Redis service user section
+  2. `/docs/developer/DEVELOPER_SETUP.md` - Update Redis setup instructions
   3. `/ansible/README.md` - Document new template
   4. `/docs/system-state.md` - Mark issue as resolved
   5. Create migration guide: `/docs/operations/REDIS_SERVICE_MIGRATION.md`
@@ -525,7 +525,7 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `devops-engineer`
 - **Description:** Sync all changes to VM3 using proper sync procedures
 - **Sync Procedure:**
-  1. Edit all files locally in `/home/kali/Desktop/AutoBot/`
+  1. Edit all files locally in `/opt/autobot`
   2. Test locally where possible
   3. Sync Ansible playbooks to VM3
   4. Run Ansible playbook to apply changes
@@ -738,7 +738,7 @@ All fixes follow the mandatory Research → Plan → Implement workflow with pro
 - **Agent:** `devops-engineer`
 - **Description:** Sync all frontend changes to VM1 (Frontend VM)
 - **Sync Procedure:**
-  1. Edit all files locally in `/home/kali/Desktop/AutoBot/autobot-frontend/`
+  1. Edit all files locally in `autobot-frontend/`
   2. Test locally if possible (but NO local dev server)
   3. Sync to Frontend VM using sync script
   4. Verify on Frontend VM (172.16.168.21:5173)
@@ -1094,12 +1094,12 @@ npm run test:performance
 **Required Documentation Updates:**
 
 1. **Architecture Documentation:**
-   - File: `/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+   - File: `/docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
    - Section: Add "Redis Service User Configuration"
    - Content: Explain standardized service user approach, Ansible template usage
 
 2. **Developer Setup:**
-   - File: `/docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+   - File: `/docs/developer/DEVELOPER_SETUP.md`
    - Section: Update "Redis Setup" instructions
    - Content: Reference Ansible template, automated permission verification
 
@@ -1380,7 +1380,7 @@ mcp__memory__create_entities --entities '[
 ### Remote Host Development Rules Compliance
 
 **MANDATORY CHECKS:**
-- [ ] ALL code edits made locally in `/home/kali/Desktop/AutoBot/`
+- [ ] ALL code edits made locally in `/opt/autobot`
 - [ ] NO direct editing on remote VMs (172.16.168.21-25)
 - [ ] NO SSH text editors used on remote hosts
 - [ ] ALL changes synced using proper sync scripts
@@ -1660,8 +1660,8 @@ Task(subagent_type="frontend-engineer", description="I2.1: Implement Sticky Tabs
 
 - `/CLAUDE.md` - Project instructions and workflow methodology
 - `/docs/system-state.md` - Current system status
-- `/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md` - System architecture
-- `/docs/developer/PHASE_5_DEVELOPER_SETUP.md` - Developer setup guide
+- `/docs/architecture/DISTRIBUTED_ARCHITECTURE.md` - System architecture
+- `/docs/developer/DEVELOPER_SETUP.md` - Developer setup guide
 - `/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md` - Troubleshooting
 
 ### Ansible References

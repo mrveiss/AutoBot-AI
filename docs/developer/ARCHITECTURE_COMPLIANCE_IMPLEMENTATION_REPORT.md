@@ -17,7 +17,7 @@ Successfully replaced **manual architecture fix scripts** with **automated compl
 
 **Problems**:
 1. ❌ **Hardcoded IP addresses** - `172.16.168.23` hardcoded in scripts
-2. ❌ **Hardcoded paths** - `/home/kali/Desktop/AutoBot` hardcoded
+2. ❌ **Hardcoded paths** - `/opt/autobot` hardcoded
 3. ❌ **Manual execution** - Developers had to remember to run them
 4. ❌ **Reactive approach** - Fixed issues after they occurred
 5. ❌ **No prevention** - Didn't stop misconfigurations from happening

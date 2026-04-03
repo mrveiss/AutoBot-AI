@@ -31,7 +31,7 @@ This document provides a comprehensive implementation plan for adding 4 integrat
 
 ### Existing Infrastructure
 
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py`
+**File:** `src/unified_config_manager.py`
 
 **What Works:**
 - Environment variable override system with `AUTOBOT_*` prefix (line 260-317)
@@ -51,7 +51,7 @@ This document provides a comprehensive implementation plan for adding 4 integrat
 
 ### Integration Points
 
-**File:** `/home/kali/Desktop/AutoBot/backend/app_factory.py`
+**File:** `backend/app_factory.py`
 
 **Startup Sequence:**
 ```python

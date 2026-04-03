@@ -147,7 +147,7 @@ redis_timeouts = config.get_timeout_group('redis.operations')
 
 #### **Phase 2: UnifiedConfig Enhancement**
 
-**New methods to add to `/home/kali/Desktop/AutoBot/src/unified_config.py`:**
+**New methods to add to `src/unified_config.py`:**
 
 ```python
 def get_timeout_for_env(self, category: str, timeout_type: str,
@@ -245,7 +245,7 @@ def validate_timeouts(self) -> Dict[str, Any]:
 
 #### **Phase 3: Migration from Hardcoded Values**
 
-**Identified Hardcoded Timeouts in `/home/kali/Desktop/AutoBot/src/knowledge_base.py`:**
+**Identified Hardcoded Timeouts in `src/knowledge_base.py`:**
 
 | Line | Current Value | Config Path | Replacement |
 |------|--------------|-------------|-------------|
@@ -511,7 +511,7 @@ prometheus-client==0.20.0
 
 **2. Create Prometheus metrics manager:**
 
-**File:** `/home/kali/Desktop/AutoBot/src/monitoring/prometheus_metrics.py`
+**File:** `src/monitoring/prometheus_metrics.py`
 
 ```python
 """
@@ -689,7 +689,7 @@ def get_metrics_manager() -> PrometheusMetricsManager:
 
 #### **3. Instrument AsyncRedisManager**
 
-**Modifications to `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py`:**
+**Modifications to `backend/utils/async_redis_manager.py`:**
 
 ```python
 from src.monitoring.prometheus_metrics import get_metrics_manager
@@ -763,7 +763,7 @@ class AsyncRedisDatabase:
 
 #### **4. Add Metrics Endpoint to FastAPI**
 
-**File:** `/home/kali/Desktop/AutoBot/autobot-backend/api/monitoring.py`
+**File:** `autobot-backend/api/monitoring.py`
 
 ```python
 """
@@ -827,7 +827,7 @@ app.include_router(monitoring_router)
 
 #### **Prometheus Configuration**
 
-**File:** `/home/kali/Desktop/AutoBot/config/prometheus.yml`
+**File:** `config/prometheus.yml`
 
 ```yaml
 # Prometheus configuration for AutoBot
@@ -916,7 +916,7 @@ volumes:
 
 ### 2.4 Alert Rules Configuration
 
-**File:** `/home/kali/Desktop/AutoBot/config/prometheus/alert_rules.yml`
+**File:** `config/prometheus/alert_rules.yml`
 
 ```yaml
 groups:
@@ -1005,7 +1005,7 @@ groups:
 
 ### 2.5 Grafana Dashboard Configuration
 
-**Dashboard JSON:** `/home/kali/Desktop/AutoBot/config/grafana/dashboards/autobot-timeouts.json`
+**Dashboard JSON:** `config/grafana/dashboards/autobot-timeouts.json`
 
 **Dashboard Panels:**
 
@@ -1294,21 +1294,21 @@ prom/alertmanager:latest  (optional)
 
 **New Files to Create:**
 
-1. `/home/kali/Desktop/AutoBot/config/prometheus.yml`
-2. `/home/kali/Desktop/AutoBot/config/prometheus/alert_rules.yml`
-3. `/home/kali/Desktop/AutoBot/config/grafana/dashboards/autobot-timeouts.json`
-4. `/home/kali/Desktop/AutoBot/src/monitoring/prometheus_metrics.py`
-5. `/home/kali/Desktop/AutoBot/autobot-backend/api/monitoring.py`
-6. `/home/kali/Desktop/AutoBot/scripts/validate_timeout_config.py`
+1. `config/prometheus.yml`
+2. `config/prometheus/alert_rules.yml`
+3. `config/grafana/dashboards/autobot-timeouts.json`
+4. `src/monitoring/prometheus_metrics.py`
+5. `autobot-backend/api/monitoring.py`
+6. `scripts/validate_timeout_config.py`
 
 **Modified Files:**
 
-1. `/home/kali/Desktop/AutoBot/config/config.yaml` - Add timeout configuration
-2. `/home/kali/Desktop/AutoBot/src/unified_config.py` - Add new methods
-3. `/home/kali/Desktop/AutoBot/src/knowledge_base.py` - Replace hardcoded timeouts
-4. `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py` - Add metrics instrumentation
-5. `/home/kali/Desktop/AutoBot/compose.yml` - Add Prometheus/Grafana services
-6. `/home/kali/Desktop/AutoBot/requirements.txt` - Add prometheus-client
+1. `config/config.yaml` - Add timeout configuration
+2. `src/unified_config.py` - Add new methods
+3. `src/knowledge_base.py` - Replace hardcoded timeouts
+4. `backend/utils/async_redis_manager.py` - Add metrics instrumentation
+5. `compose.yml` - Add Prometheus/Grafana services
+6. `requirements.txt` - Add prometheus-client
 
 ### 5.3 Infrastructure Requirements
 

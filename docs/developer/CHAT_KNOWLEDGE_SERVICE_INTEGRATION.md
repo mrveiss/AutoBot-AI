@@ -436,7 +436,7 @@ Planned improvements for Phase 2+:
 
 ## References
 
-- **RAGService**: `/home/kali/Desktop/AutoBot/backend/services/rag_service.py`
-- **ChatWorkflowManager**: `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py`
-- **AdvancedRAGOptimizer**: `/home/kali/Desktop/AutoBot/src/advanced_rag_optimizer.py`
-- **Tests**: `/home/kali/Desktop/AutoBot/tests/unit/test_chat_knowledge_service.py`
+- **RAGService**: `backend/services/rag_service.py`
+- **ChatWorkflowManager**: `src/chat_workflow_manager.py`
+- **AdvancedRAGOptimizer**: `src/advanced_rag_optimizer.py`
+- **Tests**: `tests/unit/test_chat_knowledge_service.py`

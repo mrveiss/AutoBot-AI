@@ -166,11 +166,11 @@ Successfully deployed service-to-service authentication infrastructure across Au
 
 ## Configuration Files
 
-### Main Backend: `/home/kali/Desktop/AutoBot/.env`
+### Main Backend: `.env`
 
 ```env
 SERVICE_ID=main-backend
-SERVICE_KEY_FILE=/home/kali/.autobot/service-keys/main-backend.env
+SERVICE_KEY_FILE=/etc/autobot/service-keys/main-backend.env
 AUTH_TIMESTAMP_WINDOW=300
 ```
 

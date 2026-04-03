@@ -63,7 +63,7 @@
 #### Task 2.1: Update Ansible Group Variables
 - **Agent:** devops-engineer
 - **Time:** 5 minutes
-- **File:** `/home/kali/Desktop/AutoBot/ansible/inventory/group_vars/database.yml`
+- **File:** `ansible/inventory/group_vars/database.yml`
 - **Changes:**
   ```yaml
   # Line 15-16: Update systemd service configuration
@@ -81,7 +81,7 @@
 #### Task 2.2: Update Ansible Deploy Database Playbook
 - **Agent:** devops-engineer
 - **Time:** 5 minutes
-- **File:** `/home/kali/Desktop/AutoBot/ansible/playbooks/deploy-database.yml`
+- **File:** `ansible/playbooks/deploy-database.yml`
 - **Changes:**
   ```yaml
   # Line 45-46: Update Redis user/group variables
@@ -121,7 +121,7 @@
 #### Task 3.1: Update VM Management Start Redis Script
 - **Agent:** senior-backend-engineer
 - **Time:** 3 minutes
-- **File:** `/home/kali/Desktop/AutoBot/scripts/vm-management/start-redis.sh`
+- **File:** `scripts/vm-management/start-redis.sh`
 - **Changes:**
   ```bash
   # Line 78: Update chown command
@@ -246,7 +246,7 @@
 - **Time:** 2 minutes
 - **Commands:**
   ```bash
-  cd /home/kali/Desktop/AutoBot
+  cd /opt/autobot
   git checkout HEAD -- ansible/inventory/group_vars/database.yml
   git checkout HEAD -- ansible/playbooks/deploy-database.yml
   ```

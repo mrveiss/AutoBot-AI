@@ -27,7 +27,7 @@
 
 ### 1.1 Configuration Flag Analysis
 
-**Location**: `/home/kali/Desktop/AutoBot/config/config.yaml.template`
+**Location**: `config/config.yaml.template`
 
 **Current State**:
 ```yaml
@@ -53,7 +53,7 @@ security_config:
 **Configuration Verification Required**:
 ```bash
 # Verify actual config.yaml has enable_auth: true
-grep -A 5 "security_config:" /home/kali/Desktop/AutoBot/config/config.yaml
+grep -A 5 "security_config:" config/config.yaml
 
 # If missing, copy from template
 if [ ! -f config/config.yaml ]; then
@@ -206,7 +206,7 @@ from src.auth_middleware import get_current_user
 
 **Step 2: Update All 11 File Endpoints**:
 
-Endpoints requiring updates (all in `/home/kali/Desktop/AutoBot/autobot-backend/api/files.py`):
+Endpoints requiring updates (all in `autobot-backend/api/files.py`):
 
 1. **GET /view** (line 616) - View file content
 2. **DELETE /delete** (line 658) - Delete single file
@@ -364,7 +364,7 @@ interface AuthTokens {
 }
 ```
 
-**Token Storage Service** (Create: `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/AuthTokenService.ts`):
+**Token Storage Service** (Create: `autobot-frontend/src/services/AuthTokenService.ts`):
 ```typescript
 export class AuthTokenService {
   private static readonly TOKEN_KEY = 'autobot_auth_tokens';
@@ -414,7 +414,7 @@ export class AuthTokenService {
 
 ### 3.3 ApiClient Enhancement
 
-**Update ApiClient.ts** (`/home/kali/Desktop/AutoBot/autobot-frontend/autobot-backend/utils/ApiClient.ts`):
+**Update ApiClient.ts** (`autobot-frontend/autobot-backend/utils/ApiClient.ts`):
 
 ```typescript
 import { AuthTokenService } from '@/services/AuthTokenService';
@@ -510,7 +510,7 @@ export default new ApiClient();
 **Update Login Component** (or create if missing):
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-frontend/src/components/auth/LoginForm.vue
+// File: autobot-frontend/src/components/auth/LoginForm.vue
 
 <script setup lang="ts">
 import { ref } from 'vue';
@@ -584,7 +584,7 @@ async function handleLogin() {
 
 ### 3.5 Router Navigation Guards
 
-**Update Router** (`/home/kali/Desktop/AutoBot/autobot-frontend/src/router/index.ts`):
+**Update Router** (`autobot-frontend/src/router/index.ts`):
 
 ```typescript
 import { createRouter, createWebHistory } from 'vue-router';
@@ -649,7 +649,7 @@ export default router;
 
 ### 3.6 Global Authentication Event Handling
 
-**App-wide Auth State** (`/home/kali/Desktop/AutoBot/autobot-frontend/src/main.ts`):
+**App-wide Auth State** (`autobot-frontend/src/main.ts`):
 
 ```typescript
 // Add global event listeners for auth state changes
@@ -685,7 +685,7 @@ window.addEventListener('auth:login', (event: CustomEvent) => {
 **Example: Update File List Component**:
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-frontend/src/components/files/FileList.vue
+// File: autobot-frontend/src/components/files/FileList.vue
 
 async function loadFiles(path: string) {
   try {
@@ -764,7 +764,7 @@ async function loadFiles(path: string) {
 
 ### 4.1 Unit Tests - Backend Authentication
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/unit/test_file_auth.py`
+**Test File**: `tests/unit/test_file_auth.py`
 
 ```python
 import pytest
@@ -858,7 +858,7 @@ class TestFileAuthentication:
 
 ### 4.2 Integration Tests - Full Auth Flow
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/integration/test_file_auth_integration.py`
+**Test File**: `tests/integration/test_file_auth_integration.py`
 
 ```python
 import pytest
@@ -959,7 +959,7 @@ class TestFileAuthIntegration:
 
 ### 4.3 Security Penetration Tests
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/security/test_file_auth_security.py`
+**Test File**: `tests/security/test_file_auth_security.py`
 
 ```python
 import pytest
@@ -1069,7 +1069,7 @@ class TestFileAuthSecurity:
 
 ### 4.4 End-to-End Tests - Frontend + Backend
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/e2e/test_file_auth_e2e.py`
+**Test File**: `tests/e2e/test_file_auth_e2e.py`
 
 ```python
 import pytest
@@ -1221,7 +1221,7 @@ pytest tests/ -v --cov=autobot-backend/api/files --cov=src/auth_middleware
 **Environment Verification**:
 ```bash
 # 1. Verify configuration
-grep "enable_auth: true" /home/kali/Desktop/AutoBot/config/config.yaml
+grep "enable_auth: true" config/config.yaml
 
 # 2. Verify dependencies installed
 pip list | grep -E "fastapi|pydantic|jwt"
@@ -1613,22 +1613,22 @@ Security Team
 ## Appendix A: Code Diff Summary
 
 **Files Modified**:
-1. `/home/kali/Desktop/AutoBot/autobot-backend/api/files.py`
+1. `autobot-backend/api/files.py`
    - Lines added: ~150 (auth checks, audit logging)
    - Lines removed: ~60 (deprecated function)
    - Net change: +90 lines
 
-2. `/home/kali/Desktop/AutoBot/autobot-frontend/autobot-backend/utils/ApiClient.ts`
+2. `autobot-frontend/autobot-backend/utils/ApiClient.ts`
    - Lines added: ~40 (auth header injection, error handling)
    - Lines removed: 0
    - Net change: +40 lines
 
-3. `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/AuthTokenService.ts`
+3. `autobot-frontend/src/services/AuthTokenService.ts`
    - New file
    - Lines added: ~80
    - Net change: +80 lines
 
-4. `/home/kali/Desktop/AutoBot/autobot-frontend/src/router/index.ts`
+4. `autobot-frontend/src/router/index.ts`
    - Lines added: ~30 (navigation guards)
    - Lines removed: 0
    - Net change: +30 lines

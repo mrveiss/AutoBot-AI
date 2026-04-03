@@ -39,7 +39,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
    journalctl -u autobot-backend -n 100
 
    # Check application logs
-   tail -f /home/kali/Desktop/AutoBot/logs/backend.log
+   tail -f logs/backend.log
    ```
 
 2. **Restart the service**
@@ -48,7 +48,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
    pkill -f "uvicorn backend.main:app"
 
    # Start fresh
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    sudo systemctl start autobot-backend
    ```
 
@@ -87,7 +87,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
 
    # On VM1:
-   cd ~/autobot-vue
+   cd /opt/autobot/autobot-slm-frontend
    npm run dev -- --host 0.0.0.0
    ```
 
@@ -266,7 +266,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 3. **Start AutoBot**
    ```bash
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    sudo systemctl start autobot-backend
    ```
 
@@ -296,8 +296,8 @@ sleep 10
 scp autobot@172.16.168.23:/var/lib/redis-stack/dump.rdb "$BACKUP_DIR/"
 
 # Configuration backup
-cp -r /home/kali/Desktop/AutoBot/.env "$BACKUP_DIR/"
-cp -r /home/kali/Desktop/AutoBot/backend/core/config.py "$BACKUP_DIR/"
+cp -r .env "$BACKUP_DIR/"
+cp -r backend/core/config.py "$BACKUP_DIR/"
 
 # Knowledge base metadata
 redis-cli -h 172.16.168.23 -n 1 KEYS "doc:*" > "$BACKUP_DIR/kb_keys.txt"

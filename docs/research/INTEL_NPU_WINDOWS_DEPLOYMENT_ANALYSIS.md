@@ -405,7 +405,7 @@ WSL2 Main (172.16.168.20)
    ```powershell
    # Copy from WSL2 to Windows
    # From WSL2:
-   cp -r /home/kali/Desktop/AutoBot/docker/npu-worker /mnt/c/AutoBot/npu-worker
+   cp -r docker/npu-worker /mnt/c/AutoBot/npu-worker
 
    # From PowerShell:
    cd C:\AutoBot\npu-worker
@@ -531,7 +531,7 @@ python service.py stop
 1. **Primary Development in WSL2:**
    ```bash
    # Edit code in WSL2
-   vim /home/kali/Desktop/AutoBot/docker/npu-worker/simple_npu_worker.py
+   vim docker/npu-worker/simple_npu_worker.py
    ```
 
 2. **Auto-sync to Windows:**
@@ -539,7 +539,7 @@ python service.py stop
    # Create sync script: sync-to-windows.sh
    #!/bin/bash
    rsync -av --delete \
-       /home/kali/Desktop/AutoBot/docker/npu-worker/ \
+       docker/npu-worker/ \
        /mnt/c/AutoBot/npu-worker/
 
    # Run on file changes (using inotify or manual)

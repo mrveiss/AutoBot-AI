@@ -19,7 +19,7 @@ Enhanced the validation function to accept three session ID formats while mainta
 
 ## Changes Made
 
-### File: `/home/kali/Desktop/AutoBot/autobot-backend/api/chat.py`
+### File: `autobot-backend/api/chat.py`
 
 **Line 5**: Added `import re` to top of file
 **Lines 272-313**: Enhanced `validate_chat_session_id()` function
@@ -73,7 +73,7 @@ def validate_chat_session_id(session_id: str) -> bool:
 
 ## Testing
 
-Created comprehensive test suite: `/home/kali/Desktop/AutoBot/tests/test_session_validation.py`
+Created comprehensive test suite: `tests/test_session_validation.py`
 
 **Results**: 20/20 tests passed (100% success rate)
 
@@ -122,9 +122,9 @@ Created comprehensive test suite: `/home/kali/Desktop/AutoBot/tests/test_session
 
 ## Documentation
 
-**Code Review**: `/home/kali/Desktop/AutoBot/reports/code-review/SESSION_ID_VALIDATION_FIX_2025-10-27.md`
-**Test Suite**: `/home/kali/Desktop/AutoBot/tests/test_session_validation.py`
-**This Summary**: `/home/kali/Desktop/AutoBot/docs/fixes/SESSION_ID_VALIDATION_FIX_SUMMARY.md`
+**Code Review**: `reports/code-review/SESSION_ID_VALIDATION_FIX_2025-10-27.md`
+**Test Suite**: `tests/test_session_validation.py`
+**This Summary**: `docs/fixes/SESSION_ID_VALIDATION_FIX_SUMMARY.md`
 
 ## Memory MCP Storage
 
@@ -148,7 +148,7 @@ Findings stored in Memory MCP:
 
 ```bash
 # Run test suite
-python /home/kali/Desktop/AutoBot/tests/test_session_validation.py
+python tests/test_session_validation.py
 
 # Test with actual backend (if running)
 curl -X DELETE http://172.16.168.20:8443/api/chat/sessions/test_conv

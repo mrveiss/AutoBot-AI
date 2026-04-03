@@ -422,7 +422,7 @@ git commit --no-verify -m "Emergency fix - see issue #123"
 - **SSOT Architecture**: [../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md)
 - **Python SSOT Config**: `autobot_shared/ssot_config.py`
 - **TypeScript SSOT Config**: `autobot-frontend/src/config/ssot-config.ts`
-- **Environment Setup**: [PHASE_5_DEVELOPER_SETUP.md](PHASE_5_DEVELOPER_SETUP.md)
+- **Environment Setup**: [DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)
 - **Code Quality**: [CODE_QUALITY_ENFORCEMENT.md](CODE_QUALITY_ENFORCEMENT.md)
 
 ---

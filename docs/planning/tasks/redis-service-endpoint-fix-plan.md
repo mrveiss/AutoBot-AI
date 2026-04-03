@@ -141,7 +141,7 @@ Modify frontend to parse general service monitor response at `/api/service-monit
 ### Implementation Steps
 
 #### Step 1: Update Frontend API Client ⏱️ 5 minutes
-**File**: `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/RedisServiceAPI.js`
+**File**: `autobot-frontend/src/services/RedisServiceAPI.js`
 
 **Action**: Change line 16
 ```javascript
@@ -157,7 +157,7 @@ this.baseEndpoint = '/api/redis-service'
 ---
 
 #### Step 2: Verify Backend Endpoints ⏱️ 5 minutes
-**File**: `/home/kali/Desktop/AutoBot/autobot-backend/api/redis_service.py`
+**File**: `autobot-backend/api/redis_service.py`
 
 **Backend Endpoints (ALREADY IMPLEMENTED):**
 ```python
@@ -212,7 +212,7 @@ curl https://172.16.168.20:8443/api/redis-service/health
 #### Step 3: Sync to Frontend VM ⏱️ 2 minutes
 ```bash
 # Sync updated file to Frontend VM
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 ./scripts/utilities/sync-to-vm.sh frontend \
   autobot-frontend/src/services/RedisServiceAPI.js \
   /home/autobot/autobot-frontend/src/services/RedisServiceAPI.js

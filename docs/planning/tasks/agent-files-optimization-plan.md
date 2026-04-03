@@ -116,7 +116,7 @@ Lines 279-433 are EXACT duplicates (155 lines repeated twice)
 ```markdown
 ## 🧹 Repository Cleanliness Standards
 
-**See**: [`CLAUDE.md#repository-cleanliness-standards`](/home/kali/Desktop/AutoBot/CLAUDE.md#repository-cleanliness-standards)
+**See**: [`CLAUDE.md#repository-cleanliness-standards`](CLAUDE.md#repository-cleanliness-standards)
 
 **Quick Reference**:
 - All tests → `tests/` directory
@@ -196,7 +196,7 @@ Lines 279-433 are EXACT duplicates (155 lines repeated twice)
 
 **Strategy**: Create shared code examples file, reference from agents
 
-**Create New File**: `/home/kali/Desktop/AutoBot/docs/developer/AGENT_CODE_EXAMPLES.md`
+**Create New File**: `docs/developer/AGENT_CODE_EXAMPLES.md`
 
 **Before Example** (each agent file contains 10-15 code examples):
 ```markdown
@@ -223,7 +223,7 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 ```markdown
 ### Code Examples
 
-**See**: [`docs/developer/AGENT_CODE_EXAMPLES.md`](/home/kali/Desktop/AutoBot/docs/developer/AGENT_CODE_EXAMPLES.md)
+**See**: [`docs/developer/AGENT_CODE_EXAMPLES.md`](docs/developer/AGENT_CODE_EXAMPLES.md)
 
 **Quick Reference**:
 - Parallel agent launch patterns
@@ -321,7 +321,7 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 ```markdown
 ## 🌐 Network Configuration
 
-**See**: [`CLAUDE.md#critical-networking-rules`](/home/kali/Desktop/AutoBot/CLAUDE.md#critical-networking-rules)
+**See**: [`CLAUDE.md#critical-networking-rules`](CLAUDE.md#critical-networking-rules)
 
 | Service | Bind Address | Access From VMs |
 |---------|-------------|----------------|
@@ -377,7 +377,7 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 ```markdown
 ## 🔐 SSH & Sync Procedures
 
-**See**: [`CLAUDE.md#mandatory-local-only-editing-enforcement`](/home/kali/Desktop/AutoBot/CLAUDE.md#mandatory-local-only-editing-enforcement)
+**See**: [`CLAUDE.md#mandatory-local-only-editing-enforcement`](CLAUDE.md#mandatory-local-only-editing-enforcement)
 
 **Quick Sync Commands**:
 ```bash
@@ -462,7 +462,7 @@ Ask yourself these questions right now:
 | Temporary workaround | Stop, fix properly instead | 🔴 Critical |
 | Time pressure felt | MORE rigor, not less | 🟡 High |
 
-**Full violation guide**: [`CLAUDE.md#workflow-enforcement`](/home/kali/Desktop/AutoBot/CLAUDE.md#workflow-enforcement)
+**Full violation guide**: [`CLAUDE.md#workflow-enforcement`](CLAUDE.md#workflow-enforcement)
 ```
 
 **Token Savings**: ~300 tokens per file × 29 files = 8,700 tokens
@@ -524,12 +524,12 @@ Ask yourself these questions right now:
 | Code review (MANDATORY) | code-reviewer | Implement |
 | Documentation | documentation-engineer | All phases |
 
-**Full agent guide**: [`docs/developer/AGENT_DELEGATION_GUIDE.md`](/home/kali/Desktop/AutoBot/docs/developer/AGENT_DELEGATION_GUIDE.md)
+**Full agent guide**: [`docs/developer/AGENT_DELEGATION_GUIDE.md`](docs/developer/AGENT_DELEGATION_GUIDE.md)
 
 **Key Rule**: Launch minimum 2 agents in parallel for all non-trivial tasks
 ```
 
-**New File Created**: `/home/kali/Desktop/AutoBot/docs/developer/AGENT_DELEGATION_GUIDE.md` (comprehensive agent selection guide)
+**New File Created**: `docs/developer/AGENT_DELEGATION_GUIDE.md` (comprehensive agent selection guide)
 
 **Token Savings**: ~200 tokens per file × 29 files = 5,800 tokens
 **Functionality Impact**: NONE (quick reference + detailed guide)
@@ -589,7 +589,7 @@ Browser DevTools automatically open in dev mode to monitor:
 | Backend logs | `tail -f logs/backend.log` | Error tracking |
 | Frontend console | Browser VM: `172.16.168.25:3000` | UI debugging |
 
-**Full debugging guide**: [`docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`](/home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md)
+**Full debugging guide**: [`docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`](docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md)
 
 **Key Rules**:
 - Use Browser VM (`172.16.168.25:3000`) for Playwright - NEVER install locally on Kali
@@ -661,13 +661,13 @@ Browser DevTools automatically open in dev mode to monitor:
 ```markdown
 ## 🚨 Local-Only Editing Policy
 
-**See**: [`docs/developer/LOCAL_EDIT_POLICY.md`](/home/kali/Desktop/AutoBot/docs/developer/LOCAL_EDIT_POLICY.md)
+**See**: [`docs/developer/LOCAL_EDIT_POLICY.md`](docs/developer/LOCAL_EDIT_POLICY.md)
 
 **Critical Rules for This Agent**:
 
 | Action | Status | Procedure |
 |--------|--------|-----------|
-| Edit code | ✅ Local only | Edit in `/home/kali/Desktop/AutoBot/` |
+| Edit code | ✅ Local only | Edit in `/opt/autobot` |
 | Modify config | ✅ Local only | Edit locally, sync via scripts |
 | Deploy changes | ✅ Via sync | Use `sync-to-vm.sh` after edits |
 | SSH to VMs | ❌ Never for edits | Read-only verification only |
@@ -688,7 +688,7 @@ Browser DevTools automatically open in dev mode to monitor:
 **Emergency Violation Recovery**: If accidental remote edit occurs, immediately document changes and recreate locally
 ```
 
-**New Shared File**: `/home/kali/Desktop/AutoBot/docs/developer/LOCAL_EDIT_POLICY.md` (comprehensive 2,000+ line policy document)
+**New Shared File**: `docs/developer/LOCAL_EDIT_POLICY.md` (comprehensive 2,000+ line policy document)
 
 **Token Savings**: ~2,443 tokens per file × 6 files = 14,658 tokens
 **Functionality Impact**: NONE (full policy accessible, agent-specific guidance preserved)

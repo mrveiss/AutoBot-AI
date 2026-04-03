@@ -495,7 +495,7 @@ class MultiMachineSSHAdapter:
 
     def __init__(self):
         self.connections = {}  # host -> paramiko.SSHClient
-        self.ssh_key_path = "/home/kali/.ssh/autobot_key"
+        self.ssh_key_path = "$HOME/.ssh/autobot_key"
         self.host_mapping = {
             "frontend": "172.16.168.21",
             "npu-worker": "172.16.168.22",

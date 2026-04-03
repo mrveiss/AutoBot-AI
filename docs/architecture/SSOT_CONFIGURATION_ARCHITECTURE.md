@@ -772,9 +772,9 @@ All configuration-related documentation must be updated during SSOT migration:
 5. Add validation tests for both loaders
 
 **Files to Create**:
-- `/home/kali/Desktop/AutoBot/src/config/ssot_config.py`
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/config/ssot-config.ts`
-- `/home/kali/Desktop/AutoBot/scripts/sync-env.sh`
+- `src/config/ssot_config.py`
+- `autobot-frontend/src/config/ssot-config.ts`
+- `scripts/sync-env.sh`
 
 **Backward Compatibility**: Old config modules remain functional.
 
@@ -865,7 +865,7 @@ const host = config.vm.main;
 ## 7. Appendix: File Structure After Implementation
 
 ```
-/home/kali/Desktop/AutoBot/
+
 ├── .env                                    # MASTER CONFIG - SINGLE SOURCE OF TRUTH
 ├── .env.example                            # Template with all values documented
 ├── .env.secrets.example                    # Template for secrets (gitignored)

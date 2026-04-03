@@ -473,7 +473,7 @@ Document:
 - [x] Enhance docstrings in `terminal.py` ✅ **COMPLETED**
 - [x] Enhance docstrings in `agent_terminal.py` ✅ **COMPLETED**
 - [x] Update `TERMINAL_CONSOLIDATION_ANALYSIS.md` with Phase 1 completion ✅ **COMPLETED**
-- [ ] Update `docs/developer/PHASE_5_DEVELOPER_SETUP.md` if needed
+- [ ] Update `docs/developer/DEVELOPER_SETUP.md` if needed
 
 ---
 

@@ -39,7 +39,7 @@ SSH key authentication should already be configured. Verify with:
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
 
 # Test Ansible connectivity
-cd /home/kali/Desktop/AutoBot/ansible
+cd ansible
 ansible all -i inventory/production.yml -m ping
 ```
 
@@ -48,7 +48,7 @@ ansible all -i inventory/production.yml -m ping
 Run the one-time setup to enable passwordless sudo on all VMs:
 
 ```bash
-cd /home/kali/Desktop/AutoBot/ansible
+cd ansible
 
 # This will prompt for the become (sudo) password once
 ./deploy.sh --setup-sudo

@@ -216,7 +216,7 @@ Group=redis-group    # Placeholder - should be actual system group
 
 ### 1. Create Missing Systemd Template
 
-**File to Create**: `/home/kali/Desktop/AutoBot/ansible/templates/systemd/redis-stack-server.service.j2`
+**File to Create**: `ansible/templates/systemd/redis-stack-server.service.j2`
 
 **Content**:
 ```jinja2
@@ -254,7 +254,7 @@ WantedBy=multi-user.target
 
 ### 2. Update Ansible Playbook Variables
 
-**File**: `/home/kali/Desktop/AutoBot/ansible/playbooks/deploy-database.yml`
+**File**: `ansible/playbooks/deploy-database.yml`
 
 **Change lines 12-13**:
 ```yaml
@@ -269,7 +269,7 @@ redis_group: "redis"
 
 ### 3. Update Ansible Group Variables
 
-**File**: `/home/kali/Desktop/AutoBot/ansible/inventory/group_vars/database.yml`
+**File**: `ansible/inventory/group_vars/database.yml`
 
 **Change lines 243-244**:
 ```yaml
@@ -297,7 +297,7 @@ redis_data_permissions:
 
 ### 4. Verify Start Script (No Changes Needed)
 
-**File**: `/home/kali/Desktop/AutoBot/scripts/vm-management/start-redis.sh`
+**File**: `scripts/vm-management/start-redis.sh`
 
 **Line 78** (already correct):
 ```bash
@@ -422,9 +422,9 @@ If issues occur after implementation:
 
 ### Related Files
 
-- `/home/kali/Desktop/AutoBot/ansible/playbooks/deploy-database.yml`
-- `/home/kali/Desktop/AutoBot/ansible/inventory/group_vars/database.yml`
-- `/home/kali/Desktop/AutoBot/scripts/vm-management/start-redis.sh`
+- `ansible/playbooks/deploy-database.yml`
+- `ansible/inventory/group_vars/database.yml`
+- `scripts/vm-management/start-redis.sh`
 - `/etc/systemd/system/redis-stack-server.service` (on Redis VM)
 
 ### Commands Used for Research

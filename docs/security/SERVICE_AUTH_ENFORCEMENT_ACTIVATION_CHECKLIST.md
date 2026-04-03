@@ -38,7 +38,7 @@
   - Path matching functions tested
 
 - [x] **Service Keys Deployed**
-  - main-backend: `/home/kali/.autobot/service-keys/main-backend.env`
+  - main-backend: `/etc/autobot/service-keys/main-backend.env`
   - npu-worker: Deployed to VM 22
   - ai-stack: Deployed to VM 24
   - browser-service: Deployed to VM 25
@@ -99,7 +99,7 @@ echo $SERVICE_AUTH_ENFORCEMENT_MODE
 
 **Method 2: Configuration File** (if environment variable doesn't work)
 
-Add to `/home/kali/Desktop/AutoBot/.env`:
+Add to `.env`:
 ```bash
 SERVICE_AUTH_ENFORCEMENT_MODE=true
 ```
@@ -110,7 +110,7 @@ SERVICE_AUTH_ENFORCEMENT_MODE=true
 
 ```bash
 # Navigate to AutoBot directory
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Restart backend with enforcement enabled
 sudo systemctl restart autobot-backend
@@ -271,7 +271,7 @@ curl -s http://172.16.168.21:5173 | head -5
 export SERVICE_AUTH_ENFORCEMENT_MODE=false
 
 # Restart backend
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 sudo systemctl restart autobot-backend
 
 # Verify rollback
@@ -487,7 +487,7 @@ grep "Service auth failed" logs/backend.log | grep -oP "path=[^ ]+" | sort | uni
 
 **Diagnosis**:
 ```bash
-ls -la /home/kali/.autobot/service-keys/
+ls -la /etc/autobot/service-keys/
 ```
 
 **Resolution**:

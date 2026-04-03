@@ -26,7 +26,7 @@ The Code Sync page consists of 6 main sections arranged vertically:
 │  ┌─── Code Source Card ───────────────────────────────────────┐   │
 │  │ Code Source                                   [Edit Button]  │   │
 │  │ 01-Backend (Main Server)                                    │   │
-│  │ /home/kali/Desktop/AutoBot (Dev_new_gui)                    │   │
+│  │ /opt/autobot (Dev_new_gui)                    │   │
 │  │ Last commit: 745e45ee                      [Remove Button]  │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -160,7 +160,7 @@ Banner is not visible when no sync is running.
 │  Code Source                                       [Edit Button] │
 │  ───────────────────────────────────────────────────────────────│
 │  01-Backend (Main Server)                                        │
-│  /home/kali/Desktop/AutoBot (Dev_new_gui)                        │
+│  /opt/autobot (Dev_new_gui)                        │
 │  Last commit: 745e45ee (hover for full hash)                    │
 │                                                 [Remove Button]  │
 └─────────────────────────────────────────────────────────────────┘
@@ -206,7 +206,7 @@ Banner is not visible when no sync is running.
 │                                                                  │
 │  Repository Path *                                               │
 │  ┌────────────────────────────────────────┐                     │
-│  │ /home/kali/Desktop/AutoBot               │                     │
+│  │ /opt/autobot               │                     │
 │  └────────────────────────────────────────┘                     │
 │  Must exist on source node and be a git repo                    │
 │                                                                  │

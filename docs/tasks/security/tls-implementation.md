@@ -124,7 +124,7 @@ CA Certificate:
 - Subject: CN=AutoBot Internal CA, O=AutoBot
 - Algorithm: RSA 4096-bit with SHA-256
 - Validity: Oct 3 2025 - Oct 3 2026
-- Location: /home/kali/Desktop/AutoBot/certs/ca/
+- Location: certs/ca/
 
 Service Certificates (6):
 1. main-host (172.16.168.20) - autobot-backend
@@ -194,18 +194,18 @@ All certificates include:
 ## Files Created
 
 ### Scripts (Executable)
-- `/home/kali/Desktop/AutoBot/scripts/security/generate-tls-certificates.sh` (340 lines)
-- `/home/kali/Desktop/AutoBot/scripts/security/distribute-certificates.sh` (280 lines)
-- `/home/kali/Desktop/AutoBot/scripts/security/renew-certificates.sh` (260 lines)
+- `scripts/security/generate-tls-certificates.sh` (340 lines)
+- `scripts/security/distribute-certificates.sh` (280 lines)
+- `scripts/security/renew-certificates.sh` (260 lines)
 
 ### Documentation
-- `/home/kali/Desktop/AutoBot/docs/security/TLS_CERTIFICATE_MANAGEMENT.md` (850+ lines)
-- `/home/kali/Desktop/AutoBot/certs/certificate-summary.txt` (Summary report)
-- `/home/kali/Desktop/AutoBot/reports/security/tls-certificate-implementation-report.md` (Implementation report)
+- `docs/security/TLS_CERTIFICATE_MANAGEMENT.md` (850+ lines)
+- `certs/certificate-summary.txt` (Summary report)
+- `reports/security/tls-certificate-implementation-report.md` (Implementation report)
 
 ### Certificates (25 files)
-- `/home/kali/Desktop/AutoBot/certs/ca/` - CA infrastructure (3 files)
-- `/home/kali/Desktop/AutoBot/certs/{service}/` - Service certificates (3 files × 6 services)
+- `certs/ca/` - CA infrastructure (3 files)
+- `certs/{service}/` - Service certificates (3 files × 6 services)
 
 ## Timeline
 
@@ -248,9 +248,9 @@ All certificates include:
 ## References
 
 **Documentation:**
-- Security Roadmap: `/home/kali/Desktop/AutoBot/reports/security/security-improvement-roadmap.md`
-- Certificate Management: `/home/kali/Desktop/AutoBot/docs/security/TLS_CERTIFICATE_MANAGEMENT.md`
-- Implementation Report: `/home/kali/Desktop/AutoBot/reports/security/tls-certificate-implementation-report.md`
+- Security Roadmap: `reports/security/security-improvement-roadmap.md`
+- Certificate Management: `docs/security/TLS_CERTIFICATE_MANAGEMENT.md`
+- Implementation Report: `reports/security/tls-certificate-implementation-report.md`
 
 **Scripts:**
 ```bash
@@ -268,7 +268,7 @@ All certificates include:
 ```
 
 **Certificate Locations:**
-- Local: `/home/kali/Desktop/AutoBot/certs/`
+- Local: `certs/`
 - Remote VMs: `/etc/autobot/certs/`
 
 ---

@@ -10,7 +10,7 @@
 - [ ] **Code Source Configured**
   - Log into SLM → Code Sync → Configure button
   - Node: `01-Backend` (or code source machine)
-  - Path: `/home/kali/Desktop/AutoBot`
+  - Path: `/opt/autobot`
   - Branch: `Dev_new_gui` (or `main` for prod)
 
 - [ ] **SSH Keys Deployed**

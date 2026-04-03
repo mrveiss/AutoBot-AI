@@ -1725,7 +1725,7 @@ All changes must follow the local-edit-then-sync pattern. See CLAUDE.md for deta
 
 ```bash
 # CORRECT - edit locally, sync via Ansible
-vim /home/kali/Desktop/AutoBot/autobot-slm-backend/ansible/deploy-container.yml
+vim autobot-slm-backend/ansible/deploy-container.yml
 ansible-playbook ansible/playbooks/deploy-infrastructure.yml
 
 # WRONG - direct editing on VM

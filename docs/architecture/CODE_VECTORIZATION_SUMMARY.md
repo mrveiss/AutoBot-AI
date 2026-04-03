@@ -323,7 +323,7 @@ With an expected ROI of $290,000 annually and a 4-month payback period, this sys
 
 ## Document Index
 
-All architecture documents are located in `/home/kali/Desktop/AutoBot/docs/`:
+All architecture documents are located in `docs/`:
 
 - **architecture/CODE_VECTORIZATION_ARCHITECTURE.md** - Complete system design
 - **api/CODE_VECTORIZATION_API.md** - API specifications

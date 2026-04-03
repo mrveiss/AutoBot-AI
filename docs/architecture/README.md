@@ -93,7 +93,7 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 | Document | Description |
 |----------|-------------|
 | [DISTRIBUTED_6VM_ARCHITECTURE.md](DISTRIBUTED_6VM_ARCHITECTURE.md) | Detailed VM infrastructure |
-| [PHASE_5_DISTRIBUTED_ARCHITECTURE.md](PHASE_5_DISTRIBUTED_ARCHITECTURE.md) | Phase 5 architecture details |
+| [DISTRIBUTED_ARCHITECTURE.md](DISTRIBUTED_ARCHITECTURE.md) | Phase 5 architecture details |
 | [VISUAL_ARCHITECTURE.md](VISUAL_ARCHITECTURE.md) | Architecture diagrams |
 | [AGENT_SYSTEM_ARCHITECTURE.md](AGENT_SYSTEM_ARCHITECTURE.md) | Agent system design |
 
@@ -167,7 +167,7 @@ curl http://172.16.168.24:8080/api/tags
 ## Related Documentation
 
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
-- [Developer Setup](../developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Developer Setup](../developer/DEVELOPER_SETUP.md)
 - [System State](../system-state.md)
 - [Glossary](../GLOSSARY.md)
 

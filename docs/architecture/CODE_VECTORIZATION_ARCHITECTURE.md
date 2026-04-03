@@ -151,7 +151,7 @@ This document outlines the architecture for a comprehensive code vectorization a
 # POST /api/analytics/code/vectorize
 {
     "request": {
-        "target_path": "/home/kali/Desktop/AutoBot",  # Optional, defaults to project root
+        "target_path": "/opt/autobot",  # Optional, defaults to project root
         "incremental": true,  # Only process changed files
         "force_reindex": false,  # Force complete re-indexing
         "languages": ["python", "javascript", "vue"],  # Optional filter

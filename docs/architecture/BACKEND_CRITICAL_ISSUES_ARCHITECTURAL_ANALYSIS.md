@@ -631,10 +631,10 @@ class TestDistributedFileOperations:
         file_id = response.json()["file_id"]
 
         # Verify file stored on VM0
-        assert Path(f"/home/kali/Desktop/AutoBot/data/conversation_files/{file_id}").exists()
+        assert Path(f"data/conversation_files/{file_id}").exists()
 
         # Verify metadata in SQLite on VM0
-        db = sqlite3.connect("/home/kali/Desktop/AutoBot/data/conversation_files.db")
+        db = sqlite3.connect("data/conversation_files.db")
         cursor = db.cursor()
         cursor.execute("SELECT * FROM conversation_files WHERE file_id = ?", (file_id,))
         assert cursor.fetchone() is not None
@@ -1921,7 +1921,7 @@ class AutoBotConfig(BaseSettings):
     redis_port: int = 6379
 
     # File management
-    storage_dir: Path = Path("/home/kali/Desktop/AutoBot/data/conversation_files")
+    storage_dir: Path = Path("data/conversation_files")
     max_file_size_mb: int = 100
 
     # LLM configuration

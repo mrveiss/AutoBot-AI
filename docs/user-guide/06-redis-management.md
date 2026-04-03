@@ -541,7 +541,7 @@ Manual intervention required. Please contact administrator.
 - Failure threshold: **3 consecutive failures**
 
 Administrators can configure these settings in:
-`/home/kali/Desktop/AutoBot/config/services/redis_service_management.yaml`
+`config/services/redis_service_management.yaml`
 
 ---
 
@@ -995,15 +995,15 @@ If issues persist after troubleshooting:
 ## Additional Resources
 
 **Documentation:**
-- [API Documentation](/home/kali/Desktop/AutoBot/docs/api/REDIS_SERVICE_MANAGEMENT_API.md)
-- [Operational Runbook](/home/kali/Desktop/AutoBot/docs/operations/REDIS_SERVICE_RUNBOOK.md)
-- [Architecture Document](/home/kali/Desktop/AutoBot/docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
-- [Troubleshooting Guide](/home/kali/Desktop/AutoBot/docs/troubleshooting/comprehensive_troubleshooting_guide.md)
+- [API Documentation](docs/api/REDIS_SERVICE_MANAGEMENT_API.md)
+- [Operational Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md)
+- [Architecture Document](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
+- [Troubleshooting Guide](docs/troubleshooting/comprehensive_troubleshooting_guide.md)
 
 **Support:**
 - Email: support@autobot.local
 - Emergency: emergency@autobot.local
-- Documentation: `/home/kali/Desktop/AutoBot/docs/`
+- Documentation: `docs/`
 
 ---
 

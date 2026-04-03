@@ -80,7 +80,7 @@ sudo systemctl restart autobot-backend
 ps aux | grep "python.*app_factory"
 
 # Verify process start time is AFTER code fixes
-ls -l /home/kali/Desktop/AutoBot/src/chat_workflow_manager.py
+ls -l src/chat_workflow_manager.py
 ```
 
 **Validation:**
@@ -120,7 +120,7 @@ curl http://localhost:8001/api/health
 #### 2.1 Verify New Code Loaded
 ```bash
 # Check backend logs for new debug messages
-tail -f /home/kali/Desktop/AutoBot/logs/backend.log | grep -A 5 "DEBUG.*chat_workflow_manager"
+tail -f logs/backend.log | grep -A 5 "DEBUG.*chat_workflow_manager"
 ```
 
 **Expected Output:**
@@ -198,7 +198,7 @@ curl -X POST http://localhost:8001/api/chat/completions \
 ```
 <TOOL_CALL>
 {
-  "command": "ls -la /home/kali/Desktop/AutoBot/backend"
+  "command": "ls -la backend"
 }
 </TOOL_CALL>
 ```

@@ -14,7 +14,7 @@ Successfully integrated the AutoBot Memory Graph system with the existing chat w
 
 ### 1. ChatHistoryManager Integration
 
-**File Modified**: `/home/kali/Desktop/AutoBot/src/chat_history_manager.py`
+**File Modified**: `src/chat_history_manager.py`
 
 #### Changes Made:
 
@@ -414,7 +414,7 @@ Entity not found, creating new entity for session: {session_id}
 
 ### Files Modified
 
-- `/home/kali/Desktop/AutoBot/src/chat_history_manager.py` (1 file)
+- `src/chat_history_manager.py` (1 file)
 
 ### Lines of Code Added
 

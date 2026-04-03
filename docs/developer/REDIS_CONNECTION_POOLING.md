@@ -376,7 +376,7 @@ If statistics seem stale:
 
 ## References
 
-- **Implementation**: `/home/kali/Desktop/AutoBot/src/utils/redis_management/connection_manager.py`
-- **Configuration**: `/home/kali/Desktop/AutoBot/src/constants/redis_constants.py`
-- **Main Interface**: `/home/kali/Desktop/AutoBot/src/utils/redis_client.py`
+- **Implementation**: `src/utils/redis_management/connection_manager.py`
+- **Configuration**: `src/constants/redis_constants.py`
+- **Main Interface**: `src/utils/redis_client.py`
 - **Issue**: #743 - Memory Optimization

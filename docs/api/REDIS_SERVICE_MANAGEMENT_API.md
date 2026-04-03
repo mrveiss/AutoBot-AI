@@ -1109,7 +1109,7 @@ All operations are logged with:
 - Command executed
 - Duration
 
-Audit logs are stored in: `/home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log`
+Audit logs are stored in: `logs/audit/redis_service_management.log`
 
 ### Best Practices
 
@@ -1140,13 +1140,13 @@ Audit logs are stored in: `/home/kali/Desktop/AutoBot/logs/audit/redis_service_m
 ## Support & Resources
 
 **Documentation:**
-- [User Guide](/home/kali/Desktop/AutoBot/docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md)
-- [Operational Runbook](/home/kali/Desktop/AutoBot/docs/operations/REDIS_SERVICE_RUNBOOK.md)
-- [Architecture Document](/home/kali/Desktop/AutoBot/docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
+- [User Guide](docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md)
+- [Operational Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md)
+- [Architecture Document](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
 
 **Related APIs:**
-- [Comprehensive API Documentation](/home/kali/Desktop/AutoBot/docs/api/comprehensive_api_documentation.md)
-- [Health Monitoring API](/home/kali/Desktop/AutoBot/docs/api/health_monitoring.md)
+- [Comprehensive API Documentation](docs/api/comprehensive_api_documentation.md)
+- [Health Monitoring API](docs/api/health_monitoring.md)
 
 **Contact:**
 - GitHub Issues: [AutoBot Issues](https://github.com/autobot/autobot/issues)

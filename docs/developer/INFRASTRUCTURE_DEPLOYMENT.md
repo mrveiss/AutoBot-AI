@@ -182,7 +182,7 @@ ssh autobot-redis
 
 ### Required Workflow
 
-1. **Edit locally** in `/home/kali/Desktop/AutoBot/`
+1. **Edit locally** in `/opt/autobot`
 2. **Sync immediately** using sync scripts
 3. **Never skip sync** - remote machines must stay synchronized
 
@@ -201,7 +201,7 @@ ssh autobot-redis
 
 ```bash
 # Step 1: Edit locally
-vim /home/kali/Desktop/AutoBot/autobot-user-autobot-backend/api/chat.py
+vim autobot-user-autobot-backend/api/chat.py
 
 # Step 2: Sync immediately
 ./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-backend/api/chat.py /home/autobot/autobot-user-autobot-backend/api/chat.py
@@ -594,7 +594,7 @@ scripts/start-services.sh start
 # Or: sudo systemctl start autobot-backend
 
 # 2. Make code changes locally
-vim /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
+vim autobot-backend/api/chat.py
 
 # 3. Sync changes to VMs (if needed)
 ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/ /opt/autobot/autobot-backend/
@@ -803,7 +803,7 @@ sudo systemctl restart autobot-backend
 
 # Verify sync
 ssh autobot@172.16.168.20 "md5sum /opt/autobot/autobot-backend/api/chat.py"
-md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
+md5sum autobot-backend/api/chat.py
 # Hashes should match
 ```
 
@@ -812,7 +812,7 @@ md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 ## Related Documentation
 
 - **Network Constants**: `autobot_shared/network_constants.py`
-- **Setup Guide**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- **Setup Guide**: `docs/developer/DEVELOPER_SETUP.md`
 - **Hardcoding Prevention**: `docs/developer/HARDCODING_PREVENTION.md`
 - **Redis Client Usage**: `docs/developer/REDIS_CLIENT_USAGE.md`
 
@@ -831,7 +831,7 @@ md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 
 **Development workflow**:
 
-- [ ] Edit locally in `/home/kali/Desktop/AutoBot/`
+- [ ] Edit locally in `/opt/autobot`
 - [ ] Sync immediately after changes
 - [ ] NEVER edit directly on VMs
 - [ ] Test changes on target VM

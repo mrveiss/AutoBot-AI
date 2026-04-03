@@ -51,7 +51,7 @@ All chat endpoints now include `ownership: Dict = Depends(validate_session_owner
 
 ### Code Changes Summary
 
-**File Modified:** `/home/kali/Desktop/AutoBot/autobot-backend/api/chat.py`
+**File Modified:** `autobot-backend/api/chat.py`
 
 **Lines Changed:** 7 lines (5 endpoint signatures + 1 import + 1 comment)
 
@@ -125,7 +125,7 @@ sudo systemctl restart autobot-backend
 
 # Method 2: Backend-only restart
 pkill -f "uvicorn.*backend"
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 --reload
 ```
 
@@ -251,7 +251,7 @@ If validation fails or issues discovered:
 ### Quick Rollback (< 2 minutes)
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # 1. Revert chat.py changes
 git checkout autobot-backend/api/chat.py

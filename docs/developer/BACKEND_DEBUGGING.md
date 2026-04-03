@@ -346,7 +346,7 @@ file autobot-backend/backend
 ### Fix
 
 ```bash
-cd /home/kali/Desktop/AutoBot/autobot-backend
+cd autobot-backend
 rm backend && ln -s ../autobot-backend backend
 rm autobot_shared && ln -s ../autobot_shared autobot_shared
 ```

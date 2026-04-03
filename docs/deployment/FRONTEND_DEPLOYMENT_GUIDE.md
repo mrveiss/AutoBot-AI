@@ -49,7 +49,7 @@ AutoBot uses a **pull-based deployment system** managed through the SLM (Service
 1. **Click "Configure"** button in Code Source card
 2. **Select Source Node**: Choose "01-Backend" or whichever node has git access
    - Typically the Main server (172.16.168.20) or development machine
-3. **Repository Path**: `/home/kali/Desktop/AutoBot` (or `/opt/autobot` if different)
+3. **Repository Path**: `/opt/autobot` (or `/opt/autobot` if different)
 4. **Branch**: `Dev_new_gui` (or `main` for production)
 5. **Click "Save"**
 
@@ -58,7 +58,7 @@ The Code Source card will now show:
 ┌─────────────────────────────────────────────────────────────┐
 │ Code Source                                    [Edit Button] │
 │ 01-Backend (Main)                                            │
-│ /home/kali/Desktop/AutoBot (Dev_new_gui)                    │
+│ /opt/autobot (Dev_new_gui)                    │
 │ Last commit: 745e45ee                                        │
 │                                          [Remove Button]     │
 └─────────────────────────────────────────────────────────────┘
@@ -337,7 +337,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 - [ ] Check SLM backend logs: `journalctl -u autobot-slm-backend -n 100`
 - [ ] Verify SSH connectivity: `ssh autobot@172.16.168.21 "echo test"`
 - [ ] Check disk space on Frontend VM: `df -h` (need >1GB free)
-- [ ] Verify git repository accessible: `ls -la /home/kali/Desktop/AutoBot/.git`
+- [ ] Verify git repository accessible: `ls -la .git`
 - [ ] Check npm/node versions on Frontend VM: `node --version` (need 16+)
 
 **If build succeeds but changes not visible:**

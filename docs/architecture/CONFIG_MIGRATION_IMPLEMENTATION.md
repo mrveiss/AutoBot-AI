@@ -227,7 +227,7 @@ def is_feature_enabled(self, feature: str) -> bool:
 
 ### Step 2: Create Compatibility Shim
 
-Replace entire content of `/home/kali/Desktop/AutoBot/src/unified_config.py`:
+Replace entire content of `src/unified_config.py`:
 
 ```python
 """
@@ -319,7 +319,7 @@ python -m pytest tests/unit/test_timeout_configuration.py -v
 
 ### Step 4: Mass Migration Script
 
-Create `/home/kali/Desktop/AutoBot/scripts/migrate_config_imports.py`:
+Create `scripts/migrate_config_imports.py`:
 
 ```python
 #!/usr/bin/env python3

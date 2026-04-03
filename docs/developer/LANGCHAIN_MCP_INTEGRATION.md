@@ -176,7 +176,7 @@ def get_all_mcp_tools():
     tools.append(create_mcp_tool_sync(
         "filesystem_mcp",
         "read_text_file",
-        "Read text file from allowed directories. Input: JSON with 'path' (string). Allowed: /home/kali/Desktop/AutoBot/, /tmp/autobot/, /home/kali/Desktop/"
+        "Read text file from allowed directories. Input: JSON with 'path' (string). Allowed: , /tmp/autobot/, $HOME/Desktop/"
     ))
 
     tools.append(create_mcp_tool_sync(
@@ -564,9 +564,9 @@ def create_mcp_tool_with_error_handling(
 AutoBot's filesystem MCP implements strict whitelist-based access control:
 
 **Allowed Directories:**
-- `/home/kali/Desktop/AutoBot/` - Project directory
+- `/opt/autobot` - Project directory
 - `/tmp/autobot/` - Temporary files
-- `/home/kali/Desktop/` - User desktop
+- `$HOME/Desktop/` - User desktop
 
 **Security Features:**
 - Path traversal prevention (`../` blocked)
@@ -580,9 +580,9 @@ AutoBot's filesystem MCP implements strict whitelist-based access control:
 def validate_path(path: str) -> bool:
     """Validate path is within allowed directories"""
     allowed = [
-        "/home/kali/Desktop/AutoBot/",
+        "",
         "/tmp/autobot/",
-        "/home/kali/Desktop/",
+        "$HOME/Desktop/",
     ]
     return any(path.startswith(d) for d in allowed)
 
@@ -720,8 +720,8 @@ async def parallel_tool_execution():
     """Execute multiple independent tool calls in parallel"""
 
     tasks = [
-        call_mcp_tool("filesystem_mcp", "list_directory", {"path": "/home/kali/Desktop/AutoBot/backend/"}),
-        call_mcp_tool("filesystem_mcp", "list_directory", {"path": "/home/kali/Desktop/AutoBot/docs/"}),
+        call_mcp_tool("filesystem_mcp", "list_directory", {"path": "backend/"}),
+        call_mcp_tool("filesystem_mcp", "list_directory", {"path": "docs/"}),
         call_mcp_tool("knowledge_mcp", "statistics", {}),
         call_mcp_tool("vnc_mcp", "vnc_status", {}),
     ]

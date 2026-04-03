@@ -53,7 +53,7 @@ Deploy access control enforcement to eliminate CVSS 9.1 vulnerability: **Broken 
 
 **Commands:**
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Dry run first
 ./scripts/deployment/deploy_access_control.sh phase0 --dry-run

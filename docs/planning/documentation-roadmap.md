@@ -193,7 +193,7 @@ Implemented a changelog system tracking all documentation changes:
 ## Related Documentation
 
 - [Architecture Overview](architecture/README.md)
-- [Developer Setup Guide](developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Developer Setup Guide](developer/DEVELOPER_SETUP.md)
 - [API Documentation](api/COMPREHENSIVE_API_DOCUMENTATION.md)
 - [System State](system-state.md)
 

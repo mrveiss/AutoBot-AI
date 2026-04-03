@@ -164,7 +164,7 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 
 **NEVER edit on remote VMs** — no version control, no backup, VMs are ephemeral.
 
-1. Edit in `/home/kali/Desktop/AutoBot/`
+1. Edit in `/opt/autobot`
 2. Deploy via Ansible or sync script
 
 ---
@@ -205,7 +205,7 @@ mcp__memory__create_entities --entities '[{"name": "...", "entityType": "...", "
 ## Documentation
 
 **Key docs:**
-- [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](PHASE_5_DEVELOPER_SETUP.md)
+- [`docs/developer/DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md)
 - [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
 - [`docs/system-state.md`](../system-state.md)
 

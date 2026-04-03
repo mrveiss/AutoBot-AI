@@ -244,7 +244,7 @@ Operators can view health status in multiple places:
 3. **Command Line:**
    ```bash
    # SSH to main machine
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    python -m scripts.check_redis_health
    ```
 
@@ -441,7 +441,7 @@ curl -X POST https://172.16.168.20:8443/api/services/redis/reset-circuit-breaker
 **Audit Logs:**
 ```bash
 # View recent auto-recovery attempts
-tail -f /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log | grep auto_recovery
+tail -f logs/audit/redis_service_management.log | grep auto_recovery
 ```
 
 **Recovery Metrics:**
@@ -688,7 +688,7 @@ Before performing manual operations:
 
 **Primary Log:**
 ```
-/home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log
+logs/audit/redis_service_management.log
 ```
 
 **Systemd Journal:**
@@ -730,7 +730,7 @@ sudo journalctl -u redis-server --since "1 hour ago"
 ```bash
 # Review all operations in last 24 hours
 grep -A 5 "service_operation" \
-  /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+  logs/audit/redis_service_management.log \
   | tail -50
 ```
 
@@ -746,7 +746,7 @@ grep -A 5 "service_operation" \
    ```bash
    # Count operations by type
    grep "service_operation" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.operation' | sort | uniq -c
    ```
 
@@ -754,7 +754,7 @@ grep -A 5 "service_operation" \
    ```bash
    # List all users who performed operations
    grep "service_operation" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.user.email' | sort | uniq -c
    ```
 
@@ -762,14 +762,14 @@ grep -A 5 "service_operation" \
    ```bash
    # Show all failed operations
    grep '"success": false' \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log
+     logs/audit/redis_service_management.log
    ```
 
 4. **Auto-Recovery Summary:**
    ```bash
    # Count auto-recovery attempts
    grep "auto_recovery" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.recovery_level' | sort | uniq -c
    ```
 
@@ -812,7 +812,7 @@ grep -A 5 "service_operation" \
 
 **Configuration:**
 ```yaml
-# /home/kali/Desktop/AutoBot/config/logging.yaml
+# config/logging.yaml
 redis_service_audit:
   file: logs/audit/redis_service_management.log
   max_size: 100MB
@@ -868,7 +868,7 @@ chmod 600 ~/.ssh/autobot_key
 4. **Update AutoBot configuration:**
    ```bash
    # Update key reference in config
-   vim /home/kali/Desktop/AutoBot/config/ssh.yaml
+   vim config/ssh.yaml
    ```
 
 5. **Rotate keys:**
@@ -948,7 +948,7 @@ Only these commands are allowed:
 
 **Backup Script Location:**
 ```bash
-/home/kali/Desktop/AutoBot/scripts/backup_redis.sh
+scripts/backup_redis.sh
 ```
 
 **Backup Content:**
@@ -959,16 +959,16 @@ Only these commands are allowed:
 
 **Backup Location:**
 ```
-/home/kali/Desktop/AutoBot/backups/redis/daily/
+backups/redis/daily/
 ```
 
 **Verification:**
 ```bash
 # Check latest backup
-ls -lh /home/kali/Desktop/AutoBot/backups/redis/daily/ | tail -5
+ls -lh backups/redis/daily/ | tail -5
 
 # Verify backup integrity
-redis-check-rdb /home/kali/Desktop/AutoBot/backups/redis/daily/latest/dump.rdb
+redis-check-rdb backups/redis/daily/latest/dump.rdb
 ```
 
 #### Manual Backup Procedure
@@ -991,7 +991,7 @@ EOF
 # Download backup
 scp -i ~/.ssh/autobot_key \
   autobot@172.16.168.23:/tmp/dump-*.rdb \
-  /home/kali/Desktop/AutoBot/backups/redis/manual/
+  backups/redis/manual/
 ```
 
 ### Recovery Procedures
@@ -1021,7 +1021,7 @@ scp -i ~/.ssh/autobot_key \
    ```bash
    # Copy backup to Redis VM
    scp -i ~/.ssh/autobot_key \
-     /home/kali/Desktop/AutoBot/backups/redis/daily/latest/dump.rdb \
+     backups/redis/daily/latest/dump.rdb \
      autobot@172.16.168.23:/tmp/
 
    # Replace corrupted file
@@ -1109,8 +1109,8 @@ scp -i ~/.ssh/autobot_key \
 4. **Verify all services**
 
 **Refer to:**
-- [Comprehensive Deployment Guide](/home/kali/Desktop/AutoBot/docs/deployment/comprehensive_deployment_guide.md)
-- [Disaster Recovery Plan](/home/kali/Desktop/AutoBot/docs/operations/disaster_recovery.md)
+- [Comprehensive Deployment Guide](docs/deployment/comprehensive_deployment_guide.md)
+- [Disaster Recovery Plan](docs/operations/disaster_recovery.md)
 
 ---
 
@@ -1690,7 +1690,7 @@ maxclients 10000
 
 ### AutoBot Service Management Config
 
-**Location:** `/home/kali/Desktop/AutoBot/config/services/redis_service_management.yaml`
+**Location:** `config/services/redis_service_management.yaml`
 
 **Key Settings:**
 ```yaml

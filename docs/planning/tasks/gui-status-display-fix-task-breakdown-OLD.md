@@ -21,8 +21,8 @@ The GUI displays conflicting status information because:
 - **Benefit:** Single source of truth, correct endpoints, maintainable code
 
 ### Files Affected
-- **Primary:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/App.vue` (lines 467-702)
-- **Reference:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/composables/useSystemStatus.js` (already correct)
+- **Primary:** `autobot-frontend/src/App.vue` (lines 467-702)
+- **Reference:** `autobot-frontend/src/composables/useSystemStatus.js` (already correct)
 
 ### Correct Endpoints (from useSystemStatus)
 - `/api/service-monitor/vms/status` - Infrastructure VM status
@@ -89,7 +89,7 @@ Review and verify the useSystemStatus composable has all functionality needed by
 - API contract documented
 
 **Files to Review:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/composables/useSystemStatus.js`
+- `autobot-frontend/src/composables/useSystemStatus.js`
 
 ---
 
@@ -211,7 +211,7 @@ setup() {
 ```
 
 **Files Modified:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/App.vue`
+- `autobot-frontend/src/App.vue`
 
 ---
 
@@ -312,7 +312,7 @@ Create comprehensive unit tests for the useSystemStatus composable.
 - Edge cases covered (network errors, empty responses, etc.)
 
 **Test File Location:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/tests/unit/composables/useSystemStatus.spec.js`
+- `autobot-frontend/tests/unit/composables/useSystemStatus.spec.js`
 
 **Test Framework:**
 - Vitest (already configured in project)
@@ -348,7 +348,7 @@ Test App.vue integration with useSystemStatus composable.
 - Tests pass locally
 
 **Test File Location:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/tests/integration/AppStatusIntegration.spec.js`
+- `autobot-frontend/tests/integration/AppStatusIntegration.spec.js`
 
 ---
 
@@ -506,8 +506,8 @@ Add/update code comments in modified files.
 - Comments explain "why" not just "what"
 
 **Files to Update:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/App.vue`
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/composables/useSystemStatus.js` (if needed)
+- `autobot-frontend/src/App.vue`
+- `autobot-frontend/src/composables/useSystemStatus.js` (if needed)
 
 ---
 
@@ -535,7 +535,7 @@ Document the correct API endpoints used for system status.
 - Error cases documented
 
 **Documentation Location:**
-- `/home/kali/Desktop/AutoBot/docs/api/service-monitor-endpoints.md` (create if needed)
+- `docs/api/service-monitor-endpoints.md` (create if needed)
 
 ---
 
@@ -562,7 +562,7 @@ Update user-facing documentation if system status display behavior changes.
 - Clear explanations for end users
 
 **Documentation Location:**
-- `/home/kali/Desktop/AutoBot/docs/user-guides/system-status-monitoring.md` (if exists)
+- `docs/user-guides/system-status-monitoring.md` (if exists)
 
 ---
 
@@ -1015,7 +1015,7 @@ Purpose: Monitoring system status, NOT service health
 
 ```bash
 # Run unit tests
-cd /home/kali/Desktop/AutoBot/autobot-vue
+cd autobot-vue
 npm run test:unit
 
 # Run integration tests

@@ -36,7 +36,7 @@ Trigger code vectorization for the codebase.
 **Request Body:**
 ```json
 {
-    "target_path": "/home/kali/Desktop/AutoBot",
+    "target_path": "/opt/autobot",
     "incremental": true,
     "force_reindex": false,
     "languages": ["python", "javascript", "vue"],

@@ -280,7 +280,7 @@
 **Files Processed**: 84 markdown files
 **Total Size**: ~2.1MB of documentation
 **Processing Time**: 45 minutes
-**Archive Location**: `/docs/archives/processed_20250910/`
+**Archive Location**: `/docs/archives/plans/`
 
 ### Processing Results:
 - ✅ **Task Consolidation**: 125+ tasks identified and prioritized

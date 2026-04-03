@@ -390,4 +390,4 @@ All visualization components use a consistent dark theme with the following colo
 
 - [Monitoring API](../api/COMPREHENSIVE_API_DOCUMENTATION.md#monitoring)
 - [WebSocket Integration](../developer/WEBSOCKET_INTEGRATION.md)
-- [Frontend Development](../developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Frontend Development](../developer/DEVELOPER_SETUP.md)

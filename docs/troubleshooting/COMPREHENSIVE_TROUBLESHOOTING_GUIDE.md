@@ -871,10 +871,10 @@ python3 scripts/log_analyzer.py --last=24h --severity=error
 ### External Resources
 
 **Documentation**:
-- Architecture Guide: `docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+- Architecture Guide: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - API Documentation: `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
-- Security Guide: `docs/security/PHASE_5_SECURITY_IMPLEMENTATION.md`
-- Developer Setup: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- Security Guide: `docs/security/SECURITY_FRAMEWORK.md`
+- Developer Setup: `docs/developer/DEVELOPER_SETUP.md`
 
 **Support Channels**:
 - GitHub Issues: For reproducible bugs

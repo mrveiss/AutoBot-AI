@@ -60,7 +60,7 @@ Error patterns: None detected
 ### Service Keys
 
 **Deployed and Verified**:
-- ✅ main-backend: `/home/kali/.autobot/service-keys/main-backend.env`
+- ✅ main-backend: `/etc/autobot/service-keys/main-backend.env`
 - ✅ npu-worker: Deployed to VM 22 (172.16.168.22)
 - ✅ ai-stack: Deployed to VM 24 (172.16.168.24)
 - ✅ browser-service: Deployed to VM 25 (172.16.168.25)
@@ -297,7 +297,7 @@ curl https://172.16.168.20:8443/api/health
 
 ```bash
 # Navigate to AutoBot directory
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Enable enforcement mode
 export SERVICE_AUTH_ENFORCEMENT_MODE=true

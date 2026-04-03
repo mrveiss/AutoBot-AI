@@ -57,7 +57,7 @@ Transition from **logging-only mode** to **active enforcement mode** to close CV
 
 ### Enforcement Middleware Overview
 
-**File:** `/home/kali/Desktop/AutoBot/backend/middleware/service_auth_enforcement.py`
+**File:** `backend/middleware/service_auth_enforcement.py`
 
 **Capabilities:**
 - Comprehensive endpoint categorization (85 exempt + 16 service-only)
@@ -186,7 +186,7 @@ SERVICE_ONLY_PATHS = [
 
 ### Logging Middleware Status
 
-**File:** `/home/kali/Desktop/AutoBot/backend/middleware/service_auth_logging.py`
+**File:** `backend/middleware/service_auth_logging.py`
 **Status:** ✅ DEPLOYED (Day 3 complete)
 **Mode:** Logging only - does NOT block requests
 
@@ -200,7 +200,7 @@ SERVICE_ONLY_PATHS = [
 
 ### ServiceHTTPClient Implementation
 
-**File:** `/home/kali/Desktop/AutoBot/backend/utils/service_client.py`
+**File:** `backend/utils/service_client.py`
 **Status:** ✅ FULLY IMPLEMENTED
 
 **Capabilities:**
@@ -846,7 +846,7 @@ curl http://172.16.168.22:8081/health
 
    ```bash
    # Edit .env file
-   vim /home/kali/Desktop/AutoBot/.env
+   vim .env
 
    # Change:
    SERVICE_AUTH_ENFORCEMENT_MODE=false
@@ -1733,7 +1733,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
    Schedule daily execution:
    ```bash
    # Add to crontab
-   0 8 * * * /home/kali/Desktop/AutoBot/scripts/monitoring/daily-service-auth-report.sh | mail -s "AutoBot Service Auth Daily Report" admin@autobot.local
+   0 8 * * * scripts/monitoring/daily-service-auth-report.sh | mail -s "AutoBot Service Auth Daily Report" admin@autobot.local
    ```
 
 ### Phase 4 Success Criteria
@@ -1770,7 +1770,7 @@ sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false
 # Step 2: Fast backend restart
 pkill -f "uvicorn.*backend"
 sleep 2
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 nohup python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 > logs/backend.log 2>&1 &
 
 # Step 3: Wait for startup
@@ -1795,7 +1795,7 @@ echo "Rollback executed at $(date)" | mail -s "CRITICAL: AutoBot Service Auth Em
 echo "=== Rollback Complete ==="
 ```
 
-**Save as:** `/home/kali/Desktop/AutoBot/scripts/EMERGENCY-ROLLBACK.sh`
+**Save as:** `scripts/EMERGENCY-ROLLBACK.sh`
 **Permissions:** `chmod +x scripts/EMERGENCY-ROLLBACK.sh`
 
 **Execution:** `bash scripts/EMERGENCY-ROLLBACK.sh`
@@ -2292,7 +2292,7 @@ echo "=== Validation Complete ==="
 
 **During Rollout:**
 
-1. Update `/home/kali/Desktop/AutoBot/docs/security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md` (this document)
+1. Update `docs/security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md` (this document)
 2. Update `docs/deployment/SERVICE_AUTHENTICATION.md` with final configuration
 3. Update `docs/api/SERVICE_TO_SERVICE_API.md` with authentication requirements
 4. Update `docs/troubleshooting/SERVICE_AUTH_ISSUES.md` with common problems
@@ -2302,7 +2302,7 @@ echo "=== Validation Complete ==="
 
 1. Create `docs/operations/SERVICE_AUTH_RUNBOOK.md` for daily operations
 2. Create `docs/security/SERVICE_AUTH_INCIDENT_RESPONSE.md` for incident handling
-3. Update `docs/developer/PHASE_5_DEVELOPER_SETUP.md` with service auth setup
+3. Update `docs/developer/DEVELOPER_SETUP.md` with service auth setup
 4. Document lessons learned in `docs/retrospectives/SERVICE_AUTH_ROLLOUT.md`
 
 ---

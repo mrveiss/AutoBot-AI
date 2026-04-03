@@ -34,7 +34,7 @@ This is an absolute mandate with zero exceptions:
 
 ### Development Workflow
 
-1. **Edit locally** in `/home/kali/Desktop/AutoBot/autobot-frontend/`
+1. **Edit locally** in `autobot-frontend/`
 2. **Sync to VM1** using `./sync-frontend.sh` or sync scripts
 3. **VM1 serves** the frontend (dev or production mode)
 4. **Access** via `http://172.16.168.21:5173`

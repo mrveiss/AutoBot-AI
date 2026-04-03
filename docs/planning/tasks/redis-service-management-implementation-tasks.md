@@ -2088,7 +2088,7 @@ async def load_test_status_endpoint(duration_seconds: int = 60):
 
     - name: Sync frontend to VM1
       synchronize:
-        src: /home/kali/Desktop/AutoBot/autobot-frontend/
+        src: autobot-frontend/
         dest: /home/autobot/autobot-frontend/
       when: inventory_hostname == 'frontend'
 
@@ -2347,7 +2347,7 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 ## Implementation Notes
 
 **Development Environment:**
-- Local development on `/home/kali/Desktop/AutoBot/`
+- Local development on `/opt/autobot`
 - Backend testing against Redis VM (172.16.168.23)
 - Frontend testing on VM1 (172.16.168.21:5173)
 - SSH key: `~/.ssh/autobot_key`

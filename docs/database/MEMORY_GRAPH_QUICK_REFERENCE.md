@@ -295,13 +295,13 @@ redis-cli -h 172.16.168.23 FT.INFO memory_graph_entity_idx
 
 ```bash
 # Recent logs
-tail -50 /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+tail -50 logs/database/memory_graph_init.log
 
 # Follow logs
-tail -f /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+tail -f logs/database/memory_graph_init.log
 
 # Search for errors
-grep -i error /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+grep -i error logs/database/memory_graph_init.log
 ```
 
 ### Rebuild Indexes
@@ -382,10 +382,10 @@ python scripts/utilities/init_memory_graph_redis.py
 
 ## 📚 Quick Links
 
-- **Full Guide**: `/home/kali/Desktop/AutoBot/docs/database/MEMORY_GRAPH_INITIALIZATION_GUIDE.md`
-- **Specification**: `/home/kali/Desktop/AutoBot/docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md`
-- **Script**: `/home/kali/Desktop/AutoBot/scripts/utilities/init_memory_graph_redis.py`
-- **Logs**: `/home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log`
+- **Full Guide**: `docs/database/MEMORY_GRAPH_INITIALIZATION_GUIDE.md`
+- **Specification**: `docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md`
+- **Script**: `scripts/utilities/init_memory_graph_redis.py`
+- **Logs**: `logs/database/memory_graph_init.log`
 
 ---
 

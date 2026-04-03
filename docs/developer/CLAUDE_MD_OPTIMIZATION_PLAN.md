@@ -94,7 +94,7 @@ client = redis.Redis(host="...", port=...)
 
 **🚨 MANDATORY: Local-Only Development**
 - ❌ **NEVER edit code on remote VMs (172.16.168.21-25)**
-- ✅ **Edit locally** in `/home/kali/Desktop/AutoBot/`
+- ✅ **Edit locally** in `/opt/autobot`
 - ✅ **Sync immediately** using sync scripts
 
 **Why**: VMs are ephemeral - remote edits = PERMANENT WORK LOSS

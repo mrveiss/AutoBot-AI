@@ -246,9 +246,9 @@ pytest tests/security/ -v --strict-markers
 
 # Allowed directories whitelist
 ALLOWED_DIRECTORIES = [
-    "/home/kali/Desktop/AutoBot/",
+    "",
     "/tmp/autobot/",
-    "/home/kali/Desktop/",
+    "$HOME/Desktop/",
 ]
 
 def is_path_allowed(path: str) -> bool:

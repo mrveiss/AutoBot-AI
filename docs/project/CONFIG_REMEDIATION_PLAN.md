@@ -70,7 +70,7 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 ### Task 1.1: Fix Knowledge Base Database Fallback
 
 **Priority:** CRITICAL - P0 (HIGHEST)
-**File:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+**File:** `src/knowledge_base_v2.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
@@ -107,7 +107,7 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 ### Task 1.2: Fix Celery Hardcoded Redis URLs
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/backend/celery_app.py`
+**File:** `backend/celery_app.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -166,7 +166,7 @@ celery_results: 2
 ### Task 1.3: Fix Chat Workflow Manager Ollama Endpoints
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py`
+**File:** `src/chat_workflow_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -219,7 +219,7 @@ ollama_endpoint = config.get(
 ### Task 1.4: Fix UnifiedConfig Hardcoded Default IPs
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config.py`
+**File:** `src/unified_config.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 3 hours
 
@@ -267,7 +267,7 @@ ollama_endpoint = config.get(
 ### Task 1.5: Fix Backend App Factory CORS Origins
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/backend/app_factory.py`
+**File:** `backend/app_factory.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -335,7 +335,7 @@ security:
 ### Task 1.6: Fix Chat History Manager Redis Host
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/chat_history_manager.py`
+**File:** `src/chat_history_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
@@ -379,7 +379,7 @@ self.redis_host = redis_host or redis_config.get(
 ### Task 1.7: Fix UnifiedConfig Manager Ollama Endpoint
 
 **Priority:** CRITICAL - P1
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py`
+**File:** `src/unified_config_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
@@ -599,7 +599,7 @@ redis:
 ### Task Group 2.4: Update NetworkConstants to Use Config
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/src/constants/network_constants.py`
+**File:** `src/constants/network_constants.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 4 hours
 
@@ -638,7 +638,7 @@ FRONTEND_VM_IP: str = "172.16.168.21"
 ### Task Group 2.5: Fix Service Export Script
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/scripts/export_service_keys.py`
+**File:** `scripts/export_service_keys.py`
 **Agent:** `devops-engineer`
 **Estimated Time:** 2 hours
 
@@ -666,7 +666,7 @@ FRONTEND_VM_IP: str = "172.16.168.21"
 ### Task Group 2.6: Fix Monitoring Service Endpoints
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/monitoring/performance_monitor.py`
+**File:** `monitoring/performance_monitor.py`
 **Agent:** `devops-engineer`
 **Estimated Time:** 3 hours
 
@@ -901,7 +901,7 @@ timeouts:
 ### Task Group 3.5: Fix API Hardcoded Ports
 
 **Priority:** MEDIUM - P3
-**File:** `/home/kali/Desktop/AutoBot/autobot-backend/api/playwright.py`
+**File:** `autobot-backend/api/playwright.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 

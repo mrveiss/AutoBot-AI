@@ -29,14 +29,14 @@ docs/
 │   ├── WEBSOCKET_INTEGRATION_GUIDE.md
 │   └── comprehensive_api_documentation.md
 ├── architecture/ (10 files)
-│   ├── PHASE_5_DISTRIBUTED_ARCHITECTURE.md (6-VM system design)
+│   ├── DISTRIBUTED_ARCHITECTURE.md (6-VM system design)
 │   ├── AGENT_SYSTEM_ARCHITECTURE.md
 │   ├── COMMUNICATION_ARCHITECTURE.md
 │   ├── FRONTEND_ARCHITECTURE_ASSESSMENT.md
 │   ├── TERMINAL_ARCHITECTURE_DISTRIBUTED.md
 │   └── [5 more architecture docs]
 ├── developer/ (5 files)
-│   ├── PHASE_5_DEVELOPER_SETUP.md (25-minute setup guide)
+│   ├── DEVELOPER_SETUP.md (25-minute setup guide)
 │   ├── 01-architecture.md
 │   ├── 02-process-flow.md
 │   ├── 03-api-reference.md
@@ -47,7 +47,7 @@ docs/
 │   ├── SYSTEM_OPTIMIZATION_REPORT.md
 │   └── [5 more feature docs]
 ├── security/ (5 files)
-│   ├── PHASE_5_SECURITY_IMPLEMENTATION.md
+│   ├── SECURITY_FRAMEWORK.md
 │   ├── SECURITY_AGENTS_SUMMARY.md
 │   └── [3 more security docs]
 ├── troubleshooting/ (3 files)
@@ -105,12 +105,12 @@ Root Level:
    - Request/response examples
    - Authentication and rate limiting
 
-4. **docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md**
+4. **docs/architecture/DISTRIBUTED_ARCHITECTURE.md**
    - 6-VM distributed system design
    - Hardware optimization rationale
    - Network configuration and ports
 
-5. **docs/developer/PHASE_5_DEVELOPER_SETUP.md**
+5. **docs/developer/DEVELOPER_SETUP.md**
    - 25-minute automated setup process
    - Prerequisites and troubleshooting
    - Development workflow
@@ -187,7 +187,7 @@ Root Level:
   "tags": ["api", "endpoints", "chat", "multimodal", "websockets"],
   "relevance_keywords": ["deploy", "setup", "api", "error", "troubleshoot", "configure"],
   "status": "production_ready|in_progress|archived|deprecated",
-  "related_docs": ["docs/developer/PHASE_5_DEVELOPER_SETUP.md"],
+  "related_docs": ["docs/developer/DEVELOPER_SETUP.md"],
   "vm_component": "main|frontend|npu|redis|ai-stack|browser|all",
   "source": "autobot_documentation"
 }
@@ -547,7 +547,7 @@ python tools/index_documentation.py --full --dry-run
 ```
 Query: "How do I deploy AutoBot?"
 Expected Results:
-- docs/developer/PHASE_5_DEVELOPER_SETUP.md (primary)
+- docs/developer/DEVELOPER_SETUP.md (primary)
 - docs/deployment/HYBRID_DEPLOYMENT_GUIDE.md
 - CLAUDE.md sections on standardized procedures
 Success Criteria: Top result is developer setup guide with 25-minute setup process
@@ -568,7 +568,7 @@ Query: "How to fix Redis connection issues?"
 Expected Results:
 - docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md
 - docs/system-state.md (if recent Redis fixes documented)
-- docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md (Redis configuration)
+- docs/architecture/DISTRIBUTED_ARCHITECTURE.md (Redis configuration)
 Success Criteria: Returns troubleshooting steps and configuration details
 ```
 
@@ -585,7 +585,7 @@ Success Criteria: Returns mandatory file placement rules and directory structure
 ```
 Query: "Explain the distributed architecture and VM setup"
 Expected Results:
-- docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md (primary)
+- docs/architecture/DISTRIBUTED_ARCHITECTURE.md (primary)
 - 6-VM system design rationale
 - Component distribution and network topology
 Success Criteria: Returns architecture overview with VM assignments and justification
@@ -834,8 +834,8 @@ async def reindex_file(file_path: str):
 1. CLAUDE.md (Root) - 695 lines
 2. docs/system-state.md
 3. docs/api/COMPREHENSIVE_API_DOCUMENTATION.md
-4. docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md
-5. docs/developer/PHASE_5_DEVELOPER_SETUP.md
+4. docs/architecture/DISTRIBUTED_ARCHITECTURE.md
+5. docs/developer/DEVELOPER_SETUP.md
 6. docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md
 7. docs/features/MULTIMODAL_AI_INTEGRATION.md
 
@@ -876,7 +876,7 @@ async def reindex_file(file_path: str):
 
 ### Tier 3 Files (35+ documents - 3-4 hours)
 **Security (5 files)**:
-- PHASE_5_SECURITY_IMPLEMENTATION.md
+- SECURITY_FRAMEWORK.md
 - SECURITY_AGENTS_SUMMARY.md
 - SECURITY_IMPLEMENTATION_SUMMARY.md
 - SESSION_TAKEOVER_DEMO.md
@@ -928,9 +928,9 @@ async def reindex_file(file_path: str):
 - requirements-local.txt
 
 ### Tier 4 Files (50+ documents - optional)
-**Archives**: docs/archives/processed_20250910/* (extensive historical documentation)
-**Reports**: docs/reports/finished/* (completed reports and tasks)
-**Changelog**: docs/changelog/* (change history)
+**Archives**: `docs/archives/plans/` (historical implementation plans)
+**Reports**: `docs/reports/finished/` (completed reports and tasks)
+**Changelog**: `docs/changelog/` (change history)
 
 ---
 

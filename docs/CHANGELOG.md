@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Developer Documentation**
-  - [PHASE_5_DEVELOPER_SETUP.md](developer/PHASE_5_DEVELOPER_SETUP.md): Complete setup guide
+  - [DEVELOPER_SETUP.md](developer/DEVELOPER_SETUP.md): Complete setup guide
   - [HARDCODING_PREVENTION.md](developer/HARDCODING_PREVENTION.md): No hardcoded values policy
   - [REDIS_CLIENT_USAGE.md](developer/REDIS_CLIENT_USAGE.md): Redis client patterns
   - [UTF8_ENFORCEMENT.md](developer/UTF8_ENFORCEMENT.md): UTF-8 encoding requirements
