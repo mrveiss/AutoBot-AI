@@ -25,7 +25,7 @@ cssclasses:
 | [Browser VNC Quick Start](QUICK_START_BROWSER_VNC.md) | VNC desktop access |
 | [System State](system-state.md) | Current system status |
 | [Glossary](GLOSSARY.md) | Terminology reference |
-| [Changelog](CHANGELOG.md) | Version history |
+| [Changelog](../changelog/_index.md) | Per-version release notes and unreleased fragments |
 | [Dependencies](DEPENDENCIES.md) | Dependency reference |
 | [Roadmap 2025](ROADMAP_2025.md) | Product roadmap |
 

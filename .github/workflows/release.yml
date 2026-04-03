@@ -2,6 +2,11 @@
 # Automatically creates releases on merge to main using git-cliff
 # Analyzes conventional commits to determine version bump and generate changelog
 #
+# Changelog strategy (A+B):
+#   A — git-cliff writes a per-version file: changelog/{version}.md
+#   B — changelog/unreleased/*.md fragments are compiled into that file first
+#       (human-written highlights precede the git-cliff commit log)
+#
 # Issue: #1296
 
 name: Release
@@ -51,9 +56,9 @@ jobs:
             echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate release notes
+      - name: Generate release notes (git-cliff)
         if: steps.check.outputs.release_needed == 'true'
-        id: changelog
+        id: cliff_notes
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
@@ -62,7 +67,17 @@ jobs:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
 
-      - name: Update CHANGELOG.md
+      - name: Compile changelog fragments + write per-version file (A+B)
+        if: steps.check.outputs.release_needed == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
+          python3 scripts/compile_changelog.py \
+            --version "${VERSION}" \
+            --cliff-notes RELEASE_NOTES.md
+          # Use the compiled per-version file as the GitHub Release body
+          cp "changelog/${VERSION}.md" RELEASE_NOTES.md
+
+      - name: Update CHANGELOG.md (full history index)
         if: steps.check.outputs.release_needed == 'true'
         uses: orhun/git-cliff-action@v4
         with:
@@ -72,15 +87,15 @@ jobs:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
 
-      - name: Commit changelog and tag
+      - name: Commit changelog files and tag
         if: steps.check.outputs.release_needed == 'true'
         run: |
           VERSION="${{ steps.check.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
+          git add CHANGELOG.md "changelog/${VERSION}.md" changelog/
           git diff --staged --quiet && echo "No changelog changes" || \
-            git commit -m "chore(release): update changelog for ${VERSION}"
+            git commit -m "chore(release): changelog and fragments for ${VERSION}"
           git tag -a "${VERSION}" -m "Release ${VERSION}"
           git push origin main --follow-tags
 
