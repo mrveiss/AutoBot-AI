@@ -93,6 +93,8 @@ const container = ref<HTMLElement | null>(null)
 // Issue #704 pattern: same rationale as KnowledgeGraph.vue shallowRef<Core>
 // Issue #3363: typed with ForceGraph3DInstance instead of any
 const graph = shallowRef<ForceGraph3DInstance | null>(null)
+// Issue #3370: ResizeObserver tracks container size changes; disconnected in disposeGraph()
+let resizeObserver: ResizeObserver | null = null
 
 const isEmpty = computed(() => props.entities.length === 0)
 
@@ -191,6 +193,16 @@ function initGraph(): void {
       emit('entity-selected', null)
     })
 
+  // Issue #3370: update canvas dimensions whenever the container resizes
+  resizeObserver = new ResizeObserver((entries) => {
+    const rect = entries[0]?.contentRect
+    if (graph.value && rect) {
+      graph.value.width(Math.floor(rect.width)).height(Math.floor(rect.height))
+      logger.debug('3D graph resized', { width: Math.floor(rect.width), height: Math.floor(rect.height) })
+    }
+  })
+  resizeObserver.observe(container.value)
+
   logger.debug('3D graph initialized', { nodes: props.entities.length, links: props.edges.length })
 }
 
@@ -199,6 +211,12 @@ function initGraph(): void {
  * Issue #3363: renderer.dispose() alone does not release geometry/material buffers.
  */
 function disposeGraph(): void {
+  // Issue #3370: disconnect before tearing down the graph to avoid stale callbacks
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+
   if (!graph.value) return
 
   graph.value.pauseAnimation()
