@@ -17,6 +17,7 @@
           {{ $t('knowledge.graph.refresh') }}
         </button>
         <button
+          v-if="viewMode === '2d'"
           @click="toggleLayout"
           class="action-btn"
           :title="$t('knowledge.graph.toggleLayout')"
@@ -25,12 +26,22 @@
           {{ layoutMode === 'force' ? $t('knowledge.graph.grid') : $t('knowledge.graph.force') }}
         </button>
         <button
+          v-if="viewMode === '2d'"
           @click="fitGraph"
           class="action-btn"
           :title="$t('knowledge.graph.fitGraphToView')"
         >
           <i class="fas fa-expand"></i>
           {{ $t('knowledge.graph.fit') }}
+        </button>
+        <button
+          @click="toggleViewMode"
+          class="action-btn view-mode-btn"
+          :class="{ active: viewMode === '3d' }"
+          :title="viewMode === '2d' ? 'Switch to 3D view' : 'Switch to 2D view'"
+        >
+          <i :class="viewMode === '2d' ? 'fas fa-cube' : 'fas fa-project-diagram'"></i>
+          {{ viewMode === '2d' ? '3D' : '2D' }}
         </button>
         <button
           @click="showCleanupPanel = !showCleanupPanel"
@@ -139,11 +150,11 @@
       </button>
     </div>
 
-    <!-- Cytoscape Graph Container -->
-    <div v-else class="graph-container">
+    <!-- 2D Cytoscape Graph Container -->
+    <div v-else-if="viewMode === '2d'" class="graph-container">
       <div ref="cytoscapeContainer" class="cytoscape-container"></div>
 
-      <!-- Zoom Controls -->
+      <!-- Zoom Controls (2D only) -->
       <div class="zoom-controls">
         <button @click="zoomIn" :title="$t('knowledge.graph.zoomIn')">
           <i class="fas fa-plus"></i>
@@ -160,6 +171,15 @@
           <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
         </button>
       </div>
+    </div>
+
+    <!-- 3D Force Graph Container (Issue #3330) -->
+    <div v-else class="graph-container">
+      <KnowledgeGraph3D
+        :entities="filteredEntities"
+        :edges="graphEdges"
+        @entity-selected="(e) => { selectedEntity = e; emit('entity-selected', e) }"
+      />
     </div>
 
     <!-- Entity Details Panel -->
@@ -354,6 +374,7 @@ import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
+import KnowledgeGraph3D from '@/components/knowledge/KnowledgeGraph3D.vue'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -424,6 +445,7 @@ const showCreateModal = ref(false)
 const showCleanupPanel = ref(false)
 const zoomLevel = ref(1)
 const isFullscreen = ref(false)
+const viewMode = ref<'2d' | '3d'>('2d')
 
 // New entity form
 const newEntity = ref<NewEntity>({
@@ -739,7 +761,7 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
  * Rebuilds nodes and edges, then runs the layout algorithm
  */
 function updateCytoscapeElements(): void {
-  if (!cy.value) return
+  if (viewMode.value !== '2d' || !cy.value) return
 
   const elements: cytoscape.ElementDefinition[] = []
 
@@ -878,8 +900,8 @@ async function refreshGraph(): Promise<void> {
     // Wait for DOM to render the graph container (it's conditionally rendered)
     await nextTick()
 
-    // Initialize Cytoscape if not already done (container now exists)
-    if (!cy.value && cytoscapeContainer.value) {
+    // Initialize Cytoscape if not already done (2D mode only, container now exists)
+    if (viewMode.value === '2d' && !cy.value && cytoscapeContainer.value) {
       initCytoscape()
     }
 
@@ -1128,11 +1150,27 @@ function filterByType(type: string): void {
 }
 
 /**
- * Toggles between force-directed and grid layout modes
+ * Toggles between force-directed and grid layout modes (2D only)
  */
 function toggleLayout(): void {
   layoutMode.value = layoutMode.value === 'force' ? 'grid' : 'force'
   runLayout()
+}
+
+/**
+ * Toggles between 2D (Cytoscape) and 3D (Three.js) render modes
+ * Issue #3330: 3D force-graph view toggle
+ */
+function toggleViewMode(): void {
+  viewMode.value = viewMode.value === '2d' ? '3d' : '2d'
+  if (viewMode.value === '2d') {
+    nextTick(() => {
+      if (!cy.value && cytoscapeContainer.value) {
+        initCytoscape()
+      }
+      updateCytoscapeElements()
+    })
+  }
 }
 
 /**
@@ -1286,6 +1324,20 @@ watch(layoutMode, () => {
 .action-btn.refresh {
   border-color: var(--color-primary);
   color: var(--color-primary);
+}
+
+.action-btn.view-mode-btn {
+  border-color: var(--chart-purple, #8b5cf6);
+  color: var(--chart-purple, #8b5cf6);
+}
+
+.action-btn.view-mode-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--chart-purple, #8b5cf6) 15%, transparent);
+}
+
+.action-btn.view-mode-btn.active {
+  background: var(--chart-purple, #8b5cf6);
+  color: white;
 }
 
 .action-btn.cleanup {
