@@ -172,10 +172,11 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         self, request: str, context: Optional[Dict[str, Any]]
     ) -> List[Dict[str, str]]:
         """Build messages for command generation (Issue #398: extracted)."""
-        messages = [{"role": "system", "content": self._get_system_commands_prompt()}]
+        system_prompt = self._get_system_commands_prompt()
         if context:
             context_str = self._build_context_string(context)
-            messages.append({"role": "system", "content": f"Context: {context_str}"})
+            system_prompt = f"{system_prompt}\n\nContext: {context_str}"
+        messages = [{"role": "system", "content": system_prompt}]
         messages.append({"role": "user", "content": request})
         return messages
 
