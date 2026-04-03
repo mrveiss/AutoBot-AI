@@ -250,7 +250,7 @@ onMounted(() => {
               type="button"
               :class="[
                 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                settings.memory.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
+                settings.memory.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
               ]"
               role="switch"
               :aria-checked="settings.memory.enabled"
@@ -353,7 +353,7 @@ onMounted(() => {
                 type="button"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.parallelExecution ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
+                  settings.execution.parallelExecution ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
                 ]"
                 role="switch"
                 :aria-checked="settings.execution.parallelExecution"
@@ -376,7 +376,7 @@ onMounted(() => {
                 type="button"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.priorityQueue ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
+                  settings.execution.priorityQueue ? 'bg-autobot-primary' : 'bg-autobot-bg-tertiary'
                 ]"
                 role="switch"
                 :aria-checked="settings.execution.priorityQueue"
