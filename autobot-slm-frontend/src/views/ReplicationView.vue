@@ -462,7 +462,7 @@ function getNodeHostname(nodeId: string): string {
     <!-- Create Dialog -->
     <div
       v-if="showCreateDialog"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showCreateDialog = false"
     >
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
@@ -566,7 +566,7 @@ function getNodeHostname(nodeId: string): string {
           v-if="showDetailsModal && selectedReplication"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDetails"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeDetails"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div class="flex items-center gap-3">

@@ -345,7 +345,7 @@ async function handleDelete(): Promise<void> {
         class="fixed inset-0 z-50 flex items-center justify-center"
       >
         <div
-          class="fixed inset-0 bg-black bg-opacity-50"
+          class="fixed inset-0 bg-black/50"
           @click="showCreateModal = false; showEditModal = false"
         ></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
@@ -481,7 +481,7 @@ async function handleDelete(): Promise<void> {
       leave-to-class="opacity-0"
     >
       <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black bg-opacity-50" @click="showDeleteConfirm = false"></div>
+        <div class="fixed inset-0 bg-black/50" @click="showDeleteConfirm = false"></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
           <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Alert Rule</h3>
           <p class="text-sm text-gray-600 mb-4">

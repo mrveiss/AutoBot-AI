@@ -1152,7 +1152,7 @@ function getNodeHostname(nodeId: string): string {
     <!-- Standard Deployment Wizard Dialog -->
     <div
       v-if="showWizard"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showWizard = false"
     >
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1332,7 +1332,7 @@ function getNodeHostname(nodeId: string): string {
     <!-- Blue-Green Create Dialog -->
     <div
       v-if="showBgCreateDialog"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showBgCreateDialog = false"
     >
       <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -1509,7 +1509,7 @@ function getNodeHostname(nodeId: string): string {
           v-if="showDetailsModal && selectedDeployment"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDetails"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeDetails"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div class="flex items-center gap-3">
@@ -1613,7 +1613,7 @@ function getNodeHostname(nodeId: string): string {
           v-if="showBgDetailsModal && selectedBgDeployment"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeBgDetails"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeBgDetails"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <div class="flex items-center gap-3">

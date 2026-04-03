@@ -632,7 +632,7 @@ function getNodeName(nodeId: string | null): string {
           v-if="showScheduleDialog"
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeScheduleDialog"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeScheduleDialog"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-semibold text-gray-900">

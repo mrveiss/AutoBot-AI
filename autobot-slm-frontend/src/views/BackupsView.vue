@@ -428,7 +428,7 @@ function getNodeHostname(nodeId: string): string {
     <!-- Create Backup Dialog -->
     <div
       v-if="showCreateBackupDialog"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showCreateBackupDialog = false"
     >
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -485,7 +485,7 @@ function getNodeHostname(nodeId: string): string {
     <!-- Create Replication Dialog -->
     <div
       v-if="showCreateReplicationDialog"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       @click.self="showCreateReplicationDialog = false"
     >
       <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
