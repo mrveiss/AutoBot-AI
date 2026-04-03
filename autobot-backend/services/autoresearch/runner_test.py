@@ -626,3 +626,367 @@ class TestIsRunning:
         runner = _make_runner()
         runner._running = True
         assert runner.is_running is True
+
+
+# ---------------------------------------------------------------------------
+# Docker isolation tests (issue #3223)
+# ---------------------------------------------------------------------------
+
+
+def _make_docker_config(**overrides) -> AutoResearchConfig:
+    """Build a docker-enabled test config."""
+    defaults = {
+        "default_training_timeout": 10,
+        "improvement_threshold": 0.01,
+        "docker_enabled": True,
+        "docker_image": "ghcr.io/mrveiss/autobot-autoresearch:test",
+        "docker_memory_limit": "2g",
+        "docker_cpu_limit": 1.0,
+        "docker_timeout": 30,
+    }
+    defaults.update(overrides)
+    return AutoResearchConfig(**defaults)
+
+
+class TestDockerCommand:
+    """Tests for ExperimentRunner._build_docker_command."""
+
+    def test_docker_run_flags_present(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        assert cmd[0] == "docker"
+        assert "run" in cmd
+        assert "--rm" in cmd
+        assert "--network" in cmd
+        assert "none" in cmd
+
+    def test_memory_and_cpu_flags(self):
+        config = _make_docker_config(docker_memory_limit="3g", docker_cpu_limit=1.5)
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        assert "--memory" in cmd
+        mem_idx = cmd.index("--memory")
+        assert cmd[mem_idx + 1] == "3g"
+
+        assert "--cpus" in cmd
+        cpu_idx = cmd.index("--cpus")
+        assert cmd[cpu_idx + 1] == "1.5"
+
+    def test_image_at_end_of_command(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        assert cmd[-1] == config.docker_image
+
+    def test_env_flags_contain_hyperparams(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        hp = HyperParams(max_steps=1000, learning_rate=0.001)
+        exp = _make_experiment(hyperparams=hp)
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        env_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "--env"]
+        assert any("AUTOBOT_EXP_MAX_STEPS=1000" in v for v in env_values)
+        assert any("AUTOBOT_EXP_LEARNING_RATE=0.001" in v for v in env_values)
+
+    def test_extra_params_in_env_flags(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        hp = HyperParams(extra={"seed": 42})
+        exp = _make_experiment(hyperparams=hp)
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        env_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "--env"]
+        assert any("AUTOBOT_EXP_EXTRA_SEED=42" in v for v in env_values)
+
+    def test_volume_mounts_present(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        volume_args = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-v"]
+        assert any("/experiment:ro" in v for v in volume_args)
+        assert any("/output" in v for v in volume_args)
+
+
+class TestExecuteInDocker:
+    """Tests for ExperimentRunner._execute_in_docker with mocked subprocess."""
+
+    @pytest.mark.asyncio
+    async def test_successful_docker_run_reads_output(self):
+        import json
+        import os
+        import tempfile
+
+        config = _make_docker_config()
+        expected_result = ExperimentResult(val_bpb=4.8, steps_completed=1000)
+        parser = _make_parser(result=expected_result)
+        runner = _make_runner(config=config, parser=parser)
+        exp = _make_experiment()
+
+        output_payload = json.dumps(
+            {"returncode": 0, "stdout": "step 1000 val_bpb 4.8\n", "stderr": ""}
+        ).encode("utf-8")
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(output_payload, None))
+        mock_process.returncode = 0
+
+        # Capture the output directory created by _execute_in_docker so we
+        # can pre-populate result.json before the method reads it.
+        original_tmp = tempfile.TemporaryDirectory
+
+        class _CapturingTmpDir:
+            """Context manager that writes result.json on __enter__."""
+
+            def __init__(self, *args, **kwargs):
+                self._real = original_tmp(*args, **kwargs)
+
+            def __enter__(self):
+                path = self._real.__enter__()
+                result_file = os.path.join(path, "result.json")
+                with open(result_file, "w", encoding="utf-8") as fh:
+                    json.dump(
+                        {
+                            "returncode": 0,
+                            "stdout": "step 1000 val_bpb 4.8\n",
+                            "stderr": "",
+                        },
+                        fh,
+                    )
+                return path
+
+            def __exit__(self, *args):
+                return self._real.__exit__(*args)
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            with patch(
+                "services.autoresearch.runner.tempfile.TemporaryDirectory",
+                _CapturingTmpDir,
+            ):
+                result = await runner._execute_in_docker(exp)
+
+        assert result.val_bpb == 4.8
+        parser.parse.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_docker_uses_create_subprocess_exec(self):
+        """docker_enabled=True must call asyncio.create_subprocess_exec with 'docker'."""
+        import json
+        import os
+        import tempfile
+
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        original_tmp = tempfile.TemporaryDirectory
+
+        class _PrePopTmpDir:
+            def __init__(self, *args, **kwargs):
+                self._real = original_tmp(*args, **kwargs)
+
+            def __enter__(self):
+                path = self._real.__enter__()
+                with open(
+                    os.path.join(path, "result.json"), "w", encoding="utf-8"
+                ) as fh:
+                    json.dump(
+                        {"returncode": 0, "stdout": "", "stderr": ""}, fh
+                    )
+                return path
+
+            def __exit__(self, *args):
+                return self._real.__exit__(*args)
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(b"", None))
+        mock_process.returncode = 0
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_process
+        ) as mock_exec:
+            with patch(
+                "services.autoresearch.runner.tempfile.TemporaryDirectory",
+                _PrePopTmpDir,
+            ):
+                await runner._execute_in_docker(exp)
+
+        first_call_args = mock_exec.call_args_list[0][0]
+        assert first_call_args[0] == "docker"
+        assert "run" in first_call_args
+
+    @pytest.mark.asyncio
+    async def test_docker_timeout_returns_error_result(self):
+        config = _make_docker_config(docker_timeout=1)
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_process.returncode = None
+        mock_process.pid = 99999
+        mock_process.kill = MagicMock()
+        mock_process.wait = AsyncMock()
+
+        # docker kill subprocess mock
+        mock_kill_process = AsyncMock()
+        mock_kill_process.returncode = 0
+
+        import tempfile
+        import os
+
+        original_tmp = tempfile.TemporaryDirectory
+
+        class _EmptyTmpDir:
+            def __init__(self, *args, **kwargs):
+                self._real = original_tmp(*args, **kwargs)
+
+            def __enter__(self):
+                return self._real.__enter__()
+
+            def __exit__(self, *args):
+                return self._real.__exit__(*args)
+
+        call_count = 0
+
+        async def _side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock_process
+            return mock_kill_process
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_side_effect):
+            with patch(
+                "services.autoresearch.runner.tempfile.TemporaryDirectory",
+                _EmptyTmpDir,
+            ):
+                result = await runner._execute_in_docker(exp)
+
+        assert not result.success
+        assert "timed out" in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_docker_nonzero_exit_returns_error(self):
+        import json
+        import os
+        import tempfile
+
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        original_tmp = tempfile.TemporaryDirectory
+
+        class _PrePopTmpDir:
+            def __init__(self, *args, **kwargs):
+                self._real = original_tmp(*args, **kwargs)
+
+            def __enter__(self):
+                path = self._real.__enter__()
+                with open(
+                    os.path.join(path, "result.json"), "w", encoding="utf-8"
+                ) as fh:
+                    json.dump(
+                        {"returncode": 1, "stdout": "err\n", "stderr": "crash"},
+                        fh,
+                    )
+                return path
+
+            def __exit__(self, *args):
+                return self._real.__exit__(*args)
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(b"", None))
+        mock_process.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            with patch(
+                "services.autoresearch.runner.tempfile.TemporaryDirectory",
+                _PrePopTmpDir,
+            ):
+                result = await runner._execute_in_docker(exp)
+
+        assert not result.success
+        assert "exited with code 1" in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_missing_result_json_returns_error(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(b"", None))
+        mock_process.returncode = 0
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            result = await runner._execute_in_docker(exp)
+
+        assert not result.success
+        assert "result.json" in result.error_message
+
+
+class TestDockerFallback:
+    """Verify docker_enabled=False uses subprocess, not Docker."""
+
+    @pytest.mark.asyncio
+    async def test_subprocess_path_when_docker_disabled(self):
+        config = _make_config(docker_enabled=False)
+        expected_result = ExperimentResult(val_bpb=5.5, steps_completed=5000)
+        parser = _make_parser(result=expected_result)
+        runner = _make_runner(config=config, parser=parser)
+        exp = _make_experiment()
+
+        mock_process = AsyncMock()
+        mock_process.communicate = AsyncMock(return_value=(b"step 5000", None))
+        mock_process.returncode = 0
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_process
+        ) as mock_exec:
+            result = await runner._execute_training(exp)
+
+        # Must not call docker
+        first_call_args = mock_exec.call_args_list[0][0]
+        assert first_call_args[0] != "docker"
+        assert result.val_bpb == 5.5

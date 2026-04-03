@@ -72,6 +72,36 @@ class AutoResearchConfig:
         )
     )
 
+    # Docker isolation (issue #3223)
+    # Set AUTOBOT_AUTORESEARCH_DOCKER_ENABLED=true via Ansible/env to activate.
+    docker_enabled: bool = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_AUTORESEARCH_DOCKER_ENABLED", "false"
+        ).lower()
+        == "true"
+    )
+    docker_image: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_AUTORESEARCH_DOCKER_IMAGE",
+            "ghcr.io/mrveiss/autobot-autoresearch:latest",
+        )
+    )
+    docker_memory_limit: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_AUTORESEARCH_DOCKER_MEMORY", "4g"
+        )
+    )
+    docker_cpu_limit: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_CPUS", "2.0")
+        )
+    )
+    docker_timeout: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT", "300")
+        )
+    )
+
     # Data directory for experiment outputs
     data_dir: Path = field(
         default_factory=lambda: Path(

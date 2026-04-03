@@ -11,9 +11,12 @@ enforcement and structured result parsing.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
+import tempfile
 import time
+from pathlib import Path
 from typing import Optional
 
 from .config import AutoResearchConfig
@@ -43,8 +46,22 @@ _RESERVED_KEYS = frozenset(
 )
 
 
+_ENV_PARAM_MAP = {
+    "max_steps": "AUTOBOT_EXP_MAX_STEPS",
+    "learning_rate": "AUTOBOT_EXP_LEARNING_RATE",
+    "batch_size": "AUTOBOT_EXP_BATCH_SIZE",
+    "block_size": "AUTOBOT_EXP_BLOCK_SIZE",
+    "n_layer": "AUTOBOT_EXP_N_LAYER",
+    "n_head": "AUTOBOT_EXP_N_HEAD",
+    "n_embd": "AUTOBOT_EXP_N_EMBD",
+    "dropout": "AUTOBOT_EXP_DROPOUT",
+    "warmup_steps": "AUTOBOT_EXP_WARMUP_STEPS",
+    "weight_decay": "AUTOBOT_EXP_WEIGHT_DECAY",
+}
+
+
 class ExperimentRunner:
-    """Run autoresearch experiments as isolated subprocesses."""
+    """Run autoresearch experiments as isolated subprocesses or Docker containers."""
 
     def __init__(
         self,
@@ -113,10 +130,16 @@ class ExperimentRunner:
         return experiment
 
     async def _execute_training(self, experiment: Experiment) -> ExperimentResult:
-        """Spawn training subprocess and capture output."""
+        """Spawn training subprocess or Docker container and capture output."""
+        if self.config.docker_enabled:
+            return await self._execute_in_docker(experiment)
+        return await self._execute_subprocess(experiment)
+
+    async def _execute_subprocess(self, experiment: Experiment) -> ExperimentResult:
+        """Execute training as a bare subprocess (original behaviour)."""
         cmd = self._build_command(experiment)
         logger.info(
-            "Starting training for experiment %s: %s",
+            "Starting training for experiment %s (subprocess): %s",
             experiment.id,
             " ".join(cmd),
         )
@@ -159,6 +182,133 @@ class ExperimentRunner:
             )
 
         return self.parser.parse(output, wall_time=wall_time)
+
+    async def _execute_in_docker(self, experiment: Experiment) -> ExperimentResult:
+        """Execute training inside an isolated Docker container."""
+        with tempfile.TemporaryDirectory(prefix="autobot_exp_") as output_dir:
+            cmd = self._build_docker_command(experiment, Path(output_dir))
+            logger.info(
+                "Starting training for experiment %s (docker): %s",
+                experiment.id,
+                " ".join(cmd),
+            )
+            start = time.monotonic()
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                self._current_process = process
+
+                stdout, _ = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=self.config.docker_timeout,
+                )
+            except asyncio.TimeoutError:
+                wall_time = time.monotonic() - start
+                return await self._handle_docker_timeout(wall_time)
+
+            wall_time = time.monotonic() - start
+            container_log = stdout.decode("utf-8", errors="replace") if stdout else ""
+
+            if process.returncode != 0:
+                return ExperimentResult(
+                    error_message=(
+                        f"Docker container exited with code {process.returncode}"
+                    ),
+                    raw_output=container_log,
+                    wall_time_seconds=wall_time,
+                )
+
+            return self._parse_docker_output(Path(output_dir), wall_time)
+
+    def _build_docker_command(
+        self, experiment: Experiment, output_dir: Path
+    ) -> list[str]:
+        """Build the docker run command for a containerised experiment."""
+        hp = experiment.hyperparams
+        self._validate_extra_params(hp.extra)
+        env_flags = self._build_docker_env_flags(hp)
+
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--memory",
+            self.config.docker_memory_limit,
+            "--cpus",
+            str(self.config.docker_cpu_limit),
+            "-v",
+            f"{self.config.autoresearch_dir}:/experiment:ro",
+            "-v",
+            f"{output_dir}:/output",
+        ]
+        cmd.extend(env_flags)
+        cmd.append(self.config.docker_image)
+        return cmd
+
+    @staticmethod
+    def _build_docker_env_flags(hp: object) -> list[str]:
+        """Return --env flags mapping hyperparams to AUTOBOT_EXP_* variables."""
+        flags: list[str] = []
+        for attr, env_key in _ENV_PARAM_MAP.items():
+            value = getattr(hp, attr)
+            flags.extend(["--env", f"{env_key}={value}"])
+        for extra_key, extra_val in hp.extra.items():
+            env_key = f"AUTOBOT_EXP_EXTRA_{extra_key.upper()}"
+            flags.extend(["--env", f"{env_key}={extra_val}"])
+        return flags
+
+    async def _handle_docker_timeout(self, wall_time: float) -> ExperimentResult:
+        """Kill the container after a timeout and return a timeout result."""
+        if self._current_process and self._current_process.returncode is None:
+            try:
+                await asyncio.create_subprocess_exec(
+                    "docker",
+                    "kill",
+                    str(self._current_process.pid),
+                )
+            except Exception:
+                logger.exception("Failed to docker kill container after timeout")
+            self._current_process.kill()
+            await self._current_process.wait()
+
+        return ExperimentResult(
+            error_message=(
+                f"Docker experiment timed out after {self.config.docker_timeout}s"
+            ),
+            wall_time_seconds=wall_time,
+        )
+
+    def _parse_docker_output(
+        self, output_dir: Path, wall_time: float
+    ) -> ExperimentResult:
+        """Read result.json from the container output mount and parse it."""
+        result_path = output_dir / "result.json"
+        if not result_path.exists():
+            return ExperimentResult(
+                error_message="Container produced no result.json",
+                wall_time_seconds=wall_time,
+            )
+
+        with result_path.open(encoding="utf-8") as fh:
+            payload = json.load(fh)
+
+        stdout_text = payload.get("stdout", "")
+        returncode = payload.get("returncode", -1)
+
+        if returncode != 0:
+            stderr_text = payload.get("stderr", "")
+            return ExperimentResult(
+                error_message=f"Training exited with code {returncode}",
+                raw_output=stdout_text + stderr_text,
+                wall_time_seconds=wall_time,
+            )
+
+        return self.parser.parse(stdout_text, wall_time=wall_time)
 
     def _build_command(self, experiment: Experiment) -> list[str]:
         """Build the subprocess command for a training run."""
