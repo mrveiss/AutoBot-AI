@@ -4778,7 +4778,8 @@
       "accountLocked": "Compte temporairement verrouillé en raison de tentatives infructueuses",
       "tooManyAttempts": "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
       "serverError": "Erreur du serveur. Veuillez réessayer plus tard.",
-      "unexpectedError": "Une erreur inattendue s'est produite"
+      "unexpectedError": "Une erreur inattendue s'est produite",
+      "footer": "© 2026 AutoBot. Tous droits réservés."
     }
   },
   "browser": {

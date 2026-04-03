@@ -4778,7 +4778,8 @@
       "accountLocked": "Konts īslaicīgi bloķēts vairāku neveiksmīgu mēģinājumu dēļ",
       "tooManyAttempts": "Pārāk daudz pieteikšanās mēģinājumu. Lūdzu, mēģiniet vēlāk.",
       "serverError": "Servera kļūda. Lūdzu, mēģiniet vēlāk.",
-      "unexpectedError": "Radās neparedzēta kļūda"
+      "unexpectedError": "Radās neparedzēta kļūda",
+      "footer": "© 2026 AutoBot. Visas tiesības aizsargātas."
     }
   },
   "browser": {

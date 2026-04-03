@@ -4934,7 +4934,8 @@
       "accountLocked": "Account temporarily locked due to multiple failed attempts",
       "tooManyAttempts": "Too many login attempts. Please try again later.",
       "serverError": "Server error. Please try again later.",
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "An unexpected error occurred",
+      "footer": "© 2026 AutoBot. All rights reserved."
     }
   },
   "browser": {

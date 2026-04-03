@@ -4778,7 +4778,8 @@
       "accountLocked": "Konto vorübergehend gesperrt wegen mehrerer fehlgeschlagener Versuche",
       "tooManyAttempts": "Zu viele Anmeldeversuche. Bitte versuchen Sie es später erneut.",
       "serverError": "Serverfehler. Bitte versuchen Sie es später erneut.",
-      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten"
+      "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten",
+      "footer": "© 2026 AutoBot. Alle Rechte vorbehalten."
     }
   },
   "browser": {

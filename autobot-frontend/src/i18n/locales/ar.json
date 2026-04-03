@@ -4766,7 +4766,8 @@
       "accountLocked": "Account temporarily locked due to multiple failed attempts",
       "tooManyAttempts": "Too many login attempts. Please try again later.",
       "serverError": "Server error. Please try again later.",
-      "unexpectedError": "حدث خطأ غير متوقع"
+      "unexpectedError": "حدث خطأ غير متوقع",
+      "footer": "© 2026 AutoBot. جميع الحقوق محفوظة."
     }
   },
   "browser": {

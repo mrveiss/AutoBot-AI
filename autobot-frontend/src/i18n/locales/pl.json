@@ -4778,7 +4778,8 @@
       "accountLocked": "Konto tymczasowo zablokowane z powodu wielu nieudanych prób",
       "tooManyAttempts": "Zbyt wiele prób logowania. Spróbuj ponownie później.",
       "serverError": "Błąd serwera. Spróbuj ponownie później.",
-      "unexpectedError": "Wystąpił nieoczekiwany błąd"
+      "unexpectedError": "Wystąpił nieoczekiwany błąd",
+      "footer": "© 2026 AutoBot. Wszelkie prawa zastrzeżone."
     }
   },
   "browser": {
