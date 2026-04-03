@@ -509,6 +509,13 @@ EOF
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
+    # Ensure ansible tmp dirs are owned by autobot user (#3298).
+    # When install.sh runs ansible as root during bootstrap, these dirs get
+    # created as root-owned. Later ansible runs (and become operations) need
+    # write access as the autobot user, causing permission denied errors.
+    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
+    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
+
     info "Running Ansible deployment (this may take several minutes)..."
     log "  Playbook: deploy-slm-manager.yml --skip-tags seed,provision"
 
