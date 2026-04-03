@@ -105,7 +105,11 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "state_tracking",
     ),
     ("api.project_state", "/project-state", ["project-state"], "project_state"),
-    ("api.phase_management", "/phases", ["phases"], "phase_management"),
+    # Issue #3331: api.phase_management removed — its /phases prefix conflicted and its
+    # scripts.phase_validation_system import never existed; replaced by api.phases below.
+    # Issue #3331: /api/project/* and /api/phases/* endpoints for PhaseProgressionIndicator
+    ("api.project", "/project", ["project"], "project"),
+    ("api.phases", "/phases", ["phases"], "phases"),
     # Services and infrastructure
     ("api.services", "/services", ["services"], "services"),
     ("api.elevation", "/elevation", ["elevation"], "elevation"),
