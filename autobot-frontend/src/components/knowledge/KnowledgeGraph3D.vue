@@ -2,7 +2,7 @@
   <div ref="container" class="graph3d-container">
     <div v-if="isEmpty" class="graph3d-empty">
       <i class="fas fa-project-diagram"></i>
-      <p>No entities to display</p>
+      <p>{{ $t('knowledge.graph.noEntities3D') }}</p>
     </div>
   </div>
 </template>
@@ -17,18 +17,20 @@
  *
  * @see KnowledgeGraph.vue - Parent component that owns data fetching and controls
  * @see Issue #3330 - 3D graph view toggle feature
+ * @see Issue #3363 - WebGL teardown, i18n, shallowRef typing, nextTick fixes
  *
  * @author mrveiss
- * @copyright (c) 2025 mrveiss
+ * @copyright (c) 2026 mrveiss
  */
 
 // AutoBot - AI-Powered Automation Platform
-// Copyright (c) 2025 mrveiss
+// Copyright (c) 2026 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import ForceGraph3D from '3d-force-graph'
+import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
+import * as THREE from 'three'
 import { getCssVar } from '@/composables/useCssVars'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -87,13 +89,16 @@ const emit = defineEmits<{
 // ============================================================================
 
 const container = ref<HTMLElement | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let graph: any = null
+// shallowRef prevents Vue from deeply observing the heavy Three.js instance.
+// Issue #704 pattern: same rationale as KnowledgeGraph.vue shallowRef<Core>
+// Issue #3363: typed with ForceGraph3DInstance instead of any
+const graph = shallowRef<ForceGraph3DInstance | null>(null)
 
 const isEmpty = computed(() => props.entities.length === 0)
 
 // ============================================================================
 // Color Mapping (mirrors KnowledgeGraph.vue palette)
+// Issue #704: All colors use CSS custom properties for theming support
 // ============================================================================
 
 function getNodeColor(type: string): string {
@@ -143,13 +148,14 @@ function buildGraphData(): { nodes: GraphNode[]; links: GraphLink[] } {
 function initGraph(): void {
   if (!container.value) return
 
-  const width = container.value.clientWidth
-  const height = container.value.clientHeight
+  const width = container.value.clientWidth || container.value.offsetWidth
+  const height = container.value.clientHeight || container.value.offsetHeight || 500
 
-  graph = ForceGraph3D({ antialias: true, alpha: true })(container.value)
+  // new ForceGraph3D(element, config) per IForceGraph3D constructor signature
+  graph.value = new ForceGraph3D(container.value, { antialias: true, alpha: true })
     .width(width)
     .height(height)
-    .backgroundColor('#0f172a')
+    .backgroundColor(getCssVar('--bg-primary', '#0f172a'))
     .graphData(buildGraphData())
     // Nodes: colored sphere + floating sprite text label
     .nodeColor((node: object) => getNodeColor((node as GraphNode).type))
@@ -158,16 +164,17 @@ function initGraph(): void {
     .nodeThreeObject((node: object) => {
       const n = node as GraphNode
       const sprite = new SpriteText(n.name)
-      sprite.color = '#e2e8f0'
+      sprite.color = getCssVar('--text-primary', '#e2e8f0')
       sprite.textHeight = 5
       sprite.backgroundColor = 'rgba(15, 23, 42, 0.75)'
       sprite.padding = 2
       sprite.borderRadius = 3
-      sprite.position.y = 12
+      // SpriteText extends THREE.Sprite — position is inherited from Object3D
+      ;(sprite as unknown as THREE.Sprite).position.y = 12
       return sprite
     })
     // Links
-    .linkColor(() => '#475569')
+    .linkColor(() => getCssVar('--border-default', '#475569'))
     .linkOpacity(0.5)
     .linkWidth(1)
     .linkDirectionalArrowLength(4)
@@ -187,34 +194,65 @@ function initGraph(): void {
   logger.debug('3D graph initialized', { nodes: props.entities.length, links: props.edges.length })
 }
 
+/**
+ * Fully disposes all Three.js GPU resources to prevent memory leaks.
+ * Issue #3363: renderer.dispose() alone does not release geometry/material buffers.
+ */
+function disposeGraph(): void {
+  if (!graph.value) return
+
+  graph.value.pauseAnimation()
+
+  const scene = graph.value.scene()
+  if (scene) {
+    scene.traverse((obj: THREE.Object3D) => {
+      const mesh = obj as THREE.Mesh
+      mesh.geometry?.dispose()
+      const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
+      materials.forEach((m: THREE.Material) => m.dispose())
+    })
+  }
+
+  const renderer = graph.value.renderer()
+  if (renderer) {
+    renderer.forceContextLoss()
+    renderer.dispose()
+  }
+
+  graph.value._destructor()
+  graph.value = null
+}
+
 // ============================================================================
 // Lifecycle
 // ============================================================================
 
 onMounted(() => {
+  // nextTick ensures the container has non-zero dimensions before initGraph reads them.
+  // Issue #3363: fixes 0×0 canvas on initial mount of conditionally-rendered component.
   if (!isEmpty.value) {
-    initGraph()
+    nextTick(() => initGraph())
   }
 })
 
 onUnmounted(() => {
-  if (graph) {
-    // Pause animation and release renderer resources
-    graph.pauseAnimation()
-    graph.renderer()?.dispose()
-    graph = null
-  }
+  disposeGraph()
 })
 
-// Rebuild graph data when filtered entities/edges change
+// Rebuild graph data when filtered entities/edges change.
+// nextTick in the init path ensures DOM has laid out before dimensions are read.
+// Issue #3363: fixes invisible graph when data arrives before DOM layout.
 watch(
   () => [props.entities, props.edges] as const,
-  () => {
-    if (!graph) {
-      if (!isEmpty.value) initGraph()
+  async () => {
+    if (!graph.value) {
+      if (!isEmpty.value) {
+        await nextTick()
+        initGraph()
+      }
       return
     }
-    graph.graphData(buildGraphData())
+    graph.value.graphData(buildGraphData())
   },
   { deep: true }
 )
@@ -228,7 +266,7 @@ watch(
   position: relative;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #0f172a;
+  background: var(--bg-primary);
 }
 
 .graph3d-empty {

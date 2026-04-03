@@ -1589,5 +1589,14 @@
         "scanFile": "Scan File"
       }
     }
+  },
+  "knowledge": {
+    "graph": {
+      "switchTo3d": "3D منظر پر جائیں",
+      "switchTo2d": "2D منظر پر جائیں",
+      "label3d": "3D",
+      "label2d": "2D",
+      "noEntities3D": "دکھانے کے لیے کوئی ہستی نہیں"
+    }
   }
 }

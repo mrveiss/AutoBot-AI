@@ -2555,6 +2555,10 @@
       "zoomIn": "Acercar",
       "zoomOut": "Alejar",
       "fitToView": "Ajustar a la vista",
+      "switchTo3d": "Cambiar a vista 3D",
+      "switchTo2d": "Cambiar a vista 2D",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Pantalla completa",
       "exitFullscreen": "Salir de pantalla completa",
       "typeLabel": "Tipo:",
@@ -2614,7 +2618,8 @@
         "searching": "Buscando entidades...",
         "noResults": "No se encontraron entidades que coincidan con su búsqueda",
         "sourcesCount": "{count} fuentes"
-      }
+      },
+      "noEntities3D": "No hay entidades para mostrar"
     },
     "connectors": {
       "title": "Conectores de fuentes",
