@@ -247,15 +247,16 @@ class WorkflowExecutor:
             )
 
     async def _send_step_failure_notification(
-        self, workflow_id: str, step_id: str, error: str,
+        self,
+        workflow_id: str,
+        step_id: str,
+        error: str,
         execution_context: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Fire a STEP_FAILED notification (#3101, #3168)."""
         from services.notification_service import NotificationEvent
 
-        config = self._resolve_notification_config(
-            workflow_id, execution_context or {}
-        )
+        config = self._resolve_notification_config(workflow_id, execution_context or {})
         if config is None:
             return
 
@@ -266,9 +267,7 @@ class WorkflowExecutor:
                 "step_name": step_id,
                 "error": error,
             }
-            await svc.send(
-                NotificationEvent.STEP_FAILED, workflow_id, payload, config
-            )
+            await svc.send(NotificationEvent.STEP_FAILED, workflow_id, payload, config)
         except Exception:
             logger.warning(
                 "Failed to send step-failure notification for %s/%s",
@@ -649,7 +648,10 @@ class WorkflowExecutor:
                 workflow_id,
             )
             return await self._execute_dag_workflow(
-                workflow_id, steps, effective_edges, context,
+                workflow_id,
+                steps,
+                effective_edges,
+                context,
                 notification_config=notification_config,
             )
 
@@ -724,9 +726,7 @@ class WorkflowExecutor:
                 shared_memory.clear()
 
             # Issue #3101: fire notification on terminal status.
-            await self._send_workflow_notification(
-                workflow_id, execution_context
-            )
+            await self._send_workflow_notification(workflow_id, execution_context)
 
             return execution_context
 
@@ -735,9 +735,7 @@ class WorkflowExecutor:
             execution_context["status"] = "failed"
             execution_context["error"] = str(e)
             # Issue #3101: fire failure notification.
-            await self._send_workflow_notification(
-                workflow_id, execution_context
-            )
+            await self._send_workflow_notification(workflow_id, execution_context)
             return execution_context
 
     def _apply_checkpoints(

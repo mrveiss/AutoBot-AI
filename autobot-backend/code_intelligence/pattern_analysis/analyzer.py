@@ -594,7 +594,11 @@ class CodePatternAnalyzer:
 
         except Exception as e:
             logger.error("Clone detection failed: %s", e)
-            return {"type": "clone_detection", "patterns": [], "error": "Clone detection failed"}
+            return {
+                "type": "clone_detection",
+                "patterns": [],
+                "error": "Clone detection failed",
+            }
 
     async def _run_regex_detection(self, directory: str) -> Dict[str, Any]:
         """Run regex optimization detection.
@@ -620,7 +624,11 @@ class CodePatternAnalyzer:
 
         except Exception as e:
             logger.error("Regex detection failed: %s", e)
-            return {"type": "regex_detection", "patterns": [], "error": "Regex detection failed"}
+            return {
+                "type": "regex_detection",
+                "patterns": [],
+                "error": "Regex detection failed",
+            }
 
     async def _run_complexity_analysis(self, directory: str) -> Dict[str, Any]:
         """Run complexity analysis.

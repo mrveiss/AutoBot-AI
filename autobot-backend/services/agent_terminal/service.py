@@ -817,7 +817,11 @@ class AgentTerminalService:
             return await self._execute_auto_approved_command(session, command, risk)
         except Exception as e:
             logger.error("Command execution error: %s", e)
-            return {"status": "error", "error": "Command execution failed", "command": command}
+            return {
+                "status": "error",
+                "error": "Command execution failed",
+                "command": command,
+            }
 
     async def _save_command_to_chat(
         self,

@@ -353,7 +353,9 @@ class LibrarianAssistant:
             return self._parse_assessment_response(response, content_data)
         except Exception as e:
             logger.error("Error assessing content quality: %s", e)
-            return self._build_fallback_assessment(content_data, "Content quality assessment failed")
+            return self._build_fallback_assessment(
+                content_data, "Content quality assessment failed"
+            )
 
     async def store_in_knowledge_base(
         self, content_data: Dict[str, Any], assessment: Dict[str, Any]

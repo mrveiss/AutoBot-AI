@@ -94,7 +94,9 @@ class ValBpbScorer(PromptScorer):
         baseline_val_bpb: float,
     ) -> None:
         if baseline_val_bpb <= 0:
-            raise ValueError(f"baseline_val_bpb must be positive, got {baseline_val_bpb}")
+            raise ValueError(
+                f"baseline_val_bpb must be positive, got {baseline_val_bpb}"
+            )
         self._runner = runner
         self._baseline = baseline_val_bpb
 
@@ -148,7 +150,9 @@ class ValBpbScorer(PromptScorer):
 
         # Normalize: improvement as fraction of baseline, clamped 0-1
         improvement = self._baseline - val_bpb
-        normalized = max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
+        normalized = (
+            max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
+        )
 
         return ScorerResult(
             score=normalized,
@@ -167,7 +171,7 @@ _RATING_PATTERN = re.compile(r"(\d+)\s*(?:/\s*10|out of\s*10)")
 _JUDGE_SYSTEM_PROMPT = (
     "You are a prompt quality evaluator. Rate the following output on a scale "
     "of 0-10 based on these criteria: {criteria}.\n\n"
-    "Respond with JSON: {{\"rating\": <0-10>, \"reasoning\": \"<brief explanation>\"}}"
+    'Respond with JSON: {{"rating": <0-10>, "reasoning": "<brief explanation>"}}'
 )
 
 
@@ -311,11 +315,13 @@ class HumanReviewScorer(PromptScorer):
         )
         await redis.set(
             pending_key,
-            json.dumps({
-                "prompt_output": prompt_output[:5000],
-                "session_id": session_id,
-                "variant_id": variant_id,
-            }),
+            json.dumps(
+                {
+                    "prompt_output": prompt_output[:5000],
+                    "session_id": session_id,
+                    "variant_id": variant_id,
+                }
+            ),
             ex=self._TTL_SECONDS,
         )
 

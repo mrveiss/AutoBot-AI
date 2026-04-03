@@ -360,8 +360,6 @@ async def websocket_stream(websocket: WebSocket):
     except Exception as e:
         logger.error("WebSocket error: %s", e)
         try:
-            await websocket.send_json(
-                {"type": "error", "content": "WebSocket error"}
-            )
+            await websocket.send_json({"type": "error", "content": "WebSocket error"})
         except Exception as conn_error:
             logger.debug("Connection error: %s", conn_error)  # Connection closed

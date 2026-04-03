@@ -184,9 +184,13 @@ async def start_codebase_indexing(
         from pathlib import Path
 
         try:
-            safe_codebase_path = Path(validate_path(request.codebase_path, must_exist=True))
+            safe_codebase_path = Path(
+                validate_path(request.codebase_path, must_exist=True)
+            )
         except (ValueError, PermissionError):
-            raise HTTPException(status_code=400, detail="Invalid or inaccessible codebase path")
+            raise HTTPException(
+                status_code=400, detail="Invalid or inaccessible codebase path"
+            )
 
         estimated_files = 0
         try:
@@ -259,7 +263,9 @@ async def start_comprehensive_testing(
         try:
             safe_test_path = Path(validate_path(request.test_path, must_exist=True))
         except (ValueError, PermissionError):
-            raise HTTPException(status_code=400, detail="Invalid or inaccessible test path")
+            raise HTTPException(
+                status_code=400, detail="Invalid or inaccessible test path"
+            )
 
         estimated_tests = 0
         try:
