@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 # File extensions that are meaningful to compare.
 _INCLUDE_EXTENSIONS = {".py", ".cfg", ".ini", ".toml", ".yaml", ".yml", ".sh", ".txt"}
 
+# Permitted component names for the /drift endpoint (Issue #3427).
+# Only these sub-directories may be requested to prevent path traversal.
+ALLOWED_COMPONENTS = frozenset(
+    {
+        "autobot-slm-backend",
+        "autobot-slm-frontend",
+        "autobot-backend",
+        "autobot-frontend",
+    }
+)
+
 # Directory names to skip entirely during traversal.
 _SKIP_DIRS = {
     "__pycache__",

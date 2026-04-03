@@ -52,6 +52,7 @@ from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
 from services.drift_checker import (
+    ALLOWED_COMPONENTS,
     build_drift_report,
     get_default_deployed_dir,
     get_default_source_dir,
@@ -415,9 +416,16 @@ async def get_file_drift(
 
     Query params:
         component: Sub-directory to compare (default: autobot-slm-backend).
+                   Must be one of the allowed components (Issue #3427).
 
     Returns a FileDriftReport with a list of drifted files and their checksums.
     """
+    if component not in ALLOWED_COMPONENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid component '{component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
+        )
+
     source_dir = get_default_source_dir(component)
     deployed_dir = get_default_deployed_dir(component)
 
