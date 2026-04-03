@@ -17,6 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type { TLSEndpointResponse } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
@@ -99,18 +100,6 @@ interface FleetCert {
   days_until_expiry: number | null
 }
 
-interface TLSEndpoint {
-  credential_id: string
-  node_id: string
-  hostname: string
-  ip_address: string
-  name: string | null
-  common_name: string | null
-  expires_at: string | null
-  is_active: boolean
-  days_until_expiry: number | null
-}
-
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
 const validSecurityTabs: SecurityTab[] = ['overview', 'tls-settings', 'certificates', 'audit', 'threats', 'policies']
@@ -139,7 +128,7 @@ const fleetCerts = ref<FleetCert[]>([])
 const fleetCertsLoading = ref(false)
 
 // TLS Certificates Data (Issue #725)
-const tlsEndpoints = ref<TLSEndpoint[]>([])
+const tlsEndpoints = ref<TLSEndpointResponse[]>([])
 const tlsEndpointsTotal = ref(0)
 const tlsExpiringSoon = ref(0)
 const showUploadModal = ref(false)
