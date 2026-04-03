@@ -3407,7 +3407,12 @@
       "noActiveDescription": "Start a workflow to see live execution progress here.",
       "loading": "Loading workflows...",
       "stepOf": "Step {current} of {total}",
-      "stepN": "Step {n}"
+      "stepN": "Step {n}",
+      "cancelled": "Cancelled",
+      "pending": "Pending",
+      "connectionLive": "Live",
+      "connectionConnecting": "Connecting...",
+      "connectionDisconnected": "Disconnected"
     },
     "agentObservability": {
       "title": "Agent Observability",
