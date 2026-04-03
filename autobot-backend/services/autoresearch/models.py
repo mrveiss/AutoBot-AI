@@ -15,6 +15,38 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+# Forward reference — PromptVariant is defined in prompt_optimizer to avoid
+# circular imports; callers import VariantArchiveEntry directly from models.
+# The type annotation below uses a string literal for the forward ref.
+
+
+@dataclass
+class VariantArchiveEntry:
+    """A single entry in the quality-diversity archive.
+
+    Issue #3222: Replaces the greedy top-K filter so that every evaluated
+    variant is retained and eligible for weighted-random parent selection.
+    """
+
+    variant_id: str
+    variant: Any  # PromptVariant — typed as Any to avoid circular import
+    score: float
+    parent_id: Optional[str]
+    generation: int
+    valid_parent: bool = True
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "variant_id": self.variant_id,
+            "variant": self.variant.to_dict(),
+            "score": self.score,
+            "parent_id": self.parent_id,
+            "generation": self.generation,
+            "valid_parent": self.valid_parent,
+            "created_at": self.created_at,
+        }
+
 
 class ExperimentState(str, enum.Enum):
     """Lifecycle states for an experiment run."""

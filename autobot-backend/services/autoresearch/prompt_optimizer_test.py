@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for prompt optimizer — Issue #2600."""
+"""Tests for prompt optimizer and quality-diversity archive — Issue #2600, #3222."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from services.autoresearch.archive import Archive
 from services.autoresearch.config import AutoResearchConfig
+from services.autoresearch.models import VariantArchiveEntry
 from services.autoresearch.prompt_optimizer import (
     OptimizationSession,
     OptimizationStatus,
@@ -20,6 +22,41 @@ from services.autoresearch.prompt_optimizer import (
 )
 from services.autoresearch.scorers import ScorerResult
 
+
+# ---------------------------------------------------------------------------
+# Helper factory
+# ---------------------------------------------------------------------------
+
+def _make_variant(vid: str, score: float, round_number: int = 1) -> PromptVariant:
+    return PromptVariant(
+        id=vid,
+        prompt_text=f"prompt_{vid}",
+        output=f"output_{vid}",
+        scores={"s": score},
+        final_score=score,
+        round_number=round_number,
+    )
+
+
+def _make_entry(
+    vid: str,
+    score: float,
+    valid_parent: bool = True,
+    generation: int = 1,
+) -> VariantArchiveEntry:
+    return VariantArchiveEntry(
+        variant_id=vid,
+        variant=_make_variant(vid, score),
+        score=score,
+        parent_id=None,
+        generation=generation,
+        valid_parent=valid_parent,
+    )
+
+
+# ---------------------------------------------------------------------------
+# PromptVariant
+# ---------------------------------------------------------------------------
 
 class TestPromptVariantModel:
     def test_to_dict(self):
@@ -36,6 +73,17 @@ class TestPromptVariantModel:
         assert d["scores"] == {"llm_judge": 0.8}
         assert d["final_score"] == 0.8
 
+    def test_from_dict_round_trip(self):
+        v = _make_variant("v2", 0.5)
+        restored = PromptVariant.from_dict(v.to_dict())
+        assert restored.id == "v2"
+        assert restored.final_score == 0.5
+        assert restored.prompt_text == "prompt_v2"
+
+
+# ---------------------------------------------------------------------------
+# OptimizationSession
+# ---------------------------------------------------------------------------
 
 class TestOptimizationSession:
     def test_to_dict(self):
@@ -53,11 +101,93 @@ class TestOptimizationSession:
         assert d["rounds_completed"] == 0
 
 
+# ---------------------------------------------------------------------------
+# Archive unit tests
+# ---------------------------------------------------------------------------
+
+class TestArchive:
+    def test_add_retains_all_entries(self):
+        archive = Archive()
+        for i in range(5):
+            archive.add(_make_entry(f"v{i}", score=float(i) * 0.1))
+        assert archive.size == 5
+
+    def test_best_returns_highest_score(self):
+        archive = Archive()
+        archive.add(_make_entry("low", score=0.1))
+        archive.add(_make_entry("high", score=0.9))
+        archive.add(_make_entry("mid", score=0.5))
+        assert archive.best is not None
+        assert archive.best.variant_id == "high"
+
+    def test_valid_parents_excludes_invalid(self):
+        archive = Archive()
+        archive.add(_make_entry("good", score=0.8, valid_parent=True))
+        archive.add(_make_entry("bad", score=0.2, valid_parent=False))
+        parents = archive.valid_parents
+        assert len(parents) == 1
+        assert parents[0].variant_id == "good"
+
+    def test_mark_invalid_excludes_entry(self):
+        archive = Archive()
+        archive.add(_make_entry("a", score=0.7))
+        archive.add(_make_entry("b", score=0.3))
+        archive.mark_invalid("a")
+        parents = archive.valid_parents
+        assert all(p.variant_id != "a" for p in parents)
+
+    def test_select_parent_returns_valid_entry(self):
+        archive = Archive()
+        archive.add(_make_entry("x", score=0.6))
+        archive.add(_make_entry("y", score=0.0, valid_parent=False))
+        result = archive.select_parent()
+        assert result is not None
+        assert result.variant_id == "x"
+
+    def test_select_parent_none_when_all_invalid(self):
+        archive = Archive()
+        archive.add(_make_entry("z", score=0.5, valid_parent=False))
+        assert archive.select_parent() is None
+
+    def test_select_parent_uniform_when_all_scores_zero(self):
+        archive = Archive()
+        for i in range(10):
+            archive.add(_make_entry(f"v{i}", score=0.0))
+        # Should not raise; should return one of the entries
+        result = archive.select_parent()
+        assert result is not None
+
+    def test_prune_caps_size(self):
+        archive = Archive(max_size=3)
+        for i in range(5):
+            archive.add(_make_entry(f"v{i}", score=float(i) * 0.1))
+        assert archive.size == 3
+        # Only the top-3 scoring entries should remain
+        ids = {e.variant_id for e in archive.valid_parents}
+        assert "v4" in ids  # score 0.4 — top 3
+
+    def test_serialisation_round_trip(self):
+        archive = Archive(max_size=10)
+        archive.add(_make_entry("a", score=0.7))
+        archive.add(_make_entry("b", score=0.3, valid_parent=False))
+        serialised = archive.to_json()
+        restored = Archive.from_json(serialised, PromptVariant)
+        assert restored.size == 2
+        assert restored.best is not None
+        assert restored.best.variant_id == "a"
+        invalid = [e for e in restored._entries if not e.valid_parent]
+        assert len(invalid) == 1
+        assert invalid[0].variant_id == "b"
+
+
+# ---------------------------------------------------------------------------
+# PromptOptimizer integration (archive-aware)
+# ---------------------------------------------------------------------------
+
 class TestPromptOptimizerLoop:
     @pytest.fixture
     def mock_llm(self):
         llm = AsyncMock()
-        # Return 3 variants as JSON array
         mock_response = MagicMock()
         mock_response.content = json.dumps(["variant A", "variant B", "variant C"])
         llm.chat.return_value = mock_response
@@ -103,6 +233,27 @@ class TestPromptOptimizerLoop:
         assert session.best_variant is not None
         assert session.best_variant.final_score == 0.8
         assert len(session.all_variants) == 3
+
+    def test_archive_populated_after_round(self, optimizer, mock_scorer, event_loop):
+        """Archive must retain all variants, not just top-K."""
+        import asyncio
+
+        target = PromptOptTarget(
+            agent_name="test",
+            current_prompt="base",
+            scorer_chain=["test_scorer"],
+            mutation_count=3,
+            top_k=1,  # old top-K = 1; archive must still hold all 3
+        )
+
+        async def benchmark_fn(prompt: str) -> str:
+            return f"output for: {prompt}"
+
+        session = asyncio.get_event_loop().run_until_complete(
+            optimizer.optimize(target, benchmark_fn, max_rounds=1)
+        )
+        assert session.archive is not None
+        assert session.archive.size == 3  # all variants retained
 
     @pytest.mark.asyncio
     async def test_subset_fraction_passed_to_first_scorer(self, mock_llm, mock_scorer):
@@ -256,3 +407,9 @@ class TestPromptOptimizerLoop:
         session = await optimizer.optimize(target, benchmark_fn, max_rounds=5)
         assert session.status.value == "cancelled"
         assert session.rounds_completed == 0
+
+    @pytest.mark.asyncio
+    async def test_load_archive_returns_none_when_missing(self, optimizer):
+        optimizer._redis.get.return_value = None
+        result = await optimizer.load_archive("nonexistent-session-id")
+        assert result is None
