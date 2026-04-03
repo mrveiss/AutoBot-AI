@@ -24,7 +24,8 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/unified", tags=["unified-analytics"])
+# Issue #3355: prefix moved to router registry (analytics_routers.py)
+router = APIRouter(tags=["unified-analytics"])
 
 
 async def fetch_quality_health() -> Dict[str, Any]:

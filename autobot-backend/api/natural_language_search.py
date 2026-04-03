@@ -42,7 +42,8 @@ KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = (
     {}
 )  # Populated after enum defined
 
-router = APIRouter(prefix="/nl-search", tags=["natural-language-search", "code-search"])
+# Issue #3355: prefix moved to router registry (feature_routers.py)
+router = APIRouter(tags=["natural-language-search", "code-search"])
 
 
 # =============================================================================
