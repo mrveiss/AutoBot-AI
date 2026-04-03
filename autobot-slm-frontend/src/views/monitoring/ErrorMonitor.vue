@@ -13,6 +13,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import { getTimezone } from '@/composables/useTimezone'
 
 const logger = createLogger('ErrorMonitor')
@@ -146,19 +147,7 @@ function formatTimestamp(ts: string): string {
   })
 }
 
-function formatRelativeTime(ts: string): string {
-  const date = new Date(ts)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
-}
 
 async function fetchData() {
   isLoading.value = true

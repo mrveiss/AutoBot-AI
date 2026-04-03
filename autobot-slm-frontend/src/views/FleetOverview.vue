@@ -20,6 +20,7 @@ import { useRoles } from '@/composables/useRoles'
 
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
@@ -383,19 +384,7 @@ function nodeStatusBadgeClass(status: string): string {
   }
 }
 
-function formatLastSeen(ts: string | null | undefined): string {
-  if (!ts) return 'Never'
-  const date = new Date(ts)
-  if (isNaN(date.getTime())) return ts
-  const diffMs = Date.now() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return `${diffSec}s ago`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  return date.toLocaleDateString()
-}
+const formatLastSeen = formatRelativeTime
 </script>
 
 <template>
