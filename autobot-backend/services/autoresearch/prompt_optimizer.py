@@ -184,7 +184,7 @@ class PromptOptimizer:
         # Capture pre-cancel state before starting (caller may have called cancel())
         pre_cancelled = self._cancel_event.is_set()
 
-        archive_max_size = getattr(target, "archive_max_size", target.top_k * 10 or None)
+        archive_max_size = getattr(target, "archive_max_size", target.top_k * 10)
         archive = Archive(max_size=archive_max_size)
 
         session = OptimizationSession(
@@ -302,12 +302,12 @@ class PromptOptimizer:
         benchmark_fn: BenchmarkFn,
         round_number: int,
         session: OptimizationSession,
-        parent_id: Optional[str] = None,
-    ) -> List[PromptVariant]:
+    ) -> tuple:
         """Execute a single mutation -> benchmark -> score round.
 
-        Issue #3222: All scored variants are returned (no top-K slicing).
-        The caller adds them all to the quality-diversity archive.
+        Returns (variants, failed_ids) where failed_ids is the set of variant
+        IDs that raised a scorer exception. Caller marks those invalid after
+        adding all entries to the archive.
         """
         # 1. Mutate
         prompt_texts = await self._mutate_prompt(

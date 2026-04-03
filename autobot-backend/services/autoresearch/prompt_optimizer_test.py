@@ -234,10 +234,9 @@ class TestPromptOptimizerLoop:
         assert session.best_variant.final_score == 0.8
         assert len(session.all_variants) == 3
 
-    def test_archive_populated_after_round(self, optimizer, mock_scorer, event_loop):
+    @pytest.mark.asyncio
+    async def test_archive_populated_after_round(self, optimizer, mock_scorer):
         """Archive must retain all variants, not just top-K."""
-        import asyncio
-
         target = PromptOptTarget(
             agent_name="test",
             current_prompt="base",
@@ -249,9 +248,7 @@ class TestPromptOptimizerLoop:
         async def benchmark_fn(prompt: str) -> str:
             return f"output for: {prompt}"
 
-        session = asyncio.get_event_loop().run_until_complete(
-            optimizer.optimize(target, benchmark_fn, max_rounds=1)
-        )
+        session = await optimizer.optimize(target, benchmark_fn, max_rounds=1)
         assert session.archive is not None
         assert session.archive.size == 3  # all variants retained
 
@@ -407,6 +404,36 @@ class TestPromptOptimizerLoop:
         session = await optimizer.optimize(target, benchmark_fn, max_rounds=5)
         assert session.status.value == "cancelled"
         assert session.rounds_completed == 0
+
+    @pytest.mark.asyncio
+    async def test_scorer_failure_marks_variant_invalid_in_archive(
+        self, mock_llm
+    ):
+        """Variants whose scorer raises must have valid_parent=False in archive."""
+        failing_scorer = AsyncMock()
+        failing_scorer.score.side_effect = RuntimeError("scorer exploded")
+        opt = PromptOptimizer(
+            scorers={"fail_scorer": failing_scorer},
+            llm_service=mock_llm,
+        )
+        opt._redis = AsyncMock()
+
+        target = PromptOptTarget(
+            agent_name="test",
+            current_prompt="base",
+            scorer_chain=["fail_scorer"],
+            mutation_count=3,
+            top_k=1,
+        )
+
+        async def benchmark_fn(prompt: str) -> str:
+            return "output"
+
+        session = await opt.optimize(target, benchmark_fn, max_rounds=1)
+
+        assert session.archive is not None
+        invalid = [e for e in session.archive._entries if not e.valid_parent]
+        assert len(invalid) == 3  # all variants failed scoring
 
     @pytest.mark.asyncio
     async def test_load_archive_returns_none_when_missing(self, optimizer):
