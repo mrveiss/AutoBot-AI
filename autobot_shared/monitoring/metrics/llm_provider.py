@@ -30,6 +30,7 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
 
         Delegates to helper methods for each metric category.
         Issue #665: Refactored from 149-line monolithic function.
+        Issue #3273: Added response-cache hit/miss counters.
         """
         self._init_request_metrics()
         self._init_token_metrics()
@@ -37,6 +38,7 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         self._init_error_metrics()
         self._init_rate_limit_metrics()
         self._init_provider_health_metrics()
+        self._init_response_cache_metrics()
 
     def _init_request_metrics(self) -> None:
         """Initialize request tracking metrics.
@@ -357,6 +359,38 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
     def set_provider_latency_p99(self, provider: str, latency_seconds: float) -> None:
         """Set provider 99th percentile latency."""
         self.provider_latency_p99.labels(provider=provider).set(latency_seconds)
+
+    # =========================================================================
+    # Response Cache Metrics (Issue #3273)
+    # =========================================================================
+
+    def _init_response_cache_metrics(self) -> None:
+        """Initialize LLM response cache hit/miss counters.
+
+        Issue #3273: Exposes cache effectiveness via Prometheus so operators
+        can verify that identical LLM endpoint queries are served from cache.
+        """
+        self.response_cache_hits_total = Counter(
+            "autobot_llm_response_cache_hits_total",
+            "Total LLM endpoint responses served from cache",
+            ["endpoint"],
+            registry=self.registry,
+        )
+
+        self.response_cache_misses_total = Counter(
+            "autobot_llm_response_cache_misses_total",
+            "Total LLM endpoint responses not found in cache",
+            ["endpoint"],
+            registry=self.registry,
+        )
+
+    def record_response_cache_hit(self, endpoint: str) -> None:
+        """Record a cache hit for an LLM API endpoint."""
+        self.response_cache_hits_total.labels(endpoint=endpoint).inc()
+
+    def record_response_cache_miss(self, endpoint: str) -> None:
+        """Record a cache miss for an LLM API endpoint."""
+        self.response_cache_misses_total.labels(endpoint=endpoint).inc()
 
 
 __all__ = ["LLMProviderMetricsRecorder"]
