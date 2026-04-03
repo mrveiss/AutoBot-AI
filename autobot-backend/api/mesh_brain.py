@@ -32,7 +32,15 @@ async def get_mesh_brain_status() -> dict:
 
 @router.get("/health")
 async def get_mesh_brain_health() -> dict:
-    """Return a concise health summary — healthy when no jobs have last_result='failed'."""
+    """Return a concise health summary — healthy when no jobs have last_result='failed'.
+
+    Deprecated: This router is not registered and will be removed in a future release.
+    Use /api/system/health for system-wide health checks. (#3333)
+    """
+    logger.warning(
+        "Deprecated health endpoint called: /api/mesh/brain/health — "
+        "this router is unregistered and will be removed (#3333)"
+    )
     if _scheduler is None:
         return {"healthy": False, "reason": "not_initialized"}
     return _build_health_response(_scheduler.get_status())

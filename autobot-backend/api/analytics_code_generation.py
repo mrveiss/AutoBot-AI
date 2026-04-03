@@ -948,13 +948,22 @@ def get_code_generation_engine() -> CodeGenerationEngine:
 
 @router.get("/health")
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Get code generation service health status
+    """Get code generation service health status.
+
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
 
     Issue #744: Requires admin authentication.
     """
+    logger.warning(
+        "Deprecated health endpoint called: /api/code-generation/health — "
+        "use /api/system/health instead (#3333)"
+    )
     return {
         "status": "healthy",
         "service": "code_generation",
+        "deprecated": True,
+        "use_instead": "/api/system/health",
         "features": [
             "code_generation",
             "refactoring",

@@ -227,11 +227,23 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
 )
 @router.get("/health")
 async def get_health(admin_check: bool = Depends(check_admin_permission)):
-    """Simple health check endpoint
+    """Simple health check endpoint.
+
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
 
     Issue #744: Requires admin authentication.
     """
-    return {"status": "healthy", "timestamp": datetime.now()}
+    logger.warning(
+        "Deprecated health endpoint called: /api/services/health — "
+        "use /api/system/health instead (#3333)"
+    )
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(),
+        "deprecated": True,
+        "use_instead": "/api/system/health",
+    }
 
 
 @with_error_handling(

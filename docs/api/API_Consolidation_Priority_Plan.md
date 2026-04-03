@@ -36,10 +36,29 @@ await apiRequest('/api/phases/validation/run')
 - `base_terminal.py` - Base functions
 **Action**: Consolidate to single terminal API
 
-### **4. Health Check Sprawl - 12 IMPLEMENTATIONS**
+### **4. Health Check Sprawl - 37+ IMPLEMENTATIONS** ✅ Partial (Issue #3333)
 **Frontend Usage**: Only calls `/api/system/health` (good!)
-**Backend Reality**: 12 different health endpoints across modules
+**Backend Reality**: 37+ different health endpoints across modules (12 noted originally, audit
+found more)
 **Action**: Deprecate unused health endpoints, keep `/api/system/health` as primary
+**Completed (Issue #3333)**:
+- Audited all health endpoints in `autobot-backend/api/`
+- Primary endpoint `/api/system/health` kept as-is (no changes)
+- Frontend-called endpoints kept as-is: `/api/long-running/health`,
+  `/api/monitoring/services/health`
+- Added deprecation `logger.warning` + `deprecated`/`use_instead` response fields to 9 endpoints
+  with boilerplate static responses or unregistered routers:
+  - `analytics_llm_patterns.py` → `/api/llm-patterns/health`
+  - `analytics_code_generation.py` → `/api/code-generation/health`
+  - `analytics_dfa.py` → `/api/dfa-analytics/health`
+  - `analytics_architecture.py` → `/api/architecture/health`
+  - `analytics_cfg.py` → `/api/cfg-analytics/health`
+  - `services.py` → `/api/services/health`
+  - `mesh_brain.py` → unregistered router (dead module)
+  - `monitoring_compat.py` → unregistered router (already deprecated module)
+  - `natural_language_search.py` → `/api/health` (no-prefix collision risk)
+- Remaining endpoints have legitimate per-service logic (Redis ping, real service checks)
+  and are not called by the frontend
 
 ## 📋 **MEDIUM PRIORITY (Fix This Month)**
 
@@ -96,11 +115,12 @@ await apiRequest('/api/phases/validation/run')
 3. **Deprecate unused terminal APIs**
 4. **Update documentation**
 
-### **Week 3: Health Check Cleanup**
-1. **Audit all 12 health endpoints**
-2. **Keep only `/api/system/health` as primary**
-3. **Add deprecation warnings to others**
-4. **Route internal health checks through system API**
+### **Week 3: Health Check Cleanup** ✅ Phase 1 done (Issue #3333)
+1. ✅ **Audit all health endpoints** — found 37+ (not 12 as originally estimated)
+2. ✅ **Keep `/api/system/health` as primary** — no changes to primary endpoint
+3. ✅ **Add deprecation warnings to boilerplate endpoints** — 9 endpoints updated
+4. **Route internal health checks through system API** — deferred: remaining endpoints
+   have legitimate per-service logic and are not called by the frontend
 
 ### **Week 4: Configuration Consolidation**
 1. **Route all config through `/api/settings/*`**

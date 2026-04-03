@@ -1023,10 +1023,20 @@ def get_pattern_analyzer() -> LLMPatternAnalyzer:
 
 @router.get("/health")
 async def get_health():
-    """Get LLM pattern analyzer health status"""
+    """Get LLM pattern analyzer health status.
+
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
+    """
+    logger.warning(
+        "Deprecated health endpoint called: /api/llm-patterns/health — "
+        "use /api/system/health instead (#3333)"
+    )
     return {
         "status": "healthy",
         "service": "llm_pattern_analyzer",
+        "deprecated": True,
+        "use_instead": "/api/system/health",
         "features": [
             "prompt_analysis",
             "usage_tracking",
