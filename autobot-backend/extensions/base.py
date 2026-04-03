@@ -488,6 +488,40 @@ class Extension:
             None (logging only)
         """
 
+    # ========== Prompt Pipeline Hooks (Issue #3405) ==========
+
+    async def on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+        """
+        Called after the system prompt is built.
+
+        Receives the assembled system prompt in ctx.data["system_prompt"] and
+        ctx.data["session"] for session metadata.  Return a non-None str to
+        replace the system prompt; return None to leave it unchanged.
+
+        Args:
+            ctx: Hook context with data["system_prompt"] and data["session"]
+
+        Returns:
+            Modified system prompt str or None to keep unchanged
+        """
+
+    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+        """
+        Called after the full prompt (system + knowledge + conversation) is built.
+
+        Receives the full prompt in ctx.data["prompt"], LLM parameters in
+        ctx.data["llm_params"], and request context in ctx.data["context"].
+        Return a non-None str to replace the full prompt; return None to keep it
+        unchanged.
+
+        Args:
+            ctx: Hook context with data["prompt"], data["llm_params"],
+                 data["context"]
+
+        Returns:
+            Modified full prompt str or None to keep unchanged
+        """
+
     # ========== Utility Methods ==========
 
     def __repr__(self) -> str:
