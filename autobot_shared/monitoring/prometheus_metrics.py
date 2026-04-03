@@ -605,6 +605,14 @@ class PrometheusMetricsManager:
             provider, requests_remaining, tokens_remaining, reset_seconds
         )
 
+    def record_llm_response_cache_hit(self, endpoint: str) -> None:
+        """Record a cache hit for an LLM API endpoint (Issue #3273)."""
+        self._llm_provider.record_response_cache_hit(endpoint)
+
+    def record_llm_response_cache_miss(self, endpoint: str) -> None:
+        """Record a cache miss for an LLM API endpoint (Issue #3273)."""
+        self._llm_provider.record_response_cache_miss(endpoint)
+
     # =========================================================================
     # WebSocket Metrics (Issue #470: Delegates to WebSocketMetricsRecorder)
     # =========================================================================
