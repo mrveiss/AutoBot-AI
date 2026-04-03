@@ -3428,6 +3428,19 @@
       "success": "Success",
       "failed": "Failed",
       "avgTime": "Avg Time"
+    },
+    "phaseProgression": {
+      "title": "System Phase Status",
+      "loadData": "Load Validation Data",
+      "loading": "Loading...",
+      "systemMaturity": "System Maturity",
+      "errorTitle": "Phase validation temporarily unavailable",
+      "errorBody": "The validation system is currently not accessible, but the application continues to work normally.",
+      "retry": "Retry",
+      "readyTitle": "Phase Validation Ready",
+      "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
+      "capabilities": "Capabilities",
+      "unknownPhase": "Unknown Phase"
     }
   },
   "agent": {
