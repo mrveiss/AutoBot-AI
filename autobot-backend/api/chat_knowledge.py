@@ -3,8 +3,35 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Chat Knowledge Management API
-Handles chat-specific file associations, knowledge context, and compilation
+Chat Knowledge API — session-scoped knowledge lifecycle management.
+
+Responsibility (issue #3336):
+    This module owns all knowledge operations that are **scoped to a chat
+    session**.  It is mounted at ``/api/chat-knowledge/*``.
+
+Scope:
+    - Creating and updating per-session knowledge contexts (topic, keywords,
+      user ownership).
+    - Associating or uploading files to a specific chat session.
+    - Adding *temporary* knowledge facts that live only for the duration of
+      a session.
+    - Presenting pending-decision facts to the user and applying
+      add-to-KB / keep-temporary / delete decisions.
+    - Compiling an entire chat conversation into a permanent KB entry.
+    - Session-fact preservation before conversation deletion (issue #547).
+
+What does NOT belong here:
+    - General KB document management (ingestion, tagging, categories) →
+      api/knowledge.py  (mounted at ``/api/knowledge_base/*``)
+    - LLM-mediated librarian queries → api/kb_librarian.py
+
+Overlap note (issue #3336):
+    The ``POST /search`` endpoint in this module delegates to
+    ``KnowledgeBase.search()`` *and* additionally searches in-memory
+    temporary facts for the requesting session.  It is NOT a duplicate of
+    ``POST /api/knowledge_base/search``: it adds session-scoped temporary
+    results that the global endpoint cannot see.  Keep both; they serve
+    different consumers.
 """
 
 import asyncio

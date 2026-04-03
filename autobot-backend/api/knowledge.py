@@ -1,7 +1,34 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Knowledge Base API endpoints for content management and search with RAG integration."""
+"""
+Knowledge Base API — primary document management and general search.
+
+Responsibility (issue #3336):
+    This module is the **canonical owner** of all knowledge-base document
+    lifecycle operations.  It is mounted at ``/api/knowledge_base/*``.
+
+Scope:
+    - Ingesting content: text facts, URLs, file uploads, man-pages,
+      machine profiles, and AutoBot documentation.
+    - General-purpose semantic search (vector + keyword) across the
+      entire knowledge base.
+    - Category, tag, collection, and metadata management.
+    - Import/export job status and statistics.
+    - Admin health and clear-all operations.
+
+What does NOT belong here:
+    - Chat-session-scoped operations (temporary facts, file associations,
+      session compilation, session-fact preservation) → api/chat_knowledge.py
+    - LLM-mediated librarian queries (intent detection, auto-summarise,
+      per-request parameter overrides) → api/kb_librarian.py
+
+Related modules:
+    - ``api/chat_knowledge.py``  — chat-session knowledge lifecycle
+    - ``api/kb_librarian.py``    — librarian agent (unregistered, internal use)
+    - ``api/knowledge_search.py``  — search sub-router (included here)
+    - ``api/knowledge_tags.py``, ``api/knowledge_categories.py``, etc.
+"""
 
 import asyncio
 import json
