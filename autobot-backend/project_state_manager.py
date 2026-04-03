@@ -316,7 +316,7 @@ class ProjectStateManager:
                 "chat_knowledge",
                 "Context-aware chat system",
                 "api_endpoint",
-                get_service_url("backend", "/api/chat_knowledge/health"),
+                get_service_url("backend", "/api/chat-knowledge/health"),
             ),
         ]
 
