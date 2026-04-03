@@ -2217,6 +2217,93 @@ curl -sk "https://<slm-manager-ip>/api/nodes/<node_id>/events" \
 
 ---
 
+## Trigger from AutoBot Backend
+
+AutoBot-backend exposes its own REST surface that wraps the SLM deployment
+API.  Use this when you want to orchestrate a Docker deployment from within
+another AutoBot service or from the frontend rather than calling the SLM
+directly.
+
+### Endpoints
+
+|Method|Path|Description|
+|------|----|-----------|
+|`POST`|`/api/v1/slm/deployments/docker`|Trigger Docker container deployment|
+|`GET`|`/api/v1/slm/deployments`|List active deployments|
+|`GET`|`/api/v1/slm/deployments/{id}`|Get deployment by ID|
+|`POST`|`/api/v1/slm/deployments/{id}/execute`|Execute a queued deployment|
+|`POST`|`/api/v1/slm/deployments/{id}/cancel`|Cancel a deployment|
+|`POST`|`/api/v1/slm/deployments/{id}/rollback`|Roll back a deployment|
+
+### Python client example
+
+```python
+import httpx
+
+BACKEND = "https://<autobot-backend-host>"
+TOKEN = "<autobot-jwt-token>"
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+
+payload = {
+    "node_id": "node-uuid-here",
+    "containers": [
+        {
+            "name": "my-app",
+            "image": "registry.example.com/my-app",
+            "tag": "1.2.3",
+            "ports": [{"host_port": 8080, "container_port": 80, "protocol": "tcp"}],
+            "environment": {"LOG_LEVEL": "info"},
+            "restart_policy": "unless-stopped",
+        }
+    ],
+    "playbook": "deploy-hybrid-docker.yml",
+}
+
+with httpx.Client(verify=False) as client:
+    # Trigger deployment
+    resp = client.post(
+        f"{BACKEND}/api/v1/slm/deployments/docker",
+        json=payload,
+        headers=HEADERS,
+    )
+    resp.raise_for_status()
+    deployment = resp.json()
+    print("Started:", deployment["deployment_id"], "status:", deployment["status"])
+
+    # Poll until done
+    import time
+    dep_id = deployment["deployment_id"]
+    while True:
+        r = client.get(f"{BACKEND}/api/v1/slm/deployments/{dep_id}", headers=HEADERS)
+        r.raise_for_status()
+        s = r.json()["status"]
+        print("Status:", s)
+        if s in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(5)
+```
+
+### How it works
+
+1. `POST /api/v1/slm/deployments/docker` is handled by `autobot-backend/api/slm/deployments.py`.
+2. The route delegates to `SLMDeploymentOrchestrator` (`autobot-backend/services/slm/deployment_orchestrator.py`).
+3. The orchestrator translates the `DockerDeploymentRequest` into the SLM's
+   `POST /deployments` shape: `{node_id, roles: ["docker"], extra_data: {playbook, extra_vars}}`.
+4. The SLM runs the specified Ansible playbook against the target node.
+5. Deployment status is polled via `GET /api/v1/slm/deployments/{id}`, which
+   proxies to the SLM `GET /deployments/{deployment_id}` endpoint.
+
+### Key models
+
+- `DockerDeploymentRequest` — request body for `POST /docker`
+- `DockerContainerSpec` — per-container image, ports, env, restart policy
+- `PortMapping` — single `host_port:container_port/protocol` binding
+- `DockerDeploymentStatus` — response with `deployment_id`, `status`, timestamps
+
+All models are defined in `autobot-backend/models/infrastructure.py`.
+
+---
+
 ## Related Documentation
 
 - [CLAUDE.md](../../CLAUDE.md) --- Development rules, deployment workflow, local-edit-then-sync policy

@@ -395,3 +395,169 @@ class TestDeploymentResponseFormat:
         assert response.status_code == 200
         data = response.json()
         assert data["started_at"] == "2025-01-15T10:30:00"
+
+
+# =============================================================================
+# SLMDeploymentOrchestrator integration tests (real orchestrator + test-double
+# SLM HTTP client — not MagicMock wrapping the whole orchestrator)
+# =============================================================================
+
+
+class FakeSLMClient:
+    """
+    Test-double for the SLM HTTP client.
+
+    Returns deterministic canned responses so tests exercise the real
+    SLMDeploymentOrchestrator translation logic without hitting a live SLM.
+    """
+
+    def __init__(self, deployment_id: str = "slm-deploy-001", node_id: str = "node-99"):
+        self._deployment_id = deployment_id
+        self._node_id = node_id
+
+    async def create_deployment(self, payload: dict) -> dict:
+        return {
+            "deployment_id": self._deployment_id,
+            "node_id": payload.get("node_id", self._node_id),
+            "status": "running",
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+        }
+
+    async def get_deployment(self, deployment_id: str) -> dict:
+        return {
+            "deployment_id": deployment_id,
+            "node_id": self._node_id,
+            "status": "completed",
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+        }
+
+    async def list_deployments(self, node_id=None) -> dict:
+        return {
+            "deployments": [
+                {
+                    "deployment_id": self._deployment_id,
+                    "node_id": self._node_id,
+                    "status": "completed",
+                    "started_at": None,
+                    "completed_at": None,
+                    "error": None,
+                }
+            ]
+        }
+
+
+class TestSLMDeploymentOrchestratorIntegration:
+    """Integration tests for SLMDeploymentOrchestrator with a test-double SLM client."""
+
+    @pytest.fixture
+    def fake_client(self):
+        return FakeSLMClient()
+
+    @pytest.fixture
+    def slm_orch(self, fake_client):
+        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+
+        return SLMDeploymentOrchestrator(slm_client=fake_client)
+
+    @pytest.mark.asyncio
+    async def test_deploy_docker_calls_slm_and_maps_response(self, slm_orch):
+        """deploy_docker translates the request and returns a DockerDeploymentStatus."""
+        from models.infrastructure import DockerContainerSpec, DockerDeploymentRequest
+
+        request = DockerDeploymentRequest(
+            node_id="node-99",
+            containers=[
+                DockerContainerSpec(
+                    name="my-app",
+                    image="my-org/my-app",
+                    tag="1.2.3",
+                )
+            ],
+        )
+        result = await slm_orch.deploy_docker(request)
+
+        assert result.deployment_id == "slm-deploy-001"
+        assert result.node_id == "node-99"
+        assert result.status == "running"
+
+    @pytest.mark.asyncio
+    async def test_deploy_docker_builds_extra_vars_with_ports(self, fake_client):
+        """build_extra_vars correctly serialises port mappings."""
+        from models.infrastructure import (
+            DockerContainerSpec,
+            DockerDeploymentRequest,
+            PortMapping,
+        )
+        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+
+        captured: dict = {}
+
+        async def capturing_create(payload):
+            captured.update(payload)
+            return {
+                "deployment_id": "x",
+                "node_id": "n",
+                "status": "queued",
+                "started_at": None,
+                "completed_at": None,
+                "error": None,
+            }
+
+        fake_client.create_deployment = capturing_create
+        orch = SLMDeploymentOrchestrator(slm_client=fake_client)
+
+        request = DockerDeploymentRequest(
+            node_id="node-1",
+            containers=[
+                DockerContainerSpec(
+                    name="svc",
+                    image="acme/svc",
+                    tag="latest",
+                    ports=[PortMapping(host_port=8080, container_port=80)],
+                    environment={"ENV": "prod"},
+                )
+            ],
+        )
+        await orch.deploy_docker(request)
+
+        containers = captured["extra_data"]["extra_vars"]["docker_containers"]
+        assert len(containers) == 1
+        assert containers[0]["ports"] == ["8080:80/tcp"]
+        assert containers[0]["environment"] == {"ENV": "prod"}
+
+    @pytest.mark.asyncio
+    async def test_get_deployment_returns_status(self, slm_orch):
+        """get_deployment fetches and maps a deployment by ID."""
+        result = await slm_orch.get_deployment("slm-deploy-001")
+
+        assert result.deployment_id == "slm-deploy-001"
+        assert result.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_list_deployments_returns_list(self, slm_orch):
+        """list_deployments returns a non-empty list from the SLM."""
+        results = await slm_orch.list_deployments()
+
+        assert len(results) == 1
+        assert results[0].deployment_id == "slm-deploy-001"
+
+    @pytest.mark.asyncio
+    async def test_list_deployments_node_filter_forwarded(self, fake_client):
+        """node_id filter is forwarded to the SLM client."""
+        from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
+
+        received_kwargs: dict = {}
+
+        async def spy_list(node_id=None):
+            received_kwargs["node_id"] = node_id
+            return {"deployments": []}
+
+        fake_client.list_deployments = spy_list
+        orch = SLMDeploymentOrchestrator(slm_client=fake_client)
+        await orch.list_deployments(node_id="node-42")
+
+        assert received_kwargs["node_id"] == "node-42"
