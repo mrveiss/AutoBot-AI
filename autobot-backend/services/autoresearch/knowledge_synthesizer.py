@@ -122,7 +122,9 @@ class KnowledgeSynthesizer:
             )
             raw_insights = json.loads(response.content)
         except json.JSONDecodeError as exc:
-            logger.warning("KnowledgeSynthesizer: failed to parse LLM response: %s", exc)
+            logger.warning(
+                "KnowledgeSynthesizer: failed to parse LLM response: %s", exc
+            )
             return []
         except Exception as exc:
             logger.exception("KnowledgeSynthesizer: LLM call failed: %s", exc)

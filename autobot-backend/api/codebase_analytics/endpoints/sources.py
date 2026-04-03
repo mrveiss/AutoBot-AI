@@ -94,7 +94,9 @@ async def _run_git_clone(url: str, dest: str, branch: str) -> str:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+        _, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS
+        )
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
@@ -119,7 +121,9 @@ async def _run_git_pull(clone_path: str) -> str:
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS)
+        _, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=_GIT_TIMEOUT_SECONDS
+        )
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()

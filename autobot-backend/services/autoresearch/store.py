@@ -136,7 +136,9 @@ class ExperimentStore:
         ]
         # Include hyperparams for richer search
         hp_dict = experiment.hyperparams.to_dict()
-        parts.append(f"Hyperparams: {', '.join(f'{k}={v}' for k, v in hp_dict.items())}")
+        parts.append(
+            f"Hyperparams: {', '.join(f'{k}={v}' for k, v in hp_dict.items())}"
+        )
 
         if experiment.result:
             parts.append(f"val_bpb: {experiment.result.val_bpb}")

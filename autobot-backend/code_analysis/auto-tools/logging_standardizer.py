@@ -438,7 +438,10 @@ class DevLoggingFixer:
 
         except Exception as e:
             self.report["errors"].append(
-                {"file": str(file_path.relative_to(self.project_root)), "error": "File standardization failed"}
+                {
+                    "file": str(file_path.relative_to(self.project_root)),
+                    "error": "File standardization failed",
+                }
             )
             return False
 

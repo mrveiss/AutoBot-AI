@@ -242,7 +242,11 @@ class MetadataMixin:
 
         except Exception as e:
             logger.error("Failed to list metadata templates: %s", e)
-            return {"status": "error", "message": "Metadata operation failed", "templates": []}
+            return {
+                "status": "error",
+                "message": "Metadata operation failed",
+                "templates": [],
+            }
 
     async def _update_template_category_links(
         self, template_id: str, old_categories: set, new_categories: set
@@ -393,7 +397,11 @@ class MetadataMixin:
 
         except Exception as e:
             logger.error("Failed to validate metadata: %s", e)
-            return {"valid": False, "errors": ["Metadata validation failed"], "warnings": []}
+            return {
+                "valid": False,
+                "errors": ["Metadata validation failed"],
+                "warnings": [],
+            }
 
     def _validate_field_type(self, field_name: str, value: Any, field_type: str) -> str:
         """Validate a field value against its expected type. Returns error or None."""
@@ -469,7 +477,11 @@ class MetadataMixin:
 
         except Exception as e:
             logger.error("Failed to apply template defaults: %s", e)
-            return {"status": "error", "message": "Metadata operation failed", "metadata": metadata}
+            return {
+                "status": "error",
+                "message": "Metadata operation failed",
+                "metadata": metadata,
+            }
 
     def _match_metadata_value(
         self, field_value: Any, value: Any, operator: str
@@ -548,7 +560,11 @@ class MetadataMixin:
 
         except Exception as e:
             logger.error("Failed to search by metadata: %s", e)
-            return {"status": "error", "message": "Metadata operation failed", "fact_ids": []}
+            return {
+                "status": "error",
+                "message": "Metadata operation failed",
+                "fact_ids": [],
+            }
 
     def ensure_initialized(self):
         """Ensure the knowledge base is initialized. Implemented in composed class."""

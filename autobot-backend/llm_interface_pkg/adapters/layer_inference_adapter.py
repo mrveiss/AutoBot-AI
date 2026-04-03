@@ -102,7 +102,10 @@ class LayerInferenceAdapter(AdapterBase):
 
         try:
             result = await asyncio.to_thread(
-                self._pipeline.execute, prompt, prepared, max_new_tokens=max_tokens,
+                self._pipeline.execute,
+                prompt,
+                prepared,
+                max_new_tokens=max_tokens,
             )
         except Exception:
             logger.exception("LayerInference generation failed")

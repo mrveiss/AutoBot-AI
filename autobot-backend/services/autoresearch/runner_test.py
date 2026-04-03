@@ -749,6 +749,7 @@ class TestDockerCommand:
 
     def test_unsafe_mount_path_raises(self):
         from pathlib import Path
+
         runner = _make_runner()
         with pytest.raises(ValueError, match="unsafe"):
             runner._validate_mount_path(Path("/"))
@@ -851,9 +852,7 @@ class TestExecuteInDocker:
                 with open(
                     os.path.join(path, "result.json"), "w", encoding="utf-8"
                 ) as fh:
-                    json.dump(
-                        {"returncode": 0, "stdout": "", "stderr": ""}, fh
-                    )
+                    json.dump({"returncode": 0, "stdout": "", "stderr": ""}, fh)
                 return path
 
             def __exit__(self, *args):

@@ -164,7 +164,6 @@ class TerminalSecretsService:
                 logger.error("Failed to prepare key '%s': %s", key_data["name"], e)
                 result["errors"].append(f"Failed to prepare key '{key_data['name']}'")
 
-
     async def setup_ssh_keys(
         self,
         session_id: str,

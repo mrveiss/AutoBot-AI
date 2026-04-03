@@ -113,14 +113,16 @@ class OptimizationSession:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id,
-            "target": {
-                "agent_name": self.target.agent_name,
-                "scorer_chain": self.target.scorer_chain,
-                "mutation_count": self.target.mutation_count,
-                "top_k": self.target.top_k,
-            }
-            if self.target
-            else None,
+            "target": (
+                {
+                    "agent_name": self.target.agent_name,
+                    "scorer_chain": self.target.scorer_chain,
+                    "mutation_count": self.target.mutation_count,
+                    "top_k": self.target.top_k,
+                }
+                if self.target
+                else None
+            ),
             "status": self.status.value,
             "rounds_completed": self.rounds_completed,
             "max_rounds": self.max_rounds,
@@ -361,9 +363,7 @@ class PromptOptimizer:
                 )
                 continue
 
-            subset_frac = (
-                self._config.staged_eval_fraction if tier_idx == 0 else None
-            )
+            subset_frac = self._config.staged_eval_fraction if tier_idx == 0 else None
             candidates, tier_failed = await self._score_tier(
                 scorer=scorer,
                 scorer_name=scorer_name,
@@ -417,9 +417,7 @@ class PromptOptimizer:
                     subset_fraction=subset_fraction,
                 )
                 variant.scores[scorer_name] = result.score
-                variant.final_score = (
-                    sum(variant.scores.values()) / len(variant.scores)
-                )
+                variant.final_score = sum(variant.scores.values()) / len(variant.scores)
             except Exception as exc:
                 logger.warning(
                     "PromptOptimizer: scorer %r failed for variant %s: %s",

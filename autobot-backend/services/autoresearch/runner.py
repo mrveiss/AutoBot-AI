@@ -261,9 +261,7 @@ class ExperimentRunner:
         """Reject obviously unsafe mount paths (root or non-absolute)."""
         resolved = path.resolve()
         if not resolved.is_absolute() or resolved == Path("/"):
-            raise ValueError(
-                f"autoresearch_dir is unsafe to mount: {path}"
-            )
+            raise ValueError(f"autoresearch_dir is unsafe to mount: {path}")
 
     @staticmethod
     def _build_docker_env_flags(hp: object) -> list[str]:
