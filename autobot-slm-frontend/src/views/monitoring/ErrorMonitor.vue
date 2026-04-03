@@ -12,6 +12,12 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type {
+  RecentError,
+  ErrorStatistics,
+  CategoryBreakdown,
+  ComponentBreakdown,
+} from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import { getTimezone } from '@/composables/useTimezone'
@@ -19,45 +25,9 @@ import { getTimezone } from '@/composables/useTimezone'
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
 
-interface ErrorEntry {
-  event_id: string
-  node_id: string
-  hostname: string
-  event_type: string
-  severity: string
-  message: string
-  timestamp: string
-  resolved: boolean
-  resolved_at: string | null
-  resolved_by: string | null
-}
-
-interface ErrorStats {
-  total_errors: number
-  errors_24h: number
-  errors_7d: number
-  resolved_count: number
-  unresolved_count: number
-  error_rate_per_hour: number
-  trend: string
-}
-
-interface CategoryBreakdown {
-  category: string
-  count: number
-  percentage: number
-}
-
-interface ComponentBreakdown {
-  node_id: string
-  hostname: string
-  count: number
-  percentage: number
-}
-
 // State
-const errors = ref<ErrorEntry[]>([])
-const stats = ref<ErrorStats>({
+const errors = ref<RecentError[]>([])
+const stats = ref<ErrorStatistics>({
   total_errors: 0,
   errors_24h: 0,
   errors_7d: 0,
@@ -69,7 +39,7 @@ const stats = ref<ErrorStats>({
 const categories = ref<CategoryBreakdown[]>([])
 const components = ref<ComponentBreakdown[]>([])
 const isLoading = ref(false)
-const selectedError = ref<ErrorEntry | null>(null)
+const selectedError = ref<RecentError | null>(null)
 const filterSeverity = ref<string>('all')
 const filterResolved = ref<string>('all')
 const searchQuery = ref('')
@@ -186,7 +156,7 @@ async function fetchData() {
   }
 }
 
-function selectError(error: ErrorEntry) {
+function selectError(error: RecentError) {
   selectedError.value = error
 }
 
