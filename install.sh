@@ -374,15 +374,15 @@ system_setup() {
         success "  SSH key pair already exists"
     fi
 
-    # Issue #2828: Copy SSH key to shared location so any user in the autobot
-    # group can run Ansible without needing the key in their own ~/.ssh/.
+    # Issue #2828: Copy SSH key to shared location for Ansible (#3268: must be
+    # autobot:autobot 0600 — SSH client refuses group-readable private keys).
     if [[ -f "${ssh_key}" ]]; then
         cp "${ssh_key}" /etc/autobot/ssh/autobot_key
         cp "${ssh_key}.pub" /etc/autobot/ssh/autobot_key.pub
-        chown root:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
-        chmod 0640 /etc/autobot/ssh/autobot_key
+        chown autobot:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
+        chmod 0600 /etc/autobot/ssh/autobot_key
         chmod 0644 /etc/autobot/ssh/autobot_key.pub
-        success "  SSH key published to /etc/autobot/ssh/ (group-readable)"
+        success "  SSH key published to /etc/autobot/ssh/"
     fi
 }
 

@@ -10,13 +10,8 @@
 # Auto-detect if agent runs on same host as SLM backend - use localhost if so (#2955)
 {% set admin_host = slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') %}
 {% if admin_host == ansible_host or admin_host == inventory_hostname or (ansible_connection | default('')) == 'local' %}
-{% if slm_colocated_frontend | default(false) | bool %}
-{# Co-located mode (#2829): user frontend at /; SLM API at /slm/api/ not /api/ #}
+{# Co-located: substitute 127.0.0.1 for the external hostname, keep /slm path (#2955, #3268) #}
 {% set effective_admin_url = 'https://127.0.0.1/slm' %}
-{% else %}
-{# SLM-only mode: SLM API served directly at /api/ #}
-{% set effective_admin_url = 'https://127.0.0.1' %}
-{% endif %}
 {% else %}
 {% set effective_admin_url = slm_admin_url %}
 {% endif %}
