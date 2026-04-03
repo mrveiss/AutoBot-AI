@@ -4,21 +4,20 @@
 """
 KB Librarian API — LLM-mediated librarian agent interface.
 
-Responsibility (issue #3336, registered in issue #3348):
-    This module exposes the ``KBLibrarianAgent`` (``agents/kb_librarian_agent.py``)
-    as an HTTP API mounted at ``/api/kb-librarian``.
+Mounted at ``/api/kb-librarian`` (issue #3402).
 
-    The librarian agent layer is also used internally by ``conversation.py``
-    via a direct Python import; it does not need an HTTP surface for that use.
-
-Scope:
+Endpoints:
     - ``POST /query``      — Process a natural-language query through the
-                            librarian agent (intent detection, similarity
-                            search, optional auto-summarisation).
-    - ``GET  /status``     — Return runtime configuration of the librarian
-                            agent singleton.
-    - ``PUT  /configure``  — Update librarian agent runtime parameters
-                            (enabled flag, threshold, max results, summarise).
+                            KBLibrarianAgent: intent detection, similarity
+                            search, and optional LLM auto-summarisation.
+                            Accepts per-request overrides for max_results,
+                            similarity_threshold, and auto_summarize.
+    - ``GET  /status``     — Return the runtime configuration of the
+                            librarian agent singleton (enabled flag,
+                            threshold, max results, summarise, KB active).
+    - ``PUT  /configure``  — Update librarian agent runtime parameters:
+                            enabled flag, similarity_threshold (0.0–1.0),
+                            max_results (>=1), and auto_summarize.
 
 What does NOT belong here:
     - Raw KB document CRUD → api/knowledge.py (``/api/knowledge_base/*``)
@@ -35,10 +34,11 @@ Overlap note (issue #3336):
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.kb_librarian_agent import get_kb_librarian
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 
@@ -72,17 +72,22 @@ class KBQueryResponse(BaseModel):
     error_code_prefix="KB_LIBRARIAN",
 )
 @router.post("/query", response_model=KBQueryResponse)
-async def query_knowledge_base(kb_query: KBQuery):
+async def query_knowledge_base(
+    kb_query: KBQuery,
+    current_user: dict = Depends(get_current_user),
+):
     """Query the knowledge base using the KB Librarian Agent.
 
-    For general KB search use POST /api/knowledge_base/search.
-    For chat-scoped search use POST /api/chat-knowledge/search.
+    Routes the query through the KBLibrarianAgent singleton: intent detection,
+    similarity search, and optional LLM auto-summarisation.  Per-request
+    overrides for max_results, similarity_threshold, and auto_summarize are
+    applied temporarily and restored after the call.
 
     Args:
-        kb_query: The query parameters
+        kb_query: The query parameters including optional per-request overrides.
 
     Returns:
-        KBQueryResponse with search results
+        KBQueryResponse with search results and optional summary.
     """
     try:
         kb_librarian = get_kb_librarian()
@@ -124,11 +129,14 @@ async def query_knowledge_base(kb_query: KBQuery):
     error_code_prefix="KB_LIBRARIAN",
 )
 @router.get("/status")
-async def get_kb_librarian_status():
-    """Get the status of the KB Librarian Agent.
+async def get_kb_librarian_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the runtime configuration of the KB Librarian Agent singleton.
 
     Returns:
-        Status information about the KB Librarian
+        Dict containing enabled, similarity_threshold, max_results,
+        auto_summarize, and knowledge_base_active.
     """
     try:
         kb_librarian = get_kb_librarian()
@@ -157,17 +165,20 @@ async def configure_kb_librarian(
     similarity_threshold: Optional[float] = None,
     max_results: Optional[int] = None,
     auto_summarize: Optional[bool] = None,
+    current_user: dict = Depends(get_current_user),
 ):
-    """Configure the KB Librarian Agent settings.
+    """Update KB Librarian Agent runtime parameters.
+
+    All parameters are optional; only supplied values are changed.
 
     Args:
-        enabled: Whether the KB Librarian is enabled
-        similarity_threshold: Minimum similarity score (0.0-1.0)
-        max_results: Maximum number of results to return
-        auto_summarize: Whether to automatically summarize findings
+        enabled: Whether the KB Librarian is enabled.
+        similarity_threshold: Minimum similarity score (0.0–1.0).
+        max_results: Maximum number of results to return (>=1).
+        auto_summarize: Whether to automatically summarise findings.
 
     Returns:
-        Updated configuration
+        Dict with confirmation message and updated configuration values.
     """
     try:
         kb_librarian = get_kb_librarian()
