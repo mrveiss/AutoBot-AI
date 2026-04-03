@@ -118,8 +118,8 @@ def _record_cache_hit(key: str) -> None:
         from monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_llm_response_cache_hit(endpoint=key)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Could not record cache hit metric: %s", e)
 
 
 def _record_cache_miss(key: str) -> None:
@@ -128,8 +128,8 @@ def _record_cache_miss(key: str) -> None:
         from monitoring.prometheus_metrics import get_metrics_manager
 
         get_metrics_manager().record_llm_response_cache_miss(endpoint=key)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Could not record cache miss metric: %s", e)
 
 
 def _generate_cache_key(
