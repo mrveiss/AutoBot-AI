@@ -15,7 +15,7 @@ slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
-slm_certs_dir: "{{ slm_base_dir }}/nginx/certs"
+slm_certs_dir: /etc/autobot/certs
 slm_credentials_dir: /etc/autobot
 slm_credentials_file: slm-secrets.env
 
@@ -29,8 +29,8 @@ slm_backend_port: 8000
 # ==========================================================
 # TLS Configuration
 # ==========================================================
-slm_tls_cert: "{{ slm_certs_dir }}/slm.crt"
-slm_tls_key: "{{ slm_certs_dir }}/slm.key"
+slm_tls_cert: "{{ slm_certs_dir }}/server-cert.pem"
+slm_tls_key: "{{ slm_certs_dir }}/server-key.pem"
 slm_tls_days: 365
 slm_tls_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ ansible_host }}"
 
