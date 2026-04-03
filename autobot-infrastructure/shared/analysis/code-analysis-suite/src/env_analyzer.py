@@ -23,6 +23,19 @@ from utils.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Full RFC 1918 private address prefixes (Issue #3253)
+_RFC1918_PREFIXES: tuple = (
+    "10.",
+    *[f"172.{n}." for n in range(16, 32)],
+    "192.168.",
+    "127.",
+)
+
+
+def _is_private_ip(value: str) -> bool:
+    """Return True if value looks like a private/loopback IP address."""
+    return value.startswith(_RFC1918_PREFIXES)
+
 
 @dataclass
 class HardcodedValue:
@@ -579,7 +592,7 @@ class EnvironmentAnalyzer:
                 and not any(d in value for d in example_domains)
             ),
             value in ["localhost", "127.0.0.1", "0.0.0.0"],
-            value.startswith("172.16.168."),  # VM IPs
+            _is_private_ip(value),  # RFC 1918 / loopback
             # Security (HIGH priority)
             value.startswith(
                 ("sk-", "pk_", "rk_", "api_", "API_", "Bearer ", "token_")
@@ -643,8 +656,8 @@ class EnvironmentAnalyzer:
         if value.startswith(("sk-", "pk_", "rk_", "api_", "API_", "Bearer ")):
             return "security", "high"
 
-        # VM IPs (from shell script SSOT_VM_IPS)
-        if value.startswith("172.16.168."):
+        # Private/loopback IPs — deployment-specific regardless of subnet
+        if _is_private_ip(value):
             return "hostname", "high"
 
         # Service ports (from shell script SSOT_PORTS)

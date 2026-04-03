@@ -68,14 +68,6 @@ EXCLUDE_PATTERNS=(
     "*_test.py"
     "*.spec.ts"
     "*_test.ts"
-    # Ansible node-deployed copies (managed by code-sync)
-    "autobot@172.16.168.19"
-    "autobot@172.16.168.20"
-    "autobot@172.16.168.21"
-    "autobot@172.16.168.22"
-    "autobot@172.16.168.23"
-    "autobot@172.16.168.24"
-    "autobot@172.16.168.25"
 )
 
 build_exclude_args() {

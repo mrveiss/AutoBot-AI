@@ -6,7 +6,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
-NETWORK_RANGE="${AUTOBOT_NETWORK_CIDR:-localhost/24}"
+NETWORK_RANGE="${NETWORK_SUBNET:-}"
 INVENTORY_PATH="../../ansible/inventory/hosts.yml"
 UPDATE_INVENTORY=false
 SHOW_ALL=false
@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
             echo "AutoBot VM Discovery Tool (Linux/WSL)"
             echo "Usage: $0 [options]"
             echo "Options:"
-            echo "  --network-range CIDR    Network to scan (default: 172.16.168.0/24)"
+            echo "  --network-range CIDR    Network to scan (default: \$NETWORK_SUBNET env var, required)"
             echo "  --inventory-path PATH   Ansible inventory file (default: ../../ansible/inventory/hosts.yml)"
             echo "  --update-inventory      Update Ansible inventory with discovered IPs"
             echo "  --show-all             Show detailed information"
@@ -159,7 +159,7 @@ scan_network() {
     echo -e "${CYAN}🔍 Scanning AutoBot internal network: $network${NC}"
     echo -e "${YELLOW}This may take 30-60 seconds...${NC}"
 
-    # Extract network base (e.g., 172.16.168 from 172.16.168.0/24)
+    # Extract network base (e.g., 10.0.1 from 10.0.1.0/24)
     local network_base=$(echo $network | cut -d'.' -f1-3)
 
     # Use nmap to quickly find live hosts
@@ -250,6 +250,13 @@ main() {
 
     # Check requirements
     check_requirements
+
+    # Require NETWORK_RANGE — must be set via --network-range or $NETWORK_SUBNET env var
+    if [[ -z "$NETWORK_RANGE" ]]; then
+        echo -e "${RED}❌ Network range not configured.${NC}"
+        echo -e "${YELLOW}   Set NETWORK_SUBNET env var or pass --network-range CIDR${NC}"
+        exit 1
+    fi
 
     # Check if we can reach the AutoBot network
     local gateway_ip=$(echo $NETWORK_RANGE | cut -d'/' -f1 | sed 's/0$/1/')
