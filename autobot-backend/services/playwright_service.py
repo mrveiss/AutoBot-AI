@@ -198,7 +198,12 @@ class PlaywrightService:
             }
         except Exception as e:
             logger.error("Web search error: %s", e)
-            return {"success": False, "error": "Web search failed", "query": query, "results": []}
+            return {
+                "success": False,
+                "error": "Web search failed",
+                "query": query,
+                "results": [],
+            }
 
     async def test_frontend(
         self, frontend_url: str = ServiceURLs.FRONTEND_LOCAL
@@ -317,7 +322,12 @@ class PlaywrightService:
             }
         except Exception as e:
             logger.error("Test message error: %s", e)
-            return {"success": False, "error": "Test message failed", "message": message, "steps": []}
+            return {
+                "success": False,
+                "error": "Test message failed",
+                "message": message,
+                "steps": [],
+            }
 
     async def capture_screenshot(
         self, url: str, full_page: bool = True, wait_timeout: int = 5000

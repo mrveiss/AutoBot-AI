@@ -174,6 +174,7 @@ class HuggingFaceProvider(BaseProvider):
                         if chunk_json == "[DONE]":
                             break
                         import json
+
                         chunk = json.loads(chunk_json)
                         delta = chunk["choices"][0].get("delta", {}).get("content")
                         if delta:

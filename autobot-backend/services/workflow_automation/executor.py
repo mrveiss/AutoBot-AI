@@ -402,9 +402,13 @@ class WorkflowExecutor:
 
         # Issue #3101: Notify configured channels that approval is needed.
         if step.requires_confirmation:
-            await self._notify(workflow, "approval_needed", {
-                "step_name": step.step_id,
-            })
+            await self._notify(
+                workflow,
+                "approval_needed",
+                {
+                    "step_name": step.step_id,
+                },
+            )
 
     def _check_step_dependencies(
         self, workflow: ActiveWorkflow, step: WorkflowStep
@@ -531,10 +535,14 @@ class WorkflowExecutor:
         )
 
         # Issue #3101: Notify configured channels on step failure.
-        await self._notify(workflow, "step_failed", {
-            "step_name": step_id,
-            "error": str(error),
-        })
+        await self._notify(
+            workflow,
+            "step_failed",
+            {
+                "step_name": step_id,
+                "error": str(error),
+            },
+        )
 
     async def approve_and_execute_step(
         self,
@@ -776,10 +784,14 @@ class WorkflowExecutor:
         )
 
         # Issue #3101: Notify configured channels on workflow completion.
-        await self._notify(workflow, "workflow_completed", {
-            "status": "completed",
-            "total_steps": len(workflow.steps),
-        })
+        await self._notify(
+            workflow,
+            "workflow_completed",
+            {
+                "status": "completed",
+                "total_steps": len(workflow.steps),
+            },
+        )
 
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:
@@ -839,9 +851,13 @@ class WorkflowExecutor:
         )
 
         # Issue #3101: Notify configured channels on workflow cancellation/failure.
-        await self._notify(workflow, "workflow_failed", {
-            "error": "cancelled",
-        })
+        await self._notify(
+            workflow,
+            "workflow_failed",
+            {
+                "error": "cancelled",
+            },
+        )
 
         # Issue #1367: Archive to completed history
         if self.on_workflow_finished:

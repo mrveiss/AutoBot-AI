@@ -96,7 +96,9 @@ class ProviderRegistry:
     # Per-conversation overrides
     # ------------------------------------------------------------------
 
-    def set_conversation_provider(self, conversation_id: str, provider_name: str) -> None:
+    def set_conversation_provider(
+        self, conversation_id: str, provider_name: str
+    ) -> None:
         """Pin a specific provider for a given conversation."""
         self._conversation_overrides[conversation_id] = provider_name
         logger.debug(
@@ -265,8 +267,10 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     # Ollama (local) — always registered, highest priority
     try:
         ssot = get_ssot_config()
-        ollama_url = ssot.ollama_url if ssot else os.getenv(
-            "AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434"
+        ollama_url = (
+            ssot.ollama_url
+            if ssot
+            else os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
         )
         from llm_providers.ollama_provider import OllamaProvider
 

@@ -322,7 +322,11 @@ class NPUWorkerClient:
 
         except Exception as e:
             logger.error("Heavy processing offload failed: %s", e)
-            return {"success": False, "error": "Processing offload failed", "fallback": True}
+            return {
+                "success": False,
+                "error": "Processing offload failed",
+                "fallback": True,
+            }
 
     async def close(self):
         """No-op: HTTP client is managed by singleton HTTPClientManager"""

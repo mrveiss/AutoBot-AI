@@ -221,7 +221,7 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
         return content, [], []
 
     fm_block = content[3:end]
-    body = content[end + 4:].lstrip("\n")
+    body = content[end + 4 :].lstrip("\n")
 
     fm_tags: List[str] = []
     fm_aliases: List[str] = []
@@ -232,7 +232,7 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
         key_match = re.match(r"^(\w+)\s*:", line)
         if key_match:
             current_key = key_match.group(1)
-            inline = line[key_match.end():].strip()
+            inline = line[key_match.end() :].strip()
             if inline and current_key in ("tags", "aliases"):
                 target = fm_tags if current_key == "tags" else fm_aliases
                 target.append(inline.lstrip("- ").strip())

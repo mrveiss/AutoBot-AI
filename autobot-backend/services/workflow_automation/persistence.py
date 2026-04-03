@@ -44,7 +44,9 @@ async def save_notification_config(
     key = _notif_config_key(workflow_id)
     if config is None:
         await redis.delete(key)
-        logger.debug("Deleted notification config from Redis (workflow=%s)", workflow_id)
+        logger.debug(
+            "Deleted notification config from Redis (workflow=%s)", workflow_id
+        )
         return
     payload = json.dumps(asdict(config), ensure_ascii=False)
     await redis.set(key, payload, ex=_NOTIF_CONFIG_TTL)

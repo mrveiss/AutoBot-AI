@@ -589,7 +589,11 @@ class EnhancedSecurityFixAgent:
 
         except Exception as e:
             logger.error("Error processing file %sfile_path : %se ")
-            return {"file": file_path, "status": "error", "error": "File processing failed"}
+            return {
+                "file": file_path,
+                "status": "error",
+                "error": "File processing failed",
+            }
 
     def scan_directory(self, directory: str) -> List[str]:
         """Scan directory for HTML files to fix."""

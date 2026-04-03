@@ -96,7 +96,10 @@ class PerformanceOptimizedDiagnostics:
             }
         except Exception as e:
             logger.error("Error gathering system info: %s", e)
-            return {"error": "Failed to gather system info", "timestamp": datetime.now().isoformat()}
+            return {
+                "error": "Failed to gather system info",
+                "timestamp": datetime.now().isoformat(),
+            }
 
     def _get_gpu_info(self) -> Dict[str, Any]:
         """Get GPU information for performance monitoring"""
@@ -450,7 +453,12 @@ class PerformanceOptimizedDiagnostics:
 
         except Exception as e:
             logger.error("Error generating recommendations: %s", e)
-            return [{"category": "error", "recommendation": "Error generating recommendations"}]
+            return [
+                {
+                    "category": "error",
+                    "recommendation": "Error generating recommendations",
+                }
+            ]
 
     def cleanup_and_optimize_memory(self):
         """Force memory cleanup and optimization"""
