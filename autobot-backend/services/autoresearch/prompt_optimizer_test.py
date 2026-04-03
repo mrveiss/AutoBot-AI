@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from services.autoresearch.archive import Archive
 from services.autoresearch.config import AutoResearchConfig
