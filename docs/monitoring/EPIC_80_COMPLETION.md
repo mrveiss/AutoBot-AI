@@ -206,25 +206,12 @@ Features:
 </router-link>
 ```
 
-### Phase 6: Compatibility Layer (Completed)
+### Phase 6: Compatibility Layer (Removed — #3354)
 
-**File**: `autobot-backend/api/monitoring_compat.py`
-
-- Provides deprecated REST API endpoints
-- Queries Prometheus for backward compatibility
-- Returns JSON responses with deprecation warnings
-- Guides users to Grafana dashboards
-
-**Endpoints**:
-- `/api/metrics/system/current` - Current system metrics
-- `/api/metrics/system/history` - Historical system metrics
-- `/api/metrics/workflow/summary` - Workflow summary
-- `/api/metrics/errors/recent` - Recent errors
-- `/api/metrics/claude-api/status` - Claude API status
-- `/api/metrics/services/health` - Service health
-- `/api/metrics/github/status` - GitHub API status
-
-All endpoints return: `"deprecated": true` with message pointing to Grafana.
+`autobot-backend/api/monitoring_compat.py` has been deleted (#3354). The router
+was never registered and all routes returned 404. Equivalent live functionality
+exists in `api/monitoring.py` and `api/metrics.py`. Use Grafana dashboards for
+visualization.
 
 ---
 

@@ -54,8 +54,8 @@ found more)
   - `analytics_architecture.py` → `/api/architecture/health`
   - `analytics_cfg.py` → `/api/cfg-analytics/health`
   - `services.py` → `/api/services/health`
-  - `mesh_brain.py` → unregistered router (dead module)
-  - `monitoring_compat.py` → unregistered router (already deprecated module)
+  - `mesh_brain.py` → deleted (#3354, unregistered router — dead module)
+  - `monitoring_compat.py` → deleted (#3354, unregistered router — already deprecated module)
   - `natural_language_search.py` → `/api/health` (no-prefix collision risk)
 - Remaining endpoints have legitimate per-service logic (Redis ping, real service checks)
   and are not called by the frontend

@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Unit tests for MeshBrainScheduler and mesh_brain API endpoints (#1994, #2120)."""
+"""Unit tests for MeshBrainScheduler (#1994, #2120)."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -223,84 +223,6 @@ class TestStartStop:
         mock_task_b.cancel.assert_called_once()
         assert scheduler._tasks == {}
         assert scheduler._running is False
-
-
-# =============================================================================
-# API endpoint helpers (mesh_brain.py)
-# =============================================================================
-
-
-class TestMeshBrainApiHelpers:
-    def test_health_endpoint_returns_healthy_when_no_failed_jobs(self):
-        """_build_health_response returns healthy=True when no jobs have failed."""
-        from api.mesh_brain import _build_health_response
-
-        status = {
-            "running": True,
-            "jobs": {
-                "edge_sync": {"last_result": "success"},
-                "node_promoter": {"last_result": None},
-            },
-        }
-        result = _build_health_response(status)
-        assert result["healthy"] is True
-        assert result["failed_jobs"] == []
-        assert result["running"] is True
-
-    def test_health_endpoint_returns_unhealthy_when_job_failed(self):
-        """_build_health_response returns healthy=False and lists the failed job."""
-        from api.mesh_brain import _build_health_response
-
-        status = {
-            "running": True,
-            "jobs": {
-                "edge_sync": {"last_result": "failed"},
-                "node_promoter": {"last_result": "success"},
-            },
-        }
-        result = _build_health_response(status)
-        assert result["healthy"] is False
-        assert "edge_sync" in result["failed_jobs"]
-
-    def test_set_scheduler_registers_instance(self):
-        """set_scheduler() stores the scheduler so get_status endpoint can use it."""
-        import api.mesh_brain as mb
-
-        original = mb._scheduler
-        try:
-            mock_scheduler = MagicMock()
-            mb.set_scheduler(mock_scheduler)
-            assert mb._scheduler is mock_scheduler
-        finally:
-            mb._scheduler = original
-
-    @pytest.mark.asyncio
-    async def test_status_endpoint_returns_not_initialized_message(self):
-        """get_mesh_brain_status returns a safe dict when _scheduler is None."""
-        import api.mesh_brain as mb
-
-        original = mb._scheduler
-        try:
-            mb._scheduler = None
-            result = await mb.get_mesh_brain_status()
-            assert result["running"] is False
-            assert "message" in result
-        finally:
-            mb._scheduler = original
-
-    @pytest.mark.asyncio
-    async def test_health_endpoint_returns_not_initialized(self):
-        """get_mesh_brain_health returns healthy=False with reason when _scheduler is None."""
-        import api.mesh_brain as mb
-
-        original = mb._scheduler
-        try:
-            mb._scheduler = None
-            result = await mb.get_mesh_brain_health()
-            assert result["healthy"] is False
-            assert result["reason"] == "not_initialized"
-        finally:
-            mb._scheduler = original
 
 
 # =============================================================================
