@@ -28,7 +28,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from .archive import Archive
 from .config import AutoResearchConfig
+from .models import VariantArchiveEntry
 from .scorers import PromptScorer, ScorerResult
 
 logger = logging.getLogger(__name__)
@@ -76,6 +78,18 @@ class PromptVariant:
             "created_at": self.created_at,
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PromptVariant":
+        return cls(
+            id=data.get("id", ""),
+            prompt_text=data.get("prompt_text", ""),
+            output=data.get("output", ""),
+            scores=data.get("scores", {}),
+            final_score=data.get("final_score", 0.0),
+            round_number=data.get("round_number", 0),
+            created_at=data.get("created_at", 0.0),
+        )
+
 
 @dataclass
 class OptimizationSession:
@@ -92,6 +106,9 @@ class OptimizationSession:
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
     error_message: Optional[str] = None
+    # Issue #3222: quality-diversity archive (not serialised inline — persisted
+    # separately under autoresearch:archive:{session_id})
+    archive: Optional["Archive"] = field(default=None, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -167,11 +184,15 @@ class PromptOptimizer:
         # Capture pre-cancel state before starting (caller may have called cancel())
         pre_cancelled = self._cancel_event.is_set()
 
+        archive_max_size = getattr(target, "archive_max_size", target.top_k * 10)
+        archive = Archive(max_size=archive_max_size)
+
         session = OptimizationSession(
             target=target,
             status=OptimizationStatus.RUNNING,
             max_rounds=max_rounds,
             started_at=time.time(),
+            archive=archive,
         )
         self._current_session = session
 
@@ -179,6 +200,7 @@ class PromptOptimizer:
             self._cancel_event.clear()
 
         current_best_prompt = target.current_prompt
+        parent_id: Optional[str] = None
 
         try:
             for round_num in range(1, max_rounds + 1):
@@ -193,7 +215,7 @@ class PromptOptimizer:
                     target.agent_name,
                 )
 
-                round_variants = await self._run_round(
+                round_variants, failed_ids = await self._run_round(
                     current_best_prompt=current_best_prompt,
                     target=target,
                     benchmark_fn=benchmark_fn,
@@ -202,19 +224,18 @@ class PromptOptimizer:
                 )
 
                 if round_variants:
-                    best_in_round = max(round_variants, key=lambda v: v.final_score)
-                    if best_in_round.final_score > session.baseline_score:
-                        session.best_variant = best_in_round
-                        session.baseline_score = best_in_round.final_score
-                        current_best_prompt = best_in_round.prompt_text
-                        logger.info(
-                            "PromptOptimizer: new best variant %s (score=%.3f)",
-                            best_in_round.id,
-                            best_in_round.final_score,
-                        )
+                    current_best_prompt, parent_id = self._update_archive(
+                        archive=archive,
+                        round_variants=round_variants,
+                        failed_ids=failed_ids,
+                        parent_id=parent_id,
+                        round_num=round_num,
+                        session=session,
+                    )
 
                 session.rounds_completed = round_num
                 await self._save_session(session)
+                await self._save_archive(session.id, archive)
 
             if session.status == OptimizationStatus.RUNNING:
                 session.status = OptimizationStatus.COMPLETED
@@ -229,6 +250,51 @@ class PromptOptimizer:
 
         return session
 
+    def _update_archive(
+        self,
+        archive: Archive,
+        round_variants: List[PromptVariant],
+        failed_ids: set,
+        parent_id: Optional[str],
+        round_num: int,
+        session: OptimizationSession,
+    ) -> tuple:
+        """Add round variants to archive, mark failures, select next parent.
+
+        Returns (new_best_prompt, new_parent_id).
+        """
+        for v in round_variants:
+            archive.add(
+                VariantArchiveEntry(
+                    variant_id=v.id,
+                    variant=v,
+                    score=v.final_score,
+                    parent_id=parent_id,
+                    generation=round_num,
+                    valid_parent=v.id not in failed_ids,
+                )
+            )
+
+        best_in_round = max(round_variants, key=lambda v: v.final_score)
+        if best_in_round.final_score > session.baseline_score:
+            session.best_variant = best_in_round
+            session.baseline_score = best_in_round.final_score
+            logger.info(
+                "PromptOptimizer: new best variant %s (score=%.3f)",
+                best_in_round.id,
+                best_in_round.final_score,
+            )
+
+        chosen = archive.select_parent()
+        if chosen is not None:
+            logger.debug(
+                "PromptOptimizer: selected parent %s (score=%.3f)",
+                chosen.variant_id,
+                chosen.score,
+            )
+            return chosen.variant.prompt_text, chosen.variant_id
+        return best_in_round.prompt_text, best_in_round.id
+
     async def _run_round(
         self,
         current_best_prompt: str,
@@ -236,8 +302,13 @@ class PromptOptimizer:
         benchmark_fn: BenchmarkFn,
         round_number: int,
         session: OptimizationSession,
-    ) -> List[PromptVariant]:
-        """Execute a single mutation -> benchmark -> score round."""
+    ) -> tuple:
+        """Execute a single mutation -> benchmark -> score round.
+
+        Returns (variants, failed_ids) where failed_ids is the set of variant
+        IDs that raised a scorer exception. Caller marks those invalid after
+        adding all entries to the archive.
+        """
         # 1. Mutate
         prompt_texts = await self._mutate_prompt(
             current_best_prompt, target.mutation_count
@@ -254,30 +325,33 @@ class PromptOptimizer:
             )
             variants.append(variant)
 
-        # 3. Score through the chain with staged gating
-        scored_variants = await self._score_through_chain(
+        # 3. Score through the chain with staged gating; collect failed IDs
+        failed_ids = await self._score_through_chain(
             variants=variants,
             target=target,
             session=session,
         )
 
         session.all_variants.extend(variants)
-        return scored_variants
+        return variants, failed_ids
 
     async def _score_through_chain(
         self,
         variants: List[PromptVariant],
         target: PromptOptTarget,
         session: OptimizationSession,
-    ) -> List[PromptVariant]:
+    ) -> set:
         """Run staged scoring chain with threshold gating between tiers.
 
         Tier-1 uses subset_fraction for cheap evaluation.  Variants that do
         not clear staged_eval_threshold are finalized at their current score
         and excluded from subsequent (more expensive) tiers.
+
+        Returns the set of variant IDs that raised a scorer exception.
         """
         candidates = list(variants)
         threshold = self._config.staged_eval_threshold
+        failed_ids: set = set()
 
         for tier_idx, scorer_name in enumerate(target.scorer_chain):
             scorer = self._scorers.get(scorer_name)
@@ -290,13 +364,14 @@ class PromptOptimizer:
             subset_frac = (
                 self._config.staged_eval_fraction if tier_idx == 0 else None
             )
-            candidates = await self._score_tier(
+            candidates, tier_failed = await self._score_tier(
                 scorer=scorer,
                 scorer_name=scorer_name,
                 variants=candidates,
                 session=session,
                 subset_fraction=subset_frac,
             )
+            failed_ids.update(tier_failed)
 
             # Gate: drop variants below threshold before next tier
             passed = [v for v in candidates if v.final_score >= threshold]
@@ -318,7 +393,7 @@ class PromptOptimizer:
                 )
                 break
 
-        return candidates
+        return failed_ids
 
     async def _score_tier(
         self,
@@ -327,19 +402,33 @@ class PromptOptimizer:
         variants: List[PromptVariant],
         session: OptimizationSession,
         subset_fraction: Optional[float],
-    ) -> List[PromptVariant]:
-        """Score all variants with one scorer and update final_score."""
+    ) -> tuple:
+        """Score all variants with one scorer and update final_score.
+
+        Returns (variants, failed_ids) where failed_ids contains IDs of
+        variants that raised a scorer exception.
+        """
+        failed_ids: set = set()
         for variant in variants:
-            result = await scorer.score(
-                variant.output,
-                {"session_id": session.id, "variant_id": variant.id},
-                subset_fraction=subset_fraction,
-            )
-            variant.scores[scorer_name] = result.score
-            variant.final_score = (
-                sum(variant.scores.values()) / len(variant.scores)
-            )
-        return variants
+            try:
+                result = await scorer.score(
+                    variant.output,
+                    {"session_id": session.id, "variant_id": variant.id},
+                    subset_fraction=subset_fraction,
+                )
+                variant.scores[scorer_name] = result.score
+                variant.final_score = (
+                    sum(variant.scores.values()) / len(variant.scores)
+                )
+            except Exception as exc:
+                logger.warning(
+                    "PromptOptimizer: scorer %r failed for variant %s: %s",
+                    scorer_name,
+                    variant.id,
+                    exc,
+                )
+                failed_ids.add(variant.id)
+        return variants, failed_ids
 
     async def _mutate_prompt(self, base_prompt: str, n: int) -> List[str]:
         """Generate N prompt variants using LLM."""
@@ -385,3 +474,31 @@ class PromptOptimizer:
             await redis.set(key, json.dumps(session.to_dict()), ex=86400 * 7)
         except Exception:
             logger.exception("Failed to save optimization session %s", session.id)
+
+    async def _save_archive(self, session_id: str, archive: "Archive") -> None:
+        """Persist quality-diversity archive to Redis.
+
+        Key: autoresearch:archive:{session_id}  (Issue #3222)
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"autoresearch:archive:{session_id}"
+            await redis.set(key, archive.to_json(), ex=86400 * 7)
+        except Exception:
+            logger.exception("Failed to save archive for session %s", session_id)
+
+    async def load_archive(self, session_id: str) -> Optional["Archive"]:
+        """Restore a previously persisted archive from Redis."""
+        try:
+            redis = await self._get_redis()
+            key = f"autoresearch:archive:{session_id}"
+            raw = await redis.get(key)
+            if raw is None:
+                return None
+            return Archive.from_json(
+                raw if isinstance(raw, str) else raw.decode("utf-8"),
+                PromptVariant,
+            )
+        except Exception:
+            logger.exception("Failed to load archive for session %s", session_id)
+            return None
