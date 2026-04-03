@@ -197,6 +197,8 @@ function initGraph(): void {
 /**
  * Fully disposes all Three.js GPU resources to prevent memory leaks.
  * Issue #3363: renderer.dispose() alone does not release geometry/material buffers.
+ * Issue #3399: textures attached to materials must also be disposed to release GPU memory
+ *   when toggling 2D/3D view repeatedly.
  */
 function disposeGraph(): void {
   if (!graph.value) return
@@ -209,7 +211,16 @@ function disposeGraph(): void {
       const mesh = obj as THREE.Mesh
       mesh.geometry?.dispose()
       const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []
-      materials.forEach((m: THREE.Material) => m.dispose())
+      materials.forEach((m: THREE.Material) => {
+        // Dispose any textures referenced by this material before releasing the material itself.
+        // Issue #3399: omitting this step leaks GPU texture memory on each 2D/3D toggle.
+        for (const value of Object.values(m as unknown as Record<string, unknown>)) {
+          if (value instanceof THREE.Texture) {
+            value.dispose()
+          }
+        }
+        m.dispose()
+      })
     })
   }
 
