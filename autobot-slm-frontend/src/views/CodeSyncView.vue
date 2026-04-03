@@ -359,12 +359,15 @@ function describeCron(expression: string): string {
 
 async function handleCheckDrift(): Promise<void> {
   isDriftLoading.value = true
-  const result = await codeSync.fetchDrift()
-  if (result) {
-    driftReport.value = result
-    showDriftDetails.value = true
+  try {
+    const result = await codeSync.fetchDrift()
+    if (result) {
+      driftReport.value = result
+      showDriftDetails.value = true
+    }
+  } finally {
+    isDriftLoading.value = false
   }
-  isDriftLoading.value = false
 }
 
 // =============================================================================

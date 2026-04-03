@@ -219,4 +219,8 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
     """
     source_root = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
     candidate = Path(source_root) / component
-    return str(candidate) if candidate.is_dir() else source_root
+    if not candidate.is_dir():
+        raise ValueError(
+            f"drift_checker: source component directory does not exist: {candidate}"
+        )
+    return str(candidate)

@@ -426,7 +426,10 @@ async def get_file_drift(
             detail=f"Invalid component '{component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
         )
 
-    source_dir = get_default_source_dir(component)
+    try:
+        source_dir = get_default_source_dir(component)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     deployed_dir = get_default_deployed_dir(component)
 
     logger.info(

@@ -9,7 +9,7 @@ Request and response models for the SLM API.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -1563,7 +1563,7 @@ class DriftedFile(BaseModel):
     path: str
     source_checksum: Optional[str] = None
     deployed_checksum: Optional[str] = None
-    status: str  # "modified" | "source_only" | "deployed_only"
+    status: Literal["modified", "source_only", "deployed_only"]
 
 
 class FileDriftReport(BaseModel):
