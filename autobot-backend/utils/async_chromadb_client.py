@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 # Issue #3094: Use SSOT config port so the default (8100) matches Ansible deployment.
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
-_CHROMADB_PORT = _ssot_config.ports.chromadb
+_CHROMADB_PORT = _ssot_config.port.chromadb
 
 logger = logging.getLogger(__name__)
 
