@@ -7,7 +7,8 @@ Unit tests for MetaEvalHarness (issue #3224).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch as mock_patch
+from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch as mock_patch
 
 import pytest
 

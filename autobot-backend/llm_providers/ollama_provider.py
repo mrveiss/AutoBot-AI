@@ -65,9 +65,7 @@ class OllamaProvider(BaseProvider):
         if self._delegate is not None:
             return self._delegate
         from llm_interface_pkg.models import LLMSettings
-        from llm_interface_pkg.providers.ollama import (
-            OllamaProvider as _OllamaProvider,
-        )
+        from llm_interface_pkg.providers.ollama import OllamaProvider as _OllamaProvider
         from llm_interface_pkg.streaming import StreamingManager
 
         settings = LLMSettings()

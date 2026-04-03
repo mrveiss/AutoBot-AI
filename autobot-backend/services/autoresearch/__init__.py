@@ -11,22 +11,7 @@ Issue #2597: Standalone experiment runner + result store.
 Issue #2599: AutoBot-orchestrated loop + web search (M2).
 """
 
-from .knowledge_synthesizer import ExperimentInsight, KnowledgeSynthesizer
-from .prompt_optimizer import (
-    BenchmarkFn,
-    OptimizationSession,
-    OptimizationStatus,
-    PromptOptimizer,
-    PromptOptTarget,
-    PromptVariant,
-)
-from .scorers import (
-    HumanReviewScorer,
-    LLMJudgeScorer,
-    PromptScorer,
-    ScorerResult,
-    ValBpbScorer,
-)
+from .archive import Archive
 from .auto_research_agent import (
     ApprovalGate,
     AutoResearchAgent,
@@ -37,12 +22,16 @@ from .auto_research_agent import (
     SessionStatus,
 )
 from .config import AutoResearchConfig
+from .knowledge_synthesizer import ExperimentInsight, KnowledgeSynthesizer
+from .meta_agent import MetaAgent, MetaPatch
+from .meta_eval_harness import MetaEvalHarness, MetaEvalResult
 from .models import (
     Experiment,
     ExperimentResult,
     ExperimentState,
     ExperimentStats,
     HyperParams,
+    VariantArchiveEntry,
 )
 from .osint_engine import (
     CorrelatedSignal,
@@ -57,13 +46,24 @@ from .osint_engine import (
     build_default_engine,
 )
 from .parser import ExperimentOutputParser
+from .prompt_optimizer import (
+    BenchmarkFn,
+    OptimizationSession,
+    OptimizationStatus,
+    PromptOptimizer,
+    PromptOptTarget,
+    PromptVariant,
+)
 from .routes import router
 from .runner import ExperimentRunner
+from .scorers import (
+    HumanReviewScorer,
+    LLMJudgeScorer,
+    PromptScorer,
+    ScorerResult,
+    ValBpbScorer,
+)
 from .store import ExperimentStore
-from .archive import Archive
-from .models import VariantArchiveEntry
-from .meta_agent import MetaAgent, MetaPatch
-from .meta_eval_harness import MetaEvalHarness, MetaEvalResult
 
 __all__ = [
     # Models
