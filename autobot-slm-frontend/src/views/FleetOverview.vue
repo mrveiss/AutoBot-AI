@@ -577,7 +577,7 @@ const formatLastSeen = formatRelativeTime
           aria-labelledby="delete-dialog-title"
           @keydown.escape="closeDeleteConfirm"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDeleteConfirm"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeDeleteConfirm"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
               <div class="shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
@@ -641,7 +641,7 @@ const formatLastSeen = formatRelativeTime
           aria-label="Connection test result"
           @keydown.escape="closeConnectionTestResult"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeConnectionTestResult"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeConnectionTestResult"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
               <div
@@ -703,7 +703,7 @@ const formatLastSeen = formatRelativeTime
           aria-label="Node details panel"
           @keydown.escape="closeLifecyclePanel"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeLifecyclePanel"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeLifecyclePanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
             <Transition
               enter-active-class="transform transition duration-300 ease-out"
@@ -799,7 +799,7 @@ const formatLastSeen = formatRelativeTime
           aria-label="Node services panel"
           @keydown.escape="closeServicesPanel"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeServicesPanel"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeServicesPanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
             <Transition
               enter-active-class="transform transition duration-300 ease-out"

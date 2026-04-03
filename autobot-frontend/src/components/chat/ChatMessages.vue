@@ -1422,7 +1422,7 @@ onMounted(async () => {
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
   @apply bg-purple-900/20 border-purple-500/40 text-purple-200;
-  border-left: 4px solid theme('colors.purple.500');
+  border-left: 4px solid var(--color-purple-500);
 }
 
 .message-wrapper.type-thought .message-avatar {
@@ -1453,7 +1453,7 @@ onMounted(async () => {
 /* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
   @apply bg-indigo-900/20 border-indigo-500/40 text-indigo-200;
-  border-left: 4px solid theme('colors.indigo.500');
+  border-left: 4px solid var(--color-indigo-500);
 }
 
 .message-wrapper.type-planning .message-avatar {
@@ -1484,7 +1484,7 @@ onMounted(async () => {
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
   @apply bg-amber-900/20 border-amber-500/40 text-amber-200;
-  border-left: 4px solid theme('colors.amber.500');
+  border-left: 4px solid var(--color-amber-500);
 }
 
 .message-wrapper.type-debug .message-avatar {
@@ -1510,7 +1510,7 @@ onMounted(async () => {
 /* UTILITY MESSAGES - Slate theme for tool/utility output */
 .message-wrapper.type-utility {
   @apply bg-slate-100 border-slate-300 text-slate-800;
-  border-left: 4px solid theme('colors.slate.500');
+  border-left: 4px solid var(--color-slate-500);
 }
 
 .message-wrapper.type-utility .message-avatar {
@@ -1528,7 +1528,7 @@ onMounted(async () => {
 /* SOURCES MESSAGES - Teal theme for source references */
 .message-wrapper.type-sources {
   @apply bg-teal-50 border-teal-300 text-teal-900;
-  border-left: 4px solid theme('colors.teal.500');
+  border-left: 4px solid var(--color-teal-500);
 }
 
 .message-wrapper.type-sources .message-avatar {
@@ -1546,7 +1546,7 @@ onMounted(async () => {
 /* JSON MESSAGES - Cyan theme for structured data */
 .message-wrapper.type-json {
   @apply bg-cyan-50 border-cyan-300 text-cyan-900;
-  border-left: 4px solid theme('colors.cyan.500');
+  border-left: 4px solid var(--color-cyan-500);
 }
 
 .message-wrapper.type-json .message-avatar {
@@ -1560,7 +1560,7 @@ onMounted(async () => {
 /* TERMINAL OUTPUT MESSAGES - Dark theme for terminal output */
 .message-wrapper.type-terminal_output {
   @apply bg-gray-900 border-gray-700 text-gray-100;
-  border-left: 4px solid theme('colors.green.500');
+  border-left: 4px solid var(--color-green-500);
 }
 
 .message-wrapper.type-terminal_output .message-avatar {
@@ -1587,7 +1587,7 @@ onMounted(async () => {
 /* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
 .message-wrapper.type-command_approval_request {
   @apply bg-yellow-900/20 border-yellow-500/40 text-yellow-200;
-  border-left: 4px solid theme('colors.yellow.500');
+  border-left: 4px solid var(--color-yellow-500);
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {

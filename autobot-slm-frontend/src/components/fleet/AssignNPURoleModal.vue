@@ -74,7 +74,7 @@ async function assignRole(): Promise<void> {
   <div v-if="visible" class="fixed inset-0 z-50 overflow-y-auto">
     <!-- Backdrop -->
     <div
-      class="fixed inset-0 bg-gray-500 bg-opacity-50 transition-opacity"
+      class="fixed inset-0 bg-gray-500/50 transition-opacity"
       @click="close"
     />
 

@@ -15,7 +15,7 @@
           <div class="shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary focus:ring-opacity-50"
+              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-hidden focus:ring-2 focus:ring-autobot-primary/50"
               :title="getSystemStatusTooltip()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">

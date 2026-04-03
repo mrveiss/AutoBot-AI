@@ -13,7 +13,7 @@
     >
       <div
         v-show="showNotification && notificationLevel === 'toast'"
-        class="fixed bottom-4 right-4 max-w-md w-full bg-autobot-bg-card shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-9999"
+        class="fixed bottom-4 right-4 max-w-md w-full bg-autobot-bg-card shadow-lg rounded-lg pointer-events-auto ring-1 ring-black/5 overflow-hidden z-9999"
       >
         <div class="p-4">
           <div class="flex items-start">

@@ -281,11 +281,11 @@ onUnmounted(() => {
             <button
               v-if="!isAcknowledged(index)"
               @click="acknowledgeAlert(index)"
-              class="px-3 py-1 text-xs font-medium bg-white bg-opacity-50 rounded-sm hover:bg-opacity-75 transition-colors"
+              class="px-3 py-1 text-xs font-medium bg-white/50 rounded-sm hover:bg-white/75 transition-colors"
             >
               Acknowledge
             </button>
-            <span v-else class="px-3 py-1 text-xs font-medium bg-white bg-opacity-30 rounded-sm">
+            <span v-else class="px-3 py-1 text-xs font-medium bg-white/30 rounded-sm">
               Acknowledged
             </span>
           </div>

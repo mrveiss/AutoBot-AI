@@ -401,7 +401,7 @@ onUnmounted(() => {
 
     <!-- Screenshot Modal (Issue #74) -->
     <Teleport to="body">
-      <div v-if="showScreenshotModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75" @click="showScreenshotModal = false">
+      <div v-if="showScreenshotModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75" @click="showScreenshotModal = false">
         <div class="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] flex flex-col" @click.stop>
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h3 class="text-lg font-semibold text-gray-900">Desktop Screenshot</h3>
@@ -422,7 +422,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Type Text Dialog (Issue #74) -->
-      <div v-if="showTypeDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" @click="showTypeDialog = false">
+      <div v-if="showTypeDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click="showTypeDialog = false">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.stop>
           <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h3 class="text-lg font-semibold text-gray-900">Type Text on Desktop</h3>
