@@ -58,7 +58,9 @@ class Archive:
     # Selection
     # ------------------------------------------------------------------
 
-    def select_parent(self, strategy: str = "random_weighted") -> Optional[VariantArchiveEntry]:
+    def select_parent(
+        self, strategy: str = "random_weighted"
+    ) -> Optional[VariantArchiveEntry]:
         """Return a parent entry using *strategy*.
 
         Supported strategies

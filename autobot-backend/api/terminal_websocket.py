@@ -124,9 +124,7 @@ class TerminalWebSocketHandler:
                     await self._send_error(websocket, "Invalid JSON")
                 except Exception as e:
                     logger.error(f"Error handling WebSocket message: {e}")
-                    await self._send_error(
-                        websocket, "Error processing message"
-                    )
+                    await self._send_error(websocket, "Error processing message")
 
         except Exception as e:
             logger.error(f"WebSocket session error: {e}")

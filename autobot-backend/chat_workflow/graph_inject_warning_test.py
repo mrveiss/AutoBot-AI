@@ -75,7 +75,9 @@ _STUBS: dict = {
     "langgraph": types.ModuleType("langgraph"),
     "langgraph.checkpoint": types.ModuleType("langgraph.checkpoint"),
     "langgraph.checkpoint.redis": types.ModuleType("langgraph.checkpoint.redis"),
-    "langgraph.checkpoint.redis.aio": types.ModuleType("langgraph.checkpoint.redis.aio"),
+    "langgraph.checkpoint.redis.aio": types.ModuleType(
+        "langgraph.checkpoint.redis.aio"
+    ),
     "langgraph.graph": types.ModuleType("langgraph.graph"),
     "langgraph.types": types.ModuleType("langgraph.types"),
     "typing_extensions": types.ModuleType("typing_extensions"),
@@ -126,7 +128,9 @@ class TestInjectMidConversationWarning:
         result = _inject_mid_conversation_warning(
             "Avoid repeating tool calls.", "Answer the question."
         )
-        assert result == "Answer the question.\n\n[Guidance: Avoid repeating tool calls.]"
+        assert (
+            result == "Answer the question.\n\n[Guidance: Avoid repeating tool calls.]"
+        )
 
     def test_empty_prompt(self):
         """Helper works when initial_prompt is empty."""
@@ -195,9 +199,13 @@ class TestAnthropicSystemMessageConstraint:
         messages = [
             SystemMessage(content="You are a helpful assistant."),
             HumanMessage(content="Hello"),
-            SystemMessage(content="[Warning: loop detected]"),  # mid-conversation — WRONG
+            SystemMessage(
+                content="[Warning: loop detected]"
+            ),  # mid-conversation — WRONG
         ]
-        with pytest.raises(ValueError, match="Anthropic does not support system messages"):
+        with pytest.raises(
+            ValueError, match="Anthropic does not support system messages"
+        ):
             self._mock_format_messages(messages)
 
     def test_human_message_injection_accepted(self):

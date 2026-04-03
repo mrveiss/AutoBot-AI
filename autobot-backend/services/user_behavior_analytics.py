@@ -271,7 +271,11 @@ class UserBehaviorAnalytics:
 
         except Exception as e:
             logger.error("Failed to get user journey: %s", e)
-            return {"session_id": session_id, "error": "Failed to retrieve user journey", "steps": []}
+            return {
+                "session_id": session_id,
+                "error": "Failed to retrieve user journey",
+                "steps": [],
+            }
 
     async def get_daily_stats(self, days: int = 30) -> dict:
         """

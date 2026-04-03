@@ -62,9 +62,7 @@ def _render_session_metadata_markdown(
 # ---------------------------------------------------------------------------
 
 
-def _build_json_envelope(
-    session_id: str, chat_data: Dict[str, Any]
-) -> Dict[str, Any]:
+def _build_json_envelope(session_id: str, chat_data: Dict[str, Any]) -> Dict[str, Any]:
     """Wrap raw session data in the versioned AutoBot JSON export envelope."""
     return {
         "format": AUTOBOT_EXPORT_FORMAT,
@@ -150,9 +148,7 @@ async def export_all_conversations_json(chat_history_manager) -> Optional[str]:
             session_id = session_info.get("chatId") or session_info.get("id", "")
             if not session_id:
                 continue
-            chat_data = await _load_full_session_data(
-                chat_history_manager, session_id
-            )
+            chat_data = await _load_full_session_data(chat_history_manager, session_id)
             if chat_data is not None:
                 envelopes.append(_build_json_envelope(session_id, chat_data))
         archive = _build_bulk_envelope(envelopes)

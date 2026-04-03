@@ -129,7 +129,9 @@ class BaseLLMJudge:
 
         except Exception as e:
             logger.error("Error in %s judgment: %s", self.judge_type, e)
-            return await self._create_error_judgment(subject, "Judgment evaluation failed")
+            return await self._create_error_judgment(
+                subject, "Judgment evaluation failed"
+            )
 
     async def _finalize_judgment_result(
         self, judgment_result: JudgmentResult, start_time: datetime

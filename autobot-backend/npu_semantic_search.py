@@ -860,7 +860,11 @@ class NPUSemanticSearch:
                 except Exception as e:
                     logger.error("❌ Benchmark failed for %s: %s", device.value, e)
                     device_results.append(
-                        {"query": query, "iteration": iteration, "error": "Benchmark failed"}
+                        {
+                            "query": query,
+                            "iteration": iteration,
+                            "error": "Benchmark failed",
+                        }
                     )
 
         return device_results
@@ -1344,7 +1348,10 @@ class NPUSemanticSearch:
             }
         except Exception as e:
             logger.error("Failed to get code collection stats: %s", e)
-            return {"available": False, "error": "Failed to retrieve code collection stats"}
+            return {
+                "available": False,
+                "error": "Failed to retrieve code collection stats",
+            }
 
     def _search_single_modality(
         self,

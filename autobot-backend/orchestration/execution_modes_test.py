@@ -502,7 +502,9 @@ class TestWorkflowExecutorDebugMode:
         cfg = {"workflow_id": "wf_dag_notif", "channels": {}}
 
         mock_notify = unittest.mock.AsyncMock()
-        with unittest.mock.patch.object(executor, "_send_workflow_notification", mock_notify):
+        with unittest.mock.patch.object(
+            executor, "_send_workflow_notification", mock_notify
+        ):
             asyncio.get_event_loop().run_until_complete(
                 executor.execute_coordinated_workflow(
                     "wf_dag_notif",

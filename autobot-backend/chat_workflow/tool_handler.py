@@ -1318,7 +1318,11 @@ class ToolHandlerMixin:
         except Exception as e:
             logger.error("[Issue #1368] Browser tool '%s' failed: %s", tool_name, e)
             execution_results.append(
-                {"tool": tool_name, "status": "error", "error": "Browser tool execution failed"}
+                {
+                    "tool": tool_name,
+                    "status": "error",
+                    "error": "Browser tool execution failed",
+                }
             )
             yield WorkflowMessage(
                 type="error",

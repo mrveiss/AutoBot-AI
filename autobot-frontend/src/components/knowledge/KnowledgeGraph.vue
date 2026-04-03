@@ -1171,11 +1171,15 @@ function toggleViewMode(): void {
     viewMode.value = '3d'
   } else {
     viewMode.value = '2d'
+    // Double nextTick: first tick commits the v-if DOM change; second tick guarantees
+    // the container has non-zero dimensions before Cytoscape initialises (Issue #3400)
     nextTick(() => {
-      if (!cy.value && cytoscapeContainer.value) {
-        initCytoscape()
-      }
-      updateCytoscapeElements()
+      nextTick(() => {
+        if (!cy.value && cytoscapeContainer.value) {
+          initCytoscape()
+        }
+        updateCytoscapeElements()
+      })
     })
   }
 }

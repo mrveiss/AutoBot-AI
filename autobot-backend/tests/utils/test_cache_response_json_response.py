@@ -28,7 +28,6 @@ from utils.advanced_cache_manager import (
 )
 from utils.advanced_cache_manager import SimpleCacheManager
 
-
 # ---------------------------------------------------------------------------
 # _serialise_response
 # ---------------------------------------------------------------------------
