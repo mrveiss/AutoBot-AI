@@ -60,12 +60,28 @@ class MetaPatch:
         return {
             "patch_id": self.patch_id,
             "target_path": self.target_path,
+            "original_content": self.original_content,
+            "modified_content": self.modified_content,
             "has_changes": self.has_changes,
             "rationale": self.rationale,
             "generation": self.generation,
             "parent_id": self.parent_id,
             "created_at": self.created_at,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MetaPatch":
+        """Reconstruct a MetaPatch from its serialised form (for Archive replay)."""
+        return cls(
+            patch_id=data["patch_id"],
+            target_path=data.get("target_path", ""),
+            original_content=data.get("original_content", ""),
+            modified_content=data.get("modified_content", ""),
+            rationale=data.get("rationale", ""),
+            generation=data.get("generation", 0),
+            parent_id=data.get("parent_id"),
+            created_at=data.get("created_at", 0.0),
+        )
 
 
 class MetaAgent:
@@ -158,7 +174,8 @@ class MetaAgent:
             raise ValueError(f"target_module_path must be absolute, got: {path}")
         if path.suffix != ".py":
             raise ValueError(f"target_module_path must be a .py file, got: {path.suffix}")
-        if "test" in path.stem.lower():
+        stem = path.stem.lower()
+        if stem.startswith("test_") or stem.endswith("_test"):
             raise ValueError(
                 f"meta-agent must not target test files: {path.name}"
             )

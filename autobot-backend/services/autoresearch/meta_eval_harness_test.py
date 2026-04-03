@@ -309,3 +309,82 @@ async def test_evaluate_patch_adds_to_archive(tmp_path):
     assert entry.variant_id == "arch-patch"
     assert entry.score == pytest.approx(0.75)
     assert entry.generation == 2
+
+
+# ---------------------------------------------------------------------------
+# Gate bypass safety
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_evaluate_patch_rejects_when_gate_required_no_session(tmp_path):
+    """When approval is required but session_id is empty, reject (not approve)."""
+    gate = MagicMock()
+    gate.check_approval_needed = MagicMock(return_value=True)  # gate always required
+    gate.request_approval = AsyncMock()
+
+    harness = _make_harness(approval_gate=gate)
+    archive = Archive()
+
+    applied_path = tmp_path / "module.py"
+    applied_path.write_text("def foo(): return 1\n", encoding="utf-8")
+
+    patch = MetaPatch(
+        patch_id="bypass-patch",
+        target_path=str(applied_path),
+        original_content="def foo(): return 1\n",
+        modified_content="def foo(): return 2\n",
+    )
+
+    with (
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
+        mock_patch.object(
+            harness, "_run_tests",
+            new=AsyncMock(return_value=(5, 5, "5 passed in 0.1s")),
+        ),
+    ):
+        (tmp_path / "tmp.py").touch()
+        result = await harness.evaluate_patch(patch, archive, session_id="")
+
+    assert result.decision == "rejected"
+    assert result.applied is False
+    gate.request_approval.assert_not_awaited()
+    # Live file must be unchanged
+    assert applied_path.read_text(encoding="utf-8") == "def foo(): return 1\n"
+
+
+# ---------------------------------------------------------------------------
+# Backup filename uniqueness
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_apply_patch_backup_includes_patch_id(tmp_path):
+    """Each applied patch must create a unique backup file."""
+    harness = _make_harness()
+    harness.config.meta_agent_approval_threshold = 2.0  # no gate
+
+    applied_path = tmp_path / "module.py"
+    applied_path.write_text("def foo(): return 1\n", encoding="utf-8")
+
+    patch = MetaPatch(
+        patch_id="abcdef12-0000-0000-0000-000000000000",
+        target_path=str(applied_path),
+        original_content="def foo(): return 1\n",
+        modified_content="def foo(): return 2\n",
+    )
+    archive = Archive()
+
+    with (
+        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
+        mock_patch.object(
+            harness, "_run_tests",
+            new=AsyncMock(return_value=(3, 3, "3 passed in 0.1s")),
+        ),
+    ):
+        (tmp_path / "tmp.py").touch()
+        result = await harness.evaluate_patch(patch, archive)
+
+    assert result.applied is True
+    backup = tmp_path / "module.abcdef12.meta_bak"
+    assert backup.exists(), f"expected backup at {backup}"

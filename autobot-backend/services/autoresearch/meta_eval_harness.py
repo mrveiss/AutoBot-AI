@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import shutil
 import time
 import uuid
@@ -156,14 +157,24 @@ class MetaEvalHarness:
             )
             return result
 
-        # Consult ApprovalGate if improvement is significant
+        # Consult ApprovalGate if improvement is significant.
+        # If the gate is required but no session_id is provided we reject
+        # rather than auto-approve — never silently apply to live code.
         needs_approval = self._gate.check_approval_needed(
             result.score, self.config.meta_agent_approval_threshold
         )
-        if needs_approval and session_id:
-            result.decision = await self._request_and_wait(
-                session_id, patch, result
-            )
+        if needs_approval:
+            if not session_id:
+                logger.warning(
+                    "MetaEvalHarness: approval required for patch %s but "
+                    "no session_id provided — rejecting",
+                    patch.patch_id,
+                )
+                result.decision = "rejected"
+            else:
+                result.decision = await self._request_and_wait(
+                    session_id, patch, result
+                )
         else:
             result.decision = "approved"
 
@@ -273,7 +284,6 @@ class MetaEvalHarness:
           ``3 passed in 0.10s``
           ``2 failed in 0.05s``
         """
-        import re
         passed = 0
         failed = 0
         for line in reversed(output.splitlines()):
@@ -341,11 +351,13 @@ class MetaEvalHarness:
     def _apply_patch(patch: MetaPatch) -> None:
         """Overwrite the live module with the modified content.
 
-        A backup is written alongside the live file before overwriting so the
-        original is recoverable without touching git.
+        A per-patch backup is written before overwriting so each applied
+        generation is independently recoverable without touching git.
+        Backup name: ``<module>.<patch_id_prefix>.meta_bak`` — unique per patch.
         """
         target = Path(patch.target_path)
-        backup = target.with_suffix(".py.meta_bak")
+        prefix = patch.patch_id[:8]
+        backup = target.with_name(f"{target.stem}.{prefix}.meta_bak")
         shutil.copy2(target, backup)
         target.write_text(patch.modified_content, encoding="utf-8")
         logger.info(

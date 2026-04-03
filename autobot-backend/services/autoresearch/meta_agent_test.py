@@ -60,6 +60,25 @@ def test_metapatch_to_dict_keys():
     assert "has_changes" in d
 
 
+def test_metapatch_from_dict_roundtrip():
+    original = MetaPatch(
+        patch_id="roundtrip-id",
+        target_path="/tmp/foo.py",
+        original_content="x = 1\n",
+        modified_content="x = 2\n",
+        rationale="test",
+        generation=3,
+        parent_id="parent-abc",
+    )
+    restored = MetaPatch.from_dict(original.to_dict())
+    assert restored.patch_id == original.patch_id
+    assert restored.original_content == original.original_content
+    assert restored.modified_content == original.modified_content
+    assert restored.rationale == original.rationale
+    assert restored.generation == original.generation
+    assert restored.parent_id == original.parent_id
+
+
 # ---------------------------------------------------------------------------
 # _validate_target
 # ---------------------------------------------------------------------------
@@ -79,12 +98,28 @@ def test_validate_target_rejects_non_py(tmp_path):
         agent._validate_target(f)
 
 
-def test_validate_target_rejects_test_file(tmp_path):
+def test_validate_target_rejects_test_prefix_file(tmp_path):
     agent, _ = _make_agent()
     f = tmp_path / "test_module.py"
     f.touch()
     with pytest.raises(ValueError, match="test files"):
         agent._validate_target(f)
+
+
+def test_validate_target_rejects_test_suffix_file(tmp_path):
+    agent, _ = _make_agent()
+    f = tmp_path / "module_test.py"
+    f.touch()
+    with pytest.raises(ValueError, match="test files"):
+        agent._validate_target(f)
+
+
+def test_validate_target_accepts_protest_py(tmp_path):
+    """'protest.py' contains 'test' as substring but is NOT a test file."""
+    agent, _ = _make_agent()
+    f = tmp_path / "protest.py"
+    f.touch()
+    agent._validate_target(f)  # should not raise
 
 
 def test_validate_target_rejects_missing(tmp_path):
