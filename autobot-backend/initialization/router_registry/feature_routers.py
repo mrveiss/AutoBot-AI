@@ -445,7 +445,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Issue #3407: SLM Docker deployment bridge
     (
         "api.slm.deployments",
-        "/v1",
+        "",
         ["slm-deployments"],
         "slm_deployments",
     ),

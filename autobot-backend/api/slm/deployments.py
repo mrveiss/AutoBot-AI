@@ -39,8 +39,10 @@ from services.slm.deployment_orchestrator import (
     DeploymentContext,
     DeploymentOrchestrator,
     DeploymentStatus,
+    SLMDeploymentOrchestrator,
     get_orchestrator,
 )
+from services.slm_client import get_slm_client
 
 logger = logging.getLogger(__name__)
 
@@ -120,15 +122,13 @@ async def deploy_docker(request: DockerDeploymentRequest) -> DockerDeploymentSta
     The SLM runs the configured Ansible playbook (default:
     deploy-hybrid-docker.yml) and returns a deployment record.
     """
-    orch = get_orchestrator()
-    if orch is None:
+    client = get_slm_client()
+    if client is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Deployment orchestrator not initialised",
+            detail="SLM client not initialised",
         )
-    from services.slm.deployment_orchestrator import SLMDeploymentOrchestrator
-
-    slm_orch = SLMDeploymentOrchestrator(orch._client)
+    slm_orch = SLMDeploymentOrchestrator(client)
     result = await slm_orch.deploy_docker(request)
     logger.info(
         "Docker deployment triggered: %s on node %s",
@@ -219,7 +219,12 @@ async def execute_deployment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Deployment is not queued (current status: {ctx.status})",
         )
-    ctx.status = DeploymentStatus.RUNNING
+    ok = await orch.execute_deployment(deployment_id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not execute deployment {deployment_id!r}",
+        )
     logger.info("Deployment execution started: %s", deployment_id)
     return DeploymentActionResponse(
         deployment_id=deployment_id, action="execute", success=True

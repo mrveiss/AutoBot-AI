@@ -224,6 +224,31 @@ class DeploymentOrchestrator:
                 return ctx
         return None
 
+    async def execute_deployment(self, deployment_id: str) -> bool:
+        """Execute a QUEUED deployment by forwarding each node to the SLM.
+
+        Transitions the context through RUNNING → COMPLETED/FAILED.
+        Returns False if the deployment is not found or not QUEUED.
+        """
+        ctx = self.get_deployment(deployment_id)
+        if ctx is None or ctx.status != DeploymentStatus.QUEUED:
+            return False
+        ctx.status = DeploymentStatus.RUNNING
+        try:
+            for node_id in ctx.target_nodes:
+                extra: dict = {}
+                if ctx.playbook_path:
+                    extra["playbook"] = ctx.playbook_path
+                await self._client.create_deployment(
+                    node_id=node_id, roles=[ctx.role_name], extra_data=extra
+                )
+            ctx.status = DeploymentStatus.COMPLETED
+            logger.info("Deployment completed: %s", deployment_id)
+        except Exception as exc:
+            ctx.status = DeploymentStatus.FAILED
+            logger.error("Deployment %s failed: %s", deployment_id, exc)
+        return True
+
     async def cancel_deployment(self, deployment_id: str) -> bool:
         """
         Cancel a deployment.

@@ -801,6 +801,11 @@ async def _init_slm_client():
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
+        from services.slm.deployment_orchestrator import init_orchestrator
+        from services.slm_client import get_slm_client as _get_slm_client
+
+        init_orchestrator(_get_slm_client())
+        logger.info("✅ [ 89%] SLM Client: DeploymentOrchestrator initialised")
     except Exception as slm_error:
         logger.warning(
             "SLM client initialization failed (continuing without): %s", slm_error
