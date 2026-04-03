@@ -23,7 +23,7 @@ AutoBot's documentation underwent a systematic review to identify gaps that coul
 | 3 | No Disaster Recovery Documentation | Critical | ✅ Complete | [docs/operations/disaster-recovery.md](operations/disaster-recovery.md) |
 | 4 | No Database Schema Documentation | High | ✅ Complete | [docs/architecture/redis-schema.md](architecture/redis-schema.md) |
 | 5 | Missing Scaling Strategy Documentation | High | ✅ Complete | [docs/operations/scaling-strategy.md](operations/scaling-strategy.md) |
-| 6 | No Documentation Versioning | Medium | ✅ Complete | [docs/CHANGELOG.md](CHANGELOG.md) |
+| 6 | No Documentation Versioning | Medium | ✅ Complete | [docs/changelog/CHANGELOG.md](../changelog/CHANGELOG.md) |
 
 ---
 
@@ -143,7 +143,7 @@ Created comprehensive scaling playbooks for all 5 VM types:
 
 ### 6. Documentation Versioning ✅
 
-**Location**: [docs/CHANGELOG.md](CHANGELOG.md)
+**Location**: [docs/changelog/CHANGELOG.md](../changelog/CHANGELOG.md)
 
 Implemented a changelog system tracking all documentation changes:
 
