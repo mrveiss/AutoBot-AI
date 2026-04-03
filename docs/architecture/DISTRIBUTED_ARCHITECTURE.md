@@ -780,7 +780,7 @@ echo "Maintenance completed successfully"
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)  
 - [Multi-Modal AI Integration Guide](../features/MULTIMODAL_AI_INTEGRATION.md)
 - [Security Implementation](../security/SECURITY_IMPLEMENTATION.md)
-- [Developer Setup Guide](../developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Developer Setup Guide](../developer/DEVELOPER_SETUP.md)
 - [Troubleshooting Guide](../troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md)
 
 **Support & Monitoring**:

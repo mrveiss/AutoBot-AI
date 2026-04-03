@@ -851,7 +851,7 @@ ansible-playbook playbooks/deploy-native-services.yml
 
 - **Service Management**: `docs/developer/SERVICE_MANAGEMENT.md` - Complete service management guide
 - **API Documentation**: https://172.16.168.20:8443/docs (when running)
-- **Architecture Guide**: `docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+- **Architecture Guide**: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md`
 - **Security Guide**: `docs/security/SECURITY_IMPLEMENTATION.md`
 
