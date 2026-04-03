@@ -257,14 +257,11 @@ def _build_llm_iteration_context(state: ChatState):
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
     # Inject RLM refinement hint when looping back (#1373).
-    # Uses prompt-string injection -- see _inject_mid_conversation_warning (#3260).
+    # Must use _inject_mid_conversation_warning — not SystemMessage — to satisfy
+    # Anthropic's requirement that SystemMessage only appear as the first message.
     hint = state.get("rlm_refinement_hint", "")
     if hint:
-        initial_prompt = (
-            f"{initial_prompt}\n\n"
-            f"[Self-reflection feedback -- please improve your answer: "
-            f"{hint}]"
-        )
+        initial_prompt = _inject_mid_conversation_warning(hint, initial_prompt)
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
