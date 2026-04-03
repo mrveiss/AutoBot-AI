@@ -18,6 +18,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
 
@@ -261,24 +262,7 @@ function formatEventType(eventType: string): string {
     .join(' ')
 }
 
-function formatRelativeTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
 
-  if (diffMs < 60000) {
-    return 'Just now'
-  } else if (diffMs < 3600000) {
-    const mins = Math.floor(diffMs / 60000)
-    return `${mins} minute${mins === 1 ? '' : 's'} ago`
-  } else if (diffMs < 86400000) {
-    const hours = Math.floor(diffMs / 3600000)
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  } else {
-    const days = Math.floor(diffMs / 86400000)
-    return `${days} day${days === 1 ? '' : 's'} ago`
-  }
-}
 
 function formatFullTime(timestamp: string): string {
   const date = new Date(timestamp)

@@ -20,6 +20,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import type { NodeService, ServiceStatus } from '@/types/slm'
 
 const logger = createLogger('NodeServicesPanel')
@@ -159,24 +160,7 @@ function toggleErrorDetail(serviceName: string): void {
   expandedErrors.value = next
 }
 
-function formatRelativeTime(timestamp: string | null): string {
-  if (!timestamp) return 'Never'
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
 
-  if (diffMs < 60000) return 'Just now'
-  if (diffMs < 3600000) {
-    const mins = Math.floor(diffMs / 60000)
-    return `${mins}m ago`
-  }
-  if (diffMs < 86400000) {
-    const hours = Math.floor(diffMs / 3600000)
-    return `${hours}h ago`
-  }
-  const days = Math.floor(diffMs / 86400000)
-  return `${days}d ago`
-}
 
 async function fetchServices(): Promise<void> {
   try {
