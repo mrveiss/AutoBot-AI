@@ -41,6 +41,7 @@ from api import (
     node_config_router,
     node_tls_router,
     node_vnc_router,
+    nodes_execution_router,
     nodes_router,
     npu_router,
     orchestration_router,
@@ -390,6 +391,7 @@ app.include_router(browser_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
+app.include_router(nodes_execution_router, prefix="/api")  # Issue #3406
 app.include_router(services_router, prefix="/api")
 app.include_router(fleet_services_router, prefix="/api")
 app.include_router(deployments_router, prefix="/api")
