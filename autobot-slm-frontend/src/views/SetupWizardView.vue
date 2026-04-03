@@ -195,61 +195,81 @@
         <div class="role-assignment" v-for="node in nodes" :key="node.node_id">
           <h3>{{ node.hostname }} ({{ node.ip_address }})</h3>
 
-          <!-- Core Services (required) (#1350) -->
+          <!-- Core Services (required) — grouped by deployment category (#1350, #3192) -->
           <div class="role-section">
             <span class="section-header">Core Services</span>
-            <div class="role-chips">
-              <label
-                v-for="role in rolesForNode(node.node_id, requiredRoles)"
-                :key="role.name"
-                class="role-chip"
-                :class="[
-                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
-                  `state-${roleState(node, role.name)}`,
-                ]"
-                :title="roleState(node, role.name) === 'running'
-                  ? role.display_name + ' (running)'
-                  : role.display_name"
-              >
-                <input
-                  type="checkbox"
-                  :value="role.name"
-                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
-                  @change="toggleRole(node.node_id, role.name)"
-                />
-                <span class="state-dot"></span>
-                {{ role.display_name || role.name }}
-              </label>
+            <div
+              v-for="group in groupedRolesForNode(node.node_id, requiredRoles)"
+              :key="group.label"
+              class="role-group"
+            >
+              <div class="role-group-header">
+                <span class="role-group-label">{{ group.label }}</span>
+                <span v-if="group.description" class="role-group-desc">{{ group.description }}</span>
+              </div>
+              <div class="role-chips">
+                <label
+                  v-for="role in group.roles"
+                  :key="role.name"
+                  class="role-chip"
+                  :class="[
+                    { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                    `state-${roleState(node, role.name)}`,
+                  ]"
+                  :title="roleState(node, role.name) === 'running'
+                    ? role.display_name + ' (running)'
+                    : role.display_name"
+                >
+                  <input
+                    type="checkbox"
+                    :value="role.name"
+                    :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                    @change="toggleRole(node.node_id, role.name)"
+                  />
+                  <span class="state-dot"></span>
+                  {{ role.display_name || role.name }}
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- Optional Services (#1350) -->
+          <!-- Optional Services — grouped by deployment category (#1350, #3192) -->
           <div class="role-section" v-if="rolesForNode(node.node_id, optionalRoles).length">
             <span class="section-header optional-header">Optional Services</span>
-            <div class="role-chips">
-              <label
-                v-for="role in rolesForNode(node.node_id, optionalRoles)"
-                :key="role.name"
-                class="role-chip optional-chip"
-                :class="[
-                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
-                  `state-${roleState(node, role.name)}`,
-                ]"
-                :title="roleState(node, role.name) === 'running'
-                  ? role.display_name + ' (running)'
-                  : role.degraded_without.length
-                    ? 'Without: ' + role.degraded_without.join('; ')
-                    : role.display_name"
-              >
-                <input
-                  type="checkbox"
-                  :value="role.name"
-                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
-                  @change="toggleRole(node.node_id, role.name)"
-                />
-                <span class="state-dot"></span>
-                {{ role.display_name || role.name }}
-              </label>
+            <div
+              v-for="group in groupedRolesForNode(node.node_id, optionalRoles)"
+              :key="group.label"
+              class="role-group"
+            >
+              <div class="role-group-header">
+                <span class="role-group-label">{{ group.label }}</span>
+                <span v-if="group.description" class="role-group-desc">{{ group.description }}</span>
+              </div>
+              <div class="role-chips">
+                <label
+                  v-for="role in group.roles"
+                  :key="role.name"
+                  class="role-chip optional-chip"
+                  :class="[
+                    { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                    `state-${roleState(node, role.name)}`,
+                  ]"
+                  :title="roleState(node, role.name) === 'running'
+                    ? role.display_name + ' (running)'
+                    : role.degraded_without.length
+                      ? 'Without: ' + role.degraded_without.join('; ')
+                      : role.display_name"
+                >
+                  <input
+                    type="checkbox"
+                    :value="role.name"
+                    :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                    @change="toggleRole(node.node_id, role.name)"
+                  />
+                  <span class="state-dot"></span>
+                  {{ role.display_name || role.name }}
+                </label>
+              </div>
             </div>
           </div>
 
@@ -548,6 +568,89 @@ function rolesForNode(nodeId: string, roles: RoleInfo[]): RoleInfo[] {
     )
     return !assignedTo
   })
+}
+
+/** Deployment group definitions for wizard role assignment UI (#3192). */
+interface DeploymentGroup {
+  label: string
+  description: string
+  roles: string[]
+}
+
+const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
+  {
+    label: 'Backend Stack',
+    description: 'API server and task queue',
+    roles: ['backend', 'celery'],
+  },
+  {
+    label: 'Frontend',
+    description: 'Vue frontend and nginx reverse proxy',
+    roles: ['frontend'],
+  },
+  {
+    label: 'Database',
+    description: 'Redis Stack persistence layer',
+    roles: ['redis'],
+  },
+  {
+    label: 'AI Stack',
+    description: 'AI processing service and ChromaDB vector store',
+    roles: ['ai-stack', 'chromadb'],
+  },
+  {
+    label: 'NPU Worker',
+    description: 'OpenVINO NPU inference worker',
+    roles: ['npu-worker'],
+  },
+  {
+    label: 'TTS Worker',
+    description: 'Text-to-speech synthesis service',
+    roles: ['tts-worker'],
+  },
+  {
+    label: 'Browser Worker',
+    description: 'Playwright browser automation service',
+    roles: ['browser-service'],
+  },
+  {
+    label: 'LLM Nodes',
+    description: 'Local LLM inference via Ollama',
+    roles: ['autobot-llm-cpu', 'autobot-llm-gpu'],
+  },
+  {
+    label: 'VNC / Desktop',
+    description: 'VNC remote desktop server',
+    roles: ['vnc'],
+  },
+]
+
+/**
+ * Group a filtered role list by deployment category (#3192).
+ * Roles not matched by any group appear under "Other".
+ */
+function groupedRolesForNode(
+  nodeId: string,
+  roles: RoleInfo[],
+): Array<{ label: string; description: string; roles: RoleInfo[] }> {
+  const visible = rolesForNode(nodeId, roles)
+  const placed = new Set<string>()
+  const result: Array<{ label: string; description: string; roles: RoleInfo[] }> = []
+
+  for (const group of DEPLOYMENT_GROUPS) {
+    const matched = visible.filter(r => group.roles.includes(r.name))
+    if (matched.length > 0) {
+      result.push({ label: group.label, description: group.description, roles: matched })
+      for (const r of matched) placed.add(r.name)
+    }
+  }
+
+  const ungrouped = visible.filter(r => !placed.has(r.name))
+  if (ungrouped.length > 0) {
+    result.push({ label: 'Other', description: '', roles: ungrouped })
+  }
+
+  return result
 }
 
 /** Determine per-chip state for a role on a given node (#1353). */
@@ -1411,6 +1514,30 @@ input.full-width {
 
 .optional-chip.selected {
   opacity: 1;
+}
+
+/* Deployment group sub-headers within role sections (#3192) */
+.role-group {
+  margin-bottom: 0.6rem;
+}
+
+.role-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.role-group-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary, #ccc);
+}
+
+.role-group-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted, #888);
+  font-style: italic;
 }
 
 .infra-roles-row {
