@@ -101,7 +101,7 @@ I have successfully created and deployed an automated security fix agent that id
 
 ### Generated Security Tools:
 ```
-/home/kali/Desktop/AutoBot/code-analysis-suite/fix-agents/
+code-analysis-suite/fix-agents/
 ├── security_fix_agent.py              # Original general-purpose tool
 ├── enhanced_security_fix_agent.py     # Advanced multi-layer tool
 ├── playwright_security_fixer.py       # ✅ DEPLOYED - Specialized Playwright tool
@@ -111,7 +111,7 @@ I have successfully created and deployed an automated security fix agent that id
 
 ### Protected Files:
 ```
-/home/kali/Desktop/AutoBot/tests/playwright-report/
+tests/playwright-report/
 ├── index.html                         # ✅ SECURED - Enhanced with XSS protection
 ├── security_backups/                  # Backup directory
 │   ├── index.html.backup_20250812_183322
@@ -171,7 +171,7 @@ I have successfully created and deployed an automated security fix agent that id
 
 The AutoBot project's Playwright test reports are now protected against XSS attacks through a comprehensive, multi-layer security architecture that maintains full functionality while preventing malicious code execution.
 
-**Tool Location**: `/home/kali/Desktop/AutoBot/code-analysis-suite/fix-agents/`
+**Tool Location**: `code-analysis-suite/fix-agents/`
 **Usage**: `python3 playwright_security_fixer.py <path_to_html_files>`
 **Verification**: `python3 test_security_fix.py <path_to_html_file>`
 

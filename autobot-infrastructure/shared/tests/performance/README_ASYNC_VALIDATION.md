@@ -12,7 +12,7 @@ Establish comprehensive performance baseline BEFORE async conversions (Tasks 2.1
 
 **Run Now:**
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python tests/performance/test_async_baseline.py
 ```
 
@@ -140,7 +140,7 @@ python tests/performance/compare_async_results.py \
 
 ## Results Storage
 
-**Location:** `/home/kali/Desktop/AutoBot/tests/performance/results/`
+**Location:** `tests/performance/results/`
 
 **Baseline Files:**
 ```
@@ -187,7 +187,7 @@ pip install aiohttp redis[asyncio] aiofiles
 ### Baseline Testing (Do This NOW)
 ```bash
 # Run baseline performance tests
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python tests/performance/test_async_baseline.py
 
 # Results saved to: tests/performance/results/async_baseline_YYYYMMDD_HHMMSS.json

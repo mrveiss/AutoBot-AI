@@ -15,7 +15,7 @@ This playbook reconfigures the backend systemd service to use single worker mode
 
 ### Run the fix (with sudo password prompt):
 ```bash
-cd /home/kali/Desktop/AutoBot/autobot-slm-backend/ansible
+cd autobot-slm-backend/ansible
 ansible-playbook fix-backend-worker-deadlock.yml --ask-become-pass
 ```
 

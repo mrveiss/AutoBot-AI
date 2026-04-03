@@ -192,16 +192,16 @@ Task(
     subagent_type="senior-backend-engineer",
     description="Implement issue #123",
     prompt="""
-    WORKTREE ABSOLUTE PATH: /home/kali/Desktop/AutoBot/.worktrees/issue-123
+    WORKTREE ABSOLUTE PATH: .worktrees/issue-123
 
     MANDATORY PATH DISCIPLINE — verify before ANY file operation:
     1. Run `pwd` — must match the absolute path above
     2. If it doesn't, cd to the absolute path first
     3. Use absolute paths for ALL Read/Edit/Write/Bash tool calls
-    4. NEVER write files outside /home/kali/Desktop/AutoBot/.worktrees/issue-123
+    4. NEVER write files outside .worktrees/issue-123
 
     Implement GitHub issue #123:
-    1. cd /home/kali/Desktop/AutoBot/.worktrees/issue-123 && pwd
+    1. cd .worktrees/issue-123 && pwd
     2. git checkout -b fix/issue-123
     3. Implement the full issue
     4. Run tests and verify

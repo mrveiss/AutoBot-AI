@@ -56,7 +56,7 @@ echo "172.16.168.22 ansible_host=172.16.168.22 ansible_user=autobot" >> inventor
 # 172.16.168.22
 
 # 3. Run setup playbook
-cd /home/kali/Desktop/AutoBot/autobot-slm-backend/ansible
+cd autobot-slm-backend/ansible
 ansible-playbook setup-npu-worker.yml --limit 172.16.168.22
 
 # 4. Verify
@@ -378,7 +378,7 @@ ansible-playbook provision-fleet-roles.yml --tags phase-common,phase-agent
 For issues or questions:
 1. Check playbook output for error messages
 2. Review logs: `journalctl -u <service-name>`
-3. Consult `/home/kali/Desktop/AutoBot/CLAUDE.md`
+3. Consult `CLAUDE.md`
 4. Create GitHub issue with playbook output
 
 ---

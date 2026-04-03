@@ -63,7 +63,7 @@ chat.py:generate_stream()
 
 ## Critical Code Sections
 
-### Location 1: `/home/kali/Desktop/AutoBot/backend/api/chat.py` (Lines 1437-1440)
+### Location 1: `backend/api/chat.py` (Lines 1437-1440)
 
 **UNREACHABLE CODE** after terminal command execution:
 
@@ -83,7 +83,7 @@ yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"  # ‚ù
 - Lines 1437-1440 execute **only after the stream naturally completes**
 - With terminal commands, the stream **appears to complete** (generator returns), but actually it's **waiting in an infinite loop**
 
-### Location 2: `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py` (Lines 1034-1201)
+### Location 2: `src/chat_workflow_manager.py` (Lines 1034-1201)
 
 **THE BUG - Infinite polling loop with no completion:**
 
@@ -227,7 +227,7 @@ if session_info and session_info.get("pending_approval") is None:
 4. **`last_command.get("command") != command`** - Command mismatch
 5. **Exception in polling loop** - Caught and logged, loop continues
 
-**Most likely**: **`pending_approval` is NOT being set to `None` after approval** in `/home/kali/Desktop/AutoBot/backend/services/agent_terminal_service.py`.
+**Most likely**: **`pending_approval` is NOT being set to `None` after approval** in `backend/services/agent_terminal_service.py`.
 
 Let me verify this in the agent terminal service code (lines 728-870):
 
@@ -431,8 +431,8 @@ yield WorkflowMessage(
 
 ## Files Requiring Changes
 
-1. `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py` - Add completion yields
-2. `/home/kali/Desktop/AutoBot/autobot-vue/src/stores/chat.ts` - Handle `stream_complete` message
+1. `src/chat_workflow_manager.py` - Add completion yields
+2. `autobot-vue/src/stores/chat.ts` - Handle `stream_complete` message
 
 ---
 

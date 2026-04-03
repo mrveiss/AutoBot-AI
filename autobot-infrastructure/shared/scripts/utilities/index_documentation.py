@@ -69,7 +69,7 @@ CATEGORY_TAXONOMY = {
     "developer": {
         "name": "Developer Guide",
         "description": "Setup, architecture, and development documentation",
-        "patterns": ["/developer/", "PHASE_5_DEVELOPER_SETUP"],
+        "patterns": ["/developer/", "DEVELOPER_SETUP"],
     },
     "api": {
         "name": "API Reference",

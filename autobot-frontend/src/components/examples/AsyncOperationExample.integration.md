@@ -202,7 +202,7 @@ const saveSettings = () => saveOp.execute(() => mockApi.mockSaveSettings(setting
 
 ```bash
 # Make changes to example component locally
-cd /home/kali/Desktop/AutoBot/autobot-vue/src/components/examples/
+cd autobot-vue/src/components/examples/
 
 # Edit files
 # AsyncOperationExample.vue
@@ -213,7 +213,7 @@ cd /home/kali/Desktop/AutoBot/autobot-vue/src/components/examples/
 ### 2. Test Locally (If Running Frontend Locally)
 
 ```bash
-cd /home/kali/Desktop/AutoBot/autobot-vue
+cd autobot-vue
 npm run dev
 ```
 
@@ -223,7 +223,7 @@ npm run dev
 
 ```bash
 # From AutoBot root directory
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Sync the entire examples directory
 ./scripts/utilities/sync-to-vm.sh frontend \
@@ -318,7 +318,7 @@ To remove the example from production:
 
 ```bash
 # Remove the entire examples directory
-rm -rf /home/kali/Desktop/AutoBot/autobot-vue/src/components/examples/
+rm -rf autobot-vue/src/components/examples/
 
 # Remove route from router
 # Edit: autobot-vue/src/router/index.ts

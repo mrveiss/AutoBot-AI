@@ -22,7 +22,7 @@ System Lifecycle Manager backend - manages fleet nodes, code distribution, and s
 ## Sync to SLM Machine
 
 ```bash
-# From /home/kali/Desktop/AutoBot/
+# From 
 ./scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/ /home/autobot/slm-server/
 ```
 

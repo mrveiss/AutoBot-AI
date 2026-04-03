@@ -100,11 +100,11 @@ scripts/bulletproof-frontend/test-bulletproof-architecture.sh
 
 ### Daily Development Workflow
 
-1. **Make changes locally** in `/home/kali/Desktop/AutoBot/autobot-slm-frontend/`
+1. **Make changes locally** in `autobot-slm-frontend/`
 2. **Test changes** locally before deployment
 3. **Deploy with verification**:
    ```bash
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    ./scripts/bulletproof-frontend/sync-and-verify.sh
    ```
 

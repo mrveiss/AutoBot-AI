@@ -8,13 +8,13 @@
 
 1. Execute commands to find the authoritative documentation:
    ```
-   find /home/kali/Desktop/AutoBot/docs/troubleshooting -name "*.md" | head -20
+   find docs/troubleshooting -name "*.md" | head -20
    ```
 2. Read the relevant files:
    ```
-   cat /home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md
-   cat /home/kali/Desktop/AutoBot/docs/system-state.md
-   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   cat docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md
+   cat docs/system-state.md
+   cat docs/developer/AUTOBOT_REFERENCE.md
    ```
 3. Base your answer on the **actual file contents**, not the static guidance below.
 4. If file contents contradict this document, **trust the files**.
@@ -58,7 +58,7 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 *Symptom*: API calls failing or returning 500 errors
 
 *Diagnosis Steps*:
-1. Check backend logs: `/home/kali/Desktop/AutoBot/logs/backend.log`
+1. Check backend logs: `logs/backend.log`
 2. Verify backend health: `curl http://172.16.168.20:8001/api/health`
 3. Test Redis connection: `redis-cli -h 172.16.168.23 ping`
 4. Check Ollama status: `curl http://172.16.168.24:11434/api/tags`
@@ -136,8 +136,8 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 ### Log File Locations
 
 **Main Machine:**
-- Backend: `/home/kali/Desktop/AutoBot/logs/backend.log`
-- Setup: `/home/kali/Desktop/AutoBot/logs/setup.log`
+- Backend: `logs/backend.log`
+- Setup: `logs/setup.log`
 - Docker: `docker logs <container_name>`
 
 **Frontend VM (172.16.168.21):**
@@ -172,7 +172,7 @@ curl http://172.16.168.21:5173
 **View Logs:**
 ```bash
 # Backend logs
-tail -f /home/kali/Desktop/AutoBot/logs/backend.log
+tail -f logs/backend.log
 
 # Docker logs
 docker logs -f <container_name>
@@ -196,9 +196,9 @@ nc -zv 172.16.168.23 6379
 ### Documentation References
 
 Always reference comprehensive guides:
-- **Troubleshooting Guide**: `/home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
-- **System State**: `/home/kali/Desktop/AutoBot/docs/system-state.md`
-- **API Docs**: `/home/kali/Desktop/AutoBot/docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
+- **Troubleshooting Guide**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
+- **System State**: `docs/system-state.md`
+- **API Docs**: `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
 
 ### Escalation Criteria
 

@@ -385,7 +385,7 @@ curl -X POST http://localhost:8082/model/optimize `
 For issues or questions:
 1. Check logs: `.\scripts\view-logs.ps1`
 2. Review health status: `.\scripts\check-health.ps1`
-3. Consult AutoBot documentation: `/home/kali/Desktop/AutoBot/docs/`
+3. Consult AutoBot documentation: `docs/`
 4. Report issues via AutoBot issue tracker
 
 ## License

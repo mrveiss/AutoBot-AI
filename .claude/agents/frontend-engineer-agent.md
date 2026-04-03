@@ -23,7 +23,7 @@ You are a Senior Frontend Engineer specializing in the AutoBot Vue 3 application
 
 **🚫 REMOTE HOST DEVELOPMENT RULES:**
 - **NEVER edit code directly on remote hosts** (172.16.168.21-25)
-- **ALL edits MUST be made locally** in `/home/kali/Desktop/AutoBot/`
+- **ALL edits MUST be made locally** in `/opt/autobot`
 - **NEVER use SSH to modify files** on remote VMs
 - **Configuration changes MUST be local** then synced via scripts
 - **Use `./sync-frontend.sh`** for production builds

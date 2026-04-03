@@ -59,7 +59,7 @@ const uploadFile = async (upload: any, file: File): Promise<void> => {
 #### Backend API Used
 
 - **Endpoint**: `POST /api/conversation-files/conversation/{session_id}/upload`
-- **Location**: `/home/kali/Desktop/AutoBot/backend/api/conversation_files.py:274`
+- **Location**: `backend/api/conversation_files.py:274`
 - **Status**: ✅ Already exists (implemented)
 
 #### Key Improvements
@@ -143,7 +143,7 @@ const reloadSystem = async () => {
 #### Backend API Used
 
 - **Endpoint**: `POST /api/system/reload_config`
-- **Location**: `/home/kali/Desktop/AutoBot/backend/api/system.py:226`
+- **Location**: `backend/api/system.py:226`
 - **Status**: ✅ Already exists (implemented)
 - **Functionality**: Reloads configuration and clears caches
 
@@ -249,12 +249,12 @@ const refreshMemoryStatus = async () => {
 
 1. **GPU Detection**:
    - **Endpoint**: `GET /api/monitoring/hardware/gpu`
-   - **Location**: `/home/kali/Desktop/AutoBot/backend/api/monitoring.py:538`
+   - **Location**: `backend/api/monitoring.py:538`
    - **Returns**: Real GPU metrics (utilization, memory, temperature, name)
 
 2. **System Memory**:
    - **Endpoint**: `GET /api/system/metrics`
-   - **Location**: `/home/kali/Desktop/AutoBot/backend/api/system.py:587`
+   - **Location**: `backend/api/system.py:587`
    - **Returns**: Real memory metrics using `psutil` (total, available, used, percent)
 
 #### Key Improvements

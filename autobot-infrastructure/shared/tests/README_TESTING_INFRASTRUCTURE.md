@@ -391,7 +391,7 @@ pipeline {
 | **Integration Focus** | `python tests/integration/test_distributed_system_integration.py` | 15-20 min | Cross-VM communication |
 | **CI/CD Pipeline** | `python tests/ci_cd_integration.py --pipeline` | 30-45 min | Full pipeline validation |
 
-**Test Results Location**: `/home/kali/Desktop/AutoBot/tests/results/`
+**Test Results Location**: `tests/results/`
 
 **Support**: For testing issues, check logs in `tests/results/` and review the troubleshooting section above.
 

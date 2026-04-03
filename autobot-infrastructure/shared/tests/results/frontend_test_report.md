@@ -74,7 +74,7 @@
    - Check startup configuration and host binding settings
 
 2. **Remove ApiClient Conflict**:
-   - Delete `/home/kali/Desktop/AutoBot/autobot-vue/src/utils/ApiClient.js`
+   - Delete `autobot-vue/src/utils/ApiClient.js`
    - Ensure only TypeScript version (.ts) is used
 
 3. **Network Configuration**:

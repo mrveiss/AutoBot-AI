@@ -38,7 +38,7 @@ async def test_terminal_api():
                 json={
                     "shell": "/bin/bash",
                     "environment": {},
-                    "working_directory": "/home/kali",
+                    "working_directory": "/home/autobot",
                 },
                 timeout=5.0,
             )

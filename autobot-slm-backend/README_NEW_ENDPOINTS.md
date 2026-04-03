@@ -39,7 +39,7 @@ This implementation adds seven new API endpoints to the Service Lifecycle Manage
 ### 1. Install Dependencies
 
 ```bash
-cd /home/kali/Desktop/AutoBot/slm-server
+cd slm-server
 pip install -r requirements.txt
 ```
 

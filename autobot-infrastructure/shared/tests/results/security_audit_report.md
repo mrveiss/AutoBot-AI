@@ -15,7 +15,7 @@ This comprehensive security audit of the AutoBot codebase has identified multipl
 ## Critical Security Vulnerabilities
 
 ### 1. **Command Injection in Elevation System**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/elevation.py`  
+**File**: `backend/api/elevation.py`  
 **Lines**: 178-179, 196  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-78 (OS Command Injection)
@@ -53,7 +53,7 @@ process = await asyncio.create_subprocess_exec(
 ```
 
 ### 2. **Unrestricted Command Execution in Terminal WebSocket**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/terminal_websocket.py`  
+**File**: `backend/api/terminal_websocket.py`  
 **Lines**: 49-54, 131-138  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-78 (OS Command Injection)
@@ -79,7 +79,7 @@ elif msg_type == "start_command":
 **Recommended Fix**: Implement command validation, whitelist approach, and proper sandboxing.
 
 ### 3. **Weak CORS Configuration**
-**File**: `/home/kali/Desktop/AutoBot/backend/app_factory.py`  
+**File**: `backend/app_factory.py`  
 **Lines**: 370-377  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-346 (Origin Validation Error)
@@ -102,7 +102,7 @@ app.add_middleware(
 **Recommended Fix**: Specify explicit allowed headers and remove wildcard exposure.
 
 ### 4. **Missing Authentication on Critical Endpoints**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/elevation.py`  
+**File**: `backend/api/elevation.py`  
 **Lines**: 41, 65, 127  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-862 (Missing Authorization)
@@ -124,7 +124,7 @@ async def execute_elevated_command(session_token: str, command: str):
 **Recommended Fix**: Implement proper authentication middleware for all elevation endpoints.
 
 ### 5. **Path Traversal in File Manager**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/files.py`  
+**File**: `backend/api/files.py`  
 **Lines**: 177-203  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-22 (Path Traversal)
@@ -145,7 +145,7 @@ def validate_and_resolve_path(path: str) -> Path:
 **Recommended Fix**: Use `os.path.realpath()` and strict canonicalization.
 
 ### 6. **Playwright JavaScript Code Execution**
-**File**: `/home/kali/Desktop/AutoBot/playwright-server.js`  
+**File**: `playwright-server.js`  
 **Lines**: 99-110  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-94 (Code Injection)
@@ -164,7 +164,7 @@ app.post('/execute', async (req, res) => {
 **Recommended Fix**: Implement script validation and sandboxing.
 
 ### 7. **Insecure Session Management**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/elevation.py`  
+**File**: `backend/api/elevation.py`  
 **Lines**: 82-95  
 **Risk Level**: **CRITICAL**  
 **CWE**: CWE-384 (Session Fixation)
@@ -201,7 +201,7 @@ r.execute_command("FT.DROPINDEX", index_name)  # User-controlled index_name
 ## High Severity Vulnerabilities
 
 ### 9. **Disabled Authentication in File Operations**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/files.py`  
+**File**: `backend/api/files.py`  
 **Lines**: 253-258  
 **Risk Level**: **HIGH**  
 **CWE**: CWE-862 (Missing Authorization)
@@ -219,7 +219,7 @@ r.execute_command("FT.DROPINDEX", index_name)  # User-controlled index_name
 **Recommended Fix**: Enable authentication immediately.
 
 ### 10. **Weak Role-Based Access Control**
-**File**: `/home/kali/Desktop/AutoBot/src/security_layer.py`  
+**File**: `src/security_layer.py`  
 **Lines**: 51-56  
 **Risk Level**: **HIGH**  
 **CWE**: CWE-269 (Improper Privilege Management)
@@ -237,7 +237,7 @@ if user_role.lower() in ["god", "superuser", "root"]:
 **Recommended Fix**: Remove god mode or implement strict controls.
 
 ### 11. **Insecure Password Handling**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/elevation.py`  
+**File**: `backend/api/elevation.py`  
 **Lines**: 174-189  
 **Risk Level**: **HIGH**  
 **CWE**: CWE-256 (Unprotected Storage of Credentials)
@@ -249,7 +249,7 @@ if user_role.lower() in ["god", "superuser", "root"]:
 **Recommended Fix**: Use proper authentication mechanisms.
 
 ### 12. **Missing Input Validation**
-**File**: `/home/kali/Desktop/AutoBot/backend/api/security.py`  
+**File**: `backend/api/security.py`  
 **Lines**: 74-96  
 **Risk Level**: **HIGH**  
 **CWE**: CWE-20 (Improper Input Validation)
@@ -297,7 +297,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
 ## Security Configuration Issues
 
 ### 16. **Default Configurations**
-**File**: `/home/kali/Desktop/AutoBot/config/config.yaml`  
+**File**: `config/config.yaml`  
 **Risk Level**: **MEDIUM**
 
 **Issues Found**:
@@ -306,7 +306,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
 - Debug mode enabled in production configs
 
 ### 17. **Environment Variable Exposure**
-**File**: `/home/kali/Desktop/AutoBot/.env`  
+**File**: `.env`  
 **Risk Level**: **LOW**
 
 **Issues Found**:

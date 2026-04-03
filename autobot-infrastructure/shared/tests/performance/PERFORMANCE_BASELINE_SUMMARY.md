@@ -15,7 +15,7 @@ Established comprehensive performance baseline and validation framework for Auto
 ## 📦 Deliverables
 
 ### 1. **Comprehensive Baseline Test Suite**
-**File:** `/home/kali/Desktop/AutoBot/tests/performance/test_async_baseline.py`
+**File:** `tests/performance/test_async_baseline.py`
 
 **Features:**
 - ✅ 50 concurrent chat requests (Task 2.5 Scenario #1)
@@ -28,7 +28,7 @@ Established comprehensive performance baseline and validation framework for Auto
 - ✅ Automated JSON report generation
 
 ### 2. **Validation Framework Documentation**
-**File:** `/home/kali/Desktop/AutoBot/tests/performance/README_ASYNC_VALIDATION.md`
+**File:** `tests/performance/README_ASYNC_VALIDATION.md`
 
 **Contents:**
 - Complete test execution guide
@@ -113,7 +113,7 @@ Established comprehensive performance baseline and validation framework for Auto
 ### **Phase 1: Baseline Measurement (DO THIS NOW)**
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Ensure backend is running
 sudo systemctl start autobot-backend
@@ -178,7 +178,7 @@ python tests/performance/compare_async_results.py \
 
 ### **Test Framework:**
 ```
-/home/kali/Desktop/AutoBot/tests/performance/
+tests/performance/
 ├── test_async_baseline.py           # Main test suite
 ├── README_ASYNC_VALIDATION.md       # Complete documentation
 ├── PERFORMANCE_BASELINE_SUMMARY.md  # This file
@@ -189,12 +189,12 @@ python tests/performance/compare_async_results.py \
 
 ### **Existing Performance Tools (Reusable):**
 ```
-/home/kali/Desktop/AutoBot/monitoring/
+monitoring/
 ├── performance_benchmark.py         # Existing benchmark suite
 ├── performance_monitor.py           # Continuous monitoring
 └── ai_performance_analytics.py      # AI workload analytics
 
-/home/kali/Desktop/AutoBot/reports/performance/
+reports/performance/
 └── baseline_performance_assessment.py  # System baseline tool
 ```
 

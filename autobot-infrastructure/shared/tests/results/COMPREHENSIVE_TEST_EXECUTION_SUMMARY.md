@@ -290,7 +290,7 @@ pip install pytest-cov
 
 **Results Directory**:
 ```
-/home/kali/Desktop/AutoBot/tests/results/comprehensive_test_20251005_223430/
+tests/results/comprehensive_test_20251005_223430/
 ```
 
 **Generated Files**:

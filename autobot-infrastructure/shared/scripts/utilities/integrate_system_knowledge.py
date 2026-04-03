@@ -181,8 +181,8 @@ async def integrate_autobot_documentation(kb_v2):
         "CLAUDE.md",
         "docs/system-state.md",
         "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
-        "docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md",
-        "docs/developer/PHASE_5_DEVELOPER_SETUP.md",
+        "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
+        "docs/developer/DEVELOPER_SETUP.md",
         "docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md",
     ]
 

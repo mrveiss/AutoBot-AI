@@ -186,7 +186,7 @@ Configurations are automatically backed up when saved:
 1. Check `gui/README.md` for detailed documentation
 2. Review logs in the "Logs" tab
 3. See `GUI_IMPLEMENTATION.md` for technical details
-4. Consult AutoBot docs: `/home/kali/Desktop/AutoBot/docs/`
+4. Consult AutoBot docs: `docs/`
 
 ## ✅ Verification Checklist
 

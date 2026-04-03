@@ -6,7 +6,7 @@ Comprehensive practical example demonstrating the `useAsyncOperation` composable
 
 **Created**: 2025-10-27
 **Status**: ✅ Complete - Ready for Local Testing
-**Location**: `/home/kali/Desktop/AutoBot/autobot-vue/src/components/examples/`
+**Location**: `autobot-vue/src/components/examples/`
 
 ---
 
@@ -528,4 +528,4 @@ Successfully delivered comprehensive `useAsyncOperation` example with:
 **Delivered**: 2025-10-27
 **By**: Frontend Engineer (Senior)
 **For**: AutoBot Vue 3 Frontend Team
-**Location**: `/home/kali/Desktop/AutoBot/autobot-vue/src/components/examples/`
+**Location**: `autobot-vue/src/components/examples/`

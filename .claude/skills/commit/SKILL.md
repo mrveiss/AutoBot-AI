@@ -23,7 +23,7 @@ If on `main` or `Dev_new_gui` directly: **STOP** and ask user.
 For every `.py` file that will be committed:
 
 ```bash
-BLACK=/home/kali/.cache/pre-commit/repoefsi1klb/py_env-python3/bin/black
+BLACK=$HOME/.cache/pre-commit/repoefsi1klb/py_env-python3/bin/black
 
 for FILE in $(git diff --staged --name-only | grep '\.py$'); do
     $BLACK --line-length=88 "$FILE"

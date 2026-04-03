@@ -14,7 +14,7 @@
 ```
 LOCAL EDIT → TEST → SYNC → DEPLOY → VERIFY
      ↓         ↓      ↓       ↓        ↓
-  /home/kali  local  rsync  restart  health
+  $HOME  local  rsync  restart  health
   /Desktop/   tests  or     service  check
   AutoBot/           ansible
 ```
@@ -29,7 +29,7 @@ LOCAL EDIT → TEST → SYNC → DEPLOY → VERIFY
 | VM4 | 172.16.168.24 | AI Stack |
 | VM5 | 172.16.168.25 | Browser |
 
-**Local Base:** `/home/kali/Desktop/AutoBot/` — ALL edits here. NO EXCEPTIONS.
+**Local Base:** `` — ALL edits here. NO EXCEPTIONS.
 
 ## 🔄 Approved Sync Methods
 
@@ -37,7 +37,7 @@ LOCAL EDIT → TEST → SYNC → DEPLOY → VERIFY
 ```bash
 rsync -avz --delete \
   -e "ssh -i ~/.ssh/autobot_key" \
-  /home/kali/Desktop/AutoBot/backend/ \
+  backend/ \
   autobot@172.16.168.21:/opt/autobot/backend/
 ```
 
@@ -62,7 +62,7 @@ ssh autobot@172.16.168.23 "redis-cli CONFIG SET maxmemory 2gb"
 ### ✅ CORRECT
 ```bash
 # Edit locally
-vim /home/kali/Desktop/AutoBot/config.yaml
+vim config.yaml
 
 # Sync to remote
 rsync -avz config.yaml autobot@172.16.168.21:/opt/autobot/
@@ -73,7 +73,7 @@ ansible-playbook playbooks/update-redis-config.yml
 
 ## 📋 Pre-Remote Checklist
 
-- [ ] Edit made in `/home/kali/Desktop/AutoBot/`?
+- [ ] Edit made in `/opt/autobot`?
 - [ ] Local change tested?
 - [ ] Sync script/playbook ready?
 - [ ] SSH keys configured?

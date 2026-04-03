@@ -329,9 +329,9 @@ Based on test results:
 
 ## Test Artifacts
 
-- **Before Baseline**: `/home/kali/Desktop/AutoBot/tests/performance/results/async_baseline_20251009_214400.json`
-- **After Validation**: `/home/kali/Desktop/AutoBot/tests/performance/results/async_baseline_20251010_075214.json`
-- **This Report**: `/home/kali/Desktop/AutoBot/tests/performance/results/KB-ASYNC-010_PERFORMANCE_VALIDATION_REPORT.md`
+- **Before Baseline**: `tests/performance/results/async_baseline_20251009_214400.json`
+- **After Validation**: `tests/performance/results/async_baseline_20251010_075214.json`
+- **This Report**: `tests/performance/results/KB-ASYNC-010_PERFORMANCE_VALIDATION_REPORT.md`
 
 ---
 

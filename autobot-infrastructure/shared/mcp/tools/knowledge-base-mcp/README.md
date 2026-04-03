@@ -29,7 +29,7 @@ Add to your Claude configuration (`~/.claude.json` or project `.claude/settings.
     "autobot-knowledge": {
       "command": "python",
       "args": ["-m", "autobot_knowledge_mcp.server"],
-      "cwd": "/home/kali/Desktop/AutoBot/mcp-tools/knowledge-base-mcp",
+      "cwd": "mcp-tools/knowledge-base-mcp",
       "env": {
         "AUTOBOT_BACKEND_HOST": "172.16.168.20",
         "AUTOBOT_BACKEND_PORT": "8001"

@@ -8,13 +8,13 @@
 
 1. Execute commands to find the authoritative documentation:
    ```
-   find /home/kali/Desktop/AutoBot/docs/developer -name "*.md" | head -20
+   find docs/developer -name "*.md" | head -20
    ```
 2. Read the relevant files:
    ```
-   cat /home/kali/Desktop/AutoBot/docs/developer/PHASE_5_DEVELOPER_SETUP.md
-   cat /home/kali/Desktop/AutoBot/docs/developer/INFRASTRUCTURE_DEPLOYMENT.md
-   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   cat docs/developer/DEVELOPER_SETUP.md
+   cat docs/developer/INFRASTRUCTURE_DEPLOYMENT.md
+   cat docs/developer/AUTOBOT_REFERENCE.md
    ```
 3. Base your answer on the **actual file contents**, not the static guidance below.
 4. If file contents contradict this document, **trust the files**.
@@ -107,9 +107,9 @@ Explain the 5-VM distributed architecture clearly:
 ### Key Documentation References
 
 Always reference these documents:
-- **Setup Guide**: `/home/kali/Desktop/AutoBot/docs/developer/PHASE_5_DEVELOPER_SETUP.md`
-- **Architecture**: `/home/kali/Desktop/AutoBot/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
-- **Troubleshooting**: `/home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
+- **Setup Guide**: `docs/developer/DEVELOPER_SETUP.md`
+- **Architecture**: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
+- **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
 
 ### Installation Guidance Patterns
 

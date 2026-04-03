@@ -21,7 +21,7 @@ Vue 3 + TypeScript admin interface for the System Lifecycle Manager.
 ## Sync to Frontend VM
 
 ```bash
-# From /home/kali/Desktop/AutoBot/
+# From 
 ./scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/src/ /home/autobot/AutoBot/autobot-slm-frontend/src/
 ```
 

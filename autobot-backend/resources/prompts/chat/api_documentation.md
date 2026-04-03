@@ -8,13 +8,13 @@
 
 1. Execute commands to find the authoritative documentation:
    ```
-   find /home/kali/Desktop/AutoBot/docs/api -name "*.md" | head -20
+   find docs/api -name "*.md" | head -20
    ```
 2. Read the relevant files:
    ```
-   cat /home/kali/Desktop/AutoBot/docs/api/COMPREHENSIVE_API_DOCUMENTATION.md
-   cat /home/kali/Desktop/AutoBot/docs/api/API_ENDPOINT_MAPPING.md
-   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   cat docs/api/COMPREHENSIVE_API_DOCUMENTATION.md
+   cat docs/api/API_ENDPOINT_MAPPING.md
+   cat docs/developer/AUTOBOT_REFERENCE.md
    ```
 3. Base your answer on the **actual file contents**, not the static guidance below.
 4. If file contents contradict this document, **trust the files**.
@@ -300,15 +300,15 @@ curl -X POST http://172.16.168.20:8001/api/v1/knowledge/upload \
 ### Documentation References
 
 **Complete API Reference:**
-- `/home/kali/Desktop/AutoBot/docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
+- `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
 - 518+ endpoints documented
 - Request/response examples
 - Error handling details
 - Integration guides
 
 **Related Documentation:**
-- Architecture: `/home/kali/Desktop/AutoBot/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
-- Troubleshooting: `/home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
+- Architecture: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
+- Troubleshooting: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
 
 ### API Design Principles
 

@@ -52,11 +52,11 @@ try {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/KnowledgeBrowser.vue` (3 state vars)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (8 loading states)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/NPUWorkersSettings.vue` (5+ instances)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/MonitoringDashboard.vue` (8+ instances)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/KnowledgeCategories.vue` (2 loading states)
+- `autobot-vue/src/components/knowledge/KnowledgeBrowser.vue` (3 state vars)
+- `autobot-vue/src/components/settings/BackendSettings.vue` (8 loading states)
+- `autobot-vue/src/components/settings/NPUWorkersSettings.vue` (5+ instances)
+- `autobot-vue/src/components/MonitoringDashboard.vue` (8+ instances)
+- `autobot-vue/src/components/knowledge/KnowledgeCategories.vue` (2 loading states)
 - 42 more components with similar patterns
 
 **Recommendation**: Create composable `useAsyncState` or enhance existing `useUnifiedLoading.ts`
@@ -88,10 +88,10 @@ const refreshStatus = async () => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (25+ async methods)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/NPUWorkersSettings.vue` (7+ methods)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useServiceManagement.js` (4 methods with same pattern)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/FailedVectorizationsManager.vue` (multiple methods)
+- `autobot-vue/src/components/settings/BackendSettings.vue` (25+ async methods)
+- `autobot-vue/src/components/settings/NPUWorkersSettings.vue` (7+ methods)
+- `autobot-vue/src/composables/useServiceManagement.js` (4 methods with same pattern)
+- `autobot-vue/src/components/knowledge/FailedVectorizationsManager.vue` (multiple methods)
 
 **Status**: PARTIALLY ADDRESSED
 - `useApi.ts` provides `useApiWithState()` composable with `withErrorHandling()` wrapper
@@ -133,10 +133,10 @@ const visible = ref(false)
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/SecretsManager.vue` (5 modals: create, edit, view, transfer, value-view)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/NPUWorkersSettings.vue` (4 modals)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/AdvancedStepConfirmationModal.vue` (5 modals)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/chat/ChatSidebar.vue` (2 modals)
+- `autobot-vue/src/components/SecretsManager.vue` (5 modals: create, edit, view, transfer, value-view)
+- `autobot-vue/src/components/settings/NPUWorkersSettings.vue` (4 modals)
+- `autobot-vue/src/components/AdvancedStepConfirmationModal.vue` (5 modals)
+- `autobot-vue/src/components/chat/ChatSidebar.vue` (2 modals)
 
 **Recommendation**: Create `useModal` composable
 ```typescript
@@ -172,7 +172,7 @@ if (value < 1 || value > 65535) {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (lines 859-890, 896-918)
+- `autobot-vue/src/components/settings/BackendSettings.vue` (lines 859-890, 896-918)
 - Multiple form components with manual validation
 
 **Recommendation**: Create validation utility `useFormValidation.ts`
@@ -215,7 +215,7 @@ const testConnection = async () => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (8+ test methods)
+- `autobot-vue/src/components/settings/BackendSettings.vue` (8+ test methods)
   - `testConnection()` (lines 995-1028)
   - `testLLMConnection()` (lines 1038-1048)
   - `testOllamaConnection()`
@@ -263,9 +263,9 @@ const updateLLMSetting = (key: string, value: any) => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (lines 838-973)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/UISettings.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/CacheSettings.vue`
+- `autobot-vue/src/components/settings/BackendSettings.vue` (lines 838-973)
+- `autobot-vue/src/components/settings/UISettings.vue`
+- `autobot-vue/src/components/settings/CacheSettings.vue`
 
 **Recommendation**: Create `useSettingsForm` composable
 ```typescript
@@ -297,10 +297,10 @@ const clearSearch = () => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/KnowledgeBrowser.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/ManPageManager.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/LogViewer.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/stores/useKnowledgeStore.ts`
+- `autobot-vue/src/components/knowledge/KnowledgeBrowser.vue`
+- `autobot-vue/src/components/ManPageManager.vue`
+- `autobot-vue/src/components/LogViewer.vue`
+- `autobot-vue/src/stores/useKnowledgeStore.ts`
 - 10+ other components
 
 **Recommendation**: Create `useSearch` composable (similar to existing patterns)
@@ -355,9 +355,9 @@ const loadMoreEntries = async () => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/KnowledgeBrowser.vue` (line 158-168)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/knowledge/KnowledgeEntries.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/LogViewer.vue`
+- `autobot-vue/src/components/knowledge/KnowledgeBrowser.vue` (line 158-168)
+- `autobot-vue/src/components/knowledge/KnowledgeEntries.vue`
+- `autobot-vue/src/components/LogViewer.vue`
 
 **Recommendation**: Create `usePagination` composable
 
@@ -390,9 +390,9 @@ const getConnectionIcon = (status: string) => {
 ```
 
 **Files with Duplication**:
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/settings/BackendSettings.vue` (line 975-993)
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/SystemStatusIndicator.vue`
-- `/home/kali/Desktop/AutoBot/autobot-vue/src/components/ConnectionStatus.vue`
+- `autobot-vue/src/components/settings/BackendSettings.vue` (line 975-993)
+- `autobot-vue/src/components/SystemStatusIndicator.vue`
+- `autobot-vue/src/components/ConnectionStatus.vue`
 
 **Recommendation**: Move to utility file `src/utils/iconMappings.ts`
 

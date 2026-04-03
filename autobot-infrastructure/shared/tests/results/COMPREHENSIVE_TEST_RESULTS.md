@@ -260,7 +260,7 @@ Successfully validated all 4 critical fixes in under 2 minutes (97% faster than 
 
 ## Test Artifacts
 
-**Results Directory**: `/home/kali/Desktop/AutoBot/tests/results/comprehensive_test_20251005_223430`
+**Results Directory**: `tests/results/comprehensive_test_20251005_223430`
 
 **Generated Files**:
 - `database_init_results.xml` - Database initialization tests

@@ -49,10 +49,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=kali
-Group=kali
-Environment=HOME=/home/kali
-WorkingDirectory=/home/kali
+User=${AUTOBOT_VNC_USER:-autobot}
+Group=${AUTOBOT_VNC_USER:-autobot}
+Environment=HOME=/home/${AUTOBOT_VNC_USER:-autobot}
+WorkingDirectory=/home/${AUTOBOT_VNC_USER:-autobot}
 ExecStart=/usr/bin/tigervncserver -fg -geometry 1920x1080 -depth 24 -SecurityTypes VncAuth -passwd /home/${USER:-autobot}/.vnc/passwd -xstartup /home/${USER:-autobot}/.vnc/xstartup :1
 ExecStop=/usr/bin/tigervncserver -kill :1
 Restart=on-failure

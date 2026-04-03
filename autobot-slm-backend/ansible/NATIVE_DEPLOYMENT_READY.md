@@ -26,7 +26,7 @@ Your complete AutoBot native deployment system is ready! After deployment, acces
 ## 🚀 **QUICK DEPLOYMENT**
 
 ```bash
-cd /home/kali/Desktop/AutoBot/ansible
+cd ansible
 
 # 1. Test connectivity
 ansible all -i inventory/production.yml -m ping --ask-pass

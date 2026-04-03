@@ -289,10 +289,10 @@ MIN_RETRIEVE_RATE = 5      # ops/sec
 
 ## Related Documentation
 
-- **Unit Tests**: `/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_base_async.py`
-- **KB-ASYNC Implementation**: `/home/kali/Desktop/AutoBot/src/knowledge_base.py`
-- **AsyncRedisManager**: `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py`
-- **Architecture**: `/home/kali/Desktop/AutoBot/docs/architecture/`
+- **Unit Tests**: `tests/unit/test_knowledge_base_async.py`
+- **KB-ASYNC Implementation**: `src/knowledge_base.py`
+- **AsyncRedisManager**: `backend/utils/async_redis_manager.py`
+- **Architecture**: `docs/architecture/`
 
 ## Success Criteria
 

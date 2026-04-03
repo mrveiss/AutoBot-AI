@@ -170,7 +170,7 @@ All notable changes to this project will be documented in this file.
 
 - *(skills)* Add scoring weight constants, strengthen tag test, add stub tags
 
-- *(analytics)* Replace hardcoded /home/kali paths, fix PermissionError 500 (#1178)
+- *(analytics)* Replace hardcoded $HOME paths, fix PermissionError 500 (#1178)
 
 - *(deploy)* Create backend symlink via Ansible, remove dev path (#1168)
 
@@ -562,7 +562,7 @@ All notable changes to this project will be documented in this file.
 
 - *(ansible)* Correct PYTHONPATH and EnvironmentFile paths in service templates (#941)
 
-- Replace hardcoded /home/kali/Desktop/AutoBot in 20 runtime files (#832) (#836) ([#836](https://github.com/mrveiss/AutoBot-AI/pull/836))
+- Replace hardcoded $AUTOBOT_PROJECT_ROOT in 20 runtime files (#832) (#836) ([#836](https://github.com/mrveiss/AutoBot-AI/pull/836))
 
 - *(infra)* Remove false frontend/slm-frontend conflict - nginx virtual hosts (#926)
 
@@ -874,7 +874,7 @@ All notable changes to this project will be documented in this file.
 
 - *(slm)* Fix 10 broken SLM frontend features (#834)
 
-- Replace hardcoded /home/kali/Desktop/AutoBot with env-var lookup (#832)
+- Replace hardcoded $AUTOBOT_PROJECT_ROOT with env-var lookup (#832)
 
 - *(slm)* Git_tracker DB fallback for rsync deployments (#829)
 

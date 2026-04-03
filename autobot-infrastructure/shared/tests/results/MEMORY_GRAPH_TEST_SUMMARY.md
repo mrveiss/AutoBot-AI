@@ -1,7 +1,7 @@
 # AutoBot Memory Graph Test Suite - Comprehensive Results
 
 **Date:** 2025-10-03
-**Test Suite:** `/home/kali/Desktop/AutoBot/tests/test_autobot_memory_graph.py`
+**Test Suite:** `tests/test_autobot_memory_graph.py`
 **Status:** ✅ **ALL TESTS PASSING**
 **Total Tests:** 24
 **Pass Rate:** 100%

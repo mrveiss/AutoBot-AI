@@ -61,7 +61,7 @@ MCP AutoBot Tracker Architecture:
 
 ```bash
 # Navigate to the MCP tracker directory
-cd /home/kali/Desktop/AutoBot/mcp-autobot-tracker
+cd mcp-autobot-tracker
 
 # Run the production installation script
 ./production-install.sh
@@ -194,9 +194,9 @@ Finally, use get_insights to identify patterns in the issues we're tracking.
 
 ### Log Files Monitored
 
-- `/home/kali/Desktop/AutoBot/data/logs/backend.log`
-- `/home/kali/Desktop/AutoBot/data/logs/frontend.log`
-- `/home/kali/Desktop/AutoBot/data/logs/redis.log`
+- `data/logs/backend.log`
+- `data/logs/frontend.log`
+- `data/logs/redis.log`
 
 ## 🔍 Troubleshooting
 
@@ -231,7 +231,7 @@ Finally, use get_insights to identify patterns in the issues we're tracking.
 4. **File Watching Issues**
    ```bash
    # Verify log file permissions
-   ls -la /home/kali/Desktop/AutoBot/data/logs/
+   ls -la data/logs/
 
    # Check inotify limits
    cat /proc/sys/fs/inotify/max_user_watches
