@@ -1210,7 +1210,10 @@ def cache_function(cache_key: str = None, ttl: int = 300):
             try:
                 cached_result = await cache_manager.get(key)
                 if cached_result is not None:
-                    return cached_result
+                    # Issue #3351: deserialise envelope back to JSONResponse if needed
+                    deserialised = _deserialise_cached_entry(cached_result)
+                    if deserialised is not None:
+                        return deserialised
             except Exception as e:
                 logger.error("Cache retrieval error for key %s: %s", key, e)
 
