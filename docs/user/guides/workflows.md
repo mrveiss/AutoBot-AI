@@ -59,14 +59,15 @@ Click **Workflow Automation** in the navigation bar, or navigate to
 
 Common step types include:
 
-| Step Type | Description |
-|-----------|-------------|
-| AI Task | Send a prompt to an AI agent and use its response |
-| Web Request | Fetch data from a URL |
-| Knowledge Query | Search or update the knowledge base |
-| Notification | Send an alert via email, webhook, or in-app message |
-| Condition | Branch the workflow based on a yes/no check |
-| Delay | Wait for a specified time before continuing |
+| Step Type         | Description                                                    |
+|-------------------|----------------------------------------------------------------|
+| AI Task           | Send a prompt to an AI agent and use its response              |
+| Web Request       | Fetch data from a URL                                          |
+| Knowledge Query   | Search or update the knowledge base                            |
+| Notification      | Send an alert via email, webhook, or in-app message            |
+| Condition         | Branch the workflow based on a yes/no check                    |
+| Delay             | Wait for a specified time before continuing                    |
+| Distributed Shell | Run a shell script across multiple fleet nodes simultaneously  |
 
 ## Running a Workflow
 
@@ -89,12 +90,12 @@ To run a workflow on a recurring schedule:
 
 The **Overview** page shows all workflows and their current status:
 
-| Status | Meaning |
-|--------|---------|
-| Idle | Not currently running |
-| Running | Executing steps right now |
-| Completed | Finished successfully |
-| Failed | One or more steps encountered an error |
+| Status    | Meaning                                |
+|-----------|----------------------------------------|
+| Idle      | Not currently running                  |
+| Running   | Executing steps right now              |
+| Completed | Finished successfully                  |
+| Failed    | One or more steps encountered an error |
 
 Click a workflow to see detailed logs for each step, including input, output,
 and any error messages.
@@ -195,6 +196,84 @@ configuration using Python `string.Template` syntax.
   `autobot-slm-backend/slm/agent/health_collector.py`.
 - `NotificationEvent.SERVICE_FAILED` and its default template are defined in
   `autobot-backend/services/notification_service.py`.
+
+## Parallel Fleet Execution
+
+The `distributed_shell` step type lets a single workflow node run a shell
+script on multiple fleet machines at the same time.  All target nodes execute
+the script concurrently via `asyncio.gather`; the step succeeds only when
+every node returns exit code 0.
+
+### How it works
+
+1. The DAG executor calls `POST /api/nodes/{node_id}/execute` on the SLM
+   backend for each node in the `nodes` list simultaneously.
+2. Each call is validated server-side against an injection-pattern denylist
+   before the script is executed.
+3. Per-node results (exit code, stdout, stderr, duration) are collected and
+   stored in the step output.
+4. If any node fails the whole step is marked failed and the per-node details
+   show which nodes returned a non-zero exit code.
+
+### Step configuration
+
+```json
+{
+  "id": "my-fleet-step",
+  "type": "distributed_shell",
+  "data": {
+    "nodes":    ["node-001", "node-002", "node-003"],
+    "script":   "hostname && systemctl is-active autobot-agent",
+    "language": "bash",
+    "timeout":  120
+  }
+}
+```
+
+| Field      | Type               | Default  | Description                              |
+|------------|--------------------|----------|------------------------------------------|
+| `nodes`    | list of node IDs   | required | Fleet nodes to target                    |
+| `script`   | string             | required | Shell script body                        |
+| `language` | `"bash"` or `"sh"` | `"bash"` | Interpreter                              |
+| `timeout`  | integer (seconds)  | 300      | Per-node execution timeout (1–3600)      |
+
+### Step output shape
+
+```json
+{
+  "success": true,
+  "node_id": "my-fleet-step",
+  "total_duration_ms": 843,
+  "failed_nodes": [],
+  "node_results": [
+    {
+      "node_id": "node-001",
+      "exit_code": 0,
+      "stdout": "node-001\nactive\n",
+      "stderr": "",
+      "duration_ms": 312,
+      "success": true
+    }
+  ]
+}
+```
+
+### Required environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `SLM_URL` | Base URL of the SLM backend (e.g. `https://slm.example.com`) |
+| `SLM_AUTH_TOKEN` | JWT token used to authenticate with the SLM execute endpoint |
+
+### Security
+
+Commands are validated before execution by a static denylist of shell
+injection patterns (backtick substitution, `$(...)`, pipe-to-bash, and
+others).  An optional `ALLOWED_COMMANDS_PATTERN` environment variable on
+the SLM host provides an additional regex allowlist.
+
+For a complete runnable example see
+[`docs/examples/parallel_fleet_workflow.py`](../../examples/parallel_fleet_workflow.py).
 
 ## Related Guides
 
