@@ -161,12 +161,12 @@ onMounted(() => {
       <!-- Save Status Banner -->
       <div
         v-if="saveStatus === 'success'"
-        class="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded p-3 flex items-center gap-2"
+        class="bg-autobot-success-bg border border-autobot-success-light rounded p-3 flex items-center gap-2"
       >
-        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-autobot-success" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
         </svg>
-        <span class="text-sm text-green-700 dark:text-green-300">{{ t('agent.settings.saveSuccess') }}</span>
+        <span class="text-sm text-autobot-success">{{ t('agent.settings.saveSuccess') }}</span>
       </div>
 
       <div
@@ -250,7 +250,7 @@ onMounted(() => {
               type="button"
               :class="[
                 'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                settings.memory.enabled ? 'bg-autobot-primary' : 'bg-gray-300 dark:bg-gray-600'
+                settings.memory.enabled ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
               ]"
               role="switch"
               :aria-checked="settings.memory.enabled"
@@ -353,7 +353,7 @@ onMounted(() => {
                 type="button"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.parallelExecution ? 'bg-autobot-primary' : 'bg-gray-300 dark:bg-gray-600'
+                  settings.execution.parallelExecution ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
                 ]"
                 role="switch"
                 :aria-checked="settings.execution.parallelExecution"
@@ -376,7 +376,7 @@ onMounted(() => {
                 type="button"
                 :class="[
                   'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-autobot-info focus:ring-offset-2',
-                  settings.execution.priorityQueue ? 'bg-autobot-primary' : 'bg-gray-300 dark:bg-gray-600'
+                  settings.execution.priorityQueue ? 'bg-autobot-primary' : 'bg-autobot-bg-hover'
                 ]"
                 role="switch"
                 :aria-checked="settings.execution.priorityQueue"
@@ -398,13 +398,13 @@ onMounted(() => {
       <div class="flex items-center justify-between pt-4 border-t border-default">
         <button
           type="button"
-          class="px-4 py-2 text-sm font-medium text-secondary border border-default rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          class="px-4 py-2 text-sm font-medium text-secondary border border-default rounded hover:bg-autobot-bg-hover transition-colors"
           @click="resetToDefaults"
         >
           {{ t('agent.settings.resetDefaults') }}
         </button>
         <div class="flex items-center gap-3">
-          <span v-if="hasChanges" class="text-xs text-amber-600 dark:text-amber-400">
+          <span v-if="hasChanges" class="text-xs text-autobot-warning">
             {{ t('agent.settings.unsavedChanges') }}
           </span>
           <button
