@@ -122,7 +122,7 @@ Add a new phase at the start of `provision-fleet-roles.yml`:
 The `node_dependencies` variable is computed by `setup_wizard.py` in the dynamic inventory — it resolves `ROLE_DEPENDENCIES` for all roles assigned to each node, deduplicates, and sets it as a host var:
 
 ```yaml
-172.16.168.20:
+<backend-ip>:
   node_roles: [backend, frontend, redis, ai-stack, ...]
   node_dependencies: [nginx, python312, nodejs]
   pending_dep_removals: []

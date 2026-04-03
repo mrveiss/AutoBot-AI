@@ -13,7 +13,7 @@ complete end-to-end example:
 **1. Authenticate with the SLM:**
 
 ```bash
-SLM_TOKEN=$(curl -sk -X POST https://172.16.168.19/api/auth/login \
+SLM_TOKEN=$(curl -sk -X POST https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
@@ -74,7 +74,7 @@ import asyncio
 
 async def deploy_docker_via_slm():
     """Deploy a Docker container to a fleet node using the SLM API."""
-    slm_url = "https://172.16.168.19"
+    slm_url = "https://<slm-manager-ip>"
 
     async with aiohttp.ClientSession() as session:
         # Authenticate
@@ -128,8 +128,8 @@ asyncio.run(deploy_docker_via_slm())
 
 ```bash
 curl -sk -H "Authorization: Bearer $SLM_TOKEN" \
-  https://172.16.168.19/api/nodes | python3 -m json.tool
-ssh autobot@172.16.168.24 "docker ps --filter name=my-web-app"
+  https://<slm-manager-ip>/api/nodes | python3 -m json.tool
+ssh autobot@<aiml-ip> "docker ps --filter name=my-web-app"
 ```
 
 For rolling deployments, inventory configuration, and node lifecycle management,
@@ -164,13 +164,13 @@ AutoBot's primary deployment model uses systemd services managed via Ansible. Ho
 
 ## 1. SLM Architecture for Deployment
 
-The Service Lifecycle Manager (SLM) is AutoBot's centralized fleet management system. It runs on the admin machine (172.16.168.19) and orchestrates all infrastructure operations --- including Docker container deployments --- across the fleet via Ansible.
+The Service Lifecycle Manager (SLM) is AutoBot's centralized fleet management system. It runs on the admin machine (<slm-manager-ip>) and orchestrates all infrastructure operations --- including Docker container deployments --- across the fleet via Ansible.
 
 ### Architectural Overview
 
 ```
 +---------------------------------------------------------------+
-|                   SLM Server (172.16.168.19)                   |
+|                   SLM Server (<slm-manager-ip>)                   |
 |                                                                |
 |  +-------------------+    +-------------------+               |
 |  | FastAPI Backend    |    | Vue.js Admin UI   |               |
@@ -213,7 +213,7 @@ The SLM enforces a strict separation between management and runtime:
 
 | Aspect | Management Plane (SLM) | Runtime Plane (Fleet Nodes) |
 |--------|------------------------|----------------------------|
-| **Location** | 172.16.168.19 | 172.16.168.20-27 |
+| **Location** | <slm-manager-ip> | <backend-ip>-27 |
 | **Purpose** | Orchestration, monitoring, deployment | Application workloads |
 | **Access** | Admin credentials, JWT tokens | SSH key-based (passwordless) |
 | **State** | PostgreSQL (persistent) | Stateless (agent heartbeat only) |
@@ -404,7 +404,7 @@ Provides async helper functions for authenticating with the SLM
 backend API and obtaining JWT Bearer tokens for subsequent requests.
 
 The SLM backend runs behind nginx with self-signed TLS on the
-internal 172.16.168.0/24 network. All examples use ssl=False
+internal <network-subnet> network. All examples use ssl=False
 for self-signed certificate handling.
 """
 
@@ -418,7 +418,7 @@ logger = logging.getLogger(__name__)
 
 # SLM backend is behind nginx reverse proxy with TLS on port 443.
 # Uvicorn binds to port 8000 internally (not exposed to LAN).
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def authenticate(
@@ -545,7 +545,7 @@ async def refresh_token(
 
 ### Security Notes
 
-- The SLM uses self-signed TLS certificates on the internal 172.16.168.0/24 network. Pass `ssl=False` (aiohttp) or `verify=False` (requests) when making API calls.
+- The SLM uses self-signed TLS certificates on the internal <network-subnet> network. Pass `ssl=False` (aiohttp) or `verify=False` (requests) when making API calls.
 - The admin password is managed via the `SLM_ADMIN_PASSWORD` environment variable. When set, the SLM backend syncs the admin password on every startup (in `_ensure_admin_user()`), making the env var the single source of truth.
 - Tokens expire after 24 hours (`access_token_expire_minutes = 60 * 24` in Settings).
 - All authentication events (success and failure) are recorded in the `audit_logs` table with IP address, username, and timestamp.
@@ -555,7 +555,7 @@ async def refresh_token(
 
 ## 4. Creating an Ansible Playbook for Docker Deployment
 
-Ansible playbooks for Docker deployment should be placed in the SLM Ansible directory at `/opt/autobot/autobot-slm-backend/ansible/` on the SLM server (172.16.168.19). The `PlaybookExecutor` resolves playbook names relative to this directory.
+Ansible playbooks for Docker deployment should be placed in the SLM Ansible directory at `/opt/autobot/autobot-slm-backend/ansible/` on the SLM server (<slm-manager-ip>). The `PlaybookExecutor` resolves playbook names relative to this directory.
 
 ### Playbook: deploy-container.yml
 
@@ -792,7 +792,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def deploy_docker_container(
@@ -969,7 +969,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def deploy_via_deployment_api(
@@ -1107,7 +1107,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def migrate_role_to_node(
@@ -1275,28 +1275,28 @@ all:
     slm_nodes:
       hosts:
         00-SLM-Manager:
-          ansible_host: 172.16.168.19
+          ansible_host: <slm-manager-ip>
           slm_node_id: "00-SLM-Manager"
         01-Backend:
-          ansible_host: 172.16.168.20
+          ansible_host: <backend-ip>
           slm_node_id: "01-Backend"
         02-Frontend:
-          ansible_host: 172.16.168.21
+          ansible_host: <frontend-ip>
           slm_node_id: "02-Frontend"
         npu-worker:
-          ansible_host: 172.16.168.22
+          ansible_host: <npu-ip>
           slm_node_id: "npu-worker"
         03-AI-Stack:
-          ansible_host: 172.16.168.24
+          ansible_host: <aiml-ip>
           slm_node_id: "03-AI-Stack"
         04-Databases:
-          ansible_host: 172.16.168.23
+          ansible_host: <database-ip>
           slm_node_id: "04-Databases"
         browser-automation:
-          ansible_host: 172.16.168.25
+          ansible_host: <browser-ip>
           slm_node_id: "browser-automation"
         05-LLM-CPU:
-          ansible_host: 172.16.168.26
+          ansible_host: <reserved-ip>
           slm_node_id: "05-LLM-CPU"
 
     # Role-based groups for targeted deployments
@@ -1367,14 +1367,14 @@ ansible-playbook \
 
 | Inventory Host | IP Address | SLM Node ID | Role | Group(s) |
 |----------------|------------|-------------|------|----------|
-| `00-SLM-Manager` | 172.16.168.19 | `00-SLM-Manager` | SLM admin | `slm_server` |
-| `01-Backend` | 172.16.168.20 | `01-Backend` | Main backend | `main` |
-| `02-Frontend` | 172.16.168.21 | `02-Frontend` | User frontend | `frontend` |
-| `npu-worker` | 172.16.168.22 | `npu-worker` | NPU acceleration | `npu_worker` |
-| `04-Databases` | 172.16.168.23 | `04-Databases` | Redis Stack | `redis` |
-| `03-AI-Stack` | 172.16.168.24 | `03-AI-Stack` | AI processing | `ai_stack` |
-| `browser-automation` | 172.16.168.25 | `browser-automation` | Playwright | `browser_worker` |
-| `05-LLM-CPU` | 172.16.168.26 | `05-LLM-CPU` | LLM inference | `llm_nodes` |
+| `00-SLM-Manager` | <slm-manager-ip> | `00-SLM-Manager` | SLM admin | `slm_server` |
+| `01-Backend` | <backend-ip> | `01-Backend` | Main backend | `main` |
+| `02-Frontend` | <frontend-ip> | `02-Frontend` | User frontend | `frontend` |
+| `npu-worker` | <npu-ip> | `npu-worker` | NPU acceleration | `npu_worker` |
+| `04-Databases` | <database-ip> | `04-Databases` | Redis Stack | `redis` |
+| `03-AI-Stack` | <aiml-ip> | `03-AI-Stack` | AI processing | `ai_stack` |
+| `browser-automation` | <browser-ip> | `browser-automation` | Playwright | `browser_worker` |
+| `05-LLM-CPU` | <reserved-ip> | `05-LLM-CPU` | LLM inference | `llm_nodes` |
 
 ### Inventory Variables
 
@@ -1411,7 +1411,7 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def rolling_deploy_fleet_sync(
@@ -1640,16 +1640,16 @@ The `PlaybookExecutor` uses only `slm-nodes.yml` by default. If your playbook ne
 
 ### All Builds Run FROM .19
 
-The SLM server (172.16.168.19) is the Ansible controller. All `ansible-playbook` commands execute from .19. Never run Ansible from fleet nodes:
+The SLM server (<slm-manager-ip>) is the Ansible controller. All `ansible-playbook` commands execute from .19. Never run Ansible from fleet nodes:
 
 ```bash
 # CORRECT - run from SLM server
-ssh autobot@172.16.168.19
+ssh autobot@<slm-manager-ip>
 cd /opt/autobot/autobot-slm-backend/ansible
 ansible-playbook -i inventory/slm-nodes.yml deploy-container.yml
 
 # WRONG - running Ansible from a fleet node
-ssh autobot@172.16.168.24
+ssh autobot@<aiml-ip>
 ansible-playbook deploy-container.yml  # No inventory, no SSH keys
 ```
 
@@ -1672,11 +1672,11 @@ ansible-playbook deploy-container.yml  # No inventory, no SSH keys
 ```bash
 # CORRECT
 rsync -avz --exclude='venv' autobot-slm-backend/ \
-  autobot@172.16.168.19:/opt/autobot/autobot-slm-backend/
+  autobot@<slm-manager-ip>:/opt/autobot/autobot-slm-backend/
 
 # WRONG - overwrites production venv
 rsync -avz autobot-slm-backend/ \
-  autobot@172.16.168.19:/opt/autobot/autobot-slm-backend/
+  autobot@<slm-manager-ip>:/opt/autobot/autobot-slm-backend/
 ```
 
 ### File Ownership After become: true
@@ -1729,7 +1729,7 @@ vim autobot-slm-backend/ansible/deploy-container.yml
 ansible-playbook ansible/playbooks/deploy-infrastructure.yml
 
 # WRONG - direct editing on VM
-ssh autobot@172.16.168.19 "vim /opt/autobot/.../deploy-container.yml"
+ssh autobot@<slm-manager-ip> "vim /opt/autobot/.../deploy-container.yml"
 ```
 
 ### SLM Backend Startup Time
@@ -1800,7 +1800,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deploy-container")
 
-SLM_BASE_URL = "https://172.16.168.19"
+SLM_BASE_URL = "https://<slm-manager-ip>"
 
 
 async def authenticate(
@@ -2171,7 +2171,7 @@ curl -s http://<target_ip>:<host_port>/health
 # Expected: HTTP 200 with healthy response body
 
 # 6. Fleet health via SLM API
-curl -sk https://172.16.168.19/api/roles/fleet-health \
+curl -sk https://<slm-manager-ip>/api/roles/fleet-health \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 # Expected: "health": "healthy" or "degraded" (not "critical")
 ```
@@ -2180,22 +2180,22 @@ curl -sk https://172.16.168.19/api/roles/fleet-health \
 
 ```bash
 # 7. Deployment recorded and completed
-curl -sk "https://172.16.168.19/api/deployments?node_id=<node_id>" \
+curl -sk "https://<slm-manager-ip>/api/deployments?node_id=<node_id>" \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 # Expected: Latest deployment shows "status": "completed"
 
 # 8. Node still online with recent heartbeat
-curl -sk "https://172.16.168.19/api/nodes/<node_id>" \
+curl -sk "https://<slm-manager-ip>/api/nodes/<node_id>" \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 # Expected: "status": "online", "last_heartbeat" within 60 seconds
 
 # 9. Infrastructure execution log
-curl -sk "https://172.16.168.19/api/infrastructure/executions/<execution_id>" \
+curl -sk "https://<slm-manager-ip>/api/infrastructure/executions/<execution_id>" \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 # Expected: "status": "completed", output shows all tasks succeeded
 
 # 10. No recent error events for the node
-curl -sk "https://172.16.168.19/api/nodes/<node_id>/events" \
+curl -sk "https://<slm-manager-ip>/api/nodes/<node_id>/events" \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 # Expected: No error or critical severity events in recent history
 ```

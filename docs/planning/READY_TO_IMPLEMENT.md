@@ -50,9 +50,9 @@
 
 ### System Health ✅
 
-- ✅ Backend running: https://172.16.168.20:8443
-- ✅ Frontend running: http://172.16.168.21:5173
-- ✅ Redis running: 172.16.168.23:6379
+- ✅ Backend running: https://<backend-ip>:8443
+- ✅ Frontend running: http://<frontend-ip>:5173
+- ✅ Redis running: <database-ip>:6379
 - ✅ All 6 VMs operational
 - ✅ All distributed services healthy
 
@@ -199,19 +199,19 @@ Create custom prompts for each agent based on their task sections
 
 ### Backend Status
 ```
-✅ Running: https://172.16.168.20:8443
+✅ Running: https://<backend-ip>:8443
 ✅ Health: All services operational
 ✅ Redis: Connected and healthy
 ```
 
 ### VM Status
 ```
-✅ Frontend (VM1):   172.16.168.21:5173
-✅ NPU Worker (VM2): 172.16.168.22:8081
-✅ Redis (VM3):      172.16.168.23:6379
-✅ AI Stack (VM4):   172.16.168.24:8080
-✅ Browser (VM5):    172.16.168.25:3000
-✅ Main (VM0):       172.16.168.20:8443
+✅ Frontend (VM1):   <frontend-ip>:5173
+✅ NPU Worker (VM2): <npu-ip>:8081
+✅ Redis (VM3):      <database-ip>:6379
+✅ AI Stack (VM4):   <aiml-ip>:8080
+✅ Browser (VM5):    <browser-ip>:3000
+✅ Main (VM0):       <backend-ip>:8443
 ```
 
 ### Documentation Status

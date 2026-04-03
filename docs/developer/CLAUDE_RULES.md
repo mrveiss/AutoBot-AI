@@ -41,7 +41,7 @@ If you find existing work, USE IT — don't reimplement from scratch.
 ```python
 from autobot_shared.redis_client import get_redis_client
 redis_client = get_redis_client(async_client=False, database="main")
-# NEVER: redis.Redis(host="172.16.168.23", ...)
+# NEVER: redis.Redis(host="<database-ip>", ...)
 ```
 
 Databases: `main`, `knowledge`, `prompts`, `analytics`
@@ -63,7 +63,7 @@ Pre-commit hook enforces this. Guide: [`HARDCODING_PREVENTION.md`](HARDCODING_PR
 
 Always check existing config files for correct network ranges. Use environment variables or SSOT config.
 
-> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists, or hardcoding `172.16.168.23`.
+> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists, or hardcoding `<database-ip>`.
 
 ---
 

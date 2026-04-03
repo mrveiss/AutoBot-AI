@@ -46,7 +46,7 @@ Redis is a critical component of AutoBot that provides:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend UI (VM1)                         │
-│              http://172.16.168.21:5173                       │
+│              http://<frontend-ip>:5173                       │
 │                                                              │
 │  [Redis Service Controls]                                   │
 │   - Service Status Display                                  │
@@ -59,7 +59,7 @@ Redis is a critical component of AutoBot that provides:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Backend API (Main Machine)                      │
-│           https://172.16.168.20:8443                         │
+│           https://<backend-ip>:8443                         │
 │                                                              │
 │  [Redis Service Manager]                                    │
 │   - Service Control Logic                                   │
@@ -71,7 +71,7 @@ Redis is a critical component of AutoBot that provides:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                Redis VM (VM3)                                │
-│           172.16.168.23:6379                                │
+│           <database-ip>:6379                                │
 │                                                              │
 │  [Redis Service]                                            │
 │   - Redis Server Process                                    │
@@ -85,7 +85,7 @@ Redis is a critical component of AutoBot that provides:
 
 ### Step 1: Login to AutoBot
 
-1. Navigate to AutoBot frontend: `http://172.16.168.21:5173`
+1. Navigate to AutoBot frontend: `http://<frontend-ip>:5173`
 2. Login with your credentials
 3. Ensure you have appropriate role permissions (see [Role-Based Access](#role-based-access))
 

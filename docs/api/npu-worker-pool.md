@@ -29,14 +29,14 @@ NPUTaskQueue → NPUWorkerPool → NPUWorkerClient instances
 npu:
   workers:
     - id: npu-worker-vm2
-      host: 172.16.168.22
+      host: <npu-ip>
       port: 8081
       priority: 10
       enabled: true
       max_concurrent_tasks: 4
 
     - id: windows-npu-worker
-      host: 172.16.168.20
+      host: <backend-ip>
       port: 8082
       priority: 5
       enabled: true
@@ -83,7 +83,7 @@ Get per-worker health states.
   "workers": [
     {
       "id": "npu-worker-vm2",
-      "url": "http://172.16.168.22:8081",
+      "url": "http://<npu-ip>:8081",
       "priority": 10,
       "enabled": true,
       "healthy": true,

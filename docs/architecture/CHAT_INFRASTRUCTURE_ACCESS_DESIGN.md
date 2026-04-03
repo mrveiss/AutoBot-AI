@@ -42,7 +42,7 @@ Refactor the Chat Terminal and VNC tabs to use user-configured external hosts vi
 │  Chat Terminal ──────────► Local PTY (AutoBot host)             │
 │                            └─ SECURITY RISK: Direct access      │
 │                                                                  │
-│  Chat VNC ───────────────► Main Machine VNC (172.16.168.20)     │
+│  Chat VNC ───────────────► Main Machine VNC (<backend-ip>)     │
 │                            └─ Checked on startup                 │
 │                            └─ SECURITY RISK: Exposes desktop    │
 │                                                                  │
@@ -160,7 +160,7 @@ Refactor the Chat Terminal and VNC tabs to use user-configured external hosts vi
 │                           │     │    ┌──────────────────┐      │
 │  ┌──────────────────┐     │     │    │ db-server        │      │
 │  │ Redis Stack      │     ✗     │    │ 192.168.1.20    │      │
-│  │ 172.16.168.23    │◄────┼─────┼───►│ SSH only        │      │
+│  │ <database-ip>    │◄────┼─────┼───►│ SSH only        │      │
 │  └──────────────────┘     │     │    └──────────────────┘      │
 │                           │     │                              │
 │          NO ACCESS ───────┘     │    User connects via         │

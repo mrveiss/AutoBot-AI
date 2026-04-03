@@ -520,7 +520,7 @@ async def list_all_mcp_tools():
     """Get all MCP tools from registry"""
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            "https://172.16.168.20:8443/api/mcp/tools"
+            "https://<backend-ip>:8443/api/mcp/tools"
         ) as response:
             data = await response.json()
             return data["tools"]
@@ -529,7 +529,7 @@ async def check_mcp_health():
     """Check health of all MCP bridges"""
     async with aiohttp.ClientSession() as session:
         async with session.get(
-            "https://172.16.168.20:8443/api/mcp/health"
+            "https://<backend-ip>:8443/api/mcp/health"
         ) as response:
             data = await response.json()
             return data["status"] == "healthy"

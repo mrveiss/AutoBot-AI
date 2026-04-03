@@ -429,7 +429,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
-| Redis server | ✓ | Dedicated VM (172.16.168.23) | ✅ |
+| Redis server | ✓ | Dedicated VM (<database-ip>) | ✅ |
 | Python redis-py | ✓ | Async support | ✅ |
 | Agent memory | ✓ | ChatHistoryManager | ✅ |
 | Task queue | ✓ | Distributed | ✅ |
@@ -550,12 +550,12 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 | VM | IP | Purpose | Status |
 |----|-----|---------|--------|
-| Main (WSL) | 172.16.168.20 | Backend API + VNC | ✅ |
-| VM1 Frontend | 172.16.168.21 | Web UI | ✅ |
-| VM2 NPU Worker | 172.16.168.22 | Hardware AI | ✅ |
-| VM3 Redis | 172.16.168.23 | Data layer | ✅ |
-| VM4 AI Stack | 172.16.168.24 | AI processing | ✅ |
-| VM5 Browser | 172.16.168.25 | Playwright | ✅ |
+| Main (WSL) | <backend-ip> | Backend API + VNC | ✅ |
+| VM1 Frontend | <frontend-ip> | Web UI | ✅ |
+| VM2 NPU Worker | <npu-ip> | Hardware AI | ✅ |
+| VM3 Redis | <database-ip> | Data layer | ✅ |
+| VM4 AI Stack | <aiml-ip> | AI processing | ✅ |
+| VM5 Browser | <browser-ip> | Playwright | ✅ |
 
 ---
 
@@ -586,7 +586,7 @@ AUTOBOT_REASONING_MODEL=qwen3.5:9b
 
 ### ✅ PHASE 18: Browser Automation (COMPLETE)
 
-- ✅ Playwright on Browser VM (172.16.168.25)
+- ✅ Playwright on Browser VM (<browser-ip>)
 - ✅ Screenshot capture, element interaction
 - ✅ Form automation, navigation control
 - ✅ Multi-browser support (Chromium, Firefox, WebKit)

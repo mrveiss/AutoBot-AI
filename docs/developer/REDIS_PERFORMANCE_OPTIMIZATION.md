@@ -1,6 +1,6 @@
 # Redis Performance Optimization Plan for AutoBot
 
-## Current Redis Status (172.16.168.23:6379)
+## Current Redis Status (<database-ip>:6379)
 
 ### Configuration Analysis
 - **Version**: Redis 7.4.5 (latest stable) ✅
@@ -38,10 +38,10 @@
 #### Set Memory Limits
 ```bash
 # Recommended: 8GB limit (leaves headroom for OS)
-redis-cli -h 172.16.168.23 CONFIG SET maxmemory 8gb
+redis-cli -h <database-ip> CONFIG SET maxmemory 8gb
 
 # Change eviction policy to LRU for vectorization jobs
-redis-cli -h 172.16.168.23 CONFIG SET maxmemory-policy allkeys-lru
+redis-cli -h <database-ip> CONFIG SET maxmemory-policy allkeys-lru
 ```
 
 **Rationale**:
@@ -63,7 +63,7 @@ maxmemory-samples 10  # Higher = better LRU accuracy (default: 5)
 ```bash
 # Current: save 3600 1 300 100 60 10000 (very aggressive)
 # Recommended: Less frequent snapshots
-redis-cli -h 172.16.168.23 CONFIG SET save "3600 1 7200 10000"
+redis-cli -h <database-ip> CONFIG SET save "3600 1 7200 10000"
 ```
 
 **Rationale**:
@@ -73,8 +73,8 @@ redis-cli -h 172.16.168.23 CONFIG SET save "3600 1 7200 10000"
 
 #### Option B: Enable AOF for Better Durability
 ```bash
-redis-cli -h 172.16.168.23 CONFIG SET appendonly yes
-redis-cli -h 172.16.168.23 CONFIG SET appendfsync everysec
+redis-cli -h <database-ip> CONFIG SET appendonly yes
+redis-cli -h <database-ip> CONFIG SET appendfsync everysec
 ```
 
 **Rationale**:
@@ -90,7 +90,7 @@ redis-cli -h 172.16.168.23 CONFIG SET appendfsync everysec
 Current implementation needs review. Recommended settings:
 ```python
 redis_pool = redis.ConnectionPool(
-    host='172.16.168.23',
+    host='<database-ip>',
     port=6379,
     decode_responses=True,
     max_connections=50,        # Increase from default 10
@@ -192,11 +192,11 @@ async def redis_metrics(req: Request):
 #### Monitor Slow Commands
 ```bash
 # Enable slow log (commands taking > 10ms)
-redis-cli -h 172.16.168.23 CONFIG SET slowlog-log-slower-than 10000
-redis-cli -h 172.16.168.23 CONFIG SET slowlog-max-len 128
+redis-cli -h <database-ip> CONFIG SET slowlog-log-slower-than 10000
+redis-cli -h <database-ip> CONFIG SET slowlog-max-len 128
 
 # Check slow log
-redis-cli -h 172.16.168.23 SLOWLOG GET 10
+redis-cli -h <database-ip> SLOWLOG GET 10
 ```
 
 ### 7. Scaling Considerations (FUTURE)
@@ -286,7 +286,7 @@ redis-cli -h 172.16.168.23 SLOWLOG GET 10
 ## Configuration File Template
 
 ```conf
-# /etc/redis/redis.conf on VM3 (172.16.168.23)
+# /etc/redis/redis.conf on VM3 (<database-ip>)
 
 # Network
 bind 0.0.0.0

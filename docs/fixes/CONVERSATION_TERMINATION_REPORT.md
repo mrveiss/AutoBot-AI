@@ -234,7 +234,7 @@ python -m pytest tests/test_conversation_handling_fix.py::TestRegressionPreventi
 - Prompt file changes hot-reload automatically via PromptManager
 
 ### Production Deployment Steps
-1. Sync `src/chat_workflow_manager.py` to AI Stack VM (172.16.168.24)
+1. Sync `src/chat_workflow_manager.py` to AI Stack VM (<aiml-ip>)
 2. Sync `autobot-backend/resources/prompts/chat/` directory to AI Stack VM
 3. Sync `tests/` directory for validation
 4. Run test suite on production

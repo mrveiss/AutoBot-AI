@@ -320,7 +320,7 @@ for doc_id in sample_ids:
 
 ```bash
 # Remove vector data from Redis (keep cache/state)
-redis-cli -h 172.16.168.23 DEL llama_index:*
+redis-cli -h <database-ip> DEL llama_index:*
 
 # Verify Redis size reduced
 redis-cli INFO memory | grep used_memory_human

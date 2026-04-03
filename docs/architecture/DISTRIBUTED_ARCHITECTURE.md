@@ -22,33 +22,33 @@ AutoBot Phase 5 implements a sophisticated distributed architecture across 6 ded
 ```mermaid
 graph TB
     subgraph "Physical Host (WSL2 - Ubuntu 22.04)"
-        MainHost[Main Host<br/>172.16.168.20<br/>Backend API + Desktop Access]
+        MainHost[Main Host<br/><backend-ip><br/>Backend API + Desktop Access]
         OllamaLocal[Ollama LLM Server<br/>127.0.0.1:11434<br/>Local AI Processing]
         VNC[VNC Desktop<br/>127.0.0.1:6080<br/>noVNC + kex]
     end
 
-    subgraph "VM1 - Frontend (172.16.168.21)"
+    subgraph "VM1 - Frontend (<frontend-ip>)"
         Vue3[Vue 3 + TypeScript<br/>Port 5173<br/>Nginx + Hot Reload]
         Vite[Vite Dev Server<br/>HMR + Proxy Config]
     end
 
-    subgraph "VM2 - NPU Worker (172.16.168.22)"
+    subgraph "VM2 - NPU Worker (<npu-ip>)"
         NPUService[Intel NPU Service<br/>Port 8081<br/>OpenVINO + NPU Acceleration]
         GPUProcess[GPU Acceleration<br/>CUDA/OpenCL<br/>Computer Vision Tasks]
     end
 
-    subgraph "VM3 - Redis Stack (172.16.168.23)"
+    subgraph "VM3 - Redis Stack (<database-ip>)"
         RedisStack[Redis Stack 7.4.0<br/>Port 6379<br/>11 Specialized Databases]
         RedisInsight[RedisInsight<br/>Port 8002<br/>Visual Management]
         VectorDB[Vector Storage<br/>13,383 Embeddings<br/>Knowledge Vectors]
     end
 
-    subgraph "VM4 - AI Stack (172.16.168.24)"
+    subgraph "VM4 - AI Stack (<aiml-ip>)"
         AIOrchestrator[AI Model Orchestrator<br/>Port 8080<br/>Multi-Provider Support]
         ModelCache[Model Cache<br/>GPU Memory Management<br/>Inference Optimization]
     end
 
-    subgraph "VM5 - Browser Service (172.16.168.25)"
+    subgraph "VM5 - Browser Service (<browser-ip>)"
         Playwright[Playwright Automation<br/>Port 3000<br/>Multi-Browser Support]
         WebDrivers[Chrome + Firefox<br/>Headless/Headed Modes<br/>Screenshot + Interaction]
     end
@@ -70,7 +70,7 @@ graph TB
 
 ## Detailed Component Architecture
 
-### Main Host (WSL2) - 172.16.168.20
+### Main Host (WSL2) - <backend-ip>
 **Role**: Core API server, system integration, and desktop access
 
 **Specifications**:
@@ -99,7 +99,7 @@ backend/
 # Core Configuration
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8001
-REDIS_HOST=172.16.168.23
+REDIS_HOST=<database-ip>
 OLLAMA_HOST=127.0.0.1
 
 # Multi-Modal AI Configuration
@@ -113,7 +113,7 @@ VNC_PASSWORD=autobot_secure
 DISPLAY=:99
 ```
 
-### VM1 - Frontend Service (172.16.168.21)
+### VM1 - Frontend Service (<frontend-ip>)
 **Role**: Modern web interface with real-time capabilities
 
 **Specifications**:
@@ -146,7 +146,7 @@ autobot-frontend/
 ```nginx
 server {
     listen 80;
-    server_name 172.16.168.21;
+    server_name <frontend-ip>;
 
     # Frontend static files
     location / {
@@ -156,7 +156,7 @@ server {
 
     # API proxy to main host
     location /api/ {
-        proxy_pass https://172.16.168.20:8443/api/;
+        proxy_pass https://<backend-ip>:8443/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -166,7 +166,7 @@ server {
 
     # WebSocket proxy
     location /ws/ {
-        proxy_pass https://172.16.168.20:8443/ws/;
+        proxy_pass https://<backend-ip>:8443/ws/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -174,7 +174,7 @@ server {
 }
 ```
 
-### VM2 - NPU Worker (172.16.168.22)  
+### VM2 - NPU Worker (<npu-ip>)  
 **Role**: Hardware-accelerated AI processing and computer vision
 
 **Specifications**:
@@ -224,7 +224,7 @@ models:
     fallback: "sentence_transformer_gpu.onnx"
 ```
 
-### VM3 - Redis Stack (172.16.168.23)
+### VM3 - Redis Stack (<database-ip>)
 **Role**: Centralized data persistence and caching
 
 **Specifications**:
@@ -285,7 +285,7 @@ loadmodule /opt/redis-stack/lib/redisearch.so
 loadmodule /opt/redis-stack/lib/rejson.so
 ```
 
-### VM4 - AI Stack (172.16.168.24)
+### VM4 - AI Stack (<aiml-ip>)
 **Role**: Multi-provider AI model orchestration and inference
 
 **Specifications**:
@@ -343,7 +343,7 @@ providers:
 
   ollama:
     enabled: true
-    base_url: "http://172.16.168.20:11434"
+    base_url: "http://<backend-ip>:11434"
     models: ["tinyllama", "phi", "llama2", "codellama"]
     health_check_interval: 30
 
@@ -359,7 +359,7 @@ routing_rules:
     model: "claude-3-opus-20240229"
 ```
 
-### VM5 - Browser Service (172.16.168.25)
+### VM5 - Browser Service (<browser-ip>)
 **Role**: Web automation and browser-based task execution
 
 **Specifications**:
@@ -426,31 +426,31 @@ GET /api/sessions/{session_id}/screenshot
 
 ### Network Topology
 ```
-Physical Host (172.16.168.20)
-├── Frontend VM (172.16.168.21)     # DMZ - Public facing
-├── NPU Worker (172.16.168.22)      # Compute tier - Internal only  
-├── Redis Stack (172.16.168.23)     # Data tier - Internal only
-├── AI Stack (172.16.168.24)        # Service tier - Internal only
-└── Browser Service (172.16.168.25) # Automation tier - Controlled access
+Physical Host (<backend-ip>)
+├── Frontend VM (<frontend-ip>)     # DMZ - Public facing
+├── NPU Worker (<npu-ip>)      # Compute tier - Internal only  
+├── Redis Stack (<database-ip>)     # Data tier - Internal only
+├── AI Stack (<aiml-ip>)        # Service tier - Internal only
+└── Browser Service (<browser-ip>) # Automation tier - Controlled access
 ```
 
 **Firewall Rules**:
 ```bash
 # External access (from internet)
-ALLOW 172.16.168.21:80,443         # Frontend web interface
-ALLOW 172.16.168.20:6080           # VNC desktop (admin only)
+ALLOW <frontend-ip>:80,443         # Frontend web interface
+ALLOW <backend-ip>:6080           # VNC desktop (admin only)
 
 # Inter-service communication (internal network)  
-ALLOW 172.16.168.20 -> 172.16.168.21:5173    # Backend to Frontend
-ALLOW 172.16.168.20 -> 172.16.168.22:8081    # Backend to NPU
-ALLOW 172.16.168.20 -> 172.16.168.23:6379    # Backend to Redis
-ALLOW 172.16.168.20 -> 172.16.168.24:8080    # Backend to AI Stack  
-ALLOW 172.16.168.20 -> 172.16.168.25:3000    # Backend to Browser
+ALLOW <backend-ip> -> <frontend-ip>:5173    # Backend to Frontend
+ALLOW <backend-ip> -> <npu-ip>:8081    # Backend to NPU
+ALLOW <backend-ip> -> <database-ip>:6379    # Backend to Redis
+ALLOW <backend-ip> -> <aiml-ip>:8080    # Backend to AI Stack  
+ALLOW <backend-ip> -> <browser-ip>:3000    # Backend to Browser
 
 # Service-to-service communication
-ALLOW 172.16.168.22 -> 172.16.168.23:6379    # NPU to Redis
-ALLOW 172.16.168.24 -> 172.16.168.23:6379    # AI Stack to Redis
-ALLOW 172.16.168.25 -> 172.16.168.23:6379    # Browser to Redis
+ALLOW <npu-ip> -> <database-ip>:6379    # NPU to Redis
+ALLOW <aiml-ip> -> <database-ip>:6379    # AI Stack to Redis
+ALLOW <browser-ip> -> <database-ip>:6379    # Browser to Redis
 
 # Deny all other traffic
 DENY ALL OTHER
@@ -559,29 +559,29 @@ sudo systemctl enable autobot-browser.service
 # Comprehensive health check system
 health_checks = {
     "main_host": {
-        "backend_api": "https://172.16.168.20:8443/api/health",
+        "backend_api": "https://<backend-ip>:8443/api/health",
         "ollama_service": "http://127.0.0.1:11434/api/tags",
         "vnc_desktop": "tcp://127.0.0.1:5900"
     },
     "vm1_frontend": {
-        "nginx": "http://172.16.168.21:80/health",
-        "vue_dev": "http://172.16.168.21:5173"
+        "nginx": "http://<frontend-ip>:80/health",
+        "vue_dev": "http://<frontend-ip>:5173"
     },
     "vm2_npu": {
-        "npu_service": "http://172.16.168.22:8081/health",
+        "npu_service": "http://<npu-ip>:8081/health",
         "gpu_status": "nvidia-smi"
     },
     "vm3_redis": {
-        "redis_server": "tcp://172.16.168.23:6379",
-        "redisinsight": "http://172.16.168.23:8002"
+        "redis_server": "tcp://<database-ip>:6379",
+        "redisinsight": "http://<database-ip>:8002"
     },
     "vm4_ai": {
-        "orchestrator": "http://172.16.168.24:8080/health",
-        "model_status": "http://172.16.168.24:8080/models/status"
+        "orchestrator": "http://<aiml-ip>:8080/health",
+        "model_status": "http://<aiml-ip>:8080/models/status"
     },
     "vm5_browser": {
-        "playwright": "http://172.16.168.25:3000/health",
-        "browser_pools": "http://172.16.168.25:3000/sessions/stats"
+        "playwright": "http://<browser-ip>:3000/health",
+        "browser_pools": "http://<browser-ip>:3000/sessions/stats"
     }
 }
 ```
@@ -753,11 +753,11 @@ python3 scripts/health_check_all_vms.py
 
 # 2. Update knowledge base indices  
 echo "Optimizing knowledge base..."
-curl -X POST https://172.16.168.20:8443/api/knowledge_base/optimize
+curl -X POST https://<backend-ip>:8443/api/knowledge_base/optimize
 
 # 3. Clear expired cache entries
 echo "Cleaning Redis cache..."
-redis-cli -h 172.16.168.23 -p 6379 FLUSHDB 3
+redis-cli -h <database-ip> -p 6379 FLUSHDB 3
 
 # 4. Rotate logs
 echo "Rotating logs..."
@@ -784,7 +784,7 @@ echo "Maintenance completed successfully"
 - [Troubleshooting Guide](../troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md)
 
 **Support & Monitoring**:
-- System Health Dashboard: `http://172.16.168.21/health`
-- Redis Insight: `http://172.16.168.23:8002`
+- System Health Dashboard: `http://<frontend-ip>/health`
+- Redis Insight: `http://<database-ip>:8002`
 - VNC Desktop Access: `http://127.0.0.1:6080`
-- API Documentation: `https://172.16.168.20:8443/docs`
+- API Documentation: `https://<backend-ip>:8443/docs`

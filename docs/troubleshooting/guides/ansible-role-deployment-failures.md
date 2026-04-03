@@ -78,7 +78,7 @@ rm -rf ansible/roles/old_location/my_role
 # After OS upgrade (Ubuntu 20.04→22.04), playbook uses old facts
 
 # Clear cache for specific host
-rm /tmp/ansible_fact_cache/172.16.168.22
+rm /tmp/ansible_fact_cache/<npu-ip>
 
 # Or clear all
 rm -rf /tmp/ansible_fact_cache/*

@@ -29,13 +29,13 @@
 
 ```bash
 # 1. Check if backend is running and accessible
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 
 # 2. Check CORS configuration
 grep -r "get_cors_origins" autobot-backend/
 
 # 3. Verify API routes are registered
-curl https://172.16.168.20:8443/docs | grep -i "advanced-control"
+curl https://<backend-ip>:8443/docs | grep -i "advanced-control"
 
 # 4. Check frontend API client configuration
 grep -r "ApiClient" autobot-frontend/src/ | grep import
@@ -91,7 +91,7 @@ def get_cors_origins():
     return origins
 ```
 
-Ensure this includes `172.16.168.21` (Frontend VM).
+Ensure this includes `<frontend-ip>` (Frontend VM).
 
 ### Step 4: Remove Duplicate JS/TS Files
 
@@ -150,19 +150,19 @@ async post<T>(endpoint: string, data: any): Promise<T> {
 
 ```bash
 # 1. Check API health
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 
 # 2. Test specific endpoints
-curl https://172.16.168.20:8443/api/advanced-control/status
+curl https://<backend-ip>:8443/api/advanced-control/status
 
 # 3. Check CORS headers
-curl -H "Origin: http://172.16.168.21" -I https://172.16.168.20:8443/api/health
+curl -H "Origin: http://<frontend-ip>" -I https://<backend-ip>:8443/api/health
 
 # Should include:
-# Access-Control-Allow-Origin: http://172.16.168.21
+# Access-Control-Allow-Origin: http://<frontend-ip>
 
 # 4. Verify routes in OpenAPI docs
-curl https://172.16.168.20:8443/docs
+curl https://<backend-ip>:8443/docs
 ```
 
 **Success Indicators**:

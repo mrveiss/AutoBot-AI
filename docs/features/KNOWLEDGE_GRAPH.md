@@ -208,7 +208,7 @@ curl -X POST https://localhost:8443/api/memory/entities \
     "entity_type": "implementation",
     "observations": [
       "Uses Redis Stack for data persistence",
-      "Configured on 172.16.168.23:6379"
+      "Configured on <database-ip>:6379"
     ]
   }'
 ```
@@ -263,7 +263,7 @@ Potential future improvements:
 ### Graph Not Loading
 
 1. Check backend is running: `curl https://localhost:8443/api/memory/health`
-2. Verify Redis connection: `redis-cli -h 172.16.168.23 ping`
+2. Verify Redis connection: `redis-cli -h <database-ip> ping`
 3. Check browser console for API errors
 
 ### Entity Creation Fails

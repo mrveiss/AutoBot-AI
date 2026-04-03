@@ -13,9 +13,9 @@ AutoBot uses a **Single Source of Truth (SSOT)** configuration pattern where all
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     .env (Master SSOT)                          │
-│  AUTOBOT_BACKEND_HOST=172.16.168.20                            │
-│  AUTOBOT_FRONTEND_HOST=172.16.168.21                           │
-│  AUTOBOT_REDIS_HOST=172.16.168.23                              │
+│  AUTOBOT_BACKEND_HOST=<backend-ip>                            │
+│  AUTOBOT_FRONTEND_HOST=<frontend-ip>                           │
+│  AUTOBOT_REDIS_HOST=<database-ip>                              │
 │  ...                                                            │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -35,12 +35,12 @@ AutoBot uses a **Single Source of Truth (SSOT)** configuration pattern where all
 from autobot_shared.ssot_config import config
 
 # Access configuration values
-backend_host = config.backend.host        # "172.16.168.20"
+backend_host = config.backend.host        # "<backend-ip>"
 redis_url = config.redis.url              # Full connection URL
 llm_model = config.llm.default_model      # "qwen3.5:9b"
 
 # Get full URL for a service
-api_url = config.backend.url              # "https://172.16.168.20:8443"
+api_url = config.backend.url              # "https://<backend-ip>:8443"
 ```
 
 ### TypeScript (Frontend)
@@ -50,10 +50,10 @@ import { getConfig, getBackendUrl, getRedisUrl } from '@/config/ssot-config'
 
 // Access configuration
 const config = getConfig()
-const backendHost = config.backend.host   // "172.16.168.20"
+const backendHost = config.backend.host   // "<backend-ip>"
 
 // Get full URLs
-const apiUrl = getBackendUrl()            // "https://172.16.168.20:8443"
+const apiUrl = getBackendUrl()            // "https://<backend-ip>:8443"
 const redisUrl = getRedisUrl()            // Full Redis connection URL
 ```
 
@@ -71,7 +71,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 fi
 
 # Use variables with fallbacks
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-<backend-ip>}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 ```
 
@@ -83,17 +83,17 @@ All SSOT variables use the `AUTOBOT_` prefix. Here's the complete list:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_BACKEND_HOST` | `172.16.168.20` | Backend API server IP |
+| `AUTOBOT_BACKEND_HOST` | `<backend-ip>` | Backend API server IP |
 | `AUTOBOT_BACKEND_PORT` | `8001` | Backend API port |
-| `AUTOBOT_FRONTEND_HOST` | `172.16.168.21` | Frontend server IP |
+| `AUTOBOT_FRONTEND_HOST` | `<frontend-ip>` | Frontend server IP |
 | `AUTOBOT_FRONTEND_PORT` | `5173` | Frontend dev server port |
-| `AUTOBOT_REDIS_HOST` | `172.16.168.23` | Redis server IP |
+| `AUTOBOT_REDIS_HOST` | `<database-ip>` | Redis server IP |
 | `AUTOBOT_REDIS_PORT` | `6379` | Redis port |
-| `AUTOBOT_NPU_WORKER_HOST` | `172.16.168.22` | NPU Worker IP |
+| `AUTOBOT_NPU_WORKER_HOST` | `<npu-ip>` | NPU Worker IP |
 | `AUTOBOT_NPU_WORKER_PORT` | `8081` | NPU Worker port |
-| `AUTOBOT_AI_STACK_HOST` | `172.16.168.24` | AI Stack IP |
+| `AUTOBOT_AI_STACK_HOST` | `<aiml-ip>` | AI Stack IP |
 | `AUTOBOT_AI_STACK_PORT` | `8080` | AI Stack port |
-| `AUTOBOT_BROWSER_SERVICE_HOST` | `172.16.168.25` | Browser service IP |
+| `AUTOBOT_BROWSER_SERVICE_HOST` | `<browser-ip>` | Browser service IP |
 | `AUTOBOT_BROWSER_SERVICE_PORT` | `3000` | Browser service port |
 
 ### LLM Configuration
@@ -143,7 +143,7 @@ This means `ConfigRegistry.get()` callers **no longer need hardcoded fallbacks**
 redis_host = ConfigRegistry.get("vm.redis")
 
 # ❌ WRONG — redundant hardcoded fallback
-redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+redis_host = ConfigRegistry.get("vm.redis", "<database-ip>")
 ```
 
 ## Best Practices
@@ -165,14 +165,14 @@ const redisHost = getConfig().redis.host
 ```bash
 # ✅ CORRECT - Shell
 source "$PROJECT_ROOT/.env"
-REDIS_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+REDIS_HOST="${AUTOBOT_REDIS_HOST:-<database-ip>}"
 ```
 
 ### DON'T: Hardcode Values
 
 ```python
 # ❌ WRONG - Hardcoded IP
-redis_host = "172.16.168.23"
+redis_host = "<database-ip>"
 
 # ❌ WRONG - Direct os.getenv without SSOT
 redis_host = os.getenv("REDIS_HOST", "localhost")
@@ -180,12 +180,12 @@ redis_host = os.getenv("REDIS_HOST", "localhost")
 
 ```typescript
 // ❌ WRONG - Hardcoded
-const redisHost = "172.16.168.23"
+const redisHost = "<database-ip>"
 ```
 
 ```bash
 # ❌ WRONG - Hardcoded in script
-REDIS_HOST="172.16.168.23"
+REDIS_HOST="<database-ip>"
 ```
 
 ### DO: Use Fallbacks in Shell Scripts
@@ -230,7 +230,7 @@ fi
 **Before (hardcoded):**
 ```python
 import redis
-client = redis.Redis(host="172.16.168.23", port=6379, db=0)
+client = redis.Redis(host="<database-ip>", port=6379, db=0)
 ```
 
 **After (SSOT):**
@@ -249,7 +249,7 @@ client = redis.Redis(
 
 **Before (hardcoded):**
 ```typescript
-const API_URL = "https://172.16.168.20:8443"
+const API_URL = "https://<backend-ip>:8443"
 ```
 
 **After (SSOT):**
@@ -262,14 +262,14 @@ const API_URL = getBackendUrl()
 
 **Before (hardcoded):**
 ```bash
-REMOTE_HOST="172.16.168.21"
+REMOTE_HOST="<frontend-ip>"
 ssh autobot@$REMOTE_HOST "command"
 ```
 
 **After (SSOT):**
 ```bash
 # Load .env first (see template above)
-REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-172.16.168.21}"
+REMOTE_HOST="${AUTOBOT_FRONTEND_HOST:-<frontend-ip>}"
 ssh autobot@$REMOTE_HOST "command"
 ```
 
@@ -337,7 +337,7 @@ The `src/config/ssot_mappings.py` module provides programmatic access to SSOT ma
 from src.config.ssot_mappings import get_mapping_for_value, get_ssot_suggestion
 
 # Check if a value has an SSOT equivalent
-mapping = get_mapping_for_value("172.16.168.23")
+mapping = get_mapping_for_value("<database-ip>")
 if mapping:
     print(f"Use {mapping.python_config} instead")
     # Output: Use config.vm.redis instead
@@ -369,7 +369,7 @@ Each hardcoded value now includes SSOT mapping info:
 {
   "file": "src/example.py",
   "line": 42,
-  "value": "172.16.168.23",
+  "value": "<database-ip>",
   "ssot_mapping": {
     "has_ssot_equivalent": true,
     "python_config": "config.vm.redis",
@@ -445,8 +445,8 @@ All infrastructure configuration (IPs, ports, hosts) is in `.env`:
 
 ```bash
 # Infrastructure - managed by SSOT
-AUTOBOT_BACKEND_HOST=172.16.168.20
-AUTOBOT_REDIS_HOST=172.16.168.23
+AUTOBOT_BACKEND_HOST=<backend-ip>
+AUTOBOT_REDIS_HOST=<database-ip>
 AUTOBOT_OLLAMA_HOST=127.0.0.1
 AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 ```

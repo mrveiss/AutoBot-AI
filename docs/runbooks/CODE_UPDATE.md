@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Runbook: Deploy a Code Update
 
 **Issue #926 Phase 8** | Last updated: 2026-02-18
@@ -29,7 +31,7 @@ git push
 # → hook detects changed role, notifies SLM, SLM marks nodes OUTDATED
 
 # Trigger update from SLM GUI
-# https://172.16.168.19 → Code Sync → "Update All Nodes"
+# https://<slm-manager-ip> → Code Sync → "Update All Nodes"
 
 # Manual trigger via Ansible
 cd autobot-slm-backend/ansible
@@ -80,7 +82,7 @@ scripts/hooks/slm-post-commit
 ### 3. Trigger Fleet Update
 
 Via SLM GUI (recommended):
-1. Navigate to `https://172.16.168.19` → **Code Sync**
+1. Navigate to `https://<slm-manager-ip>` → **Code Sync**
 2. Review which nodes are `OUTDATED` and which commit they're on
 3. Click **"Update All"** or select individual nodes
 
@@ -99,7 +101,7 @@ CLI:
 
 ```bash
 # Watch node status
-watch -n 5 "curl -sk https://172.16.168.19/api/nodes \
+watch -n 5 "curl -sk https://<slm-manager-ip>/api/nodes \
   -H 'Authorization: Bearer ${SLM_TOKEN}' \
   | jq '.[] | {node_id, code_status}'"
 ```
@@ -108,16 +110,16 @@ watch -n 5 "curl -sk https://172.16.168.19/api/nodes \
 
 ```bash
 # Check all nodes are UP_TO_DATE
-curl -sk https://172.16.168.19/api/nodes \
+curl -sk https://<slm-manager-ip>/api/nodes \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   | jq '.[] | select(.code_status != "UP_TO_DATE") | {node_id, code_status}'
 # Expected: empty array
 
 # Check backend health
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
+ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'
 
 # Check frontend
-curl -sk https://172.16.168.21/api/health
+curl -sk https://<frontend-ip>/api/health
 ```
 
 ---
@@ -172,7 +174,7 @@ git checkout <old-commit-hash>
 # 2. Rsync to SLM cache manually
 rsync -av --exclude='node_modules' --exclude='venv' \
   autobot-backend/ \
-  autobot@172.16.168.19:/opt/autobot/cache/autobot-backend/
+  autobot@<slm-manager-ip>:/opt/autobot/cache/autobot-backend/
 
 # 3. Trigger update
 cd autobot-slm-backend/ansible
@@ -203,9 +205,9 @@ git stash pop
 ## Post-Update Verification Checklist
 
 - [ ] All nodes show `code_status: UP_TO_DATE` in SLM
-- [ ] Backend health check returns 200: `curl -sk https://172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'`
-- [ ] Frontend serves updated build: `curl -sk https://172.16.168.21/ | grep <version-or-feature>`
-- [ ] No error spikes in logs: `ssh autobot@172.16.168.20 "tail -50 /var/log/autobot/backend.log" | grep -i error`
+- [ ] Backend health check returns 200: `curl -sk https://<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'`
+- [ ] Frontend serves updated build: `curl -sk https://<frontend-ip>/ | grep <version-or-feature>`
+- [ ] No error spikes in logs: `ssh autobot@<backend-ip> "tail -50 /var/log/autobot/backend.log" | grep -i error`
 
 ---
 

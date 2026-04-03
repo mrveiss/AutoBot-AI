@@ -21,7 +21,7 @@ AutoBot uses **SLM (System Lifecycle Manager) orchestration** and **systemd** fo
 
 **Best for:** Visual monitoring, fleet-wide operations, production management
 
-**Access:** https://172.16.168.19/orchestration
+**Access:** https://<slm-manager-ip>/orchestration
 
 **Features:**
 - Start/stop/restart all services
@@ -31,9 +31,9 @@ AutoBot uses **SLM (System Lifecycle Manager) orchestration** and **systemd** fo
 - Service dependency visualization
 
 **Usage:**
-1. Open https://172.16.168.19/orchestration in browser
+1. Open https://<slm-manager-ip>/orchestration in browser
 2. Navigate to "Services" tab
-3. Select node (e.g., "Main - 172.16.168.20")
+3. Select node (e.g., "Main - <backend-ip>")
 4. Click service action buttons (Start/Stop/Restart)
 5. View logs by clicking "Logs" button
 
@@ -238,7 +238,7 @@ python backend/main.py
 systemctl status redis-stack-server
 
 # Check network connectivity
-curl -k https://172.16.168.20:8443/api/health
+curl -k https://<backend-ip>:8443/api/health
 ```
 
 ### Restarting Services After Configuration Changes
@@ -308,7 +308,7 @@ AUTOBOT_BACKEND_PORT=8443
 AUTOBOT_BACKEND_TLS_ENABLED=true
 
 # Redis
-AUTOBOT_REDIS_HOST=172.16.168.23
+AUTOBOT_REDIS_HOST=<database-ip>
 AUTOBOT_REDIS_PORT=6379
 
 # AI Services
@@ -344,7 +344,7 @@ ansible-playbook playbooks/deploy-native-services.yml
 **Deploy to specific node:**
 ```bash
 # Deploy to frontend VM
-ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.21
+ansible-playbook playbooks/deploy-native-services.yml --limit <frontend-ip>
 
 # Deploy NPU worker
 ansible-playbook playbooks/deploy-native-services.yml --tags npu
@@ -364,7 +364,7 @@ ansible-playbook playbooks/deploy-native-services.yml --tags npu
 ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 
 # SSH to node and restart
-ssh autobot@172.16.168.20
+ssh autobot@<backend-ip>
 sudo systemctl restart autobot-backend
 ```
 
@@ -519,7 +519,7 @@ scripts/start-services.sh start backend
 sudo systemctl start autobot-backend
 
 # Or SLM GUI
-# Open https://172.16.168.19/orchestration
+# Open https://<slm-manager-ip>/orchestration
 ```
 
 **4. Update your workflow:**
@@ -586,7 +586,7 @@ journalctl -u autobot-backend -n 50
 
 ## Additional Resources
 
-- **SLM Orchestration:** https://172.16.168.19/orchestration
+- **SLM Orchestration:** https://<slm-manager-ip>/orchestration
 - **Systemd Documentation:** `man systemd`, `man journalctl`
 - **Ansible Playbooks:** `autobot-slm-backend/ansible/playbooks/`
 - **Service Templates:** `autobot-slm-backend/ansible/roles/*/templates/*.service.j2`
@@ -599,7 +599,7 @@ journalctl -u autobot-backend -n 50
 **Common Issues:**
 1. Service won't start → Check logs: `journalctl -u autobot-backend -n 50`
 2. Configuration not loading → Restart: `sudo systemctl restart autobot-backend`
-3. Can't access GUI → Check network: `ping 172.16.168.19`
+3. Can't access GUI → Check network: `ping <slm-manager-ip>`
 4. Port in use → Find process: `lsof -i :8443`
 
 **Need more help?**

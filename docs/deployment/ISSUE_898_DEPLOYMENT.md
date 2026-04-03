@@ -45,7 +45,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-full.yml --tags backend
 
 # Verify backend restarts successfully
-ssh autobot@172.16.168.20 "systemctl status autobot-backend"
+ssh autobot@<backend-ip> "systemctl status autobot-backend"
 ```
 
 ### Option 2: Manual Sync
@@ -55,7 +55,7 @@ ssh autobot@172.16.168.20 "systemctl status autobot-backend"
 ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 
 # SSH to server and restart backend
-ssh autobot@172.16.168.20
+ssh autobot@<backend-ip>
 cd /opt/autobot
 sudo systemctl restart autobot-backend
 
@@ -70,7 +70,7 @@ journalctl -u autobot-backend -n 100 --no-pager | grep -i "nameerror\|list"
 ### 1. Check Backend Startup (No NameError)
 
 ```bash
-ssh autobot@172.16.168.20 "journalctl -u autobot-backend -n 50 --no-pager"
+ssh autobot@<backend-ip> "journalctl -u autobot-backend -n 50 --no-pager"
 ```
 
 **Expected:** No `NameError: name 'List' is not defined` errors
@@ -78,7 +78,7 @@ ssh autobot@172.16.168.20 "journalctl -u autobot-backend -n 50 --no-pager"
 ### 2. Test Backend Health
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/health | jq
+curl -sk https://<backend-ip>:8443/api/health | jq
 ```
 
 **Expected:** `{"status": "healthy"}` or similar
@@ -86,7 +86,7 @@ curl -sk https://172.16.168.20:8443/api/health | jq
 ### 3. Test Login (Returns JWT Token)
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/auth/login \
+curl -sk https://<backend-ip>:8443/api/auth/login \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin"}' \
@@ -99,11 +99,11 @@ curl -sk https://172.16.168.20:8443/api/auth/login \
 
 ```bash
 # Check frontend can reach backend
-curl -Ik https://172.16.168.21
+curl -Ik https://<frontend-ip>
 
 # Test from frontend to backend
-ssh autobot@172.16.168.21 \
-  "curl -s http://172.16.168.20:8443/api/health | jq"
+ssh autobot@<frontend-ip> \
+  "curl -s http://<backend-ip>:8443/api/health | jq"
 ```
 
 ---
@@ -119,7 +119,7 @@ ssh autobot@172.16.168.21 \
 **Fix:**
 ```bash
 # Verify file on server has List import
-ssh autobot@172.16.168.20 \
+ssh autobot@<backend-ip> \
   "head -20 /opt/autobot/autobot-backend/api/vnc_manager.py | grep 'from typing'"
 ```
 
@@ -128,8 +128,8 @@ Expected output should include: `from typing import Dict, List`
 If not, manually copy the file:
 ```bash
 scp autobot-backend/api/vnc_manager.py \
-  autobot@172.16.168.20:/opt/autobot/autobot-backend/api/vnc_manager.py
-ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
+  autobot@<backend-ip>:/opt/autobot/autobot-backend/api/vnc_manager.py
+ssh autobot@<backend-ip> "sudo systemctl restart autobot-backend"
 ```
 
 ### Login Returns "Could not determine join condition"
@@ -140,7 +140,7 @@ ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
 
 **Fix:** Verify commits e9abf21a and 852518e1 are deployed:
 ```bash
-ssh autobot@172.16.168.20 \
+ssh autobot@<backend-ip> \
   "cd /opt/autobot && git log --oneline -10 | grep -E 'e9abf21a|852518e1'"
 ```
 

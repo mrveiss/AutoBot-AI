@@ -154,7 +154,7 @@ To force a full re-index when incremental indexing is enabled:
 
 ```bash
 # Clear all file hashes from Redis
-redis-cli -h 172.16.168.23 -n 11 KEYS "codebase:file_hash:*" | xargs redis-cli -h 172.16.168.23 -n 11 DEL
+redis-cli -h <database-ip> -n 11 KEYS "codebase:file_hash:*" | xargs redis-cli -h <database-ip> -n 11 DEL
 ```
 
 Or temporarily disable incremental indexing:

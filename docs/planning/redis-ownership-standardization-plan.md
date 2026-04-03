@@ -20,7 +20,7 @@
 
 **Scope:**
 - **Files Affected:** 5 configuration and script files
-- **Directories Affected:** 2 Redis directories on VM3 (172.16.168.23)
+- **Directories Affected:** 2 Redis directories on VM3 (<database-ip>)
 - **Infrastructure:** Distributed VM setup (main + 5 VMs)
 
 ---
@@ -35,9 +35,9 @@
 - **Time:** 5 minutes
 - **Commands:**
   ```bash
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R autobot:autobot /var/lib/redis-stack"
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R autobot:autobot /var/log/redis-stack"
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo chown -R autobot:autobot /var/lib/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo chown -R autobot:autobot /var/log/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo systemctl restart redis-stack-server"
   ```
 - **Success Criteria:** Redis service starts successfully, no permission errors in logs
 - **Risk:** Medium - Service restart required (but quick recovery)
@@ -48,9 +48,9 @@
 - **Time:** 3 minutes
 - **Commands:**
   ```bash
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl status redis-stack-server"
-  redis-cli -h 172.16.168.23 ping
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "ls -la /var/lib/redis-stack /var/log/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "systemctl status redis-stack-server"
+  redis-cli -h <database-ip> ping
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "ls -la /var/lib/redis-stack /var/log/redis-stack"
   ```
 - **Success Criteria:** Service active, PONG response, `autobot:autobot` ownership confirmed
 - **Dependencies:** Task 1.1 complete
@@ -141,11 +141,11 @@
   # Add new function after line 200 (in verification section)
   verify_redis_ownership() {
       echo "Verifying Redis ownership..."
-      local owner=$(ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "stat -c '%U:%G' /var/lib/redis-stack" 2>/dev/null)
+      local owner=$(ssh -i ~/.ssh/autobot_key autobot@<database-ip> "stat -c '%U:%G' /var/lib/redis-stack" 2>/dev/null)
       if [[ "$owner" != "autobot:autobot" ]]; then
           echo "WARNING: Redis ownership mismatch detected: $owner (expected autobot:autobot)"
           echo "Fixing ownership..."
-          ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R autobot:autobot /var/lib/redis-stack /var/log/redis-stack"
+          ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo chown -R autobot:autobot /var/lib/redis-stack /var/log/redis-stack"
           echo "Ownership corrected."
       else
           echo "Redis ownership verified: autobot:autobot"
@@ -199,18 +199,18 @@
   sudo systemctl start autobot-backend
 
   # Test 2: Ownership auto-correction
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R redis:redis /var/lib/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo chown -R redis:redis /var/lib/redis-stack"
   sudo systemctl restart autobot-backend
 
   # Test 3: Service restart
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "stat -c '%U:%G' /var/lib/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo systemctl restart redis-stack-server"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "stat -c '%U:%G' /var/lib/redis-stack"
 
   # Test 4: Ansible deployment
   ansible-playbook -i ansible/inventory ansible/playbooks/deploy-database.yml
 
   # Test 5 & 6: File/directory verification
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "find /var/lib/redis-stack /var/log/redis-stack -not -user autobot -o -not -group autobot"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "find /var/lib/redis-stack /var/log/redis-stack -not -user autobot -o -not -group autobot"
   ```
 - **Success Criteria:** All tests pass, ownership always `autobot:autobot`, no permission errors
 - **Dependencies:** Task 4.1 complete
@@ -237,8 +237,8 @@
 - **Time:** 3 minutes
 - **Commands:**
   ```bash
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo chown -R redis:redis /var/lib/redis-stack /var/log/redis-stack"
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo chown -R redis:redis /var/lib/redis-stack /var/log/redis-stack"
+  ssh -i ~/.ssh/autobot_key autobot@<database-ip> "sudo systemctl restart redis-stack-server"
   ```
 
 #### Phase 2 Rollback (if Ansible playbook breaks)

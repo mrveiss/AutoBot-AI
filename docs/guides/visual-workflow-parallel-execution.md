@@ -925,15 +925,15 @@ executor = ParallelToolExecutor(
 # Create tool calls for parallel execution
 calls = [
     ToolCall(tool_name="execute_shell", arguments={
-        "host": "172.16.168.21",
+        "host": "<frontend-ip>",
         "command": "/opt/autobot/scripts/audit/check_permissions.sh",
     }),
     ToolCall(tool_name="execute_shell", arguments={
-        "host": "172.16.168.22",
+        "host": "<npu-ip>",
         "command": "/opt/autobot/scripts/audit/check_services.sh",
     }),
     ToolCall(tool_name="execute_shell", arguments={
-        "host": "172.16.168.24",
+        "host": "<aiml-ip>",
         "command": "/opt/autobot/scripts/audit/check_network.sh",
     }),
 ]
@@ -997,12 +997,12 @@ async def execute_step_on_target(
 
 | IP | Role | Typical Audit Scripts |
 |----|------|-----------------------|
-| 172.16.168.21 | Frontend VM | `check_permissions.sh`, `check_nginx.sh` |
-| 172.16.168.22 | NPU VM | `check_services.sh`, `check_npu_health.sh` |
-| 172.16.168.23 | Redis VM | `check_redis.sh`, `check_memory.sh` |
-| 172.16.168.24 | AI Stack VM | `check_network.sh`, `check_gpu.sh` |
-| 172.16.168.25 | Browser VM | `check_playwright.sh`, `check_vnc.sh` |
-| 172.16.168.19 | SLM Server | `check_slm.sh`, `check_celery.sh` |
+| <frontend-ip> | Frontend VM | `check_permissions.sh`, `check_nginx.sh` |
+| <npu-ip> | NPU VM | `check_services.sh`, `check_npu_health.sh` |
+| <database-ip> | Redis VM | `check_redis.sh`, `check_memory.sh` |
+| <aiml-ip> | AI Stack VM | `check_network.sh`, `check_gpu.sh` |
+| <browser-ip> | Browser VM | `check_playwright.sh`, `check_vnc.sh` |
+| <slm-manager-ip> | SLM Server | `check_slm.sh`, `check_celery.sh` |
 
 ---
 
@@ -1318,21 +1318,21 @@ fleet_update_template = WorkflowTemplate(
             agent_type="system_commands",
             action="apt update on frontend node",
             description="System_Commands: apt update (.21)",
-            inputs={"target_host": "172.16.168.21", "cmd": "sudo apt update"},
+            inputs={"target_host": "<frontend-ip>", "cmd": "sudo apt update"},
         ),
         WorkflowStep(
             id="update_npu",
             agent_type="system_commands",
             action="apt update on NPU node",
             description="System_Commands: apt update (.22)",
-            inputs={"target_host": "172.16.168.22", "cmd": "sudo apt update"},
+            inputs={"target_host": "<npu-ip>", "cmd": "sudo apt update"},
         ),
         WorkflowStep(
             id="update_ai_stack",
             agent_type="system_commands",
             action="apt update on AI Stack node",
             description="System_Commands: apt update (.24)",
-            inputs={"target_host": "172.16.168.24", "cmd": "sudo apt update"},
+            inputs={"target_host": "<aiml-ip>", "cmd": "sudo apt update"},
         ),
         # Phase 2: Upgrade packages (parallel, depends on update phase)
         WorkflowStep(
@@ -1342,7 +1342,7 @@ fleet_update_template = WorkflowTemplate(
             description="System_Commands: apt upgrade (.21)",
             dependencies=["update_frontend"],
             requires_approval=True,
-            inputs={"target_host": "172.16.168.21", "cmd": "sudo apt upgrade -y"},
+            inputs={"target_host": "<frontend-ip>", "cmd": "sudo apt upgrade -y"},
         ),
         WorkflowStep(
             id="upgrade_npu",
@@ -1351,7 +1351,7 @@ fleet_update_template = WorkflowTemplate(
             description="System_Commands: apt upgrade (.22)",
             dependencies=["update_npu"],
             requires_approval=True,
-            inputs={"target_host": "172.16.168.22", "cmd": "sudo apt upgrade -y"},
+            inputs={"target_host": "<npu-ip>", "cmd": "sudo apt upgrade -y"},
         ),
         WorkflowStep(
             id="upgrade_ai_stack",
@@ -1360,7 +1360,7 @@ fleet_update_template = WorkflowTemplate(
             description="System_Commands: apt upgrade (.24)",
             dependencies=["update_ai_stack"],
             requires_approval=True,
-            inputs={"target_host": "172.16.168.24", "cmd": "sudo apt upgrade -y"},
+            inputs={"target_host": "<aiml-ip>", "cmd": "sudo apt upgrade -y"},
         ),
         # Phase 3: Verify services (after all upgrades)
         WorkflowStep(
@@ -1726,7 +1726,7 @@ workflow = {
                 "parallel_group": "audit_wave_1",
                 "timeout": 300,
                 "inputs": {
-                    "target_host": "172.16.168.21",
+                    "target_host": "<frontend-ip>",
                     "script": "/opt/autobot/scripts/audit/check_permissions.sh",
                 },
             },
@@ -1737,7 +1737,7 @@ workflow = {
                 "parallel_group": "audit_wave_1",
                 "timeout": 300,
                 "inputs": {
-                    "target_host": "172.16.168.22",
+                    "target_host": "<npu-ip>",
                     "script": "/opt/autobot/scripts/audit/check_services.sh",
                 },
             },
@@ -1748,7 +1748,7 @@ workflow = {
                 "parallel_group": "audit_wave_1",
                 "timeout": 300,
                 "inputs": {
-                    "target_host": "172.16.168.24",
+                    "target_host": "<aiml-ip>",
                     "script": "/opt/autobot/scripts/audit/check_network.sh",
                 },
             },

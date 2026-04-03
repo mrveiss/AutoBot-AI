@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Runbook: Rotate SSH Keys
 
 **Issue #926 Phase 7** | Last updated: 2026-02-18
@@ -94,9 +96,9 @@ are not rolled back (they are safe to leave in place).
 
 ```bash
 # Test direct SSH with new key
-ssh -i ~/.ssh/autobot_ed25519 autobot@172.16.168.19 "hostname"
-ssh -i ~/.ssh/autobot_ed25519 autobot@172.16.168.20 "hostname"
-ssh -i ~/.ssh/autobot_ed25519 autobot@172.16.168.21 "hostname"
+ssh -i ~/.ssh/autobot_ed25519 autobot@<slm-manager-ip> "hostname"
+ssh -i ~/.ssh/autobot_ed25519 autobot@<backend-ip> "hostname"
+ssh -i ~/.ssh/autobot_ed25519 autobot@<frontend-ip> "hostname"
 
 # Test Ansible connectivity
 ansible all -i inventory/slm-nodes.yml -m ping
@@ -136,14 +138,14 @@ If you've rotated to a broken key but the safety-net key is still present:
 
 ```bash
 # SSH in with safety-net key
-ssh -i ~/.ssh/autobot_admin_temp_ed25519 autobot@172.16.168.19
+ssh -i ~/.ssh/autobot_admin_temp_ed25519 autobot@<slm-manager-ip>
 
 # Restore old key (from backup)
 cat ~/.ssh/autobot_ed25519.bak >> ~/.ssh/authorized_keys
 
 # Remove broken new key
 # (identify fingerprint from: ssh-keygen -l -f ~/.ssh/autobot_ed25519_new.pub)
-ssh-keygen -R 172.16.168.19
+ssh-keygen -R <slm-manager-ip>
 ```
 
 ---

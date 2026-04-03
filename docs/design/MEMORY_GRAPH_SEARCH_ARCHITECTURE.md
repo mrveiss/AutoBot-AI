@@ -142,7 +142,7 @@ User Query: "What bugs did we fix today?"
 │ Observations:                                                │
 │   - Fixed incorrect endpoint /api/system/status             │
 │   - Updated API calls in frontend components                │
-│   - Deployed to Frontend VM (172.16.168.21)                 │
+│   - Deployed to Frontend VM (<frontend-ip>)                 │
 │ Created: 2025-10-03 09:15                                    │
 │ Relations: [relates_to: API Documentation Update]           │
 └─────────────────────────────────────────────────────────────┘
@@ -524,7 +524,7 @@ MemoryGraphSearch
     │       │       └─► Ollama Server (localhost:11434)
     │       │
     │       └─► RedisVectorStore (llama-index)
-    │               └─► Redis Server (172.16.168.23:6379)
+    │               └─► Redis Server (<database-ip>:6379)
     │
     ├─► EntityIndexManager
     │       │

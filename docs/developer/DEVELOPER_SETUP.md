@@ -23,9 +23,9 @@ docker compose up -d --build
 # Optional profiles: --profile ollama, --profile monitoring
 
 # 3. Access development interface
-# SLM Orchestration: https://172.16.168.19/orchestration
-# User Frontend: https://172.16.168.21
-# Backend API: https://172.16.168.20:8443/docs
+# SLM Orchestration: https://<slm-manager-ip>/orchestration
+# User Frontend: https://<frontend-ip>
+# Backend API: https://<backend-ip>:8443/docs
 # VNC Desktop: http://127.0.0.1:6080
 ```
 
@@ -136,7 +136,7 @@ AutoBot supports three deployment methods:
 sudo ./install.sh
 # - Installs system packages and Python 3.12 venv
 # - Configures systemd services (autobot-backend, autobot-celery, etc.)
-# - Sets up networking for the 172.16.168.0/24 fleet
+# - Sets up networking for the <network-subnet> fleet
 # - Generates SSH keys for inter-VM communication
 # - Launches the Setup Wizard at https://<server-ip>
 #   (complete remaining configuration — AI models, API keys — via the wizard)
@@ -161,7 +161,7 @@ docker compose --profile ollama --profile monitoring up -d --build
 #### Path C: Fleet Deployment via Ansible (from SLM Manager .19)
 
 ```bash
-# On the SLM Manager (172.16.168.19)
+# On the SLM Manager (<slm-manager-ip>)
 cd autobot-slm-backend/ansible
 
 # Deploy or update the full fleet
@@ -193,7 +193,7 @@ Phase 2 — Dependency Installation (~5 min)
   - SSH server and key generation
 
 Phase 3 — Fleet Infrastructure Setup (~8 min)
-  - Configure VM network (172.16.168.0/24)
+  - Configure VM network (<network-subnet>)
   - Generate SSH keys for inter-VM communication
   - Set up firewall rules and VM-to-VM networking
   - Install VM-specific dependencies
@@ -255,16 +255,16 @@ systemctl status ollama
 
 # Or use SLM GUI
 scripts/start-services.sh gui
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 
 # Expected services:
-✓ Main Backend API      (https://172.16.168.20:8443)
+✓ Main Backend API      (https://<backend-ip>:8443)
 ✓ Celery Worker         (Background tasks)
-✓ Frontend Service      (https://172.16.168.21)
-✓ NPU Worker           (http://172.16.168.22:8081)
-✓ Redis Stack          (tcp://172.16.168.23:6379)
-✓ AI Orchestrator      (http://172.16.168.24:8080)
-✓ Browser Service      (http://172.16.168.25:3000)
+✓ Frontend Service      (https://<frontend-ip>)
+✓ NPU Worker           (http://<npu-ip>:8081)
+✓ Redis Stack          (tcp://<database-ip>:6379)
+✓ AI Orchestrator      (http://<aiml-ip>:8080)
+✓ Browser Service      (http://<browser-ip>:3000)
 ✓ Ollama LLM           (http://127.0.0.1:11434)
 
 System Status: ALL SERVICES HEALTHY ✓
@@ -307,7 +307,7 @@ journalctl -u autobot-backend -f
 **Alternative: SLM GUI (Best for operations)**
 ```bash
 scripts/start-services.sh gui
-# Or visit: https://172.16.168.19/orchestration
+# Or visit: https://<slm-manager-ip>/orchestration
 ```
 
 See [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
@@ -318,21 +318,21 @@ Once services are started, these URLs will be available:
 
 ```yaml
 # Primary interfaces
-SLM_Orchestration: "https://172.16.168.19/orchestration"  # Service management GUI
-Frontend_UI: "https://172.16.168.21"                      # User interface (production)
-Frontend_Dev: "http://172.16.168.21:5173"                 # Development server (if running)
-Backend_API: "https://172.16.168.20:8443"                 # FastAPI backend (TLS)
-API_Docs: "https://172.16.168.20:8443/docs"               # Interactive API documentation
+SLM_Orchestration: "https://<slm-manager-ip>/orchestration"  # Service management GUI
+Frontend_UI: "https://<frontend-ip>"                      # User interface (production)
+Frontend_Dev: "http://<frontend-ip>:5173"                 # Development server (if running)
+Backend_API: "https://<backend-ip>:8443"                 # FastAPI backend (TLS)
+API_Docs: "https://<backend-ip>:8443/docs"               # Interactive API documentation
 
 # Administrative interfaces
 VNC_Desktop: "http://127.0.0.1:6080"          # Full desktop access
-Redis_Insight: "http://172.16.168.23:8002"   # Database management
-System_Health: "https://172.16.168.21/health" # System monitoring
+Redis_Insight: "http://<database-ip>:8002"   # Database management
+System_Health: "https://<frontend-ip>/health" # System monitoring
 
 # Development tools (backend endpoints)
-WebSocket_Test: "https://172.16.168.20:8443/ws-test"  # WebSocket testing
-File_Manager: "https://172.16.168.20:8443/files"      # File browser
-Log_Viewer: "https://172.16.168.20:8443/logs"         # Real-time logs
+WebSocket_Test: "https://<backend-ip>:8443/ws-test"  # WebSocket testing
+File_Manager: "https://<backend-ip>:8443/files"      # File browser
+Log_Viewer: "https://<backend-ip>:8443/logs"         # Real-time logs
 ```
 
 ### Hot Reload Development
@@ -405,7 +405,7 @@ flake8 src/ backend/         # Check code style
 **Database Development**:
 ```bash
 # Connect to Redis for debugging
-redis-cli -h 172.16.168.23 -p 6379
+redis-cli -h <database-ip> -p 6379
 
 # Browse databases
 SELECT 0  # Main application data
@@ -414,7 +414,7 @@ SELECT 8  # Vector embeddings
 FT.INFO knowledge_idx  # Vector database info
 
 # Redis Insight GUI
-# Visit: http://172.16.168.23:8002
+# Visit: http://<database-ip>:8002
 ```
 
 ## Configuration Management
@@ -436,7 +436,7 @@ AutoBot uses a hierarchical configuration system:
 # Core services
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=8001
-REDIS_HOST=172.16.168.23
+REDIS_HOST=<database-ip>
 REDIS_PORT=6379
 
 # AI Configuration  
@@ -462,29 +462,29 @@ ENABLE_HOT_RELOAD=true
 ```yaml
 vms:
   frontend:
-    host: "172.16.168.21"
+    host: "<frontend-ip>"
     services: ["nginx", "vue-dev-server"]
     ports: [80, 443, 5173]
 
   npu_worker:  
-    host: "172.16.168.22"
+    host: "<npu-ip>"
     services: ["npu-service", "gpu-fallback"]
     ports: [8081, 8082]
     hardware: ["intel_npu", "nvidia_gpu"]
 
   redis_stack:
-    host: "172.16.168.23"
+    host: "<database-ip>"
     services: ["redis-server", "redisinsight"]
     ports: [6379, 8002]
     databases: 11
 
   ai_orchestrator:
-    host: "172.16.168.24"
+    host: "<aiml-ip>"
     services: ["model-orchestrator", "inference-cache"]
     ports: [8080, 8083, 8084]
 
   browser_service:
-    host: "172.16.168.25"
+    host: "<browser-ip>"
     services: ["playwright-api", "browser-pool"]  
     ports: [3000, 3001, 3002]
 ```
@@ -505,7 +505,7 @@ sudo usermod -aG docker $USER
 ```bash
 # Check Redis service status
 docker ps | grep redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # If not responding, restart Redis
 docker restart autobot-redis
@@ -514,7 +514,7 @@ docker restart autobot-redis
 **Problem: Frontend shows "Network Error" for API calls**
 ```bash
 # Check backend is running
-curl -k https://172.16.168.20:8443/api/health
+curl -k https://<backend-ip>:8443/api/health
 
 # Check systemd service status
 systemctl status autobot-backend
@@ -588,7 +588,7 @@ journalctl -u autobot-backend -u autobot-celery -u redis-stack-server -f
 **Debug WebSocket Connections**:
 ```javascript
 // Test WebSocket connection in browser console
-const ws = new WebSocket('wss://172.16.168.20:8443/ws/test');
+const ws = new WebSocket('wss://<backend-ip>:8443/ws/test');
 ws.onopen = () => console.log('WebSocket connected');
 ws.onmessage = (event) => console.log('Received:', event.data);
 ws.onerror = (error) => console.log('WebSocket error:', error);
@@ -597,7 +597,7 @@ ws.onerror = (error) => console.log('WebSocket error:', error);
 **Debug Multi-modal AI Processing**:
 ```bash
 # Test AI processing pipeline
-curl -k -X POST https://172.16.168.20:8443/api/multimodal/process \
+curl -k -X POST https://<backend-ip>:8443/api/multimodal/process \
   -H "Content-Type: application/json" \
   -d '{
     "inputs": {
@@ -806,16 +806,16 @@ scripts/start-services.sh status
 **2. Database Optimization**:
 ```bash
 # Clear development cache for fresh start
-redis-cli -h 172.16.168.23 FLUSHDB 3
+redis-cli -h <database-ip> FLUSHDB 3
 
 # Optimize knowledge base index
-curl -k -X POST https://172.16.168.20:8443/api/knowledge_base/optimize
+curl -k -X POST https://<backend-ip>:8443/api/knowledge_base/optimize
 ```
 
 **3. AI Model Caching**:
 ```bash
 # Pre-load models for faster development
-curl -X POST http://172.16.168.24:8080/models/preload \
+curl -X POST http://<aiml-ip>:8080/models/preload \
   -H "Content-Type: application/json" \
   -d '{"models": ["gpt-3.5-turbo", "claude-3-sonnet"]}'
 ```
@@ -842,7 +842,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-native-services.yml
 
 # 6. Verify deployment via SLM GUI
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 ```
 
 ## Getting Help
@@ -850,7 +850,7 @@ ansible-playbook playbooks/deploy-native-services.yml
 ### Documentation Resources
 
 - **Service Management**: `docs/developer/SERVICE_MANAGEMENT.md` - Complete service management guide
-- **API Documentation**: https://172.16.168.20:8443/docs (when running)
+- **API Documentation**: https://<backend-ip>:8443/docs (when running)
 - **Architecture Guide**: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md`
 - **Security Guide**: `docs/security/SECURITY_IMPLEMENTATION.md`
@@ -886,7 +886,7 @@ ansible-playbook playbooks/deploy-native-services.yml
 
 **Internal Support**:
 - Check logs: `journalctl -u autobot-backend -f` or `scripts/start-services.sh logs backend`
-- Health check: `curl -k https://172.16.168.20:8443/api/health`
+- Health check: `curl -k https://<backend-ip>:8443/api/health`
 - System status: `scripts/start-services.sh status` or visit SLM GUI
 
 **Community Resources**:

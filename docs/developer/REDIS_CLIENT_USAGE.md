@@ -49,15 +49,15 @@ async_redis = await get_redis_client(async_client=True, database="knowledge")
 ```python
 # ❌ WRONG - Direct instantiation (67 files still violate this!)
 import redis
-client = redis.Redis(host="172.16.168.23", port=6379, db=0)
+client = redis.Redis(host="<database-ip>", port=6379, db=0)
 
 # ❌ WRONG - Custom connection pooling
-pool = redis.ConnectionPool(host="172.16.168.23", port=6379, max_connections=10)
+pool = redis.ConnectionPool(host="<database-ip>", port=6379, max_connections=10)
 client = redis.Redis(connection_pool=pool)
 
 # ❌ WRONG - Direct StrictRedis
 from redis import StrictRedis
-client = StrictRedis(host="172.16.168.23", port=6379)
+client = StrictRedis(host="<database-ip>", port=6379)
 ```
 
 ### Deprecated Utilities
@@ -92,9 +92,9 @@ analytics_db = get_redis_client(database="analytics")  # Analytics data
 
 # ❌ WRONG - Database numbers (unclear purpose)
 import redis
-db0 = redis.Redis(host="172.16.168.23", db=0)  # What is this for?
-db1 = redis.Redis(host="172.16.168.23", db=1)  # What is this for?
-db2 = redis.Redis(host="172.16.168.23", db=2)  # What is this for?
+db0 = redis.Redis(host="<database-ip>", db=0)  # What is this for?
+db1 = redis.Redis(host="<database-ip>", db=1)  # What is this for?
+db2 = redis.Redis(host="<database-ip>", db=2)  # What is this for?
 ```
 
 ### Standard Database Names
@@ -212,7 +212,7 @@ def safe_redis_operation():
          │ Manages connection pools
          ▼
 ┌─────────────────┐
-│  Redis Server   │ (172.16.168.23:6379)
+│  Redis Server   │ (<database-ip>:6379)
 └─────────────────┘
 ```
 
@@ -225,7 +225,7 @@ The canonical utility uses `NetworkConstants` internally:
 from src.constants.network_constants import NetworkConstants
 
 # Automatic - no hardcoded IPs!
-redis_host = NetworkConstants.REDIS_VM_IP  # 172.16.168.23
+redis_host = NetworkConstants.REDIS_VM_IP  # <database-ip>
 redis_port = NetworkConstants.REDIS_PORT    # 6379
 ```
 
@@ -267,7 +267,7 @@ import redis
 
 class MyService:
     def __init__(self):
-        self.redis = redis.Redis(host="172.16.168.23", port=6379, db=0)
+        self.redis = redis.Redis(host="<database-ip>", port=6379, db=0)
 
     def cache_data(self, key, value):
         self.redis.set(key, value)
@@ -382,10 +382,10 @@ result = redis_client.get(key)  # What if connection fails?
 **Solution**:
 ```bash
 # Check Redis VM is running
-ssh autobot@172.16.168.23 "systemctl status redis"
+ssh autobot@<database-ip> "systemctl status redis"
 
 # Check Redis is listening
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 # Should return: PONG
 
 # Verify NetworkConstants
@@ -399,14 +399,14 @@ python3 -c "from src.constants.network_constants import NetworkConstants; print(
 **Solution**:
 ```bash
 # Check network connectivity
-ping 172.16.168.23
+ping <database-ip>
 
 # Check Redis configuration
-ssh autobot@172.16.168.23 "cat /etc/redis/redis.conf | grep bind"
-# Should bind to 0.0.0.0 or 172.16.168.23
+ssh autobot@<database-ip> "cat /etc/redis/redis.conf | grep bind"
+# Should bind to 0.0.0.0 or <database-ip>
 
 # Check timeout settings
-ssh autobot@172.16.168.23 "cat /etc/redis/redis.conf | grep timeout"
+ssh autobot@<database-ip> "cat /etc/redis/redis.conf | grep timeout"
 ```
 
 ### Database Number Confusion

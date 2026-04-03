@@ -29,7 +29,7 @@ A three-way configuration conflict has been identified in the Redis Stack deploy
 | **Ansible Playbook** | `redis-stack` | `redis-stack` | INTENDED | What deployment expects |
 | **Start Script** | `redis` | `redis` | EXECUTED | What manual script sets |
 
-### User/Group Existence on Redis VM (172.16.168.23)
+### User/Group Existence on Redis VM (<database-ip>)
 
 ```bash
 # Users that EXIST:
@@ -306,7 +306,7 @@ sudo chown redis:redis /var/lib/redis-stack /var/log/redis-stack
 
 This is already correct and matches the recommended solution.
 
-### 5. Update Systemd Service on Redis VM (172.16.168.23)
+### 5. Update Systemd Service on Redis VM (<database-ip>)
 
 **File on VM**: `/etc/systemd/system/redis-stack-server.service`
 
@@ -339,7 +339,7 @@ Group=redis
 - [ ] Commit all configuration changes
 
 ### Phase 3: Fix Directory Ownership (Redis VM)
-- [ ] SSH to Redis VM: `ssh -i ~/.ssh/autobot_key autobot@172.16.168.23`
+- [ ] SSH to Redis VM: `ssh -i ~/.ssh/autobot_key autobot@<database-ip>`
 - [ ] Stop Redis service: `sudo systemctl stop redis-stack-server`
 - [ ] Fix directory ownership: `sudo chown -R redis:redis /var/lib/redis-stack`
 - [ ] Fix log ownership: `sudo chown -R redis:redis /var/log/redis-stack`
@@ -347,19 +347,19 @@ Group=redis
 
 ### Phase 4: Deploy Updated Configuration (Ansible)
 - [ ] Deploy systemd service: `ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-database.yml --tags systemd`
-- [ ] Verify service file deployed: `ssh autobot@172.16.168.23 "cat /etc/systemd/system/redis-stack-server.service | grep User="`
-- [ ] Reload systemd: `ssh autobot@172.16.168.23 "sudo systemctl daemon-reload"`
+- [ ] Verify service file deployed: `ssh autobot@<database-ip> "cat /etc/systemd/system/redis-stack-server.service | grep User="`
+- [ ] Reload systemd: `ssh autobot@<database-ip> "sudo systemctl daemon-reload"`
 
 ### Phase 5: Restart and Verify
-- [ ] Start Redis service: `ssh autobot@172.16.168.23 "sudo systemctl start redis-stack-server"`
-- [ ] Check service status: `ssh autobot@172.16.168.23 "sudo systemctl status redis-stack-server"`
-- [ ] Verify no permission errors: `ssh autobot@172.16.168.23 "sudo journalctl -u redis-stack-server -n 50 --no-pager | grep -i permission"`
-- [ ] Test Redis connectivity: `redis-cli -h 172.16.168.23 ping`
-- [ ] Verify RDB save works: `redis-cli -h 172.16.168.23 BGSAVE` (wait 10s) `redis-cli -h 172.16.168.23 LASTSAVE`
-- [ ] Check file ownership after save: `ssh autobot@172.16.168.23 "ls -la /var/lib/redis-stack/dump.rdb"`
+- [ ] Start Redis service: `ssh autobot@<database-ip> "sudo systemctl start redis-stack-server"`
+- [ ] Check service status: `ssh autobot@<database-ip> "sudo systemctl status redis-stack-server"`
+- [ ] Verify no permission errors: `ssh autobot@<database-ip> "sudo journalctl -u redis-stack-server -n 50 --no-pager | grep -i permission"`
+- [ ] Test Redis connectivity: `redis-cli -h <database-ip> ping`
+- [ ] Verify RDB save works: `redis-cli -h <database-ip> BGSAVE` (wait 10s) `redis-cli -h <database-ip> LASTSAVE`
+- [ ] Check file ownership after save: `ssh autobot@<database-ip> "ls -la /var/lib/redis-stack/dump.rdb"`
 
 ### Phase 6: Monitor and Validate
-- [ ] Monitor logs for 1 hour: `ssh autobot@172.16.168.23 "sudo journalctl -u redis-stack-server -f"`
+- [ ] Monitor logs for 1 hour: `ssh autobot@<database-ip> "sudo journalctl -u redis-stack-server -f"`
 - [ ] Verify RDB saves succeed at scheduled intervals
 - [ ] Confirm no permission denied errors
 - [ ] Validate backup system can access data files
@@ -431,17 +431,17 @@ If issues occur after implementation:
 
 ```bash
 # Check systemd service configuration
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "cat /etc/systemd/system/redis-stack-server.service"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "cat /etc/systemd/system/redis-stack-server.service"
 
 # Check directory ownership
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "ls -la /var/lib/redis-stack/"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "ls -la /var/lib/redis-stack/"
 
 # Check user existence
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "getent passwd redis; getent passwd redis-stack; getent passwd autobot"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "getent passwd redis; getent passwd redis-stack; getent passwd autobot"
 
 # Check service status and errors
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl status redis-stack-server"
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "journalctl -u redis-stack-server | grep -i permission"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "systemctl status redis-stack-server"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "journalctl -u redis-stack-server | grep -i permission"
 ```
 
 ---

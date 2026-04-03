@@ -164,7 +164,7 @@ Key packages:
 - @heroicons/vue
 
 ### Nginx Configuration
-- Proxy to backend: https://172.16.168.20:8443
+- Proxy to backend: https://<backend-ip>:8443
 - WebSocket support for /ws endpoint
 - TLS certificates: `/etc/ssl/certs/autobot.{crt,key}`
 
@@ -426,8 +426,8 @@ All VMs must be able to reach:
 ### Environment Variables
 - `AUTOBOT_BASE_DIR` - Base directory (default: `/opt/autobot`)
 - `SLM_ANSIBLE_DIR` - Ansible directory (default: `/opt/autobot/autobot-slm-backend/ansible`)
-- `REDIS_HOST` - Redis server IP (172.16.168.23)
-- `POSTGRES_HOST` - PostgreSQL server IP (172.16.168.19 for SLM)
+- `REDIS_HOST` - Redis server IP (<database-ip>)
+- `POSTGRES_HOST` - PostgreSQL server IP (<slm-manager-ip> for SLM)
 
 ---
 

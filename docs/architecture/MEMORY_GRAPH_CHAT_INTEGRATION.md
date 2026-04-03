@@ -376,7 +376,7 @@ Entity not found, creating new entity for session: {session_id}
 
 **Symptom**: Warning logged during session creation
 **Solution**:
-1. Check Redis connection (VM3: 172.16.168.23:6379)
+1. Check Redis connection (VM3: <database-ip>:6379)
 2. Verify Redis DB 9 is accessible
 3. Check logs for specific initialization error
 4. System continues with JSON files only

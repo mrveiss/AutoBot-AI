@@ -18,7 +18,7 @@ This plan addresses 4 root causes identified in AutoBot's backend with full "No 
 **Key Metrics**:
 - **Total Tasks**: 47 granular implementation tasks
 - **Agents Required**: 6 specialized agents working in parallel
-- **VMs Affected**: All 6 VMs (172.16.168.20-25)
+- **VMs Affected**: All 6 VMs (<backend-ip>-25)
 - **Code Changes**: 15 files modified, 5 files created
 - **Tests Required**: 28 test cases across unit/integration/security
 
@@ -363,7 +363,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-service-auth.yml 
 ansible all -i ansible/inventory -m shell -a "ls -la /etc/autobot/service-keys/"
 
 # Verify correct middleware file deployed
-ssh autobot@172.16.168.20 "grep -l 'ServiceAuthLoggingMiddleware' /home/autobot/backend/app.py"
+ssh autobot@<backend-ip> "grep -l 'ServiceAuthLoggingMiddleware' /home/autobot/backend/app.py"
 ```
 
 **What Ansible Does**:
@@ -407,11 +407,11 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-service-auth.yml 
   --extra-vars "middleware_file=service_auth_enforcement.py"
 
 # Verify enforcement active
-curl http://172.16.168.22:8081/api/process
+curl http://<npu-ip>:8081/api/process
 # Should return: 401 Unauthorized (no signature)
 
 # Verify correct middleware deployed
-ssh autobot@172.16.168.20 "grep -l 'ServiceAuthEnforcementMiddleware' /home/autobot/backend/app.py"
+ssh autobot@<backend-ip> "grep -l 'ServiceAuthEnforcementMiddleware' /home/autobot/backend/app.py"
 ```
 
 **What Ansible Does**:
@@ -457,7 +457,7 @@ user browser-service on >password ~sessions:* +get +set +del +expire
 ansible-playbook -i ansible/inventory ansible/playbooks/deploy-redis-acl.yml
 
 # Restart Redis with ACL enabled
-ssh autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+ssh autobot@<database-ip> "sudo systemctl restart redis-stack-server"
 ```
 
 **Task 3.14: Update All Redis Clients with Auth (2 hours)**
@@ -626,17 +626,17 @@ If agents must work sequentially:
 After each deployment:
 ```bash
 # Backend health
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 
 # Redis connectivity
-redis-cli -h 172.16.168.23 --user main-backend --pass <password> ping
+redis-cli -h <database-ip> --user main-backend --pass <password> ping
 
 # Service auth verification
-curl -H "X-Service-ID: test" http://172.16.168.22:8081/api/process
+curl -H "X-Service-ID: test" http://<npu-ip>:8081/api/process
 # Should return 401 (no valid signature)
 
 # Chat functionality
-curl -X POST https://172.16.168.20:8443/api/chat/stream \
+curl -X POST https://<backend-ip>:8443/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "test", "session_id": "test"}'
 ```

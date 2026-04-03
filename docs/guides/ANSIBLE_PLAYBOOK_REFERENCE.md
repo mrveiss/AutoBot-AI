@@ -17,7 +17,7 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-fu
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-development-services.yml
 ```
 **Purpose**: Development environment with hot reload and development workflow
-**Components**: Vite dev server on VM1 (172.16.168.21:5173) with live reload
+**Components**: Vite dev server on VM1 (<frontend-ip>:5173) with live reload
 **Use Case**: Daily development work with automatic code refresh
 
 ### 3. **Health Check and Validation**
@@ -40,7 +40,7 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-ba
 ```bash
 ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-database.yml
 ```
-**Purpose**: Redis Stack, data persistence, model storage on VM3 (172.16.168.23)
+**Purpose**: Redis Stack, data persistence, model storage on VM3 (<database-ip>)
 
 #### Data Migration
 ```bash
@@ -64,11 +64,11 @@ ansible-playbook -i ansible/inventory/production.yml ansible/playbooks/deploy-na
 
 | VM | IP Address | Role | Ansible Group | Primary Services |
 |---|---|---|---|---|
-| VM1 | 172.16.168.21 | Frontend | `frontend` | nginx, Vue.js, development server |
-| VM2 | 172.16.168.22 | NPU Worker | `aiml` | NPU acceleration, Intel OpenVINO |
-| VM3 | 172.16.168.23 | Database | `database` | Redis Stack, RedisInsight |
-| VM4 | 172.16.168.24 | AI Stack | `aiml` | AI processing, backend ML |
-| VM5 | 172.16.168.25 | Browser | `browser` | Playwright, VNC, desktop environment |
+| VM1 | <frontend-ip> | Frontend | `frontend` | nginx, Vue.js, development server |
+| VM2 | <npu-ip> | NPU Worker | `aiml` | NPU acceleration, Intel OpenVINO |
+| VM3 | <database-ip> | Database | `database` | Redis Stack, RedisInsight |
+| VM4 | <aiml-ip> | AI Stack | `aiml` | AI processing, backend ML |
+| VM5 | <browser-ip> | Browser | `browser` | Playwright, VNC, desktop environment |
 
 ## Service-Specific Deployment Commands
 
@@ -141,7 +141,7 @@ ansible all -i ansible/inventory/production.yml -m shell -a "uptime && free -h |
 ansible all -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-* --no-pager -l"
 
 # Network connectivity test
-ansible all -i ansible/inventory/production.yml -m shell -a "ping -c 3 172.16.168.20 && curl -s https://172.16.168.20:8443/api/health || echo 'Connection failed'"
+ansible all -i ansible/inventory/production.yml -m shell -a "ping -c 3 <backend-ip> && curl -s https://<backend-ip>:8443/api/health || echo 'Connection failed'"
 ```
 
 ## Troubleshooting Commands
@@ -199,7 +199,7 @@ sudo systemctl start autobot-backend
 ansible-playbook playbooks/update-all-nodes.yml
 
 # Health check
-curl -sk https://172.16.168.20:8443/api/health | jq
+curl -sk https://<backend-ip>:8443/api/health | jq
 ```
 
 ## Best Practices

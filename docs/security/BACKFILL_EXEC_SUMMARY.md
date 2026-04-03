@@ -56,11 +56,11 @@ python3 scripts/security/backfill_conversation_ownership.py --dry-run
 ### Phase 3: Production (30 minutes)
 ```bash
 # Backup Redis
-redis-cli -h 172.16.168.23 BGSAVE
+redis-cli -h <database-ip> BGSAVE
 
 # Execute backfill
 python3 scripts/security/backfill_conversation_ownership.py \
-    --redis-host 172.16.168.23 \
+    --redis-host <database-ip> \
     --default-owner admin \
     --ttl-days 90
 ```
@@ -71,7 +71,7 @@ python3 scripts/security/backfill_conversation_ownership.py \
 python3 scripts/security/verify_ownership_backfill.py
 
 # Check Redis
-redis-cli -h 172.16.168.23 -n 0 KEYS "chat_session_owner:*" | wc -l
+redis-cli -h <database-ip> -n 0 KEYS "chat_session_owner:*" | wc -l
 # Expected: 54
 ```
 

@@ -19,7 +19,7 @@ import ssl
 
 import aiohttp
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 
 def _ssl_ctx() -> ssl.SSLContext:
@@ -84,12 +84,12 @@ if __name__ == "__main__":
 **curl equivalent:**
 
 ```bash
-TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+TOKEN=$(curl -sk https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk -X POST https://172.16.168.19/api/infrastructure/execute \
+curl -sk -X POST https://<slm-manager-ip>/api/infrastructure/execute \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"playbook":"run-command.yml","extra_vars":{"target_hosts":"frontend","shell_command":"systemctl status nginx"}}'
@@ -123,7 +123,7 @@ Execute bash commands on target groups of Linux nodes using the AutoBot Service 
 
 ## 1. SLM Overview
 
-The Service Lifecycle Manager (SLM) is the central control plane for the AutoBot fleet. It runs on `172.16.168.19` and provides:
+The Service Lifecycle Manager (SLM) is the central control plane for the AutoBot fleet. It runs on `<slm-manager-ip>` and provides:
 
 - **FastAPI backend** (`autobot-slm-backend/`) -- RESTful API with JWT authentication for fleet operations
 - **Vue 3 admin dashboard** (`autobot-slm-frontend/`) -- web UI served via nginx with TLS on port 443
@@ -156,8 +156,8 @@ The Service Lifecycle Manager (SLM) is the central control plane for the AutoBot
 The SLM backend listens on port 8000 internally, proxied through nginx on port 443 with TLS. All API routes are prefixed with `/api`.
 
 ```
-Internal:  http://172.16.168.19:8000/api/...
-External:  https://172.16.168.19:443/api/...  (self-signed TLS)
+Internal:  http://<slm-manager-ip>:8000/api/...
+External:  https://<slm-manager-ip>:443/api/...  (self-signed TLS)
 ```
 
 ---
@@ -170,15 +170,15 @@ The SLM Ansible inventory (`autobot-slm-backend/ansible/inventory/slm-nodes.yml`
 
 | Node ID | IP Address | Role | Monitored Services |
 |---------|------------|------|--------------------|
-| `00-SLM-Manager` | 172.16.168.19 | SLM Server | autobot-slm-backend, slm-admin-ui, nginx, postgresql |
-| `01-Backend` | 172.16.168.20 | Main Backend | autobot-backend, ollama, nginx |
-| `02-Frontend` | 172.16.168.21 | Frontend VM | nginx |
-| `npu-worker` | 172.16.168.22 | NPU Worker | autobot-npu-worker, nginx |
-| `04-Databases` | 172.16.168.23 | Redis/Database | redis-stack-server, redis_exporter, nginx |
-| `03-AI-Stack` | 172.16.168.24 | AI Processing | autobot-ai-stack, autobot-chromadb, autobot-tts-worker, nginx |
-| `browser-automation` | 172.16.168.25 | Browser | autobot-playwright, nginx |
-| `05-LLM-CPU` | 172.16.168.26 | LLM CPU Node | ollama |
-| `06-Node-27` | 172.16.168.27 | Reserved | (none) |
+| `00-SLM-Manager` | <slm-manager-ip> | SLM Server | autobot-slm-backend, slm-admin-ui, nginx, postgresql |
+| `01-Backend` | <backend-ip> | Main Backend | autobot-backend, ollama, nginx |
+| `02-Frontend` | <frontend-ip> | Frontend VM | nginx |
+| `npu-worker` | <npu-ip> | NPU Worker | autobot-npu-worker, nginx |
+| `04-Databases` | <database-ip> | Redis/Database | redis-stack-server, redis_exporter, nginx |
+| `03-AI-Stack` | <aiml-ip> | AI Processing | autobot-ai-stack, autobot-chromadb, autobot-tts-worker, nginx |
+| `browser-automation` | <browser-ip> | Browser | autobot-playwright, nginx |
+| `05-LLM-CPU` | <reserved-ip> | LLM CPU Node | ollama |
+| `06-Node-27` | <reserved-ip> | Reserved | (none) |
 
 ### Ansible Inventory Groups
 
@@ -249,7 +249,7 @@ import ssl
 
 import aiohttp
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 
 def _create_permissive_ssl() -> ssl.SSLContext:
@@ -304,13 +304,13 @@ if __name__ == "__main__":
 
 ```bash
 # Obtain JWT token
-TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+TOKEN=$(curl -sk https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Verify token works
-curl -sk https://172.16.168.19/api/auth/me \
+curl -sk https://<slm-manager-ip>/api/auth/me \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 
@@ -359,7 +359,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 # Valid Ansible inventory groups from slm-nodes.yml
 VALID_GROUPS = {
@@ -675,11 +675,11 @@ if __name__ == "__main__":
 
 ### 4.2 Alternative: Direct Ansible Execution from SLM Host
 
-If you have SSH access to the SLM server (172.16.168.19), you can run Ansible ad-hoc commands directly:
+If you have SSH access to the SLM server (<slm-manager-ip>), you can run Ansible ad-hoc commands directly:
 
 ```bash
 # SSH to SLM server
-ssh autobot@172.16.168.19
+ssh autobot@<slm-manager-ip>
 
 # Run ad-hoc command on all infrastructure nodes
 cd /opt/autobot/autobot-slm-backend/ansible
@@ -934,7 +934,7 @@ Response 200:
     "success": true,
     "message": "Restart successful",
     "node_id": "02-Frontend",
-    "host": "172.16.168.21"
+    "host": "<frontend-ip>"
 }
 ```
 
@@ -1157,7 +1157,7 @@ import aiohttp
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 
 def _create_ssl_context() -> ssl.SSLContext:
@@ -1315,47 +1315,47 @@ if __name__ == "__main__":
 
 ```bash
 # Authenticate and store token
-TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+TOKEN=$(curl -sk https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Check fleet health
-curl -sk https://172.16.168.19/api/roles/fleet-health \
+curl -sk https://<slm-manager-ip>/api/roles/fleet-health \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # List all registered playbooks
-curl -sk https://172.16.168.19/api/infrastructure/playbooks \
+curl -sk https://<slm-manager-ip>/api/infrastructure/playbooks \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # Execute update-all-nodes playbook
-curl -sk https://172.16.168.19/api/infrastructure/execute \
+curl -sk https://<slm-manager-ip>/api/infrastructure/execute \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"playbook_id":"update-all-nodes","variables":{}}' \
   | python3 -m json.tool
 
 # Restart nginx on frontend node
-curl -sk -X POST https://172.16.168.19/api/orchestration/services/nginx/restart \
+curl -sk -X POST https://<slm-manager-ip>/api/orchestration/services/nginx/restart \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"node_id":"02-Frontend"}' \
   | python3 -m json.tool
 
 # Restart nginx across ALL nodes that have it
-curl -sk -X POST https://172.16.168.19/api/orchestration/fleet/services/nginx/restart \
+curl -sk -X POST https://<slm-manager-ip>/api/orchestration/fleet/services/nginx/restart \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # Get services running on backend node
-curl -sk https://172.16.168.19/api/nodes/01-Backend/services \
+curl -sk https://<slm-manager-ip>/api/nodes/01-Backend/services \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # Get service logs from a node
-curl -sk "https://172.16.168.19/api/nodes/01-Backend/services/autobot-backend/logs?lines=50" \
+curl -sk "https://<slm-manager-ip>/api/nodes/01-Backend/services/autobot-backend/logs?lines=50" \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # Start all services in dependency order
-curl -sk -X POST https://172.16.168.19/api/orchestration/start-all \
+curl -sk -X POST https://<slm-manager-ip>/api/orchestration/start-all \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"exclude":[]}' \
@@ -1369,7 +1369,7 @@ curl -sk -X POST https://172.16.168.19/api/orchestration/start-all \
 The SLM admin dashboard provides a graphical interface for fleet management. Access it at:
 
 ```
-https://172.16.168.19/
+https://<slm-manager-ip>/
 ```
 
 ### Dashboard Panels
@@ -1434,7 +1434,7 @@ import aiohttp
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 
 def _create_ssl_context() -> ssl.SSLContext:
@@ -1563,17 +1563,17 @@ if __name__ == "__main__":
 
 ```bash
 # Authenticate
-TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+TOKEN=$(curl -sk https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Step 1: Pull latest code
-curl -sk -X POST https://172.16.168.19/api/code-sync/pull \
+curl -sk -X POST https://<slm-manager-ip>/api/code-sync/pull \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 
 # Step 2: Sync to fleet (batch_size=1 to avoid index.lock races)
-curl -sk -X POST https://172.16.168.19/api/code-sync/fleet/sync \
+curl -sk -X POST https://<slm-manager-ip>/api/code-sync/fleet/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"strategy":"rolling","batch_size":1,"restart":true}' \
@@ -1609,7 +1609,7 @@ ansible-playbook -i inventory/slm-nodes.yml playbooks/update-all-nodes.yml --lim
 - **SSH key-based authentication** -- all fleet nodes use the `autobot` user with `~/.ssh/autobot_key`
 - **TLS encryption** -- nginx reverse proxy with certificates on all nodes
 - **Internal CA** -- self-signed certificates managed via the `rotate-certs.yml` playbook
-- **Firewall rules** -- SLM API port 8000 restricted to `172.16.168.0/24` subnet (Issue #894)
+- **Firewall rules** -- SLM API port 8000 restricted to `<network-subnet>` subnet (Issue #894)
 
 ### Command Execution Safety
 
@@ -1660,7 +1660,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SLM_URL = "https://172.16.168.19"
+SLM_URL = "https://<slm-manager-ip>"
 
 
 def _create_ssl_context() -> ssl.SSLContext:
@@ -1814,7 +1814,7 @@ if __name__ == "__main__":
 
 ```bash
 # From any machine on the network
-curl -sk https://172.16.168.19/api/health | python3 -m json.tool
+curl -sk https://<slm-manager-ip>/api/health | python3 -m json.tool
 
 # Expected: {"status": "healthy", ...}
 ```
@@ -1822,13 +1822,13 @@ curl -sk https://172.16.168.19/api/health | python3 -m json.tool
 #### 2. Verify SSH Connectivity to Fleet Nodes
 
 ```bash
-# From SLM server (172.16.168.19)
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.20 hostname
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 hostname
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.22 hostname
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 hostname
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 hostname
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.25 hostname
+# From SLM server (<slm-manager-ip>)
+ssh -i ~/.ssh/autobot_key autobot@<backend-ip> hostname
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> hostname
+ssh -i ~/.ssh/autobot_key autobot@<npu-ip> hostname
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> hostname
+ssh -i ~/.ssh/autobot_key autobot@<aiml-ip> hostname
+ssh -i ~/.ssh/autobot_key autobot@<browser-ip> hostname
 ```
 
 #### 3. Verify Ansible Connectivity
@@ -1850,12 +1850,12 @@ journalctl -u autobot-slm-backend -n 100 --no-pager
 
 ```bash
 # Via SLM API
-TOKEN=$(curl -sk https://172.16.168.19/api/auth/login \
+TOKEN=$(curl -sk https://<slm-manager-ip>/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-curl -sk https://172.16.168.19/api/nodes/01-Backend/services \
+curl -sk https://<slm-manager-ip>/api/nodes/01-Backend/services \
   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
 ```
 
@@ -1910,7 +1910,7 @@ When a fleet sync reports `partial` status, some nodes succeeded while others fa
 
 ```bash
 # Check which nodes failed
-curl -sk "https://172.16.168.19/api/code-sync/fleet/sync/$JOB_ID" \
+curl -sk "https://<slm-manager-ip>/api/code-sync/fleet/sync/$JOB_ID" \
   -H "Authorization: Bearer $TOKEN" \
   | python3 -c "
 import sys, json
@@ -1921,7 +1921,7 @@ for node in data.get('node_states', []):
 "
 
 # Retry sync for specific failed node
-curl -sk -X POST https://172.16.168.19/api/code-sync/fleet/sync \
+curl -sk -X POST https://<slm-manager-ip>/api/code-sync/fleet/sync \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"strategy":"rolling","batch_size":1,"restart":true,"node_filter":["02-Frontend"]}' \

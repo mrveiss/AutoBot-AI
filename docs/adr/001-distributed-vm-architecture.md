@@ -31,12 +31,12 @@ We adopt a distributed 6-VM architecture where each VM serves a specific purpose
 
 | VM | IP Address | Port | Purpose |
 |----|------------|------|---------|
-| **Main (WSL)** | 172.16.168.20 | 8001, 6080 | Backend API + VNC Desktop |
-| **VM1 Frontend** | 172.16.168.21 | 5173 | Web interface (Vite dev server) |
-| **VM2 NPU Worker** | 172.16.168.22 | 8081 | Hardware AI acceleration |
-| **VM3 Redis** | 172.16.168.23 | 6379 | Data layer (Redis Stack) |
-| **VM4 AI Stack** | 172.16.168.24 | 8080 | AI processing (Ollama, LLM) |
-| **VM5 Browser** | 172.16.168.25 | 3000 | Web automation (Playwright) |
+| **Main (WSL)** | <backend-ip> | 8001, 6080 | Backend API + VNC Desktop |
+| **VM1 Frontend** | <frontend-ip> | 5173 | Web interface (Vite dev server) |
+| **VM2 NPU Worker** | <npu-ip> | 8081 | Hardware AI acceleration |
+| **VM3 Redis** | <database-ip> | 6379 | Data layer (Redis Stack) |
+| **VM4 AI Stack** | <aiml-ip> | 8080 | AI processing (Ollama, LLM) |
+| **VM5 Browser** | <browser-ip> | 3000 | Web automation (Playwright) |
 
 ### Alternatives Considered
 
@@ -89,11 +89,11 @@ We adopt a distributed 6-VM architecture where each VM serves a specific purpose
 
 ### Network Configuration
 
-All VMs are on the same subnet (172.16.168.0/24) for low-latency communication.
+All VMs are on the same subnet (<network-subnet>) for low-latency communication.
 
 ```bash
 # SSH access pattern
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
 
 # Sync files to VM
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
@@ -106,10 +106,10 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
 curl http://localhost:8001/api/health
 
 # Redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # Frontend (from main machine)
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 ```
 
 ### Critical Rules

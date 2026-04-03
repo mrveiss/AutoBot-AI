@@ -43,7 +43,7 @@ Service authentication enforcement has been **successfully activated** and is no
 2025-10-09 15:15:50 [error] Service authentication FAILED - request BLOCKED
                            error='Missing authentication headers'
                            status_code=401
-INFO: 172.16.168.20:45814 - "GET /api/npu/heartbeat HTTP/1.1" 401 Unauthorized
+INFO: <backend-ip>:45814 - "GET /api/npu/heartbeat HTTP/1.1" 401 Unauthorized
 ```
 
 ---
@@ -77,7 +77,7 @@ INFO: 172.16.168.20:45814 - "GET /api/npu/heartbeat HTTP/1.1" 401 Unauthorized
 
 **Attack Prevention**:
 ```bash
-curl https://172.16.168.20:8443/api/npu/heartbeat
+curl https://<backend-ip>:8443/api/npu/heartbeat
 # Returns: 401 Unauthorized - Attack BLOCKED ✅
 ```
 

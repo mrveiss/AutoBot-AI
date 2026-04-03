@@ -72,7 +72,7 @@ git push
 
 ```bash
 # scripts/hooks/slm-post-commit
-curl -sk -X POST https://172.16.168.19/api/code-source/notify \
+curl -sk -X POST https://<slm-manager-ip>/api/code-source/notify \
   -H "Authorization: Bearer ${SLM_API_TOKEN}" \
   -d '{"commit": "abc123", "changed_roles": ["autobot-backend"]}'
 ```

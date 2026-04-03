@@ -23,8 +23,8 @@ offline services through circuit breakers and intelligent log suppression.
 
 | Service | VM | IP:Port | Description |
 |---------|-----|---------|-------------|
-| **Backend API** | Main (WSL) | 172.16.168.20:8443 | Core backend - must always be running |
-| **Redis** | VM3 | 172.16.168.23:6379 | Data layer - required for caching, sessions, queues |
+| **Backend API** | Main (WSL) | <backend-ip>:8443 | Core backend - must always be running |
+| **Redis** | VM3 | <database-ip>:6379 | Data layer - required for caching, sessions, queues |
 
 **If these are offline**: System will not function properly. Immediate attention required.
 
@@ -32,11 +32,11 @@ offline services through circuit breakers and intelligent log suppression.
 
 | Service | VM | IP:Port | Description | When Offline |
 |---------|-----|---------|-------------|--------------|
-| **Frontend** | VM1 | 172.16.168.21:5173 | Web interface | Use backend API directly |
-| **NPU Worker** | VM2 | 172.16.168.22:8081 | Hardware AI acceleration | Falls back to CPU inference |
-| **AI Stack** | VM4 | 172.16.168.24:8080 | AI processing stack | Limited AI features |
-| **Ollama** | VM4 | 172.16.168.24:11434 | Local LLM inference | Uses fallback LLM providers |
-| **Browser Automation** | VM5 | 172.16.168.25:3000 | Playwright automation | Web scraping unavailable |
+| **Frontend** | VM1 | <frontend-ip>:5173 | Web interface | Use backend API directly |
+| **NPU Worker** | VM2 | <npu-ip>:8081 | Hardware AI acceleration | Falls back to CPU inference |
+| **AI Stack** | VM4 | <aiml-ip>:8080 | AI processing stack | Limited AI features |
+| **Ollama** | VM4 | <aiml-ip>:11434 | Local LLM inference | Uses fallback LLM providers |
+| **Browser Automation** | VM5 | <browser-ip>:3000 | Playwright automation | Web scraping unavailable |
 
 **If these are offline**: System continues with reduced functionality. Non-urgent.
 
@@ -95,21 +95,21 @@ intelligent log suppression:
 
 ```
 # First failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to 172.16.168.22:8081
+WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Second failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to 172.16.168.22:8081
+WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Third failure
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to 172.16.168.22:8081
+WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Fourth failure (suppression begins)
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to 172.16.168.22:8081
+WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081
 
 # Next 60 seconds of failures: no logs
 
 # After 60 seconds
-WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to 172.16.168.22:8081 (47 similar errors suppressed)
+WARNING: VM service NPU Worker (npu_worker) is offline: Cannot connect to <npu-ip>:8081 (47 similar errors suppressed)
 ```
 
 ---

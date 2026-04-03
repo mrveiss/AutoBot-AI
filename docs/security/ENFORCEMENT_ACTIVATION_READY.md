@@ -13,13 +13,13 @@
 ```
 Status: healthy
 Uptime: Operational
-API Endpoint: https://172.16.168.20:8443
+API Endpoint: https://<backend-ip>:8443
 ```
 
 **Frontend Accessibility**: ✅ Accessible
 ```
 Status Code: 200 OK
-Frontend URL: http://172.16.168.21:5173
+Frontend URL: http://<frontend-ip>:5173
 ```
 
 **Authentication Failures**: ✅ ZERO
@@ -61,10 +61,10 @@ Error patterns: None detected
 
 **Deployed and Verified**:
 - ✅ main-backend: `/etc/autobot/service-keys/main-backend.env`
-- ✅ npu-worker: Deployed to VM 22 (172.16.168.22)
-- ✅ ai-stack: Deployed to VM 24 (172.16.168.24)
-- ✅ browser-service: Deployed to VM 25 (172.16.168.25)
-- ✅ frontend: Deployed to VM 21 (172.16.168.21)
+- ✅ npu-worker: Deployed to VM 22 (<npu-ip>)
+- ✅ ai-stack: Deployed to VM 24 (<aiml-ip>)
+- ✅ browser-service: Deployed to VM 25 (<browser-ip>)
+- ✅ frontend: Deployed to VM 21 (<frontend-ip>)
 
 ---
 
@@ -77,10 +77,10 @@ Error patterns: None detected
 
 **Service Communication Pattern**:
 ```
-Backend (172.16.168.20:8443)
-    ├─> NPU Worker (172.16.168.22:8081)      [passive receiver]
-    ├─> AI Stack (172.16.168.24:8080)        [passive receiver]
-    └─> Browser Service (172.16.168.25:3000) [passive receiver]
+Backend (<backend-ip>:8443)
+    ├─> NPU Worker (<npu-ip>:8081)      [passive receiver]
+    ├─> AI Stack (<aiml-ip>:8080)        [passive receiver]
+    └─> Browser Service (<browser-ip>:3000) [passive receiver]
 ```
 
 **Remote Service Backend Calls**:
@@ -139,8 +139,8 @@ Backend (172.16.168.20:8443)
 **Attack Vector**:
 ```bash
 # Currently succeeds (vulnerability exploitable)
-curl -X POST https://172.16.168.20:8443/api/npu/heartbeat
-curl -X POST https://172.16.168.20:8443/api/ai-stack/results
+curl -X POST https://<backend-ip>:8443/api/npu/heartbeat
+curl -X POST https://<backend-ip>:8443/api/ai-stack/results
 ```
 
 ### Post-Enforcement State
@@ -153,7 +153,7 @@ curl -X POST https://172.16.168.20:8443/api/ai-stack/results
 **Attack Prevention**:
 ```bash
 # Will return 401 Unauthorized
-curl -X POST https://172.16.168.20:8443/api/npu/heartbeat
+curl -X POST https://<backend-ip>:8443/api/npu/heartbeat
 # Response: {"detail": "Missing authentication headers", "authenticated": false}
 ```
 
@@ -182,7 +182,7 @@ export SERVICE_AUTH_ENFORCEMENT_MODE=false
 sudo systemctl restart autobot-backend
 
 # Verify rollback
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 ```
 
 **Recovery Time**: < 2 minutes

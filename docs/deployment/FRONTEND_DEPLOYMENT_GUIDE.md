@@ -1,7 +1,7 @@
 # Frontend Deployment Guide
 ## Using SLM Code Sync Interface
 
-> **Quick Link:** https://172.16.168.19/code-sync
+> **Quick Link:** https://<slm-manager-ip>/code-sync
 
 ---
 
@@ -15,7 +15,7 @@ AutoBot uses a **pull-based deployment system** managed through the SLM (Service
 
 ### Step 1: Access SLM Admin Interface
 
-1. **Open Browser**: Navigate to `https://172.16.168.19`
+1. **Open Browser**: Navigate to `https://<slm-manager-ip>`
 2. **Login**: Use your SLM admin credentials
    - Default: `admin` / (check `/etc/autobot/slm-secrets.env` on SLM server)
    - Browser will warn about self-signed certificate - this is expected, click "Advanced" → "Proceed"
@@ -48,7 +48,7 @@ AutoBot uses a **pull-based deployment system** managed through the SLM (Service
 
 1. **Click "Configure"** button in Code Source card
 2. **Select Source Node**: Choose "01-Backend" or whichever node has git access
-   - Typically the Main server (172.16.168.20) or development machine
+   - Typically the Main server (<backend-ip>) or development machine
 3. **Repository Path**: `/opt/autobot` (or `/opt/autobot` if different)
 4. **Branch**: `Dev_new_gui` (or `main` for production)
 5. **Click "Save"**
@@ -137,7 +137,7 @@ The Code Source card will now show:
 
 1. **Check Status Banner**: "Outdated Nodes" should show `0 / 9`
 2. **Green Badge**: "All Up To Date" appears
-3. **Test Frontend**: Open `https://172.16.168.21/analytics/evolution`
+3. **Test Frontend**: Open `https://<frontend-ip>/analytics/evolution`
    - New Evolution Dashboard should be visible in Analytics menu
    - Charts and UI should match Phase 2 implementation
 
@@ -170,7 +170,7 @@ The Code Source card will now show:
 **Post-Commit Hook Flow:**
 1. Developer commits to git on Main server (.20)
 2. `.git/hooks/post-commit` executes `scripts/hooks/slm-post-commit`
-3. Hook calls `POST https://172.16.168.19/api/code-source/notify`
+3. Hook calls `POST https://<slm-manager-ip>/api/code-source/notify`
 4. SLM updates `CodeSource` table with new commit hash
 5. SLM marks all fleet nodes as `CodeStatus.OUTDATED`
 6. Nodes appear in Code Sync "Pending Updates" table
@@ -252,7 +252,7 @@ NodeRole (
 **Environment Variables (SLM Server):**
 ```bash
 # /etc/autobot/slm-secrets.env
-AUTOBOT_SLM_HOST=172.16.168.19
+AUTOBOT_SLM_HOST=<slm-manager-ip>
 AUTOBOT_CODE_SOURCE_NODE=01-Backend
 SLM_REPO_PATH=/opt/autobot
 SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
@@ -290,7 +290,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 ### Deployment Execution Checklist
 
 **Step-by-Step:**
-- [ ] 1. Access SLM interface at https://172.16.168.19/code-sync
+- [ ] 1. Access SLM interface at https://<slm-manager-ip>/code-sync
 - [ ] 2. Verify "Latest Version" shows your commit hash (745e45ee for Phase 2)
 - [ ] 3. Confirm "Outdated Nodes" count > 0 (should show Frontend VM)
 - [ ] 4. Check "Pending Updates" table lists Frontend node
@@ -311,7 +311,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 - [ ] `last_sync_at` timestamp is recent (within last 5 minutes)
 
 **Manual Testing:**
-- [ ] Open frontend: https://172.16.168.21
+- [ ] Open frontend: https://<frontend-ip>
 - [ ] Check browser console for errors (F12 → Console)
 - [ ] Navigate to new feature: `/analytics/evolution` (Phase 2)
 - [ ] Verify UI renders correctly (no missing components)
@@ -335,7 +335,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 
 **If sync fails:**
 - [ ] Check SLM backend logs: `journalctl -u autobot-slm-backend -n 100`
-- [ ] Verify SSH connectivity: `ssh autobot@172.16.168.21 "echo test"`
+- [ ] Verify SSH connectivity: `ssh autobot@<frontend-ip> "echo test"`
 - [ ] Check disk space on Frontend VM: `df -h` (need >1GB free)
 - [ ] Verify git repository accessible: `ls -la .git`
 - [ ] Check npm/node versions on Frontend VM: `node --version` (need 16+)
@@ -350,7 +350,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 **If progress hangs:**
 - [ ] Check WebSocket connection in browser (F12 → Network → WS)
 - [ ] Verify SLM backend not crashed: `systemctl status autobot-slm-backend`
-- [ ] Check node SSH connection still alive: `ssh autobot@172.16.168.21`
+- [ ] Check node SSH connection still alive: `ssh autobot@<frontend-ip>`
 - [ ] Review sync timeout settings (default: 10 minutes)
 
 ---
@@ -366,22 +366,22 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 git add . && git commit -m "feat: your change" && git push
 
 # 2. Access SLM
-https://172.16.168.19/code-sync
+https://<slm-manager-ip>/code-sync
 
 # 3. Click "Sync Now" for outdated nodes
 
 # 4. Verify
-https://172.16.168.21  # Check your changes live
+https://<frontend-ip>  # Check your changes live
 ```
 
 ### 🔧 Configuration Quick Access
 
 | Item | Location |
 |------|----------|
-| SLM Admin UI | https://172.16.168.19 |
-| Code Sync Page | https://172.16.168.19/code-sync |
-| User Frontend | https://172.16.168.21 |
-| Backend API | https://172.16.168.20:8443/docs |
+| SLM Admin UI | https://<slm-manager-ip> |
+| Code Sync Page | https://<slm-manager-ip>/code-sync |
+| User Frontend | https://<frontend-ip> |
+| Backend API | https://<backend-ip>:8443/docs |
 | SLM Backend Logs | `journalctl -u autobot-slm-backend -f` |
 | Post-Commit Hook | `.git/hooks/post-commit` |
 

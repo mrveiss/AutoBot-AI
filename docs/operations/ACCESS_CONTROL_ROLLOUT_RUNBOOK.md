@@ -20,9 +20,9 @@ Deploy access control enforcement to eliminate CVSS 9.1 vulnerability: **Broken 
 
 ### Environment Verification
 
-- [ ] All 6 VMs accessible (172.16.168.21-25)
-- [ ] Redis healthy (172.16.168.23:6379)
-- [ ] Backend API responding (172.16.168.20:8443)
+- [ ] All 6 VMs accessible (<frontend-ip>-25)
+- [ ] Redis healthy (<database-ip>:6379)
+- [ ] Backend API responding (<backend-ip>:8443)
 - [ ] SSH keys configured (`~/.ssh/autobot_key`)
 - [ ] Python virtual environment activated
 - [ ] No ongoing deployments or maintenance
@@ -122,7 +122,7 @@ python3 scripts/security/backfill_session_ownership.py --verify-only
 **Issue:** Backfill fails partway through
 ```bash
 # Check Redis connectivity
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # Check specific session
 python3 -c "
@@ -190,7 +190,7 @@ asyncio.run(main())
 **Performance Validation:**
 ```bash
 # Backend API response times should be < +10ms
-curl -w "@curl-format.txt" -o /dev/null -s "https://172.16.168.20:8443/api/health"
+curl -w "@curl-format.txt" -o /dev/null -s "https://<backend-ip>:8443/api/health"
 ```
 
 **Rollback:** Disable audit middleware (requires backend restart)
@@ -417,7 +417,7 @@ asyncio.run(main())
 **Test 1: Cross-User Access Attempt**
 ```bash
 # Attempt to access another user's session (should fail)
-curl -X GET "https://172.16.168.20:8443/api/chat/sessions/OTHER_USER_SESSION_ID" \
+curl -X GET "https://<backend-ip>:8443/api/chat/sessions/OTHER_USER_SESSION_ID" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -w "\nHTTP Status: %{http_code}\n"
 ```
@@ -426,7 +426,7 @@ curl -X GET "https://172.16.168.20:8443/api/chat/sessions/OTHER_USER_SESSION_ID"
 **Test 2: Unauthenticated Access**
 ```bash
 # Attempt without authentication (should fail)
-curl -X GET "https://172.16.168.20:8443/api/chat/sessions/SESSION_ID" \
+curl -X GET "https://<backend-ip>:8443/api/chat/sessions/SESSION_ID" \
   -w "\nHTTP Status: %{http_code}\n"
 ```
 **Expected:** HTTP 401 Unauthorized
@@ -613,7 +613,7 @@ python3 scripts/security/backfill_session_ownership.py --default-owner admin --f
 **Diagnosis:**
 ```bash
 # Check Redis DB 10 connectivity
-redis-cli -h 172.16.168.23 -p 6379 -n 10 ping
+redis-cli -h <database-ip> -p 6379 -n 10 ping
 
 # Check audit logger statistics
 python3 -c "
@@ -651,7 +651,7 @@ sudo systemctl restart autobot-backend
 ./scripts/deployment/validate_access_control.sh --performance-only
 
 # Check Redis latency
-redis-cli -h 172.16.168.23 -p 6379 --latency
+redis-cli -h <database-ip> -p 6379 --latency
 ```
 
 **Resolution:**
@@ -660,8 +660,8 @@ redis-cli -h 172.16.168.23 -p 6379 --latency
 ./scripts/deployment/rollback_access_control.sh --reason "Performance degradation"
 
 # Investigate Redis performance
-redis-cli -h 172.16.168.23 -p 6379 INFO stats
-redis-cli -h 172.16.168.23 -p 6379 SLOWLOG GET 10
+redis-cli -h <database-ip> -p 6379 INFO stats
+redis-cli -h <database-ip> -p 6379 SLOWLOG GET 10
 ```
 
 ---
