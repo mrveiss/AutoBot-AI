@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Runbook: Rotate TLS Certificates
 
 **Issue #926 Phase 7** | Last updated: 2026-02-18
@@ -75,9 +77,9 @@ Expected output per node:
 ansible-playbook playbooks/rotate-certs.yml --tags check
 
 # Verify HTTPS connectivity
-curl --insecure -v https://172.16.168.19/ 2>&1 | grep "expire date"
-curl --insecure -v https://172.16.168.21/ 2>&1 | grep "expire date"
-ssh autobot@172.16.168.19 "curl --insecure -v https://172.16.168.20:8443/api/health 2>&1 | grep 'expire date'"
+curl --insecure -v https://<slm-manager-ip>/ 2>&1 | grep "expire date"
+curl --insecure -v https://<frontend-ip>/ 2>&1 | grep "expire date"
+ssh autobot@<slm-manager-ip> "curl --insecure -v https://<backend-ip>:8443/api/health 2>&1 | grep 'expire date'"
 ```
 
 ### 5. Update SLM Cert Records (optional)
@@ -115,7 +117,7 @@ If the new cert causes issues, restore the backup:
 
 ```bash
 # On a specific node (example: SLM server)
-ssh autobot@172.16.168.19 "sudo cp /etc/autobot/certs/server-cert.pem.bak /etc/autobot/certs/server-cert.pem && sudo systemctl reload nginx"
+ssh autobot@<slm-manager-ip> "sudo cp /etc/autobot/certs/server-cert.pem.bak /etc/autobot/certs/server-cert.pem && sudo systemctl reload nginx"
 ```
 
 Or via Ansible:

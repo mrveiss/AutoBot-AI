@@ -13,7 +13,7 @@ A document that captures an important architectural decision along with its cont
 An autonomous AI component that can perform specific tasks. AutoBot uses multiple specialized agents including KB Librarian, RAG Agent, and Task Agents.
 
 ### API Gateway
-The central entry point for all API requests, handling routing, authentication, and rate limiting. Located at `172.16.168.20:8443` (HTTPS).
+The central entry point for all API requests, handling routing, authentication, and rate limiting. Located at `<backend-ip>:8443` (HTTPS).
 
 ### Async Client
 A non-blocking Redis or HTTP client that allows concurrent operations. Used for high-performance data access.
@@ -26,7 +26,7 @@ A non-blocking Redis or HTTP client that allows concurrent operations. Used for 
 The FastAPI-based REST API service running on the main machine. Handles all business logic, LLM orchestration, and data management.
 
 ### Browser VM
-VM5 (`172.16.168.25:3000`) dedicated to Playwright browser automation. Isolated for security and stability.
+VM5 (`<browser-ip>:3000`) dedicated to Playwright browser automation. Isolated for security and stability.
 
 ---
 
@@ -75,7 +75,7 @@ The Python web framework used for the backend API. Provides async support, autom
 A code smell where a method accesses data from another object more than its own. Indicates misplaced logic.
 
 ### Frontend VM
-VM1 (`172.16.168.21:5173`) - the **only** machine allowed to run the Vite frontend server.
+VM1 (`<frontend-ip>:5173`) - the **only** machine allowed to run the Vite frontend server.
 
 ---
 
@@ -145,7 +145,7 @@ AI capabilities that span multiple modalities: text, image, voice, and desktop i
 Redis database accessed by logical name (e.g., "knowledge") rather than number (e.g., db=1). See [ADR-002](adr/002-redis-database-separation.md).
 
 ### NPU Worker
-VM2 (`172.16.168.22:8081`) - dedicated service for Intel NPU-accelerated AI inference.
+VM2 (`<npu-ip>:8081`) - dedicated service for Intel NPU-accelerated AI inference.
 
 ---
 

@@ -1,7 +1,7 @@
 # Code Sync UI Guide
 ## Visual Walkthrough of SLM Code Deployment Interface
 
-> **Access:** https://172.16.168.19/code-sync
+> **Access:** https://<slm-manager-ip>/code-sync
 
 ---
 

@@ -214,9 +214,9 @@ ChromaDB Storage       Cross-Encoder Reranking
 
 | Store | Location | Purpose |
 |-------|----------|---------|
-| **ChromaDB** | AI Stack VM (172.16.168.24) via `data/chromadb` path | Vector embeddings with HNSW index (cosine, construction_ef=300, search_ef=100, M=32) |
-| **Redis DB 1** | Redis VM (172.16.168.23) | Document metadata, fact storage (`knowledge_base:facts` hash), category caches, vectorization status |
-| **NPU Worker** | NPU VM (172.16.168.22) | Hardware-accelerated embedding generation with cached availability checks (30s TTL) |
+| **ChromaDB** | AI Stack VM (<aiml-ip>) via `data/chromadb` path | Vector embeddings with HNSW index (cosine, construction_ef=300, search_ef=100, M=32) |
+| **Redis DB 1** | Redis VM (<database-ip>) | Document metadata, fact storage (`knowledge_base:facts` hash), category caches, vectorization status |
+| **NPU Worker** | NPU VM (<npu-ip>) | Hardware-accelerated embedding generation with cached availability checks (30s TTL) |
 
 ### Embedding Pipeline
 
@@ -1738,15 +1738,15 @@ aligned this across 6 locations). Adjust this to control result quality:
 
 ```bash
 # Check knowledge base health
-curl -sk https://172.16.168.20:8443/api/knowledge_base/health \
+curl -sk https://<backend-ip>:8443/api/knowledge_base/health \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 
 # Check total facts and vectors
-curl -sk https://172.16.168.20:8443/api/knowledge_base/stats \
+curl -sk https://<backend-ip>:8443/api/knowledge_base/stats \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 
 # Verify NPU availability for embeddings
-curl -sk https://172.16.168.20:8443/api/enhanced-search/hardware/status \
+curl -sk https://<backend-ip>:8443/api/enhanced-search/hardware/status \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 ```
 
@@ -1755,7 +1755,7 @@ curl -sk https://172.16.168.20:8443/api/enhanced-search/hardware/status \
 - If `total_vectors` is much lower than `total_facts`, background vectorization is incomplete.
   Wait or trigger manual vectorization.
 - If `rag_status` is `"error"`, the RAG Agent failed to initialize. Check AI Stack availability
-  on 172.16.168.24.
+  on <aiml-ip>.
 - Lower the `score_threshold` / `min_score` parameter to 0.1 to see if content exists but
   scores below threshold.
 - Switch to `mode: "hybrid"` -- pure semantic search may miss keyword-heavy content.
@@ -1768,7 +1768,7 @@ curl -sk https://172.16.168.20:8443/api/enhanced-search/hardware/status \
 
 ```bash
 # List recent entries to verify the upload is stored
-curl -sk "https://172.16.168.20:8443/api/knowledge_base/entries?limit=5" \
+curl -sk "https://<backend-ip>:8443/api/knowledge_base/entries?limit=5" \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 ```
 
@@ -1789,20 +1789,20 @@ curl -sk "https://172.16.168.20:8443/api/knowledge_base/entries?limit=5" \
 
 ```bash
 # Run a benchmark
-curl -sk https://172.16.168.20:8443/api/enhanced-search/benchmark \
+curl -sk https://<backend-ip>:8443/api/enhanced-search/benchmark \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"test_queries": ["test query"], "iterations": 3}' | python3 -m json.tool
 
 # Check performance analytics
-curl -sk https://172.16.168.20:8443/api/enhanced-search/performance/analytics \
+curl -sk https://<backend-ip>:8443/api/enhanced-search/performance/analytics \
   -H "Authorization: Bearer <token>" | python3 -m json.tool
 ```
 
 **Fixes:**
 
 - If `device_used` is `"cpu"`, NPU and GPU are unavailable. Check NPU Worker on
-  172.16.168.22 and GPU drivers.
+  <npu-ip> and GPU drivers.
 - If `cache_size` is 0, the search cache is cold. Performance improves after repeated queries.
 - If `embedding_generation_time_ms` is high, the embedding model may need warming up.
   The backend runs `warmup_npu_connection()` at startup (Issue #165).
@@ -1825,7 +1825,7 @@ tail -100 /var/log/autobot/backend.log | grep -i "knowledge\|init"
 
 **Fixes:**
 
-- Verify Redis is accessible on 172.16.168.23:6379. The knowledge base uses DB 1.
+- Verify Redis is accessible on <database-ip>:6379. The knowledge base uses DB 1.
 - Verify ChromaDB data directory exists and is writable: `ls -la data/chromadb/`.
 - Check if Ollama is running (needed for LlamaIndex embedding configuration):
   `curl http://127.0.0.1:11434/api/tags`.

@@ -7,9 +7,9 @@
 ## ✅ Pre-Flight Checklist
 
 ### System Status
-- [x] Backend running: https://172.16.168.20:8443
-- [x] Frontend running: http://172.16.168.21:5173
-- [x] Redis running: 172.16.168.23:6379
+- [x] Backend running: https://<backend-ip>:8443
+- [x] Frontend running: http://<frontend-ip>:5173
+- [x] Redis running: <database-ip>:6379
 - [x] All VMs accessible
 - [x] Implementation guide created: `planning/tasks/week-1-database-initialization-detailed-guide.md`
 - [x] Memory MCP entities created
@@ -228,7 +228,7 @@ After implementation, verify these criteria:
 - [ ] Fresh deployment scenario tested
 - [ ] Existing deployment scenario tested
 - [ ] All 6 VMs can perform file operations
-- [ ] Health check accessible: `curl https://172.16.168.20:8443/api/health`
+- [ ] Health check accessible: `curl https://<backend-ip>:8443/api/health`
 
 ---
 
@@ -251,7 +251,7 @@ sqlite3 data/conversation_files.db "SELECT * FROM schema_version;"
 # Should show: 1.0.0
 
 # 4. Test health check
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 # Should show database status as "healthy"
 
 # 5. Run unit tests
@@ -261,7 +261,7 @@ pytest tests/unit/test_conversation_file_manager.py -v --cov=src.conversation_fi
 pytest tests/distributed/test_db_initialization.py -v -m integration
 
 # 7. Test file upload (end-to-end)
-curl -X POST https://172.16.168.20:8443/api/files/conversation/upload \
+curl -X POST https://<backend-ip>:8443/api/files/conversation/upload \
   -F "file=@test.txt" \
   -F "session_id=test-session"
 ```

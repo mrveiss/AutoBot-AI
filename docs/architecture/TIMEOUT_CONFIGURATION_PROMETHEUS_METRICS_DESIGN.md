@@ -841,7 +841,7 @@ global:
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8443']  # Main machine backend
+      - targets: ['<backend-ip>:8443']  # Main machine backend
         labels:
           service: 'autobot'
           component: 'backend'
@@ -854,7 +854,7 @@ scrape_configs:
 
   - job_name: 'redis-exporter'
     static_configs:
-      - targets: ['172.16.168.23:9121']  # Redis exporter (if deployed)
+      - targets: ['<database-ip>:9121']  # Redis exporter (if deployed)
         labels:
           service: 'redis'
           environment: 'production'
@@ -863,7 +863,7 @@ scrape_configs:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ['172.16.168.20:9093']  # Alertmanager address
+        - targets: ['<backend-ip>:9093']  # Alertmanager address
 
 # Rule files for alerting
 rule_files:
@@ -1257,18 +1257,18 @@ async def test_metrics_collection_overhead():
 ### 4.3 Monitoring Dashboard Access
 
 **Prometheus:**
-- URL: `http://172.16.168.20:9090`
+- URL: `http://<backend-ip>:9090`
 - Query examples:
   - Timeout rate: `rate(autobot_timeout_total{status="timeout"}[5m])`
   - Circuit breaker state: `autobot_circuit_breaker_state`
 
 **Grafana:**
-- URL: `http://172.16.168.20:3001`
+- URL: `http://<backend-ip>:3001`
 - Default credentials: admin/admin
 - Dashboard: "AutoBot Timeout & Performance Monitoring"
 
 **Metrics Endpoint:**
-- URL: `https://172.16.168.20:8443/monitoring/metrics`
+- URL: `https://<backend-ip>:8443/monitoring/metrics`
 - Format: Prometheus text format
 - Refresh: Real-time
 
@@ -1312,13 +1312,13 @@ prom/alertmanager:latest  (optional)
 
 ### 5.3 Infrastructure Requirements
 
-**Main Machine (172.16.168.20):**
+**Main Machine (<backend-ip>):**
 - FastAPI backend with `/monitoring/metrics` endpoint
 - Prometheus server (port 9090)
 - Grafana server (port 3001)
 - Alertmanager (port 9093, optional)
 
-**Redis VM (172.16.168.23):**
+**Redis VM (<database-ip>):**
 - Redis server accessible for connection pool metrics
 - Optional: Redis exporter for native Redis metrics
 

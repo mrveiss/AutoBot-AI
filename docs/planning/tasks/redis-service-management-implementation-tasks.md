@@ -140,7 +140,7 @@ result = await self.ssh_manager.execute_command(
 # Commands to execute:
 # 1. systemctl is-active redis-server
 # 2. systemctl status redis-server
-# 3. redis-cli -h 172.16.168.23 PING
+# 3. redis-cli -h <database-ip> PING
 ```
 
 ---
@@ -271,7 +271,7 @@ redis_service_management:
     name: "redis-server"
     systemd_unit: "redis-server.service"
     host: "redis"
-    ip: "172.16.168.23"
+    ip: "<database-ip>"
     port: 6379
 
   health_check:
@@ -501,7 +501,7 @@ async def test_full_service_restart_flow(test_client, admin_auth_token):
 
 **Acceptance Criteria:**
 - [ ] ConnectionHealthChecker class with async check method
-- [ ] Executes `redis-cli -h 172.16.168.23 PING` via SSH
+- [ ] Executes `redis-cli -h <database-ip> PING` via SSH
 - [ ] Measures response time in milliseconds
 - [ ] Returns HealthCheckResult (status, layer, response_time, error)
 - [ ] Timeout handling (5 seconds max)
@@ -515,7 +515,7 @@ class ConnectionHealthChecker:
         try:
             result = await ssh_manager.execute_command(
                 host='redis',
-                command='redis-cli -h 172.16.168.23 PING',
+                command='redis-cli -h <database-ip> PING',
                 timeout=5
             )
             response_time = (time.time() - start_time) * 1000
@@ -1269,7 +1269,7 @@ export default {
 **Priority:** P0 (Critical - Real-Time Updates)
 
 **Acceptance Criteria:**
-- [ ] WebSocket endpoint: `wss://172.16.168.20:8443/ws/services/redis/status`
+- [ ] WebSocket endpoint: `wss://<backend-ip>:8443/ws/services/redis/status`
 - [ ] Authentication via token (URL parameter or header)
 - [ ] Broadcast service status changes to all subscribed clients
 - [ ] Message types: service_status, service_event, auto_recovery
@@ -1463,7 +1463,7 @@ const subscribeToStatusUpdates = (callback) => {
 **E2E Test Example:**
 ```javascript
 test('Admin can restart Redis service from UI', async ({ page }) => {
-  await page.goto('http://172.16.168.21:5173/login');
+  await page.goto('http://<frontend-ip>:5173/login');
   await page.fill('[name="email"]', 'admin@autobot.local');
   await page.fill('[name="password"]', 'admin-password');
   await page.click('button[type="submit"]');
@@ -1700,7 +1700,7 @@ ansible redis -i ansible/inventory -m shell -a "sudo systemctl status redis-serv
     "email": "admin@autobot.local",
     "role": "admin"
   },
-  "source_ip": "172.16.168.20",
+  "source_ip": "<backend-ip>",
   "result": {
     "success": true,
     "duration_seconds": 15.7,
@@ -1854,7 +1854,7 @@ import time
 from httpx import AsyncClient
 
 async def load_test_status_endpoint(duration_seconds: int = 60):
-    client = AsyncClient(base_url="https://172.16.168.20:8443")
+    client = AsyncClient(base_url="https://<backend-ip>:8443")
 
     request_count = 0
     error_count = 0
@@ -2348,8 +2348,8 @@ REDIS-5.4.1 + REDIS-5.4.2 (Final Testing)
 
 **Development Environment:**
 - Local development on `/opt/autobot`
-- Backend testing against Redis VM (172.16.168.23)
-- Frontend testing on VM1 (172.16.168.21:5173)
+- Backend testing against Redis VM (<database-ip>)
+- Frontend testing on VM1 (<frontend-ip>:5173)
 - SSH key: `~/.ssh/autobot_key`
 
 **Deployment Strategy:**

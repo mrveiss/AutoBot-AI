@@ -19,7 +19,7 @@ python scripts/validate_timeout_config.py
 
 # 4. Verify no regression
 scripts/start-services.sh start
-curl http://172.16.168.21:5173  # Frontend accessible?
+curl http://<frontend-ip>:5173  # Frontend accessible?
 ```
 
 ## Implementation Steps
@@ -406,11 +406,11 @@ python scripts/validate_timeout_config.py
 curl http://localhost:8001/api/health
 
 # 4. Frontend connectivity (CRITICAL!)
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 
 # 5. Full system test
 scripts/start-services.sh start
-# Open browser to http://172.16.168.21:5173
+# Open browser to http://<frontend-ip>:5173
 # Test model selection in GUI
 ```
 

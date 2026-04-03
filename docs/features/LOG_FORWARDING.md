@@ -167,12 +167,12 @@ Scope: Global
 ```
 
 Hosts included:
-- autobot-main (172.16.168.20) - Backend API
-- autobot-frontend (172.16.168.21) - Web interface
-- autobot-npu-worker (172.16.168.22) - NPU acceleration
-- autobot-redis (172.16.168.23) - Redis data layer
-- autobot-ai-stack (172.16.168.24) - AI processing
-- autobot-browser (172.16.168.25) - Browser automation
+- autobot-main (<backend-ip>) - Backend API
+- autobot-frontend (<frontend-ip>) - Web interface
+- autobot-npu-worker (<npu-ip>) - NPU acceleration
+- autobot-redis (<database-ip>) - Redis data layer
+- autobot-ai-stack (<aiml-ip>) - AI processing
+- autobot-browser (<browser-ip>) - Browser automation
 
 ### Per-Host Scope
 

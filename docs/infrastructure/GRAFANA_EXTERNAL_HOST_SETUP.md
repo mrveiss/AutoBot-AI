@@ -5,11 +5,11 @@
 > **⚠️ IMPORTANT NOTE:**
 >
 > **Current Production Configuration (Issue #859):**
-> - Grafana is deployed on **SLM Server (172.16.168.19)** via Ansible playbooks (`slm_manager` role)
-> - Prometheus and AlertManager also run on SLM Server (172.16.168.19)
-> - Redis VM (172.16.168.23) runs only Redis Stack
+> - Grafana is deployed on **SLM Server (<slm-manager-ip>)** via Ansible playbooks (`slm_manager` role)
+> - Prometheus and AlertManager also run on SLM Server (<slm-manager-ip>)
+> - Redis VM (<database-ip>) runs only Redis Stack
 >
-> **This document covers OPTIONAL external deployment** for advanced use cases requiring dedicated monitoring infrastructure. For standard deployments, Grafana remains colocated with the SLM backend on 172.16.168.19.
+> **This document covers OPTIONAL external deployment** for advanced use cases requiring dedicated monitoring infrastructure. For standard deployments, Grafana remains colocated with the SLM backend on <slm-manager-ip>.
 
 This document describes how to deploy Grafana on a dedicated external host for AutoBot SLM monitoring, instead of running it locally on the SLM server.
 
@@ -33,7 +33,7 @@ This document describes how to deploy Grafana on a dedicated external host for A
 ### Current Architecture (Local Grafana)
 
 ```
-SLM Server (172.16.168.19)
+SLM Server (<slm-manager-ip>)
 ├── Grafana :3000 (localhost only)
 ├── Prometheus :9090 (localhost only)
 ├── Nginx :443
@@ -52,16 +52,16 @@ SLM Server (172.16.168.19)
 ### External Architecture (Dedicated Monitoring VM)
 
 ```
-SLM Server (172.16.168.19)
+SLM Server (<slm-manager-ip>)
 ├── Prometheus :9090 (exposed to monitoring VM)
 ├── Nginx :443
-│   ├── /grafana/ → http://172.16.168.28:3000/grafana/
+│   ├── /grafana/ → http://<reserved-ip>:3000/grafana/
 │   └── Frontend served from /
 └── AutoBot SLM Backend :8000
 
-Monitoring VM (172.16.168.28)
+Monitoring VM (<reserved-ip>)
 └── Grafana :3000
-    └── Data Source → http://172.16.168.19:9090 (Prometheus)
+    └── Data Source → http://<slm-manager-ip>:9090 (Prometheus)
 ```
 
 **Characteristics:**
@@ -124,7 +124,7 @@ Monitoring VM (172.16.168.28)
 1. **Target VM prepared:**
    ```bash
    # Ubuntu 22.04 with SSH access
-   ssh autobot@172.16.168.28 "uname -a"
+   ssh autobot@<reserved-ip> "uname -a"
    ```
 
 2. **Ansible inventory configured:**
@@ -152,10 +152,10 @@ ansible-playbook migrate-grafana-to-vm.yml \
   -i inventory-migration.ini
 
 # Step 2: Verify migration
-curl -k https://172.16.168.19/grafana/api/health
+curl -k https://<slm-manager-ip>/grafana/api/health
 
 # Step 3: Test dashboard access
-curl -k -I https://172.16.168.19/grafana/d/autobot-system?kiosk=tv
+curl -k -I https://<slm-manager-ip>/grafana/d/autobot-system?kiosk=tv
 
 # Step 4: (Optional) Remove Grafana from SLM server
 ansible-playbook migrate-grafana-to-vm.yml \
@@ -168,18 +168,18 @@ ansible-playbook migrate-grafana-to-vm.yml \
 
 1. **Direct Grafana access:**
    ```bash
-   curl http://172.16.168.28:3000/grafana/api/health
+   curl http://<reserved-ip>:3000/grafana/api/health
    # Expected: {"database":"ok","version":"12.3.2"}
    ```
 
 2. **Proxied access via SLM:**
    ```bash
-   curl -k https://172.16.168.19/grafana/api/health
+   curl -k https://<slm-manager-ip>/grafana/api/health
    # Expected: {"database":"ok","version":"12.3.2"}
    ```
 
 3. **Dashboard access:**
-   - Open browser: https://172.16.168.19/monitoring/system
+   - Open browser: https://<slm-manager-ip>/monitoring/system
    - Verify all 6 dashboard types load
    - Check Prometheus data is displayed
 
@@ -190,7 +190,7 @@ ansible-playbook migrate-grafana-to-vm.yml \
 ### Phase 1: Install Grafana on External Host
 
 ```bash
-# On monitoring VM (172.16.168.28)
+# On monitoring VM (<reserved-ip>)
 sudo apt-get update
 
 # Add Grafana APT repository
@@ -217,10 +217,10 @@ http_addr = 0.0.0.0
 http_port = 3000
 
 # Domain should be the SLM server (nginx proxy)
-domain = 172.16.168.19
+domain = <slm-manager-ip>
 
 # Root URL includes the proxy path
-root_url = https://172.16.168.19/grafana/
+root_url = https://<slm-manager-ip>/grafana/
 
 # Enable subpath serving
 serve_from_sub_path = true
@@ -247,7 +247,7 @@ sudo chown root:grafana /var/lib/grafana/dashboards
 sudo chmod 755 /var/lib/grafana/dashboards
 
 # Copy dashboards from SLM server
-scp -r autobot@172.16.168.19:/var/lib/grafana/dashboards/*.json \
+scp -r autobot@<slm-manager-ip>:/var/lib/grafana/dashboards/*.json \
   /tmp/
 
 sudo mv /tmp/*.json /var/lib/grafana/dashboards/
@@ -280,7 +280,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://172.16.168.19:9090
+    url: http://<slm-manager-ip>:9090
     isDefault: true
     editable: false
     jsonData:
@@ -305,11 +305,11 @@ curl http://localhost:3000/api/health
 
 ```bash
 # On monitoring VM - allow incoming from SLM server
-sudo ufw allow from 172.16.168.19 to any port 3000 proto tcp \
+sudo ufw allow from <slm-manager-ip> to any port 3000 proto tcp \
   comment "Nginx to Grafana"
 
 # On SLM server - allow incoming from monitoring VM
-sudo ufw allow from 172.16.168.28 to any port 9090 proto tcp \
+sudo ufw allow from <reserved-ip> to any port 9090 proto tcp \
   comment "Grafana to Prometheus"
 
 sudo ufw status numbered
@@ -323,7 +323,7 @@ Edit `/etc/nginx/sites-available/autobot-slm`:
 # Update Grafana proxy location
 location /grafana/ {
     # Point to external Grafana host
-    proxy_pass http://172.16.168.28:3000/grafana/;
+    proxy_pass http://<reserved-ip>:3000/grafana/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -331,7 +331,7 @@ location /grafana/ {
     proxy_set_header X-Forwarded-Proto $scheme;
 
     # Add CORS headers for iframe embedding
-    add_header Access-Control-Allow-Origin "https://172.16.168.19" always;
+    add_header Access-Control-Allow-Origin "https://<slm-manager-ip>" always;
     add_header Access-Control-Allow-Credentials "true" always;
 }
 ```
@@ -346,12 +346,12 @@ sudo systemctl reload nginx
 
 ```bash
 # Test all components
-curl http://172.16.168.28:3000/grafana/api/health  # Direct Grafana
-curl -k https://172.16.168.19/grafana/api/health   # Proxied via nginx
-curl -k -I https://172.16.168.19/grafana/d/autobot-system?kiosk=tv  # Dashboard
+curl http://<reserved-ip>:3000/grafana/api/health  # Direct Grafana
+curl -k https://<slm-manager-ip>/grafana/api/health   # Proxied via nginx
+curl -k -I https://<slm-manager-ip>/grafana/d/autobot-system?kiosk=tv  # Dashboard
 
 # Open in browser
-xdg-open https://172.16.168.19/monitoring/system
+xdg-open https://<slm-manager-ip>/monitoring/system
 ```
 
 ---
@@ -369,7 +369,7 @@ To use external Grafana with the `slm_manager` role:
 grafana_mode: external
 
 # Specify external Grafana host
-grafana_external_host: 172.16.168.28
+grafana_external_host: <reserved-ip>
 
 # Grafana port (default: 3000)
 grafana_port: 3000
@@ -383,10 +383,10 @@ grafana_deploy_dashboards: false  # Set to true if deploying from Ansible
 
 # Enable CORS for external access
 grafana_enable_cors: true
-grafana_cors_origin: "https://172.16.168.19"
+grafana_cors_origin: "https://<slm-manager-ip>"
 
 # Prometheus must be accessible from external Grafana
-prometheus_host: 172.16.168.19  # Expose on all interfaces or specific IP
+prometheus_host: <slm-manager-ip>  # Expose on all interfaces or specific IP
 prometheus_port: 9090
 ```
 
@@ -394,15 +394,15 @@ prometheus_port: 9090
 
 ```ini
 [slm_server]
-172.16.168.19 ansible_user=autobot
+<slm-manager-ip> ansible_user=autobot
 
 [slm_server:vars]
 grafana_mode=external
-grafana_external_host=172.16.168.28
+grafana_external_host=<reserved-ip>
 grafana_install=false
 grafana_configure=false
 grafana_enable_cors=true
-prometheus_host=172.16.168.19
+prometheus_host=<slm-manager-ip>
 ```
 
 Run deployment:
@@ -423,10 +423,10 @@ ansible-playbook deploy-slm-manager.yml -i inventory.ini
 **Diagnosis:**
 ```bash
 # Check Prometheus accessibility from Grafana VM
-ssh autobot@172.16.168.28 "curl -s http://172.16.168.19:9090/api/v1/query?query=up | jq"
+ssh autobot@<reserved-ip> "curl -s http://<slm-manager-ip>:9090/api/v1/query?query=up | jq"
 
 # Check Grafana data source configuration
-curl -s -u admin:admin http://172.16.168.28:3000/api/datasources | jq
+curl -s -u admin:admin http://<reserved-ip>:3000/api/datasources | jq
 ```
 
 **Solution:**
@@ -454,14 +454,14 @@ curl -s -u admin:admin http://172.16.168.28:3000/api/datasources | jq
 
 **Symptoms:**
 ```
-Access to XMLHttpRequest at 'https://172.16.168.19/grafana/...' from origin
-'https://172.16.168.28:3000' has been blocked by CORS policy
+Access to XMLHttpRequest at 'https://<slm-manager-ip>/grafana/...' from origin
+'https://<reserved-ip>:3000' has been blocked by CORS policy
 ```
 
 **Solution:**
 1. Verify nginx CORS headers:
    ```bash
-   curl -k -I https://172.16.168.19/grafana/api/health | grep Access-Control
+   curl -k -I https://<slm-manager-ip>/grafana/api/health | grep Access-Control
    ```
 
 2. Check Grafana cookie settings:
@@ -480,13 +480,13 @@ Access to XMLHttpRequest at 'https://172.16.168.19/grafana/...' from origin
 **Diagnosis:**
 ```bash
 # Check Grafana is running
-ssh autobot@172.16.168.28 "systemctl status grafana-server"
+ssh autobot@<reserved-ip> "systemctl status grafana-server"
 
 # Check Grafana is listening
-ssh autobot@172.16.168.28 "netstat -tlnp | grep 3000"
+ssh autobot@<reserved-ip> "netstat -tlnp | grep 3000"
 
 # Test direct access
-ssh autobot@172.16.168.28 "curl -I http://localhost:3000/grafana/api/health"
+ssh autobot@<reserved-ip> "curl -I http://localhost:3000/grafana/api/health"
 ```
 
 **Solution:**
@@ -513,12 +513,12 @@ ssh autobot@172.16.168.28 "curl -I http://localhost:3000/grafana/api/health"
 
 2. Check `root_url` includes the subpath:
    ```ini
-   root_url = https://172.16.168.19/grafana/
+   root_url = https://<slm-manager-ip>/grafana/
    ```
 
 3. Ensure nginx proxy_pass keeps the prefix:
    ```nginx
-   proxy_pass http://172.16.168.28:3000/grafana/;  # NOT /
+   proxy_pass http://<reserved-ip>:3000/grafana/;  # NOT /
    ```
 
 ### Issue: Authentication Required
@@ -557,7 +557,7 @@ ssh autobot@172.16.168.28 "curl -I http://localhost:3000/grafana/api/health"
    ```bash
    # On monitoring VM
    sudo ufw deny 3000
-   sudo ufw allow from 172.16.168.19 to any port 3000
+   sudo ufw allow from <slm-manager-ip> to any port 3000
    ```
 
 3. **VPN/Private Network:**
@@ -650,10 +650,10 @@ sudo systemctl enable grafana-server
 
 # 3. Verify
 curl http://localhost:3000/api/health
-curl -k https://172.16.168.19/grafana/api/health
+curl -k https://<slm-manager-ip>/grafana/api/health
 
 # 4. Test dashboards
-xdg-open https://172.16.168.19/monitoring/system
+xdg-open https://<slm-manager-ip>/monitoring/system
 ```
 
 ### Ansible Rollback

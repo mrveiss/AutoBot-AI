@@ -22,17 +22,17 @@ The `manifest.yml` in each infrastructure directory is the **single source of tr
 
 | Role | Directory | Target Node | IP |
 |------|-----------|-------------|-----|
-| `autobot-backend` | `autobot-backend/` | backend (.20) | 172.16.168.20 |
-| `autobot-frontend` | `autobot-frontend/` | frontend (.21) | 172.16.168.21 |
-| `autobot-ollama` | `autobot-ollama/` | backend (.20) | 172.16.168.20 |
-| `autobot-slm-backend` | `autobot-slm-backend/` | slm (.19) | 172.16.168.19 |
-| `autobot-slm-frontend` | `autobot-slm-frontend/` | slm (.19) | 172.16.168.19 |
-| `autobot-slm-database` | `autobot-slm-database/` | slm (.19) | 172.16.168.19 |
-| `autobot-monitoring` | `autobot-monitoring/` | slm (.19) | 172.16.168.19 |
-| `autobot-npu-worker` | `autobot-npu-worker/` | npu (.22) | 172.16.168.22 |
-| `autobot-browser-worker` | `autobot-browser-worker/` | browser (.25) | 172.16.168.25 |
-| `autobot-ai-stack` | `autobot-ai-stack/` | ai-stack (.24) | 172.16.168.24 |
-| `autobot-database` | `autobot-database/` | database (.23) | 172.16.168.23 |
+| `autobot-backend` | `autobot-backend/` | backend (.20) | <backend-ip> |
+| `autobot-frontend` | `autobot-frontend/` | frontend (.21) | <frontend-ip> |
+| `autobot-ollama` | `autobot-ollama/` | backend (.20) | <backend-ip> |
+| `autobot-slm-backend` | `autobot-slm-backend/` | slm (.19) | <slm-manager-ip> |
+| `autobot-slm-frontend` | `autobot-slm-frontend/` | slm (.19) | <slm-manager-ip> |
+| `autobot-slm-database` | `autobot-slm-database/` | slm (.19) | <slm-manager-ip> |
+| `autobot-monitoring` | `autobot-monitoring/` | slm (.19) | <slm-manager-ip> |
+| `autobot-npu-worker` | `autobot-npu-worker/` | npu (.22) | <npu-ip> |
+| `autobot-browser-worker` | `autobot-browser-worker/` | browser (.25) | <browser-ip> |
+| `autobot-ai-stack` | `autobot-ai-stack/` | ai-stack (.24) | <aiml-ip> |
+| `autobot-database` | `autobot-database/` | database (.23) | <database-ip> |
 | `autobot-slm-agent` | `autobot-slm-agent/` | **all nodes** | all |
 | `autobot_shared` | `autobot_shared/` | all backend nodes | all |
 
@@ -44,15 +44,15 @@ Each node gets **only** its assigned role directories + `autobot_shared/` + `aut
 
 | Node | IP | Roles |
 |------|----|-------|
-| SLM (.19) | 172.16.168.19 | slm-backend + slm-frontend + slm-database + monitoring + slm-agent |
-| Backend (.20) | 172.16.168.20 | backend + ollama + slm-agent |
-| Frontend (.21) | 172.16.168.21 | frontend + slm-agent |
-| NPU (.22) | 172.16.168.22 | npu-worker + slm-agent |
-| Database (.23) | 172.16.168.23 | database + slm-agent |
-| AI Stack (.24) | 172.16.168.24 | ai-stack + slm-agent |
-| Browser (.25) | 172.16.168.25 | browser-worker + slm-agent |
-| Reserved (.26) | 172.16.168.26 | slm-agent |
-| Reserved (.27) | 172.16.168.27 | slm-agent |
+| SLM (.19) | <slm-manager-ip> | slm-backend + slm-frontend + slm-database + monitoring + slm-agent |
+| Backend (.20) | <backend-ip> | backend + ollama + slm-agent |
+| Frontend (.21) | <frontend-ip> | frontend + slm-agent |
+| NPU (.22) | <npu-ip> | npu-worker + slm-agent |
+| Database (.23) | <database-ip> | database + slm-agent |
+| AI Stack (.24) | <aiml-ip> | ai-stack + slm-agent |
+| Browser (.25) | <browser-ip> | browser-worker + slm-agent |
+| Reserved (.26) | <reserved-ip> | slm-agent |
+| Reserved (.27) | <reserved-ip> | slm-agent |
 
 Expected `/opt/autobot/` content on each node:
 

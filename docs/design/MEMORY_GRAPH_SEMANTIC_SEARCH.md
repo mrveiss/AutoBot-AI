@@ -702,7 +702,7 @@ The System Status Bug Fix addressed an incorrect API endpoint. Here's what I fou
 **Details:**
 - Fixed endpoint from /api/status to /api/system/status
 - Updated API calls in frontend components
-- Deployed to Frontend VM (172.16.168.21)
+- Deployed to Frontend VM (<frontend-ip>)
 
 **Related entities:**
 - API Documentation Update (documentation)

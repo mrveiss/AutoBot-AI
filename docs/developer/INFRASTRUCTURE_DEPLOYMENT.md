@@ -16,11 +16,11 @@ This guide provides detailed instructions for AutoBot's distributed VM infrastru
 
 **Configured for all 5 VMs**:
 
-- `frontend` (172.16.168.21)
-- `npu-worker` (172.16.168.22)
-- `redis` (172.16.168.23)
-- `ai-stack` (172.16.168.24)
-- `browser` (172.16.168.25)
+- `frontend` (<frontend-ip>)
+- `npu-worker` (<npu-ip>)
+- `redis` (<database-ip>)
+- `ai-stack` (<aiml-ip>)
+- `browser` (<browser-ip>)
 
 ### Verify SSH Access
 
@@ -28,11 +28,11 @@ This guide provides detailed instructions for AutoBot's distributed VM infrastru
 # Test connection to all VMs
 for vm in frontend npu-worker redis ai-stack browser; do
     echo "Testing $vm..."
-    ssh -i ~/.ssh/autobot_key autobot@172.16.168.{21..25} "hostname" 2>/dev/null
+    ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> through <browser-ip> "hostname" 2>/dev/null
 done
 
 # Test specific VM
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'Frontend VM connected'"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'Frontend VM connected'"
 ```
 
 ### SSH Configuration
@@ -42,31 +42,31 @@ Add to `~/.ssh/config` for easier access:
 ```ssh-config
 # AutoBot VMs
 Host autobot-frontend
-    HostName 172.16.168.21
+    HostName <frontend-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
     StrictHostKeyChecking accept-new
 
 Host autobot-npu
-    HostName 172.16.168.22
+    HostName <npu-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
     StrictHostKeyChecking accept-new
 
 Host autobot-redis
-    HostName 172.16.168.23
+    HostName <database-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
     StrictHostKeyChecking accept-new
 
 Host autobot-ai
-    HostName 172.16.168.24
+    HostName <aiml-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
     StrictHostKeyChecking accept-new
 
 Host autobot-browser
-    HostName 172.16.168.25
+    HostName <browser-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
     StrictHostKeyChecking accept-new
@@ -178,7 +178,7 @@ ssh autobot-redis
 
 ### The Rule
 
-**NEVER edit code directly on remote VMs (172.16.168.21-25) - ZERO TOLERANCE**
+**NEVER edit code directly on remote VMs (<frontend-ip>-25) - ZERO TOLERANCE**
 
 ### Required Workflow
 
@@ -215,7 +215,7 @@ git commit -m "Update chat API"
 
 ```bash
 # NEVER DO THIS - Direct editing on VM
-ssh autobot@172.16.168.21
+ssh autobot@<frontend-ip>
 vim /home/autobot/autobot-user-autobot-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
 ```
 
@@ -254,27 +254,27 @@ vite --host localhost --port 5173
 
 ### Service Access Patterns
 
-**Backend on Main Machine** (172.16.168.20):
+**Backend on Main Machine** (<backend-ip>):
 
 ```python
 # Binds to all interfaces
 uvicorn main:app --host 0.0.0.0 --port 8001
 
 # Accessed from frontend VM:
-# https://172.16.168.20:8443/api/chat
+# https://<backend-ip>:8443/api/chat
 ```
 
-**Frontend on VM1** (172.16.168.21):
+**Frontend on VM1** (<frontend-ip>):
 
 ```bash
 # Binds to all interfaces
 npm run dev -- --host 0.0.0.0 --port 5173
 
 # Accessed from browser:
-# http://172.16.168.21:5173
+# http://<frontend-ip>:5173
 ```
 
-**Redis on VM3** (172.16.168.23):
+**Redis on VM3** (<database-ip>):
 
 ```bash
 # Configure Redis to bind to all interfaces
@@ -282,7 +282,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 bind 0.0.0.0
 
 # Accessed from any VM:
-# redis-cli -h 172.16.168.23 -p 6379
+# redis-cli -h <database-ip> -p 6379
 ```
 
 ### Inter-VM Communication
@@ -294,10 +294,10 @@ bind 0.0.0.0
 from autobot_shared.network_constants import NetworkConstants
 
 backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
-# Result: https://172.16.168.20:8443/api/chat
+# Result: https://<backend-ip>:8443/api/chat
 
 redis_host = NetworkConstants.REDIS_VM_IP
-# Result: 172.16.168.23
+# Result: <database-ip>
 
 # WRONG - Using localhost (won't work from remote VMs)
 backend_url = "http://localhost:8001/api/chat"
@@ -310,13 +310,13 @@ redis_host = "localhost"
 
 ```bash
 # From main machine, test backend accessibility
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 
 # From frontend VM, test backend accessibility
-ssh autobot@172.16.168.21 "curl https://172.16.168.20:8443/api/health"
+ssh autobot@<frontend-ip> "curl https://<backend-ip>:8443/api/health"
 
 # From any VM, test Redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 # Should return: PONG
 
 # Test all VMs from main machine
@@ -336,7 +336,7 @@ done
 
 AutoBot infrastructure requires specific firewall rules to function correctly:
 
-1. **Infrastructure subnet must be allowed** (`172.16.168.0/24`) - VMs cannot communicate without this
+1. **Infrastructure subnet must be allowed** (`<network-subnet>`) - VMs cannot communicate without this
 2. **SSH must be allowed** (port 22) - Critical to prevent lockout
 3. **Service-specific ports** - Backend API, Redis, Frontend, etc.
 
@@ -354,7 +354,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
 
 # Deploy to specific VM
-ansible-playbook playbooks/provision-fleet-roles.yml --limit 172.16.168.20 --tags common,firewall
+ansible-playbook playbooks/provision-fleet-roles.yml --limit <backend-ip> --tags common,firewall
 ```
 
 **Firewall rules are defined in**: `ansible/inventory/group_vars/all.yml` under `security.firewall_rules`
@@ -385,38 +385,38 @@ sudo ./infrastructure/shared/config/ufw-defaults.sh status
 ### Default Firewall Rules
 
 **Base rules (applied to ALL VMs):**
-- SSH from gateway (port 22, source: 172.16.168.1)
+- SSH from gateway (port 22, source: <network-gateway>)
 
 **Role-specific rules (defined in `inventory/group_vars/<role>.yml`):**
 
-**Frontend VM (172.16.168.21):**
+**Frontend VM (<frontend-ip>):**
 - 443/tcp (any) - HTTPS public access
 - 80/tcp (any) - HTTP public access
 - 5173/tcp (infrastructure only) - Vue dev server
 - 8001/tcp (infrastructure only) - Backend API connectivity
 - 8443/tcp (infrastructure only) - Backend API HTTPS connectivity
 
-**Backend VM (172.16.168.20):**
+**Backend VM (<backend-ip>):**
 - 8443/tcp (infrastructure only) - Backend API HTTPS
 - 8001/tcp (infrastructure only) - Backend API HTTP
 - 6080/tcp (infrastructure only) - noVNC web console
 - 5900/tcp (infrastructure only) - VNC
 
-**Redis VM (172.16.168.23):**
+**Redis VM (<database-ip>):**
 - 6379/tcp (infrastructure only) - Redis Stack
 - 5432/tcp (infrastructure only) - PostgreSQL
 - 8001/tcp (infrastructure only) - Redis Insight UI
 
-**AI/ML VMs (172.16.168.22, 172.16.168.24):**
+**AI/ML VMs (<npu-ip>, <aiml-ip>):**
 - 8080/tcp (infrastructure only) - AI Stack API
 - 8081/tcp (infrastructure only) - NPU Worker API
 - 11434/tcp (infrastructure only) - Ollama API
 
-**Browser VM (172.16.168.25):**
+**Browser VM (<browser-ip>):**
 - 3000/tcp (infrastructure only) - Browser Worker API
 - 3001/tcp (infrastructure only) - Playwright Debug
 
-**SLM Server (172.16.168.19):**
+**SLM Server (<slm-manager-ip>):**
 - 443/tcp (any) - SLM Frontend HTTPS
 - 80/tcp (any) - SLM Frontend HTTP
 - 8000/tcp (infrastructure only) - SLM Backend API
@@ -451,7 +451,7 @@ sudo dmesg | grep UFW | tail -20
 sudo ufw status verbose
 
 # Check specific rule exists
-sudo ufw status | grep "172.16.168.0/24"
+sudo ufw status | grep "<network-subnet>"
 sudo ufw status | grep "8443"
 
 # Check recent UFW blocks
@@ -486,7 +486,7 @@ security:
     - rule: allow
       port: 9999
       proto: tcp
-      src: "172.16.168.0/24"
+      src: "<network-subnet>"
       comment: "Custom service port"
 ```
 
@@ -501,7 +501,7 @@ ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
 
 ```bash
 # Allow specific port from infrastructure subnet
-sudo ufw allow from 172.16.168.0/24 to any port 9999 proto tcp comment 'Custom service'
+sudo ufw allow from <network-subnet> to any port 9999 proto tcp comment 'Custom service'
 
 # Allow specific port from any source
 sudo ufw allow 9999/tcp comment 'Public service'
@@ -521,7 +521,7 @@ After deploying firewall configuration, verify:
 sudo ufw status | grep "Status: active"
 
 # 2. Infrastructure subnet rule exists
-sudo ufw status | grep "172.16.168.0/24"
+sudo ufw status | grep "<network-subnet>"
 
 # 3. SSH rule exists (CRITICAL)
 sudo ufw status | grep "22/tcp"
@@ -532,9 +532,9 @@ sudo ufw status | grep "6379/tcp"  # Redis
 sudo ufw status | grep "443/tcp"   # Frontend
 
 # 5. Test actual connectivity
-curl http://172.16.168.20:8443/api/health  # Backend
-redis-cli -h 172.16.168.23 ping            # Redis
-curl https://172.16.168.21                 # Frontend
+curl http://<backend-ip>:8443/api/health  # Backend
+redis-cli -h <database-ip> ping            # Redis
+curl https://<frontend-ip>                 # Frontend
 ```
 
 ---
@@ -545,20 +545,20 @@ curl https://172.16.168.21                 # Frontend
 
 | VM | IP:Port | Service | Purpose |
 |----|---------|---------|---------|
-| **Main (WSL)** | 172.16.168.20:8443 | Backend API | FastAPI backend, business logic |
-| **Main (WSL)** | 172.16.168.20:6080 | VNC Desktop | noVNC web-based terminal |
-| **VM1 Frontend** | 172.16.168.21:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
-| **VM2 NPU Worker** | 172.16.168.22:8081 | AI Acceleration | Hardware NPU for AI tasks |
-| **VM3 Redis** | 172.16.168.23:6379 | Data Layer | Redis database, cache, queues |
-| **VM4 AI Stack** | 172.16.168.24:8080 | AI Processing | LLM inference, AI services |
-| **VM5 Browser** | 172.16.168.25:3000 | Web Automation | Playwright browser automation |
+| **Main (WSL)** | <backend-ip>:8443 | Backend API | FastAPI backend, business logic |
+| **Main (WSL)** | <backend-ip>:6080 | VNC Desktop | noVNC web-based terminal |
+| **VM1 Frontend** | <frontend-ip>:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
+| **VM2 NPU Worker** | <npu-ip>:8081 | AI Acceleration | Hardware NPU for AI tasks |
+| **VM3 Redis** | <database-ip>:6379 | Data Layer | Redis database, cache, queues |
+| **VM4 AI Stack** | <aiml-ip>:8080 | AI Processing | LLM inference, AI services |
+| **VM5 Browser** | <browser-ip>:3000 | Web Automation | Playwright browser automation |
 
 ### Architecture Diagram
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     Main Machine (WSL)                       │
-│                    172.16.168.20                             │
+│                    <backend-ip>                             │
 │  ┌──────────────┐  ┌──────────────┐                         │
 │  │ Backend API  │  │ VNC Desktop  │                         │
 │  │   :8001      │  │   :6080      │                         │
@@ -569,13 +569,13 @@ curl https://172.16.168.21                 # Frontend
         │                   │                   │
 ┌───────▼─────────┐ ┌──────▼──────────┐ ┌─────▼──────────┐
 │  VM1: Frontend  │ │  VM3: Redis     │ │  VM4: AI Stack │
-│  172.16.168.21  │ │  172.16.168.23  │ │  172.16.168.24 │
+│  <frontend-ip>  │ │  <database-ip>  │ │  <aiml-ip> │
 │  Port: 5173     │ │  Port: 6379     │ │  Port: 8080    │
 └─────────────────┘ └─────────────────┘ └────────────────┘
         │                   │                   │
 ┌───────▼─────────┐ ┌──────▼──────────┐
 │ VM2: NPU Worker │ │ VM5: Browser    │
-│ 172.16.168.22   │ │ 172.16.168.25   │
+│ <npu-ip>   │ │ <browser-ip>   │
 │ Port: 8081      │ │ Port: 3000      │
 └─────────────────┘ └─────────────────┘
 ```
@@ -628,11 +628,11 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-native-services.yml
 
 # 4. Verify health checks
-curl -k https://172.16.168.20:8443/api/health
-curl https://172.16.168.21
+curl -k https://<backend-ip>:8443/api/health
+curl https://<frontend-ip>
 
 # 5. Monitor via SLM GUI
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 ```
 
 **See**: [Service Management Guide](SERVICE_MANAGEMENT.md) for Ansible deployment details.
@@ -644,16 +644,16 @@ curl https://172.16.168.21
 ```bash
 # Update specific node via Ansible
 cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.21 --tags frontend
+ansible-playbook playbooks/deploy-native-services.yml --limit <frontend-ip> --tags frontend
 
 # Wait for health check
-curl https://172.16.168.21
+curl https://<frontend-ip>
 
 # Update NPU Worker VM
-ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.22 --tags npu
+ansible-playbook playbooks/deploy-native-services.yml --limit <npu-ip> --tags npu
 
 # Or use SLM GUI for rolling updates
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 # Select node → Deploy → Monitor progress
 ```
 
@@ -662,7 +662,7 @@ ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.22 --ta
 ```bash
 # Update Frontend VM
 ./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /opt/autobot/autobot-slm-frontend/
-ssh autobot@172.16.168.21 "sudo systemctl restart autobot-frontend"
+ssh autobot@<frontend-ip> "sudo systemctl restart autobot-frontend"
 ```
 
 ---
@@ -679,8 +679,8 @@ for ip in 20 21 22 23 24 25; do
 done
 
 # Check services on each VM
-ssh autobot@172.16.168.21 "systemctl status frontend"
-ssh autobot@172.16.168.23 "systemctl status redis"
+ssh autobot@<frontend-ip> "systemctl status frontend"
+ssh autobot@<database-ip> "systemctl status redis"
 ```
 
 ### Restart Services
@@ -695,11 +695,11 @@ sudo systemctl restart autobot-backend
 sudo systemctl restart autobot-celery
 
 # Remote VM services (via SSH)
-ssh autobot@172.16.168.21 "sudo systemctl restart autobot-frontend"
-ssh autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+ssh autobot@<frontend-ip> "sudo systemctl restart autobot-frontend"
+ssh autobot@<database-ip> "sudo systemctl restart redis-stack-server"
 
 # Or use SLM Orchestration GUI
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 ```
 
 ### View Logs
@@ -713,13 +713,13 @@ scripts/start-services.sh logs backend
 journalctl -u autobot-celery -f
 
 # Remote VMs - Frontend logs
-ssh autobot@172.16.168.21 "journalctl -u autobot-frontend -f"
+ssh autobot@<frontend-ip> "journalctl -u autobot-frontend -f"
 
 # Remote VMs - Redis logs
-ssh autobot@172.16.168.23 "journalctl -u redis-stack-server -f"
+ssh autobot@<database-ip> "journalctl -u redis-stack-server -f"
 
 # Or use SLM GUI for log viewing
-# Visit: https://172.16.168.19/orchestration → Select service → Logs
+# Visit: https://<slm-manager-ip>/orchestration → Select service → Logs
 ```
 
 ---
@@ -765,7 +765,7 @@ chmod +x infrastructure/shared/scripts/sync-to-vm.sh
 chmod 600 ~/.ssh/autobot_key
 
 # Test SSH connection
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'Connected'"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'Connected'"
 ```
 
 ### Services Not Accessible
@@ -776,14 +776,14 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'Connected'"
 
 ```bash
 # 1. Verify service is running
-ssh autobot@172.16.168.21 "ps aux | grep node"  # Frontend
+ssh autobot@<frontend-ip> "ps aux | grep node"  # Frontend
 ps aux | grep uvicorn  # Backend (main machine)
 
 # 2. Verify service is binding to 0.0.0.0
 netstat -tulpn | grep 8001  # Should show 0.0.0.0:8001
 
 # 3. Test from source VM
-ssh autobot@172.16.168.21 "curl https://172.16.168.20:8443/api/health"
+ssh autobot@<frontend-ip> "curl https://<backend-ip>:8443/api/health"
 ```
 
 ### VM Out of Sync
@@ -802,7 +802,7 @@ ansible-playbook playbooks/deploy-native-services.yml
 sudo systemctl restart autobot-backend
 
 # Verify sync
-ssh autobot@172.16.168.20 "md5sum /opt/autobot/autobot-backend/api/chat.py"
+ssh autobot@<backend-ip> "md5sum /opt/autobot/autobot-backend/api/chat.py"
 md5sum autobot-backend/api/chat.py
 # Hashes should match
 ```
@@ -839,7 +839,7 @@ md5sum autobot-backend/api/chat.py
 
 **Avoid**:
 
-- [ ] No direct edits on remote VMs (172.16.168.21-25)
+- [ ] No direct edits on remote VMs (<frontend-ip>-25)
 - [ ] No binding to localhost/127.0.0.1
 - [ ] No hardcoded IPs/ports in code
 - [ ] No skipping sync after changes

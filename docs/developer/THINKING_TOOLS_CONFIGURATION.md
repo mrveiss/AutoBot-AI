@@ -162,10 +162,10 @@ autobot-backend/api/structured_thinking_mcp.py
 **Check Tool Registration**:
 ```bash
 # Test sequential thinking endpoint
-curl https://172.16.168.20:8443/api/mcp/sequential-thinking/tools
+curl https://<backend-ip>:8443/api/mcp/sequential-thinking/tools
 
 # Test structured thinking endpoint
-curl https://172.16.168.20:8443/api/mcp/structured-thinking/tools
+curl https://<backend-ip>:8443/api/mcp/structured-thinking/tools
 ```
 
 ### Step 3: Ensure Tools Are Available to LLM
@@ -343,8 +343,8 @@ Here's the implementation plan...
 **Check MCP Server Status**:
 ```bash
 # Test endpoints
-curl https://172.16.168.20:8443/api/mcp/sequential-thinking/tools
-curl https://172.16.168.20:8443/api/mcp/structured-thinking/tools
+curl https://<backend-ip>:8443/api/mcp/sequential-thinking/tools
+curl https://<backend-ip>:8443/api/mcp/structured-thinking/tools
 ```
 
 **Check Backend Logs**:

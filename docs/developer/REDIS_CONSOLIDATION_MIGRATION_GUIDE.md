@@ -107,7 +107,7 @@ async with client.pipeline() as pipe:
 \`\`\`python
 from src.utils.async_redis_manager import AsyncRedisManager
 
-manager = AsyncRedisManager(host="172.16.168.23", port=6379)
+manager = AsyncRedisManager(host="<database-ip>", port=6379)
 await manager.connect()
 client = manager.client
 \`\`\`
@@ -119,7 +119,7 @@ from src.utils.redis_client import get_redis_client
 client = await get_redis_client(
     async_client=True,
     database="main",  # or whichever database you need
-    host="172.16.168.23",  # optional - uses NetworkConstants.REDIS_VM_IP by default
+    host="<database-ip>",  # optional - uses NetworkConstants.REDIS_VM_IP by default
     port=6379  # optional - uses default
 )
 \`\`\`

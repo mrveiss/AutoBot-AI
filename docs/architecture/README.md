@@ -22,25 +22,25 @@ AutoBot is an AI-powered automation platform built on a distributed 6-VM archite
 
 ```mermaid
 graph TB
-    User[User Browser] --> Frontend[VM1: Frontend<br/>172.16.168.21:5173]
-    Frontend --> Backend[Main: Backend API<br/>172.16.168.20:8443]
-    Backend --> Redis[VM3: Redis Stack<br/>172.16.168.23:6379]
-    Backend --> AI[VM4: AI Stack<br/>172.16.168.24:8080]
-    Backend --> NPU[VM2: NPU Worker<br/>172.16.168.22:8081]
-    Backend --> Browser[VM5: Browser Automation<br/>172.16.168.25:3000]
-    Backend --> Desktop[Main: VNC Desktop<br/>172.16.168.20:6080]
+    User[User Browser] --> Frontend[VM1: Frontend<br/><frontend-ip>:5173]
+    Frontend --> Backend[Main: Backend API<br/><backend-ip>:8443]
+    Backend --> Redis[VM3: Redis Stack<br/><database-ip>:6379]
+    Backend --> AI[VM4: AI Stack<br/><aiml-ip>:8080]
+    Backend --> NPU[VM2: NPU Worker<br/><npu-ip>:8081]
+    Backend --> Browser[VM5: Browser Automation<br/><browser-ip>:3000]
+    Backend --> Desktop[Main: VNC Desktop<br/><backend-ip>:6080]
 ```
 
 ### Service Responsibilities
 
 | VM | IP Address | Services | Purpose |
 |----|------------|----------|---------|
-| **Main (WSL)** | 172.16.168.20 | Backend API (8001), VNC (6080) | Core API, desktop automation |
-| **VM1 Frontend** | 172.16.168.21 | Vite (5173) | Web interface (single source) |
-| **VM2 NPU Worker** | 172.16.168.22 | NPU API (8081) | Hardware-accelerated AI |
-| **VM3 Redis** | 172.16.168.23 | Redis Stack (6379) | Data persistence, caching |
-| **VM4 AI Stack** | 172.16.168.24 | Ollama (8080) | LLM inference, embeddings |
-| **VM5 Browser** | 172.16.168.25 | Playwright (3000) | Web automation |
+| **Main (WSL)** | <backend-ip> | Backend API (8001), VNC (6080) | Core API, desktop automation |
+| **VM1 Frontend** | <frontend-ip> | Vite (5173) | Web interface (single source) |
+| **VM2 NPU Worker** | <npu-ip> | NPU API (8081) | Hardware-accelerated AI |
+| **VM3 Redis** | <database-ip> | Redis Stack (6379) | Data persistence, caching |
+| **VM4 AI Stack** | <aiml-ip> | Ollama (8080) | LLM inference, embeddings |
+| **VM5 Browser** | <browser-ip> | Playwright (3000) | Web automation |
 
 ---
 
@@ -137,13 +137,13 @@ Key architectural decisions are documented in ADRs. See [docs/adr/](../adr/READM
 curl http://localhost:8001/api/health
 
 # Frontend
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 
 # Redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # Ollama
-curl http://172.16.168.24:8080/api/tags
+curl http://<aiml-ip>:8080/api/tags
 ```
 
 ### Key Configuration Files

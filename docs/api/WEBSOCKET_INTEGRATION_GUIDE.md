@@ -6,9 +6,9 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 ## WebSocket Endpoints
 
 ### Primary Endpoints
-- **Main WebSocket**: `wss://172.16.168.20:8443/ws`
-- **Test WebSocket**: `wss://172.16.168.20:8443/ws-test`
-- **Health Check**: `wss://172.16.168.20:8443/ws/health`
+- **Main WebSocket**: `wss://<backend-ip>:8443/ws`
+- **Test WebSocket**: `wss://<backend-ip>:8443/ws-test`
+- **Health Check**: `wss://<backend-ip>:8443/ws/health`
 
 ## Message Formats
 
@@ -900,7 +900,7 @@ describe('AutoBot WebSocket Integration', () => {
   let ws: WebSocket;
 
   beforeEach(() => {
-    ws = new WebSocket('wss://172.16.168.20:8443/ws-test');
+    ws = new WebSocket('wss://<backend-ip>:8443/ws-test');
   });
 
   afterEach(() => {

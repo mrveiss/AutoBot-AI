@@ -19,7 +19,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ## Failure Scenarios
 
-### Scenario 1: Main Backend Failure (172.16.168.20)
+### Scenario 1: Main Backend Failure (<backend-ip>)
 
 **Impact**: Complete API outage, no chat functionality
 
@@ -61,12 +61,12 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 2: Frontend VM Failure (172.16.168.21)
+### Scenario 2: Frontend VM Failure (<frontend-ip>)
 
 **Impact**: No web interface, API still functional
 
 **Symptoms**:
-- Cannot access `http://172.16.168.21:5173`
+- Cannot access `http://<frontend-ip>:5173`
 - SSH to VM1 fails or shows issues
 
 **Recovery Steps**:
@@ -84,7 +84,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 3. **SSH and restart service**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
 
    # On VM1:
    cd /opt/autobot/autobot-slm-frontend
@@ -100,20 +100,20 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 3: Redis Failure (172.16.168.23)
+### Scenario 3: Redis Failure (<database-ip>)
 
 **Impact**: Session loss, knowledge base unavailable, cache miss
 
 **Symptoms**:
 - Connection errors in backend logs
-- `redis-cli -h 172.16.168.23 ping` fails
+- `redis-cli -h <database-ip> ping` fails
 - Chat responses very slow or fail
 
 **Recovery Steps**:
 
 1. **Check Redis status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip>
    sudo systemctl status redis-stack-server
    ```
 
@@ -124,8 +124,8 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 3. **Verify connectivity**
    ```bash
-   redis-cli -h 172.16.168.23 ping
-   redis-cli -h 172.16.168.23 INFO
+   redis-cli -h <database-ip> ping
+   redis-cli -h <database-ip> INFO
    ```
 
 4. **Restore from backup if data lost**
@@ -145,20 +145,20 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 4: AI Stack Failure (172.16.168.24)
+### Scenario 4: AI Stack Failure (<aiml-ip>)
 
 **Impact**: LLM responses fail, embeddings unavailable
 
 **Symptoms**:
 - Chat responses timeout
-- `curl http://172.16.168.24:8080/api/tags` fails
+- `curl http://<aiml-ip>:8080/api/tags` fails
 - Backend logs show Ollama connection errors
 
 **Recovery Steps**:
 
 1. **Check Ollama status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.24
+   ssh -i ~/.ssh/autobot_key autobot@<aiml-ip>
    sudo systemctl status ollama
    ```
 
@@ -169,7 +169,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 3. **Verify models are loaded**
    ```bash
-   curl http://172.16.168.24:8080/api/tags
+   curl http://<aiml-ip>:8080/api/tags
    ```
 
 4. **Pull models if missing**
@@ -184,7 +184,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 5: NPU Worker Failure (172.16.168.22)
+### Scenario 5: NPU Worker Failure (<npu-ip>)
 
 **Impact**: Slower embeddings (falls back to cloud/CPU)
 
@@ -196,7 +196,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check NPU worker status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.22
+   ssh -i ~/.ssh/autobot_key autobot@<npu-ip>
    sudo systemctl status npu-worker
    ```
 
@@ -216,7 +216,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 6: Browser VM Failure (172.16.168.25)
+### Scenario 6: Browser VM Failure (<browser-ip>)
 
 **Impact**: Browser automation unavailable
 
@@ -228,7 +228,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check VM and Playwright**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.25
+   ssh -i ~/.ssh/autobot_key autobot@<browser-ip>
    sudo systemctl status playwright-server
    ```
 
@@ -291,16 +291,16 @@ BACKUP_DIR="/backups/autobot/$(date +%Y-%m-%d)"
 mkdir -p "$BACKUP_DIR"
 
 # Redis backup
-ssh autobot@172.16.168.23 "redis-cli BGSAVE"
+ssh autobot@<database-ip> "redis-cli BGSAVE"
 sleep 10
-scp autobot@172.16.168.23:/var/lib/redis-stack/dump.rdb "$BACKUP_DIR/"
+scp autobot@<database-ip>:/var/lib/redis-stack/dump.rdb "$BACKUP_DIR/"
 
 # Configuration backup
 cp -r .env "$BACKUP_DIR/"
 cp -r backend/core/config.py "$BACKUP_DIR/"
 
 # Knowledge base metadata
-redis-cli -h 172.16.168.23 -n 1 KEYS "doc:*" > "$BACKUP_DIR/kb_keys.txt"
+redis-cli -h <database-ip> -n 1 KEYS "doc:*" > "$BACKUP_DIR/kb_keys.txt"
 
 echo "Backup completed: $BACKUP_DIR"
 ```
@@ -330,11 +330,11 @@ check_service() {
 }
 
 check_service "http://localhost:8001/api/health" "Backend API"
-check_service "http://172.16.168.21:5173" "Frontend"
-check_service "http://172.16.168.24:8080/api/tags" "Ollama"
+check_service "http://<frontend-ip>:5173" "Frontend"
+check_service "http://<aiml-ip>:8080/api/tags" "Ollama"
 
 # Redis check
-if ! redis-cli -h 172.16.168.23 ping > /dev/null 2>&1; then
+if ! redis-cli -h <database-ip> ping > /dev/null 2>&1; then
     echo "ALERT: Redis is DOWN at $(date)" | mail -s "AutoBot Alert: Redis" admin@example.com
 fi
 ```

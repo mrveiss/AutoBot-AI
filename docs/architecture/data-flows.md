@@ -15,12 +15,12 @@ flowchart TB
         Browser[Web Browser]
     end
 
-    subgraph Frontend["VM1: Frontend (172.16.168.21)"]
+    subgraph Frontend["VM1: Frontend (<frontend-ip>)"]
         Vue[Vue 3 Application]
         WS_Client[WebSocket Client]
     end
 
-    subgraph Backend["Main: Backend (172.16.168.20)"]
+    subgraph Backend["Main: Backend (<backend-ip>)"]
         API[FastAPI Server]
         WS_Server[WebSocket Server]
         Orchestrator[Enhanced Orchestrator]
@@ -28,19 +28,19 @@ flowchart TB
         KB_Manager[Knowledge Base Manager]
     end
 
-    subgraph Redis["VM3: Redis (172.16.168.23)"]
+    subgraph Redis["VM3: Redis (<database-ip>)"]
         DB0[(DB0: Main)]
         DB1[(DB1: Knowledge)]
         DB2[(DB2: Prompts)]
         DB3[(DB3: Analytics)]
     end
 
-    subgraph AI["VM4: AI Stack (172.16.168.24)"]
+    subgraph AI["VM4: AI Stack (<aiml-ip>)"]
         Ollama[Ollama Server]
         Models[LLM Models]
     end
 
-    subgraph NPU["VM2: NPU Worker (172.16.168.22)"]
+    subgraph NPU["VM2: NPU Worker (<npu-ip>)"]
         NPU_API[NPU API]
         OpenVINO[OpenVINO Runtime]
     end
@@ -269,7 +269,7 @@ flowchart LR
         Browser_Client[Browser Client]
     end
 
-    subgraph Browser_VM["VM5: Browser (172.16.168.25)"]
+    subgraph Browser_VM["VM5: Browser (<browser-ip>)"]
         Playwright[Playwright Server]
         Chromium[Chromium Browser]
         Context[Browser Context]
@@ -318,7 +318,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph Main["Main Machine (172.16.168.20)"]
+    subgraph Main["Main Machine (<backend-ip>)"]
         Xvfb[Xvfb Display]
         x11vnc[x11vnc Server]
         noVNC[noVNC WebSocket]
@@ -354,7 +354,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph Redis["VM3: Redis Stack (172.16.168.23:6379)"]
+    subgraph Redis["VM3: Redis Stack (<database-ip>:6379)"]
         subgraph DB0["Database 0: Main"]
             Sessions[Sessions]
             Cache[API Cache]

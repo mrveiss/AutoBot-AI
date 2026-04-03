@@ -242,7 +242,7 @@ pip install numpy>=1.24.0
 
 2. **Network Architecture:**
    ```
-   WSL2 Backend (172.16.168.20:8443)
+   WSL2 Backend (<backend-ip>:8443)
        ↓ HTTP
    Windows NPU Worker (Windows Host:8082)
        ↓ OpenVINO/NPU
@@ -323,12 +323,12 @@ pip install numpy>=1.24.0
 
 **Current Architecture:**
 ```
-WSL2 Main (172.16.168.20)
-  ├── VM1 Frontend (172.16.168.21)
-  ├── VM2 NPU Worker (172.16.168.22)  ← Currently in VM
-  ├── VM3 Redis (172.16.168.23)
-  ├── VM4 AI Stack (172.16.168.24)
-  └── VM5 Browser (172.16.168.25)
+WSL2 Main (<backend-ip>)
+  ├── VM1 Frontend (<frontend-ip>)
+  ├── VM2 NPU Worker (<npu-ip>)  ← Currently in VM
+  ├── VM3 Redis (<database-ip>)
+  ├── VM4 AI Stack (<aiml-ip>)
+  └── VM5 Browser (<browser-ip>)
 ```
 
 **Required Architecture with Windows NPU:**
@@ -336,11 +336,11 @@ WSL2 Main (172.16.168.20)
 Windows Host (192.168.x.x or localhost)
   └── NPU Worker Native (Port 8082)
         ↑ HTTP
-WSL2 Main (172.16.168.20)
-  ├── VM1 Frontend (172.16.168.21)
-  ├── VM3 Redis (172.16.168.23)
-  ├── VM4 AI Stack (172.16.168.24)
-  └── VM5 Browser (172.16.168.25)
+WSL2 Main (<backend-ip>)
+  ├── VM1 Frontend (<frontend-ip>)
+  ├── VM3 Redis (<database-ip>)
+  ├── VM4 AI Stack (<aiml-ip>)
+  └── VM5 Browser (<browser-ip>)
 ```
 
 **Changes Required:**
@@ -372,8 +372,8 @@ WSL2 Main (172.16.168.20)
 │  ┌────────────────────────────────┐    │
 │  │ WSL2 Ubuntu                    │    │
 │  │                                │    │
-│  │  Backend API (172.16.168.20)   │    │
-│  │  Remote VMs (172.16.168.21-25) │    │
+│  │  Backend API (<backend-ip>)   │    │
+│  │  Remote VMs (<frontend-ip>-25) │    │
 │  └────────────────────────────────┘    │
 └─────────────────────────────────────────┘
 ```
@@ -642,7 +642,7 @@ profiling_info = infer_request.get_profiling_info()
 ### 8.5 Rollback Plan
 
 **If migration fails:**
-1. Keep VM2 NPU worker (172.16.168.22) as CPU-only fallback
+1. Keep VM2 NPU worker (<npu-ip>) as CPU-only fallback
 2. Backend can detect NPU unavailability and fall back to CPU
 3. No data loss risk (stateless worker)
 

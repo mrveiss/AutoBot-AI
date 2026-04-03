@@ -1,18 +1,18 @@
 # AutoBot Frontend Integration API Specifications
 
 ## Overview
-This document provides complete API specifications for frontend integration with the AutoBot backend system. The backend runs on `https://172.16.168.20:8443/` and provides 285+ documented endpoints across multiple service modules.
+This document provides complete API specifications for frontend integration with the AutoBot backend system. The backend runs on `https://<backend-ip>:8443/` and provides 285+ documented endpoints across multiple service modules.
 
 ## Base Configuration
 
 ### Backend API Base URL
 ```
-https://172.16.168.20:8443/
+https://<backend-ip>:8443/
 ```
 
 ### OpenAPI Documentation
-- **Swagger UI**: `https://172.16.168.20:8443/docs`
-- **OpenAPI JSON**: `https://172.16.168.20:8443/openapi.json`
+- **Swagger UI**: `https://<backend-ip>:8443/docs`
+- **OpenAPI JSON**: `https://<backend-ip>:8443/openapi.json`
 
 ## Core API Endpoints
 
@@ -273,12 +273,12 @@ Content-Type: application/json
 
 #### Main WebSocket Connection
 ```javascript
-const ws = new WebSocket('ws://172.16.168.20:8443/ws');
+const ws = new WebSocket('ws://<backend-ip>:8443/ws');
 ```
 
 #### Test WebSocket Connection
 ```javascript
-const ws = new WebSocket('ws://172.16.168.20:8443/ws-test');
+const ws = new WebSocket('ws://<backend-ip>:8443/ws-test');
 ```
 
 #### WebSocket Message Types
@@ -403,11 +403,11 @@ GET /api/system/frontend-config
         "embedding_endpoint": "http://127.0.0.1:11434/api/embeddings"
       },
       "playwright": {
-        "vnc_url": "http://172.16.168.25:6080",
-        "api_url": "http://172.16.168.25:3000"
+        "vnc_url": "http://<browser-ip>:6080",
+        "api_url": "http://<browser-ip>:3000"
       },
       "redis": {
-        "host": "172.16.168.23",
+        "host": "<database-ip>",
         "port": 6379,
         "enabled": true
       }
@@ -590,7 +590,7 @@ Content-Type: application/json
 #### React/TypeScript Example
 ```typescript
 // API client configuration
-const API_BASE = 'https://172.16.168.20:8443';
+const API_BASE = 'https://<backend-ip>:8443';
 
 interface ChatMessage {
   message: string;
@@ -647,7 +647,7 @@ async function sendChatMessage(
 
 // WebSocket connection
 function connectWebSocket(onMessage: (data: any) => void) {
-  const ws = new WebSocket(`ws://172.16.168.20:8443/ws`);
+  const ws = new WebSocket(`ws://<backend-ip>:8443/ws`);
 
   ws.onopen = () => {
     console.log('WebSocket connected');
@@ -709,7 +709,7 @@ export function useChatAPI() {
   };
 
   const connectWebSocket = () => {
-    ws.value = new WebSocket('ws://172.16.168.20:8443/ws');
+    ws.value = new WebSocket('ws://<backend-ip>:8443/ws');
 
     ws.value.onopen = () => {
       isConnected.value = true;

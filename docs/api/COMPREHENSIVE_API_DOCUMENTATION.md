@@ -17,11 +17,11 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
 
 ### Service Distribution
 - **Main Backend**: 127.0.0.1:8443 - Core API and system management
-- **Frontend**: 172.16.168.21:5173 - Vue.js web interface
-- **NPU Worker**: 172.16.168.22:8081 - Hardware AI acceleration
-- **Redis**: 172.16.168.23:6379 - Data persistence layer
-- **AI Stack**: 172.16.168.24:8080 - AI model processing
-- **Browser Service**: 172.16.168.25:3000 - Web automation via Playwright
+- **Frontend**: <frontend-ip>:5173 - Vue.js web interface
+- **NPU Worker**: <npu-ip>:8081 - Hardware AI acceleration
+- **Redis**: <database-ip>:6379 - Data persistence layer
+- **AI Stack**: <aiml-ip>:8080 - AI model processing
+- **Browser Service**: <browser-ip>:3000 - Web automation via Playwright
 
 ## Core API Categories
 
@@ -243,26 +243,26 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
         "memory_usage": "245MB / 1GB",
         "connected_clients": 12,
         "operations_per_sec": 150,
-        "host": "172.16.168.23:6379"
+        "host": "<database-ip>:6379"
       },
       "npu_worker": {
         "status": "healthy",
         "gpu_utilization": 0.23,
         "model_loading_time": 1.8,
         "queue_size": 3,
-        "host": "172.16.168.22:8081"
+        "host": "<npu-ip>:8081"
       },
       "ai_stack": {
         "status": "healthy",
         "active_models": ["gpt-4-turbo", "claude-3-sonnet"],
         "avg_inference_time": 2.1,
-        "host": "172.16.168.24:8080"
+        "host": "<aiml-ip>:8080"
       },
       "browser_service": {
         "status": "healthy",
         "active_sessions": 2,
         "available_browsers": ["chromium", "firefox"],
-        "host": "172.16.168.25:3000"
+        "host": "<browser-ip>:3000"
       },
       "knowledge_base": {
         "status": "healthy",

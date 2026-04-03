@@ -179,7 +179,7 @@ This ensures:
 
 ### 2. Verify Deployment on Server
 ```bash
-ssh autobot@172.16.168.21
+ssh autobot@<frontend-ip>
 ls -lh /opt/autobot/autobot-frontend/dist/
 cat /opt/autobot/autobot-frontend/dist/index.html
 ```

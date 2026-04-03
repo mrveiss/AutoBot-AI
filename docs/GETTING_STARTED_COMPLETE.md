@@ -80,18 +80,18 @@ ansible-playbook playbooks/deploy-full.yml
 ./run_agent.sh
 
 # 3. Access AutoBot
-# Production frontend: https://172.16.168.21 (Frontend VM)
-# Backend API: https://172.16.168.20:8443
-# SLM Admin: https://172.16.168.19
+# Production frontend: https://<frontend-ip> (Frontend VM)
+# Backend API: https://<backend-ip>:8443
+# SLM Admin: https://<slm-manager-ip>
 ```
 
 ### **Verification**
 ```bash
 # Verify backend health (from another VM due to WSL2 loopback)
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
+ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'
 
 # Verify Redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # Check service status
 ansible all -m ping

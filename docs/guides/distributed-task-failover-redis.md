@@ -1161,11 +1161,11 @@ All endpoints require admin authentication and are prefixed with `/api`.
 ### Pairing a Worker
 
 ```bash
-curl -sk -X POST https://172.16.168.20:8443/api/npu/workers/pair \
+curl -sk -X POST https://<backend-ip>:8443/api/npu/workers/pair \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{
-        "url": "http://172.16.168.22:8081",
+        "url": "http://<npu-ip>:8081",
         "name": "NPU Worker VM22",
         "platform": "linux",
         "max_concurrent_tasks": 4,
@@ -1281,7 +1281,7 @@ All endpoints are under `/api/scheduler` and require admin authentication.
 ### Scheduling a Workflow
 
 ```bash
-curl -sk -X POST https://172.16.168.20:8443/api/scheduler/schedule \
+curl -sk -X POST https://<backend-ip>:8443/api/scheduler/schedule \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{
@@ -1300,19 +1300,19 @@ curl -sk -X POST https://172.16.168.20:8443/api/scheduler/schedule \
 
 ```bash
 # Pause the queue
-curl -sk -X POST https://172.16.168.20:8443/api/scheduler/queue/control \
+curl -sk -X POST https://<backend-ip>:8443/api/scheduler/queue/control \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"action": "pause"}'
 
 # Resume the queue
-curl -sk -X POST https://172.16.168.20:8443/api/scheduler/queue/control \
+curl -sk -X POST https://<backend-ip>:8443/api/scheduler/queue/control \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"action": "resume"}'
 
 # Set maximum concurrent workflows
-curl -sk -X POST https://172.16.168.20:8443/api/scheduler/queue/control \
+curl -sk -X POST https://<backend-ip>:8443/api/scheduler/queue/control \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"action": "set_max_concurrent", "value": 5}'
@@ -1381,7 +1381,7 @@ All endpoints are under `/api/operations`.
 ### Starting a Long-Running Operation
 
 ```bash
-curl -sk -X POST https://172.16.168.20:8443/api/operations/codebase/index \
+curl -sk -X POST https://<backend-ip>:8443/api/operations/codebase/index \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{
@@ -1407,7 +1407,7 @@ Response:
 
 ```javascript
 const ws = new WebSocket(
-    `wss://172.16.168.20:8443/api/operations/${operationId}/progress`
+    `wss://<backend-ip>:8443/api/operations/${operationId}/progress`
 );
 
 ws.onmessage = (event) => {
@@ -1426,7 +1426,7 @@ interrupted, it can be resumed from the most recent checkpoint:
 ```bash
 # Resume an interrupted operation
 curl -sk -X POST \
-    https://172.16.168.20:8443/api/operations/${OPERATION_ID}/resume \
+    https://<backend-ip>:8443/api/operations/${OPERATION_ID}/resume \
     -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -2028,7 +2028,7 @@ redis = get_redis_client(async_client=False, database="main")
 ```python
 # WRONG -- bypasses all protections, violates CLAUDE.md Rule 2
 import redis
-r = redis.Redis(host="172.16.168.23", port=6379, db=0)
+r = redis.Redis(host="<database-ip>", port=6379, db=0)
 ```
 
 ### Use the Correct Database
@@ -2115,7 +2115,7 @@ at 500 entries). Query it directly:
 
 ```bash
 # Last 10 failover events
-redis-cli -h 172.16.168.23 -n 0 LRANGE failover:log 0 9
+redis-cli -h <database-ip> -n 0 LRANGE failover:log 0 9
 ```
 
 Or programmatically:
@@ -2136,36 +2136,36 @@ for event in events:
 
 ```bash
 # List all registered workers
-redis-cli -h 172.16.168.23 -n 0 SMEMBERS workers:registered
+redis-cli -h <database-ip> -n 0 SMEMBERS workers:registered
 
 # Check a specific worker's heartbeat
-redis-cli -h 172.16.168.23 -n 0 GET worker:npu-worker-1:heartbeat
+redis-cli -h <database-ip> -n 0 GET worker:npu-worker-1:heartbeat
 
 # Check heartbeat TTL (seconds remaining)
-redis-cli -h 172.16.168.23 -n 0 TTL worker:npu-worker-1:heartbeat
+redis-cli -h <database-ip> -n 0 TTL worker:npu-worker-1:heartbeat
 
 # Count tasks assigned to a worker
-redis-cli -h 172.16.168.23 -n 0 SCARD worker:npu-worker-1:tasks
+redis-cli -h <database-ip> -n 0 SCARD worker:npu-worker-1:tasks
 
 # List tasks assigned to a worker
-redis-cli -h 172.16.168.23 -n 0 SMEMBERS worker:npu-worker-1:tasks
+redis-cli -h <database-ip> -n 0 SMEMBERS worker:npu-worker-1:tasks
 
 # Inspect a specific task
-redis-cli -h 172.16.168.23 -n 0 HGETALL task:<task-id>
+redis-cli -h <database-ip> -n 0 HGETALL task:<task-id>
 ```
 
 ### Queue Depth Monitoring
 
 ```bash
 # Check queue depth
-redis-cli -h 172.16.168.23 -n 0 LLEN queue:npu_tasks
+redis-cli -h <database-ip> -n 0 LLEN queue:npu_tasks
 
 # Check processing list depth (tasks being worked on)
-redis-cli -h 172.16.168.23 -n 0 LLEN queue:npu_tasks:processing
+redis-cli -h <database-ip> -n 0 LLEN queue:npu_tasks:processing
 
 # Check priority queue depths
 for p in critical high normal low; do
-    echo "$p: $(redis-cli -h 172.16.168.23 -n 0 LLEN queue:${p}:npu_inference)"
+    echo "$p: $(redis-cli -h <database-ip> -n 0 LLEN queue:${p}:npu_inference)"
 done
 ```
 
@@ -2195,13 +2195,13 @@ actually alive.
 **Resolution:**
 ```bash
 # Check network connectivity from worker to Redis
-ping -c 3 172.16.168.23
+ping -c 3 <database-ip>
 
 # Check Redis latency
-redis-cli -h 172.16.168.23 --latency
+redis-cli -h <database-ip> --latency
 
 # Check if worker process is running
-ssh autobot@172.16.168.22 "ps aux | grep npu_worker"
+ssh autobot@<npu-ip> "ps aux | grep npu_worker"
 ```
 
 ### Tasks Stuck in Processing List
@@ -2215,12 +2215,12 @@ workers, but unregistered workers or edge cases can leave orphans.
 **Resolution:**
 ```bash
 # List stuck tasks
-redis-cli -h 172.16.168.23 -n 0 LRANGE queue:npu_tasks:processing 0 -1
+redis-cli -h <database-ip> -n 0 LRANGE queue:npu_tasks:processing 0 -1
 
 # Manually re-queue a stuck task
-redis-cli -h 172.16.168.23 -n 0 LREM queue:npu_tasks:processing 1 "<task_id>"
-redis-cli -h 172.16.168.23 -n 0 HSET task:<task_id> status queued worker_id ""
-redis-cli -h 172.16.168.23 -n 0 LPUSH queue:npu_tasks "<task_id>"
+redis-cli -h <database-ip> -n 0 LREM queue:npu_tasks:processing 1 "<task_id>"
+redis-cli -h <database-ip> -n 0 HSET task:<task_id> status queued worker_id ""
+redis-cli -h <database-ip> -n 0 LPUSH queue:npu_tasks "<task_id>"
 ```
 
 ### Circuit Breaker Open
@@ -2233,10 +2233,10 @@ redis-cli -h 172.16.168.23 -n 0 LPUSH queue:npu_tasks "<task_id>"
 **Resolution:**
 ```bash
 # Check Redis is running
-ssh autobot@172.16.168.23 "systemctl status redis-stack-server"
+ssh autobot@<database-ip> "systemctl status redis-stack-server"
 
 # Check Redis memory usage
-redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human
+redis-cli -h <database-ip> INFO memory | grep used_memory_human
 
 # The circuit breaker auto-resets after 60 seconds of the last failure.
 # If Redis is back up, wait 60 seconds and retry.
@@ -2255,10 +2255,10 @@ If the task payload itself is causing crashes, fix the root cause. To
 retry a permanently failed task, reset its state manually:
 
 ```bash
-redis-cli -h 172.16.168.23 -n 0 HSET task:<task_id> status queued
-redis-cli -h 172.16.168.23 -n 0 HSET task:<task_id> retry_count 0
-redis-cli -h 172.16.168.23 -n 0 HSET task:<task_id> worker_id ""
-redis-cli -h 172.16.168.23 -n 0 LPUSH queue:<task_type> "<task_id>"
+redis-cli -h <database-ip> -n 0 HSET task:<task_id> status queued
+redis-cli -h <database-ip> -n 0 HSET task:<task_id> retry_count 0
+redis-cli -h <database-ip> -n 0 HSET task:<task_id> worker_id ""
+redis-cli -h <database-ip> -n 0 LPUSH queue:<task_type> "<task_id>"
 ```
 
 ---

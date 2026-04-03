@@ -83,8 +83,8 @@ if __name__ == "__main__":
 **Verify it works:**
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/system/health | python3 -m json.tool
-redis-cli -h 172.16.168.23 subscribe system_alerts
+curl -sk https://<backend-ip>:8443/api/system/health | python3 -m json.tool
+redis-cli -h <database-ip> subscribe system_alerts
 ```
 
 For the full implementation with SQLite storage, Prometheus metrics, auto-recovery,
@@ -257,7 +257,7 @@ collector = HealthCollector(
     services=["nginx", "autobot-backend", "redis-server"],
     ports=[
         {"host": "localhost", "port": 8443},
-        {"host": "172.16.168.23", "port": 6379},
+        {"host": "<database-ip>", "port": 6379},
     ],
     discover_services=True,
 )
@@ -280,7 +280,7 @@ health = collector.collect()
 #     },
 #     "ports": {
 #         "localhost:8443": true,
-#         "172.16.168.23:6379": true
+#         "<database-ip>:6379": true
 #     },
 #     "discovered_services": [
 #         {
@@ -403,7 +403,7 @@ asyncio.run(run_continuous())
 ## 3. API Endpoints for Monitoring
 
 All backend endpoints are served over HTTPS on port 8443. The base URL is
-`https://172.16.168.20:8443` (configured via `autobot_shared.ssot_config`).
+`https://<backend-ip>:8443` (configured via `autobot_shared.ssot_config`).
 
 ### System Health Endpoints
 
@@ -415,7 +415,7 @@ frontend health monitors before login.
 **Request:**
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/system/health | python3 -m json.tool
+curl -sk https://<backend-ip>:8443/api/system/health | python3 -m json.tool
 ```
 
 **Response (200 OK):**
@@ -450,7 +450,7 @@ LLM, knowledge base, system resources, and per-service status.
 
 ```bash
 curl -sk -H "Authorization: Bearer $TOKEN" \
-    https://172.16.168.20:8443/api/system/health/detailed | python3 -m json.tool
+    https://<backend-ip>:8443/api/system/health/detailed | python3 -m json.tool
 ```
 
 **Response (200 OK):**
@@ -497,7 +497,7 @@ memory, disk, and cache statistics.
 
 ```bash
 curl -sk -H "Authorization: Bearer $TOKEN" \
-    https://172.16.168.20:8443/api/system/metrics | python3 -m json.tool
+    https://<backend-ip>:8443/api/system/metrics | python3 -m json.tool
 ```
 
 **Response (200 OK):**
@@ -542,7 +542,7 @@ All error monitoring endpoints are mounted under `/api/error-monitoring/`.
 Returns system-wide error statistics aggregated from the error boundary system.
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/error-monitoring/statistics | python3 -m json.tool
+curl -sk https://<backend-ip>:8443/api/error-monitoring/statistics | python3 -m json.tool
 ```
 
 ```json
@@ -576,7 +576,7 @@ curl -sk https://172.16.168.20:8443/api/error-monitoring/statistics | python3 -m
 Returns the most recent error reports stored in Redis (max 100).
 
 ```bash
-curl -sk "https://172.16.168.20:8443/api/error-monitoring/recent?limit=5" | python3 -m json.tool
+curl -sk "https://<backend-ip>:8443/api/error-monitoring/recent?limit=5" | python3 -m json.tool
 ```
 
 ```json
@@ -603,7 +603,7 @@ curl -sk "https://172.16.168.20:8443/api/error-monitoring/recent?limit=5" | pyth
 Returns the error system's own health assessment with a 0-100 score.
 
 ```bash
-curl -sk https://172.16.168.20:8443/api/error-monitoring/health | python3 -m json.tool
+curl -sk https://<backend-ip>:8443/api/error-monitoring/health | python3 -m json.tool
 ```
 
 ```json
@@ -660,7 +660,7 @@ Set custom alert thresholds per component:
 curl -sk -X POST \
     -H "Content-Type: application/json" \
     -d '{"component": "redis", "threshold": 5}' \
-    https://172.16.168.20:8443/api/error-monitoring/metrics/alert-threshold
+    https://<backend-ip>:8443/api/error-monitoring/metrics/alert-threshold
 ```
 
 #### `POST /api/error-monitoring/metrics/resolve/{trace_id}`
@@ -678,7 +678,7 @@ The SLM admin server on `.19` provides fleet-wide health:
 #### `GET /api/health`
 
 ```bash
-curl -sk https://172.16.168.19:8000/api/health | python3 -m json.tool
+curl -sk https://<slm-manager-ip>:8000/api/health | python3 -m json.tool
 ```
 
 ```json
@@ -830,7 +830,7 @@ async def set_custom_threshold(component: str, threshold: int):
     """Set a custom alert threshold for a component."""
     async with aiohttp.ClientSession() as session:
         await session.post(
-            "https://172.16.168.20:8443/api/error-monitoring/metrics/alert-threshold",
+            "https://<backend-ip>:8443/api/error-monitoring/metrics/alert-threshold",
             json={
                 "component": component,
                 "error_code": None,  # any error in component
@@ -879,7 +879,7 @@ sent_count = await publish_live_event(
         "severity": "CRITICAL",
         "message": "Service nginx has entered failed state",
         "timestamp": "2026-03-15T10:30:00",
-        "node": "172.16.168.21",
+        "node": "<frontend-ip>",
     },
 )
 # sent_count = number of WebSocket clients that received the event
@@ -956,7 +956,7 @@ Prometheus scrapes autobot_service_status metric
         "description": "Backend API is not responding",
         "recommendation": "Check backend service logs and restart if necessary"
     },
-    "externalURL": "http://172.16.168.20:9093",
+    "externalURL": "http://<backend-ip>:9093",
     "alerts": [
         {
             "status": "firing",
@@ -973,7 +973,7 @@ Prometheus scrapes autobot_service_status metric
             },
             "startsAt": "2026-03-15T10:30:00.000Z",
             "endsAt": null,
-            "generatorURL": "http://172.16.168.20:9090/graph?...",
+            "generatorURL": "http://<backend-ip>:9090/graph?...",
             "fingerprint": "abc123def456"
         }
     ]
@@ -1677,7 +1677,7 @@ WebSocket endpoint is at `/ws/live` and requires JWT authentication.
         "severity": "CRITICAL",
         "message": "Service nginx has entered failed state",
         "timestamp": "2026-03-15T10:30:00",
-        "node": "172.16.168.21"
+        "node": "<frontend-ip>"
     }
 }
 ```
@@ -1687,7 +1687,7 @@ WebSocket endpoint is at `/ws/live` and requires JWT authentication.
 ```javascript
 // Connect to the live events WebSocket
 const token = localStorage.getItem('auth_token');
-const ws = new WebSocket(`wss://172.16.168.20:8443/ws/live?token=${token}`);
+const ws = new WebSocket(`wss://<backend-ip>:8443/ws/live?token=${token}`);
 
 ws.onopen = () => {
     console.log('Connected to live events');
@@ -1766,7 +1766,7 @@ The dedicated monitoring dashboard WebSocket at `/ws/monitoring` automatically
 broadcasts performance updates:
 
 ```javascript
-const monitoringWs = new WebSocket('wss://172.16.168.20:8443/ws/monitoring');
+const monitoringWs = new WebSocket('wss://<backend-ip>:8443/ws/monitoring');
 
 monitoringWs.onmessage = (event) => {
     const data = JSON.parse(event.data);
@@ -1933,19 +1933,19 @@ scrape_configs:
     tls_config:
       insecure_skip_verify: true
     static_configs:
-      - targets: ['172.16.168.20:8443']
+      - targets: ['<backend-ip>:8443']
     metrics_path: '/metrics'
     scrape_interval: 15s
 
   - job_name: 'node'
     static_configs:
       - targets:
-        - '172.16.168.20:9100'
-        - '172.16.168.21:9100'
-        - '172.16.168.22:9100'
-        - '172.16.168.23:9100'
-        - '172.16.168.24:9100'
-        - '172.16.168.25:9100'
+        - '<backend-ip>:9100'
+        - '<frontend-ip>:9100'
+        - '<npu-ip>:9100'
+        - '<database-ip>:9100'
+        - '<aiml-ip>:9100'
+        - '<browser-ip>:9100'
 ```
 
 ### AlertManager Configuration
@@ -1969,7 +1969,7 @@ route:
 receivers:
   - name: 'autobot-webhook'
     webhook_configs:
-      - url: 'https://172.16.168.20:8443/api/webhook/alertmanager'
+      - url: 'https://<backend-ip>:8443/api/webhook/alertmanager'
         tls_config:
           insecure_skip_verify: true
         send_resolved: true
@@ -1985,35 +1985,35 @@ curl -sk -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{}' \
-    https://172.16.168.20:8443/api/prometheus/mcp/get_system_metrics
+    https://<backend-ip>:8443/api/prometheus/mcp/get_system_metrics
 
 # Query a specific metric
 curl -sk -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"query": "autobot_service_health_score"}' \
-    https://172.16.168.20:8443/api/prometheus/mcp/query_metric
+    https://<backend-ip>:8443/api/prometheus/mcp/query_metric
 
 # Get service health status
 curl -sk -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{}' \
-    https://172.16.168.20:8443/api/prometheus/mcp/get_service_health
+    https://<backend-ip>:8443/api/prometheus/mcp/get_service_health
 
 # Get metrics for a specific VM
 curl -sk -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"vm_ip": "172.16.168.23"}' \
-    https://172.16.168.20:8443/api/prometheus/mcp/get_vm_metrics
+    -d '{"vm_ip": "<database-ip>"}' \
+    https://<backend-ip>:8443/api/prometheus/mcp/get_vm_metrics
 
 # List all available metrics
 curl -sk -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"filter": "autobot_service"}' \
-    https://172.16.168.20:8443/api/prometheus/mcp/list_available_metrics
+    https://<backend-ip>:8443/api/prometheus/mcp/list_available_metrics
 ```
 
 ### Grafana Dashboard Integration
@@ -2057,7 +2057,7 @@ Error Rate Panel:
 ```bash
 # Check detailed health to identify which component is degraded
 curl -sk -H "Authorization: Bearer $TOKEN" \
-    https://172.16.168.20:8443/api/system/health/detailed | python3 -m json.tool
+    https://<backend-ip>:8443/api/system/health/detailed | python3 -m json.tool
 
 # Look for components with "error" in their status
 ```
@@ -2079,13 +2079,13 @@ curl -sk -H "Authorization: Bearer $TOKEN" \
 ```bash
 # Get a fresh token
 TOKEN=$(curl -sk -X POST \
-    https://172.16.168.20:8443/api/auth/login \
+    https://<backend-ip>:8443/api/auth/login \
     -H "Content-Type: application/json" \
     -d '{"username": "admin", "password": "..."}' \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Use the token in the WebSocket URL
-wscat -c "wss://172.16.168.20:8443/ws/live?token=$TOKEN" --no-check
+wscat -c "wss://<backend-ip>:8443/ws/live?token=$TOKEN" --no-check
 ```
 
 #### 3. Alerts not appearing in the monitoring dashboard
@@ -2094,14 +2094,14 @@ wscat -c "wss://172.16.168.20:8443/ws/live?token=$TOKEN" --no-check
 
 ```bash
 # 1. Check if Prometheus is scraping the backend
-curl -s http://172.16.168.20:9090/api/v1/targets \
+curl -s http://<backend-ip>:9090/api/v1/targets \
     | python3 -m json.tool | grep autobot
 
 # 2. Check if AlertManager is receiving alerts
-curl -s http://172.16.168.20:9093/api/v2/alerts | python3 -m json.tool
+curl -s http://<backend-ip>:9093/api/v2/alerts | python3 -m json.tool
 
 # 3. Check the webhook endpoint health
-curl -sk https://172.16.168.20:8443/api/webhook/alertmanager/health
+curl -sk https://<backend-ip>:8443/api/webhook/alertmanager/health
 
 # 4. Check if WebSocket manager has connected clients
 # (visible in backend logs)
@@ -2153,13 +2153,13 @@ SystemMonitor().cleanup_old_metrics()
 
 ```bash
 # Check Redis connectivity
-redis-cli -h 172.16.168.23 -p 6379 ping
+redis-cli -h <database-ip> -p 6379 ping
 
 # Monitor the alert channel in real time
-redis-cli -h 172.16.168.23 subscribe system_alerts
+redis-cli -h <database-ip> subscribe system_alerts
 
 # From another terminal, publish a test alert
-redis-cli -h 172.16.168.23 publish system_alerts '{"type":"test","message":"ping"}'
+redis-cli -h <database-ip> publish system_alerts '{"type":"test","message":"ping"}'
 ```
 
 **Common causes:**
@@ -2173,13 +2173,13 @@ redis-cli -h 172.16.168.23 publish system_alerts '{"type":"test","message":"ping
 
 ```bash
 # Check if metrics endpoint is responding
-curl -sk https://172.16.168.20:8443/metrics | head -20
+curl -sk https://<backend-ip>:8443/metrics | head -20
 
 # Check for autobot-specific metrics
-curl -sk https://172.16.168.20:8443/metrics | grep autobot_service
+curl -sk https://<backend-ip>:8443/metrics | grep autobot_service
 
 # Verify Prometheus can reach the backend
-curl -s http://172.16.168.20:9090/api/v1/targets \
+curl -s http://<backend-ip>:9090/api/v1/targets \
     | python3 -c "
 import sys, json
 targets = json.load(sys.stdin)['data']['activeTargets']
@@ -2223,7 +2223,7 @@ initialize. During this time, health checks may return `degraded` or `unhealthy`
 
 ```bash
 # Watch health status until it becomes "healthy"
-watch -n 5 'curl -sk https://172.16.168.20:8443/api/system/health 2>/dev/null \
+watch -n 5 'curl -sk https://<backend-ip>:8443/api/system/health 2>/dev/null \
     | python3 -m json.tool 2>/dev/null || echo "Not ready yet"'
 ```
 
@@ -2234,21 +2234,21 @@ watch -n 5 'curl -sk https://172.16.168.20:8443/api/system/health 2>/dev/null \
 systemctl list-units --type=service --state=failed --no-pager
 
 # Check backend health
-curl -sk https://172.16.168.20:8443/api/system/health | python3 -m json.tool
+curl -sk https://<backend-ip>:8443/api/system/health | python3 -m json.tool
 
 # Check SLM fleet health (requires auth)
 curl -sk -H "Authorization: Bearer $SLM_TOKEN" \
-    https://172.16.168.19:8000/api/roles/fleet-health | python3 -m json.tool
+    https://<slm-manager-ip>:8000/api/roles/fleet-health | python3 -m json.tool
 
 # Check recent errors
-curl -sk "https://172.16.168.20:8443/api/error-monitoring/recent?limit=5" \
+curl -sk "https://<backend-ip>:8443/api/error-monitoring/recent?limit=5" \
     | python3 -m json.tool
 
 # Check Prometheus alert rules
-curl -s http://172.16.168.20:9090/api/v1/rules | python3 -m json.tool
+curl -s http://<backend-ip>:9090/api/v1/rules | python3 -m json.tool
 
 # Check firing alerts
-curl -s http://172.16.168.20:9093/api/v2/alerts | python3 -m json.tool
+curl -s http://<backend-ip>:9093/api/v2/alerts | python3 -m json.tool
 
 # Monitor backend logs for alerts in real time
 journalctl -u autobot-backend -f | grep -i "alert\|CRITICAL\|failed"

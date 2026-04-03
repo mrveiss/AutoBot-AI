@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](architecture/VM_ROLES.md) for role definitions.
+
 # Quick Start: Browser VNC Real-Time Viewing
 
 ## TL;DR - Using the System
@@ -14,26 +16,26 @@
 
 ```bash
 # Check system status
-ssh autobot@172.16.168.25 'sudo systemctl status browser-*.service'
+ssh autobot@<browser-ip> 'sudo systemctl status browser-*.service'
 
 # View Playwright logs
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-playwright -f'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-playwright -f'
 
 # Test navigation
-curl -X POST http://172.16.168.25:3000/navigate \
+curl -X POST http://<browser-ip>:3000/navigate \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 
 # Restart all services
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-*.service'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-*.service'
 ```
 
 ## Access Points
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| **noVNC Web** | http://172.16.168.25:6080/vnc.html | Direct VNC access |
-| **Playwright API** | http://172.16.168.25:3000 | Browser automation |
+| **noVNC Web** | http://<browser-ip>:6080/vnc.html | Direct VNC access |
+| **Playwright API** | http://<browser-ip>:3000 | Browser automation |
 | **Frontend** | Browser tab in AutoBot | Integrated experience |
 
 ## Architecture
@@ -41,7 +43,7 @@ ssh autobot@172.16.168.25 'sudo systemctl restart browser-*.service'
 ```
 User/Agent → Frontend Browser Tab
                     ↓ (noVNC iframe)
-           Browser VM (172.16.168.25)
+           Browser VM (<browser-ip>)
                     ↓
            ┌────────┴────────┐
            │                  │
@@ -66,7 +68,7 @@ User/Agent → Frontend Browser Tab
 
 ```bash
 # Quick health check
-ssh autobot@172.16.168.25 "
+ssh autobot@<browser-ip> "
   sudo systemctl is-active browser-vnc browser-vnc-websockify browser-playwright &&
   ss -tuln | grep -E ':(5901|6080|3000)'
 "
@@ -91,7 +93,7 @@ ssh autobot@172.16.168.25 "
 
 **Via API:**
 ```bash
-curl -X POST http://172.16.168.25:3000/navigate \
+curl -X POST http://<browser-ip>:3000/navigate \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com"}'
 ```
@@ -99,7 +101,7 @@ curl -X POST http://172.16.168.25:3000/navigate \
 ### Reload Page
 
 ```bash
-curl -X POST http://172.16.168.25:3000/reload \
+curl -X POST http://<browser-ip>:3000/reload \
   -H "Content-Type: application/json" \
   -d '{"wait_until": "networkidle"}'
 ```
@@ -110,17 +112,17 @@ curl -X POST http://172.16.168.25:3000/reload \
 
 ```bash
 # Check VNC service
-ssh autobot@172.16.168.25 'sudo systemctl status browser-vnc'
+ssh autobot@<browser-ip> 'sudo systemctl status browser-vnc'
 
 # Restart if needed
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-vnc'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-vnc'
 ```
 
 ### Browser Not Visible in VNC
 
 ```bash
 # Check Playwright is in headed mode
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-playwright | grep mode'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-playwright | grep mode'
 
 # Should show: "headless":false,"mode":"headed"
 ```
@@ -129,7 +131,7 @@ ssh autobot@172.16.168.25 'sudo journalctl -u browser-playwright | grep mode'
 
 ```bash
 # Check service logs
-ssh autobot@172.16.168.25 'sudo journalctl -xe'
+ssh autobot@<browser-ip> 'sudo journalctl -xe'
 
 # Redeploy all services
 ./scripts/infrastructure/deploy_browser_vnc_services.sh

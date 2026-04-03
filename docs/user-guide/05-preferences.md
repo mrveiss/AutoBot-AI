@@ -10,7 +10,7 @@
 
 1. **From Desktop**: Click **"Preferences"** in the top navigation bar
 2. **From Mobile**: Tap the menu icon → Select **"Preferences"**
-3. **Direct Link**: Navigate to http://172.16.168.21:5173/preferences
+3. **Direct Link**: Navigate to http://<frontend-ip>:5173/preferences
 
 ---
 

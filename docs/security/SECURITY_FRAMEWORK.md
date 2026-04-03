@@ -264,37 +264,37 @@ iptables -A INPUT -i lo -j ACCEPT
 # Allow established connections
 iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# Main Host (172.16.168.20) - Backend API
-iptables -A INPUT -s 172.16.168.21 -p tcp --dport 8001 -j ACCEPT  # Frontend → Backend
-iptables -A INPUT -s 172.16.168.22 -p tcp --dport 8001 -j ACCEPT  # NPU → Backend
-iptables -A INPUT -s 172.16.168.24 -p tcp --dport 8001 -j ACCEPT  # AI Stack → Backend
-iptables -A INPUT -s 172.16.168.25 -p tcp --dport 8001 -j ACCEPT  # Browser → Backend
+# Main Host (<backend-ip>) - Backend API
+iptables -A INPUT -s <frontend-ip> -p tcp --dport 8001 -j ACCEPT  # Frontend → Backend
+iptables -A INPUT -s <npu-ip> -p tcp --dport 8001 -j ACCEPT  # NPU → Backend
+iptables -A INPUT -s <aiml-ip> -p tcp --dport 8001 -j ACCEPT  # AI Stack → Backend
+iptables -A INPUT -s <browser-ip> -p tcp --dport 8001 -j ACCEPT  # Browser → Backend
 
 # VNC Access (admin only, with IP restriction)
 iptables -A INPUT -s 192.168.1.0/24 -p tcp --dport 6080 -j ACCEPT  # Admin network only
 
-# VM1 - Frontend (172.16.168.21) 
+# VM1 - Frontend (<frontend-ip>) 
 iptables -A INPUT -p tcp --dport 80 -j ACCEPT   # HTTP (redirect to HTTPS)
 iptables -A INPUT -p tcp --dport 443 -j ACCEPT  # HTTPS
-iptables -A INPUT -s 172.16.168.20 -p tcp --dport 5173 -j ACCEPT  # Dev server
+iptables -A INPUT -s <backend-ip> -p tcp --dport 5173 -j ACCEPT  # Dev server
 
-# VM2 - NPU Worker (172.16.168.22) - Internal only
-iptables -A INPUT -s 172.16.168.20 -p tcp --dport 8081 -j ACCEPT  # Backend → NPU
+# VM2 - NPU Worker (<npu-ip>) - Internal only
+iptables -A INPUT -s <backend-ip> -p tcp --dport 8081 -j ACCEPT  # Backend → NPU
 
-# VM3 - Redis Stack (172.16.168.23) - Internal only
-iptables -A INPUT -s 172.16.168.20 -p tcp --dport 6379 -j ACCEPT  # Backend → Redis
-iptables -A INPUT -s 172.16.168.22 -p tcp --dport 6379 -j ACCEPT  # NPU → Redis
-iptables -A INPUT -s 172.16.168.24 -p tcp --dport 6379 -j ACCEPT  # AI Stack → Redis
-iptables -A INPUT -s 172.16.168.25 -p tcp --dport 6379 -j ACCEPT  # Browser → Redis
+# VM3 - Redis Stack (<database-ip>) - Internal only
+iptables -A INPUT -s <backend-ip> -p tcp --dport 6379 -j ACCEPT  # Backend → Redis
+iptables -A INPUT -s <npu-ip> -p tcp --dport 6379 -j ACCEPT  # NPU → Redis
+iptables -A INPUT -s <aiml-ip> -p tcp --dport 6379 -j ACCEPT  # AI Stack → Redis
+iptables -A INPUT -s <browser-ip> -p tcp --dport 6379 -j ACCEPT  # Browser → Redis
 
 # RedisInsight (admin access only)
 iptables -A INPUT -s 192.168.1.0/24 -p tcp --dport 8002 -j ACCEPT
 
-# VM4 - AI Stack (172.16.168.24) - Internal only  
-iptables -A INPUT -s 172.16.168.20 -p tcp --dport 8080 -j ACCEPT  # Backend → AI Stack
+# VM4 - AI Stack (<aiml-ip>) - Internal only  
+iptables -A INPUT -s <backend-ip> -p tcp --dport 8080 -j ACCEPT  # Backend → AI Stack
 
-# VM5 - Browser Service (172.16.168.25) - Internal only
-iptables -A INPUT -s 172.16.168.20 -p tcp --dport 3000 -j ACCEPT  # Backend → Browser
+# VM5 - Browser Service (<browser-ip>) - Internal only
+iptables -A INPUT -s <backend-ip> -p tcp --dport 3000 -j ACCEPT  # Backend → Browser
 
 # SSH access (key-based only)
 iptables -A INPUT -s 192.168.1.0/24 -p tcp --dport 22 -j ACCEPT

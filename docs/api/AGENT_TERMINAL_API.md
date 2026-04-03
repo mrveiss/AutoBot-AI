@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 ## Agent Terminal API Documentation
 
 **API Version:** 1.0.0
@@ -64,12 +66,12 @@ Create a new terminal session for an AI agent.
 - `admin_agent` - Administrative agents (highest privilege)
 
 **Available Hosts:**
-- `main` - Main machine (172.16.168.20)
-- `frontend` - Frontend VM (172.16.168.21)
-- `npu-worker` - NPU Worker VM (172.16.168.22)
-- `redis` - Redis VM (172.16.168.23)
-- `ai-stack` - AI Stack VM (172.16.168.24)
-- `browser` - Browser VM (172.16.168.25)
+- `main` - Main machine (<backend-ip>)
+- `frontend` - Frontend VM (<frontend-ip>)
+- `npu-worker` - NPU Worker VM (<npu-ip>)
+- `redis` - Redis VM (<database-ip>)
+- `ai-stack` - AI Stack VM (<aiml-ip>)
+- `browser` - Browser VM (<browser-ip>)
 
 #### Response (201 Created)
 
@@ -89,7 +91,7 @@ Create a new terminal session for an AI agent.
 #### Example
 
 ```bash
-curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions \
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "chat_agent_1",
@@ -138,13 +140,13 @@ List agent terminal sessions with optional filtering.
 
 ```bash
 # List all sessions
-curl https://172.16.168.20:8443/api/agent-terminal/sessions
+curl https://<backend-ip>:8443/api/agent-terminal/sessions
 
 # List sessions for specific agent
-curl https://172.16.168.20:8443/api/agent-terminal/sessions?agent_id=chat_agent_1
+curl https://<backend-ip>:8443/api/agent-terminal/sessions?agent_id=chat_agent_1
 
 # List sessions for specific conversation
-curl https://172.16.168.20:8443/api/agent-terminal/sessions?conversation_id=conv_abc123
+curl https://<backend-ip>:8443/api/agent-terminal/sessions?conversation_id=conv_abc123
 ```
 
 ---
@@ -183,7 +185,7 @@ Get detailed information about a specific agent terminal session.
 #### Example
 
 ```bash
-curl https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
+curl https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ---
@@ -206,7 +208,7 @@ Close and delete an agent terminal session.
 #### Example
 
 ```bash
-curl -X DELETE https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
+curl -X DELETE https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ---
@@ -279,7 +281,7 @@ Execute a command in an agent terminal session with security controls.
 
 ```bash
 # Execute safe command (auto-approved)
-curl -X POST "https://172.16.168.20:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST "https://<backend-ip>:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "echo \"Hello World\"",
@@ -287,7 +289,7 @@ curl -X POST "https://172.16.168.20:8443/api/agent-terminal/execute?session_id=5
   }'
 
 # Execute moderate command (requires approval)
-curl -X POST "https://172.16.168.20:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST "https://<backend-ip>:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "mkdir /tmp/test_dir",
@@ -340,7 +342,7 @@ Approve or deny a pending agent command.
 
 ```bash
 # Approve command
-curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": true,
@@ -348,7 +350,7 @@ curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29
   }'
 
 # Deny command
-curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": false,
@@ -390,7 +392,7 @@ User interrupts agent and takes control of the terminal session.
 #### Example
 
 ```bash
-curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt \
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "user_123"
@@ -418,7 +420,7 @@ Resume agent control after user interrupt.
 #### Example
 
 ```bash
-curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/resume
+curl -X POST https://<backend-ip>:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/resume
 ```
 
 ---
@@ -512,7 +514,7 @@ import httpx
 async def create_agent_session():
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            "https://172.16.168.20:8443/api/agent-terminal/sessions",
+            "https://<backend-ip>:8443/api/agent-terminal/sessions",
             json={
                 "agent_id": "chat_agent_1",
                 "agent_role": "chat_agent",
@@ -525,7 +527,7 @@ async def create_agent_session():
 async def execute_command(session_id, command):
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"https://172.16.168.20:8443/api/agent-terminal/execute?session_id={session_id}",
+            f"https://<backend-ip>:8443/api/agent-terminal/execute?session_id={session_id}",
             json={
                 "command": command,
                 "description": "Agent command"

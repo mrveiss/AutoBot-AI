@@ -14,7 +14,7 @@ The following values must NEVER be hardcoded in source files:
 
 | Type | Examples | Correct Alternative |
 |------|----------|---------------------|
-| **IP Addresses** | `"172.16.168.20"`, `"192.168.1.100"` | `config.backend.host` (Python) or SSOT env vars |
+| **IP Addresses** | `"<backend-ip>"`, `"192.168.1.100"` | `config.backend.host` (Python) or SSOT env vars |
 | **Port Numbers** | `8001`, `6379`, `5173` | `config.backend.port` (Python) or SSOT env vars |
 | **LLM Model Names** | `"qwen3.5:9b"`, `"mistral:7b-instruct"` | `config.llm.default_model` or `AUTOBOT_DEFAULT_LLM_MODEL` |
 | **URLs** | `"http://example.com/api"` | `getBackendUrl()` (TypeScript) or SSOT config |
@@ -80,7 +80,7 @@ redis_host = ConfigRegistry.get("vm.redis")
 npu_port = ConfigRegistry.get("port.npu")
 
 # BAD -- redundant hardcoded fallback (will trigger detection script)
-redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+redis_host = ConfigRegistry.get("vm.redis", "<database-ip>")
 ```
 
 For model names and embedding models, use the SSOT constants:
@@ -107,8 +107,8 @@ embedding = "nomic-embed-text:latest"
 
 ```python
 # BAD - Hardcoded values
-url = "https://172.16.168.20:8443/api/chat"
-redis_host = "172.16.168.23"
+url = "https://<backend-ip>:8443/api/chat"
+redis_host = "<database-ip>"
 redis_port = 6379
 
 # GOOD - Use SSOT config
@@ -123,7 +123,7 @@ redis_port = config.redis.port
 
 ```typescript
 // BAD - Hardcoded values
-const url = "https://172.16.168.20:8443/api/chat"
+const url = "https://<backend-ip>:8443/api/chat"
 
 // GOOD - Use SSOT config
 import { getBackendUrl } from '@/config/ssot-config'
@@ -142,10 +142,10 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
 fi
 
 # BAD - Hardcoded
-BACKEND_HOST="172.16.168.20"
+BACKEND_HOST="<backend-ip>"
 
 # GOOD - SSOT env var with fallback
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-<backend-ip>}"
 ```
 
 ### 2. For LLM Model Names
@@ -251,7 +251,7 @@ autobot-infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 **IP Address Patterns**:
 
-- IPv4: `172.16.168.20`, `192.168.1.1`, etc.
+- IPv4: `<backend-ip>`, `192.168.1.1`, etc.
 - IPv6: Full and compressed formats
 - Excludes: Comments, documentation, test files
 

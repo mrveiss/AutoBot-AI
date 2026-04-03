@@ -60,7 +60,7 @@ AutoBot uses **TWO SEPARATE** conversation storage systems:
 - **Session ID Format**: UUID, `session_{number}`, `test-session-{id}`, or custom
 
 #### System C: Session Ownership (Security Layer)
-- **Location**: Redis DB 0 (172.16.168.23:6379)
+- **Location**: Redis DB 0 (<database-ip>:6379)
 - **Manager**: `backend/security/session_ownership.py`
 - **Schema**:
   ```
@@ -349,8 +349,8 @@ CREATE INDEX idx_ownership_backfilled ON conversation_ownership(is_backfilled);
 1. **Stop backfill script** (if still running)
 2. **Delete all ownership keys**:
    ```bash
-   redis-cli -h 172.16.168.23 -p 6379 -n 0 DEL chat_session_owner:*
-   redis-cli -h 172.16.168.23 -p 6379 -n 0 DEL user_chat_sessions:*
+   redis-cli -h <database-ip> -p 6379 -n 0 DEL chat_session_owner:*
+   redis-cli -h <database-ip> -p 6379 -n 0 DEL user_chat_sessions:*
    ```
 3. **Re-run backfill** with corrected logic
 4. **Verify** ownership assignment
@@ -387,10 +387,10 @@ CREATE INDEX idx_ownership_backfilled ON conversation_ownership(is_backfilled);
 **Step 1: Environment Preparation**
 ```bash
 # Backup Redis DB 0
-redis-cli -h 172.16.168.23 -p 6379 BGSAVE
+redis-cli -h <database-ip> -p 6379 BGSAVE
 
 # Verify backup completed
-redis-cli -h 172.16.168.23 -p 6379 LASTSAVE
+redis-cli -h <database-ip> -p 6379 LASTSAVE
 
 # Copy backup to safe location
 docker cp autobot-redis-stack:/data/dump.rdb backups/redis_pre_backfill_$(date +%Y%m%d_%H%M%S).rdb
@@ -400,7 +400,7 @@ docker cp autobot-redis-stack:/data/dump.rdb backups/redis_pre_backfill_$(date +
 ```bash
 # Execute backfill (async, non-blocking)
 python3 scripts/security/backfill_conversation_ownership.py \
-    --redis-host 172.16.168.23 \
+    --redis-host <database-ip> \
     --redis-port 6379 \
     --redis-db 0 \
     --default-owner admin \
@@ -409,7 +409,7 @@ python3 scripts/security/backfill_conversation_ownership.py \
 
 # After dry-run validation, run for real
 python3 scripts/security/backfill_conversation_ownership.py \
-    --redis-host 172.16.168.23 \
+    --redis-host <database-ip> \
     --redis-port 6379 \
     --redis-db 0 \
     --default-owner admin \
@@ -419,27 +419,27 @@ python3 scripts/security/backfill_conversation_ownership.py \
 **Step 3: Verification**
 ```bash
 # Count ownership keys created
-redis-cli -h 172.16.168.23 -p 6379 -n 0 KEYS "chat_session_owner:*" | wc -l
+redis-cli -h <database-ip> -p 6379 -n 0 KEYS "chat_session_owner:*" | wc -l
 # Expected: 54
 
 # Verify admin user session set
-redis-cli -h 172.16.168.23 -p 6379 -n 0 SMEMBERS "user_chat_sessions:admin" | wc -l
+redis-cli -h <database-ip> -p 6379 -n 0 SMEMBERS "user_chat_sessions:admin" | wc -l
 # Expected: 54
 
 # Check sample ownership
-redis-cli -h 172.16.168.23 -p 6379 -n 0 GET "chat_session_owner:d40d0c19-2d76-4af7-98dd-d1c6a07619ac"
+redis-cli -h <database-ip> -p 6379 -n 0 GET "chat_session_owner:d40d0c19-2d76-4af7-98dd-d1c6a07619ac"
 # Expected: "admin"
 ```
 
 **Step 4: Functional Testing**
 ```bash
 # Test ownership validation API
-curl -X POST https://172.16.168.20:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac/validate \
+curl -X POST https://<backend-ip>:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac/validate \
     -H "Authorization: Bearer <admin_token>"
 # Expected: 200 OK with authorized=true
 
 # Test unauthorized access (should fail after auth enabled)
-curl -X GET https://172.16.168.20:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac \
+curl -X GET https://<backend-ip>:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac \
     -H "Authorization: Bearer <different_user_token>"
 # Expected: 403 Forbidden (when auth enabled)
 ```
@@ -544,7 +544,7 @@ class ConversationOwnershipBackfill:
 
     def __init__(
         self,
-        redis_host: str = "172.16.168.23",
+        redis_host: str = "<database-ip>",
         redis_port: int = 6379,
         redis_db: int = 0,
         default_owner: str = "admin",
@@ -774,7 +774,7 @@ async def main():
     )
     parser.add_argument(
         "--redis-host",
-        default="172.16.168.23",
+        default="<database-ip>",
         help="Redis host address"
     )
     parser.add_argument(

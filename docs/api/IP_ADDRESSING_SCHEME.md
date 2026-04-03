@@ -106,7 +106,7 @@ PLAYWRIGHT_VNC_URL: 'http://127.0.0.4:6080/vnc.html'
 
 1. **No hardcoded IPs anywhere in code or docs.** Reference Ansible vars, ssot_config, or environment variables.
 2. **No `localhost` / `127.0.0.1`.** Use role aliases in co-located mode, or `ssot_config` values in distributed mode.
-3. **Document by role, not by IP.** When writing docs or error messages, say "backend VM" not "172.16.168.20".
+3. **Document by role, not by IP.** When writing docs or error messages, say "backend VM" not "<backend-ip>".
 4. **IPs in docs are examples only.** Any specific IP shown in documentation reflects one test deployment and is not canonical.
 
 ---

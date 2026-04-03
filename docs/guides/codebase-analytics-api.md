@@ -107,7 +107,7 @@ For the full endpoint reference, report generation, and SDK client, see
 ---
 
 
-> **Base URL:** `https://172.16.168.20:8443`
+> **Base URL:** `https://<backend-ip>:8443`
 > **API Prefix:** `/api/analytics/codebase`
 > **Auth:** All endpoints require admin permission (`check_admin_permission` dependency)
 > **Source code:** `autobot-backend/api/codebase_analytics/`
@@ -437,21 +437,21 @@ print(json.dumps(report, indent=2))
 
 ```bash
 # Index a project
-curl -sk -X POST "https://172.16.168.20:8443/api/analytics/codebase/index" \
+curl -sk -X POST "https://<backend-ip>:8443/api/analytics/codebase/index" \
   -H "Content-Type: application/json" \
   -d '{"root_path": "/opt/autobot/autobot-backend"}' | jq .
 
 # Check indexing status
-curl -sk "https://172.16.168.20:8443/api/analytics/codebase/index/status/<task_id>" | jq .
+curl -sk "https://<backend-ip>:8443/api/analytics/codebase/index/status/<task_id>" | jq .
 
 # Get API coverage report
-curl -sk "https://172.16.168.20:8443/api/analytics/codebase/endpoint-coverage" | jq .
+curl -sk "https://<backend-ip>:8443/api/analytics/codebase/endpoint-coverage" | jq .
 
 # Get codebase statistics
-curl -sk "https://172.16.168.20:8443/api/analytics/codebase/stats" | jq .
+curl -sk "https://<backend-ip>:8443/api/analytics/codebase/stats" | jq .
 
 # Get full endpoint analysis with details
-curl -sk "https://172.16.168.20:8443/api/analytics/codebase/endpoint-analysis" | jq .
+curl -sk "https://<backend-ip>:8443/api/analytics/codebase/endpoint-analysis" | jq .
 ```
 
 ---
@@ -734,8 +734,8 @@ Find hardcoded values in the codebase (IPs, credentials, magic numbers).
       "file_path": "api/redis.py",
       "line": 42,
       "type": "ip_address",
-      "value": "172.16.168.23",
-      "context": "redis_host = '172.16.168.23'"
+      "value": "<database-ip>",
+      "context": "redis_host = '<database-ip>'"
     }
   ],
   "total_count": 15,
@@ -1654,13 +1654,13 @@ class CodebaseAnalyticsClient:
     """Async Python client for the Codebase Analytics API.
 
     Args:
-        base_url: Backend base URL (default: https://172.16.168.20:8443).
+        base_url: Backend base URL (default: https://<backend-ip>:8443).
         verify_ssl: Whether to verify SSL certificates.
     """
 
     def __init__(
         self,
-        base_url: str = "https://172.16.168.20:8443",
+        base_url: str = "https://<backend-ip>:8443",
         verify_ssl: bool = False,
     ):
         """Initialize the client with backend URL."""
@@ -2228,8 +2228,8 @@ ls -la /opt/autobot/data/chromadb/
 mkdir -p /opt/autobot/data/chromadb/
 
 # If corrupted, clear and re-index
-curl -sk -X DELETE "https://172.16.168.20:8443/api/analytics/codebase/cache"
-curl -sk -X POST "https://172.16.168.20:8443/api/analytics/codebase/index"
+curl -sk -X DELETE "https://<backend-ip>:8443/api/analytics/codebase/cache"
+curl -sk -X POST "https://<backend-ip>:8443/api/analytics/codebase/index"
 ```
 
 ### Redis connection failed (using in-memory storage)
@@ -2239,10 +2239,10 @@ curl -sk -X POST "https://172.16.168.20:8443/api/analytics/codebase/index"
 **Fix:**
 ```bash
 # Check Redis connectivity from backend host
-redis-cli -h 172.16.168.23 -p 6379 -n 11 ping
+redis-cli -h <database-ip> -p 6379 -n 11 ping
 
 # Check Redis service on .23
-ssh autobot@172.16.168.23 "sudo systemctl status redis"
+ssh autobot@<database-ip> "sudo systemctl status redis"
 ```
 
 The system falls back to in-memory storage, but data is lost on restart.

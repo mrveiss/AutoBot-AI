@@ -60,13 +60,13 @@ AutoBot uses dedicated Redis databases for different data types, enabling indivi
 
 ```bash
 # Check all database sizes
-for db in {0..15}; do echo -n "DB$db: "; redis-cli -h 172.16.168.23 -p 6379 -n $db DBSIZE; done
+for db in {0..15}; do echo -n "DB$db: "; redis-cli -h <database-ip> -p 6379 -n $db DBSIZE; done
 
 # Clear a specific database (example: temp data in DB 9)
-redis-cli -h 172.16.168.23 -p 6379 -n 9 FLUSHDB
+redis-cli -h <database-ip> -p 6379 -n 9 FLUSHDB
 
 # Backup a specific database
-redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb main_backup.rdb
+redis-cli -h <database-ip> -p 6379 -n 0 --rdb main_backup.rdb
 ```
 
 ### Legacy schema (Docker-based deployment)

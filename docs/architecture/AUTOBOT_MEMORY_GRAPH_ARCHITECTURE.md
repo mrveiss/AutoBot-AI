@@ -50,7 +50,7 @@ The AutoBot Memory Graph is an enhanced memory system that provides graph-based 
 │                                                                   │
 └───────────────────────────────────────────────────────────────────┘
                                 │
-                                │ Redis Stack (172.16.168.23:6379)
+                                │ Redis Stack (<database-ip>:6379)
                                 ▼
                 ┌────────────────────────────────┐
                 │  Redis Stack Modules           │
@@ -63,7 +63,7 @@ The AutoBot Memory Graph is an enhanced memory system that provides graph-based 
 
 ### 1.2 Technology Stack
 
-- **Storage Backend**: Redis Stack 7.4 on VM3 (172.16.168.23:6379)
+- **Storage Backend**: Redis Stack 7.4 on VM3 (<database-ip>:6379)
 - **Database**: DB 9 (dedicated for Memory Graph)
 - **Redis Modules**:
   - **RedisGraph**: Native graph operations for entity relationships
@@ -212,7 +212,7 @@ class AutoBotMemoryGraph:
 
     def __init__(
         self,
-        redis_host: str = "172.16.168.23",
+        redis_host: str = "<database-ip>",
         redis_port: int = 6379,
         database: int = 9,
         chat_history_manager: Optional[ChatHistoryManager] = None
@@ -679,7 +679,7 @@ The system maintains full backward compatibility:
 1. Create `AutoBotMemoryGraph` class in `src/autobot_memory_graph.py`
 2. Initialize Redis DB 9 with RedisGraph, RedisJSON, RediSearch indexes
 3. Create RediSearch index for entity search
-4. Deploy configuration to Redis VM (172.16.168.23)
+4. Deploy configuration to Redis VM (<database-ip>)
 5. Unit tests for all API operations
 
 **Validation**:
@@ -822,7 +822,7 @@ async def process_chat_message(message, ...):
    ```python
    # Redis connection pool (50 connections, 10 I/O threads)
    pool = redis.ConnectionPool(
-       host="172.16.168.23",
+       host="<database-ip>",
        port=6379,
        db=9,
        max_connections=50,
@@ -879,7 +879,7 @@ Total:                      = 33 MB
 ### 7.1 Access Control
 
 1. **Network Security**:
-   - Redis VM on internal network only (172.16.168.0/24)
+   - Redis VM on internal network only (<network-subnet>)
    - No external access to Redis port
    - Protected mode disabled (internal network trust)
 

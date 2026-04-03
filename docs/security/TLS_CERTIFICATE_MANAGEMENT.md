@@ -25,12 +25,12 @@ AutoBot Internal CA (Root)
 ├── ca-cert.pem (CA Certificate)
 ├── ca-key.pem (CA Private Key - CRITICAL)
 └── Service Certificates
-    ├── main-host (172.16.168.20) - Backend API
-    ├── frontend (172.16.168.21) - Web Interface
-    ├── npu-worker (172.16.168.22) - NPU Acceleration
-    ├── redis (172.16.168.23) - Data Layer
-    ├── ai-stack (172.16.168.24) - AI Processing
-    └── browser (172.16.168.25) - Web Automation
+    ├── main-host (<backend-ip>) - Backend API
+    ├── frontend (<frontend-ip>) - Web Interface
+    ├── npu-worker (<npu-ip>) - NPU Acceleration
+    ├── redis (<database-ip>) - Data Layer
+    ├── ai-stack (<aiml-ip>) - AI Processing
+    └── browser (<browser-ip>) - Web Automation
 ```
 
 ### Certificate Specifications
@@ -123,7 +123,7 @@ If you need to generate a certificate for a new service:
 ```bash
 # Define service details
 SERVICE_NAME="new-service"
-IP_ADDRESS="172.16.168.26"
+IP_ADDRESS="<reserved-ip>"
 COMMON_NAME="autobot-new-service"
 
 # Create service directory
@@ -234,7 +234,7 @@ If automated distribution fails, distribute manually:
 
 ```bash
 SERVICE="frontend"
-IP="172.16.168.21"
+IP="<frontend-ip>"
 SSH_KEY="$HOME/.ssh/autobot_key"
 
 # Create directory on remote VM
@@ -454,12 +454,12 @@ openssl verify -CAfile certs/ca/ca-cert.pem certs/frontend/server-cert.pem
 
 1. **Verify VM is running**:
    ```bash
-   ping -c 3 172.16.168.21
+   ping -c 3 <frontend-ip>
    ```
 
 2. **Check SSH connectivity**:
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'Connection OK'"
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'Connection OK'"
    ```
 
 3. **Verify SSH key permissions**:
@@ -469,7 +469,7 @@ openssl verify -CAfile certs/ca/ca-cert.pem certs/frontend/server-cert.pem
 
 4. **Check SSH authorized_keys on VM**:
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cat ~/.ssh/authorized_keys"
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "cat ~/.ssh/authorized_keys"
    ```
 
 ### Certificate Expiration
@@ -496,7 +496,7 @@ openssl verify -CAfile certs/ca/ca-cert.pem certs/frontend/server-cert.pem
 3. **Restart affected services**:
    ```bash
    # Example for frontend
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "sudo systemctl restart nginx"
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "sudo systemctl restart nginx"
    ```
 
 ### Wrong SAN Entries
@@ -708,12 +708,12 @@ openssl s_client -connect <IP>:443 -CAfile certs/ca/ca-cert.pem
 
 | VM Name | IP Address | Service Name | Certificate Location |
 |---------|------------|--------------|---------------------|
-| main-host | 172.16.168.20 | autobot-backend | `/etc/autobot/certs/` |
-| frontend | 172.16.168.21 | nginx | `/etc/autobot/certs/` |
-| npu-worker | 172.16.168.22 | npu-worker | `/etc/autobot/certs/` |
-| redis | 172.16.168.23 | redis-stack-server | `/etc/autobot/certs/` |
-| ai-stack | 172.16.168.24 | backend | `/etc/autobot/certs/` |
-| browser | 172.16.168.25 | playwright | `/etc/autobot/certs/` |
+| main-host | <backend-ip> | autobot-backend | `/etc/autobot/certs/` |
+| frontend | <frontend-ip> | nginx | `/etc/autobot/certs/` |
+| npu-worker | <npu-ip> | npu-worker | `/etc/autobot/certs/` |
+| redis | <database-ip> | redis-stack-server | `/etc/autobot/certs/` |
+| ai-stack | <aiml-ip> | backend | `/etc/autobot/certs/` |
+| browser | <browser-ip> | playwright | `/etc/autobot/certs/` |
 
 ### Support Contacts
 

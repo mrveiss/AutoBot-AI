@@ -353,7 +353,7 @@ Screen Reader (announce change)
 
 ### Live Deployment
 
-**URL**: http://172.16.168.21:5173/preferences
+**URL**: http://<frontend-ip>:5173/preferences
 **Status**: ✅ Deployed and Accessible
 **Last Sync**: 2026-02-05
 
@@ -521,7 +521,7 @@ d306c6d4 - Preferences UI + accessibility
 - Phase 2 (Preferences UI): 10/10
 - Full WCAG 2.1 AA compliance
 - All commits: 733c0f04, 2b6722c7, 69f5289a, 946cc818, ed9e442e, d306c6d4, 93c05a36
-- Live at: http://172.16.168.21:5173/preferences
+- Live at: http://<frontend-ip>:5173/preferences
 
 ---
 

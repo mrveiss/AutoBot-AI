@@ -176,7 +176,7 @@ backend:
       endpoint: http://127.0.0.1:11434
       # GPU endpoint for model-to-endpoint routing (#1070)
       # When set, models in gpu_models are routed here instead of the default.
-      # gpu_endpoint: http://172.16.168.20:11434
+      # gpu_endpoint: http://<backend-ip>:11434
       # gpu_models:
       #   - "qwen3.5:9b"
       #   - "mistral:7b-instruct"
@@ -283,7 +283,7 @@ first successful result is used.
 [1] SLM service discovery (_discover_ollama_from_slm)
      |  Calls: services/slm_client.py -> discover_service("ollama")
      |  Cached: 60s TTL
-     |  Returns: base URL like "http://172.16.168.20:11434"
+     |  Returns: base URL like "http://<backend-ip>:11434"
      |
      +-- If found -> append /api/generate -> DONE
      |
@@ -1015,7 +1015,7 @@ backend:
   llm:
     ollama:
       endpoint: http://127.0.0.1:11434           # CPU endpoint (default)
-      gpu_endpoint: http://172.16.168.20:11434    # GPU-accelerated endpoint
+      gpu_endpoint: http://<backend-ip>:11434    # GPU-accelerated endpoint
       gpu_models:
         - "qwen3.5:9b"
         - "mistral:7b-instruct"
@@ -1058,7 +1058,7 @@ journalctl -u autobot-backend --since "30 seconds ago" \
 Expected output:
 
 ```
-[ChatWorkflowManager] Making Ollama request to: http://172.16.168.20:11434/api/generate
+[ChatWorkflowManager] Making Ollama request to: http://<backend-ip>:11434/api/generate
 [ChatWorkflowManager] Using model: qwen3.5:9b
 ```
 
@@ -1108,7 +1108,7 @@ fallback chain:
 ### Configuring SLM URL
 
 ```bash
-export SLM_URL=https://172.16.168.19:8443
+export SLM_URL=https://<slm-manager-ip>:8443
 ```
 
 Without `SLM_URL`, the SLM client is unavailable and discovery silently returns
@@ -1164,7 +1164,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
-BACKEND_URL = "https://172.16.168.20:8443"
+BACKEND_URL = "https://<backend-ip>:8443"
 
 
 async def check_ollama() -> list[str]:
@@ -1489,10 +1489,10 @@ done
 
 ```bash
 # Check Redis connectivity
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # Check for conversation keys
-redis-cli -h 172.16.168.23 keys "chat:conversation:*" | head -5
+redis-cli -h <database-ip> keys "chat:conversation:*" | head -5
 
 # Check file transcripts
 ls -la autobot-backend/data/conversation_transcripts/ | head -5
@@ -1519,7 +1519,7 @@ ls -la autobot-backend/data/conversation_transcripts/ | head -5
 | LLM timeout | -- | `AUTOBOT_LLM_TIMEOUT` | `30` (seconds) |
 | LLM temperature | -- | `AUTOBOT_LLM_TEMPERATURE` | `0.7` |
 | SLM URL | -- | `SLM_URL` | (none) |
-| Redis host | -- | `AUTOBOT_REDIS_HOST` | `172.16.168.23` |
+| Redis host | -- | `AUTOBOT_REDIS_HOST` | `<database-ip>` |
 
 ---
 

@@ -1,7 +1,9 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Code Vectorization API Specification
 **Version**: 1.0
 **Date**: 2025-10-25
-**Base URL**: `https://172.16.168.20:8443/api/analytics/code`
+**Base URL**: `https://<backend-ip>:8443/api/analytics/code`
 
 ---
 
@@ -64,7 +66,7 @@ Trigger code vectorization for the codebase.
         "status": "in_progress",
         "estimated_time_seconds": 120,
         "total_files": 450,
-        "websocket_url": "wss://172.16.168.20:8443/ws/vectorization/550e8400-e29b-41d4-a716-446655440000"
+        "websocket_url": "wss://<backend-ip>:8443/ws/vectorization/550e8400-e29b-41d4-a716-446655440000"
     }
 }
 ```
@@ -563,7 +565,7 @@ Get cache statistics.
 
 ### Vectorization Progress
 
-**Endpoint:** `wss://172.16.168.20:8443/ws/vectorization/{job_id}`
+**Endpoint:** `wss://<backend-ip>:8443/ws/vectorization/{job_id}`
 
 **Message Types:**
 

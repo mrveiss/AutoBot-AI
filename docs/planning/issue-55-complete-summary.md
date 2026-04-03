@@ -287,10 +287,10 @@ entity_extractor = GraphEntityExtractor(
 sudo systemctl restart autobot-backend
 
 # 2. Verify endpoints available
-curl https://172.16.168.20:8443/api/entities/extract/health
+curl https://<backend-ip>:8443/api/entities/extract/health
 
 # 3. Test extraction
-curl -X POST https://172.16.168.20:8443/api/entities/extract \
+curl -X POST https://<backend-ip>:8443/api/entities/extract \
   -H "Content-Type: application/json" \
   -d '{
     "conversation_id": "test-123",

@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -12,12 +14,12 @@ AutoBot uses OpenTelemetry for distributed tracing across its 5-VM infrastructur
 
 | VM | IP Address | Service Name | Role |
 |----|------------|--------------|------|
-| Main Machine | 172.16.168.20 | autobot-backend | Backend API |
-| VM1 Frontend | 172.16.168.21 | autobot-frontend | Web interface |
-| VM2 NPU Worker | 172.16.168.22 | autobot-npu-worker | Hardware AI acceleration |
-| VM3 Redis | 172.16.168.23 | autobot-redis | Data layer + Jaeger |
-| VM4 AI Stack | 172.16.168.24 | autobot-ai-stack | AI processing |
-| VM5 Browser | 172.16.168.25 | autobot-browser | Web automation |
+| Main Machine | <backend-ip> | autobot-backend | Backend API |
+| VM1 Frontend | <frontend-ip> | autobot-frontend | Web interface |
+| VM2 NPU Worker | <npu-ip> | autobot-npu-worker | Hardware AI acceleration |
+| VM3 Redis | <database-ip> | autobot-redis | Data layer + Jaeger |
+| VM4 AI Stack | <aiml-ip> | autobot-ai-stack | AI processing |
+| VM5 Browser | <browser-ip> | autobot-browser | Web automation |
 
 ## Architecture
 
@@ -99,7 +101,7 @@ opentelemetry-exporter-otlp
 opentelemetry-propagator-b3
 ```
 
-### Jaeger Setup (VM3 Redis - 172.16.168.23)
+### Jaeger Setup (VM3 Redis - <database-ip>)
 
 Since AutoBot doesn't use Docker, Jaeger runs as a native binary on the Redis VM.
 
@@ -107,7 +109,7 @@ Since AutoBot doesn't use Docker, Jaeger runs as a native binary on the Redis VM
 
 ```bash
 # SSH to Redis VM
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23
+ssh -i ~/.ssh/autobot_key autobot@<database-ip>
 
 # Download Jaeger (latest version)
 JAEGER_VERSION="1.53.0"
@@ -152,11 +154,11 @@ sudo systemctl start jaeger
 sudo systemctl status jaeger
 
 # Test OTLP endpoint
-curl http://172.16.168.23:4317  # gRPC (connection refused is OK)
-curl http://172.16.168.23:4318  # HTTP
+curl http://<database-ip>:4317  # gRPC (connection refused is OK)
+curl http://<database-ip>:4318  # HTTP
 
 # Access Jaeger UI
-# Open in browser: http://172.16.168.23:16686
+# Open in browser: http://<database-ip>:16686
 ```
 
 ## Configuration
@@ -165,7 +167,7 @@ curl http://172.16.168.23:4318  # HTTP
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AUTOBOT_JAEGER_ENDPOINT` | `http://172.16.168.23:4317` | OTLP gRPC endpoint |
+| `AUTOBOT_JAEGER_ENDPOINT` | `http://<database-ip>:4317` | OTLP gRPC endpoint |
 | `AUTOBOT_TRACE_CONSOLE` | `false` | Enable console span export |
 | `AUTOBOT_ENV` | `development` | Deployment environment tag |
 
@@ -179,7 +181,7 @@ tracing = get_tracing_service()
 tracing.initialize(
     service_name="autobot-backend",
     service_version="2.0.0",
-    jaeger_endpoint="http://172.16.168.23:4317",
+    jaeger_endpoint="http://<database-ip>:4317",
 )
 tracing.instrument_fastapi(app)
 ```
@@ -242,7 +244,7 @@ http_client = get_traced_http_client()
 async def call_ai_stack(payload: dict):
     # Trace context is automatically propagated via headers
     response = await http_client.post(
-        "http://172.16.168.24:8080/api/process",
+        "http://<aiml-ip>:8080/api/process",
         payload=payload,
     )
     return response
@@ -280,7 +282,7 @@ async def call_ai_stack(payload: dict):
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            "http://172.16.168.24:8080/api/process",
+            "http://<aiml-ip>:8080/api/process",
             json=payload,
             headers=headers,  # Propagate trace context
         )
@@ -320,7 +322,7 @@ The following paths are excluded from detailed tracing to reduce noise:
 
 ### Jaeger UI
 
-Access the Jaeger UI at: `http://172.16.168.23:16686`
+Access the Jaeger UI at: `http://<database-ip>:16686`
 
 Features:
 - Search traces by service, operation, tags
@@ -333,7 +335,7 @@ Features:
 Tracing status is included in the backend health check:
 
 ```bash
-curl https://172.16.168.20:8443/api/health | jq '.services.distributed_tracing'
+curl https://<backend-ip>:8443/api/health | jq '.services.distributed_tracing'
 # Returns: "ready" or "pending" or "failed"
 ```
 
@@ -343,12 +345,12 @@ curl https://172.16.168.20:8443/api/health | jq '.services.distributed_tracing'
 
 1. **Check Jaeger is running:**
    ```bash
-   ssh autobot@172.16.168.23 "sudo systemctl status jaeger"
+   ssh autobot@<database-ip> "sudo systemctl status jaeger"
    ```
 
 2. **Verify OTLP endpoint:**
    ```bash
-   curl -v http://172.16.168.23:4318/v1/traces
+   curl -v http://<database-ip>:4318/v1/traces
    ```
 
 3. **Enable console export for debugging:**
@@ -381,7 +383,7 @@ sudo systemctl restart jaeger
 
 ## VM-Specific Setup
 
-### NPU Worker (VM2 - 172.16.168.22)
+### NPU Worker (VM2 - <npu-ip>)
 
 ```python
 # In NPU worker initialization
@@ -390,27 +392,27 @@ from backend.services.tracing_service import get_tracing_service
 tracing = get_tracing_service()
 tracing.initialize(
     service_name="autobot-npu-worker",
-    jaeger_endpoint="http://172.16.168.23:4317",
+    jaeger_endpoint="http://<database-ip>:4317",
 )
 ```
 
-### AI Stack (VM4 - 172.16.168.24)
+### AI Stack (VM4 - <aiml-ip>)
 
 ```python
 # In AI stack initialization
 tracing.initialize(
     service_name="autobot-ai-stack",
-    jaeger_endpoint="http://172.16.168.23:4317",
+    jaeger_endpoint="http://<database-ip>:4317",
 )
 ```
 
-### Browser Automation (VM5 - 172.16.168.25)
+### Browser Automation (VM5 - <browser-ip>)
 
 ```python
 # In browser automation service
 tracing.initialize(
     service_name="autobot-browser",
-    jaeger_endpoint="http://172.16.168.23:4317",
+    jaeger_endpoint="http://<database-ip>:4317",
 )
 ```
 

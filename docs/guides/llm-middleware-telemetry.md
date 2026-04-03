@@ -108,9 +108,9 @@ def get_chat_workflow_manager():
 **Seed test telemetry and verify:**
 
 ```bash
-redis-cli -h 172.16.168.23 SET metrics:cpu:current 45
-redis-cli -h 172.16.168.23 SET metrics:memory:current 62
-redis-cli -h 172.16.168.23 HSET service:backend:health status healthy
+redis-cli -h <database-ip> SET metrics:cpu:current 45
+redis-cli -h <database-ip> SET metrics:memory:current 62
+redis-cli -h <database-ip> HSET service:backend:health status healthy
 curl -sk https://localhost:8443/api/chat/message \
   -H "Content-Type: application/json" \
   -d '{"message": "What is the current system status?", "session_id": "test"}'
@@ -1051,7 +1051,7 @@ backend:
     ollama:
       endpoint: http://127.0.0.1:11434
       # GPU endpoint for model-to-endpoint routing (#1070)
-      # gpu_endpoint: http://172.16.168.20:11434
+      # gpu_endpoint: http://<backend-ip>:11434
       # gpu_models:
       #   - "qwen3.5:9b"
       #   - "mistral:7b-instruct"
@@ -1085,8 +1085,8 @@ infrastructure:
 from autobot_shared.ssot_config import config
 
 # Access fleet node IPs
-redis_host = config.redis.host      # -> "172.16.168.23"
-ai_stack_host = config.ai_stack.host # -> "172.16.168.24"
+redis_host = config.redis.host      # -> "<database-ip>"
+ai_stack_host = config.ai_stack.host # -> "<aiml-ip>"
 
 # Access Redis properly
 from autobot_shared.redis_client import get_redis_client
@@ -1650,11 +1650,11 @@ def get_chat_workflow_manager() -> ChatWorkflowManager:
 
 ```bash
 # Example: set test telemetry values
-redis-cli -h 172.16.168.23 SET metrics:cpu:current 45
-redis-cli -h 172.16.168.23 SET metrics:memory:current 62
-redis-cli -h 172.16.168.23 SET metrics:disk:current 38
-redis-cli -h 172.16.168.23 HSET service:backend:health status healthy
-redis-cli -h 172.16.168.23 HSET service:frontend:health status healthy
+redis-cli -h <database-ip> SET metrics:cpu:current 45
+redis-cli -h <database-ip> SET metrics:memory:current 62
+redis-cli -h <database-ip> SET metrics:disk:current 38
+redis-cli -h <database-ip> HSET service:backend:health status healthy
+redis-cli -h <database-ip> HSET service:frontend:health status healthy
 ```
 
 **Step 4.** Restart the backend and verify:

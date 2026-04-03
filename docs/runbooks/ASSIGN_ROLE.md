@@ -27,7 +27,7 @@ Before assigning, verify the role can coexist with existing roles on the node.
 
 ```bash
 # Check what roles are currently on the node
-curl -sk https://172.16.168.19/api/nodes/<node-id> \
+curl -sk https://<slm-manager-ip>/api/nodes/<node-id> \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   | jq '.roles'
 
@@ -55,7 +55,7 @@ Edit `autobot-slm-backend/ansible/inventory/slm-nodes.yml` to add the new role:
 
 ```yaml
 04-Database:
-  ansible_host: 172.16.168.23
+  ansible_host: <database-ip>
   ansible_user: autobot
   node_roles:
     - autobot-database
@@ -70,7 +70,7 @@ Edit `autobot-slm-backend/ansible/inventory/slm-nodes.yml` to add the new role:
 Register the new role assignment in SLM:
 
 ```bash
-curl -sk -X POST https://172.16.168.19/api/nodes/<node-id>/roles \
+curl -sk -X POST https://<slm-manager-ip>/api/nodes/<node-id>/roles \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"role": "autobot-monitoring"}'
@@ -133,13 +133,13 @@ ansible-playbook playbooks/provision-fleet-roles.yml \
 
 ```bash
 # Check new role service is running
-ssh autobot@172.16.168.23 "systemctl status autobot-monitoring"
+ssh autobot@<database-ip> "systemctl status autobot-monitoring"
 
 # Check health endpoint
-curl -sk https://172.16.168.23/metrics    # Prometheus example
+curl -sk https://<database-ip>/metrics    # Prometheus example
 
 # Check SLM shows the new role
-curl -sk https://172.16.168.19/api/nodes/04-Database \
+curl -sk https://<slm-manager-ip>/api/nodes/04-Database \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   | jq '.roles'
 ```
@@ -165,7 +165,7 @@ ansible 04-Database -i inventory/slm-nodes.yml -m file \
 # Edit inventory/slm-nodes.yml: remove 'autobot-monitoring' from node_roles
 
 # 4. Update SLM DB
-curl -sk -X DELETE https://172.16.168.19/api/nodes/04-Database/roles/autobot-monitoring \
+curl -sk -X DELETE https://<slm-manager-ip>/api/nodes/04-Database/roles/autobot-monitoring \
   -H "Authorization: Bearer ${SLM_TOKEN}"
 ```
 

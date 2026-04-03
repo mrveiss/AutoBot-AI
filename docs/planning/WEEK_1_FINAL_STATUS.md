@@ -12,8 +12,8 @@
 
 **Single Environment Architecture:**
 - **Dev/Production:** Same environment (no separate staging)
-- **Backend:** https://172.16.168.20:8443 ✅ RUNNING
-- **Frontend:** http://172.16.168.21:5173 ✅ RUNNING
+- **Backend:** https://<backend-ip>:8443 ✅ RUNNING
+- **Frontend:** http://<frontend-ip>:5173 ✅ RUNNING
 - **Database:** `data/conversation_files.db` ✅ EXISTS (96KB)
 - **All 6 VMs:** ✅ OPERATIONAL
 
@@ -194,7 +194,7 @@ All 5 critical bugs are now FIXED in production:
 ## 📞 Production Support
 
 ### Monitoring
-- **Health Check:** https://172.16.168.20:8443/api/health
+- **Health Check:** https://<backend-ip>:8443/api/health
 - **Database:** `data/conversation_files.db`
 - **Logs:** Check backend logs for initialization messages
 

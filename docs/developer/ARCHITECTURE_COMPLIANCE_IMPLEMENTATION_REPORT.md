@@ -16,7 +16,7 @@ Successfully replaced **manual architecture fix scripts** with **automated compl
 - `workflow_orchestration_fix.py` - Analysis document (not really a fix script)
 
 **Problems**:
-1. ❌ **Hardcoded IP addresses** - `172.16.168.23` hardcoded in scripts
+1. ❌ **Hardcoded IP addresses** - `<database-ip>` hardcoded in scripts
 2. ❌ **Hardcoded paths** - `/opt/autobot` hardcoded
 3. ❌ **Manual execution** - Developers had to remember to run them
 4. ❌ **Reactive approach** - Fixed issues after they occurred
@@ -33,7 +33,7 @@ Successfully replaced **manual architecture fix scripts** with **automated compl
 ```python
 # BEFORE (created by fix_critical_redis_timeouts.py with hardcodes)
 def get_redis_connection(
-    host: str = "172.16.168.23",  # ❌ Hardcoded
+    host: str = "<database-ip>",  # ❌ Hardcoded
     port: int = 6379,
     ...
 )
@@ -74,12 +74,12 @@ def get_redis_connection(
 
 #### TestServiceDistribution
 Validates that each service runs on its designated VM:
-- ✅ `test_redis_on_vm3_only()` - Redis must be on 172.16.168.23
-- ✅ `test_backend_on_main_machine()` - Backend on 172.16.168.20
-- ✅ `test_frontend_on_vm1()` - Frontend on 172.16.168.21
-- ✅ `test_npu_worker_on_vm2()` - NPU worker on 172.16.168.22
-- ✅ `test_ai_stack_on_vm4()` - AI stack on 172.16.168.24
-- ✅ `test_browser_service_on_vm5()` - Browser service on 172.16.168.25
+- ✅ `test_redis_on_vm3_only()` - Redis must be on <database-ip>
+- ✅ `test_backend_on_main_machine()` - Backend on <backend-ip>
+- ✅ `test_frontend_on_vm1()` - Frontend on <frontend-ip>
+- ✅ `test_npu_worker_on_vm2()` - NPU worker on <npu-ip>
+- ✅ `test_ai_stack_on_vm4()` - AI stack on <aiml-ip>
+- ✅ `test_browser_service_on_vm5()` - Browser service on <browser-ip>
 
 #### TestNetworkConfiguration
 Validates network configuration compliance:
@@ -182,7 +182,7 @@ Tests automatically run on:
 
 ```python
 # Old way (hardcoded - DON'T DO THIS)
-redis_client = redis.Redis(host="172.16.168.23", port=6379)
+redis_client = redis.Redis(host="<database-ip>", port=6379)
 
 # New way (configuration-driven - CORRECT)
 from src.utils.redis_helper import get_redis_connection

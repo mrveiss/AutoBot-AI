@@ -201,9 +201,9 @@ class AutoBotConfigSchema(BaseModel):
 ```
 Layer 1: .env (Required Configuration)
 -----------------------------------------
-AUTOBOT_MAIN_MACHINE_IP=172.16.168.20
-AUTOBOT_FRONTEND_VM_IP=172.16.168.21
-AUTOBOT_REDIS_VM_IP=172.16.168.23
+AUTOBOT_MAIN_MACHINE_IP=<backend-ip>
+AUTOBOT_FRONTEND_VM_IP=<frontend-ip>
+AUTOBOT_REDIS_VM_IP=<database-ip>
 AUTOBOT_BACKEND_PORT=8001
 AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
 
@@ -279,22 +279,22 @@ The canonical `.env` structure with all configuration values:
 # -----------------------------------------------------------------------------
 
 # Main Machine (WSL) - Backend API + VNC Desktop
-AUTOBOT_VM_MAIN_IP=172.16.168.20
+AUTOBOT_VM_MAIN_IP=<backend-ip>
 
 # VM1 Frontend - Web interface (SINGLE FRONTEND SERVER)
-AUTOBOT_VM_FRONTEND_IP=172.16.168.21
+AUTOBOT_VM_FRONTEND_IP=<frontend-ip>
 
 # VM2 NPU Worker - Hardware AI acceleration
-AUTOBOT_VM_NPU_IP=172.16.168.22
+AUTOBOT_VM_NPU_IP=<npu-ip>
 
 # VM3 Redis - Data layer
-AUTOBOT_VM_REDIS_IP=172.16.168.23
+AUTOBOT_VM_REDIS_IP=<database-ip>
 
 # VM4 AI Stack - AI processing
-AUTOBOT_VM_AISTACK_IP=172.16.168.24
+AUTOBOT_VM_AISTACK_IP=<aiml-ip>
 
 # VM5 Browser - Web automation (Playwright)
-AUTOBOT_VM_BROWSER_IP=172.16.168.25
+AUTOBOT_VM_BROWSER_IP=<browser-ip>
 
 # -----------------------------------------------------------------------------
 # SERVICE PORTS
@@ -389,12 +389,12 @@ from pydantic_settings import BaseSettings
 
 class VMConfig(BaseSettings):
     """VM IP addresses"""
-    main: str = Field(alias="AUTOBOT_VM_MAIN_IP", default="172.16.168.20")
-    frontend: str = Field(alias="AUTOBOT_VM_FRONTEND_IP", default="172.16.168.21")
-    npu: str = Field(alias="AUTOBOT_VM_NPU_IP", default="172.16.168.22")
-    redis: str = Field(alias="AUTOBOT_VM_REDIS_IP", default="172.16.168.23")
-    aistack: str = Field(alias="AUTOBOT_VM_AISTACK_IP", default="172.16.168.24")
-    browser: str = Field(alias="AUTOBOT_VM_BROWSER_IP", default="172.16.168.25")
+    main: str = Field(alias="AUTOBOT_VM_MAIN_IP", default="<backend-ip>")
+    frontend: str = Field(alias="AUTOBOT_VM_FRONTEND_IP", default="<frontend-ip>")
+    npu: str = Field(alias="AUTOBOT_VM_NPU_IP", default="<npu-ip>")
+    redis: str = Field(alias="AUTOBOT_VM_REDIS_IP", default="<database-ip>")
+    aistack: str = Field(alias="AUTOBOT_VM_AISTACK_IP", default="<aiml-ip>")
+    browser: str = Field(alias="AUTOBOT_VM_BROWSER_IP", default="<browser-ip>")
 
 
 class PortConfig(BaseSettings):
@@ -569,12 +569,12 @@ export function getConfig(): AutoBotConfig {
   if (_config) return _config;
 
   const vm: VMConfig = {
-    main: getEnv('VITE_VM_MAIN_IP', '172.16.168.20'),
-    frontend: getEnv('VITE_VM_FRONTEND_IP', '172.16.168.21'),
-    npu: getEnv('VITE_VM_NPU_IP', '172.16.168.22'),
-    redis: getEnv('VITE_VM_REDIS_IP', '172.16.168.23'),
-    aistack: getEnv('VITE_VM_AISTACK_IP', '172.16.168.24'),
-    browser: getEnv('VITE_VM_BROWSER_IP', '172.16.168.25'),
+    main: getEnv('VITE_VM_MAIN_IP', '<backend-ip>'),
+    frontend: getEnv('VITE_VM_FRONTEND_IP', '<frontend-ip>'),
+    npu: getEnv('VITE_VM_NPU_IP', '<npu-ip>'),
+    redis: getEnv('VITE_VM_REDIS_IP', '<database-ip>'),
+    aistack: getEnv('VITE_VM_AISTACK_IP', '<aiml-ip>'),
+    browser: getEnv('VITE_VM_BROWSER_IP', '<browser-ip>'),
   };
 
   const port: PortConfig = {

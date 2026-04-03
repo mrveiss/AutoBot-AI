@@ -127,12 +127,12 @@ CA Certificate:
 - Location: certs/ca/
 
 Service Certificates (6):
-1. main-host (172.16.168.20) - autobot-backend
-2. frontend (172.16.168.21) - autobot-frontend
-3. npu-worker (172.16.168.22) - autobot-npu-worker
-4. redis (172.16.168.23) - autobot-redis
-5. ai-stack (172.16.168.24) - autobot-ai-stack
-6. browser (172.16.168.25) - autobot-browser
+1. main-host (<backend-ip>) - autobot-backend
+2. frontend (<frontend-ip>) - autobot-frontend
+3. npu-worker (<npu-ip>) - autobot-npu-worker
+4. redis (<database-ip>) - autobot-redis
+5. ai-stack (<aiml-ip>) - autobot-ai-stack
+6. browser (<browser-ip>) - autobot-browser
 
 All certificates include:
 - DNS: Common Name, Service Name, localhost

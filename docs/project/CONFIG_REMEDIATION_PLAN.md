@@ -114,8 +114,8 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 **Issue:**
 - Lines 15-16: Hardcoded Redis URLs with specific database numbers
 ```python
-broker=os.environ.get("CELERY_BROKER_URL", "redis://172.16.168.23:6379/1"),
-backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://172.16.168.23:6379/2"),
+broker=os.environ.get("CELERY_BROKER_URL", "redis://<database-ip>:6379/1"),
+backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://<database-ip>:6379/2"),
 ```
 
 **Should Be:**
@@ -226,13 +226,13 @@ ollama_endpoint = config.get(
 **Issue:**
 - Lines 233-239: Hardcoded IPs as defaults in the config manager itself
 ```python
-"backend": "172.16.168.20",
-"frontend": "172.16.168.21",
-"redis": "172.16.168.23",
-"ollama": "172.16.168.20",
-"ai_stack": "172.16.168.24",
-"npu_worker": "172.16.168.22",
-"browser_service": "172.16.168.25",
+"backend": "<backend-ip>",
+"frontend": "<frontend-ip>",
+"redis": "<database-ip>",
+"ollama": "<backend-ip>",
+"ai_stack": "<aiml-ip>",
+"npu_worker": "<npu-ip>",
+"browser_service": "<browser-ip>",
 ```
 
 **Should Be:** Read from `config/complete.yaml` infrastructure section, with NO hardcoded fallbacks
@@ -279,11 +279,11 @@ allow_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://172.16.168.20:5173",
-    "http://172.16.168.21:5173",
-    "http://172.16.168.20:3000",
-    "http://172.16.168.21:3000",
-    "http://172.16.168.25:3000",
+    "http://<backend-ip>:5173",
+    "http://<frontend-ip>:5173",
+    "http://<backend-ip>:3000",
+    "http://<frontend-ip>:3000",
+    "http://<browser-ip>:3000",
 ]
 ```
 
@@ -343,7 +343,7 @@ security:
 - Line 63: Hardcoded fallback to VM IP
 ```python
 self.redis_host = redis_host or redis_config.get(
-    "host", os.getenv("REDIS_HOST", "172.16.168.23")  # HARDCODED IP
+    "host", os.getenv("REDIS_HOST", "<database-ip>")  # HARDCODED IP
 )
 ```
 
@@ -386,7 +386,7 @@ self.redis_host = redis_host or redis_config.get(
 **Issue:**
 - Line 557: Hardcoded Ollama endpoint fallback
 ```python
-.get("endpoint", "http://172.16.168.20:11434"),  # HARDCODED
+.get("endpoint", "http://<backend-ip>:11434"),  # HARDCODED
 ```
 
 **Should Be:**
@@ -606,8 +606,8 @@ redis:
 **Issue:**
 - Lines 30-37: Hardcoded VM IPs as class constants
 ```python
-MAIN_MACHINE_IP: str = "172.16.168.20"
-FRONTEND_VM_IP: str = "172.16.168.21"
+MAIN_MACHINE_IP: str = "<backend-ip>"
+FRONTEND_VM_IP: str = "<frontend-ip>"
 # ... etc
 ```
 
@@ -1315,7 +1315,7 @@ timeouts:
 ```python
 def test_get_host_from_config():
     """Test host retrieval from config"""
-    assert config.get_host("redis") == "172.16.168.23"
+    assert config.get_host("redis") == "<database-ip>"
 
 def test_get_host_with_env_override():
     """Test environment variable override"""
@@ -1325,7 +1325,7 @@ def test_get_host_with_env_override():
 def test_get_cors_origins():
     """Test CORS origin generation"""
     origins = config.get_cors_origins()
-    assert "http://172.16.168.21:5173" in origins
+    assert "http://<frontend-ip>:5173" in origins
     assert "http://localhost:5173" in origins
 ```
 
@@ -2468,7 +2468,7 @@ backend:
 
 # 1. Add to config/complete.yaml
 new_service:
-  host: "172.16.168.30"
+  host: "<example-ip>"
   port: 9000
   timeout: 5.0
 
@@ -2481,7 +2481,7 @@ timeout = config.get("new_service.timeout", 5.0)
 
 # 3. Add tests
 def test_new_service_config():
-    assert config.get_host("new_service") == "172.16.168.30"
+    assert config.get_host("new_service") == "<example-ip>"
 ```
 
 ---
