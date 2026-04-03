@@ -70,6 +70,7 @@ class NotificationEvent(str, Enum):
     WORKFLOW_FAILED = "workflow_failed"
     STEP_FAILED = "step_failed"
     APPROVAL_NEEDED = "approval_needed"
+    SERVICE_FAILED = "service_failure"
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +119,9 @@ _DEFAULT_TEMPLATES: Dict[str, str] = {
     ),
     NotificationEvent.APPROVAL_NEEDED: (
         "Workflow '$workflow_id' is waiting for approval at step '$step_name'."
+    ),
+    NotificationEvent.SERVICE_FAILED: (
+        "Service '$service' on '$hostname' transitioned $prev_state -> $new_state. $error_context"
     ),
 }
 

@@ -133,6 +133,69 @@ reaches an approval gate:
 - Check the Overview page regularly to catch failed workflows early.
 - Use descriptive names for your workflows so they are easy to find later.
 
+## Monitor a Linux Service
+
+AutoBot can alert you the moment a systemd service on any managed node
+changes state.  The SLM HealthCollector polls every node's systemd unit list
+and publishes a Redis pub/sub event whenever a service transitions between
+states (for example, `running` to `failed`).
+
+### How it works
+
+1. The SLM agent running on each node calls `HealthCollector.discover_all_services()`
+   on every health-check cycle.
+2. When a service's state changes from the previous cycle, the agent publishes
+   to the Redis channel:
+
+   ```text
+   autobot:services:{service_name}:state_change
+   ```
+
+   The message payload includes the service name, the originating hostname,
+   the previous and new state, and any recent journal error context.
+
+3. A workflow subscribed to that channel receives the event and can dispatch
+   notifications, log the incident, or trigger a remediation workflow.
+
+### Using the built-in template
+
+A ready-made template is provided at
+`autobot-backend/workflow_templates/service_health_monitor.yaml`.
+
+To use it:
+
+1. Click **Templates** in the Workflow Automation sidebar.
+2. Select **Service Health Monitor**.
+3. Click **Use Template**.
+4. Optionally restrict the trigger channel to a specific service
+   (change `autobot:services:*:state_change` to
+   `autobot:services:my-service:state_change`).
+5. Configure at least one notification channel (in-app, email, Slack, or
+   webhook) in the **Send service-failure notification** step.
+6. Save and enable the workflow.
+
+### Notification event type
+
+The `SERVICE_FAILED` notification event type is available in
+`NotificationEvent.SERVICE_FAILED` (`"service_failure"`).  The default
+message template is:
+
+```text
+Service '{service}' on '{hostname}' transitioned {prev_state} -> {new_state}. {error_context}
+```
+
+You can override this template in the workflow's notification step
+configuration using Python `string.Template` syntax.
+
+### Developer reference
+
+- See `docs/examples/service_failure_monitoring.py` for a standalone Python
+  script that subscribes to the state-change channel and sends notifications.
+- The `HealthCollector` class lives in
+  `autobot-slm-backend/slm/agent/health_collector.py`.
+- `NotificationEvent.SERVICE_FAILED` and its default template are defined in
+  `autobot-backend/services/notification_service.py`.
+
 ## Related Guides
 
 - [Working with Agents](working-with-agents.md) -- agents power many workflow

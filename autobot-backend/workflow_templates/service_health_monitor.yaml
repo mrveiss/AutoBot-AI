@@ -1,0 +1,79 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Workflow Template: Service Health Monitor (#3404)
+#
+# Triggered by Redis pub/sub events emitted by HealthCollector when a
+# systemd service changes state.  Use this template to create an
+# automated workflow that notifies operators the moment a service fails
+# or recovers.
+
+metadata:
+  id: service_health_monitor
+  name: "Service Health Monitor"
+  description: >
+    Listens for systemd service state-change events published by the SLM
+    HealthCollector and dispatches a SERVICE_FAILED notification through
+    the AutoBot notification pipeline.
+  version: "1.0.0"
+  category: monitoring
+  tags:
+    - systemd
+    - health
+    - alerting
+
+trigger:
+  type: REDIS_PUBSUB
+  # Glob pattern — matches any service on any managed node.
+  # To restrict to a specific service, replace * with the service name,
+  # e.g.  autobot:services:autobot-backend:state_change
+  channel: "autobot:services:*:state_change"
+  # Only fire when the service has entered a failure-like state.
+  # Remove this filter block to react to all transitions (including recovery).
+  filter:
+    field: new_state
+    operator: in
+    values:
+      - failed
+      - crash-loop
+
+steps:
+  - id: notify_service_failure
+    name: "Send service-failure notification"
+    type: notification
+    event: service_failure
+    # Map pub/sub payload fields to notification template variables.
+    # The SERVICE_FAILED default template uses: service, hostname,
+    # prev_state, new_state, error_context.
+    payload_mapping:
+      service: "{{ trigger.payload.service }}"
+      hostname: "{{ trigger.payload.hostname }}"
+      prev_state: "{{ trigger.payload.prev_state }}"
+      new_state: "{{ trigger.payload.new_state }}"
+      error_context: "{{ trigger.payload.error_context }}"
+    # Channel routing — configure at least one channel.
+    channels:
+      - in_app
+    # Uncomment and fill in to enable additional channels:
+    # email_recipients:
+    #   - ops@example.com
+    # slack_webhook_url: "{{ env.SLACK_OPS_WEBHOOK }}"
+    # webhook_url: "{{ env.PAGERDUTY_EVENTS_URL }}"
+
+  - id: log_state_change
+    name: "Log state change to knowledge base"
+    type: knowledge_write
+    depends_on:
+      - notify_service_failure
+    payload:
+      title: "Service state change: {{ trigger.payload.service }}"
+      body: >
+        Host {{ trigger.payload.hostname }} reported service
+        {{ trigger.payload.service }} transitioned from
+        {{ trigger.payload.prev_state }} to {{ trigger.payload.new_state }}.
+        Error context: {{ trigger.payload.error_context }}
+      tags:
+        - service-health
+        - "host:{{ trigger.payload.hostname }}"
+        - "service:{{ trigger.payload.service }}"

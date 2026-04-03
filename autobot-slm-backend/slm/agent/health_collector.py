@@ -5,8 +5,10 @@
 Health Collector for SLM Agent
 
 Collects system and service health metrics for reporting to admin.
+Publishes state-change events to Redis pub/sub (#3404).
 """
 
+import json
 import logging
 import os
 import platform
@@ -18,6 +20,8 @@ from typing import Dict, List, Optional
 import psutil
 
 logger = logging.getLogger(__name__)
+
+_STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
 
 
 class HealthCollector:
@@ -49,6 +53,9 @@ class HealthCollector:
         self.ports = ports or []
         self.hostname = platform.node()
         self.discover_services = discover_services
+        # Tracks the last known status per service name for state-change detection.
+        # Populated on first collect(); events are only published on transitions.
+        self._last_known_status: Dict[str, str] = {}
 
     def collect(self) -> Dict:
         """Collect all health metrics."""
@@ -158,6 +165,7 @@ class HealthCollector:
         except Exception as e:
             logger.warning("Error discovering services: %s", e)
 
+        self._detect_and_publish_state_changes(services)
         return services
 
     def _run_systemctl_list_units(self) -> Optional[str]:
@@ -286,6 +294,85 @@ class HealthCollector:
         except Exception as e:
             logger.debug("Could not get error context for %s: %s", service_name, e)
         return ""
+
+    def _publish_state_change(
+        self,
+        service_name: str,
+        prev_state: str,
+        new_state: str,
+        error_context: str,
+    ) -> None:
+        """Publish a service state-change event to Redis pub/sub.
+
+        Channel: autobot:services:{service_name}:state_change
+        Payload keys: service, hostname, prev_state, new_state, error_context.
+
+        Failure is logged at WARNING level and never propagates — a Redis
+        outage must not interrupt health collection (#3404).
+        """
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            client = get_redis_client(database="main")
+            if client is None:
+                logger.warning(
+                    "Redis unavailable — state-change event not published "
+                    "(service=%s %s->%s)",
+                    service_name,
+                    prev_state,
+                    new_state,
+                )
+                return
+            channel = _STATE_CHANGE_CHANNEL_TEMPLATE.format(service=service_name)
+            payload = json.dumps(
+                {
+                    "service": service_name,
+                    "hostname": self.hostname,
+                    "prev_state": prev_state,
+                    "new_state": new_state,
+                    "error_context": error_context,
+                }
+            )
+            client.publish(channel, payload)
+            logger.info(
+                "Published state-change event: service=%s %s->%s",
+                service_name,
+                prev_state,
+                new_state,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to publish state-change event for %s: %s", service_name, exc
+            )
+
+    def _detect_and_publish_state_changes(
+        self, services: List[Dict]
+    ) -> None:
+        """Compare discovered service statuses against last known state.
+
+        Publishes a Redis pub/sub event for each service whose status has
+        changed since the previous call.  Updates ``_last_known_status`` so
+        only real transitions trigger events (#3404).
+        """
+        for svc in services:
+            name = svc.get("name")
+            new_state = svc.get("status", "unknown")
+            if name is None:
+                continue
+            prev_state = self._last_known_status.get(name)
+            if prev_state is None:
+                # First observation — record state but do not emit an event.
+                self._last_known_status[name] = new_state
+                continue
+            if prev_state == new_state:
+                continue
+            self._last_known_status[name] = new_state
+            self._publish_state_change(
+                service_name=name,
+                prev_state=prev_state,
+                new_state=new_state,
+                error_context=svc.get("error_message", ""),
+            )
 
     def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
         """Quick health check against thresholds."""
