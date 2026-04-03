@@ -1003,17 +1003,19 @@ async def terminal_info(
         "endpoints": {
             "sessions": "/api/terminal/sessions",
             "websocket_primary": "/api/terminal/ws/{session_id}",
-            "websocket_simple": "/api/terminal/ws/simple/{session_id}",
-            "websocket_secure": "/api/terminal/ws/secure/{session_id}",
+            # Issue #3332: /ws/simple and /ws/secure are compat aliases — use /ws/{session_id}
+            "websocket_simple": "/api/terminal/ws/simple/{session_id} (compat alias)",
+            "websocket_secure": "/api/terminal/ws/secure/{session_id} (compat alias)",
             # Issue #729: SSH to infrastructure hosts moved to slm-server
             "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
         },
         "security_levels": [level.value for level in SecurityLevel],
-        "consolidated_from": [
-            "terminal.py",
-            "simple_terminal_websocket.py",
-            "secure_terminal_websocket.py",
-            "base_terminal.py",
+        # Issue #3332: simple_terminal_websocket.py, secure_terminal_websocket.py,
+        # and base_terminal.py are deprecated — logic consolidated here.
+        "deprecated_modules": [
+            "api/simple_terminal_websocket.py",
+            "api/secure_terminal_websocket.py",
+            "api/base_terminal.py",
         ],
         # Issue #729: Layer separation notice
         "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
