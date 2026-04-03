@@ -68,6 +68,63 @@ export function useHighContrast() {
 }
 
 
+// ─── Dark Mode ───────────────────────────────────────────────
+
+const DARK_MODE_STORAGE_KEY = 'autobot-dark-mode'
+
+/** Shared reactive state for dark mode across all consumers. */
+const darkModeEnabled = ref(false)
+
+/**
+ * Apply or remove the dark-mode data attribute on the root element.
+ * High-contrast takes priority — dark mode will not override it.
+ */
+function applyDarkMode(enabled: boolean): void {
+  if (enabled) {
+    if (document.documentElement.getAttribute('data-theme') !== 'high-contrast') {
+      document.documentElement.setAttribute('data-theme', 'dark')
+    }
+  } else {
+    if (document.documentElement.getAttribute('data-theme') === 'dark') {
+      document.documentElement.removeAttribute('data-theme')
+    }
+  }
+}
+
+/**
+ * Dark mode composable with localStorage persistence.
+ *
+ * Issue #3305: Wire dark mode setting to CSS class.
+ */
+export function useDarkMode() {
+  function set(enabled: boolean): void {
+    darkModeEnabled.value = enabled
+    localStorage.setItem(DARK_MODE_STORAGE_KEY, String(enabled))
+    applyDarkMode(enabled)
+    logger.info('Dark mode:', enabled ? 'enabled' : 'disabled')
+  }
+
+  function toggle(): void {
+    set(!darkModeEnabled.value)
+  }
+
+  function init(): void {
+    const stored = localStorage.getItem(DARK_MODE_STORAGE_KEY)
+    if (stored === 'true') {
+      darkModeEnabled.value = true
+      applyDarkMode(true)
+    }
+  }
+
+  return {
+    enabled: darkModeEnabled,
+    set,
+    toggle,
+    init,
+  }
+}
+
+
 // ─── Focus Trap ───────────────────────────────────────────────
 
 /** Selector for all focusable elements within a container. */
