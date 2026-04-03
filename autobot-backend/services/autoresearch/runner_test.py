@@ -731,6 +731,28 @@ class TestDockerCommand:
         env_values = [cmd[i + 1] for i, v in enumerate(cmd) if v == "--env"]
         assert any("AUTOBOT_EXP_EXTRA_SEED=42" in v for v in env_values)
 
+    def test_container_name_flag_present(self):
+        config = _make_docker_config()
+        runner = _make_runner(config=config)
+        exp = _make_experiment()
+        runner._current_container_name = f"autobot_exp_{exp.id}"
+
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cmd = runner._build_docker_command(exp, Path(tmp))
+
+        assert "--name" in cmd
+        name_idx = cmd.index("--name")
+        assert cmd[name_idx + 1] == f"autobot_exp_{exp.id}"
+
+    def test_unsafe_mount_path_raises(self):
+        from pathlib import Path
+        runner = _make_runner()
+        with pytest.raises(ValueError, match="unsafe"):
+            runner._validate_mount_path(Path("/"))
+
     def test_volume_mounts_present(self):
         config = _make_docker_config()
         runner = _make_runner(config=config)
@@ -863,16 +885,15 @@ class TestExecuteInDocker:
         mock_process = AsyncMock()
         mock_process.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
         mock_process.returncode = None
-        mock_process.pid = 99999
         mock_process.kill = MagicMock()
         mock_process.wait = AsyncMock()
 
         # docker kill subprocess mock
         mock_kill_process = AsyncMock()
         mock_kill_process.returncode = 0
+        mock_kill_process.wait = AsyncMock()
 
         import tempfile
-        import os
 
         original_tmp = tempfile.TemporaryDirectory
 
@@ -887,12 +908,14 @@ class TestExecuteInDocker:
                 return self._real.__exit__(*args)
 
         call_count = 0
+        kill_args_captured = []
 
         async def _side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 return mock_process
+            kill_args_captured.extend(args)
             return mock_kill_process
 
         with patch("asyncio.create_subprocess_exec", side_effect=_side_effect):
@@ -904,6 +927,11 @@ class TestExecuteInDocker:
 
         assert not result.success
         assert "timed out" in result.error_message
+        # docker kill must target container name, not host PID
+        assert "docker" in kill_args_captured
+        assert "kill" in kill_args_captured
+        container_name = kill_args_captured[kill_args_captured.index("kill") + 1]
+        assert container_name.startswith("autobot_exp_")
 
     @pytest.mark.asyncio
     async def test_docker_nonzero_exit_returns_error(self):

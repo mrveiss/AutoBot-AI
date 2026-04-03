@@ -35,4 +35,4 @@ jobs:
           push: true
           tags: |
             ghcr.io/mrveiss/autobot-autoresearch:${{ github.sha }}
-            ghcr.io/mrveiss/autobot-autoresearch:latest
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/mrveiss/autobot-autoresearch:latest' || '' }}

@@ -75,6 +75,7 @@ class ExperimentRunner:
         self._running: bool = False
         self._lock = asyncio.Lock()
         self._current_process: Optional[asyncio.subprocess.Process] = None
+        self._current_container_name: Optional[str] = None
 
     async def run_experiment(self, experiment: Experiment) -> Experiment:
         """Execute a single experiment and persist results.
@@ -185,6 +186,7 @@ class ExperimentRunner:
 
     async def _execute_in_docker(self, experiment: Experiment) -> ExperimentResult:
         """Execute training inside an isolated Docker container."""
+        self._current_container_name = f"autobot_exp_{experiment.id}"
         with tempfile.TemporaryDirectory(prefix="autobot_exp_") as output_dir:
             cmd = self._build_docker_command(experiment, Path(output_dir))
             logger.info(
@@ -229,12 +231,16 @@ class ExperimentRunner:
         """Build the docker run command for a containerised experiment."""
         hp = experiment.hyperparams
         self._validate_extra_params(hp.extra)
+        self._validate_mount_path(Path(self.config.autoresearch_dir))
         env_flags = self._build_docker_env_flags(hp)
+        container_name = self._current_container_name or f"autobot_exp_{experiment.id}"
 
         cmd = [
             "docker",
             "run",
             "--rm",
+            "--name",
+            container_name,
             "--network",
             "none",
             "--memory",
@@ -251,6 +257,15 @@ class ExperimentRunner:
         return cmd
 
     @staticmethod
+    def _validate_mount_path(path: Path) -> None:
+        """Reject obviously unsafe mount paths (root or non-absolute)."""
+        resolved = path.resolve()
+        if not resolved.is_absolute() or resolved == Path("/"):
+            raise ValueError(
+                f"autoresearch_dir is unsafe to mount: {path}"
+            )
+
+    @staticmethod
     def _build_docker_env_flags(hp: object) -> list[str]:
         """Return --env flags mapping hyperparams to AUTOBOT_EXP_* variables."""
         flags: list[str] = []
@@ -265,14 +280,17 @@ class ExperimentRunner:
     async def _handle_docker_timeout(self, wall_time: float) -> ExperimentResult:
         """Kill the container after a timeout and return a timeout result."""
         if self._current_process and self._current_process.returncode is None:
-            try:
-                await asyncio.create_subprocess_exec(
-                    "docker",
-                    "kill",
-                    str(self._current_process.pid),
-                )
-            except Exception:
-                logger.exception("Failed to docker kill container after timeout")
+            if self._current_container_name:
+                try:
+                    kill_proc = await asyncio.create_subprocess_exec(
+                        "docker", "kill", self._current_container_name
+                    )
+                    await kill_proc.wait()
+                except Exception:
+                    logger.exception(
+                        "Failed to docker kill container %s after timeout",
+                        self._current_container_name,
+                    )
             self._current_process.kill()
             await self._current_process.wait()
 
