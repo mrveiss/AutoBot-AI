@@ -1411,10 +1411,19 @@ async def health_check(
     """
     Check the health of the architecture analyzer.
 
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
+
     Issue #744: Requires admin authentication.
     """
+    logger.warning(
+        "Deprecated health endpoint called: /api/architecture/health — "
+        "use /api/system/health instead (#3333)"
+    )
     return {
         "status": "healthy",
         "available_patterns": len(PatternType),
         "templates_loaded": len(PATTERN_TEMPLATES),
+        "deprecated": True,
+        "use_instead": "/api/system/health",
     }

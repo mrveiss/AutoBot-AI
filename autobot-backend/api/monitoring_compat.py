@@ -425,7 +425,15 @@ async def get_github_status():
 async def get_monitoring_compat_health():
     """
     Health check for monitoring compatibility layer.
+
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This entire module is deprecated; use Grafana dashboards instead. (#3333)
     """
+    logger.warning(
+        "Deprecated health endpoint called: /api/metrics/health — "
+        "use /api/system/health instead (#3333). %s",
+        DEPRECATION_MSG,
+    )
     # Check Prometheus connectivity
     try:
         cpu = await query_prometheus_instant("autobot_cpu_usage_percent")
@@ -438,5 +446,6 @@ async def get_monitoring_compat_health():
         "prometheus_connected": prometheus_healthy,
         "prometheus_url": PROMETHEUS_URL,
         "deprecation_notice": DEPRECATION_MSG,
+        "use_instead": "/api/system/health",
         "timestamp": datetime.now().isoformat(),
     }

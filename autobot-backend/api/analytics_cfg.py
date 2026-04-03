@@ -1452,13 +1452,22 @@ async def cfg_health(
     """
     Health check for CFG analyzer.
 
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
+
     Issue #744: Requires admin authentication.
     """
+    logger.warning(
+        "Deprecated health endpoint called: /api/cfg-analytics/health — "
+        "use /api/system/health instead (#3333)"
+    )
     return JSONResponse(
         status_code=200,
         content={
             "status": "healthy",
             "service": "cfg_analyzer",
+            "deprecated": True,
+            "use_instead": "/api/system/health",
             "capabilities": [
                 "cfg_construction",
                 "unreachable_code_detection",
