@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "7634876467695ca4",
+        "id": "37d4195077e89425",
         "type": "tabs",
         "children": [
           {
-            "id": "28620ee7fa1c0e23",
+            "id": "6bcb51ce41706d03",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -70,7 +70,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -176,9 +177,64 @@
       "bases:Create new base": false
     }
   },
-  "active": "28620ee7fa1c0e23",
+  "active": "6bcb51ce41706d03",
   "lastOpenFiles": [
-    "plans/2026-03-01-voice-sidepanel-implementation.md",
-    "INDEX.md"
+<<<<<<< Updated upstream
+    "releases/VLLM_OPTIMIZATION_RELEASE_NOTES.md",
+    "INDEX.md",
+    "archives/plans/LAYER_SEPARATION_DELETIONS.md",
+    "archives/plans/2026-03-26-redis-mcp-bridge-design.md",
+    "archives/plans/2026-03-25-vision-automation-integration-implementation.md",
+    "archives/plans/2026-03-25-vision-automation-integration-design.md",
+    "archives/plans/2026-03-22-research-skill-design.md",
+    "archives/plans/2026-03-22-neural-mesh-rag-implementation.md",
+    "archives/plans/2026-02-28-github-issue-enforcement-implementation.md",
+    "archives/plans/2026-02-28-github-issue-enforcement-design.md",
+    "archives/plans/2026-02-27-vision-chat-modal-implementation.md",
+    "archives/plans/2026-02-27-vision-chat-modal-design.md",
+    "archives/plans/2026-02-27-system-updates-implementation.md",
+    "archives/plans/2026-02-27-system-updates-design.md",
+    "archives/plans/2026-02-27-precommit-autoformat-hook-design.md",
+    "archives/plans/2026-02-02-config-registry-consolidation-design.md",
+    "archives/plans/2026-02-02-agent-llm-config-implementation.md",
+    "archives/plans/2026-02-02-agent-llm-config-design.md",
+    "archives/plans/2026-02-01-knowledge-manager-frontend-implementation.md",
+    "archives/plans/2026-02-01-knowledge-manager-frontend-design.md",
+    "archives/plans/2026-01-31-slm-code-distribution-implementation.md",
+    "archives/plans/2026-01-31-slm-code-distribution-design.md",
+    "archives/plans/2026-01-31-issue-738-code-consolidation.md",
+    "archives/plans/2026-01-31-cache-coordinator-design.md",
+    "archives/plans/2026-01-30-layer-separation-implementation.md",
+    "archives/plans/2026-01-30-layer-separation-design.md",
+    "archives/plans"
+=======
+    "api/npu-worker-pool.md",
+    "plans/2026-02-24-community-growth-skill-implementation.md",
+    "workflow/_index.md",
+    "user/_index.md",
+    "troubleshooting/_index.md",
+    "testing/_index.md",
+    "security/_index.md",
+    "sdk/_index.md",
+    "runbooks/_index.md",
+    "refactoring/_index.md",
+    "planning/_index.md",
+    "operations/_index.md",
+    "infrastructure/_index.md",
+    "implementation/_index.md",
+    "guides/_index.md",
+    "frontend/_index.md",
+    "features/_index.md",
+    "development/_index.md",
+    "developer/_index.md",
+    "deployment/_index.md",
+    "archives/plans/_index.md",
+    "archives/plans",
+    "architecture/_index.md",
+    "api/_index.md",
+    "agents/_index.md",
+    "adr/_index.md",
+    "developer/CONSOLIDATION_PROJECT_STATUS.md"
+>>>>>>> Stashed changes
   ]
 }
