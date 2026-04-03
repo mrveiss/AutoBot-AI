@@ -114,6 +114,124 @@ docker_containers:
 
 Poll `GET /api/slm/deployments/{deployment_id}` until `status` is `completed` or `failed`.
 
+## SLM-side deployment lifecycle
+
+When the AutoBot backend calls `SLMClient.create_deployment()`, the SLM backend (`autobot-slm-backend/api/deployments.py`) performs the following:
+
+```
+SLM POST /deployments
+  │
+  ├─ Validates node_id exists and is ONLINE in the SLM database
+  ├─ Creates a Deployment record (status=PENDING) in PostgreSQL
+  ├─ Launches asyncio.create_task(_run_deployment(deployment_id))
+  └─ Returns deployment record immediately (202 Accepted)
+
+_run_deployment()
+  ├─ status → RUNNING
+  ├─ Resolves node SSH credentials from the encrypted node record
+  ├─ Builds Ansible inventory for the target node
+  ├─ Runs: ansible-playbook <playbook> -i <inventory> --extra-vars <json>
+  │     (via PlaybookExecutor — SLM_ANSIBLE_DIR defaults to
+  │      /opt/autobot/code_source/autobot-slm-backend/ansible)
+  ├─ status → COMPLETED  (exit 0)
+  └─ status → FAILED     (exit non-0, stderr captured in error field)
+```
+
+### SLM deployment status values
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Queued, playbook not yet started |
+| `running` | Ansible playbook executing on the target node |
+| `completed` | Playbook exited 0 — all tasks succeeded |
+| `failed` | Playbook exited non-0 — check `error` field for stderr |
+
+### SLM's own `POST /deployments` payload shape
+
+The AutoBot backend sends this to the SLM:
+
+```json
+{
+  "node_id": "node-001",
+  "roles":   ["docker"],
+  "extra_data": {
+    "playbook":   "deploy-hybrid-docker.yml",
+    "extra_vars": {
+      "docker_containers": [
+        {
+          "name":           "my-app",
+          "image":          "myregistry/my-app:v1.2.3",
+          "ports":          ["8080:80/tcp"],
+          "environment":    {"APP_ENV": "production"},
+          "restart_policy": "unless-stopped"
+        }
+      ]
+    }
+  }
+}
+```
+
+The SLM validates that `roles` contains only known role names (from `role_registry.DEFAULT_ROLES`) before accepting the request.
+
+### Ansible playbook execution
+
+The SLM's `PlaybookExecutor` service resolves the playbook path relative to `SLM_ANSIBLE_DIR` and runs it with the node's SSH credentials:
+
+```bash
+ansible-playbook deploy-hybrid-docker.yml \
+  -i /tmp/slm-inventory-<uuid>.yml \
+  --extra-vars '{"docker_containers": [...]}' \
+  --private-key /home/autobot/.ssh/autobot_key \
+  -u autobot
+```
+
+The inventory file contains the target node's IP address and SSH port, built from the node record stored in the SLM database.
+
+## Complete poll-to-completion example
+
+```python
+import httpx
+import time
+
+BASE_URL = "https://autobot.example.com:8443/api"
+TOKEN    = "your-jwt-token"
+
+client = httpx.Client(
+    base_url=BASE_URL,
+    headers={"Authorization": f"Bearer {TOKEN}"},
+    verify=False,
+)
+
+# 1. Trigger deployment
+response = client.post("/slm/deployments/docker", json={
+    "node_id": "node-001",
+    "containers": [{
+        "name":  "redis",
+        "image": "redis",
+        "tag":   "7-alpine",
+        "ports": [{"host_port": 6380, "container_port": 6379}],
+        "restart_policy": "unless-stopped"
+    }]
+})
+response.raise_for_status()
+dep = response.json()
+dep_id = dep["deployment_id"]
+print(f"Deployment {dep_id} triggered, status={dep['status']}")
+
+# 2. Poll until done (SLM status: pending → running → completed/failed)
+for _ in range(60):          # max 5 minutes
+    time.sleep(5)
+    status_resp = client.get(f"/slm/deployments/{dep_id}").json()
+    print(f"  status={status_resp['status']}")
+    if status_resp["status"] in ("completed", "failed"):
+        break
+
+if status_resp["status"] == "failed":
+    print(f"Deployment failed: {status_resp.get('error')}")
+else:
+    print("Deployment completed successfully")
+```
+
 ## Multi-step multi-node deployment (DeploymentOrchestrator)
 
 For rolling out across multiple nodes with a sequential, parallel, or canary strategy, use the generic deployment API:
