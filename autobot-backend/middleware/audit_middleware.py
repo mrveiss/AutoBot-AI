@@ -72,12 +72,13 @@ def set_main_event_loop(loop: asyncio.AbstractEventLoop) -> None:
 
 # Issue #380: Module-level frozensets for audit checks
 _MODIFYING_HTTP_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
+# Issue #3334: /api/config/ replaced by /api/settings/ — updated sensitive prefix list
 _SENSITIVE_PATH_PREFIXES = (
     "/api/auth/",
     "/api/security/",
     "/api/elevation/",
     "/api/files/",
-    "/api/config/",
+    "/api/settings/",
 )
 
 
@@ -99,8 +100,10 @@ AUTO_AUDIT_OPERATIONS = {
     "/api/chat/sessions": "session.create",
     "/api/agent-terminal/sessions": "session.create",
     "/api/terminal/sessions": "session.create",
-    # Configuration
-    "/api/config": "config.update",
+    # Configuration — Issue #3334: consolidated under /api/settings/
+    "/api/settings/": "config.update",
+    "/api/settings/config": "config.update",
+    "/api/settings/backend": "config.update",
 }
 
 
