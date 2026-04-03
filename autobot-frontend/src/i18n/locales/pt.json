@@ -4778,7 +4778,8 @@
       "accountLocked": "Conta temporariamente bloqueada devido a múltiplas tentativas falhadas",
       "tooManyAttempts": "Demasiadas tentativas de início de sessão. Tente mais tarde.",
       "serverError": "Erro do servidor. Tente novamente mais tarde.",
-      "unexpectedError": "Ocorreu um erro inesperado"
+      "unexpectedError": "Ocorreu um erro inesperado",
+      "footer": "© 2026 AutoBot. Todos os direitos reservados."
     }
   },
   "browser": {
