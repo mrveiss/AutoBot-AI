@@ -250,6 +250,23 @@
       register: _slm_nginx_rerendered
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    # Re-build the SLM frontend so VITE_API_URL='/slm' is baked in (#3268).
+    # Without this, the SLM login page calls /api/auth/login which nginx routes
+    # to the user backend (port 8001) → 502 in co-located mode.
+    # Must run BEFORE nginx test/reload so the new assets are served immediately.
+    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+      become_user: "{{ slm_user | default('autobot') }}"
+      environment:
+        VITE_API_URL: "/slm"
+      when:
+        - _is_slm_frontend_colocated | bool
+        - slm_colocated_frontend | default(false) | bool
+      changed_when: true
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     - name: "SLM | Test nginx config after co-location update"
       ansible.builtin.command:
         cmd: nginx -t
@@ -264,22 +281,6 @@
         state: reloaded
       when:
         - _slm_nginx_rerendered is changed
-      tags: ['frontend', 'slm-nginx', 'provision']
-
-    # Re-build the SLM frontend so VITE_API_URL='/slm' is baked in (#3268).
-    # Without this, the SLM login page calls /api/auth/login which nginx routes
-    # to the user backend (port 8001) → 502 in co-located mode.
-    - name: "SLM | Rebuild SLM frontend with co-located API prefix (#3268)"
-      ansible.builtin.command:
-        cmd: npm run build
-        chdir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
-      become_user: "{{ slm_user | default('autobot') }}"
-      environment:
-        VITE_API_URL: "/slm"
-      when:
-        - _is_slm_frontend_colocated | bool
-        - slm_colocated_frontend | default(false) | bool
-      changed_when: true
       tags: ['frontend', 'slm-nginx', 'provision']
 
 # -------------------------------------------------------------------
