@@ -60,6 +60,18 @@ class AutoResearchConfig:
     max_concurrent_experiments: int = 1
     python_executable: Optional[str] = None
 
+    # Staged evaluation (cheap-first gating)
+    staged_eval_fraction: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION", "0.3")
+        )
+    )
+    staged_eval_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD", "0.5")
+        )
+    )
+
     # Data directory for experiment outputs
     data_dir: Path = field(
         default_factory=lambda: Path(

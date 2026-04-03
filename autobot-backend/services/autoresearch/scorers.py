@@ -18,7 +18,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +56,21 @@ class PromptScorer(ABC):
         """Unique scorer identifier."""
 
     @abstractmethod
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
         """Score a prompt variant's output.
 
         Args:
             prompt_output: The text produced by running the prompt variant.
             context: Scorer-specific context (hyperparams, criteria, etc.).
+            subset_fraction: If provided (0 < value <= 1), evaluate on this
+                fraction of benchmark samples instead of the full set.
+                Scorers that do not support subset evaluation ignore this
+                parameter.  Pass None (default) for full evaluation.
 
         Returns:
             ScorerResult with normalized score.
@@ -93,7 +102,19 @@ class ValBpbScorer(PromptScorer):
     def name(self) -> str:
         return "val_bpb"
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction is informational for this scorer; full experiment
+        # is always required to get a valid val_bpb reading.
+        if subset_fraction is not None:
+            logger.debug(
+                "ValBpbScorer: subset_fraction=%s ignored — full experiment required",
+                subset_fraction,
+            )
         hp_data = context.get("hyperparams", {})
         hp = HyperParams.from_dict(hp_data) if hp_data else HyperParams()
 
@@ -169,7 +190,14 @@ class LLMJudgeScorer(PromptScorer):
     def name(self) -> str:
         return "llm_judge"
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction: LLMJudgeScorer evaluates a single output text so
+        # sub-sampling is not applicable; parameter accepted for interface compat.
         criteria_str = ", ".join(self._criteria)
         system_msg = _JUDGE_SYSTEM_PROMPT.format(criteria=criteria_str)
 
@@ -260,7 +288,14 @@ class HumanReviewScorer(PromptScorer):
             )
         return value
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction: HumanReviewScorer queues the variant for a human;
+        # sub-sampling does not apply — parameter accepted for interface compat.
         session_id = self._validate_key_component(
             context.get("session_id", "unknown"), "session_id"
         )
