@@ -1,80 +1,119 @@
-# AutoBot IP Addressing Scheme
+---
+tags:
+  - api
+  - networking
+  - deployment
+aliases:
+  - IP Addressing
+  - Network Configuration
+---
 
-## **Critical Rule: NO LOCALHOST USAGE**
+# IP Addressing Scheme
 
-**NEVER use `localhost` in AutoBot configurations.** Each component must use its designated 127.0.0.x IP address to avoid routing confusion between hosts and containers.
+AutoBot runs in two modes. The addressing rules differ per mode. **Never hardcode
+a specific IP address** — always derive it from configuration or Ansible variables.
 
-## **IP Address Allocation**
+---
 
-| Component | IP Address | Purpose | Examples |
-|-----------|------------|---------|----------|
-| `127.0.0.1` | **RESERVED** | Internal processes only | System internal only |
-| `127.0.0.2` | Windows Host | Windows services | Windows-side services |
-| `127.0.0.3` | WSL Kali | AutoBot backend, Ollama | `https://127.0.0.3:8443` |
-| `127.0.0.4` | Playwright | VNC, browser testing | `http://127.0.0.4:6080` |
-| `127.0.0.5` | NPU Worker | AI processing | `http://127.0.0.5:8081` |
-| `127.0.0.6` | AI Stack | ML services | `http://127.0.0.6:8080` |
-| `127.0.0.7` | Redis | Database | `redis://127.0.0.7:6379` |
-| `127.0.0.8` | Log Viewer | Seq logging | `http://127.0.0.8:5341` |
+## Distributed Mode (Production — Multi-VM)
 
-## **Configuration Requirements**
+Each role runs on a dedicated VM. IPs are **assigned at install time** by `install.sh`,
+which detects the network interface and writes them to `/etc/autobot/slm-secrets.env`.
 
-### **Frontend (Vue.js)**
-```javascript
-// ✅ CORRECT - Use specific IPs
-BASE_URL: 'https://127.0.0.3:8443'
-WS_BASE_URL: 'wss://127.0.0.3:8443/ws'
-PLAYWRIGHT_VNC_URL: 'http://127.0.0.4:6080/vnc.html'
+All Ansible templates reference role variables, not literal IPs:
 
-// ❌ WRONG - Never use localhost
-BASE_URL: 'https://localhost:8443'  // NO!
+| Role | Ansible var | Services | Key ports |
+| --- | --- | --- | --- |
+| SLM Manager | `infrastructure.hosts.slm` | SLM API, nginx, Prometheus, Grafana | 443, 8000, 9090, 3000 |
+| Backend | `infrastructure.hosts.backend` | FastAPI, noVNC | 8443, 8001, 6080 |
+| Frontend | `infrastructure.hosts.frontend` | nginx, Vue build | 443 |
+| Database | `infrastructure.hosts.database` | Redis, ChromaDB, PostgreSQL | 6379, 8100, 5432 |
+| AI/ML | `infrastructure.hosts.aiml` | AI Stack, NPU Worker, Ollama | 8080, 8081, 11434 |
+| Browser | `infrastructure.hosts.browser` | Playwright, VNC | 3000, 6080, 5901 |
+
+> Full role descriptions, firewall rules, and service configs: [VM_ROLES.md](../architecture/VM_ROLES.md)
+
+In Ansible templates use:
+
+```jinja2
+{{ infrastructure.hosts.backend }}:8443
+{{ infrastructure.hosts.database }}:6379
 ```
 
-### **Backend**
-```json
-{
-  "backend": {
-    "api_endpoint": "https://127.0.0.3:8443",
-    "ollama_endpoint": "http://127.0.0.3:11434"
-  }
-}
+In Python (runtime) use `autobot_shared.ssot_config`:
+
+```python
+from autobot_shared.ssot_config import config
+backend_url = config.network.backend_url   # resolved at startup from env
 ```
 
-### **Docker Containers**
-- Each container gets its assigned 127.0.0.x IP
-- Containers use host networking to access other components
-- Never use `localhost` or `127.0.0.1` for inter-component communication
-
-## **Why This Scheme?**
-
-1. **Eliminates Routing Confusion**: Each component has a unique, predictable address
-2. **Container Isolation**: Prevents localhost routing loops
-3. **Debugging**: Easy to identify which component is being accessed
-4. **Consistency**: Same addressing works across host and container environments
-5. **Scalability**: Clear pattern for adding new components
-
-## **Migration Checklist**
-
-- [ ] Update all `localhost` references in frontend code
-- [ ] Update backend configuration files
-- [ ] Update Vite proxy configuration
-- [ ] Update Docker service configurations
-- [ ] Update environment variables
-- [ ] Test all inter-component communication
-
-## **Testing Commands**
-
+In shell scripts use `ssot-config.sh`:
 ```bash
-# Test backend connectivity
-curl https://127.0.0.3:8443/api/system/health
-
-# Test VNC access
-curl http://127.0.0.4:6080/vnc.html
-
-# Test from container
-docker exec autobot-playwright-vnc curl https://127.0.0.3:8443/api/system/health
+source /opt/autobot/infrastructure/shared/scripts/lib/ssot-config.sh
+curl "https://${AUTOBOT_BACKEND_HOST}:8443/api/system/health"
 ```
 
 ---
 
-**⚠️ CRITICAL**: Any use of `localhost` in AutoBot configurations is considered a bug and must be replaced with the proper 127.0.0.x address according to this scheme.
+## Co-located Mode (Single Host / Development)
+
+All services run on one machine. Each service binds to a `127.0.0.x` loopback alias
+so they can address each other by a stable IP without routing ambiguity.
+
+> **Critical rule: never use `localhost` or `127.0.0.1`.** Use the specific alias below.
+
+| Alias | Role | Key services | Example |
+| --- | --- | --- | --- |
+| `127.0.0.1` | **RESERVED** | System internal only | — |
+| `127.0.0.2` | Windows host | Windows-side services | — |
+| `127.0.0.3` | Backend | FastAPI, Ollama | `https://127.0.0.3:8443` |
+| `127.0.0.4` | Browser / Playwright | VNC, browser automation | `http://127.0.0.4:6080` |
+| `127.0.0.5` | NPU Worker | AI inference | `http://127.0.0.5:8081` |
+| `127.0.0.6` | AI Stack | LLM serving | `http://127.0.0.6:8080` |
+| `127.0.0.7` | Redis | Database | `redis://127.0.0.7:6379` |
+| `127.0.0.8` | Log Viewer | Seq logging | `http://127.0.0.8:5341` |
+
+### Why loopback aliases and not `localhost`?
+
+- Eliminates routing ambiguity when Docker / WSL share the loopback stack
+- Each service has a unique, grep-able address for debugging
+- The same `ssot_config` values work in co-located and distributed mode — only
+  the resolved IP changes, the code does not
+
+### Setting up loopback aliases (co-located only)
+
+```bash
+# Add aliases (run once, or add to /etc/rc.local)
+sudo ip addr add 127.0.0.3/8 dev lo
+sudo ip addr add 127.0.0.4/8 dev lo
+sudo ip addr add 127.0.0.5/8 dev lo
+sudo ip addr add 127.0.0.6/8 dev lo
+sudo ip addr add 127.0.0.7/8 dev lo
+```
+
+### Example configuration (co-located)
+
+```javascript
+// Vue ssot-config.ts — co-located values
+BASE_URL: 'https://127.0.0.3:8443'
+WS_BASE_URL: 'wss://127.0.0.3:8443/ws'
+PLAYWRIGHT_VNC_URL: 'http://127.0.0.4:6080/vnc.html'
+```
+
+---
+
+## Rules for All Modes
+
+1. **No hardcoded IPs anywhere in code or docs.** Reference Ansible vars, ssot_config, or environment variables.
+2. **No `localhost` / `127.0.0.1`.** Use role aliases in co-located mode, or `ssot_config` values in distributed mode.
+3. **Document by role, not by IP.** When writing docs or error messages, say "backend VM" not "172.16.168.20".
+4. **IPs in docs are examples only.** Any specific IP shown in documentation reflects one test deployment and is not canonical.
+
+---
+
+## Related
+
+- [VM_ROLES.md](../architecture/VM_ROLES.md) — full role definitions, services, and ports
+- [AUTOBOT_REFERENCE.md](../developer/AUTOBOT_REFERENCE.md) — quick reference
+- [Ansible inventory](../../autobot-slm-backend/ansible/inventory/) — live host configuration
+- [ssot_config](../../autobot-backend/autobot_shared/) — Python config access

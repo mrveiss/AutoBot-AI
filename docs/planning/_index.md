@@ -8,7 +8,10 @@ aliases:
 
 # Planning Documents
 
-> Historical planning and analysis documents. For active work see [GitHub Issues](https://github.com/mrveiss/AutoBot-AI/issues).
+> **Active tasks:** [GitHub Issues](https://github.com/mrveiss/AutoBot-AI/issues) — authoritative source for all work items.
+> **Task file index:** [ACTIVE_TASKS.md](ACTIVE_TASKS.md) — status of all implementation breakdown files in `tasks/`.
+>
+> Documents below are historical planning records. Do not add new tasks here.
 
 ## Implementation Plans
 

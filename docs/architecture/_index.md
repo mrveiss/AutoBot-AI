@@ -17,6 +17,7 @@ aliases:
 | [VISUAL_ARCHITECTURE](VISUAL_ARCHITECTURE.md) | Visual architecture diagram |
 | [DISTRIBUTED_6VM_ARCHITECTURE](DISTRIBUTED_6VM_ARCHITECTURE.md) | 6-VM distributed deployment |
 | [DISTRIBUTED_ARCHITECTURE](DISTRIBUTED_ARCHITECTURE.md) | Distributed architecture |
+| [VM_ROLES](VM_ROLES.md) | VM role definitions — services, ports, Ansible groups |
 | [NETWORK_TOPOLOGY](NETWORK_TOPOLOGY.md) | Network topology |
 | [data-flows](data-flows.md) | Data flow diagrams |
 | [dependency_injection](dependency_injection.md) | Dependency injection patterns |
