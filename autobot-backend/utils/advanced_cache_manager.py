@@ -1101,7 +1101,17 @@ class SimpleCacheManager:
                     if cached_entry is not None:
                         logger.debug("Cache HIT: %s - serving from cache", key)
                         _record_cache_hit(key)
-                        return _deserialise_cached_entry(cached_entry)
+                        # Issue #3352: _deserialise_cached_entry returns None on
+                        # corrupt/malformed entries; treat that as a cache miss
+                        # and fall through to execute the real function.
+                        result = _deserialise_cached_entry(cached_entry)
+                        if result is not None:
+                            return result
+                        logger.warning(
+                            "Cache entry for key %s could not be deserialised; "
+                            "treating as cache miss",
+                            key,
+                        )
                 except Exception as e:
                     logger.error("Cache retrieval error for key %s: %s", key, e)
 
@@ -1200,16 +1210,25 @@ def cache_function(cache_key: str = None, ttl: int = 300):
             try:
                 cached_result = await cache_manager.get(key)
                 if cached_result is not None:
-                    return cached_result
+                    # Issue #3351: deserialise envelope back to JSONResponse if needed
+                    deserialised = _deserialise_cached_entry(cached_result)
+                    if deserialised is not None:
+                        return deserialised
             except Exception as e:
                 logger.error("Cache retrieval error for key %s: %s", key, e)
 
             # Execute and cache
             result = await func(*args, **kwargs)
 
-            if cache_manager._is_cacheable_response(result):
+            # Issue #3351: Use _serialise_response so that JSONResponse objects
+            # are wrapped in an envelope before storage.  Storing the raw
+            # Starlette object causes json.dumps to raise TypeError and the
+            # entry is silently dropped.  _serialise_response returns None for
+            # responses that must not be cached (errors, empty dicts, etc.).
+            serialisable = _serialise_response(result)
+            if serialisable is not None:
                 try:
-                    await cache_manager.set(key, result, ttl)
+                    await cache_manager.set(key, serialisable, ttl)
                 except Exception as e:
                     logger.error("Cache storage error for key %s: %s", key, e)
 
