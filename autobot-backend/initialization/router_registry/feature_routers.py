@@ -291,6 +291,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["chat-knowledge"],
         "chat_knowledge",
     ),
+    # Issue #3348: KB Librarian agent HTTP surface (re-registered)
+    (
+        "api.kb_librarian",
+        "/kb-librarian",
+        ["kb-librarian", "knowledge"],
+        "kb_librarian",
+    ),
     # NPU and Redis
     ("api.npu_workers", "", ["npu-workers"], "npu_workers"),
     ("api.redis_service", "/redis-service", ["redis-service"], "redis_service"),
