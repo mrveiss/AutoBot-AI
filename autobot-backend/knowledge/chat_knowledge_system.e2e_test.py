@@ -68,7 +68,7 @@ class ChatKnowledgeSystemTester:
         }
 
         async with self.session.post(
-            f"{BASE_URL}/api/chat_knowledge/context/create", json=context_data
+            f"{BASE_URL}/api/chat-knowledge/context/create", json=context_data
         ) as response:
             if response.status == 200:
                 data = await response.json()
@@ -108,7 +108,7 @@ if __name__ == "__main__":
                 data.add_field("association_type", "upload")
 
                 async with self.session.post(
-                    f"{BASE_URL}/api/chat_knowledge/files/upload/{self.test_chat_id}",
+                    f"{BASE_URL}/api/chat-knowledge/files/upload/{self.test_chat_id}",
                     data=data,
                 ) as response:
                     if response.status == 200:
@@ -151,7 +151,7 @@ if __name__ == "__main__":
             }
 
             async with self.session.post(
-                f"{BASE_URL}/api/chat_knowledge/knowledge/add_temporary",
+                f"{BASE_URL}/api/chat-knowledge/knowledge/add_temporary",
                 json=knowledge_data,
             ) as response:
                 if response.status == 200:
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
         # Get pending knowledge items
         async with self.session.get(
-            f"{BASE_URL}/api/chat_knowledge/knowledge/pending/{self.test_chat_id}"
+            f"{BASE_URL}/api/chat-knowledge/knowledge/pending/{self.test_chat_id}"
         ) as response:
             if response.status == 200:
                 data = await response.json()
@@ -204,7 +204,7 @@ if __name__ == "__main__":
                             }
 
                             async with self.session.post(
-                                f"{BASE_URL}/api/chat_knowledge/knowledge/decide",
+                                f"{BASE_URL}/api/chat-knowledge/knowledge/decide",
                                 json=decision_data,
                             ) as decision_response:
                                 if decision_response.status == 200:
@@ -253,7 +253,7 @@ if __name__ == "__main__":
             }
 
             async with self.session.post(
-                f"{BASE_URL}/api/chat_knowledge/search", json=search_data
+                f"{BASE_URL}/api/chat-knowledge/search", json=search_data
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         }
 
         async with self.session.post(
-            f"{BASE_URL}/api/chat_knowledge/compile", json=compile_data
+            f"{BASE_URL}/api/chat-knowledge/compile", json=compile_data
         ) as response:
             if response.status == 200:
                 data = await response.json()
@@ -339,7 +339,7 @@ if __name__ == "__main__":
         logger.info("📋 Test 7: Context Retrieval")
 
         async with self.session.get(
-            f"{BASE_URL}/api/chat_knowledge/context/{self.test_chat_id}"
+            f"{BASE_URL}/api/chat-knowledge/context/{self.test_chat_id}"
         ) as response:
             if response.status == 200:
                 data = await response.json()
