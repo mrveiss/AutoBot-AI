@@ -502,10 +502,22 @@ EOF
         network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
         [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
         [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
-        sed -i "s|^SLM_EXTERNAL_URL=.*|SLM_EXTERNAL_URL=https://${local_ip}|" "${SECRETS_FILE}"
-        sed -i "s|^SLM_HOST=.*|SLM_HOST=${local_ip}|" "${SECRETS_FILE}"
-        sed -i "s|^NETWORK_SUBNET=.*|NETWORK_SUBNET=${network_subnet}|" "${SECRETS_FILE}"
-        sed -i "s|^NETWORK_GATEWAY=.*|NETWORK_GATEWAY=${network_gateway}|" "${SECRETS_FILE}"
+        # Upsert each key: replace the line if it exists, append if missing.
+        # Plain sed s/// silently does nothing when the key is absent — which
+        # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
+        # before those keys were introduced (#3194).
+        _upsert_secrets_key() {
+            local key="$1" value="$2" file="$3"
+            if grep -q "^${key}=" "${file}"; then
+                sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+            else
+                echo "${key}=${value}" >> "${file}"
+            fi
+        }
+        _upsert_secrets_key "SLM_EXTERNAL_URL" "https://${local_ip}" "${SECRETS_FILE}"
+        _upsert_secrets_key "SLM_HOST"         "${local_ip}"          "${SECRETS_FILE}"
+        _upsert_secrets_key "NETWORK_SUBNET"   "${network_subnet}"    "${SECRETS_FILE}"
+        _upsert_secrets_key "NETWORK_GATEWAY"  "${network_gateway}"   "${SECRETS_FILE}"
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
 
