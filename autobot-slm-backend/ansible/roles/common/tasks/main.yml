@@ -178,7 +178,9 @@
   hostname:
     name: "{{ inventory_hostname }}"
   become: yes
-  when: inventory_hostname is defined
+  when:
+    - inventory_hostname is defined
+    - inventory_hostname != '00-SLM-Manager'
   tags: ['common', 'hostname']
 
 - name: "Common | Update /etc/hosts"
