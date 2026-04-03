@@ -301,8 +301,9 @@ class OSAwareToolSelector:
         if "{network}" in command and not resolved_network:
             logger.warning(
                 "Tool command contains {network} placeholder but no network is configured. "
-                "Set NETWORK_SUBNET env var or pass 'network' in parameters."
+                "Set AUTOBOT_DEFAULT_SCAN_NETWORK env var or pass 'network' in parameters."
             )
+            return command
 
         # Replace common placeholders
         replacements = {
