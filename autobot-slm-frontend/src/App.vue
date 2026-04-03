@@ -18,7 +18,7 @@ import UpdateNotification from '@/components/UpdateNotification.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
-import { useHighContrast } from '@/composables/useAccessibility'
+import { useHighContrast, useDarkMode } from '@/composables/useAccessibility'
 import { ensureTimezone } from '@/composables/useTimezone'
 
 const route = useRoute()
@@ -26,6 +26,7 @@ const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const ws = useSlmWebSocket()
 const highContrast = useHighContrast()
+const darkMode = useDarkMode()
 
 const isLoginPage = computed(() => route.name === 'login')
 
@@ -65,6 +66,8 @@ async function initializeApp(): Promise<void> {
 onMounted(async () => {
   // Issue #754: Initialize high contrast preference from localStorage
   highContrast.init()
+  // Issue #3305: Initialize dark mode preference from localStorage
+  darkMode.init()
 
   if (authStore.isAuthenticated) {
     await initializeApp()

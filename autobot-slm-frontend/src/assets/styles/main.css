@@ -211,6 +211,94 @@
   border-color: var(--a11y-border) !important;
 }
 
+/* ─── Dark Mode (Issue #3305) ───────────────────────────────── */
+
+:root[data-theme='dark'] {
+  --a11y-focus-ring: #38bdf8;
+  --a11y-focus-width: 2px;
+  --a11y-bg: #111827;
+  --a11y-bg-surface: #1f2937;
+  --a11y-bg-muted: #374151;
+  --a11y-text: #f9fafb;
+  --a11y-text-muted: #9ca3af;
+  --a11y-border: #374151;
+  --a11y-sidebar-bg: #030712;
+  --a11y-sidebar-text: #f3f4f6;
+  --a11y-sidebar-active: #38bdf8;
+}
+
+:root[data-theme='dark'] body {
+  background-color: var(--a11y-bg);
+  color: var(--a11y-text);
+}
+
+:root[data-theme='dark'] .card {
+  background-color: var(--a11y-bg-surface);
+  border-color: var(--a11y-border);
+  color: var(--a11y-text);
+}
+
+:root[data-theme='dark'] .bg-gray-100,
+:root[data-theme='dark'] .bg-gray-50 {
+  background-color: var(--a11y-bg) !important;
+}
+
+:root[data-theme='dark'] .bg-white {
+  background-color: var(--a11y-bg-surface) !important;
+}
+
+:root[data-theme='dark'] .bg-gray-200 {
+  background-color: var(--a11y-bg-muted) !important;
+}
+
+:root[data-theme='dark'] .text-gray-900,
+:root[data-theme='dark'] .text-gray-800,
+:root[data-theme='dark'] .text-gray-700 {
+  color: var(--a11y-text) !important;
+}
+
+:root[data-theme='dark'] .text-gray-600,
+:root[data-theme='dark'] .text-gray-500,
+:root[data-theme='dark'] .text-gray-400 {
+  color: var(--a11y-text-muted) !important;
+}
+
+:root[data-theme='dark'] .border-gray-200,
+:root[data-theme='dark'] .border-gray-300,
+:root[data-theme='dark'] .border-gray-100 {
+  border-color: var(--a11y-border) !important;
+}
+
+:root[data-theme='dark'] .btn-secondary {
+  background-color: var(--a11y-bg-muted) !important;
+  color: var(--a11y-text) !important;
+  border-color: var(--a11y-border) !important;
+}
+
+:root[data-theme='dark'] .input {
+  background-color: var(--a11y-bg-surface);
+  border-color: var(--a11y-border);
+  color: var(--a11y-text);
+}
+
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] textarea {
+  background-color: var(--a11y-bg-surface) !important;
+  border-color: var(--a11y-border) !important;
+  color: var(--a11y-text) !important;
+}
+
+:root[data-theme='dark'] table thead {
+  background-color: var(--a11y-bg-muted) !important;
+}
+
+:root[data-theme='dark'] table th,
+:root[data-theme='dark'] table td {
+  color: var(--a11y-text) !important;
+  border-color: var(--a11y-border) !important;
+}
+
 /* ─── Global Focus Indicators (Issue #754) ───────────────────── */
 
 *:focus-visible {
