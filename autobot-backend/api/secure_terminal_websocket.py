@@ -1,16 +1,38 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
 """
-Secure Terminal WebSocket Handler with Command Auditing
-Provides PTY terminal with enhanced security logging and optional sandboxing
+Secure Terminal WebSocket Handler — DEPRECATED (Issue #3332)
+
+This module is deprecated. The consolidated terminal implementation lives in:
+    api/terminal.py   — Primary router with /api/terminal/ws/{session_id}
+    api/terminal_handlers.py — ConsolidatedTerminalWebSocket with security_level support
+
+The /api/terminal/ws/secure/{session_id} WebSocket endpoint in terminal.py
+provides backward-compatible elevated-security access (SecurityLevel.ELEVATED).
+
+SecureTerminalSession and handle_secure_terminal_websocket are kept here only
+for backward compatibility with:
+    api/secure_terminal_websocket_test.py
+    security/security_integration_test.py
+No production code should import from this module.
 """
 
 import json
 import logging
 import time
+import warnings
 from typing import Dict, Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .base_terminal import BaseTerminalWebSocket
+
+warnings.warn(
+    "api.secure_terminal_websocket is deprecated (Issue #3332). "
+    "Use api.terminal and /api/terminal/ws/secure/{session_id} instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,8 @@ __all__ = [
     "knowledge",
     "llm",
     "sandbox",
-    "base_terminal",
+    # Issue #567: base_terminal archived — endpoints migrated to terminal.py
+    # Issue #3332: base_terminal removed from public API surface
     "websockets",
     "enhanced_search",  # New NPU-accelerated search API
     "analytics",  # Enhanced backend analytics API

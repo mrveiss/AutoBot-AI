@@ -1,15 +1,36 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
 """
-Simplified Terminal WebSocket Handler for AutoBot
-A working alternative to the complex PTY-based system with enhanced security
+Simple Terminal WebSocket Handler — DEPRECATED (Issue #3332)
+
+This module is deprecated. The consolidated terminal implementation lives in:
+    api/terminal.py   — Primary router with /api/terminal/ws/{session_id}
+    api/terminal_handlers.py — ConsolidatedTerminalWebSocket
+
+The /api/terminal/ws/simple/{session_id} WebSocket endpoint in terminal.py
+provides full backward compatibility for any caller that previously used the
+path that this module once served.
+
+SimpleTerminalSession is kept here only for the test in
+takeover_manager.e2e_test.py which imports it inside a try/except block.
+No production code should import from this module.
 """
 
 import json
 import logging
+import warnings
 from typing import Dict
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from .base_terminal import BaseTerminalWebSocket
+
+warnings.warn(
+    "api.simple_terminal_websocket is deprecated (Issue #3332). "
+    "Use api.terminal and api.terminal_handlers.ConsolidatedTerminalWebSocket instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def _get_workflow_manager():

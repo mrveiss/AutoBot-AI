@@ -1,7 +1,18 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
 """
-Base Terminal WebSocket Handler
-Provides common terminal functionality for websocket handlers including PTY management
-Updated to use improved TerminalWebSocketManager for race condition fixes
+Base Terminal WebSocket Handler — DEPRECATED (Issue #3332)
+
+This module is deprecated. The consolidated terminal implementation lives in:
+    api/terminal.py         — REST API and primary WebSocket (/api/terminal/ws/{session_id})
+    api/terminal_handlers.py — ConsolidatedTerminalWebSocket and ConsolidatedTerminalManager
+
+This file is retained only because api/simple_terminal_websocket.py and
+api/secure_terminal_websocket.py (themselves deprecated) still import
+BaseTerminalWebSocket from here. Once those files are removed, this file
+can be deleted.
+
+Do NOT add new features here or import this module from production code.
 """
 
 import asyncio
@@ -9,10 +20,18 @@ import logging
 import os
 import subprocess  # nosec B404 - required for PTY terminal operations
 import threading
+import warnings
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from utils.terminal_websocket_manager import TerminalWebSocketAdapter
+
+warnings.warn(
+    "api.base_terminal is deprecated (Issue #3332). "
+    "Use api.terminal_handlers.ConsolidatedTerminalWebSocket instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 
