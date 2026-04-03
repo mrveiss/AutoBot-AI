@@ -50,12 +50,11 @@ async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
         data={"system_prompt": system_prompt, "session": session},
     )
     result = await get_extension_manager().invoke_with_transform(
-        HookPoint.ON_SYSTEM_PROMPT_READY, ctx, "system_prompt"
+        HookPoint.SYSTEM_PROMPT_READY, ctx, "system_prompt"
     )
-    if isinstance(result, str) and result:
+    if isinstance(result, str) and result != system_prompt:
         logger.debug(
-            "[#3405] ON_SYSTEM_PROMPT_READY modified system prompt "
-            "(%d -> %d chars)",
+            "[#3405] SYSTEM_PROMPT_READY modified system prompt (%d -> %d chars)",
             len(system_prompt),
             len(result),
         )
@@ -86,12 +85,11 @@ async def _emit_full_prompt_ready(
         data={"prompt": prompt, "llm_params": llm_params, "context": context},
     )
     result = await get_extension_manager().invoke_with_transform(
-        HookPoint.ON_FULL_PROMPT_READY, ctx, "prompt"
+        HookPoint.FULL_PROMPT_READY, ctx, "prompt"
     )
-    if isinstance(result, str) and result:
+    if isinstance(result, str) and result != prompt:
         logger.debug(
-            "[#3405] ON_FULL_PROMPT_READY modified full prompt "
-            "(%d -> %d chars)",
+            "[#3405] FULL_PROMPT_READY modified full prompt (%d -> %d chars)",
             len(prompt),
             len(result),
         )

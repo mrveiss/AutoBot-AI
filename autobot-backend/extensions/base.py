@@ -490,7 +490,7 @@ class Extension:
 
     # ========== Prompt Pipeline Hooks (Issue #3405) ==========
 
-    async def on_on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         """
         Called after the system prompt is built.
 
@@ -505,7 +505,7 @@ class Extension:
             Modified system prompt str or None to keep unchanged
         """
 
-    async def on_on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         """
         Called after the full prompt (system + knowledge + conversation) is built.
 

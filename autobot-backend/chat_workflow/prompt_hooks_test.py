@@ -33,7 +33,7 @@ class _SystemPromptWatcher(Extension):
         self._return_value = return_value
         self.captured_system_prompt: Optional[str] = None
 
-    async def on_on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_system_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         self.captured_system_prompt = ctx.get("system_prompt")
         return self._return_value
 
@@ -49,7 +49,7 @@ class _FullPromptWatcher(Extension):
         self.captured_llm_params: Optional[dict] = None
         self.captured_context: Optional[dict] = None
 
-    async def on_on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         self.captured_prompt = ctx.get("prompt")
         self.captured_llm_params = ctx.get("llm_params")
         self.captured_context = ctx.get("context")
@@ -61,7 +61,7 @@ class _ErrorExtension(Extension):
 
     name = "test_error_extension"
 
-    async def on_on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         raise RuntimeError("simulated extension failure")
 
 
@@ -82,10 +82,10 @@ class TestNewHookPoints:
     """Verify the new HookPoint members are present."""
 
     def test_on_system_prompt_ready_exists(self):
-        assert HookPoint.ON_SYSTEM_PROMPT_READY is not None
+        assert HookPoint.SYSTEM_PROMPT_READY is not None
 
     def test_on_full_prompt_ready_exists(self):
-        assert HookPoint.ON_FULL_PROMPT_READY is not None
+        assert HookPoint.FULL_PROMPT_READY is not None
 
     def test_total_hook_count_increased(self):
         # Original 22 hooks + 2 new ones = 24

@@ -60,7 +60,7 @@ class TelemetryPromptMiddleware(Extension):
             or os.getenv("PROMETHEUS_URL", "")
         ).rstrip("/")
 
-    async def on_on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
+    async def on_full_prompt_ready(self, ctx: HookContext) -> Optional[str]:
         """Append a concise-response hint when CPU load exceeds threshold."""
         prompt = ctx.get("prompt", "")
         if not prompt:

@@ -77,8 +77,8 @@ class HookPoint(Enum):
     APPROVAL_RECEIVED = auto()  # Method: on_approval_received
 
     # Prompt pipeline — Issue #3405
-    ON_SYSTEM_PROMPT_READY = auto()
-    ON_FULL_PROMPT_READY = auto()
+    SYSTEM_PROMPT_READY = auto()  # Method: on_system_prompt_ready
+    FULL_PROMPT_READY = auto()    # Method: on_full_prompt_ready
 
 
 # Hook metadata for documentation and validation
@@ -193,12 +193,12 @@ HOOK_METADATA = {
         "can_modify": [],
         "return_type": "None (logging only)",
     },
-    HookPoint.ON_SYSTEM_PROMPT_READY: {
+    HookPoint.SYSTEM_PROMPT_READY: {
         "description": "Called after the system prompt is built; return a str to replace it",
         "can_modify": ["system_prompt"],
         "return_type": "Modified system prompt str or None",
     },
-    HookPoint.ON_FULL_PROMPT_READY: {
+    HookPoint.FULL_PROMPT_READY: {
         "description": "Called after the full prompt is assembled; return a str to replace it",
         "can_modify": ["prompt"],
         "return_type": "Modified full prompt str or None",

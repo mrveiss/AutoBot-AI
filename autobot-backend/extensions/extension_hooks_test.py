@@ -84,8 +84,8 @@ class TestHookPoint:
 
     def test_prompt_pipeline_hooks(self):
         """Should have prompt pipeline hooks added in Issue #3405."""
-        assert HookPoint.ON_SYSTEM_PROMPT_READY is not None
-        assert HookPoint.ON_FULL_PROMPT_READY is not None
+        assert HookPoint.SYSTEM_PROMPT_READY is not None
+        assert HookPoint.FULL_PROMPT_READY is not None
 
     def test_hook_metadata_exists(self):
         """Every hook should have metadata."""
