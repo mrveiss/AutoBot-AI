@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from .config import AutoResearchConfig
 from .scorers import PromptScorer, ScorerResult
 
 logger = logging.getLogger(__name__)
@@ -138,9 +139,11 @@ class PromptOptimizer:
         self,
         scorers: Dict[str, PromptScorer],
         llm_service: Any,
+        config: Optional[AutoResearchConfig] = None,
     ) -> None:
         self._scorers = scorers
         self._llm = llm_service
+        self._config = config or AutoResearchConfig()
         self._cancel_event = asyncio.Event()
         self._current_session: Optional[OptimizationSession] = None
         self._redis = None
@@ -251,9 +254,32 @@ class PromptOptimizer:
             )
             variants.append(variant)
 
-        # 3. Score through the chain
-        candidates = variants
-        for scorer_name in target.scorer_chain:
+        # 3. Score through the chain with staged gating
+        scored_variants = await self._score_through_chain(
+            variants=variants,
+            target=target,
+            session=session,
+        )
+
+        session.all_variants.extend(variants)
+        return scored_variants
+
+    async def _score_through_chain(
+        self,
+        variants: List[PromptVariant],
+        target: PromptOptTarget,
+        session: OptimizationSession,
+    ) -> List[PromptVariant]:
+        """Run staged scoring chain with threshold gating between tiers.
+
+        Tier-1 uses subset_fraction for cheap evaluation.  Variants that do
+        not clear staged_eval_threshold are finalized at their current score
+        and excluded from subsequent (more expensive) tiers.
+        """
+        candidates = list(variants)
+        threshold = self._config.staged_eval_threshold
+
+        for tier_idx, scorer_name in enumerate(target.scorer_chain):
             scorer = self._scorers.get(scorer_name)
             if scorer is None:
                 logger.warning(
@@ -261,27 +287,59 @@ class PromptOptimizer:
                 )
                 continue
 
-            for variant in candidates:
-                result = await scorer.score(
-                    variant.output,
-                    {
-                        "session_id": session.id,
-                        "variant_id": variant.id,
-                    },
-                )
-                variant.scores[scorer_name] = result.score
-                # Final score = average across all scorers so far
-                variant.final_score = (
-                    sum(variant.scores.values()) / len(variant.scores)
-                )
+            subset_frac = (
+                self._config.staged_eval_fraction if tier_idx == 0 else None
+            )
+            candidates = await self._score_tier(
+                scorer=scorer,
+                scorer_name=scorer_name,
+                variants=candidates,
+                session=session,
+                subset_fraction=subset_frac,
+            )
 
-            # Keep top-K for next scorer
-            candidates = sorted(
-                candidates, key=lambda v: v.final_score, reverse=True
-            )[: target.top_k]
+            # Gate: drop variants below threshold before next tier
+            passed = [v for v in candidates if v.final_score >= threshold]
+            gated_out = len(candidates) - len(passed)
+            if gated_out:
+                logger.info(
+                    "PromptOptimizer: staged gate after %r — %d variant(s) below "
+                    "threshold %.2f (kept %d)",
+                    scorer_name,
+                    gated_out,
+                    threshold,
+                    len(passed),
+                )
+            candidates = passed
 
-        session.all_variants.extend(variants)
+            if not candidates:
+                logger.info(
+                    "PromptOptimizer: no candidates passed gate after %r", scorer_name
+                )
+                break
+
         return candidates
+
+    async def _score_tier(
+        self,
+        scorer: PromptScorer,
+        scorer_name: str,
+        variants: List[PromptVariant],
+        session: OptimizationSession,
+        subset_fraction: Optional[float],
+    ) -> List[PromptVariant]:
+        """Score all variants with one scorer and update final_score."""
+        for variant in variants:
+            result = await scorer.score(
+                variant.output,
+                {"session_id": session.id, "variant_id": variant.id},
+                subset_fraction=subset_fraction,
+            )
+            variant.scores[scorer_name] = result.score
+            variant.final_score = (
+                sum(variant.scores.values()) / len(variant.scores)
+            )
+        return variants
 
     async def _mutate_prompt(self, base_prompt: str, n: int) -> List[str]:
         """Generate N prompt variants using LLM."""
