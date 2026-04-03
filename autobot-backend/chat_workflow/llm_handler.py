@@ -17,6 +17,9 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from constants.model_constants import ModelConstants
 from dependencies import global_config_manager
+from extensions.base import HookContext
+from extensions.hooks import HookPoint
+from extensions.manager import get_extension_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
 from .models import WorkflowSession
@@ -25,6 +28,75 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")
+
+
+async def _emit_system_prompt_ready(system_prompt: str, session: Any) -> str:
+    """Emit ON_SYSTEM_PROMPT_READY to registered extensions and return result.
+
+    Issue #3405: Fires after _get_system_prompt() so extensions can inspect or
+    rewrite the system prompt before it enters prompt assembly.  If no extension
+    is registered for this hook the function is a no-op and the original prompt
+    is returned unchanged.
+
+    Args:
+        system_prompt: The assembled system prompt string.
+        session: WorkflowSession instance (passed as data["session"]).
+
+    Returns:
+        Possibly modified system prompt string.
+    """
+    ctx = HookContext(
+        session_id=getattr(session, "session_id", ""),
+        data={"system_prompt": system_prompt, "session": session},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.ON_SYSTEM_PROMPT_READY, ctx, "system_prompt"
+    )
+    if isinstance(result, str) and result:
+        logger.debug(
+            "[#3405] ON_SYSTEM_PROMPT_READY modified system prompt "
+            "(%d -> %d chars)",
+            len(system_prompt),
+            len(result),
+        )
+        return result
+    return system_prompt
+
+
+async def _emit_full_prompt_ready(
+    prompt: str, llm_params: Dict[str, Any], context: Dict[str, Any]
+) -> str:
+    """Emit ON_FULL_PROMPT_READY to registered extensions and return result.
+
+    Issue #3405: Fires after _build_full_prompt() so extensions can append
+    dynamic content (e.g. infrastructure telemetry hints) before the prompt
+    is sent to the LLM.  If no extension is registered for this hook the
+    function is a no-op and the original prompt is returned unchanged.
+
+    Args:
+        prompt: The fully assembled prompt string.
+        llm_params: Dict containing model/endpoint selection.
+        context: Arbitrary request-level context dict.
+
+    Returns:
+        Possibly modified full prompt string.
+    """
+    ctx = HookContext(
+        session_id=context.get("session_id", ""),
+        data={"prompt": prompt, "llm_params": llm_params, "context": context},
+    )
+    result = await get_extension_manager().invoke_with_transform(
+        HookPoint.ON_FULL_PROMPT_READY, ctx, "prompt"
+    )
+    if isinstance(result, str) and result:
+        logger.debug(
+            "[#3405] ON_FULL_PROMPT_READY modified full prompt "
+            "(%d -> %d chars)",
+            len(prompt),
+            len(result),
+        )
+        return result
+    return prompt
 
 
 class LLMHandlerMixin:
@@ -310,6 +382,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt(language=language)
+        system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 
         # Knowledge retrieval for RAG
@@ -323,6 +396,11 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
         full_prompt = self._build_full_prompt(
             system_prompt, knowledge_context, conversation_context, message
+        )
+        full_prompt = await _emit_full_prompt_ready(
+            full_prompt,
+            {"endpoint": ollama_endpoint, "model": selected_model},
+            {"session_id": session.session_id, "message": message},
         )
 
         logger.info(

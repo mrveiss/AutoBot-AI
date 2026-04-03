@@ -30,8 +30,8 @@ class TestHookPoint:
     """Test HookPoint enum definitions."""
 
     def test_hook_count(self):
-        """Should have exactly 22 hook points."""
-        assert len(HookPoint) == 22
+        """Should have exactly 24 hook points (22 original + 2 added in #3405)."""
+        assert len(HookPoint) == 24
 
     def test_message_preparation_hooks(self):
         """Should have message preparation hooks."""
@@ -81,6 +81,11 @@ class TestHookPoint:
         """Should have approval flow hooks."""
         assert HookPoint.APPROVAL_REQUIRED is not None
         assert HookPoint.APPROVAL_RECEIVED is not None
+
+    def test_prompt_pipeline_hooks(self):
+        """Should have prompt pipeline hooks added in Issue #3405."""
+        assert HookPoint.ON_SYSTEM_PROMPT_READY is not None
+        assert HookPoint.ON_FULL_PROMPT_READY is not None
 
     def test_hook_metadata_exists(self):
         """Every hook should have metadata."""
