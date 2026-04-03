@@ -22,8 +22,10 @@ import asyncio
 import logging
 import os
 import re
+import socket
 import time
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -166,27 +168,69 @@ async def _audit_execute_event(
     await db.commit()
 
 
-async def _run_locally(
+_SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+
+_LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
+try:
+    _LOCAL_ADDRESSES.add(socket.gethostbyname(socket.gethostname()))
+except OSError:
+    pass
+
+
+def _is_local_ip(ip: str) -> bool:
+    """Return True if *ip* resolves to this host."""
+    return ip in _LOCAL_ADDRESSES
+
+
+async def _run_script(
     script: str, language: str, timeout: int
 ) -> tuple[int, str, str]:
-    """Execute *script* in a subprocess; return (exit_code, stdout, stderr)."""
+    """Execute *script* locally via subprocess; return (exit_code, stdout, stderr)."""
     interpreter = "/bin/bash" if language == "bash" else "/bin/sh"
     proc = await asyncio.create_subprocess_exec(
-        interpreter,
-        "-c",
-        script,
+        interpreter, "-c", script,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        raw_out, raw_err = await asyncio.wait_for(
-            proc.communicate(), timeout=float(timeout)
-        )
+        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
     except asyncio.TimeoutError:
         proc.kill()
         await proc.communicate()
         return 124, "", f"Execution timed out after {timeout}s"
+    return (
+        proc.returncode if proc.returncode is not None else 1,
+        raw_out.decode("utf-8", errors="replace"),
+        raw_err.decode("utf-8", errors="replace"),
+    )
 
+
+async def _run_via_ssh(
+    ip: str, ssh_user: str, ssh_port: int, script: str, language: str, timeout: int
+) -> tuple[int, str, str]:
+    """Execute *script* on *ip* via SSH; return (exit_code, stdout, stderr)."""
+    interpreter = "bash" if language == "bash" else "sh"
+    cmd = [
+        "ssh", "-p", str(ssh_port),
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "BatchMode=yes",
+        "-o", f"ConnectTimeout={min(timeout, 30)}",
+    ]
+    if Path(_SSH_KEY_PATH).exists():
+        cmd.extend(["-i", _SSH_KEY_PATH])
+    cmd.append(f"{ssh_user}@{ip}")
+    cmd.extend([interpreter, "-c", script])
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return 124, "", f"SSH execution timed out after {timeout}s"
     return (
         proc.returncode if proc.returncode is not None else 1,
         raw_out.decode("utf-8", errors="replace"),
@@ -215,26 +259,34 @@ async def execute_on_node(
     The node must be ONLINE.  Commands are validated against the injection
     denylist before execution.  The result is audit-logged as a NodeEvent.
 
-    Currently executes locally (this host is the manager node).  Future
-    iterations will fan out via the SLM agent Redis queue when the target
-    node is remote.
+    Local nodes (manager host) execute via subprocess; remote nodes execute
+    via SSH using the SLM key (SLM_SSH_KEY env var, default
+    /home/autobot/.ssh/autobot_key) with the node's ssh_user and ssh_port.
     """
     _validate_command(body.command)
-    await _require_online_node(node_id, db)
+    node = await _require_online_node(node_id, db)
 
     job_id = str(uuid.uuid4())[:16]
     logger.info(
-        "Remote execute: node=%s job=%s language=%s timeout=%s",
+        "Execute: node=%s ip=%s job=%s language=%s timeout=%s",
         node_id,
+        node.ip_address,
         job_id,
         body.language,
         body.timeout,
     )
 
     t0 = time.monotonic()
-    exit_code, stdout, stderr = await _run_locally(
-        body.command, body.language, body.timeout
-    )
+    if _is_local_ip(node.ip_address or ""):
+        exit_code, stdout, stderr = await _run_script(
+            body.command, body.language, body.timeout
+        )
+    else:
+        ssh_user = node.ssh_user or "autobot"
+        ssh_port = int(node.ssh_port or 22)
+        exit_code, stdout, stderr = await _run_via_ssh(
+            node.ip_address, ssh_user, ssh_port, body.command, body.language, body.timeout
+        )
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     severity = EventSeverity.INFO if exit_code == 0 else EventSeverity.WARNING
