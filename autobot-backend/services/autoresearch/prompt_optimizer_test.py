@@ -15,17 +15,16 @@ from services.autoresearch.config import AutoResearchConfig
 from services.autoresearch.models import VariantArchiveEntry
 from services.autoresearch.prompt_optimizer import (
     OptimizationSession,
-    OptimizationStatus,
     PromptOptimizer,
     PromptOptTarget,
     PromptVariant,
 )
 from services.autoresearch.scorers import ScorerResult
 
+
 # ---------------------------------------------------------------------------
 # Helper factory
 # ---------------------------------------------------------------------------
-
 
 def _make_variant(vid: str, score: float, round_number: int = 1) -> PromptVariant:
     return PromptVariant(
@@ -58,7 +57,6 @@ def _make_entry(
 # PromptVariant
 # ---------------------------------------------------------------------------
 
-
 class TestPromptVariantModel:
     def test_to_dict(self):
         variant = PromptVariant(
@@ -86,7 +84,6 @@ class TestPromptVariantModel:
 # OptimizationSession
 # ---------------------------------------------------------------------------
 
-
 class TestOptimizationSession:
     def test_to_dict(self):
         target = PromptOptTarget(
@@ -106,7 +103,6 @@ class TestOptimizationSession:
 # ---------------------------------------------------------------------------
 # Archive unit tests
 # ---------------------------------------------------------------------------
-
 
 class TestArchive:
     def test_add_retains_all_entries(self):
@@ -187,7 +183,6 @@ class TestArchive:
 # PromptOptimizer integration (archive-aware)
 # ---------------------------------------------------------------------------
 
-
 class TestPromptOptimizerLoop:
     @pytest.fixture
     def mock_llm(self):
@@ -202,15 +197,9 @@ class TestPromptOptimizerLoop:
         scorer = AsyncMock()
         scorer.name = "test_scorer"
         scorer.score.side_effect = [
-            ScorerResult(
-                score=0.3, raw_score=3, metadata={}, scorer_name="test_scorer"
-            ),
-            ScorerResult(
-                score=0.8, raw_score=8, metadata={}, scorer_name="test_scorer"
-            ),
-            ScorerResult(
-                score=0.5, raw_score=5, metadata={}, scorer_name="test_scorer"
-            ),
+            ScorerResult(score=0.3, raw_score=3, metadata={}, scorer_name="test_scorer"),
+            ScorerResult(score=0.8, raw_score=8, metadata={}, scorer_name="test_scorer"),
+            ScorerResult(score=0.5, raw_score=5, metadata={}, scorer_name="test_scorer"),
         ]
         return scorer
 
@@ -416,7 +405,9 @@ class TestPromptOptimizerLoop:
         assert session.rounds_completed == 0
 
     @pytest.mark.asyncio
-    async def test_scorer_failure_marks_variant_invalid_in_archive(self, mock_llm):
+    async def test_scorer_failure_marks_variant_invalid_in_archive(
+        self, mock_llm
+    ):
         """Variants whose scorer raises must have valid_parent=False in archive."""
         failing_scorer = AsyncMock()
         failing_scorer.score.side_effect = RuntimeError("scorer exploded")

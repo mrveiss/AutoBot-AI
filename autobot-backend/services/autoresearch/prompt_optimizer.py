@@ -31,7 +31,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional
 from .archive import Archive
 from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
-from .scorers import PromptScorer, ScorerResult
+from .scorers import PromptScorer
 
 logger = logging.getLogger(__name__)
 
