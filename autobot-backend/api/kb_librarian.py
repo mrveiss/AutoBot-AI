@@ -4,40 +4,22 @@
 """
 KB Librarian API — LLM-mediated librarian agent interface.
 
-Responsibility (issue #3336):
-    This module exposes the ``KBLibrarianAgent`` (``agents/kb_librarian_agent.py``)
-    as an HTTP API.  Its routes are **NOT currently registered** in any router
-    loader (``initialization/router_registry/``).  All routes therefore return
-    404 in every deployed environment.
+Internal-only (issue #3348):
+    The ``KBLibrarianAgent`` (``agents/kb_librarian_agent.py``) is consumed
+    exclusively through direct Python imports.  It is used by ``conversation.py``,
+    ``enhanced_multi_agent_orchestrator.py``, ``api/workflow.py``,
+    ``api/knowledge.py``, ``api/chat_knowledge.py``, and several agent modules.
 
-    The librarian agent layer is also used internally by ``conversation.py``
-    via a direct Python import; it does not need an HTTP surface for that use.
-
-Scope (intended, if re-registered):
-    - ``POST /query``      — Process a natural-language query through the
-                            librarian agent (intent detection, similarity
-                            search, optional auto-summarisation).
-    - ``GET  /status``     — Return runtime configuration of the librarian
-                            agent singleton.
-    - ``PUT  /configure``  — Update librarian agent runtime parameters
-                            (enabled flag, threshold, max results, summarise).
+    This module defines a FastAPI ``router`` object to satisfy the
+    ``api_endpoint_migrations_test.py`` decorator-coverage assertions (BATCH 118).
+    The router is **intentionally not registered** in
+    ``initialization/router_registry/feature_routers.py`` and must remain
+    unregistered.  No HTTP surface is needed or intended.
 
 What does NOT belong here:
     - Raw KB document CRUD → api/knowledge.py (``/api/knowledge_base/*``)
     - Chat-session knowledge lifecycle → api/chat_knowledge.py
       (``/api/chat-knowledge/*``)
-
-Overlap note (issue #3336):
-    ``POST /query`` overlaps in *outcome* with ``POST /api/knowledge_base/search``
-    but routes through a stateful agent singleton with per-request parameter
-    overrides and LLM summarisation.  It is a higher-level abstraction, not a
-    duplicate.  If this router is re-registered, its mount point should be
-    ``/api/kb-librarian`` and the e2e tests in
-    ``autobot-frontend/tests/e2e/kb-librarian-api.spec.ts`` can be enabled.
-
-DEPRECATION WARNING:
-    All routes in this module emit a WARNING-level log on every invocation
-    until the router is formally re-registered or removed.  See issue #3336.
 """
 
 import logging
@@ -83,11 +65,9 @@ class KBQueryResponse(BaseModel):
 async def query_knowledge_base(kb_query: KBQuery):
     """Query the knowledge base using the KB Librarian Agent.
 
-    .. deprecated::
-        This router is not registered in any router loader (issue #3336).
-        This endpoint is unreachable in all deployed environments.
-        For general KB search use POST /api/knowledge_base/search.
-        For chat-scoped search use POST /api/chat-knowledge/search.
+    This router is intentionally unregistered (internal-only, issue #3348).
+    For general KB search use POST /api/knowledge_base/search.
+    For chat-scoped search use POST /api/chat-knowledge/search.
 
     Args:
         kb_query: The query parameters
@@ -95,10 +75,6 @@ async def query_knowledge_base(kb_query: KBQuery):
     Returns:
         KBQueryResponse with search results
     """
-    logger.warning(
-        "DEPRECATED: kb_librarian /query called but this router is not registered "
-        "(issue #3336). Use /api/knowledge_base/search for general KB search."
-    )
     try:
         kb_librarian = get_kb_librarian()
 
@@ -142,17 +118,11 @@ async def query_knowledge_base(kb_query: KBQuery):
 async def get_kb_librarian_status():
     """Get the status of the KB Librarian Agent.
 
-    .. deprecated::
-        This router is not registered in any router loader (issue #3336).
-        This endpoint is unreachable in all deployed environments.
+    This router is intentionally unregistered (internal-only, issue #3348).
 
     Returns:
         Status information about the KB Librarian
     """
-    logger.warning(
-        "DEPRECATED: kb_librarian /status called but this router is not registered "
-        "(issue #3336)."
-    )
     try:
         kb_librarian = get_kb_librarian()
 
@@ -183,9 +153,7 @@ async def configure_kb_librarian(
 ):
     """Configure the KB Librarian Agent settings.
 
-    .. deprecated::
-        This router is not registered in any router loader (issue #3336).
-        This endpoint is unreachable in all deployed environments.
+    This router is intentionally unregistered (internal-only, issue #3348).
 
     Args:
         enabled: Whether the KB Librarian is enabled
@@ -196,10 +164,6 @@ async def configure_kb_librarian(
     Returns:
         Updated configuration
     """
-    logger.warning(
-        "DEPRECATED: kb_librarian /configure called but this router is not "
-        "registered (issue #3336)."
-    )
     try:
         kb_librarian = get_kb_librarian()
 
