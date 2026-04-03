@@ -411,7 +411,11 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
         except Exception as e:
             self.logger.error("Codebase indexing failed: %s", e)
-            return {"status": "error", "error": "Codebase indexing failed", "indexed_files": indexed_files}
+            return {
+                "status": "error",
+                "error": "Codebase indexing failed",
+                "indexed_files": indexed_files,
+            }
 
     def _build_file_index_data(
         self, relative_path: str, language: str, content: str, elements: Dict[str, List]

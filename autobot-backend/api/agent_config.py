@@ -114,7 +114,9 @@ async def _get_available_providers() -> list:
     try:
         from services.provider_health import ProviderHealthManager
 
-        results = await ProviderHealthManager.check_all_providers(timeout=3.0, use_cache=True)
+        results = await ProviderHealthManager.check_all_providers(
+            timeout=3.0, use_cache=True
+        )
         return [name for name, result in results.items() if result.available]
     except Exception as e:
         logger.warning("Could not check provider availability: %s", e)

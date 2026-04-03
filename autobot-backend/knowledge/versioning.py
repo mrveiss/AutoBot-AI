@@ -208,7 +208,11 @@ class VersioningMixin:
 
         except Exception as e:
             logger.error("Failed to list versions for %s: %s", fact_id, e)
-            return {"status": "error", "message": "Versioning operation failed", "versions": []}
+            return {
+                "status": "error",
+                "message": "Versioning operation failed",
+                "versions": [],
+            }
 
     async def _apply_version_to_fact(
         self, fact_id: str, target_version: Dict[str, Any]

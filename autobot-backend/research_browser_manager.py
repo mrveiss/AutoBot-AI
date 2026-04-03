@@ -335,7 +335,9 @@ class ResearchBrowserSession:
             }
 
         except Exception as e:
-            logger.error("Content extraction failed for session %s: %s", self.session_id, e)
+            logger.error(
+                "Content extraction failed for session %s: %s", self.session_id, e
+            )
             return {"success": False, "error": "Content extraction failed"}
 
     async def save_mhtml(self) -> Optional[str]:

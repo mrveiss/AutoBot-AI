@@ -339,7 +339,9 @@ class FactExtractionService:
 
         except Exception as e:
             logger.error("Error processing chunks for fact extraction: %s", e)
-            return self._build_chunks_error_response("Chunk fact extraction failed", len(chunks))
+            return self._build_chunks_error_response(
+                "Chunk fact extraction failed", len(chunks)
+            )
 
     async def _deduplicate_facts(self, facts: List[AtomicFact]) -> List[AtomicFact]:
         """

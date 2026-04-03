@@ -52,7 +52,7 @@ def _build_train_args() -> list[str]:
             args.append(f"--{flag}={value}")
     for key, value in os.environ.items():
         if key.startswith(_EXTRA_PREFIX):
-            flag = key[len(_EXTRA_PREFIX):].lower()
+            flag = key[len(_EXTRA_PREFIX) :].lower()
             args.append(f"--{flag}={value}")
     return args
 

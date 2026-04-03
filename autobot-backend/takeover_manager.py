@@ -597,7 +597,10 @@ class TakeoverManager:
 
         except Exception as e:
             logger.error("Failed to capture system snapshot: %s", e)
-            return {"error": "Failed to capture system snapshot", "timestamp": datetime.now().isoformat()}
+            return {
+                "error": "Failed to capture system snapshot",
+                "timestamp": datetime.now().isoformat(),
+            }
 
     async def _execute_trigger_handlers(self, request: TakeoverRequest):
         """Execute registered handlers for takeover triggers"""

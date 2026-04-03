@@ -258,7 +258,10 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error initializing invalidation rules: %s", e)
-            return {"status": "error", "message": "Temporal invalidation operation failed"}
+            return {
+                "status": "error",
+                "message": "Temporal invalidation operation failed",
+            }
 
     async def _load_invalidation_rules(self) -> Dict[str, InvalidationRule]:
         """Load invalidation rules from Redis."""
@@ -638,7 +641,9 @@ class TemporalInvalidationService:
         except Exception as e:
             logger.error("Error in invalidation sweep: %s", e)
             processing_time = (datetime.now() - start_time).total_seconds()
-            return self._build_sweep_error_response("Invalidation sweep failed", processing_time)
+            return self._build_sweep_error_response(
+                "Invalidation sweep failed", processing_time
+            )
 
     def _prepare_fact_for_invalidation(
         self, pipe, fact: AtomicFact, reasons: Dict[str, Dict[str, Any]]
@@ -869,7 +874,10 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error in contradiction invalidation: %s", e)
-            return {"status": "error", "message": "Temporal invalidation operation failed"}
+            return {
+                "status": "error",
+                "message": "Temporal invalidation operation failed",
+            }
 
     def _aggregate_history_statistics(
         self, recent_history: List[str]
@@ -969,7 +977,10 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error adding invalidation rule: %s", e)
-            return {"status": "error", "message": "Temporal invalidation operation failed"}
+            return {
+                "status": "error",
+                "message": "Temporal invalidation operation failed",
+            }
 
     async def remove_invalidation_rule(self, rule_id: str) -> Dict[str, Any]:
         """Remove an invalidation rule."""
@@ -985,7 +996,10 @@ class TemporalInvalidationService:
 
         except Exception as e:
             logger.error("Error removing invalidation rule: %s", e)
-            return {"status": "error", "message": "Temporal invalidation operation failed"}
+            return {
+                "status": "error",
+                "message": "Temporal invalidation operation failed",
+            }
 
     async def schedule_periodic_invalidation(self):
         """Schedule periodic invalidation sweeps."""

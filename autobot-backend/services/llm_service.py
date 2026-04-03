@@ -81,7 +81,9 @@ def _apply_task_defaults(
     """
     defaults = _TASK_TYPE_DEFAULTS.get(llm_type.value, _TASK_TYPE_DEFAULTS["general"])
     resolved_temp = temperature if temperature is not None else defaults["temperature"]
-    resolved_tokens = max_tokens if max_tokens is not None else defaults.get("max_tokens")
+    resolved_tokens = (
+        max_tokens if max_tokens is not None else defaults.get("max_tokens")
+    )
     return resolved_temp, resolved_tokens
 
 
@@ -182,9 +184,7 @@ class LLMService:
         if provider is None:
             self._error_count += 1
             logger.error("No available provider for chat request")
-            return _build_error_response(
-                request, "No available LLM provider", "none"
-            )
+            return _build_error_response(request, "No available LLM provider", "none")
 
         response = await provider.chat_completion(request)
         if response.error:
@@ -275,9 +275,7 @@ class LLMService:
         import asyncio as _asyncio
 
         target_names = (
-            [provider_name]
-            if provider_name
-            else list(self._registry._providers.keys())
+            [provider_name] if provider_name else list(self._registry._providers.keys())
         )
         results: Dict[str, List[str]] = {}
         for name in target_names:

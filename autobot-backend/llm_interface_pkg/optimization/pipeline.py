@@ -25,7 +25,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from .attention_backend import AttentionBackendSelector, ModelConfig as AttentionModelConfig
+from .attention_backend import (
+    AttentionBackendSelector,
+    ModelConfig as AttentionModelConfig,
+)
 from .hf_quantizer import HfQuantizerWrapper, QuantizerConfig, QuantizationType
 from .kv_cache import KVCacheConfig, KVCacheManager, LayerKVCache
 from .layer_inference import LayerInferenceConfig, LayerInferenceEngine
@@ -224,7 +227,10 @@ class LayerInferencePipeline:
         kv_layers = prepared.kv_cache.config.num_layers if prepared.kv_cache else 0
         logger.info(
             "Pipeline.prepare: done in %.3fs quant=%s attn=%s kv_layers=%d",
-            elapsed, quant_type, prepared.attention_backend, kv_layers,
+            elapsed,
+            quant_type,
+            prepared.attention_backend,
+            kv_layers,
         )
 
     def _try_build_quantizer(self, model_cfg):

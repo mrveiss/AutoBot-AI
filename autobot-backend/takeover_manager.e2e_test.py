@@ -67,7 +67,11 @@ class SessionTakeoverTestSuite:
             except Exception as e:
                 logger.error(f"❌ {test_method.__name__} FAILED: {e}")
                 self.test_results.append(
-                    {"test": test_method.__name__, "status": "FAILED", "error": "Test execution failed"}
+                    {
+                        "test": test_method.__name__,
+                        "status": "FAILED",
+                        "error": "Test execution failed",
+                    }
                 )
 
         await self.print_test_summary()

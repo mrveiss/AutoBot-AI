@@ -144,7 +144,8 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
             if elapsed < KB_RETRY_COOLDOWN_SECONDS:
                 remaining = int(KB_RETRY_COOLDOWN_SECONDS - elapsed)
                 logger.debug(
-                    "KB init cooldown active — skipping retry (%ds remaining)", remaining
+                    "KB init cooldown active — skipping retry (%ds remaining)",
+                    remaining,
                 )
                 return None
 

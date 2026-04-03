@@ -87,9 +87,7 @@ class AutoResearchConfig:
         )
     )
     docker_memory_limit: str = field(
-        default_factory=lambda: os.getenv(
-            "AUTOBOT_AUTORESEARCH_DOCKER_MEMORY", "4g"
-        )
+        default_factory=lambda: os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_MEMORY", "4g")
     )
     docker_cpu_limit: float = field(
         default_factory=lambda: float(
@@ -114,9 +112,7 @@ class AutoResearchConfig:
         )
     )
     meta_agent_test_timeout: int = field(
-        default_factory=lambda: int(
-            os.getenv("AUTOBOT_META_AGENT_TEST_TIMEOUT", "60")
-        )
+        default_factory=lambda: int(os.getenv("AUTOBOT_META_AGENT_TEST_TIMEOUT", "60"))
     )
     meta_agent_approval_threshold: float = field(
         default_factory=lambda: float(

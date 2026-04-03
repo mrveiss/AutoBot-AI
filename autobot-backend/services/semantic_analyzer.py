@@ -54,7 +54,9 @@ class SemanticAnalyzer:
             "docstring": re.compile(r'"""[\s\S]{0,5000}Args:[\s\S]{0,5000}Returns:'),
         },
         "numpy": {
-            "docstring": re.compile(r'"""[\s\S]{0,5000}Parameters[\s\S]{0,5000}----------'),
+            "docstring": re.compile(
+                r'"""[\s\S]{0,5000}Parameters[\s\S]{0,5000}----------'
+            ),
         },
     }
 

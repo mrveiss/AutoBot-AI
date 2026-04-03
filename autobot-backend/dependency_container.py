@@ -339,7 +339,10 @@ class AsyncServiceContainer:
                     }
             except Exception as e:
                 logger.error("Health check failed for service %s: %s", service_name, e)
-                results[service_name] = {"status": "unhealthy", "error": "Health check failed"}
+                results[service_name] = {
+                    "status": "unhealthy",
+                    "error": "Health check failed",
+                }
 
         return results
 

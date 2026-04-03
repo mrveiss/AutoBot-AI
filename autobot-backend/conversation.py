@@ -744,7 +744,9 @@ class Conversation:
 
         except Exception as e:
             logger.error("Research failed: %s", e)
-            self._add_system_message("External research failed", "debug", {"error": True})
+            self._add_system_message(
+                "External research failed", "debug", {"error": True}
+            )
             return {"success": False, "error": "External research failed"}
 
     def _generate_search_queries(self, user_message: str) -> List[str]:
