@@ -38,10 +38,10 @@
           @click="toggleViewMode"
           class="action-btn view-mode-btn"
           :class="{ active: viewMode === '3d' }"
-          :title="viewMode === '2d' ? 'Switch to 3D view' : 'Switch to 2D view'"
+          :title="viewMode === '2d' ? $t('knowledge.graph.switchTo3d') : $t('knowledge.graph.switchTo2d')"
         >
           <i :class="viewMode === '2d' ? 'fas fa-cube' : 'fas fa-project-diagram'"></i>
-          {{ viewMode === '2d' ? '3D' : '2D' }}
+          {{ viewMode === '2d' ? $t('knowledge.graph.label3d') : $t('knowledge.graph.label2d') }}
         </button>
         <button
           @click="showCleanupPanel = !showCleanupPanel"
@@ -1162,8 +1162,15 @@ function toggleLayout(): void {
  * Issue #3330: 3D force-graph view toggle
  */
 function toggleViewMode(): void {
-  viewMode.value = viewMode.value === '2d' ? '3d' : '2d'
   if (viewMode.value === '2d') {
+    // Destroy Cytoscape to stop its RAF loop before switching to 3D (Issue #3363)
+    if (cy.value) {
+      cy.value.destroy()
+      cy.value = null
+    }
+    viewMode.value = '3d'
+  } else {
+    viewMode.value = '2d'
     nextTick(() => {
       if (!cy.value && cytoscapeContainer.value) {
         initCytoscape()

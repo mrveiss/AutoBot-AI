@@ -2555,6 +2555,10 @@
       "zoomIn": "Zoom avant",
       "zoomOut": "Zoom arrière",
       "fitToView": "Ajuster à la vue",
+      "switchTo3d": "Passer en vue 3D",
+      "switchTo2d": "Passer en vue 2D",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Plein écran",
       "exitFullscreen": "Quitter le plein écran",
       "typeLabel": "Type :",
@@ -2614,7 +2618,8 @@
         "searching": "Recherche d'entités...",
         "noResults": "Aucune entité correspondant à votre recherche",
         "sourcesCount": "{count} sources"
-      }
+      },
+      "noEntities3D": "Aucune entité à afficher"
     },
     "connectors": {
       "title": "Connecteurs source",

@@ -2555,6 +2555,10 @@
       "zoomIn": "Powiększ",
       "zoomOut": "Pomniejsz",
       "fitToView": "Dopasuj do widoku",
+      "switchTo3d": "Przełącz na widok 3D",
+      "switchTo2d": "Przełącz na widok 2D",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Pełny ekran",
       "exitFullscreen": "Zamknij pełny ekran",
       "typeLabel": "Typ:",
@@ -2614,7 +2618,8 @@
         "searching": "Wyszukiwanie encji...",
         "noResults": "Nie znaleziono encji pasujących do wyszukiwania",
         "sourcesCount": "{count} źródeł"
-      }
+      },
+      "noEntities3D": "Brak encji do wyświetlenia"
     },
     "connectors": {
       "title": "Konektory źródeł",
