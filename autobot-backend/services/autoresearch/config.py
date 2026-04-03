@@ -102,6 +102,28 @@ class AutoResearchConfig:
         )
     )
 
+    # Meta-agent settings (issue #3224)
+    meta_agent_max_module_lines: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTOBOT_META_AGENT_MAX_MODULE_LINES", "500")
+        )
+    )
+    meta_agent_llm_model: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_META_AGENT_LLM_MODEL", "claude-sonnet-4-6"
+        )
+    )
+    meta_agent_test_timeout: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTOBOT_META_AGENT_TEST_TIMEOUT", "60")
+        )
+    )
+    meta_agent_approval_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_META_AGENT_APPROVAL_THRESHOLD", "0.1")
+        )
+    )
+
     # Data directory for experiment outputs
     data_dir: Path = field(
         default_factory=lambda: Path(

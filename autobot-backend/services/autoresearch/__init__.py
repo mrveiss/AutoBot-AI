@@ -60,6 +60,10 @@ from .parser import ExperimentOutputParser
 from .routes import router
 from .runner import ExperimentRunner
 from .store import ExperimentStore
+from .archive import Archive
+from .models import VariantArchiveEntry
+from .meta_agent import MetaAgent, MetaPatch
+from .meta_eval_harness import MetaEvalHarness, MetaEvalResult
 
 __all__ = [
     # Models
@@ -98,6 +102,13 @@ __all__ = [
     "ExperimentInsight",
     # Routes
     "router",
+    # Archive + Meta-agent (Issue #3222, #3224)
+    "Archive",
+    "VariantArchiveEntry",
+    "MetaAgent",
+    "MetaPatch",
+    "MetaEvalHarness",
+    "MetaEvalResult",
     # OSINT Engine (Issue #1949)
     "OSINTSource",
     "OSINTEngine",
