@@ -177,7 +177,7 @@ To use it:
 ### Notification event type
 
 The `SERVICE_FAILED` notification event type is available in
-`NotificationEvent.SERVICE_FAILED` (`"service_failure"`).  The default
+`NotificationEvent.SERVICE_FAILED` (`"service_failed"`).  The default
 message template is:
 
 ```text

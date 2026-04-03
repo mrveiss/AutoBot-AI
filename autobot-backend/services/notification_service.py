@@ -70,7 +70,7 @@ class NotificationEvent(str, Enum):
     WORKFLOW_FAILED = "workflow_failed"
     STEP_FAILED = "step_failed"
     APPROVAL_NEEDED = "approval_needed"
-    SERVICE_FAILED = "service_failure"
+    SERVICE_FAILED = "service_failed"
 
 
 # ---------------------------------------------------------------------------

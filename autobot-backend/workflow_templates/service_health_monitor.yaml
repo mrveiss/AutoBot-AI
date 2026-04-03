@@ -42,7 +42,7 @@ steps:
   - id: notify_service_failure
     name: "Send service-failure notification"
     type: notification
-    event: service_failure
+    event: service_failed
     # Map pub/sub payload fields to notification template variables.
     # The SERVICE_FAILED default template uses: service, hostname,
     # prev_state, new_state, error_context.

@@ -160,10 +160,13 @@ class HealthCollector:
 
         except subprocess.TimeoutExpired:
             logger.warning("Timeout discovering services")
+            return services
         except FileNotFoundError:
             logger.warning("systemctl not found - not a systemd system")
+            return services
         except Exception as e:
             logger.warning("Error discovering services: %s", e)
+            return services
 
         self._detect_and_publish_state_changes(services)
         return services

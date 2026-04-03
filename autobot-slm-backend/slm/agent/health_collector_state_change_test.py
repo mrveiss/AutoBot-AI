@@ -170,7 +170,7 @@ class TestServiceFailedEvent:
     def test_service_failed_enum_value(self):
         from services.notification_service import NotificationEvent
 
-        assert NotificationEvent.SERVICE_FAILED.value == "service_failure"
+        assert NotificationEvent.SERVICE_FAILED.value == "service_failed"
 
     def test_service_failed_template_renders(self):
         from services.notification_service import NotificationEvent, NotificationService
