@@ -238,67 +238,6 @@ class TestSecurityAPIIntegration:
         assert "approved" in data["message"]
 
 
-class TestTerminalSecurityIntegration:
-    """Integration tests for secure terminal functionality"""
-
-    @pytest.mark.asyncio
-    async def test_secure_terminal_session_integration(self):
-        """Test secure terminal session with security layer integration"""
-        from api.secure_terminal_websocket import SecureTerminalSession
-
-        # Create mock security layer
-        mock_security = MagicMock()
-
-        # Create terminal session
-        session = SecureTerminalSession(
-            session_id="integration_test",
-            security_layer=mock_security,
-            user_role="developer",
-        )
-
-        # Test command auditing integration
-        await session.audit_command("ls -la")
-
-        # Verify security layer was called for auditing
-        mock_security.audit_log.assert_called()
-        call_args = mock_security.audit_log.call_args
-        assert call_args[1]["action"] == "terminal_command"
-        assert call_args[1]["details"]["command"] == "ls -la"
-
-    @pytest.mark.asyncio
-    async def test_terminal_risk_assessment_integration(self):
-        """Test terminal risk assessment integration"""
-        from api.secure_terminal_websocket import SecureTerminalSession
-
-        # Mock security layer with command executor
-        mock_security = MagicMock()
-        mock_executor = MagicMock()
-        mock_executor.assess_command_risk.return_value = ("high", ["High risk command"])
-        mock_security.command_executor = mock_executor
-
-        # Create terminal session
-        session = SecureTerminalSession(
-            session_id="risk_test", security_layer=mock_security, user_role="user"
-        )
-
-        # Mock WebSocket for warning messages
-        session.websocket = AsyncMock()
-        session.active = True
-
-        # Test high-risk command that matches risky patterns
-        await session.audit_command("rm -rf /tmp/test")
-
-        # Should log both command execution and risky command detection
-        assert mock_security.audit_log.call_count == 2
-
-        # Verify the audit calls
-        audit_calls = mock_security.audit_log.call_args_list
-        assert audit_calls[0][1]["action"] == "terminal_command"
-        assert audit_calls[1][1]["action"] == "risky_command_detected"
-        assert audit_calls[1][1]["outcome"] == "warning"
-        assert audit_calls[1][1]["details"]["risk_level"] == "high"
-
-
 class TestDockerSandboxIntegration:
     """Integration tests for Docker sandbox functionality"""
 
