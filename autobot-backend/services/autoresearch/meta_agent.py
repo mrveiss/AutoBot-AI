@@ -43,10 +43,10 @@ class MetaPatch:
     """Proposed code improvement produced by the MetaAgent."""
 
     patch_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    target_path: str = ""          # absolute path to the target module
+    target_path: str = ""  # absolute path to the target module
     original_content: str = ""
     modified_content: str = ""
-    rationale: str = ""            # LLM summary of what was changed and why
+    rationale: str = ""  # LLM summary of what was changed and why
     generation: int = 0
     parent_id: Optional[str] = None
     created_at: float = field(default_factory=time.time)
@@ -140,7 +140,9 @@ class MetaAgent:
 
         prompt = self._build_prompt(original_content, eval_context)
         logger.info(
-            "MetaAgent: generating patch for %s (gen=%d)", target_module_path.name, generation
+            "MetaAgent: generating patch for %s (gen=%d)",
+            target_module_path.name,
+            generation,
         )
         modified_content = await self._call_llm(prompt)
         rationale = self._extract_rationale(modified_content)
@@ -154,7 +156,9 @@ class MetaAgent:
             parent_id=parent_id,
         )
         if not patch.has_changes:
-            logger.info("MetaAgent: LLM produced no changes for %s", target_module_path.name)
+            logger.info(
+                "MetaAgent: LLM produced no changes for %s", target_module_path.name
+            )
         else:
             logger.info(
                 "MetaAgent: patch %s has changes (gen=%d, parent=%s)",
@@ -173,12 +177,12 @@ class MetaAgent:
         if not path.is_absolute():
             raise ValueError(f"target_module_path must be absolute, got: {path}")
         if path.suffix != ".py":
-            raise ValueError(f"target_module_path must be a .py file, got: {path.suffix}")
+            raise ValueError(
+                f"target_module_path must be a .py file, got: {path.suffix}"
+            )
         stem = path.stem.lower()
         if stem.startswith("test_") or stem.endswith("_test"):
-            raise ValueError(
-                f"meta-agent must not target test files: {path.name}"
-            )
+            raise ValueError(f"meta-agent must not target test files: {path.name}")
         if not path.exists():
             raise FileNotFoundError(f"Target module not found: {path}")
 
@@ -195,8 +199,11 @@ class MetaAgent:
         self, original_content: str, eval_context: List[Dict[str, Any]]
     ) -> str:
         """Compose the user prompt from module content and archive context."""
-        parts = ["Here is the Python module to improve:\n\n```python\n",
-                 original_content, "\n```\n"]
+        parts = [
+            "Here is the Python module to improve:\n\n```python\n",
+            original_content,
+            "\n```\n",
+        ]
         if eval_context:
             parts.append("\nContext from prior generations (best → worst score):\n")
             for entry in eval_context[:5]:  # cap at 5 entries
@@ -226,5 +233,5 @@ class MetaAgent:
         """Pull the rationale comment from the first line of the LLM output."""
         first_line = modified_content.splitlines()[0] if modified_content else ""
         if first_line.startswith("# RATIONALE:"):
-            return first_line[len("# RATIONALE:"):].strip()
+            return first_line[len("# RATIONALE:") :].strip()
         return "no rationale provided"

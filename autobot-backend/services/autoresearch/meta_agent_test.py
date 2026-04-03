@@ -16,7 +16,6 @@ import pytest
 from .config import AutoResearchConfig
 from .meta_agent import MetaAgent, MetaPatch
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -25,9 +24,7 @@ from .meta_agent import MetaAgent, MetaPatch
 def _make_agent(llm_response: str = "") -> tuple[MetaAgent, MagicMock]:
     """Return (agent, mock_llm) with the LLM returning *llm_response*."""
     llm = MagicMock()
-    llm.chat = AsyncMock(
-        return_value=MagicMock(content=llm_response)
-    )
+    llm.chat = AsyncMock(return_value=MagicMock(content=llm_response))
     agent = MetaAgent(config=AutoResearchConfig(), llm_service=llm)
     return agent, llm
 
@@ -240,6 +237,7 @@ async def test_generate_patch_no_changes_logs(tmp_path, caplog):
     _write_module(target, content)
 
     import logging
+
     with caplog.at_level(logging.INFO):
         patch = await agent.generate_patch(
             target_module_path=target,

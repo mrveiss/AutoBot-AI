@@ -16,7 +16,6 @@ from .config import AutoResearchConfig
 from .meta_agent import MetaPatch
 from .meta_eval_harness import MetaEvalHarness, MetaEvalResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -78,14 +77,17 @@ def test_result_to_dict():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("output,expected_passed,expected_total", [
-    ("5 passed, 2 failed in 0.5s", 5, 7),
-    ("3 passed in 0.1s", 3, 3),
-    ("2 failed in 0.05s", 0, 2),
-    ("1 passed, 1 failed, 1 error in 1.0s", 1, 3),
-    ("no output", 0, 0),
-    ("", 0, 0),
-])
+@pytest.mark.parametrize(
+    "output,expected_passed,expected_total",
+    [
+        ("5 passed, 2 failed in 0.5s", 5, 7),
+        ("3 passed in 0.1s", 3, 3),
+        ("2 failed in 0.05s", 0, 2),
+        ("1 passed, 1 failed, 1 error in 1.0s", 1, 3),
+        ("no output", 0, 0),
+        ("", 0, 0),
+    ],
+)
 def test_parse_pytest_summary(output, expected_passed, expected_total):
     passed, total = MetaEvalHarness._parse_pytest_summary(output)
     assert passed == expected_passed
@@ -142,9 +144,12 @@ async def test_evaluate_patch_tests_fail_rejected(tmp_path):
     patch = _make_patch()
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(0, 3, "3 failed in 0.1s")),
         ),
     ):
@@ -181,9 +186,12 @@ async def test_evaluate_patch_approved_no_gate(tmp_path):
     )
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(5, 5, "5 passed in 0.2s")),
         ),
     ):
@@ -221,9 +229,12 @@ async def test_evaluate_patch_gate_approved(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(4, 4, "4 passed in 0.1s")),
         ),
     ):
@@ -257,9 +268,12 @@ async def test_evaluate_patch_gate_rejected(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(4, 4, "4 passed in 0.1s")),
         ),
     ):
@@ -295,9 +309,12 @@ async def test_evaluate_patch_adds_to_archive(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(3, 4, "3 passed, 1 failed in 0.1s")),
         ),
     ):
@@ -337,9 +354,12 @@ async def test_evaluate_patch_rejects_when_gate_required_no_session(tmp_path):
     )
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(5, 5, "5 passed in 0.1s")),
         ),
     ):
@@ -376,9 +396,12 @@ async def test_apply_patch_backup_includes_patch_id(tmp_path):
     archive = Archive()
 
     with (
-        mock_patch.object(harness, "_write_temp_module", return_value=tmp_path / "tmp.py"),
         mock_patch.object(
-            harness, "_run_tests",
+            harness, "_write_temp_module", return_value=tmp_path / "tmp.py"
+        ),
+        mock_patch.object(
+            harness,
+            "_run_tests",
             new=AsyncMock(return_value=(3, 3, "3 passed in 0.1s")),
         ),
     ):

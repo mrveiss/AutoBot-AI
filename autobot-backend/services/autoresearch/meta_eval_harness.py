@@ -51,12 +51,12 @@ class MetaEvalResult:
     """Outcome of evaluating a single MetaPatch."""
 
     patch_id: str = ""
-    score: float = 0.0          # fraction of tests passed (0..1)
+    score: float = 0.0  # fraction of tests passed (0..1)
     tests_passed: int = 0
     tests_total: int = 0
-    test_output: str = ""       # raw pytest output for diagnostics
-    decision: str = "skipped"   # "approved" | "rejected" | "skipped" | "timeout"
-    applied: bool = False       # True only when patch is written to live file
+    test_output: str = ""  # raw pytest output for diagnostics
+    decision: str = "skipped"  # "approved" | "rejected" | "skipped" | "timeout"
+    applied: bool = False  # True only when patch is written to live file
     error: Optional[str] = None
     evaluated_at: float = field(default_factory=time.time)
 
@@ -121,7 +121,9 @@ class MetaEvalHarness:
         result = MetaEvalResult(patch_id=patch.patch_id)
 
         if not patch.has_changes:
-            logger.info("MetaEvalHarness: patch %s has no changes — skipping", patch.patch_id)
+            logger.info(
+                "MetaEvalHarness: patch %s has no changes — skipping", patch.patch_id
+            )
             result.decision = "skipped"
             self._add_to_archive(archive, patch, result)
             return result
@@ -137,7 +139,9 @@ class MetaEvalHarness:
             result.test_output = output
             result.score = self._compute_score(passed, total)
         except Exception as exc:
-            logger.exception("MetaEvalHarness: test run failed for patch %s", patch.patch_id)
+            logger.exception(
+                "MetaEvalHarness: test run failed for patch %s", patch.patch_id
+            )
             result.error = str(exc)
             result.decision = "rejected"
             self._add_to_archive(archive, patch, result)
@@ -310,7 +314,7 @@ class MetaEvalHarness:
         """Record the evaluation result as a VariantArchiveEntry."""
         entry = VariantArchiveEntry(
             variant_id=patch.patch_id,
-            variant=patch,       # MetaPatch is stored as the "variant"
+            variant=patch,  # MetaPatch is stored as the "variant"
             score=result.score,
             parent_id=patch.parent_id,
             generation=patch.generation,
@@ -360,6 +364,4 @@ class MetaEvalHarness:
         backup = target.with_name(f"{target.stem}.{prefix}.meta_bak")
         shutil.copy2(target, backup)
         target.write_text(patch.modified_content, encoding="utf-8")
-        logger.info(
-            "MetaEvalHarness: live file updated, backup at %s", backup
-        )
+        logger.info("MetaEvalHarness: live file updated, backup at %s", backup)
