@@ -178,7 +178,9 @@
   hostname:
     name: "{{ inventory_hostname }}"
   become: yes
-  when: inventory_hostname is defined
+  when:
+    - inventory_hostname is defined
+    - inventory_hostname != '00-SLM-Manager'
   tags: ['common', 'hostname']
 
 - name: "Common | Update /etc/hosts"
@@ -188,7 +190,9 @@
     regexp: "^{{ ansible_default_ipv4.address }}"
     state: present
   become: yes
-  when: ansible_default_ipv4.address is defined
+  when:
+    - ansible_default_ipv4.address is defined
+    - inventory_hostname != '00-SLM-Manager'
   tags: ['common', 'hostname']
 
 - name: "Common | Configure DNS resolvers"
