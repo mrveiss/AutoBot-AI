@@ -161,9 +161,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["merge-conflicts", "code-intelligence", "git"],
         "merge_conflict_resolution",
     ),
+    # Issue #3355: moved prefix from APIRouter() into registry (was "")
     (
         "api.natural_language_search",
-        "",
+        "/nl-search",
         ["natural-language-search", "code-search"],
         "natural_language_search",
     ),

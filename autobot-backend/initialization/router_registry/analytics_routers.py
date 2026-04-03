@@ -30,9 +30,10 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "codebase_analytics",
     ),
     # Issue #708: renamed from analytics_unified
+    # Issue #3355: moved prefix from APIRouter() into registry (was "")
     (
         "api.analytics_reporting",
-        "",
+        "/unified",
         ["analytics-reporting", "analytics"],
         "analytics_reporting",
     ),
@@ -145,9 +146,10 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "analytics_continuous_learning",
     ),
     # Advanced analytics - Issue #59, Issue #708: renamed from analytics_advanced
+    # Issue #3355: moved prefix from APIRouter() into registry (was "")
     (
         "api.analytics_maintenance",
-        "",
+        "/advanced",
         ["analytics-maintenance", "analytics", "bi"],
         "analytics_maintenance",
     ),
