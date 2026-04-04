@@ -136,8 +136,11 @@ def _build_inventory_children(
 
 # Role name -> (variable_name, port) for infrastructure service discovery.
 # Maps active roles to the Ansible vars that templates expect (#1431).
+# Ports are INTERNAL service ports (uvicorn/service listen ports), not the
+# external nginx TLS port (8443).  Co-located nodes use 127.0.0.1 so uvicorn
+# binds to loopback; nginx already holds 8443 on the same host (#3426).
 _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
-    "backend": ("backend_host", 8443),
+    "backend": ("backend_host", 8001),  # uvicorn internal port (#3426: was 8443)
     "redis": ("redis_host", 6379),
     "frontend": ("frontend_host", 5173),
     "ai-stack": ("ai_stack_host", 8080),
@@ -149,8 +152,14 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
 def _build_infra_vars(
     node_roles: list,
     node_id_to_ip: dict[str, str],
+    local_ips: set | None = None,
 ) -> dict:
-    """Derive infrastructure discovery vars from active role assignments (#1431)."""
+    """Derive infrastructure discovery vars from active role assignments (#1431).
+
+    For co-located services (node IP in local_ips), uses 127.0.0.1 so that
+    uvicorn and other daemons bind to loopback rather than an external
+    interface that nginx may already hold (#3426).
+    """
     infra_vars: dict = {}
     for nr in node_roles:
         mapping = _ROLE_INFRA_VARS.get(nr.role_name)
@@ -161,7 +170,9 @@ def _build_infra_vars(
             continue
         host_var, port = mapping
         if host_var not in infra_vars:
-            infra_vars[host_var] = ip
+            # Co-located: use loopback so services bind correctly on the SLM host.
+            resolved = "127.0.0.1" if (local_ips and ip in local_ips) else ip
+            infra_vars[host_var] = resolved
             infra_vars[host_var.replace("_host", "_port")] = port
     return infra_vars
 
@@ -272,9 +283,14 @@ def _apply_colocation_vars(
     frontend at / and SLM at /slm/ (#2829).  When backend is co-located too,
     sets frontend_backend_port=8001 and frontend_backend_protocol=http so
     templates proxy directly to uvicorn, eliminating the double-proxy.
+
+    Also propagates slm_colocated_frontend=True to the 00-SLM-Manager host
+    entry so Phase 4c in provision-fleet-roles.yml can rebuild the SLM
+    frontend with VITE_API_URL=/slm (#3426).
     """
     _frontend_roles = {"frontend", "autobot-frontend"}
     _backend_roles = {"backend", "autobot-backend"}
+    colocated_frontend_detected = False
     for node in db_nodes:
         inv_name = node.ansible_target
         if inv_name not in hosts:
@@ -285,10 +301,19 @@ def _apply_colocation_vars(
         is_local = node.ip_address in local_ips or node.node_id == "00-SLM-Manager"
         if is_local and roles & _frontend_roles:
             hosts[inv_name]["slm_colocated_frontend"] = True
+            colocated_frontend_detected = True
             if roles & _backend_roles:
                 hosts[inv_name]["frontend_backend_host"] = "127.0.0.1"
                 hosts[inv_name]["frontend_backend_port"] = 8001
                 hosts[inv_name]["frontend_backend_protocol"] = "http"
+
+    # Propagate to 00-SLM-Manager so Phase 4c can rebuild the SLM frontend
+    # with VITE_API_URL=/slm after the user frontend has been deployed (#3426).
+    if colocated_frontend_detected:
+        for node in db_nodes:
+            if node.node_id == "00-SLM-Manager" and node.ansible_target in hosts:
+                hosts[node.ansible_target]["slm_colocated_frontend"] = True
+                break
 
 
 def _build_inventory_dict(
@@ -333,12 +358,13 @@ async def _fetch_inventory_data(
         list,
         list,
         dict[str, str],
+        set,
     ]
 ]:
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
-             all_node_roles, all_active, all_ip_map) or None when no nodes match.
+             all_node_roles, all_active, all_ip_map, local_ips) or None when no nodes match.
     """
     from sqlalchemy import select
 
@@ -387,6 +413,7 @@ async def _fetch_inventory_data(
         all_node_roles,
         all_active,
         all_ip_map,
+        local_ips,
     )
 
 
@@ -411,11 +438,12 @@ async def _generate_dynamic_inventory(
         all_node_roles,
         all_active,
         all_ip_map,
+        local_ips,
     ) = result
     children, ansible_groups = _build_inventory_children(
         hosts, all_node_roles, node_id_to_hostname
     )
-    infra_vars = _build_infra_vars(all_active, all_ip_map)
+    infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
