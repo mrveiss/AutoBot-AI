@@ -248,7 +248,6 @@ function disposeGraph(): void {
     renderer.dispose()
   }
 
-  graph.value._destructor()
   graph.value = null
 }
 
