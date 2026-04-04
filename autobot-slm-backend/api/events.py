@@ -15,16 +15,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import EventSeverity, Node, NodeEvent
-from services.auth import get_current_user
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/events",
-    tags=["events"],
-    dependencies=[Depends(get_current_user)],
-)
+# This router is intentionally unauthenticated: node agents post to /sync
+# without a bearer token and are identified by node_id validated in the
+# endpoint body against the Node table (#3193).  Network-layer access control
+# (VPN / firewall) provides the perimeter guard.
+router = APIRouter(prefix="/events", tags=["events"])
 
 
 class BufferedEvent(BaseModel):
