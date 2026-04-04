@@ -320,6 +320,43 @@ def _apply_colocation_vars(
                 break
 
 
+def _inject_co_located_ai_stack(
+    hosts: dict[str, dict],
+    db_nodes: list,
+    fleet_has_ai_stack: bool,
+) -> None:
+    """Auto-inject ai-stack onto backend nodes when no fleet node has it (#3461).
+
+    On single-host co-located deployments, users often assign backend/frontend/
+    redis but forget ai-stack (which deploys ChromaDB).  Without ChromaDB, the
+    knowledge base is permanently unhealthy.  When the full fleet has no ai-stack
+    assignment, silently add it to each backend node so Phase 5a runs the role.
+
+    In distributed setups where a dedicated AI stack VM already carries ai-stack,
+    fleet_has_ai_stack is True and this function is a no-op.
+    """
+    if fleet_has_ai_stack:
+        return
+
+    _ai_stack_roles = {"ai-stack", "autobot-ai-stack"}
+    _backend_roles = {"backend", "autobot-backend"}
+
+    for node in db_nodes:
+        inv_name = node.ansible_target
+        if inv_name not in hosts:
+            continue
+        roles = hosts[inv_name].get("node_roles", [])
+        if not (_backend_roles & set(roles)):
+            continue
+        if _ai_stack_roles & set(roles):
+            continue
+        hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        logger.info(
+            "Auto-injecting ai-stack onto %s (no dedicated AI stack node in fleet; #3461)",
+            inv_name,
+        )
+
+
 def _build_inventory_dict(
     hosts: dict[str, dict],
     children: dict[str, dict],
@@ -398,6 +435,17 @@ async def _fetch_inventory_data(
 
         _apply_role_host_vars(hosts, db_nodes, all_node_roles)
         _apply_colocation_vars(hosts, db_nodes, local_ips)
+
+        # (#3461) Check full fleet for ai-stack assignment (independent of node_ids filter)
+        # so single-host setups get ChromaDB even if user forgot to assign ai-stack.
+        fleet_ai_q = select(NodeRole).where(
+            NodeRole.status.in_(["active", "inactive", "not_installed"]),
+            NodeRole.role_name.in_(["ai-stack", "autobot-ai-stack"]),
+        )
+        fleet_ai_stack = (await session.execute(fleet_ai_q)).scalars().all()
+        _inject_co_located_ai_stack(
+            hosts, db_nodes, fleet_has_ai_stack=len(fleet_ai_stack) > 0
+        )
 
         # Fetch ALL active roles for infra var derivation (#1431)
         if node_ids:
