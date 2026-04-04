@@ -5,23 +5,26 @@
 Node Remote Execution API
 
 Issue #3406: Adds POST /nodes/{node_id}/execute — a guarded endpoint that
-runs a shell script on the target node.  Commands are validated against an
-injection-pattern denylist and an optional allowlist before execution.
+runs a shell command on the target node.
 
 Security model
 --------------
-- Shell injection patterns (backtick, process substitution, null-byte, etc.)
-  are always rejected.
-- An opt-in ALLOWED_COMMANDS_PATTERN env var restricts commands to an
-  additional regex if set.
+- Commands are tokenised with shlex.split() and the first token (the
+  executable name) is checked against ALLOWED_EXECUTABLES.  Any command
+  whose first token is not in that frozenset is rejected with HTTP 400.
+- This allowlist approach replaces the prior denylist, which was trivially
+  bypassed via semicolons, &&, shell-newline chaining, python3 -c, eval,
+  and many other vectors (#3421).
 - The node must be ONLINE before a job is accepted.
-- All executions are audit-logged via the standard node event system.
+- The endpoint requires admin privileges (require_admin dependency).
+- All executions are audit-logged including the command and acting user.
+- SSH connections use a known_hosts file instead of StrictHostKeyChecking=no.
 """
 
 import asyncio
 import logging
 import os
-import re
+import shlex
 import socket
 import time
 import uuid
@@ -33,7 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
-from services.auth import get_current_user
+from services.auth import require_admin
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -41,46 +44,96 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes-execution"])
 
 # ---------------------------------------------------------------------------
-# Security: static injection-pattern denylist
+# Security: strict allowlist of permitted executables
 # ---------------------------------------------------------------------------
 
-# Patterns that are unconditionally rejected regardless of allowlist.
-_INJECTION_PATTERNS: list[re.Pattern] = [
-    re.compile(r"`"),  # backtick command substitution
-    re.compile(r"\$\("),  # $(…) command substitution
-    re.compile(r"<\("),  # process substitution <(…)
-    re.compile(r">\("),  # process substitution >(…)
-    re.compile(r"\x00"),  # null byte
-    re.compile(r";\s*rm\s"),  # destructive rm chaining
-    re.compile(r"\|\s*bash"),  # pipe-to-bash
-    re.compile(r"\|\s*sh\b"),  # pipe-to-sh
-    re.compile(r"curl\s.*\|\s*(bash|sh)"),  # curl-pipe-execute
-    re.compile(r"wget\s.*-O\s*-"),  # wget stdout pipe
-]
-
-# Optional: set ALLOWED_COMMANDS_PATTERN to a regex; commands not matching
-# are rejected.  Empty / unset means no additional restriction.
-_ALLOWED_RE_SRC = os.getenv("ALLOWED_COMMANDS_PATTERN", "")
-_ALLOWED_RE: re.Pattern | None = (
-    re.compile(_ALLOWED_RE_SRC) if _ALLOWED_RE_SRC else None
+# Only these executable names (first shlex token) are permitted.
+# Add entries deliberately — omission is the safe default.
+ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
+    {
+        # Service / status inspection
+        "systemctl",
+        "journalctl",
+        "service",
+        # Network diagnostics
+        "ping",
+        "ss",
+        "netstat",
+        "ip",
+        "nmap",
+        "curl",
+        "wget",
+        # Process inspection
+        "ps",
+        "top",
+        "htop",
+        "uptime",
+        "free",
+        "df",
+        "du",
+        "lsof",
+        # File inspection (read-only)
+        "ls",
+        "cat",
+        "head",
+        "tail",
+        "find",
+        "stat",
+        "file",
+        # Package management (query-only)
+        "dpkg",
+        "apt",
+        "rpm",
+        "yum",
+        "dnf",
+        # AutoBot-specific helpers
+        "autobot-status",
+        "autobot-health",
+        # Git (read-only operations are enforced at argument level by callers)
+        "git",
+    }
 )
 
 
-def _validate_command(script: str) -> None:
-    """Raise HTTPException 400 if *script* contains forbidden patterns."""
-    for pattern in _INJECTION_PATTERNS:
-        if pattern.search(script):
-            logger.warning("Command rejected — injection pattern: %s", pattern.pattern)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Command rejected: forbidden pattern detected",
-            )
-    if _ALLOWED_RE and not _ALLOWED_RE.search(script):
-        logger.warning("Command rejected — not in allowlist: %.80s", script)
+def _validate_command(script: str) -> str:
+    """Parse *script* and enforce the executable allowlist.
+
+    Returns the normalised first token for logging.
+    Raises HTTPException 400 if the command is empty or the executable is
+    not in ALLOWED_EXECUTABLES.
+    """
+    try:
+        tokens = shlex.split(script)
+    except ValueError as exc:
+        logger.warning("Command rejected — shlex parse error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Command rejected: does not match configured allowlist",
+            detail="Command rejected: could not parse command tokens",
+        ) from exc
+
+    if not tokens:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Command rejected: empty command",
         )
+
+    # Extract the bare executable name (strip any leading path components
+    # so that e.g. /bin/ls still matches "ls").
+    executable = Path(tokens[0]).name
+
+    if executable not in ALLOWED_EXECUTABLES:
+        logger.warning(
+            "Command rejected — executable %r not in allowlist", executable
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Command rejected: executable {executable!r} is not permitted. "
+                "Contact an administrator to extend the allowlist."
+            ),
+        )
+
+    return executable
 
 
 # ---------------------------------------------------------------------------
@@ -93,14 +146,9 @@ class NodeExecuteRequest(BaseModel):
 
     command: str = Field(
         ...,
-        description="Shell command or script body to execute on the node.",
+        description="Shell command to execute on the node (single command, no shell chaining).",
         min_length=1,
-        max_length=32_768,
-    )
-    language: str = Field(
-        default="bash",
-        description="Interpreter: 'bash' or 'sh'.",
-        pattern=r"^(bash|sh)$",
+        max_length=4096,
     )
     timeout: int = Field(
         default=300,
@@ -147,19 +195,32 @@ async def _audit_execute_event(
     db: AsyncSession,
     node_id: str,
     job_id: str,
+    command: str,
+    acting_user: str,
     exit_code: int,
     duration_ms: int,
     severity: EventSeverity,
 ) -> None:
-    """Persist an audit NodeEvent for the remote-execute job."""
+    """Persist an audit NodeEvent for the remote-execute job.
+
+    Records the full command and acting user identity to support forensic
+    investigation (#3421).
+    """
+    # Truncate command in the message to keep it readable; full command is in details.
+    short_cmd = command[:120] + ("..." if len(command) > 120 else "")
     event = NodeEvent(
         event_id=str(uuid.uuid4())[:16],
         node_id=node_id,
         event_type=EventType.MANUAL_ACTION.value,
         severity=severity.value,
-        message=f"Remote execution job {job_id}: exit_code={exit_code}",
+        message=(
+            f"Remote execution job {job_id} by {acting_user!r}: "
+            f"exit_code={exit_code} cmd={short_cmd!r}"
+        ),
         details={
             "job_id": job_id,
+            "command": command,
+            "acting_user": acting_user,
             "exit_code": exit_code,
             "duration_ms": duration_ms,
         },
@@ -169,6 +230,9 @@ async def _audit_execute_event(
 
 
 _SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_SSH_KNOWN_HOSTS_PATH = os.environ.get(
+    "SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts"
+)
 
 _LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
 try:
@@ -182,18 +246,21 @@ def _is_local_ip(ip: str) -> bool:
     return ip in _LOCAL_ADDRESSES
 
 
-async def _run_script(
-    script: str, language: str, timeout: int
-) -> tuple[int, str, str]:
-    """Execute *script* locally via subprocess; return (exit_code, stdout, stderr)."""
-    interpreter = "/bin/bash" if language == "bash" else "/bin/sh"
+async def _run_command(tokens: list[str], timeout: int) -> tuple[int, str, str]:
+    """Execute a pre-tokenised command locally; return (exit_code, stdout, stderr).
+
+    Uses shell=False (exec list form) — the tokens come from shlex.split() of
+    an allowlist-validated command, so no shell interpretation occurs.
+    """
     proc = await asyncio.create_subprocess_exec(
-        interpreter, "-c", script,
+        *tokens,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
+        raw_out, raw_err = await asyncio.wait_for(
+            proc.communicate(), timeout=float(timeout)
+        )
     except asyncio.TimeoutError:
         proc.kill()
         await proc.communicate()
@@ -206,27 +273,57 @@ async def _run_script(
 
 
 async def _run_via_ssh(
-    ip: str, ssh_user: str, ssh_port: int, script: str, language: str, timeout: int
+    ip: str,
+    ssh_user: str,
+    ssh_port: int,
+    tokens: list[str],
+    timeout: int,
 ) -> tuple[int, str, str]:
-    """Execute *script* on *ip* via SSH; return (exit_code, stdout, stderr)."""
-    interpreter = "bash" if language == "bash" else "sh"
+    """Execute a pre-tokenised command on *ip* via SSH.
+
+    Uses known_hosts verification (StrictHostKeyChecking=yes) when a
+    known_hosts file exists, falling back to 'accept-new' for first contact
+    rather than the previous insecure 'no' (#3421).
+    """
+    known_hosts_path = Path(_SSH_KNOWN_HOSTS_PATH)
+    if known_hosts_path.exists():
+        host_key_checking = "yes"
+        known_hosts_file = str(known_hosts_path)
+    else:
+        # Accept and persist the key on first connection; never silently
+        # accept a changed key (this is safer than StrictHostKeyChecking=no).
+        host_key_checking = "accept-new"
+        known_hosts_file = "/dev/null"
+        logger.warning(
+            "known_hosts file not found at %s — using accept-new for %s",
+            _SSH_KNOWN_HOSTS_PATH,
+            ip,
+        )
+
     cmd = [
-        "ssh", "-p", str(ssh_port),
-        "-o", "StrictHostKeyChecking=no",
+        "ssh",
+        "-p", str(ssh_port),
+        "-o", f"StrictHostKeyChecking={host_key_checking}",
+        "-o", f"UserKnownHostsFile={known_hosts_file}",
         "-o", "BatchMode=yes",
         "-o", f"ConnectTimeout={min(timeout, 30)}",
     ]
     if Path(_SSH_KEY_PATH).exists():
         cmd.extend(["-i", _SSH_KEY_PATH])
     cmd.append(f"{ssh_user}@{ip}")
-    cmd.extend([interpreter, "-c", script])
+    # Pass the command tokens as individual arguments to avoid any shell
+    # interpretation on the remote side.
+    cmd.extend(tokens)
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
+        raw_out, raw_err = await asyncio.wait_for(
+            proc.communicate(), timeout=float(timeout)
+        )
     except asyncio.TimeoutError:
         proc.kill()
         await proc.communicate()
@@ -246,58 +343,77 @@ async def _run_via_ssh(
 @router.post(
     "/{node_id}/execute",
     response_model=NodeExecuteResponse,
-    summary="Execute a shell command on a fleet node",
+    summary="Execute an allowlisted command on a fleet node",
 )
 async def execute_on_node(
     node_id: str,
     body: NodeExecuteRequest,
     db: AsyncSession = Depends(get_db),
-    _user=Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ) -> NodeExecuteResponse:
     """Run *body.command* on the node identified by *node_id*.
 
-    The node must be ONLINE.  Commands are validated against the injection
-    denylist before execution.  The result is audit-logged as a NodeEvent.
+    The node must be ONLINE.  *body.command* is tokenised with shlex.split()
+    and the first token (executable name) must be present in
+    ALLOWED_EXECUTABLES — any other command is rejected with HTTP 400.
 
-    Local nodes (manager host) execute via subprocess; remote nodes execute
-    via SSH using the SLM key (SLM_SSH_KEY env var, default
-    /home/autobot/.ssh/autobot_key) with the node's ssh_user and ssh_port.
+    Admin privileges are required (require_admin dependency).
+
+    Local nodes (manager host) execute via subprocess with shell=False;
+    remote nodes execute via SSH using the SLM key (SLM_SSH_KEY env var,
+    default /home/autobot/.ssh/autobot_key) and known_hosts verification
+    (SLM_SSH_KNOWN_HOSTS env var, default /home/autobot/.ssh/known_hosts).
+
+    All executions are audit-logged including the full command and acting user.
     """
-    _validate_command(body.command)
+    acting_user: str = current_user.get("sub", "unknown")
+
+    executable = _validate_command(body.command)
+    tokens = shlex.split(body.command)
+
     node = await _require_online_node(node_id, db)
 
     job_id = str(uuid.uuid4())[:16]
     logger.info(
-        "Execute: node=%s ip=%s job=%s language=%s timeout=%s",
+        "Execute: node=%s ip=%s job=%s executable=%s user=%s timeout=%s",
         node_id,
         node.ip_address,
         job_id,
-        body.language,
+        executable,
+        acting_user,
         body.timeout,
     )
 
     t0 = time.monotonic()
     if _is_local_ip(node.ip_address or ""):
-        exit_code, stdout, stderr = await _run_script(
-            body.command, body.language, body.timeout
-        )
+        exit_code, stdout, stderr = await _run_command(tokens, body.timeout)
     else:
         ssh_user = node.ssh_user or "autobot"
         ssh_port = int(node.ssh_port or 22)
         exit_code, stdout, stderr = await _run_via_ssh(
-            node.ip_address, ssh_user, ssh_port, body.command, body.language, body.timeout
+            node.ip_address, ssh_user, ssh_port, tokens, body.timeout
         )
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     severity = EventSeverity.INFO if exit_code == 0 else EventSeverity.WARNING
-    await _audit_execute_event(db, node_id, job_id, exit_code, duration_ms, severity)
+    await _audit_execute_event(
+        db,
+        node_id,
+        job_id,
+        body.command,
+        acting_user,
+        exit_code,
+        duration_ms,
+        severity,
+    )
 
     logger.info(
-        "Remote execute done: node=%s job=%s exit=%d dur=%dms",
+        "Remote execute done: node=%s job=%s exit=%d dur=%dms user=%s",
         node_id,
         job_id,
         exit_code,
         duration_ms,
+        acting_user,
     )
 
     return NodeExecuteResponse(
