@@ -3012,7 +3012,7 @@ before summarizing.
             queue.put_nowait(
                 {
                     "type": "error",
-                    "content": f"Error: {exc}",
+                    "content": str(exc),
                 }
             )
         finally:
