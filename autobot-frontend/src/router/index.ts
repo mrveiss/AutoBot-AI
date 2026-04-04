@@ -366,23 +366,6 @@ const routes: RouteRecordRaw[] = [
           }
         ]
       },
-      // Issue #3436: Legacy redirect routes — old flat paths redirect to codebase landing
-      {
-        path: 'code-quality',
-        redirect: '/analytics/codebase'
-      },
-      {
-        path: 'code-review',
-        redirect: '/analytics/codebase'
-      },
-      {
-        path: 'code-generation',
-        redirect: '/analytics/codebase'
-      },
-      {
-        path: 'evolution',
-        redirect: '/analytics/codebase'
-      },
       {
         path: 'bi',
         name: 'analytics-bi',
