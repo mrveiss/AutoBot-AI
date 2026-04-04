@@ -13,21 +13,22 @@ import threading
 from fastapi import Depends
 
 from config import ConfigManager
-
-global_config_manager = ConfigManager()
+from config.manager import get_config_manager
 
 
 def get_config() -> ConfigManager:
     """
     Dependency injection provider for configuration.
 
-    This function provides access to the configuration manager
-    without requiring direct imports of global_config_manager.
+    Returns the application-wide singleton ConfigManager so that route
+    handlers can receive it via ``Depends(get_config)`` instead of
+    importing ``global_config_manager`` directly.  Tests can override
+    this dependency with ``app.dependency_overrides[get_config]``.
 
     Returns:
-        ConfigManager: The global configuration manager instance
+        ConfigManager: The global configuration manager singleton
     """
-    return global_config_manager
+    return get_config_manager()
 
 
 def get_diagnostics(config: ConfigManager = Depends(get_config)):
