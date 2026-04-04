@@ -506,13 +506,16 @@ class RedisConfig(BaseSettings):
     db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
     db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
 
-    # LangGraph checkpoint TTL (#1481)
+    # LangGraph checkpoint TTL (#1481, #3231)
     checkpoint_ttl_minutes: int = Field(
-        default=1440,
+        default=43200,
         alias="AUTOBOT_REDIS_CHECKPOINT_TTL_MINUTES",
         description=(
             "TTL in minutes for LangGraph checkpoint keys. "
-            "Active sessions refresh on read. 0 = no expiry."
+            "Active sessions refresh on read so the window resets on each "
+            "interaction.  Default is 30 days (43200 min) to accommodate "
+            "human-in-the-loop pauses that span multiple days without "
+            "silently expiring the checkpoint.  Set to 0 to disable expiry."
         ),
     )
 

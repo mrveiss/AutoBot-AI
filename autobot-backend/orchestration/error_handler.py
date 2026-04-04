@@ -39,7 +39,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CHECKPOINT_KEY_PREFIX = "autobot:workflow:checkpoint:"
-CHECKPOINT_TTL = 7 * 24 * 3600  # 7 days in seconds
+# Issue #3231: 30-day TTL so paused workflows (e.g. awaiting human approval)
+# survive extended pauses without silent expiry.  The TTL is refreshed on
+# every save() and on every resume, so active workflows never approach the
+# limit.  Operators who need a different window can override via
+# AUTOBOT_WORKFLOW_CHECKPOINT_TTL_DAYS.
+CHECKPOINT_TTL = 30 * 24 * 3600  # 30 days in seconds
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +254,35 @@ class WorkflowCheckpointManager:
                     exc,
                 )
         return result
+
+    def refresh_ttl(self, workflow_id: str) -> None:
+        """
+        Reset the TTL on the checkpoint hash for *workflow_id* to
+        ``CHECKPOINT_TTL`` seconds from now.
+
+        Call this at resume time so that a workflow paused for human
+        approval gets a fresh 30-day window from the moment it is
+        resumed — not from the moment the last step completed before the
+        pause.  This prevents silent expiry when a human-in-the-loop
+        approval spans many days.
+
+        Issue #3231.
+        """
+        redis = self._get_redis()
+        key = self._checkpoint_key(workflow_id)
+        try:
+            redis.expire(key, CHECKPOINT_TTL)
+            logger.debug(
+                "Checkpoint TTL refreshed for workflow=%s (%ds)",
+                workflow_id,
+                CHECKPOINT_TTL,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to refresh checkpoint TTL for workflow=%s: %s",
+                workflow_id,
+                exc,
+            )
 
     def clear(self, workflow_id: str) -> None:
         """

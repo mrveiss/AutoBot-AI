@@ -759,6 +759,11 @@ class WorkflowExecutor:
         if not checkpoints:
             return
 
+        # Issue #3231: refresh TTL at resume time so a workflow that was
+        # paused for human approval (potentially for days) gets a fresh
+        # 30-day window from this moment rather than from the last step save.
+        self._checkpoint_manager.refresh_ttl(workflow_id)
+
         logger.info(
             "Workflow %s: resuming with %d checkpointed steps: %s",
             workflow_id,
