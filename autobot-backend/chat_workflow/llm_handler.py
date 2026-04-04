@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
 from constants.model_constants import ModelConstants
-from dependencies import global_config_manager
+from dependencies import get_config
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import get_extension_manager
@@ -146,7 +146,7 @@ class LLMHandlerMixin:
         Config may store just the base URL, so we ensure the path is appended.
         """
         try:
-            endpoint = global_config_manager.get_nested(
+            endpoint = get_config().get_nested(
                 "backend.llm.ollama.endpoint", None
             )
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
@@ -169,7 +169,7 @@ class LLMHandlerMixin:
         Returns URL with /api/generate suffix.
         """
         try:
-            base_url = global_config_manager.get_ollama_endpoint_for_model(model_name)
+            base_url = get_config().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
                 if not base_url.endswith("/api/generate"):
                     base_url = base_url.rstrip("/") + "/api/generate"
@@ -341,8 +341,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
-            default_model = global_config_manager.get_default_llm_model()
-            selected = global_config_manager.get_nested(
+            default_model = get_config().get_default_llm_model()
+            selected = get_config().get_nested(
                 "backend.llm.ollama.selected_model", default_model
             )
             if selected and isinstance(selected, str):
@@ -674,13 +674,13 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         self, command: str, stdout: str, stderr: str, return_code: int
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
-        selected_model = global_config_manager.get_selected_model()
+        selected_model = get_config().get_selected_model()
         # Issue #1214: Try SLM discovery first, then config-based routing
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
             ollama_endpoint = slm_base
         else:
-            ollama_endpoint = global_config_manager.get_ollama_url_for_model(
+            ollama_endpoint = get_config().get_ollama_url_for_model(
                 selected_model
             )
 
