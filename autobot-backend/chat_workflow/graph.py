@@ -762,8 +762,10 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
     if _checkpointer is not None:
         return _checkpointer
 
-    # Get Redis URI and checkpoint TTL from SSOT config
-    ttl_minutes = 1440  # Default: 24 hours
+    # Get Redis URI and checkpoint TTL from SSOT config.
+    # Issue #3231: default raised to 30 days (43200 min) to prevent silent
+    # checkpoint expiry during human-in-the-loop pauses.
+    ttl_minutes = 43200  # Default: 30 days
     try:
         from autobot_shared.ssot_config import config as ssot
 
