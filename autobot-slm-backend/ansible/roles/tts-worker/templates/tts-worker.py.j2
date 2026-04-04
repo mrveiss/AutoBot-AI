@@ -67,6 +67,33 @@ HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_T
 TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
 
 
+def _check_cache_writable(models_dir: Path) -> None:
+    """Validate that the TTS model cache directory is writable before loading.
+
+    pocket_tts catches PermissionError and re-raises with a misleading
+    'accept terms / hf auth login' message. This check surfaces the real
+    cause early so the operator sees the correct fix (#3466).
+    """
+    import getpass
+
+    try:
+        models_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        pass  # fall through to the access check below
+
+    if not os.access(models_dir, os.W_OK):
+        user = getpass.getuser()
+        logger.error(
+            "TTS model cache directory %s is not writable by %s. "
+            "Run: sudo chown -R autobot-tts:autobot-tts %s  "
+            "Or re-run setup provisioning to fix automatically. (#3466)",
+            models_dir,
+            user,
+            models_dir,
+        )
+        raise SystemExit(1)
+
+
 def _is_gated_model(model_id: str) -> bool:
     """Return True when model_id belongs to a known gated-model namespace."""
     return any(model_id.startswith(prefix) for prefix in _GATED_MODEL_PREFIXES)
@@ -115,6 +142,7 @@ def _load_model():
     try:
         from pocket_tts import TTSModel
 
+        _check_cache_writable(MODELS_DIR)
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         VOICES_DIR.mkdir(parents=True, exist_ok=True)
         _configure_hf_token()
