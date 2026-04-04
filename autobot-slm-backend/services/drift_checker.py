@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from services.git_tracker import DEFAULT_REPO_PATH
+
 logger = logging.getLogger(__name__)
 
 # File extensions that are meaningful to compare.
@@ -207,9 +209,8 @@ def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
 def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
     """Return the code_source sub-directory for *component*.
 
-    Reads ``SLM_REPO_PATH`` from the environment (same var used by git_tracker).
-    Falls back to the repository root when the component sub-directory does not
-    exist yet (e.g. monorepo roots that serve as the authoritative source).
+    Uses ``DEFAULT_REPO_PATH`` from ``services.git_tracker``, which resolves
+    ``SLM_REPO_PATH`` with the same fallback, ensuring a single source of truth.
 
     Args:
         component: Sub-directory name inside the code_source repository.
@@ -217,8 +218,7 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
     Returns:
         Absolute path string for the source directory to compare against.
     """
-    source_root = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
-    candidate = Path(source_root) / component
+    candidate = Path(DEFAULT_REPO_PATH) / component
     if not candidate.is_dir():
         raise ValueError(
             f"drift_checker: source component directory does not exist: {candidate}"
