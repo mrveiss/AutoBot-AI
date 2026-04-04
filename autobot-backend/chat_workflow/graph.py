@@ -207,8 +207,39 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     }
 
 
+def _inject_mid_conversation_warning(hint: str, initial_prompt: str) -> str:
+    """Append a corrective hint to the prompt string for mid-conversation injection.
+
+    Issue #3260 — Anthropic provider constraint: the Anthropic API only permits
+    a system message at the *start* of a conversation.  Any additional
+    ``SystemMessage`` inserted after the first human turn raises a validation
+    error from ``langchain_anthropic._format_messages()``.
+
+    Rule: ALL mid-conversation corrective content (loop warnings, guardrail
+    feedback, RLM refinement hints, etc.) MUST be injected by appending to
+    ``initial_prompt`` (prompt-string injection) or wrapped in a
+    ``HumanMessage``.  Never construct a standalone ``SystemMessage`` and
+    insert it after the conversation has started.
+
+    Args:
+        hint: The corrective text to inject (e.g. a loop-detection warning or
+              a self-reflection refinement note).
+        initial_prompt: The current value of the initial prompt string that
+                        will be forwarded to the LLM on the next iteration.
+
+    Returns:
+        A new prompt string with ``hint`` appended in a clearly labelled block.
+
+    Example::
+
+        >>> _inject_mid_conversation_warning("Avoid repeating tool calls.", "Answer the question.")
+        'Answer the question.\\n\\n[Guidance: Avoid repeating tool calls.]'
+    """
+    return f"{initial_prompt}\n\n[Guidance: {hint}]"
+
+
 def _build_llm_iteration_context(state: ChatState):
-    """Helper for generate_response. Ref: #1088, #1373.
+    """Helper for generate_response. Ref: #1088, #1373, #3260.
 
     Reconstructs an LLMIterationContext from the current graph state so that
     generate_response can delegate to the manager's continuation loop method.
@@ -216,19 +247,21 @@ def _build_llm_iteration_context(state: ChatState):
     When an RLM refinement hint is present (set by reflect_on_response), it
     is appended to the initial prompt so the LLM focuses on the identified
     deficiency in the next pass.
+
+    Note (Issue #3260): Corrective/warning content is always merged into
+    ``initial_prompt`` via ``_inject_mid_conversation_warning``, never via a
+    ``SystemMessage``.  See that helper's docstring for the full rationale.
     """
     from .models import LLMIterationContext
 
     initial_prompt = state["llm_params"].get("initial_prompt") or ""
 
-    # Inject RLM refinement hint when looping back (#1373)
+    # Inject RLM refinement hint when looping back (#1373).
+    # Must use _inject_mid_conversation_warning — not SystemMessage — to satisfy
+    # Anthropic's requirement that SystemMessage only appear as the first message.
     hint = state.get("rlm_refinement_hint", "")
     if hint:
-        initial_prompt = (
-            f"{initial_prompt}\n\n"
-            f"[Self-reflection feedback — please improve your answer: "
-            f"{hint}]"
-        )
+        initial_prompt = _inject_mid_conversation_warning(hint, initial_prompt)
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],

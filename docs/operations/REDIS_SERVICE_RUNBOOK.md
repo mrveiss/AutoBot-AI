@@ -38,7 +38,7 @@ This runbook provides operational procedures for managing the Redis service with
 
 **Service Details:**
 - **Service Name:** redis-server
-- **Host:** VM3 (172.16.168.23)
+- **Host:** VM3 (<database-ip>)
 - **Port:** 6379
 - **systemd Unit:** redis-server.service
 - **User:** redis
@@ -69,7 +69,7 @@ This runbook provides operational procedures for managing the Redis service with
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   Main Machine (WSL)                     │
-│              172.16.168.20:8443                         │
+│              <backend-ip>:8443                         │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  RedisServiceManager                            │  │
@@ -84,7 +84,7 @@ This runbook provides operational procedures for managing the Redis service with
                  ▼
 ┌─────────────────────────────────────────────────────────┐
 │                 Redis VM (VM3)                           │
-│              172.16.168.23:6379                         │
+│              <database-ip>:6379                         │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  systemd (redis-server.service)                 │  │
@@ -138,7 +138,7 @@ This runbook provides operational procedures for managing the Redis service with
 
 **Command:**
 ```bash
-redis-cli -h 172.16.168.23 -p 6379 PING
+redis-cli -h <database-ip> -p 6379 PING
 ```
 
 **Expected Response:** `PONG`
@@ -163,7 +163,7 @@ redis-cli -h 172.16.168.23 -p 6379 PING
 
 **Command:**
 ```bash
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl is-active redis-server"
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> "systemctl is-active redis-server"
 ```
 
 **Expected Response:** `active`
@@ -193,7 +193,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl is-active redis-serve
 
 1. **Memory Usage:**
    ```bash
-   redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human
+   redis-cli -h <database-ip> INFO memory | grep used_memory_human
    ```
    - **Normal:** <3072 MB
    - **Warning:** 3072-4000 MB
@@ -201,7 +201,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl is-active redis-serve
 
 2. **Connection Count:**
    ```bash
-   redis-cli -h 172.16.168.23 INFO clients | grep connected_clients
+   redis-cli -h <database-ip> INFO clients | grep connected_clients
    ```
    - **Normal:** <8000
    - **Warning:** 8000-9500
@@ -209,7 +209,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl is-active redis-serve
 
 3. **Commands Per Second:**
    ```bash
-   redis-cli -h 172.16.168.23 INFO stats | grep instantaneous_ops_per_sec
+   redis-cli -h <database-ip> INFO stats | grep instantaneous_ops_per_sec
    ```
    - **Normal:** <10000
    - **Warning:** 10000-50000
@@ -232,19 +232,19 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 "systemctl is-active redis-serve
 Operators can view health status in multiple places:
 
 1. **Web Interface:**
-   - URL: `http://172.16.168.21:5173/services/redis`
+   - URL: `http://<frontend-ip>:5173/services/redis`
    - Real-time updates via WebSocket
    - Visual health indicators
 
 2. **API Endpoint:**
    ```bash
-   curl https://172.16.168.20:8443/api/services/redis/health
+   curl https://<backend-ip>:8443/api/services/redis/health
    ```
 
 3. **Command Line:**
    ```bash
    # SSH to main machine
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    python -m scripts.check_redis_health
    ```
 
@@ -340,7 +340,7 @@ Operators can view health status in multiple places:
 **Actions:**
 ```bash
 # Send SIGHUP to reload configuration
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
   "sudo systemctl reload redis-server"
 ```
 
@@ -368,7 +368,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
 **Actions:**
 ```bash
 # Start the service
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
   "sudo systemctl start redis-server"
 ```
 
@@ -398,7 +398,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
 **Actions:**
 ```bash
 # Force restart the service
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
   "sudo systemctl restart redis-server"
 ```
 
@@ -430,7 +430,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
 **Manual Reset Procedure:**
 ```bash
 # After fixing root cause, reset circuit breaker
-curl -X POST https://172.16.168.20:8443/api/services/redis/reset-circuit-breaker \
+curl -X POST https://<backend-ip>:8443/api/services/redis/reset-circuit-breaker \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -441,7 +441,7 @@ curl -X POST https://172.16.168.20:8443/api/services/redis/reset-circuit-breaker
 **Audit Logs:**
 ```bash
 # View recent auto-recovery attempts
-tail -f /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log | grep auto_recovery
+tail -f logs/audit/redis_service_management.log | grep auto_recovery
 ```
 
 **Recovery Metrics:**
@@ -488,7 +488,7 @@ Before performing manual operations:
 
 1. **SSH to Redis VM:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip>
    ```
 
 2. **Check service status:**
@@ -534,7 +534,7 @@ Before performing manual operations:
 
 1. **Check current state:**
    ```bash
-   redis-cli -h 172.16.168.23 INFO | grep -E "uptime|memory|clients"
+   redis-cli -h <database-ip> INFO | grep -E "uptime|memory|clients"
    ```
 
 2. **Notify users** (if connection count >50):
@@ -544,14 +544,14 @@ Before performing manual operations:
 
 3. **Graceful restart:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo systemctl restart redis-server"
    ```
 
 4. **Monitor startup:**
    ```bash
    # Watch service come back online
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo journalctl -u redis-server -f"
    ```
    - Wait for "Ready to accept connections" message
@@ -559,7 +559,7 @@ Before performing manual operations:
 
 5. **Verify health:**
    ```bash
-   curl https://172.16.168.20:8443/api/services/redis/health
+   curl https://<backend-ip>:8443/api/services/redis/health
    ```
 
 6. **Confirm dependent services recovered:**
@@ -577,13 +577,13 @@ Before performing manual operations:
 
 1. **Backup current configuration:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo cp /etc/redis/redis.conf /etc/redis/redis.conf.backup.$(date +%Y%m%d_%H%M%S)"
    ```
 
 2. **Edit configuration:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip>
    sudo vim /etc/redis/redis.conf
    ```
 
@@ -641,14 +641,14 @@ Before performing manual operations:
 2. **Notify immediately:**
    ```bash
    # Send emergency notification
-   curl -X POST https://172.16.168.20:8443/api/notifications/emergency \
+   curl -X POST https://<backend-ip>:8443/api/notifications/emergency \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -d '{"message": "Redis emergency stop initiated", "reason": "..."}'
    ```
 
 3. **Stop service:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo systemctl stop redis-server"
    ```
 
@@ -688,7 +688,7 @@ Before performing manual operations:
 
 **Primary Log:**
 ```
-/home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log
+logs/audit/redis_service_management.log
 ```
 
 **Systemd Journal:**
@@ -709,7 +709,7 @@ sudo journalctl -u redis-server --since "1 hour ago"
     "email": "admin@autobot.local",
     "role": "admin"
   },
-  "source_ip": "172.16.168.20",
+  "source_ip": "<backend-ip>",
   "result": {
     "success": true,
     "duration_seconds": 15.7,
@@ -730,7 +730,7 @@ sudo journalctl -u redis-server --since "1 hour ago"
 ```bash
 # Review all operations in last 24 hours
 grep -A 5 "service_operation" \
-  /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+  logs/audit/redis_service_management.log \
   | tail -50
 ```
 
@@ -746,7 +746,7 @@ grep -A 5 "service_operation" \
    ```bash
    # Count operations by type
    grep "service_operation" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.operation' | sort | uniq -c
    ```
 
@@ -754,7 +754,7 @@ grep -A 5 "service_operation" \
    ```bash
    # List all users who performed operations
    grep "service_operation" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.user.email' | sort | uniq -c
    ```
 
@@ -762,14 +762,14 @@ grep -A 5 "service_operation" \
    ```bash
    # Show all failed operations
    grep '"success": false' \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log
+     logs/audit/redis_service_management.log
    ```
 
 4. **Auto-Recovery Summary:**
    ```bash
    # Count auto-recovery attempts
    grep "auto_recovery" \
-     /home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log \
+     logs/audit/redis_service_management.log \
      | jq -r '.recovery_level' | sort | uniq -c
    ```
 
@@ -812,7 +812,7 @@ grep -A 5 "service_operation" \
 
 **Configuration:**
 ```yaml
-# /home/kali/Desktop/AutoBot/config/logging.yaml
+# config/logging.yaml
 redis_service_audit:
   file: logs/audit/redis_service_management.log
   max_size: 100MB
@@ -857,18 +857,18 @@ chmod 600 ~/.ssh/autobot_key
 
 2. **Deploy new key to Redis VM:**
    ```bash
-   ssh-copy-id -i ~/.ssh/autobot_key_new autobot@172.16.168.23
+   ssh-copy-id -i ~/.ssh/autobot_key_new autobot@<database-ip>
    ```
 
 3. **Test new key:**
    ```bash
-   ssh -i ~/.ssh/autobot_key_new autobot@172.16.168.23 "echo 'Key works'"
+   ssh -i ~/.ssh/autobot_key_new autobot@<database-ip> "echo 'Key works'"
    ```
 
 4. **Update AutoBot configuration:**
    ```bash
    # Update key reference in config
-   vim /home/kali/Desktop/AutoBot/config/ssh.yaml
+   vim config/ssh.yaml
    ```
 
 5. **Rotate keys:**
@@ -879,7 +879,7 @@ chmod 600 ~/.ssh/autobot_key
 
 6. **Remove old key from VM after 24 hours:**
    ```bash
-   ssh autobot@172.16.168.23 "sed -i '/old_key_fingerprint/d' ~/.ssh/authorized_keys"
+   ssh autobot@<database-ip> "sed -i '/old_key_fingerprint/d' ~/.ssh/authorized_keys"
    ```
 
 ### Sudo Permissions
@@ -903,7 +903,7 @@ autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-server *
 **Verify Permissions:**
 ```bash
 # Test sudo access
-ssh autobot@172.16.168.23 "sudo -l"
+ssh autobot@<database-ip> "sudo -l"
 ```
 
 ### Command Validation
@@ -948,7 +948,7 @@ Only these commands are allowed:
 
 **Backup Script Location:**
 ```bash
-/home/kali/Desktop/AutoBot/scripts/backup_redis.sh
+scripts/backup_redis.sh
 ```
 
 **Backup Content:**
@@ -959,23 +959,23 @@ Only these commands are allowed:
 
 **Backup Location:**
 ```
-/home/kali/Desktop/AutoBot/backups/redis/daily/
+backups/redis/daily/
 ```
 
 **Verification:**
 ```bash
 # Check latest backup
-ls -lh /home/kali/Desktop/AutoBot/backups/redis/daily/ | tail -5
+ls -lh backups/redis/daily/ | tail -5
 
 # Verify backup integrity
-redis-check-rdb /home/kali/Desktop/AutoBot/backups/redis/daily/latest/dump.rdb
+redis-check-rdb backups/redis/daily/latest/dump.rdb
 ```
 
 #### Manual Backup Procedure
 
 ```bash
 # Create on-demand backup
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 << 'EOF'
+ssh -i ~/.ssh/autobot_key autobot@<database-ip> << 'EOF'
   # Trigger save
   redis-cli BGSAVE
 
@@ -990,8 +990,8 @@ EOF
 
 # Download backup
 scp -i ~/.ssh/autobot_key \
-  autobot@172.16.168.23:/tmp/dump-*.rdb \
-  /home/kali/Desktop/AutoBot/backups/redis/manual/
+  autobot@<database-ip>:/tmp/dump-*.rdb \
+  backups/redis/manual/
 ```
 
 ### Recovery Procedures
@@ -1007,13 +1007,13 @@ scp -i ~/.ssh/autobot_key \
 
 1. **Stop Redis service:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo systemctl stop redis-server"
    ```
 
 2. **Backup corrupted data:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo cp /var/lib/redis/dump.rdb /var/lib/redis/dump.rdb.corrupted"
    ```
 
@@ -1021,11 +1021,11 @@ scp -i ~/.ssh/autobot_key \
    ```bash
    # Copy backup to Redis VM
    scp -i ~/.ssh/autobot_key \
-     /home/kali/Desktop/AutoBot/backups/redis/daily/latest/dump.rdb \
-     autobot@172.16.168.23:/tmp/
+     backups/redis/daily/latest/dump.rdb \
+     autobot@<database-ip>:/tmp/
 
    # Replace corrupted file
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 << 'EOF'
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> << 'EOF'
      sudo mv /tmp/dump.rdb /var/lib/redis/dump.rdb
      sudo chown redis:redis /var/lib/redis/dump.rdb
      sudo chmod 640 /var/lib/redis/dump.rdb
@@ -1034,14 +1034,14 @@ scp -i ~/.ssh/autobot_key \
 
 4. **Start Redis:**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
+   ssh -i ~/.ssh/autobot_key autobot@<database-ip> \
      "sudo systemctl start redis-server"
    ```
 
 5. **Verify data integrity:**
    ```bash
-   redis-cli -h 172.16.168.23 DBSIZE
-   redis-cli -h 172.16.168.23 INFO persistence
+   redis-cli -h <database-ip> DBSIZE
+   redis-cli -h <database-ip> INFO persistence
    ```
 
 6. **Test functionality:**
@@ -1079,7 +1079,7 @@ scp -i ~/.ssh/autobot_key \
    - Restore latest data backup
 
    **Option B: Deploy new Redis VM**
-   - Provision new VM at 172.16.168.23
+   - Provision new VM at <database-ip>
    - Install Redis
    - Configure service
    - Restore data from backup
@@ -1089,10 +1089,10 @@ scp -i ~/.ssh/autobot_key \
 4. **Verify full system recovery:**
    ```bash
    # Test all health checks
-   curl https://172.16.168.20:8443/api/services/redis/health
+   curl https://<backend-ip>:8443/api/services/redis/health
 
    # Test from backend
-   redis-cli -h 172.16.168.23 PING
+   redis-cli -h <database-ip> PING
    ```
 
 **RTO (Recovery Time Objective):** 30 minutes (VM restore) or 2 hours (new VM)
@@ -1109,8 +1109,8 @@ scp -i ~/.ssh/autobot_key \
 4. **Verify all services**
 
 **Refer to:**
-- [Comprehensive Deployment Guide](/home/kali/Desktop/AutoBot/docs/deployment/comprehensive_deployment_guide.md)
-- [Disaster Recovery Plan](/home/kali/Desktop/AutoBot/docs/operations/disaster_recovery.md)
+- [Comprehensive Deployment Guide](docs/deployment/comprehensive_deployment_guide.md)
+- [Disaster Recovery Plan](docs/operations/disaster_recovery.md)
 
 ---
 
@@ -1188,16 +1188,16 @@ scp -i ~/.ssh/autobot_key \
 1. **Backup everything:**
    ```bash
    # Data backup
-   ssh autobot@172.16.168.23 "redis-cli BGSAVE"
+   ssh autobot@<database-ip> "redis-cli BGSAVE"
 
    # Config backup
-   ssh autobot@172.16.168.23 \
+   ssh autobot@<database-ip> \
      "sudo cp /etc/redis/redis.conf /etc/redis/redis.conf.pre-upgrade"
    ```
 
 2. **Update Redis:**
    ```bash
-   ssh autobot@172.16.168.23 << 'EOF'
+   ssh autobot@<database-ip> << 'EOF'
      # Stop service
      sudo systemctl stop redis-server
 
@@ -1216,14 +1216,14 @@ scp -i ~/.ssh/autobot_key \
 3. **Verify update:**
    ```bash
    # Check version
-   redis-cli -h 172.16.168.23 INFO server | grep redis_version
+   redis-cli -h <database-ip> INFO server | grep redis_version
 
    # Run health checks
-   curl https://172.16.168.20:8443/api/services/redis/health
+   curl https://<backend-ip>:8443/api/services/redis/health
 
    # Test functionality
-   redis-cli -h 172.16.168.23 SET test "upgrade-success"
-   redis-cli -h 172.16.168.23 GET test
+   redis-cli -h <database-ip> SET test "upgrade-success"
+   redis-cli -h <database-ip> GET test
    ```
 
 4. **Monitor post-upgrade:**
@@ -1234,7 +1234,7 @@ scp -i ~/.ssh/autobot_key \
 **Rollback (if needed):**
 
 ```bash
-ssh autobot@172.16.168.23 << 'EOF'
+ssh autobot@<database-ip> << 'EOF'
   # Stop current version
   sudo systemctl stop redis-server
 
@@ -1598,61 +1598,61 @@ Auto-recovery fails
 
 ```bash
 # Quick health check
-redis-cli -h 172.16.168.23 PING
+redis-cli -h <database-ip> PING
 
 # Service status
-ssh autobot@172.16.168.23 "systemctl status redis-server"
+ssh autobot@<database-ip> "systemctl status redis-server"
 
 # Full health via API
-curl https://172.16.168.20:8443/api/services/redis/health
+curl https://<backend-ip>:8443/api/services/redis/health
 
 # Memory usage
-redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human
+redis-cli -h <database-ip> INFO memory | grep used_memory_human
 
 # Connection count
-redis-cli -h 172.16.168.23 INFO clients | grep connected_clients
+redis-cli -h <database-ip> INFO clients | grep connected_clients
 ```
 
 ### Service Control
 
 ```bash
 # Start
-ssh autobot@172.16.168.23 "sudo systemctl start redis-server"
+ssh autobot@<database-ip> "sudo systemctl start redis-server"
 
 # Stop
-ssh autobot@172.16.168.23 "sudo systemctl stop redis-server"
+ssh autobot@<database-ip> "sudo systemctl stop redis-server"
 
 # Restart
-ssh autobot@172.16.168.23 "sudo systemctl restart redis-server"
+ssh autobot@<database-ip> "sudo systemctl restart redis-server"
 
 # Reload config
-ssh autobot@172.16.168.23 "sudo systemctl reload redis-server"
+ssh autobot@<database-ip> "sudo systemctl reload redis-server"
 ```
 
 ### Logs
 
 ```bash
 # Recent logs
-ssh autobot@172.16.168.23 "sudo journalctl -u redis-server -n 50"
+ssh autobot@<database-ip> "sudo journalctl -u redis-server -n 50"
 
 # Follow logs
-ssh autobot@172.16.168.23 "sudo journalctl -u redis-server -f"
+ssh autobot@<database-ip> "sudo journalctl -u redis-server -f"
 
 # Errors only
-ssh autobot@172.16.168.23 "sudo journalctl -u redis-server -p err"
+ssh autobot@<database-ip> "sudo journalctl -u redis-server -p err"
 ```
 
 ### Performance
 
 ```bash
 # Full INFO
-redis-cli -h 172.16.168.23 INFO
+redis-cli -h <database-ip> INFO
 
 # Slow queries
-redis-cli -h 172.16.168.23 SLOWLOG GET 10
+redis-cli -h <database-ip> SLOWLOG GET 10
 
 # Key statistics
-redis-cli -h 172.16.168.23 --bigkeys
+redis-cli -h <database-ip> --bigkeys
 ```
 
 ---
@@ -1690,7 +1690,7 @@ maxclients 10000
 
 ### AutoBot Service Management Config
 
-**Location:** `/home/kali/Desktop/AutoBot/config/services/redis_service_management.yaml`
+**Location:** `config/services/redis_service_management.yaml`
 
 **Key Settings:**
 ```yaml

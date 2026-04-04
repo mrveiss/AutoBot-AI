@@ -11,7 +11,7 @@
 
 This guide provides comprehensive testing procedures for the AutoBot Preferences System, including dark/light mode, font size scaling, accent colors, and layout density preferences.
 
-**Test URL**: http://172.16.168.21:5173/preferences
+**Test URL**: http://<frontend-ip>:5173/preferences
 
 ---
 
@@ -31,14 +31,14 @@ This guide provides comprehensive testing procedures for the AutoBot Preferences
 ## Quick Start Testing
 
 ### Prerequisites
-- AutoBot frontend running at http://172.16.168.21:5173
+- AutoBot frontend running at http://<frontend-ip>:5173
 - Modern web browser (Chrome, Firefox, Safari, or Edge)
 - Screen reader (optional, for accessibility testing)
 
 ### Basic Smoke Test (5 minutes)
 
 1. **Navigate to Preferences**
-   - Go to http://172.16.168.21:5173
+   - Go to http://<frontend-ip>:5173
    - Click "Preferences" in the header
    - Verify page loads successfully
 
@@ -669,7 +669,7 @@ This guide provides comprehensive testing procedures for the AutoBot Preferences
 ## Test Execution Checklist
 
 ### Before Testing
-- [ ] Frontend server running (http://172.16.168.21:5173)
+- [ ] Frontend server running (http://<frontend-ip>:5173)
 - [ ] Clear browser cache
 - [ ] Clear localStorage
 - [ ] Browser DevTools open

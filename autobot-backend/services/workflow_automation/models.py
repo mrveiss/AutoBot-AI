@@ -311,11 +311,26 @@ class PlanPresentationRequest(BaseModel):
 _EMAIL_RE = __import__("re").compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _PRIVATE_PREFIXES = (
-    "https://10.", "https://172.16.", "https://172.17.", "https://172.18.",
-    "https://172.19.", "https://172.20.", "https://172.21.", "https://172.22.",
-    "https://172.23.", "https://172.24.", "https://172.25.", "https://172.26.",
-    "https://172.27.", "https://172.28.", "https://172.29.", "https://172.30.",
-    "https://172.31.", "https://192.168.", "https://127.", "https://169.254.",
+    "https://10.",
+    "https://172.16.",
+    "https://172.17.",
+    "https://172.18.",
+    "https://172.19.",
+    "https://172.20.",
+    "https://172.21.",
+    "https://172.22.",
+    "https://172.23.",
+    "https://172.24.",
+    "https://172.25.",
+    "https://172.26.",
+    "https://172.27.",
+    "https://172.28.",
+    "https://172.29.",
+    "https://172.30.",
+    "https://172.31.",
+    "https://192.168.",
+    "https://127.",
+    "https://169.254.",
     "https://localhost",
 )
 

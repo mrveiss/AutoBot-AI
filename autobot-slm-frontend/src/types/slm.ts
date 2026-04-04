@@ -653,3 +653,124 @@ export interface ExternalAgentCard {
   base_url: string
   card: Record<string, unknown>
 }
+
+// =============================================================================
+// Security API Response Types (Issue #3184)
+// =============================================================================
+
+export interface SecurityEventResponse {
+  id: number
+  event_id: string
+  timestamp: string
+  event_type: string
+  severity: string
+  category: string | null
+  source_ip: string | null
+  source_user: string | null
+  source_node_id: string | null
+  target_resource: string | null
+  target_node_id: string | null
+  title: string
+  description: string | null
+  threat_indicator: string | null
+  threat_score: number | null
+  mitre_technique: string | null
+  is_acknowledged: boolean
+  acknowledged_by: string | null
+  acknowledged_at: string | null
+  is_resolved: boolean
+  resolved_by: string | null
+  resolved_at: string | null
+  resolution_notes: string | null
+  created_at: string
+}
+
+export interface SecurityOverviewResponse {
+  security_score: number
+  active_threats: number
+  failed_logins_24h: number
+  policy_violations: number
+  total_events_24h: number
+  critical_events: number
+  certificates_expiring: number
+  recent_events: SecurityEventResponse[]
+}
+
+export interface AuditLogResponse {
+  id: number
+  log_id: string
+  timestamp: string
+  user_id: string | null
+  username: string | null
+  ip_address: string | null
+  category: string
+  action: string
+  resource_type: string | null
+  resource_id: string | null
+  description: string | null
+  request_method: string | null
+  request_path: string | null
+  response_status: number | null
+  success: boolean
+  error_message: string | null
+  created_at: string
+}
+
+export interface AuditLogListResponse {
+  logs: AuditLogResponse[]
+  total: number
+  page: number
+  per_page: number
+}
+
+export interface SecurityEventListResponse {
+  events: SecurityEventResponse[]
+  total: number
+  page: number
+  per_page: number
+  unacknowledged_count: number
+  critical_count: number
+}
+
+export interface ThreatSummary {
+  total_threats: number
+  critical: number
+  high: number
+  medium: number
+  low: number
+  acknowledged: number
+  resolved: number
+  by_type: Record<string, number>
+  by_source_ip: Record<string, number>
+  trend_24h: Array<Record<string, unknown>>
+}
+
+export interface SecurityPolicyResponse {
+  id: number
+  policy_id: string
+  name: string
+  description: string | null
+  category: string
+  policy_type: string
+  rules: unknown[]
+  parameters: Record<string, unknown>
+  applies_to_nodes: unknown[]
+  applies_to_roles: unknown[]
+  status: string
+  is_enforced: boolean
+  last_evaluated: string | null
+  compliance_score: number | null
+  violations_count: number
+  version: number
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SecurityPolicyListResponse {
+  policies: SecurityPolicyResponse[]
+  total: number
+  page: number
+  per_page: number
+}

@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the architecture for Redis service management features in AutoBot's distributed VM infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on VM3 (172.16.168.23), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
+This document defines the architecture for Redis service management features in AutoBot's distributed VM infrastructure. The design enables frontend UI controls and backend auto-detection/auto-start capabilities for the Redis service running on VM3 (<database-ip>), while maintaining security, auditability, and alignment with AutoBot's "No Temporary Fixes" policy.
 
 ---
 
@@ -33,7 +33,7 @@ This document defines the architecture for Redis service management features in 
 ### 1.1 Current State
 
 **Infrastructure:**
-- Redis service runs on VM3 (172.16.168.23:6379)
+- Redis service runs on VM3 (<database-ip>:6379)
 - SSH key-based authentication configured (~/.ssh/autobot_key)
 - Existing SSHManager handles remote command execution
 - ConsolidatedHealthService aggregates component health
@@ -70,7 +70,7 @@ This document defines the architecture for Redis service management features in 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Frontend (VM1: 172.16.168.21)               │
+│                         Frontend (VM1: <frontend-ip>)               │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  RedisServiceControl.vue                                      │  │
 │  │  - Service status display                                     │  │
@@ -84,7 +84,7 @@ This document defines the architecture for Redis service management features in 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Backend API (Main: 172.16.168.20:8443)           │
+│                    Backend API (Main: <backend-ip>:8443)           │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  /api/services/redis (ServiceManagementRouter)                │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
@@ -122,7 +122,7 @@ This document defines the architecture for Redis service management features in 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Redis VM (VM3: 172.16.168.23)                    │
+│                    Redis VM (VM3: <database-ip>)                    │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  systemd (redis-server.service)                               │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
@@ -133,7 +133,7 @@ This document defines the architecture for Redis service management features in 
 │  │  └─────────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                       │
-│  Redis Process: 172.16.168.23:6379                                   │
+│  Redis Process: <database-ip>:6379                                   │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -251,7 +251,7 @@ redis_service_management:
 
 **Purpose:** RESTful API endpoints for service management
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-backend/api/service_management.py`
+**Location:** `autobot-backend/api/service_management.py`
 
 **Endpoints:**
 
@@ -683,7 +683,7 @@ async def auto_recover(self) -> RecoveryResult:
   "commands_processed": 1000000,
   "last_check": "2025-10-10T14:30:00Z",
   "vm_info": {
-    "host": "172.16.168.23",
+    "host": "<database-ip>",
     "name": "Redis VM",
     "ssh_accessible": true
   }
@@ -700,7 +700,7 @@ async def auto_recover(self) -> RecoveryResult:
   "connections": null,
   "last_check": "2025-10-10T14:30:00Z",
   "vm_info": {
-    "host": "172.16.168.23",
+    "host": "<database-ip>",
     "name": "Redis VM",
     "ssh_accessible": true
   }
@@ -880,7 +880,7 @@ async def auto_recover(self) -> RecoveryResult:
   ],
   "total_lines": 50,
   "service": "redis-server",
-  "vm": "172.16.168.23"
+  "vm": "<database-ip>"
 }
 ```
 
@@ -888,7 +888,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 ### 4.2 WebSocket Real-Time Updates
 
-**Endpoint:** `wss://172.16.168.20:8443/ws/services/redis/status`
+**Endpoint:** `wss://<backend-ip>:8443/ws/services/redis/status`
 
 **Authentication:** Required (token in URL or header)
 
@@ -956,7 +956,7 @@ autobot-frontend/src/
 
 **Purpose:** Main UI for Redis service management
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/components/services/RedisServiceControl.vue`
+**Location:** `autobot-frontend/src/components/services/RedisServiceControl.vue`
 
 **Features:**
 - Real-time service status display
@@ -1358,7 +1358,7 @@ const formatUptime = (seconds) => {
 
 **Purpose:** Reusable service management logic
 
-**Location:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/composables/useServiceManagement.js`
+**Location:** `autobot-frontend/src/composables/useServiceManagement.js`
 
 ```javascript
 import { ref, onMounted, onUnmounted } from 'vue';
@@ -1651,7 +1651,7 @@ autobot ALL=(ALL) NOPASSWD: /bin/journalctl -u redis-server *
     "email": "admin@autobot.local",
     "role": "admin"
   },
-  "source_ip": "172.16.168.20",
+  "source_ip": "<backend-ip>",
   "result": {
     "success": true,
     "duration_seconds": 15.7,
@@ -2323,7 +2323,7 @@ async def test_full_restart_flow(client: AsyncClient, admin_token: str):
 ```javascript
 test('Admin can restart Redis service from UI', async ({ page }) => {
   // Login as admin
-  await page.goto('http://172.16.168.21:5173/login');
+  await page.goto('http://<frontend-ip>:5173/login');
   await page.fill('[name="email"]', 'admin@autobot.local');
   await page.fill('[name="password"]', 'admin-password');
   await page.click('button[type="submit"]');
@@ -2372,7 +2372,7 @@ from httpx import AsyncClient
 async def load_test_status_endpoint(duration_seconds: int = 60):
     """Load test status endpoint for sustained period"""
 
-    client = AsyncClient(base_url="https://172.16.168.20:8443")
+    client = AsyncClient(base_url="https://<backend-ip>:8443")
 
     request_count = 0
     error_count = 0
@@ -2430,7 +2430,7 @@ redis_service_management:
     name: "redis-server"
     systemd_unit: "redis-server.service"
     host: "redis"  # Reference to SSH host config
-    ip: "172.16.168.23"
+    ip: "<database-ip>"
     port: 6379
 
   # Health Monitoring
@@ -2443,7 +2443,7 @@ redis_service_management:
     checks:
       connectivity:
         enabled: true
-        command: "redis-cli -h 172.16.168.23 PING"
+        command: "redis-cli -h <database-ip> PING"
         expected_output: "PONG"
 
       systemd:

@@ -370,7 +370,10 @@ class BaseAgent(ABC):
             return StandardMessage(
                 header=MessageHeader(message_type=MessageType.ERROR),
                 payload=MessagePayload(
-                    content={"error": "Communication request failed", "error_type": type(e).__name__}
+                    content={
+                        "error": "Communication request failed",
+                        "error_type": type(e).__name__,
+                    }
                 ),
             )
 

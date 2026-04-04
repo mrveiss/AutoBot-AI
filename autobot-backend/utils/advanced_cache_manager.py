@@ -53,6 +53,85 @@ def _extract_request_from_call(args: tuple, kwargs: dict) -> Any:
     return None
 
 
+_JSON_RESPONSE_ENVELOPE = "__json_response__"
+
+
+def _serialise_response(result: Any) -> Optional[Any]:
+    """
+    Convert a response value into a JSON-serialisable form for Redis storage.
+
+    Issue #3273: JSONResponse bodies were never cached because json.dumps
+    cannot handle Starlette Response objects.  We wrap them in an envelope dict
+    so they survive the round-trip through Redis.
+
+    Returns None when the response must not be cached (error responses, etc.).
+    """
+    from starlette.responses import JSONResponse as StarletteJSONResponse
+
+    if isinstance(result, StarletteJSONResponse):
+        if result.status_code >= 400:
+            return None
+        try:
+            body_str = result.body.decode("utf-8")
+            return {
+                _JSON_RESPONSE_ENVELOPE: True,
+                "status_code": result.status_code,
+                "body": body_str,
+            }
+        except Exception as exc:
+            logger.warning("Could not serialise JSONResponse for caching: %s", exc)
+            return None
+
+    if isinstance(result, dict):
+        if result.get("error") or result.get("status") == "error" or not result:
+            return None
+        return result
+
+    return None
+
+
+def _deserialise_cached_entry(cached_entry: Any) -> Any:
+    """
+    Reconstruct the original response from a cached entry.
+
+    Issue #3273: Reverse of _serialise_response — rebuild JSONResponse when
+    the envelope marker is present, otherwise return the dict as-is.
+    """
+    from fastapi.responses import JSONResponse
+
+    if isinstance(cached_entry, dict) and cached_entry.get(_JSON_RESPONSE_ENVELOPE):
+        try:
+            return JSONResponse(
+                content=json.loads(cached_entry["body"]),
+                status_code=cached_entry.get("status_code", 200),
+            )
+        except Exception as exc:
+            logger.warning("Could not deserialise cached JSONResponse: %s", exc)
+            return None
+
+    return cached_entry
+
+
+def _record_cache_hit(key: str) -> None:
+    """Increment Prometheus LLM response cache hit counter (Issue #3273)."""
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_llm_response_cache_hit(endpoint=key)
+    except Exception as e:
+        logger.warning("Could not record cache hit metric: %s", e)
+
+
+def _record_cache_miss(key: str) -> None:
+    """Increment Prometheus LLM response cache miss counter (Issue #3273)."""
+    try:
+        from monitoring.prometheus_metrics import get_metrics_manager
+
+        get_metrics_manager().record_llm_response_cache_miss(endpoint=key)
+    except Exception as e:
+        logger.warning("Could not record cache miss metric: %s", e)
+
+
 def _generate_cache_key(
     explicit_key: Optional[str],
     request: Any,
@@ -999,8 +1078,10 @@ class SimpleCacheManager:
 
         Compatible with original CacheManager.cache_response().
         Supports FastAPI Request objects for automatic key generation.
+        Supports JSONResponse objects (Issue #3273: re-enable LLM response caching).
 
         Issue #620: Refactored to use extracted helper functions.
+        Issue #3273: Extended to serialise/deserialise JSONResponse bodies.
         """
         actual_ttl = ttl or self.default_ttl
 
@@ -1016,21 +1097,34 @@ class SimpleCacheManager:
 
                 # Try to get from cache first
                 try:
-                    cached_result = await self.get(key)
-                    if cached_result is not None:
+                    cached_entry = await self.get(key)
+                    if cached_entry is not None:
                         logger.debug("Cache HIT: %s - serving from cache", key)
-                        return cached_result
+                        _record_cache_hit(key)
+                        # Issue #3352: _deserialise_cached_entry returns None on
+                        # corrupt/malformed entries; treat that as a cache miss
+                        # and fall through to execute the real function.
+                        result = _deserialise_cached_entry(cached_entry)
+                        if result is not None:
+                            return result
+                        logger.warning(
+                            "Cache entry for key %s could not be deserialised; "
+                            "treating as cache miss",
+                            key,
+                        )
                 except Exception as e:
                     logger.error("Cache retrieval error for key %s: %s", key, e)
 
                 # Execute function and cache result
                 logger.debug("Cache MISS: %s - executing function", key)
+                _record_cache_miss(key)
                 result = await func(*args, **kwargs)
 
-                # Cache successful responses
-                if self._is_cacheable_response(result):
+                # Cache successful responses (dict or JSONResponse)
+                serialisable = _serialise_response(result)
+                if serialisable is not None:
                     try:
-                        await self.set(key, result, actual_ttl)
+                        await self.set(key, serialisable, actual_ttl)
                         logger.debug("Cache SET: %s - cached for %ds", key, actual_ttl)
                     except Exception as e:
                         logger.error("Cache storage error for key %s: %s", key, e)
@@ -1043,7 +1137,16 @@ class SimpleCacheManager:
 
     @staticmethod
     def _is_cacheable_response(result: Any) -> bool:
-        """Check if a response should be cached"""
+        """Check if a response should be cached.
+
+        Issue #3273: Extended to accept JSONResponse objects in addition to dicts.
+        """
+        from starlette.responses import JSONResponse as StarletteJSONResponse
+
+        if isinstance(result, StarletteJSONResponse):
+            # Only cache non-error status codes
+            return result.status_code < 400
+
         if not isinstance(result, dict):
             return False
 
@@ -1107,16 +1210,25 @@ def cache_function(cache_key: str = None, ttl: int = 300):
             try:
                 cached_result = await cache_manager.get(key)
                 if cached_result is not None:
-                    return cached_result
+                    # Issue #3351: deserialise envelope back to JSONResponse if needed
+                    deserialised = _deserialise_cached_entry(cached_result)
+                    if deserialised is not None:
+                        return deserialised
             except Exception as e:
                 logger.error("Cache retrieval error for key %s: %s", key, e)
 
             # Execute and cache
             result = await func(*args, **kwargs)
 
-            if cache_manager._is_cacheable_response(result):
+            # Issue #3351: Use _serialise_response so that JSONResponse objects
+            # are wrapped in an envelope before storage.  Storing the raw
+            # Starlette object causes json.dumps to raise TypeError and the
+            # entry is silently dropped.  _serialise_response returns None for
+            # responses that must not be cached (errors, empty dicts, etc.).
+            serialisable = _serialise_response(result)
+            if serialisable is not None:
                 try:
-                    await cache_manager.set(key, result, ttl)
+                    await cache_manager.set(key, serialisable, ttl)
                 except Exception as e:
                     logger.error("Cache storage error for key %s: %s", key, e)
 

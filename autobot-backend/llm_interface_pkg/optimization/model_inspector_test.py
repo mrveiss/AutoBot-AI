@@ -27,7 +27,6 @@ from llm_interface_pkg.optimization.model_inspector import (
     inspect_model,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -174,9 +173,17 @@ class TestExtractFromConfig:
     def test_zero_config_returns_zero_params(self):
         """All-zero config produces zero param_count."""
         cfg = MagicMock()
-        for attr in ("num_hidden_layers", "num_layers", "n_layer",
-                     "hidden_size", "d_model", "n_embd",
-                     "num_attention_heads", "n_head", "vocab_size"):
+        for attr in (
+            "num_hidden_layers",
+            "num_layers",
+            "n_layer",
+            "hidden_size",
+            "d_model",
+            "n_embd",
+            "num_attention_heads",
+            "n_head",
+            "vocab_size",
+        ):
             setattr(cfg, attr, 0)
         info = _extract_from_config(cfg)
         assert info.param_count == 0
@@ -226,7 +233,9 @@ class TestCountParamsViaSkeleton:
         """Returns None when from_config raises, without propagating the error."""
         cfg = _make_config()
         transformers = MagicMock(name="transformers")
-        transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError("unsupported arch")
+        transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError(
+            "unsupported arch"
+        )
         accelerate = _make_accelerate_mock()
 
         result = _count_params_via_skeleton(cfg, transformers, accelerate)
@@ -328,8 +337,12 @@ class TestInspectModel:
 
     def test_returns_model_info_with_skeleton_param_count(self):
         """inspect_model uses skeleton param count when available."""
-        cfg = _make_config(num_hidden_layers=32, hidden_size=4096,
-                           num_attention_heads=32, vocab_size=32000)
+        cfg = _make_config(
+            num_hidden_layers=32,
+            hidden_size=4096,
+            num_attention_heads=32,
+            vocab_size=32000,
+        )
         mock_transformers = _make_transformers_mock(param_count=7_241_732_096)
         mock_transformers.AutoConfig = MagicMock()
         mock_transformers.AutoConfig.from_pretrained.return_value = cfg
@@ -358,7 +371,9 @@ class TestInspectModel:
         mock_transformers = MagicMock(name="transformers")
         mock_transformers.AutoConfig = MagicMock()
         mock_transformers.AutoConfig.from_pretrained.return_value = cfg
-        mock_transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError("no arch")
+        mock_transformers.AutoModelForCausalLM.from_config.side_effect = RuntimeError(
+            "no arch"
+        )
         mock_accelerate = _make_accelerate_mock()
 
         with (
@@ -405,7 +420,9 @@ class TestInspectModel:
     def test_returns_none_on_config_fetch_failure(self):
         """inspect_model returns None when AutoConfig.from_pretrained raises."""
         mock_transformers = MagicMock(name="transformers")
-        mock_transformers.AutoConfig.from_pretrained.side_effect = OSError("hub unavailable")
+        mock_transformers.AutoConfig.from_pretrained.side_effect = OSError(
+            "hub unavailable"
+        )
         mock_accelerate = _make_accelerate_mock()
 
         with (

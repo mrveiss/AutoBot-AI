@@ -60,6 +60,66 @@ class AutoResearchConfig:
     max_concurrent_experiments: int = 1
     python_executable: Optional[str] = None
 
+    # Staged evaluation (cheap-first gating)
+    staged_eval_fraction: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION", "0.3")
+        )
+    )
+    staged_eval_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD", "0.5")
+        )
+    )
+
+    # Docker isolation (issue #3223)
+    # Set AUTOBOT_AUTORESEARCH_DOCKER_ENABLED=true via Ansible/env to activate.
+    docker_enabled: bool = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_AUTORESEARCH_DOCKER_ENABLED", "false"
+        ).lower()
+        == "true"
+    )
+    docker_image: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_AUTORESEARCH_DOCKER_IMAGE",
+            "ghcr.io/mrveiss/autobot-autoresearch:latest",
+        )
+    )
+    docker_memory_limit: str = field(
+        default_factory=lambda: os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_MEMORY", "4g")
+    )
+    docker_cpu_limit: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_CPUS", "2.0")
+        )
+    )
+    docker_timeout: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT", "300")
+        )
+    )
+
+    # Meta-agent settings (issue #3224)
+    meta_agent_max_module_lines: int = field(
+        default_factory=lambda: int(
+            os.getenv("AUTOBOT_META_AGENT_MAX_MODULE_LINES", "500")
+        )
+    )
+    meta_agent_llm_model: str = field(
+        default_factory=lambda: os.getenv(
+            "AUTOBOT_META_AGENT_LLM_MODEL", "claude-sonnet-4-6"
+        )
+    )
+    meta_agent_test_timeout: int = field(
+        default_factory=lambda: int(os.getenv("AUTOBOT_META_AGENT_TEST_TIMEOUT", "60"))
+    )
+    meta_agent_approval_threshold: float = field(
+        default_factory=lambda: float(
+            os.getenv("AUTOBOT_META_AGENT_APPROVAL_THRESHOLD", "0.1")
+        )
+    )
+
     # Data directory for experiment outputs
     data_dir: Path = field(
         default_factory=lambda: Path(

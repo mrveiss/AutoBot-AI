@@ -151,7 +151,7 @@ ansible-playbook -i ansible/inventory/dynamic/generate_inventory.py ansible/play
 - **Comprehensive Guide**: `ansible/ROLE_STRUCTURE_README.md`
 - **Dynamic Inventory**: `ansible/inventory/dynamic/README.md`
 - **Existing Playbooks**: `ansible/playbooks/`
-- **Developer Setup**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- **Developer Setup**: `docs/developer/DEVELOPER_SETUP.md`
 
 ## 🆘 Troubleshooting
 

@@ -155,6 +155,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useLiveEvents, type LiveEvent } from '@/composables/useLiveEvents';
 import AgentObservabilityPanel from './AgentObservabilityPanel.vue';
@@ -165,6 +166,7 @@ import type {
 } from '@/composables/useWorkflowBuilder';
 
 const logger = createLogger('WorkflowLiveDashboard');
+const { t } = useI18n();
 
 const props = defineProps<{
   activeWorkflows: ActiveWorkflow[];
@@ -200,9 +202,9 @@ const connectionIcon = computed(() => {
 });
 
 const connectionLabel = computed(() => {
-  if (liveConnected.value) return 'Live';
-  if (connectionState.value === 'connecting') return 'Connecting...';
-  return 'Disconnected';
+  if (liveConnected.value) return t('workflow.liveDashboard.connectionLive');
+  if (connectionState.value === 'connecting') return t('workflow.liveDashboard.connectionConnecting');
+  return t('workflow.liveDashboard.connectionDisconnected');
 });
 
 async function reconnectLiveEvents(): Promise<void> {
@@ -263,12 +265,12 @@ function getStatusIcon(wf: ActiveWorkflow): string {
 }
 
 function getStatusLabel(wf: ActiveWorkflow): string {
-  if (wf.is_cancelled) return 'Cancelled';
-  if (wf.is_paused) return 'Paused';
-  if (wf.completed_at) return 'Completed';
-  if (wf.steps.some(s => s.status === 'failed')) return 'Failed';
-  if (wf.steps.some(s => s.status === 'executing')) return 'Running';
-  return 'Pending';
+  if (wf.is_cancelled) return t('workflow.liveDashboard.cancelled');
+  if (wf.is_paused) return t('workflow.liveDashboard.paused');
+  if (wf.completed_at) return t('workflow.liveDashboard.completedRecent');
+  if (wf.steps.some(s => s.status === 'failed')) return t('workflow.liveDashboard.failed');
+  if (wf.steps.some(s => s.status === 'executing')) return t('workflow.liveDashboard.running');
+  return t('workflow.liveDashboard.pending');
 }
 
 function getProgressPercent(wf: ActiveWorkflow): number {

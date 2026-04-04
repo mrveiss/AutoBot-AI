@@ -858,7 +858,10 @@ class LLMCostTracker:
 
         except Exception as e:
             logger.error("Failed to get session cost: %s", e)
-            return {"session_id": session_id, "error": "Failed to retrieve session cost"}
+            return {
+                "session_id": session_id,
+                "error": "Failed to retrieve session cost",
+            }
 
     async def get_cost_trends(self, days: int = 30) -> Dict[str, Any]:
         """

@@ -21,7 +21,7 @@
 
 ## Overview
 
-The Redis Service Management API provides comprehensive control over the Redis service running on VM3 (172.16.168.23:6379) within AutoBot's distributed infrastructure. This API enables:
+The Redis Service Management API provides comprehensive control over the Redis service running on VM3 (<database-ip>:6379) within AutoBot's distributed infrastructure. This API enables:
 
 - **Service Control**: Start, stop, restart Redis service
 - **Health Monitoring**: Real-time health checks and status reporting
@@ -32,7 +32,7 @@ The Redis Service Management API provides comprehensive control over the Redis s
 ### Base URL
 
 ```
-https://172.16.168.20:8443/api/services/redis
+https://<backend-ip>:8443/api/services/redis
 ```
 
 ### API Versioning
@@ -107,7 +107,7 @@ Operations are restricted based on user roles:
 
 ```bash
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/start \
+  https://<backend-ip>:8443/api/services/redis/start \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -182,7 +182,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/stop \
+  https://<backend-ip>:8443/api/services/redis/stop \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"confirmation": true}'
@@ -252,7 +252,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/restart \
+  https://<backend-ip>:8443/api/services/redis/restart \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -314,7 +314,7 @@ curl -X POST \
 
 ```bash
 curl -X GET \
-  https://172.16.168.20:8443/api/services/redis/status
+  https://<backend-ip>:8443/api/services/redis/status
 ```
 
 **Example Response (Running):**
@@ -329,7 +329,7 @@ curl -X GET \
   "commands_processed": 1000000,
   "last_check": "2025-10-10T14:30:00Z",
   "vm_info": {
-    "host": "172.16.168.23",
+    "host": "<database-ip>",
     "name": "Redis VM",
     "ssh_accessible": true
   }
@@ -347,7 +347,7 @@ curl -X GET \
   "connections": null,
   "last_check": "2025-10-10T14:30:00Z",
   "vm_info": {
-    "host": "172.16.168.23",
+    "host": "<database-ip>",
     "name": "Redis VM",
     "ssh_accessible": true
   }
@@ -424,7 +424,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  https://172.16.168.20:8443/api/services/redis/health
+  https://<backend-ip>:8443/api/services/redis/health
 ```
 
 **Example Response (Healthy):**
@@ -560,7 +560,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  "https://172.16.168.20:8443/api/services/redis/logs?lines=20&level=error" \
+  "https://<backend-ip>:8443/api/services/redis/logs?lines=20&level=error" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -587,7 +587,7 @@ curl -X GET \
   ],
   "total_lines": 20,
   "service": "redis-server",
-  "vm": "172.16.168.23"
+  "vm": "<database-ip>"
 }
 ```
 
@@ -602,7 +602,7 @@ curl -X GET \
 ```bash
 # Start Redis service as operator
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/start \
+  https://<backend-ip>:8443/api/services/redis/start \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json"
 ```
@@ -612,7 +612,7 @@ curl -X POST \
 ```bash
 # Stop Redis service with confirmation
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/stop \
+  https://<backend-ip>:8443/api/services/redis/stop \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -625,7 +625,7 @@ curl -X POST \
 ```bash
 # Restart Redis service
 curl -X POST \
-  https://172.16.168.20:8443/api/services/redis/restart \
+  https://<backend-ip>:8443/api/services/redis/restart \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json"
 ```
@@ -635,7 +635,7 @@ curl -X POST \
 ```bash
 # Get current status (no authentication required)
 curl -X GET \
-  https://172.16.168.20:8443/api/services/redis/status
+  https://<backend-ip>:8443/api/services/redis/status
 ```
 
 #### Get Health (Public)
@@ -643,7 +643,7 @@ curl -X GET \
 ```bash
 # Get detailed health status
 curl -X GET \
-  https://172.16.168.20:8443/api/services/redis/health
+  https://<backend-ip>:8443/api/services/redis/health
 ```
 
 #### Get Logs (Admin)
@@ -651,7 +651,7 @@ curl -X GET \
 ```bash
 # Get last 100 error logs
 curl -X GET \
-  "https://172.16.168.20:8443/api/services/redis/logs?lines=100&level=error" \
+  "https://<backend-ip>:8443/api/services/redis/logs?lines=100&level=error" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
@@ -732,7 +732,7 @@ class RedisServiceClient:
 
 # Usage example
 client = RedisServiceClient(
-    base_url='https://172.16.168.20:8443',
+    base_url='https://<backend-ip>:8443',
     api_token='your_jwt_token_here'
 )
 
@@ -841,7 +841,7 @@ All API errors follow this consistent format:
   "error": "Redis VM unreachable",
   "message": "Cannot establish SSH connection to Redis VM",
   "details": {
-    "host": "172.16.168.23",
+    "host": "<database-ip>",
     "error": "Connection timeout after 10 seconds"
   },
   "timestamp": "2025-10-10T14:30:00Z"
@@ -896,7 +896,7 @@ X-RateLimit-Reset: 1696950000
 
 ### WebSocket Connection
 
-**Endpoint:** `ws://172.16.168.20:8443/ws/services/redis/status`
+**Endpoint:** `ws://<backend-ip>:8443/ws/services/redis/status`
 
 **Authentication:** Required (JWT token in URL parameter or header)
 
@@ -906,7 +906,7 @@ X-RateLimit-Reset: 1696950000
 // JavaScript WebSocket connection
 const token = 'your_jwt_token_here';
 const ws = new WebSocket(
-  `ws://172.16.168.20:8443/ws/services/redis/status?token=${token}`
+  `ws://<backend-ip>:8443/ws/services/redis/status?token=${token}`
 );
 
 ws.onopen = () => {
@@ -1017,7 +1017,7 @@ function useRedisServiceStatus(token) {
 
   useEffect(() => {
     const ws = new WebSocket(
-      `ws://172.16.168.20:8443/ws/services/redis/status?token=${token}`
+      `ws://<backend-ip>:8443/ws/services/redis/status?token=${token}`
     );
 
     ws.onopen = () => {
@@ -1109,7 +1109,7 @@ All operations are logged with:
 - Command executed
 - Duration
 
-Audit logs are stored in: `/home/kali/Desktop/AutoBot/logs/audit/redis_service_management.log`
+Audit logs are stored in: `logs/audit/redis_service_management.log`
 
 ### Best Practices
 
@@ -1140,13 +1140,13 @@ Audit logs are stored in: `/home/kali/Desktop/AutoBot/logs/audit/redis_service_m
 ## Support & Resources
 
 **Documentation:**
-- [User Guide](/home/kali/Desktop/AutoBot/docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md)
-- [Operational Runbook](/home/kali/Desktop/AutoBot/docs/operations/REDIS_SERVICE_RUNBOOK.md)
-- [Architecture Document](/home/kali/Desktop/AutoBot/docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
+- [User Guide](docs/user-guides/REDIS_SERVICE_MANAGEMENT_GUIDE.md)
+- [Operational Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md)
+- [Architecture Document](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
 
 **Related APIs:**
-- [Comprehensive API Documentation](/home/kali/Desktop/AutoBot/docs/api/comprehensive_api_documentation.md)
-- [Health Monitoring API](/home/kali/Desktop/AutoBot/docs/api/health_monitoring.md)
+- [Comprehensive API Documentation](docs/api/comprehensive_api_documentation.md)
+- [Health Monitoring API](docs/api/health_monitoring.md)
 
 **Contact:**
 - GitHub Issues: [AutoBot Issues](https://github.com/autobot/autobot/issues)

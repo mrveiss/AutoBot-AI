@@ -33,6 +33,22 @@ router = APIRouter(
     tags=["code-evolution", "analytics"]
 )  # Prefix set in router_registry
 
+async def _resolve_source_or_404(source_id: Optional[str]) -> None:
+    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
+
+    Uses a lazy import of resolve_source_root to avoid loading the full
+    codebase_analytics package at module import time.
+    """
+    if source_id is None:
+        return
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
+    from fastapi import HTTPException
+
+    source_root = await resolve_source_root(source_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
+
+
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
 AGGREGATION_GRANULARITIES = {"weekly", "monthly"}
 
@@ -337,10 +353,14 @@ async def get_evolution_timeline(
         description="Comma-separated metrics",
     ),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get code evolution timeline (Issue #398: refactored).
 
-    Issue #744: Requires admin authentication."""
+    Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
+    """
+    await _resolve_source_or_404(source_id)
     redis_client = get_evolution_redis()
     requested_metrics = metrics.split(",")
 
@@ -396,6 +416,7 @@ async def get_pattern_evolution(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get pattern evolution data (Issue #315: depth 6→3).
@@ -403,7 +424,9 @@ async def get_pattern_evolution(
     Tracks adoption/removal of patterns like god_class, long_method, etc.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     redis_client = get_evolution_redis()
 
     if not redis_client:
@@ -551,10 +574,14 @@ def _build_trends_success_response(
 async def get_quality_trends(
     days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ):
     """Get quality trend analysis (Issue #398: refactored).
 
-    Issue #744: Requires admin authentication."""
+    Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
+    """
+    await _resolve_source_or_404(source_id)
     redis_client = get_evolution_redis()
 
     if not redis_client:
@@ -825,6 +852,7 @@ async def export_evolution_data(
 @router.get("/summary")
 async def get_evolution_summary(
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ):
     """
     Get a summary of code evolution including key statistics.
@@ -832,7 +860,9 @@ async def get_evolution_summary(
     Provides overview for dashboard display.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     redis_client = get_evolution_redis()
 
     summary = {

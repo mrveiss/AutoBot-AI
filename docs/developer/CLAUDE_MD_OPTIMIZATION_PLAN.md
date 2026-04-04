@@ -93,8 +93,8 @@ client = redis.Redis(host="...", port=...)
 ```
 
 **🚨 MANDATORY: Local-Only Development**
-- ❌ **NEVER edit code on remote VMs (172.16.168.21-25)**
-- ✅ **Edit locally** in `/home/kali/Desktop/AutoBot/`
+- ❌ **NEVER edit code on remote VMs (<frontend-ip>-25)**
+- ✅ **Edit locally** in `/opt/autobot`
 - ✅ **Sync immediately** using sync scripts
 
 **Why**: VMs are ephemeral - remote edits = PERMANENT WORK LOSS
@@ -165,12 +165,12 @@ Each subtask should be:
 
 | Service | IP:Port | Purpose |
 |---------|---------|---------|
-| **Main Machine (WSL)** | 172.16.168.20:8443 | Backend API + VNC Desktop (6080) |
-| **VM1 Frontend** | 172.16.168.21:5173 | Web interface (SINGLE FRONTEND) |
-| **VM2 NPU Worker** | 172.16.168.22:8081 | Hardware AI acceleration |
-| **VM3 Redis** | 172.16.168.23:6379 | Data layer |
-| **VM4 AI Stack** | 172.16.168.24:8080 | AI processing |
-| **VM5 Browser** | 172.16.168.25:3000 | Web automation (Playwright) |
+| **Main Machine (WSL)** | <backend-ip>:8443 | Backend API + VNC Desktop (6080) |
+| **VM1 Frontend** | <frontend-ip>:5173 | Web interface (SINGLE FRONTEND) |
+| **VM2 NPU Worker** | <npu-ip>:8081 | Hardware AI acceleration |
+| **VM3 Redis** | <database-ip>:6379 | Data layer |
+| **VM4 AI Stack** | <aiml-ip>:8080 | AI processing |
+| **VM5 Browser** | <browser-ip>:3000 | Web automation (Playwright) |
 ```
 
 **REMOVED from CLAUDE.md** (redundant):

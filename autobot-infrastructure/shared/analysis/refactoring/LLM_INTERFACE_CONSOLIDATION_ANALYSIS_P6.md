@@ -15,7 +15,7 @@
 
 **Original Status**: In Progress (2025-01-11)
 **Final Status**: Superseded by Issue #738 (2026-01-31)
-**Priority**: High (from AutoBot_Phase_9_Refactoring_Opportunities.md Priority 2.2)
+**Priority**: High (from REFACTORING_OPPORTUNITIES.md Priority 2.2)
 **Analyst**: Claude Code (Autonomous Refactoring)
 
 ## Historical Executive Summary

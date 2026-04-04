@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](../architecture/VM_ROLES.md) for role definitions.
+
 # Epic #80: Consolidate All Monitoring Systems - COMPLETE ✅
 
 **Status**: ✅ **COMPLETE**
@@ -31,35 +33,35 @@
 
 | Component | Location | Port | Purpose |
 |-----------|----------|------|---------|
-| **Prometheus** | SLM Server (172.16.168.19) | 9090 | Metrics collection & storage |
-| **Grafana** | SLM Server (172.16.168.19) | 3000 | Dashboard visualization |
-| **AlertManager** | SLM Server (172.16.168.19) | 9093 | Alert routing & notifications |
-| **Backend Metrics** | Main (172.16.168.20) | 8001 | `/api/monitoring/metrics` endpoint |
+| **Prometheus** | SLM Server (<slm-manager-ip>) | 9090 | Metrics collection & storage |
+| **Grafana** | SLM Server (<slm-manager-ip>) | 3000 | Dashboard visualization |
+| **AlertManager** | SLM Server (<slm-manager-ip>) | 9093 | Alert routing & notifications |
+| **Backend Metrics** | Main (<backend-ip>) | 8001 | `/api/monitoring/metrics` endpoint |
 
 **Note:** Monitoring stack is deployed via Ansible playbooks (`slm_manager` role), not manually.
 
 ### Data Flow
 
 ```
-AutoBot Backend (172.16.168.20:8443)
+AutoBot Backend (<backend-ip>:8443)
     ↓
     Exposes /api/monitoring/metrics (Prometheus format)
     ↓
-Prometheus (172.16.168.19:9090)
+Prometheus (<slm-manager-ip>:9090)
     ↓
     Scrapes metrics every 15s
     ↓
     Stores time-series data (30-day retention)
     ↓
-Grafana (172.16.168.19:3000)
+Grafana (<slm-manager-ip>:3000)
     ↓
     Queries Prometheus for dashboard data
     ↓
-AutoBot Frontend (172.16.168.21:5173)
+AutoBot Frontend (<frontend-ip>:5173)
     ↓
     Embeds Grafana dashboards via iframe
     ↓
-Users access at: http://172.16.168.21:5173/monitoring/dashboards
+Users access at: http://<frontend-ip>:5173/monitoring/dashboards
 ```
 
 ---
@@ -125,7 +127,7 @@ async def metrics_endpoint():
     return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
 ```
 
-**Endpoint**: `https://172.16.168.20:8443/api/monitoring/metrics`
+**Endpoint**: `https://<backend-ip>:8443/api/monitoring/metrics`
 
 **Registered in**: `backend/app_factory_enhanced.py`
 
@@ -137,7 +139,7 @@ async def metrics_endpoint():
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8443']
+      - targets: ['<backend-ip>:8443']
         labels:
           instance: 'autobot-main'
           service: 'backend-api'
@@ -168,7 +170,7 @@ org_name = Main Org.
 org_role = Viewer
 
 [cors]
-allow_origins = http://172.16.168.21:5173
+allow_origins = http://<frontend-ip>:5173
 ```
 
 **Dashboards Imported**:
@@ -204,25 +206,12 @@ Features:
 </router-link>
 ```
 
-### Phase 6: Compatibility Layer (Completed)
+### Phase 6: Compatibility Layer (Removed — #3354)
 
-**File**: `autobot-backend/api/monitoring_compat.py`
-
-- Provides deprecated REST API endpoints
-- Queries Prometheus for backward compatibility
-- Returns JSON responses with deprecation warnings
-- Guides users to Grafana dashboards
-
-**Endpoints**:
-- `/api/metrics/system/current` - Current system metrics
-- `/api/metrics/system/history` - Historical system metrics
-- `/api/metrics/workflow/summary` - Workflow summary
-- `/api/metrics/errors/recent` - Recent errors
-- `/api/metrics/claude-api/status` - Claude API status
-- `/api/metrics/services/health` - Service health
-- `/api/metrics/github/status` - GitHub API status
-
-All endpoints return: `"deprecated": true` with message pointing to Grafana.
+`autobot-backend/api/monitoring_compat.py` has been deleted (#3354). The router
+was never registered and all routes returned 404. Equivalent live functionality
+exists in `api/monitoring.py` and `api/metrics.py`. Use Grafana dashboards for
+visualization.
 
 ---
 
@@ -234,7 +223,7 @@ All monitoring services run as **systemd services** on SLM Server (deployed via 
 
 ```bash
 # Check status
-ssh autobot@172.16.168.19 'systemctl status prometheus grafana-server alertmanager'
+ssh autobot@<slm-manager-ip> 'systemctl status prometheus grafana-server alertmanager'
 
 # All services are enabled for auto-start on boot
 systemctl is-enabled prometheus      # enabled
@@ -246,14 +235,14 @@ systemctl is-enabled alertmanager    # enabled
 
 ```bash
 # Restart all monitoring services
-ssh autobot@172.16.168.19 'sudo systemctl restart prometheus alertmanager grafana-server'
+ssh autobot@<slm-manager-ip> 'sudo systemctl restart prometheus alertmanager grafana-server'
 
 # Stop services
-ssh autobot@172.16.168.19 'sudo systemctl stop prometheus alertmanager grafana-server'
+ssh autobot@<slm-manager-ip> 'sudo systemctl stop prometheus alertmanager grafana-server'
 
 # View logs
-ssh autobot@172.16.168.19 'sudo journalctl -u prometheus -f'
-ssh autobot@172.16.168.19 'sudo journalctl -u grafana-server -f'
+ssh autobot@<slm-manager-ip> 'sudo journalctl -u prometheus -f'
+ssh autobot@<slm-manager-ip> 'sudo journalctl -u grafana-server -f'
 ```
 
 ### Startup Procedure Integration
@@ -322,21 +311,21 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **AutoBot UI** | http://172.16.168.21:5173/monitoring/dashboards | N/A |
-| **Grafana Direct** | http://172.16.168.19:3000 | admin / autobot |
-| **Prometheus** | http://172.16.168.19:9090 | N/A (no auth) |
-| **AlertManager** | http://172.16.168.19:9093 | N/A (no auth) |
-| **Backend Metrics** | https://172.16.168.20:8443/api/monitoring/metrics | N/A |
+| **AutoBot UI** | http://<frontend-ip>:5173/monitoring/dashboards | N/A |
+| **Grafana Direct** | http://<slm-manager-ip>:3000 | admin / autobot |
+| **Prometheus** | http://<slm-manager-ip>:9090 | N/A (no auth) |
+| **AlertManager** | http://<slm-manager-ip>:9093 | N/A (no auth) |
+| **Backend Metrics** | https://<backend-ip>:8443/api/monitoring/metrics | N/A |
 
 ### Recommended Access Method
 
-**✅ Primary**: http://172.16.168.21:5173/monitoring/dashboards
+**✅ Primary**: http://<frontend-ip>:5173/monitoring/dashboards
 - Integrated into AutoBot UI
 - No login required
 - All dashboards in one place
 - Consistent theme and navigation
 
-**⚙️ Advanced**: http://172.16.168.19:3000
+**⚙️ Advanced**: http://<slm-manager-ip>:3000
 - Direct Grafana access (on SLM Server)
 - Dashboard editing capabilities
 - Query explorer
@@ -404,16 +393,16 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 
 ```bash
 # Check all services
-curl http://172.16.168.19:9090/-/healthy  # Prometheus
-curl http://172.16.168.19:3000/api/health # Grafana
-curl http://172.16.168.19:9093/-/healthy  # AlertManager
-curl https://172.16.168.20:8443/api/monitoring/metrics | head # Backend
+curl http://<slm-manager-ip>:9090/-/healthy  # Prometheus
+curl http://<slm-manager-ip>:3000/api/health # Grafana
+curl http://<slm-manager-ip>:9093/-/healthy  # AlertManager
+curl https://<backend-ip>:8443/api/monitoring/metrics | head # Backend
 
 # Check targets
-curl http://172.16.168.19:9090/api/v1/targets
+curl http://<slm-manager-ip>:9090/api/v1/targets
 
 # Query metrics
-curl "http://172.16.168.19:9090/api/v1/query?query=up{job='autobot-backend'}"
+curl "http://<slm-manager-ip>:9090/api/v1/query?query=up{job='autobot-backend'}"
 ```
 
 ### Current Status (as of 2025-12-05)
@@ -475,28 +464,28 @@ Targets monitored: 9
 **Problem**: No data in dashboards
 ```bash
 # Check backend metrics endpoint
-curl https://172.16.168.20:8443/api/monitoring/metrics
+curl https://<backend-ip>:8443/api/monitoring/metrics
 
 # Check Prometheus targets
-curl http://172.16.168.19:9090/api/v1/targets
+curl http://<slm-manager-ip>:9090/api/v1/targets
 
 # Check Prometheus logs
-ssh autobot@172.16.168.19 'sudo journalctl -u prometheus -n 100'
+ssh autobot@<slm-manager-ip> 'sudo journalctl -u prometheus -n 100'
 ```
 
 **Problem**: Grafana not loading
 ```bash
 # Check Grafana status
-ssh autobot@172.16.168.19 'sudo systemctl status grafana-server'
+ssh autobot@<slm-manager-ip> 'sudo systemctl status grafana-server'
 
 # Restart Grafana
-ssh autobot@172.16.168.19 'sudo systemctl restart grafana-server'
+ssh autobot@<slm-manager-ip> 'sudo systemctl restart grafana-server'
 ```
 
 **Problem**: High memory usage on Prometheus
 ```bash
 # Check current data size
-ssh autobot@172.16.168.19 'du -sh /var/lib/prometheus/'
+ssh autobot@<slm-manager-ip> 'du -sh /var/lib/prometheus/'
 
 # Reduce retention if needed (edit prometheus.service)
 # Change: --storage.tsdb.retention.time=30d
@@ -526,7 +515,7 @@ ssh autobot@172.16.168.19 'du -sh /var/lib/prometheus/'
 
 All monitoring systems have been successfully consolidated into a unified Prometheus + Grafana stack. Users can now access all dashboards "under one roof" at:
 
-**http://172.16.168.21:5173/monitoring/dashboards**
+**http://<frontend-ip>:5173/monitoring/dashboards**
 
 The system is:
 - ✅ Production-ready

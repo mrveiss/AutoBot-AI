@@ -185,7 +185,9 @@ class StartupValidator:
                 )
             except Exception as e:
                 # Module imported but failed to initialize
-                logger.error("AutoBot module initialization failed: %s: %s", module_name, e)
+                logger.error(
+                    "AutoBot module initialization failed: %s: %s", module_name, e
+                )
                 self.result.add_error(
                     f"AutoBot module initialization failed: {module_name}",
                     {"error": type(e).__name__},
@@ -202,10 +204,13 @@ class StartupValidator:
             except ImportError as e:
                 logger.debug("Optional module not available: %s: %s", module_name, e)
                 self.result.add_warning(
-                    f"Optional module not available: {module_name}", {"error": type(e).__name__}
+                    f"Optional module not available: {module_name}",
+                    {"error": type(e).__name__},
                 )
             except Exception as e:
-                logger.debug("Optional module initialization failed: %s: %s", module_name, e)
+                logger.debug(
+                    "Optional module initialization failed: %s: %s", module_name, e
+                )
                 self.result.add_warning(
                     f"Optional module initialization failed: {module_name}",
                     {"error": type(e).__name__},
@@ -253,7 +258,9 @@ class StartupValidator:
                 logger.debug("✅ Service connectivity: %s", service_name)
                 return service_name, None
             except Exception as e:
-                logger.error("Service connectivity check failed for %s: %s", service_name, e)
+                logger.error(
+                    "Service connectivity check failed for %s: %s", service_name, e
+                )
                 return service_name, "Service connectivity check failed"
 
         results = await asyncio.gather(

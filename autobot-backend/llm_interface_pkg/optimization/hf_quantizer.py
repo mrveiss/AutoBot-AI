@@ -378,7 +378,9 @@ class HfQuantizerWrapper:
         if self._config.extra_kwargs.get("load_in_8bit"):
             bnb_kwargs = {"load_in_8bit": True}
         elif self._config.extra_kwargs.get("load_in_4bit") is not None:
-            bnb_kwargs = {"load_in_4bit": bool(self._config.extra_kwargs["load_in_4bit"])}
+            bnb_kwargs = {
+                "load_in_4bit": bool(self._config.extra_kwargs["load_in_4bit"])
+            }
         bnb_config = transformers.BitsAndBytesConfig(**bnb_kwargs)
         return {
             "quantization_config": bnb_config,

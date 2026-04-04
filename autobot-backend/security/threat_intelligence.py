@@ -286,7 +286,11 @@ class VirusTotalClient:
                     }
         except Exception as e:
             logger.error("Failed to submit URL to VirusTotal: %s", e)
-            return {"success": False, "error": "VirusTotal submission failed", "score": None}
+            return {
+                "success": False,
+                "error": "VirusTotal submission failed",
+                "score": None,
+            }
 
     def _parse_url_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Parse VirusTotal URL analysis response."""
@@ -318,7 +322,11 @@ class VirusTotalClient:
             }
         except Exception as e:
             logger.error("Failed to parse VirusTotal response: %s", e)
-            return {"success": False, "error": "Failed to parse VirusTotal response", "score": None}
+            return {
+                "success": False,
+                "error": "Failed to parse VirusTotal response",
+                "score": None,
+            }
 
 
 class URLVoidClient:
@@ -418,7 +426,11 @@ class URLVoidClient:
             return {"success": False, "error": "Request timeout", "score": None}
         except Exception as e:
             logger.error("URLVoid API error: %s", e)
-            return {"success": False, "error": "URLVoid API request failed", "score": None}
+            return {
+                "success": False,
+                "error": "URLVoid API request failed",
+                "score": None,
+            }
 
     def _check_xml_error(self, root: Any) -> Optional[Dict[str, Any]]:
         """Check for error response in URLVoid XML.
@@ -524,7 +536,11 @@ class URLVoidClient:
         except Exception as e:
             # defusedxml raises various exceptions for malformed/malicious XML
             logger.error("Failed to parse URLVoid XML response: %s", e)
-            return {"success": False, "error": "Failed to parse URLVoid response", "score": None}
+            return {
+                "success": False,
+                "error": "Failed to parse URLVoid response",
+                "score": None,
+            }
 
 
 class ThreatIntelligenceService:

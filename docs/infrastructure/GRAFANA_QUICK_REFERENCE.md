@@ -13,11 +13,11 @@ curl http://localhost:3000/api/health
 systemctl status grafana-server
 
 # External Grafana (monitoring VM)
-curl http://172.16.168.28:3000/api/health
-ssh autobot@172.16.168.28 "systemctl status grafana-server"
+curl http://<reserved-ip>:3000/api/health
+ssh autobot@<reserved-ip> "systemctl status grafana-server"
 
 # Via nginx proxy
-curl -k https://172.16.168.19/grafana/api/health
+curl -k https://<slm-manager-ip>/grafana/api/health
 ```
 
 ### Test Dashboard Access
@@ -25,7 +25,7 @@ curl -k https://172.16.168.19/grafana/api/health
 # All dashboard types
 for dash in autobot-system autobot-overview autobot-performance autobot-multi-machine autobot-redis autobot-api-health; do
   echo -n "$dash: "
-  curl -k -s -o /dev/null -w "%{http_code}\n" "https://172.16.168.19/grafana/d/$dash?kiosk=tv"
+  curl -k -s -o /dev/null -w "%{http_code}\n" "https://<slm-manager-ip>/grafana/d/$dash?kiosk=tv"
 done
 ```
 
@@ -35,14 +35,14 @@ done
 sudo journalctl -u grafana-server -f
 
 # External
-ssh autobot@172.16.168.28 "sudo journalctl -u grafana-server -f"
+ssh autobot@<reserved-ip> "sudo journalctl -u grafana-server -f"
 ```
 
 ---
 
 ## 📁 Important File Locations
 
-### SLM Server (172.16.168.19)
+### SLM Server (<slm-manager-ip>)
 ```
 /etc/grafana/grafana.ini                    - Grafana configuration
 /var/lib/grafana/dashboards/                - Dashboard JSON files
@@ -80,7 +80,7 @@ docs/infrastructure/
 sudo systemctl restart grafana-server
 
 # External
-ssh autobot@172.16.168.28 "sudo systemctl restart grafana-server"
+ssh autobot@<reserved-ip> "sudo systemctl restart grafana-server"
 ```
 
 ### Reload Nginx (after config change)
@@ -96,7 +96,7 @@ curl -s http://localhost:3000/api/search | jq -r '.[] | "\(.title) - \(.uid)"'
 ### Check Prometheus Connection
 ```bash
 # From Grafana VM
-curl -s http://172.16.168.19:9090/api/v1/query?query=up | jq
+curl -s http://<slm-manager-ip>:9090/api/v1/query?query=up | jq
 ```
 
 ---
@@ -111,25 +111,25 @@ grafana_mode: local
 
 **URLs:**
 - Direct: http://localhost:3000
-- Proxied: https://172.16.168.19/grafana/
+- Proxied: https://<slm-manager-ip>/grafana/
 
 ### Mode 2: External Grafana (Dedicated VM)
 ```yaml
 grafana_mode: external
-grafana_external_host: 172.16.168.28
+grafana_external_host: <reserved-ip>
 grafana_enable_cors: true
 ```
 
 **URLs:**
-- Direct: http://172.16.168.28:3000
-- Proxied: https://172.16.168.19/grafana/
+- Direct: http://<reserved-ip>:3000
+- Proxied: https://<slm-manager-ip>/grafana/
 
 ### Mode 3: External Grafana (Cloud/Remote)
 ```yaml
 grafana_mode: external
 grafana_external_host: grafana.example.com
 grafana_enable_cors: true
-prometheus_host: 172.16.168.19  # Public IP
+prometheus_host: <slm-manager-ip>  # Public IP
 ```
 
 ---
@@ -155,7 +155,7 @@ ansible -i inventory-migration.ini monitoring_vm -m ping
 ansible-playbook migrate-grafana-to-vm.yml -i inventory-migration.ini
 
 # 4. Verify
-curl -k https://172.16.168.19/grafana/api/health
+curl -k https://<slm-manager-ip>/grafana/api/health
 ```
 
 ### Rollback to Local
@@ -171,7 +171,7 @@ ansible-playbook deploy-slm-manager.yml -i inventory.ini \
 ### Problem: No Data in Dashboards
 ```bash
 # Check Prometheus
-curl http://172.16.168.19:9090/api/v1/query?query=up
+curl http://<slm-manager-ip>:9090/api/v1/query?query=up
 
 # Check firewall
 sudo ufw status | grep 9090
@@ -196,7 +196,7 @@ cat /etc/nginx/sites-enabled/autobot-slm | grep grafana -A 5
 ### Problem: CORS Errors
 ```bash
 # Check nginx CORS headers
-curl -k -I https://172.16.168.19/grafana/api/health | grep Access-Control
+curl -k -I https://<slm-manager-ip>/grafana/api/health | grep Access-Control
 
 # Check Grafana settings
 grep -E "allow_embedding|cookie_samesite" /etc/grafana/grafana.ini | grep -v '^;'
@@ -230,17 +230,17 @@ grep -A 2 "location /grafana/" /etc/nginx/sites-enabled/autobot-slm
 
 ### Direct Access (Kiosk Mode)
 ```
-https://172.16.168.19/grafana/d/autobot-system?kiosk=tv
-https://172.16.168.19/grafana/d/autobot-overview?kiosk=tv
-https://172.16.168.19/grafana/d/autobot-performance?kiosk=tv
-https://172.16.168.19/grafana/d/autobot-multi-machine?kiosk=tv
-https://172.16.168.19/grafana/d/autobot-redis?kiosk=tv
-https://172.16.168.19/grafana/d/autobot-api-health?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-system?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-overview?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-performance?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-multi-machine?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-redis?kiosk=tv
+https://<slm-manager-ip>/grafana/d/autobot-api-health?kiosk=tv
 ```
 
 ### SLM Frontend Integration
 ```
-https://172.16.168.19/monitoring/system
+https://<slm-manager-ip>/monitoring/system
 ```
 
 ---
@@ -250,10 +250,10 @@ https://172.16.168.19/monitoring/system
 ### Minimum Required Access
 ```bash
 # SLM Server firewall
-sudo ufw allow from 172.16.168.28 to any port 9090 comment "Grafana to Prometheus"
+sudo ufw allow from <reserved-ip> to any port 9090 comment "Grafana to Prometheus"
 
 # Monitoring VM firewall
-sudo ufw allow from 172.16.168.19 to any port 3000 comment "Nginx to Grafana"
+sudo ufw allow from <slm-manager-ip> to any port 3000 comment "Nginx to Grafana"
 ```
 
 ### Production Hardening
@@ -318,7 +318,7 @@ Save as `check-grafana-health.sh`:
 #!/bin/bash
 # AutoBot Grafana Health Check
 
-GRAFANA_HOST="${1:-172.16.168.19}"
+GRAFANA_HOST="${1:-<slm-manager-ip>}"
 GRAFANA_PORT="${2:-3000}"
 
 echo "=== Grafana Health Check ==="
@@ -364,7 +364,7 @@ Usage:
 ```bash
 chmod +x check-grafana-health.sh
 ./check-grafana-health.sh                    # Local
-./check-grafana-health.sh 172.16.168.28      # External
+./check-grafana-health.sh <reserved-ip>      # External
 ```
 
 ---

@@ -18,7 +18,7 @@ AutoBot supports comprehensive configuration through environment variables with 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_DEFAULT_LLM_MODEL` | `qwen3.5:9b` | **Quality tier** - Default LLM model for complex tasks (chat, research, code) |
-| `AUTOBOT_OLLAMA_HOST` | `172.16.168.24` | Ollama server host (AI Stack VM) |
+| `AUTOBOT_OLLAMA_HOST` | `<aiml-ip>` | Ollama server host (AI Stack VM) |
 | `AUTOBOT_OLLAMA_PORT` | `11434` | Ollama server port |
 | `AUTOBOT_OLLAMA_ENDPOINT` | `http://${HOST}:${PORT}/api/generate` | Ollama API endpoint |
 | `AUTOBOT_LLM_PROVIDER_TYPE` | `local` | LLM provider type (local/cloud) |

@@ -29,6 +29,7 @@ from .maintenance import router as maintenance_router
 from .mfa import router as mfa_router
 from .monitoring import router as monitoring_router
 from .nodes import router as nodes_router
+from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
 from .orchestration import router as orchestration_router
 from .secrets import router as secrets_router
@@ -52,6 +53,7 @@ __all__ = [
     "api_keys_router",
     "auth_router",
     "nodes_router",
+    "nodes_execution_router",
     "deployments_router",
     "settings_router",
     "errors_router",

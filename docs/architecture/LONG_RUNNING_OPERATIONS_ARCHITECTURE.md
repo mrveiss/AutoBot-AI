@@ -161,7 +161,7 @@ class OperationProgress:
 ```python
 # Enhanced indexing operation
 async def enhanced_indexing_operation(context: OperationExecutionContext):
-    codebase_path = Path("/home/kali/Desktop/AutoBot")
+    codebase_path = Path("/opt/autobot")
     file_patterns = ["*.py", "*.js", "*.vue", "*.ts"]
 
     # Check if resuming from checkpoint

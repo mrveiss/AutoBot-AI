@@ -63,7 +63,6 @@ from .layer_inference import (
     LayerInferenceEngine,
     LayerInferenceStats,
 )
-from .model_inspector import ModelInfo, clear_cache, inspect_model
 from .meta_eviction import (
     EvictionStats,
     MetaDeviceEvictionManager,
@@ -71,6 +70,7 @@ from .meta_eviction import (
     evict_layer_to_meta,
     get_gpu_memory_allocated,
 )
+from .model_inspector import ModelInfo, clear_cache, inspect_model
 from .pipeline import LayerInferencePipeline, PipelineConfig, PreparedPipeline
 from .profiler import INFERENCE_STAGES, LayeredProfiler
 from .prompt_compressor import CompressionConfig, CompressionResult, PromptCompressor

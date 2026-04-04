@@ -38,7 +38,7 @@
   - Path matching functions tested
 
 - [x] **Service Keys Deployed**
-  - main-backend: `/home/kali/.autobot/service-keys/main-backend.env`
+  - main-backend: `/etc/autobot/service-keys/main-backend.env`
   - npu-worker: Deployed to VM 22
   - ai-stack: Deployed to VM 24
   - browser-service: Deployed to VM 25
@@ -65,13 +65,13 @@
 **Commands**:
 ```bash
 # Verify backend is running
-curl -s https://172.16.168.20:8443/api/health | jq
+curl -s https://<backend-ip>:8443/api/health | jq
 
 # Check recent authentication failures (should be 0)
 tail -100 logs/backend.log | grep -c "Service auth failed"
 
 # Verify frontend accessible
-curl -s http://172.16.168.21:5173 | head -5
+curl -s http://<frontend-ip>:5173 | head -5
 
 # Run monitoring dashboard
 bash scripts/monitoring/service_auth_monitor.sh
@@ -99,7 +99,7 @@ echo $SERVICE_AUTH_ENFORCEMENT_MODE
 
 **Method 2: Configuration File** (if environment variable doesn't work)
 
-Add to `/home/kali/Desktop/AutoBot/.env`:
+Add to `.env`:
 ```bash
 SERVICE_AUTH_ENFORCEMENT_MODE=true
 ```
@@ -110,7 +110,7 @@ SERVICE_AUTH_ENFORCEMENT_MODE=true
 
 ```bash
 # Navigate to AutoBot directory
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Restart backend with enforcement enabled
 sudo systemctl restart autobot-backend
@@ -133,19 +133,19 @@ Service-only paths: ['/api/npu/results', '/api/npu/heartbeat', ...]
 
 ```bash
 # Health check
-curl -s https://172.16.168.20:8443/api/health
+curl -s https://<backend-ip>:8443/api/health
 
 # Frontend config
-curl -s https://172.16.168.20:8443/api/frontend-config
+curl -s https://<backend-ip>:8443/api/frontend-config
 
 # Chat list
-curl -s https://172.16.168.20:8443/api/chats
+curl -s https://<backend-ip>:8443/api/chats
 
 # NPU workers (frontend Settings panel)
-curl -s https://172.16.168.20:8443/api/npu/workers
+curl -s https://<backend-ip>:8443/api/npu/workers
 
 # Cache stats
-curl -s https://172.16.168.20:8443/api/cache/stats
+curl -s https://<backend-ip>:8443/api/cache/stats
 ```
 
 **Expected**: All requests return 200 OK (no authentication required)
@@ -154,9 +154,9 @@ curl -s https://172.16.168.20:8443/api/cache/stats
 
 ```bash
 # These should return 401 Unauthorized without service authentication
-curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/npu/heartbeat
-curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/ai-stack/results
-curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/browser/internal
+curl -s -w "\nHTTP Status: %{http_code}\n" https://<backend-ip>:8443/api/npu/heartbeat
+curl -s -w "\nHTTP Status: %{http_code}\n" https://<backend-ip>:8443/api/ai-stack/results
+curl -s -w "\nHTTP Status: %{http_code}\n" https://<backend-ip>:8443/api/browser/internal
 ```
 
 **Expected**: All return 401 with `{"detail": "...", "authenticated": false}`
@@ -180,7 +180,7 @@ tail -f logs/backend.log | grep -E "(Service auth|BLOCKED|exempt)"
 
 ### Step 6: Frontend Functional Testing (15 minutes)
 
-**Test via Browser** (http://172.16.168.21:5173):
+**Test via Browser** (http://<frontend-ip>:5173):
 
 1. **Chat Functionality**:
    - [ ] Can view chat list
@@ -223,7 +223,7 @@ bash scripts/monitoring/service_auth_monitor.sh
 tail -100 logs/backend.log | grep -i error
 
 # Frontend accessibility
-curl -s http://172.16.168.21:5173 | head -5
+curl -s http://<frontend-ip>:5173 | head -5
 ```
 
 **Alert Thresholds**:
@@ -271,7 +271,7 @@ curl -s http://172.16.168.21:5173 | head -5
 export SERVICE_AUTH_ENFORCEMENT_MODE=false
 
 # Restart backend
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 sudo systemctl restart autobot-backend
 
 # Verify rollback
@@ -279,8 +279,8 @@ tail -50 logs/backend.log | grep "Service Authentication"
 # Should see: "Service Authentication in LOGGING MODE (enforcement disabled)"
 
 # Test frontend
-curl https://172.16.168.20:8443/api/health
-curl http://172.16.168.21:5173
+curl https://<backend-ip>:8443/api/health
+curl http://<frontend-ip>:5173
 ```
 
 **Post-Rollback**:
@@ -487,7 +487,7 @@ grep "Service auth failed" logs/backend.log | grep -oP "path=[^ ]+" | sort | uni
 
 **Diagnosis**:
 ```bash
-ls -la /home/kali/.autobot/service-keys/
+ls -la /etc/autobot/service-keys/
 ```
 
 **Resolution**:

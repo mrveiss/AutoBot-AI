@@ -506,7 +506,11 @@ class StatsMixin:
 
         except Exception as e:
             logger.error("Error generating detailed stats: %s", e)
-            return {**basic_stats, "detailed_stats": False, "error": "Failed to generate detailed stats"}
+            return {
+                **basic_stats,
+                "detailed_stats": False,
+                "error": "Failed to generate detailed stats",
+            }
 
     async def _calc_all_quality_dimensions(
         self, facts: List[Dict[str, Any]]

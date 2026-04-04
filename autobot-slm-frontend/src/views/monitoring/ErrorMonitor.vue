@@ -12,51 +12,22 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type {
+  RecentError,
+  ErrorStatistics,
+  CategoryBreakdown,
+  ComponentBreakdown,
+} from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import { getTimezone } from '@/composables/useTimezone'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
 
-interface ErrorEntry {
-  event_id: string
-  node_id: string
-  hostname: string
-  event_type: string
-  severity: string
-  message: string
-  timestamp: string
-  resolved: boolean
-  resolved_at: string | null
-  resolved_by: string | null
-}
-
-interface ErrorStats {
-  total_errors: number
-  errors_24h: number
-  errors_7d: number
-  resolved_count: number
-  unresolved_count: number
-  error_rate_per_hour: number
-  trend: string
-}
-
-interface CategoryBreakdown {
-  category: string
-  count: number
-  percentage: number
-}
-
-interface ComponentBreakdown {
-  node_id: string
-  hostname: string
-  count: number
-  percentage: number
-}
-
 // State
-const errors = ref<ErrorEntry[]>([])
-const stats = ref<ErrorStats>({
+const errors = ref<RecentError[]>([])
+const stats = ref<ErrorStatistics>({
   total_errors: 0,
   errors_24h: 0,
   errors_7d: 0,
@@ -68,7 +39,7 @@ const stats = ref<ErrorStats>({
 const categories = ref<CategoryBreakdown[]>([])
 const components = ref<ComponentBreakdown[]>([])
 const isLoading = ref(false)
-const selectedError = ref<ErrorEntry | null>(null)
+const selectedError = ref<RecentError | null>(null)
 const filterSeverity = ref<string>('all')
 const filterResolved = ref<string>('all')
 const searchQuery = ref('')
@@ -146,19 +117,7 @@ function formatTimestamp(ts: string): string {
   })
 }
 
-function formatRelativeTime(ts: string): string {
-  const date = new Date(ts)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
-}
 
 async function fetchData() {
   isLoading.value = true
@@ -197,7 +156,7 @@ async function fetchData() {
   }
 }
 
-function selectError(error: ErrorEntry) {
+function selectError(error: RecentError) {
   selectedError.value = error
 }
 
@@ -557,7 +516,7 @@ onUnmounted(() => {
     <!-- Error Detail Modal -->
     <div
       v-if="selectedError"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       @click.self="closeDetail"
     >
       <div

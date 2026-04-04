@@ -3,10 +3,10 @@
 ## Current Architecture (Co-located with Backend)
 
 ### Overview
-Currently, the terminal functionality runs on the main machine (`172.16.168.20`) alongside the backend API. This provides optimal performance and minimal latency for terminal operations.
+Currently, the terminal functionality runs on the main machine (`<backend-ip>`) alongside the backend API. This provides optimal performance and minimal latency for terminal operations.
 
 ### Current Setup
-- **Location**: Main machine (WSL) at `172.16.168.20`
+- **Location**: Main machine (WSL) at `<backend-ip>`
 - **Backend API**: Port 8001
 - **Terminal Endpoints**: `/api/terminal/*`
 - **WebSocket Endpoints**: `/ws/terminal/*`, `/ws/simple/*`, `/ws/secure/*`
@@ -65,14 +65,14 @@ POST   /api/terminal/{id}/control/return # Return to agent
 ### Proposed Distributed Architecture
 
 ```
-Main Backend Machine (172.16.168.20)
+Main Backend Machine (<backend-ip>)
 ├── FastAPI Backend (Port 8001)
 ├── Terminal Proxy API
 └── WebSocket Proxy
 
 ↓ Network Communication ↓
 
-Terminal Machine (172.16.168.26) [Future]
+Terminal Machine (<reserved-ip>) [Future]
 ├── Terminal Service (Port 8002)
 ├── PTY Manager
 ├── Security Auditor
@@ -128,7 +128,7 @@ WS     /api/terminal/ws/{id}          # WebSocket proxy
 terminal:
   mode: "local"  # or "remote"
   remote:
-    host: "172.16.168.26"
+    host: "<reserved-ip>"
     port: 8002
     auth:
       method: "ssh_key"
@@ -200,7 +200,7 @@ async def terminal_websocket_proxy(websocket: WebSocket, session_id: str):
 ```bash
 # Terminal configuration
 AUTOBOT_TERMINAL_MODE=remote
-AUTOBOT_TERMINAL_HOST=172.16.168.26
+AUTOBOT_TERMINAL_HOST=<reserved-ip>
 AUTOBOT_TERMINAL_PORT=8002
 AUTOBOT_TERMINAL_AUTH_KEY=/home/autobot/.ssh/terminal_key
 ```
@@ -245,7 +245,7 @@ class TerminalServiceDiscovery:
 ```python
 @pytest.mark.asyncio
 async def test_remote_terminal_command_execution():
-    client = RemoteTerminalClient("172.16.168.26:8002")
+    client = RemoteTerminalClient("<reserved-ip>:8002")
     session = await client.create_session()
     result = await client.execute_command(session.id, "pwd")
     assert result.exit_code == 0

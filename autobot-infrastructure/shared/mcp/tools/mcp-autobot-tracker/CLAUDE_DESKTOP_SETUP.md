@@ -3,7 +3,7 @@
 ## Step 1: Install MCP AutoBot Tracker
 
 ```bash
-cd /home/kali/Desktop/AutoBot/mcp-autobot-tracker
+cd mcp-autobot-tracker
 ./production-install.sh
 ```
 
@@ -19,7 +19,7 @@ Add this configuration to your Claude Desktop config file:
     "autobot-tracker": {
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "/home/kali/Desktop/AutoBot/mcp-autobot-tracker",
+      "cwd": "mcp-autobot-tracker",
       "env": {
         "NODE_ENV": "production"
       }

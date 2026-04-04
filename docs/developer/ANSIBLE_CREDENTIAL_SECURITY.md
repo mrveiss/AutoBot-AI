@@ -36,10 +36,10 @@ SSH key authentication should already be configured. Verify with:
 
 ```bash
 # Test SSH connection to a VM
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
 
 # Test Ansible connectivity
-cd /home/kali/Desktop/AutoBot/ansible
+cd ansible
 ansible all -i inventory/production.yml -m ping
 ```
 
@@ -48,7 +48,7 @@ ansible all -i inventory/production.yml -m ping
 Run the one-time setup to enable passwordless sudo on all VMs:
 
 ```bash
-cd /home/kali/Desktop/AutoBot/ansible
+cd ansible
 
 # This will prompt for the become (sudo) password once
 ./deploy.sh --setup-sudo
@@ -89,8 +89,8 @@ Host *
     PubkeyAuthentication yes
     PasswordAuthentication no
 
-Host autobot-frontend 172.16.168.21
-    HostName 172.16.168.21
+Host autobot-frontend <frontend-ip>
+    HostName <frontend-ip>
     User autobot
     IdentityFile ~/.ssh/autobot_key
 ```
@@ -182,7 +182,7 @@ ansible-vault rekey inventory/group_vars/vault.yml
 
 The passwordless sudo configuration is secure because:
 
-- VMs are on an isolated internal network (172.16.168.0/24)
+- VMs are on an isolated internal network (<network-subnet>)
 - SSH is the only remote access method
 - SSH only accepts key-based authentication
 - Firewall rules restrict access to the internal network
@@ -199,7 +199,7 @@ Force password auth from the client:
 
 ```bash
 # Emergency SSH with password
-ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no autobot@172.16.168.21
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no autobot@<frontend-ip>
 
 # For Ansible operations
 ansible all -i inventory/production.yml -m ping \
@@ -220,7 +220,7 @@ If network access is completely lost:
 
 ```bash
 # From WSL, re-copy the SSH key
-ssh-copy-id -i ~/.ssh/autobot_key.pub -o PreferredAuthentications=password autobot@172.16.168.21
+ssh-copy-id -i ~/.ssh/autobot_key.pub -o PreferredAuthentications=password autobot@<frontend-ip>
 ```
 
 ### Preventing Lockouts
@@ -240,11 +240,11 @@ ls -la ~/.ssh/autobot_key
 chmod 600 ~/.ssh/autobot_key
 
 # Test key authentication
-ssh -v autobot@172.16.168.21
+ssh -v autobot@<frontend-ip>
 
 # Regenerate key if corrupted
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/autobot_key -N ''
-ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@172.16.168.21
+ssh-copy-id -i ~/.ssh/autobot_key.pub autobot@<frontend-ip>
 ```
 
 ## Troubleshooting
@@ -257,7 +257,7 @@ ls -la ~/.ssh/autobot_key
 # Should be: -rw------- (600)
 
 # Test SSH manually
-ssh -vvv -i ~/.ssh/autobot_key autobot@172.16.168.21
+ssh -vvv -i ~/.ssh/autobot_key autobot@<frontend-ip>
 ```
 
 ### Permission Denied (sudo)

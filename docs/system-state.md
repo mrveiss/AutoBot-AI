@@ -1,3 +1,5 @@
+> **IP addresses** in this document use role placeholders (e.g. `<backend-ip>`). Replace with your actual VM IPs. See [VM_ROLES.md](architecture/VM_ROLES.md) for role definitions.
+
 # AutoBot System State & Updates
 
 This document tracks all system fixes, improvements, and status updates for the AutoBot platform.
@@ -86,8 +88,8 @@ python scripts/security/mtls-migrate.py --phase disable-password
 
 After analysis, it was determined that the main frontend and SLM should **coexist** with complementary purposes:
 
-- **Main Frontend (172.16.168.21)** - User-oriented application features (Chat, UI, Workflows, User Tools)
-- **SLM Admin (172.16.168.19)** - Infrastructure administration (Fleet, Nodes, Services, System Settings)
+- **Main Frontend (<frontend-ip>)** - User-oriented application features (Chat, UI, Workflows, User Tools)
+- **SLM Admin (<slm-manager-ip>)** - Infrastructure administration (Fleet, Nodes, Services, System Settings)
 
 **SLM Admin Implementation:**
 
@@ -115,8 +117,8 @@ After analysis, it was determined that the main frontend and SLM should **coexis
 **Access:**
 
 ```
-SLM Admin: http://172.16.168.19:5174
-API Base:  http://172.16.168.19:8000/api
+SLM Admin: http://<slm-manager-ip>:5174
+API Base:  http://<slm-manager-ip>:8000/api
 ```
 
 **Code Quality Fixes (Code Review):**
@@ -204,15 +206,15 @@ API Base:  http://172.16.168.19:8000/api
 
 **Access:**
 ```
-Primary: http://172.16.168.21:5173/monitoring/dashboards
+Primary: http://<frontend-ip>:5173/monitoring/dashboards
 Navigate: AutoBot UI → Monitoring → Dashboards
 ```
 
 **Components:**
-- **Prometheus** (172.16.168.19:9090) - Metrics collection & storage (30-day retention)
-- **Grafana** (172.16.168.19:3000) - Dashboard visualization (admin/autobot)
-- **AlertManager** (172.16.168.19:9093) - Alert routing & notifications
-- **Backend Metrics** (172.16.168.20:8443) - `/api/monitoring/metrics` endpoint
+- **Prometheus** (<slm-manager-ip>:9090) - Metrics collection & storage (30-day retention)
+- **Grafana** (<slm-manager-ip>:3000) - Dashboard visualization (admin/autobot)
+- **AlertManager** (<slm-manager-ip>:9093) - Alert routing & notifications
+- **Backend Metrics** (<backend-ip>:8443) - `/api/monitoring/metrics` endpoint
 
 **Note:** Monitoring stack (Prometheus, Grafana, AlertManager) is deployed on SLM Server via Ansible playbooks (`slm_manager` role), not manually or via scripts.
 
@@ -520,7 +522,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - Frontend WebSocket connections failing with timeout errors
 - Process showing 99% CPU during initialization
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+**Root Cause:** `src/knowledge_base_v2.py`
 - `VectorStoreIndex.from_vector_store()` loading 545,255 vectors synchronously during initialization
 - Even with `asyncio.to_thread()`, the operation blocked the entire event loop
 - Line 392-394 created index during first search, freezing backend for minutes
@@ -581,7 +583,7 @@ async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 - Errors in: `backend/services/ai_stack_client.py`, `autobot-backend/api/services.py`
 - Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py` (Lines 652-677)
+**Fix Applied:** `src/unified_config_manager.py` (Lines 652-677)
 ```python
 def get_distributed_services_config(self) -> Dict[str, Any]:
     """Get distributed services configuration from NetworkConstants"""
@@ -598,13 +600,13 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 
 **2. AI Stack Client Configuration**
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/backend/services/ai_stack_client.py` (Lines 46-57)
+**Fix Applied:** `backend/services/ai_stack_client.py` (Lines 46-57)
 - Replaced missing config call with direct NetworkConstants usage
 - Uses `NetworkConstants.AI_STACK_HOST` and `NetworkConstants.AI_STACK_PORT`
 
 **3. VM Status Endpoint**
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/autobot-backend/api/services.py` (Lines 239-298)
+**Fix Applied:** `autobot-backend/api/services.py` (Lines 239-298)
 - Replaced config method calls with NetworkConstants
 - Returns VM status for all 5 infrastructure VMs (frontend, npu-worker, redis, ai-stack, browser)
 
@@ -638,7 +640,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 - **4.17 MILLION Redis SCAN operations** causing severe performance degradation
 - Redis slowlog showing 10-74ms KEYS operations
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py:675` - Category+title duplicate checking
+**Root Cause:** `src/knowledge_base_v2.py:675` - Category+title duplicate checking
 
 **Fix Applied:** (Lines 756-822)
 - **Replaced SCAN with O(1) Redis SET indexing:**
@@ -657,7 +659,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 - Errors: `TypeError: response.json is not a function` throughout frontend
 - Every API call failing with this error
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts:21-38`
+**Root Cause:** `autobot-frontend/src/services/api.ts:21-38`
 - `ApiClient.get/post/put/delete()` already return parsed JSON (confirmed in `ApiClient.js:243`)
 - api.ts was calling `.json()` again on already-parsed JSON objects
 - Can't call `.json()` method on plain JavaScript objects
@@ -677,7 +679,7 @@ async get<T>(endpoint: string): Promise<T> {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts` (Lines 21-38)
+- `autobot-frontend/src/services/api.ts` (Lines 21-38)
 
 ---
 
@@ -689,8 +691,8 @@ async get<T>(endpoint: string): Promise<T> {
 - Components falling back to stub methods
 
 **Root Cause:** **Vue 3 composable lifecycle violation**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts:8-9`
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts:8`
+- `autobot-frontend/src/models/controllers/KnowledgeController.ts:8-9`
+- `autobot-frontend/src/models/controllers/ChatController.ts:8`
 - Controllers called `useKnowledgeStore()` and `useAppStore()` during class construction
 - Singletons created at module load: `const knowledgeController = reactive(new KnowledgeController())`
 - **Vue composables can ONLY be called inside setup() or component lifecycle**
@@ -726,8 +728,8 @@ export class KnowledgeController {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
-- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
+- `autobot-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
+- `autobot-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
 
 **Synced to Frontend VM:**
 - `api.ts`
@@ -765,7 +767,7 @@ export class KnowledgeController {
 ```python
 {
     "machine_id": "mv-stealth",
-    "machine_ip": "172.16.168.20",
+    "machine_ip": "<backend-ip>",
     "os_name": "Kali",
     "os_version": "2025.2",
     "os_type": "Linux",
@@ -788,7 +790,7 @@ export class KnowledgeController {
 
 **Status:** ✅ Complete
 
-**Changes Applied** (VM3: 172.16.168.23):
+**Changes Applied** (VM3: <database-ip>):
 
 1. **Memory Management:**
    - Set `maxmemory 8gb` (prevents OOM kills)
@@ -960,13 +962,13 @@ docs/
 ├── api/
 │   └── COMPREHENSIVE_API_DOCUMENTATION.md      # 518+ endpoints fully documented
 ├── architecture/
-│   └── PHASE_5_DISTRIBUTED_ARCHITECTURE.md    # 6-VM distributed system explained
+│   └── DISTRIBUTED_ARCHITECTURE.md    # 6-VM distributed system explained
 ├── developer/
-│   └── PHASE_5_DEVELOPER_SETUP.md             # Complete onboarding guide (25min setup)
+│   └── DEVELOPER_SETUP.md             # Complete onboarding guide (25min setup)
 ├── features/
 │   └── MULTIMODAL_AI_INTEGRATION.md           # Multi-modal AI capabilities guide
 ├── security/
-│   └── PHASE_5_SECURITY_IMPLEMENTATION.md     # Enterprise security framework
+│   └── SECURITY_FRAMEWORK.md     # Enterprise security framework
 └── troubleshooting/
     └── COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md # Complete problem resolution guide
 ```
@@ -981,14 +983,14 @@ docs/
 - Multi-modal AI processing examples
 - Python/JavaScript SDK usage examples
 
-🏗️ **Architecture Documentation** (`docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`):
+🏗️ **Architecture Documentation** (`docs/architecture/DISTRIBUTED_ARCHITECTURE.md`):
 - **6-VM distributed system** design rationale and implementation
 - Hardware optimization (Intel NPU + RTX 4070 + 22-core CPU)
 - Network security and firewall configuration
 - Service mesh communication patterns
 - Performance benchmarks and scalability plans
 
-👨‍💻 **Developer Setup Guide** (`docs/developer/PHASE_5_DEVELOPER_SETUP.md`):
+👨‍💻 **Developer Setup Guide** (`docs/developer/DEVELOPER_SETUP.md`):
 - **~25 minute automated setup** (down from hours of manual work)
 - Complete environment configuration and troubleshooting
 - Hot reload development workflow
@@ -1002,7 +1004,7 @@ docs/
 - Performance benchmarks and hardware requirements
 - Complete integration examples with code
 
-🔒 **Security Implementation** (`docs/security/PHASE_5_SECURITY_IMPLEMENTATION.md`):
+🔒 **Security Implementation** (`docs/security/SECURITY_FRAMEWORK.md`):
 - Enterprise-grade security architecture
 - Multi-layer defense system (6 security layers)
 - PII detection and automatic redaction
@@ -1110,7 +1112,7 @@ scripts/start-services.sh start
 
 # Or: SLM Orchestration GUI
 scripts/start-services.sh gui
-# Visit: https://172.16.168.19/orchestration
+# Visit: https://<slm-manager-ip>/orchestration
 
 # Or: Direct systemctl
 sudo systemctl start autobot-backend
@@ -1411,7 +1413,7 @@ scripts/start-services.sh --help
 scripts/start-services.sh gui
 
 # Or visit directly:
-# https://172.16.168.19/orchestration
+# https://<slm-manager-ip>/orchestration
 ```
 - Visual service management
 - Real-time health monitoring
@@ -1454,7 +1456,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-native-services.yml
 
 # Monitor via SLM GUI
-# https://172.16.168.19/orchestration
+# https://<slm-manager-ip>/orchestration
 ```
 - Automated deployment
 - Service orchestration
@@ -1474,19 +1476,19 @@ Desktop access is **enabled by default** on all modes:
 ### Service Layout - Distributed VM Infrastructure
 
 **Infrastructure Overview:**
-- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8443) + Desktop/Terminal VNC (port 6080)
+- 📡 **Main Machine (WSL)**: `<backend-ip>` - Backend API (port 8443) + Desktop/Terminal VNC (port 6080)
 - 🌐 **Remote VMs:**
-  - **VM1 Frontend**: `172.16.168.21:5173` - Web interface (SINGLE FRONTEND SERVER)
-  - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration
-  - **VM3 Redis**: `172.16.168.23:6379` - Data layer
-  - **VM4 AI Stack**: `172.16.168.24:8080` - AI processing
-  - **VM5 Browser**: `172.16.168.25:3000` - Web automation (Playwright)
+  - **VM1 Frontend**: `<frontend-ip>:5173` - Web interface (SINGLE FRONTEND SERVER)
+  - **VM2 NPU Worker**: `<npu-ip>:8081` - Hardware AI acceleration
+  - **VM3 Redis**: `<database-ip>:6379` - Data layer
+  - **VM4 AI Stack**: `<aiml-ip>:8080` - AI processing
+  - **VM5 Browser**: `<browser-ip>:3000` - Web automation (Playwright)
 
 **Service Distribution:**
-- **Backend API**: `172.16.168.20:8443` - Main machine
-- **Desktop VNC**: `172.16.168.20:6080` - Main machine
-- **Terminal VNC**: `172.16.168.20:6080` - Main machine
-- **Browser Automation**: `172.16.168.25:3000` - Browser VM
+- **Backend API**: `<backend-ip>:8443` - Main machine
+- **Desktop VNC**: `<backend-ip>:6080` - Main machine
+- **Terminal VNC**: `<backend-ip>:6080` - Main machine
+- **Browser Automation**: `<browser-ip>:3000` - Browser VM
 - **Ollama LLM**: `127.0.0.1:11434` - Local LLM processing
 
 ## ⚠️ **CRITICAL: Single Frontend Server Architecture**
@@ -1494,13 +1496,13 @@ Desktop access is **enabled by default** on all modes:
 **MANDATORY FRONTEND SERVER RULES:**
 
 ### **✅ CORRECT: Single Frontend Server**
-- **ONLY** `172.16.168.21:5173` runs the frontend (Frontend VM)
-- **NO** frontend servers on main machine (`172.16.168.20`)
+- **ONLY** `<frontend-ip>:5173` runs the frontend (Frontend VM)
+- **NO** frontend servers on main machine (`<backend-ip>`)
 - **NO** local development servers (`localhost:5173`)
 - **NO** multiple frontend instances permitted
 
 ### **Development Workflow:**
-1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-frontend/`
+1. **Edit Code Locally**: Make all changes in `autobot-frontend/`
 2. **Sync to Frontend VM**: Use `./sync-frontend.sh` or `./scripts/utilities/sync-to-vm.sh frontend`
 3. **Frontend VM Runs**: Either dev or production mode via systemd services
 
@@ -1510,7 +1512,7 @@ Desktop access is **enabled by default** on all modes:
 - **SSH Key Authentication**: Uses `~/.ssh/autobot_key` (no passwords)
 
 ### **❌ STRICTLY FORBIDDEN (CAUSES SYSTEM CONFLICTS):**
-- Starting frontend servers on main machine (`172.16.168.20`)
+- Starting frontend servers on main machine (`<backend-ip>`)
 - Running `npm run dev` locally
 - Running `yarn dev` locally
 - Running `vite dev` locally
@@ -1558,7 +1560,7 @@ All major issues have been resolved:
 The application is now fully functional with:
 
 - Backend responding on port 8443 (main machine) — **Note**: test from .19/.21, not from within .20 (WSL2 loopback limitation, see [WSL2_NETWORKING.md](developer/WSL2_NETWORKING.md))
-- **Single Frontend VM** running on 172.16.168.21:5173 with proxy to backend
+- **Single Frontend VM** running on <frontend-ip>:5173 with proxy to backend
 - **VNC desktop access on port 6080 (enabled by default)**
 - All VM services healthy
 - Chat save operations working
@@ -1702,7 +1704,7 @@ All services now start cleanly and maintain stable operations.
 ### **Safe Database Operations:**
 ```bash
 # Safe to drop any database - data can be regenerated
-redis-cli -h 172.16.168.23 FLUSHDB
+redis-cli -h <database-ip> FLUSHDB
 
 # Repopulate knowledge base after dropping
 curl -X POST https://localhost:8443/api/knowledge_base/rebuild
@@ -1741,14 +1743,14 @@ curl -X POST https://localhost:8443/api/knowledge_base/rebuild
 **This rule MUST NEVER BE BROKEN under any circumstances:**
 
 - **ALL code edits MUST be made locally** and then synced to remote hosts
-- **NEVER use SSH to edit files directly** on remote VMs (172.16.168.21-25)
+- **NEVER use SSH to edit files directly** on remote VMs (<frontend-ip>-25)
 - **NEVER use remote text editors** (vim, nano, etc.) on remote hosts
 - **NEVER use vi, vim, nano, emacs** or any editor on remote machines
 - **Configuration changes MUST be made locally** and deployed via sync scripts
 - **ALWAYS use sync scripts to push changes** to remote machines after local edits
 
 **🔄 MANDATORY WORKFLOW AFTER ANY CODE CHANGES:**
-1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
+1. **Edit locally** - Make ALL changes in `/opt/autobot`
 2. **Immediately sync** - Use appropriate sync script after each edit session
 3. **Never skip sync** - Remote machines must stay synchronized with local changes
 
@@ -1767,7 +1769,7 @@ curl -X POST https://localhost:8443/api/knowledge_base/rebuild
 ./scripts/utilities/setup-ssh-keys.sh
 
 # Verify key deployment
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "hostname"
 ```
 
 #### Sync Files to Remote VMs:
@@ -1802,7 +1804,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 - ~~`sshpass -p "autobot" scp`~~ → Use `scp -i ~/.ssh/autobot_key`
 
 **🔄 MANDATORY WORKFLOW FOR REMOTE CHANGES (STRICTLY ENFORCED)**:
-1. **Edit locally** - Make ALL changes in `/home/kali/Desktop/AutoBot/`
+1. **Edit locally** - Make ALL changes in `/opt/autobot`
 2. **Test locally** - Verify changes work on local development environment
 3. **IMMEDIATELY sync to remote** - Use `./sync-frontend.sh` or appropriate sync script
 4. **Verify on remote** - Check that changes are applied correctly
@@ -1818,7 +1820,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 
 **Sync Methods**:
 - **Frontend production build**: `./sync-frontend.sh` (builds and deploys to /var/www/html/)
-- **Frontend source code**: `tar czf /tmp/frontend-src.tar.gz --exclude=node_modules --exclude=dist --exclude=.git -C autobot-vue . && sshpass -p "autobot" scp -o StrictHostKeyChecking=no /tmp/frontend-src.tar.gz autobot@172.16.168.21:/tmp/ && sshpass -p "autobot" ssh -o StrictHostKeyChecking=no autobot@172.16.168.21 "cd /home/autobot/autobot-vue && tar xzf /tmp/frontend-src.tar.gz"`
+- **Frontend source code**: `tar czf /tmp/frontend-src.tar.gz --exclude=node_modules --exclude=dist --exclude=.git -C autobot-vue . && sshpass -p "autobot" scp -o StrictHostKeyChecking=no /tmp/frontend-src.tar.gz autobot@<frontend-ip>:/tmp/ && sshpass -p "autobot" ssh -o StrictHostKeyChecking=no autobot@<frontend-ip> "cd /home/autobot/autobot-vue && tar xzf /tmp/frontend-src.tar.gz"`
 - **Backend/other services**: Use ansible playbooks or custom sync scripts
 
 **🎯 WHY THIS RULE MUST NEVER BE BROKEN:**
@@ -1842,7 +1844,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 - **Backup protection** - code is preserved and can be restored
 
 **🚨 ZERO TOLERANCE POLICY:**
-Direct editing on remote machines (172.16.168.21-25) **GUARANTEES WORK LOSS** when machines are reinstalled. We cannot track remote changes and cannot recover lost work.
+Direct editing on remote machines (<frontend-ip>-25) **GUARANTEES WORK LOSS** when machines are reinstalled. We cannot track remote changes and cannot recover lost work.
 
 ## Fixes Applied During This Session
 
@@ -2036,7 +2038,7 @@ These fixes address the **root architectural causes** rather than symptoms, maki
 curl https://localhost:8443/api/health
 
 # Redis connection
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # View logs
 tail -f logs/backend.log
@@ -2340,7 +2342,7 @@ Fragmentation Ratio: 0.98 (excellent)
 - Request throughput: ⬆️ 30% (with connection pool optimization)
 
 ### Configuration Persisted
-Changes saved to `/etc/redis-stack.conf` on VM3 (172.16.168.23)
+Changes saved to `/etc/redis-stack.conf` on VM3 (<database-ip>)
 
 ### Why Redis Uses Only 1 Core
 Redis is architecturally **single-threaded** for command processing by design:

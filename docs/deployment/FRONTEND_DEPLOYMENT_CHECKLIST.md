@@ -1,7 +1,7 @@
 # Frontend Deployment Checklist
 ## Quick Reference for AutoBot Code Deployments
 
-> **SLM Interface:** https://172.16.168.19/code-sync
+> **SLM Interface:** https://<slm-manager-ip>/code-sync
 
 ---
 
@@ -10,7 +10,7 @@
 - [ ] **Code Source Configured**
   - Log into SLM → Code Sync → Configure button
   - Node: `01-Backend` (or code source machine)
-  - Path: `/home/kali/Desktop/AutoBot`
+  - Path: `/opt/autobot`
   - Branch: `Dev_new_gui` (or `main` for prod)
 
 - [ ] **SSH Keys Deployed**
@@ -19,7 +19,7 @@
   ls -la ~/.ssh/autobot_key
 
   # Test SSH to frontend
-  ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo success"
+  ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo success"
   ```
 
 - [ ] **Git Hook Installed**
@@ -64,7 +64,7 @@
 ### Phase 2: SLM Deployment
 
 - [ ] **Access SLM**
-  - Browser: https://172.16.168.19
+  - Browser: https://<slm-manager-ip>
   - Login with admin credentials
   - Navigate to "Code Sync" in sidebar
 
@@ -97,14 +97,14 @@
 - [ ] **Test Frontend Access**
   ```bash
   # Check homepage loads
-  curl -Ik https://172.16.168.21
+  curl -Ik https://<frontend-ip>
 
   # Check your new feature (Phase 2 example)
-  curl -Ik https://172.16.168.21/analytics/evolution
+  curl -Ik https://<frontend-ip>/analytics/evolution
   ```
 
 - [ ] **Browser Testing**
-  - Open: https://172.16.168.21
+  - Open: https://<frontend-ip>
   - Hard refresh: Ctrl+F5 (clear cache)
   - Check console: F12 → Console (no red errors)
   - Navigate to your feature
@@ -124,10 +124,10 @@ cd autobot-frontend && npm run build && cd ..
 git add <files> && git commit -m "feat: change" && git push
 
 # 2. Deploy via SLM
-# https://172.16.168.19/code-sync → Sync Now
+# https://<slm-manager-ip>/code-sync → Sync Now
 
 # 3. Verify
-curl -Ik https://172.16.168.21
+curl -Ik https://<frontend-ip>
 ```
 
 **Expected Time:** 3-7 minutes total
@@ -140,14 +140,14 @@ curl -Ik https://172.16.168.21
 
 ```bash
 # Check SLM logs
-ssh autobot@172.16.168.19
+ssh autobot@<slm-manager-ip>
 journalctl -u autobot-slm-backend -n 100 --no-pager
 
 # Check SSH connectivity
-ssh autobot@172.16.168.21 "echo test"
+ssh autobot@<frontend-ip> "echo test"
 
 # Verify disk space
-ssh autobot@172.16.168.21 "df -h"
+ssh autobot@<frontend-ip> "df -h"
 ```
 
 ### Changes Not Visible
@@ -160,23 +160,23 @@ Ctrl + F5  (or Cmd + Shift + R on Mac)
 F12 → Application → Clear Storage → Clear site data
 
 # Check nginx serving correct files
-ssh autobot@172.16.168.21 "ls -lt /var/www/autobot-frontend/ | head -10"
+ssh autobot@<frontend-ip> "ls -lt /var/www/autobot-frontend/ | head -10"
 
 # Check file timestamp
-ssh autobot@172.16.168.21 "stat /var/www/autobot-frontend/index.html"
+ssh autobot@<frontend-ip> "stat /var/www/autobot-frontend/index.html"
 ```
 
 ### Build Fails on VM
 
 ```bash
 # Check node version (need 16+)
-ssh autobot@172.16.168.21 "node --version"
+ssh autobot@<frontend-ip> "node --version"
 
 # Check npm install errors
-ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-frontend && npm install"
+ssh autobot@<frontend-ip> "cd /opt/autobot/autobot-frontend && npm install"
 
 # Check build errors
-ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-frontend && npm run build"
+ssh autobot@<frontend-ip> "cd /opt/autobot/autobot-frontend && npm run build"
 ```
 
 ### Rollback to Previous Version
@@ -193,7 +193,7 @@ git push --force-with-lease origin Dev_new_gui
 bash scripts/hooks/slm-post-commit
 
 # 4. Re-sync in SLM interface
-# https://172.16.168.19/code-sync → Sync Now
+# https://<slm-manager-ip>/code-sync → Sync Now
 ```
 
 ---
@@ -214,10 +214,10 @@ bash scripts/hooks/slm-post-commit
 
 | Resource | URL |
 |----------|-----|
-| SLM Admin | https://172.16.168.19 |
-| Code Sync | https://172.16.168.19/code-sync |
-| User Frontend | https://172.16.168.21 |
-| Backend Docs | https://172.16.168.20:8443/docs |
+| SLM Admin | https://<slm-manager-ip> |
+| Code Sync | https://<slm-manager-ip>/code-sync |
+| User Frontend | https://<frontend-ip> |
+| Backend Docs | https://<backend-ip>:8443/docs |
 | GitHub Issues | https://github.com/mrveiss/AutoBot-AI/issues |
 
 ---
@@ -235,10 +235,10 @@ bash scripts/hooks/slm-post-commit
 journalctl -u autobot-slm-backend -f
 
 # Frontend VM Nginx
-ssh autobot@172.16.168.21 "journalctl -u nginx -f"
+ssh autobot@<frontend-ip> "journalctl -u nginx -f"
 
 # Frontend VM System
-ssh autobot@172.16.168.21 "tail -f /var/log/syslog"
+ssh autobot@<frontend-ip> "tail -f /var/log/syslog"
 ```
 
 ---

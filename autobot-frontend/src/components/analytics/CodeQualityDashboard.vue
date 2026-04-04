@@ -4,6 +4,8 @@
     <div class="dashboard-header">
       <div class="header-content">
         <h2 class="dashboard-title">{{ $t('analytics.codeQuality.title') }}</h2>
+        <!-- Issue #3436: show project scope when rendered under a codebase -->
+        <p v-if="sourceId" class="dashboard-project-subtitle">{{ sourceId }}</p>
         <div class="realtime-status" :class="{ connected: wsConnected }">
           <span class="status-dot"></span>
           {{ wsConnected ? $t('analytics.codeQuality.live') : $t('analytics.codeQuality.offline') }}
@@ -419,11 +421,24 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import { useRoute } from 'vue-router';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('CodeQualityDashboard');
+
+// Issue #3436: read sourceId from route param set by codebase/:sourceId parent
+const route = useRoute();
+const sourceId = computed(() => route.params.sourceId as string | undefined);
+
+/** Append ?source_id=<id> to a URL when a sourceId is available. */
+function withSourceId(url: string): string {
+  const id = sourceId.value;
+  if (!id) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}source_id=${encodeURIComponent(id)}`;
+}
 
 // Helper to get CSS variable value for JavaScript usage (SVG, charts, etc.)
 
@@ -632,7 +647,8 @@ async function refreshData(): Promise<void> {
 async function loadHealthScore(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth('/api/quality/health-score');
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/quality/health-score'));
     if (response.ok) {
       healthScore.value = await response.json();
     } else {
@@ -647,7 +663,8 @@ async function loadHealthScore(): Promise<void> {
 async function loadMetrics(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth('/api/quality/metrics');
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/quality/metrics'));
     if (response.ok) {
       metrics.value = await response.json();
     } else {
@@ -663,7 +680,8 @@ async function loadMetrics(): Promise<void> {
 async function loadPatterns(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth('/api/quality/patterns');
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/quality/patterns'));
     if (response.ok) {
       patterns.value = await response.json();
     } else {
@@ -679,7 +697,8 @@ async function loadPatterns(): Promise<void> {
 async function loadComplexity(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth('/api/quality/complexity?top_n=5');
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/quality/complexity?top_n=5'));
     if (response.ok) {
       complexity.value = await response.json();
     } else {
@@ -694,7 +713,8 @@ async function loadComplexity(): Promise<void> {
 async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth(`/api/quality/trends?period=${selectedPeriod.value}`);
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId(`/api/quality/trends?period=${selectedPeriod.value}`));
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
@@ -711,7 +731,8 @@ async function loadTrends(): Promise<void> {
 async function loadSnapshot(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth('/api/quality/snapshot');
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/quality/snapshot'));
     if (response.ok) {
       const data = await response.json();
       codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
@@ -728,7 +749,8 @@ async function drillDown(category: string): Promise<void> {
   drillDownCategory.value = category;
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth(`/api/quality/drill-down/${category}`);
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId(`/api/quality/drill-down/${category}`));
     if (response.ok) {
       drillDownData.value = await response.json();
     } else {

@@ -1300,7 +1300,9 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete fact %s: %s", fact_id, e)
-            result["errors"].append({"fact_id": fact_id, "error": "Fact deletion failed"})
+            result["errors"].append(
+                {"fact_id": fact_id, "error": "Fact deletion failed"}
+            )
 
     async def _process_session_facts_deletion(
         self,
@@ -1376,7 +1378,9 @@ class FactsMixin:
 
         except Exception as e:
             logger.error("Failed to delete facts for session %s: %s", session_id, e)
-            result["errors"].append({"session_id": session_id, "error": "Session facts deletion failed"})
+            result["errors"].append(
+                {"session_id": session_id, "error": "Session facts deletion failed"}
+            )
             return result
 
     async def _cleanup_session_tracking(

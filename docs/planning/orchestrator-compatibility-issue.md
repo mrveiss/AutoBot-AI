@@ -46,7 +46,7 @@ Someone refactored `orchestrator.py` creating `ConsolidatedOrchestrator` but did
 
 ## Evidence from Backend Logs
 
-From `/home/kali/Desktop/AutoBot/logs/backend.log`:
+From `logs/backend.log`:
 ```
 WARNING:root:⚠️ Optional router not available: orchestrator - cannot import name 'MemoryManager' from 'src.memory_manager'
 WARNING:root:⚠️ Optional router not available: workflow_automation - cannot import name 'MemoryManager' from 'src.memory_manager'
@@ -150,9 +150,9 @@ Need to verify these exist and are exported:
 Let's check if these are defined elsewhere:
 
 ```bash
-grep -r "class TaskComplexity" /home/kali/Desktop/AutoBot/src/
-grep -r "class WorkflowStatus" /home/kali/Desktop/AutoBot/src/
-grep -r "class WorkflowStep" /home/kali/Desktop/AutoBot/src/
+grep -r "class TaskComplexity" src/
+grep -r "class WorkflowStatus" src/
+grep -r "class WorkflowStep" src/
 ```
 
 ---
@@ -270,7 +270,7 @@ WARNING: cannot import name 'TaskType' from 'src.task_execution_tracker'
 - `orchestrator.py` called `task_tracker.start_task()`, `complete_task()`, `fail_task()` with specific signatures
 - But `TaskExecutionTracker` only provided `track_task()` context manager
 
-**Solution Implemented in `/home/kali/Desktop/AutoBot/src/task_execution_tracker.py`**:
+**Solution Implemented in `src/task_execution_tracker.py`**:
 
 1. **Added Imports** (lines 14-21):
    ```python

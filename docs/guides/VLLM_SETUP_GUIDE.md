@@ -119,7 +119,7 @@ huggingface-cli download codellama/CodeLlama-7b-Instruct-hf
 
 ### Step 1: Enable vLLM in Config
 
-Edit `/home/kali/Desktop/AutoBot/config/config.yaml`:
+Edit `config/config.yaml`:
 
 ```yaml
 backend:

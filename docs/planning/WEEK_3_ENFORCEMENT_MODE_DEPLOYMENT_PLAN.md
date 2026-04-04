@@ -42,9 +42,9 @@
 **Objective**: Deploy ServiceHTTPClient to all remote services
 
 **Services to Update**:
-1. NPU Worker (172.16.168.22:8081)
-2. AI Stack (172.16.168.24:8080)
-3. Browser Service (172.16.168.25:3000)
+1. NPU Worker (<npu-ip>:8081)
+2. AI Stack (<aiml-ip>:8080)
+3. Browser Service (<browser-ip>:3000)
 
 **Tasks**:
 - Add ServiceHTTPClient to service codebase
@@ -87,7 +87,7 @@
 
 ## Phase 1: Remote Service Updates
 
-### 1.1 NPU Worker Service (172.16.168.22:8081)
+### 1.1 NPU Worker Service (<npu-ip>:8081)
 
 #### Current State
 
@@ -118,7 +118,7 @@ def get_backend_client():
 async def send_inference_result(task_id: str, result: dict):
     """Send inference result to backend with authentication."""
     client = get_backend_client()
-    backend_url = os.getenv("BACKEND_HOST", "172.16.168.20")
+    backend_url = os.getenv("BACKEND_HOST", "<backend-ip>")
     backend_port = os.getenv("BACKEND_PORT", "8001")
 
     response = await client.post(
@@ -139,7 +139,7 @@ async def send_inference_result(task_id: str, result: dict):
 4. Test authenticated request to backend
 5. Restart NPU worker service
 
-### 1.2 AI Stack Service (172.16.168.24:8080)
+### 1.2 AI Stack Service (<aiml-ip>:8080)
 
 #### Current State
 
@@ -169,7 +169,7 @@ def get_backend_client():
 async def report_status(status: dict):
     """Report AI stack status to backend with authentication."""
     client = get_backend_client()
-    backend_url = os.getenv("BACKEND_HOST", "172.16.168.20")
+    backend_url = os.getenv("BACKEND_HOST", "<backend-ip>")
     backend_port = os.getenv("BACKEND_PORT", "8001")
 
     response = await client.post(
@@ -183,7 +183,7 @@ async def report_status(status: dict):
 - `/etc/autobot/.env` has `SERVICE_ID=ai-stack`
 - `/etc/autobot/service-keys/ai-stack.env` has service key
 
-### 1.3 Browser Service (172.16.168.25:3000)
+### 1.3 Browser Service (<browser-ip>:3000)
 
 #### Current State
 
@@ -213,7 +213,7 @@ def get_backend_client():
 async def send_automation_result(task_id: str, result: dict):
     """Send automation result to backend with authentication."""
     client = get_backend_client()
-    backend_url = os.getenv("BACKEND_HOST", "172.16.168.20")
+    backend_url = os.getenv("BACKEND_HOST", "<backend-ip>")
     backend_port = os.getenv("BACKEND_PORT", "8001")
 
     response = await client.post(
@@ -225,7 +225,7 @@ async def send_automation_result(task_id: str, result: dict):
 async def upload_screenshot(screenshot_data: bytes):
     """Upload screenshot to backend with authentication."""
     client = get_backend_client()
-    backend_url = os.getenv("BACKEND_HOST", "172.16.168.20")
+    backend_url = os.getenv("BACKEND_HOST", "<backend-ip>")
     backend_port = os.getenv("BACKEND_PORT", "8001")
 
     response = await client.post(
@@ -371,9 +371,9 @@ grep "Service auth failed" logs/backend.log | tail -50
 grep "401" logs/backend.log | grep -v "logging only" | tail -20
 
 # Verify services still functioning
-curl http://172.16.168.22:8081/health  # NPU Worker
-curl http://172.16.168.24:8080/health  # AI Stack
-curl http://172.16.168.25:3000/health  # Browser
+curl http://<npu-ip>:8081/health  # NPU Worker
+curl http://<aiml-ip>:8080/health  # AI Stack
+curl http://<browser-ip>:3000/health  # Browser
 ```
 
 ### 3.2 Enforcement Activation
@@ -395,7 +395,7 @@ sudo systemctl restart autobot-backend
 tail -f logs/backend.log | grep "service"
 
 # Check enforcement working
-curl -X POST https://172.16.168.20:8443/api/npu/test
+curl -X POST https://<backend-ip>:8443/api/npu/test
 # Should return 401 Unauthorized (no auth headers)
 ```
 

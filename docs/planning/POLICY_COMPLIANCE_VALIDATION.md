@@ -77,7 +77,7 @@ Convert 4 synchronous Redis operations to async using existing AsyncRedisManager
 
 **❓ Challenge: Is AsyncRedisManager actually production-ready?**
 
-**Evidence from `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py`**:
+**Evidence from `backend/utils/async_redis_manager.py`**:
 - ✅ Full async implementation with connection pooling
 - ✅ Circuit breaker pattern for resilience
 - ✅ Health monitoring and statistics

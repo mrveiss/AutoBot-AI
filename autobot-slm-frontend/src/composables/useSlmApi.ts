@@ -42,8 +42,59 @@ import type {
   NPUWorkerMetrics,
   NPUWorkerConfig,
   FleetUpdateSummary,
+  EligibleNode,
 } from '@/types/slm'
 import { getSlmApiBase } from '@/config/ssot-config'
+import type {
+  ActionResponse,
+  SyncVerifyResponse,
+  RestartAllServicesRequest,
+  RestartAllServicesResponse,
+  VNCCredentialCreate,
+  VNCCredentialResponse,
+  VNCEndpointsResponse,
+  VNCConnectionInfo,
+  TLSCredentialCreate,
+  TLSCredentialResponse,
+  TLSEndpointsResponse,
+  TLSRenewResponse,
+  TLSRotateResponse,
+  TLSBulkRenewResponse,
+  TLSEnableResponse,
+  FleetMetrics,
+  AlertsResponse,
+  MonitoringSystemHealth,
+  DashboardOverview,
+  LogsResponse,
+  BlueGreenDeploymentApi,
+  BlueGreenCreate,
+  BlueGreenListResponse,
+  NPUNodesResponse,
+  NPURoleResponse,
+  NPUDetectionResponse,
+  ErrorStatistics,
+  RecentErrorsResponse,
+  CategoriesResponse,
+  ComponentsResponse,
+  ErrorHealthResponse,
+  MetricsSummary,
+  TimelineResponse,
+  TopErrorsResponse,
+  AlertThresholdConfig,
+  AlertThresholdResponse,
+  CleanupResponse,
+  ClearResponse,
+  ResolveResponse,
+  SecurityEventResponse,
+  SecurityOverviewResponse,
+  AuditLogListResponse,
+  SecurityEventListResponse,
+  ThreatSummary,
+  SecurityPolicyResponse,
+  SecurityPolicyListResponse,
+  FleetCert,
+  WizardStatusResponse,
+} from '@/types/api-responses'
 
 // SLM Admin uses the local SLM backend API
 const API_BASE = getSlmApiBase()
@@ -122,13 +173,6 @@ interface BackupsResponse {
 interface ReplicationsResponse {
   replications: Replication[]
   total: number
-}
-
-interface ActionResponse {
-  action: string
-  success: boolean
-  message: string
-  resource_id?: string
 }
 
 export function useSlmApi() {
@@ -374,22 +418,6 @@ export function useSlmApi() {
     return response.data
   }
 
-  interface SyncVerifyResponse {
-    is_healthy: boolean
-    service_type: string
-    details: {
-      source?: Record<string, unknown>
-      target?: Record<string, unknown>
-      comparison?: Record<string, unknown>
-      lag?: Record<string, unknown>
-    }
-    checks: Array<{
-      name: string
-      status: string
-      message: string
-    }>
-  }
-
   async function verifyReplicationSync(replicationId: string): Promise<SyncVerifyResponse> {
     const response = await client.post<SyncVerifyResponse>(
       `/stateful/replications/${replicationId}/verify-sync`
@@ -501,27 +529,6 @@ export function useSlmApi() {
   }
 
   // Restart All Services on a Node (Issue #725)
-  interface RestartAllServicesRequest {
-    category?: 'autobot' | 'system' | 'all'
-    exclude_services?: string[]
-  }
-
-  interface RestartAllServicesResponse {
-    node_id: string
-    success: boolean
-    message: string
-    total_services: number
-    successful_restarts: number
-    failed_restarts: number
-    results: Array<{
-      service_name: string
-      success: boolean
-      message: string
-      is_slm_agent: boolean
-    }>
-    slm_agent_restarted: boolean
-  }
-
   async function restartAllNodeServices(
     nodeId: string,
     options?: RestartAllServicesRequest
@@ -534,62 +541,6 @@ export function useSlmApi() {
   }
 
   // VNC Credentials (Issue #725)
-  interface VNCCredentialCreate {
-    vnc_type?: 'desktop' | 'browser' | 'custom'
-    name?: string
-    password: string
-    port?: number
-    display_number?: number
-    vnc_port?: number
-    websockify_enabled?: boolean
-  }
-
-  interface VNCCredentialResponse {
-    id: number
-    credential_id: string
-    node_id: string
-    vnc_type: string | null
-    name: string | null
-    port: number | null
-    display_number: number | null
-    vnc_port: number | null
-    websockify_enabled: boolean
-    is_active: boolean
-    last_used: string | null
-    created_at: string
-    updated_at: string
-    websocket_url: string | null
-  }
-
-  interface VNCEndpointResponse {
-    credential_id: string
-    node_id: string
-    hostname: string
-    ip_address: string
-    vnc_type: string
-    name: string | null
-    port: number
-    websocket_url: string
-    is_active: boolean
-  }
-
-  interface VNCEndpointsResponse {
-    endpoints: VNCEndpointResponse[]
-    total: number
-  }
-
-  interface VNCConnectionInfo {
-    credential_id: string
-    node_id: string
-    vnc_type: string
-    host: string
-    port: number
-    display_number: number
-    websocket_url: string
-    connection_token: string | null
-    token_expires_at: string | null
-  }
-
   async function getVncEndpoints(includeInactive = false): Promise<VNCEndpointsResponse> {
     const params = includeInactive ? '?include_inactive=true' : ''
     const response = await client.get<VNCEndpointsResponse>(`/vnc/endpoints${params}`)
@@ -634,46 +585,6 @@ export function useSlmApi() {
   }
 
   // TLS Credentials (Issue #725: mTLS support)
-  interface TLSCredentialCreate {
-    name?: string
-    ca_cert: string
-    server_cert: string
-    server_key: string
-    common_name?: string
-    expires_at?: string
-  }
-
-  interface TLSCredentialResponse {
-    id: number
-    credential_id: string
-    node_id: string
-    name: string | null
-    common_name: string | null
-    expires_at: string | null
-    fingerprint: string | null
-    is_active: boolean
-    created_at: string
-    updated_at: string
-  }
-
-  interface TLSEndpointResponse {
-    credential_id: string
-    node_id: string
-    hostname: string
-    ip_address: string
-    name: string | null
-    common_name: string | null
-    expires_at: string | null
-    is_active: boolean
-    days_until_expiry: number | null
-  }
-
-  interface TLSEndpointsResponse {
-    endpoints: TLSEndpointResponse[]
-    total: number
-    expiring_soon: number
-  }
-
   async function getTlsEndpoints(includeInactive = false): Promise<TLSEndpointsResponse> {
     const params = includeInactive ? '?include_inactive=true' : ''
     const response = await client.get<TLSEndpointsResponse>(`/tls/endpoints${params}`)
@@ -732,42 +643,6 @@ export function useSlmApi() {
   }
 
   // TLS Certificate Lifecycle (Issue #725: renew/rotate workflows)
-  interface TLSRenewResponse {
-    success: boolean
-    message: string
-    old_credential_id: string
-    new_credential_id: string
-    expires_at: string | null
-    deployed: boolean
-    deployment_message: string | null
-  }
-
-  interface TLSRotateResponse {
-    success: boolean
-    message: string
-    old_credential_id: string
-    old_deactivated: boolean
-    new_credential_id: string
-    expires_at: string | null
-    deployed: boolean
-    deployment_message: string | null
-  }
-
-  interface TLSBulkRenewResponse {
-    success: boolean
-    message: string
-    renewed: number
-    failed: number
-    results: Array<{
-      old_credential_id: string
-      new_credential_id?: string
-      node_id: string
-      success: boolean
-      deployed?: boolean
-      error?: string
-    }>
-  }
-
   async function renewTlsCertificate(
     credentialId: string,
     deploy = false
@@ -800,27 +675,6 @@ export function useSlmApi() {
   }
 
   // TLS Service Enablement (Issue #164)
-  interface TLSEnableResponse {
-    success: boolean
-    message: string
-    services: string[]
-    results: {
-      deploy_certs: {
-        success: boolean
-        returncode: number
-        stdout: string
-        stderr: string
-      } | null
-      enable_tls: {
-        success: boolean
-        returncode: number
-        stdout: string
-        stderr: string
-      } | null
-      services_enabled: string[]
-    }
-  }
-
   async function enableTlsOnServices(
     services: string[] = ['frontend', 'backend', 'redis'],
     deployCertsFirst = true
@@ -899,84 +753,6 @@ export function useSlmApi() {
   // Monitoring API (Issue #729)
   // =============================================================================
 
-  interface FleetMetrics {
-    total_nodes: number
-    online_nodes: number
-    degraded_nodes: number
-    offline_nodes: number
-    avg_cpu_percent: number
-    avg_memory_percent: number
-    avg_disk_percent: number
-    total_services: number
-    running_services: number
-    failed_services: number
-    nodes: Array<{
-      node_id: string
-      hostname: string
-      ip_address: string
-      status: string
-      cpu_percent: number
-      memory_percent: number
-      disk_percent: number
-      last_heartbeat: string | null
-      services_running: number
-      services_failed: number
-    }>
-    timestamp: string
-  }
-
-  interface AlertItem {
-    alert_id: string
-    severity: string
-    category: string
-    message: string
-    node_id: string | null
-    hostname: string | null
-    timestamp: string
-    acknowledged: boolean
-  }
-
-  interface AlertsResponse {
-    total_count: number
-    critical_count: number
-    warning_count: number
-    info_count: number
-    alerts: AlertItem[]
-  }
-
-  interface SystemHealth {
-    overall_status: string
-    health_score: number
-    components: Record<string, string>
-    issues: string[]
-    last_check: string
-  }
-
-  interface DashboardOverview {
-    fleet_metrics: FleetMetrics
-    recent_alerts: AlertItem[]
-    recent_deployments: number
-    active_maintenance: number
-    health_summary: SystemHealth
-  }
-
-  interface LogEntry {
-    event_id: string
-    node_id: string
-    hostname: string
-    event_type: string
-    severity: string
-    message: string
-    timestamp: string
-  }
-
-  interface LogsResponse {
-    logs: LogEntry[]
-    total: number
-    page: number
-    per_page: number
-  }
-
   async function getFleetMetrics(): Promise<FleetMetrics> {
     const response = await client.get<FleetMetrics>('/monitoring/metrics/fleet')
     return response.data
@@ -1000,8 +776,8 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getSystemHealth(): Promise<SystemHealth> {
-    const response = await client.get<SystemHealth>('/monitoring/health')
+  async function getSystemHealth(): Promise<MonitoringSystemHealth> {
+    const response = await client.get<MonitoringSystemHealth>('/monitoring/health')
     return response.data
   }
 
@@ -1054,61 +830,6 @@ export function useSlmApi() {
   // Blue-Green Deployments API (Issue #726 Phase 3)
   // =============================================================================
 
-  interface BlueGreenDeployment {
-    id: number
-    bg_deployment_id: string
-    blue_node_id: string
-    blue_roles: string[]
-    green_node_id: string
-    green_original_roles: string[]
-    borrowed_roles: string[]
-    purge_on_complete: boolean
-    deployment_type: string
-    health_check_url: string | null
-    health_check_interval: number
-    health_check_timeout: number
-    auto_rollback: boolean
-    status: string
-    progress_percent: number
-    current_step: string | null
-    error: string | null
-    started_at: string | null
-    switched_at: string | null
-    completed_at: string | null
-    rollback_at: string | null
-    triggered_by: string | null
-    created_at: string
-    updated_at: string
-  }
-
-  interface BlueGreenCreate {
-    blue_node_id: string
-    green_node_id: string
-    roles: string[]
-    deployment_type?: string
-    health_check_url?: string
-    health_check_interval?: number
-    health_check_timeout?: number
-    auto_rollback?: boolean
-    purge_on_complete?: boolean
-  }
-
-  interface BlueGreenListResponse {
-    deployments: BlueGreenDeployment[]
-    total: number
-    page: number
-    per_page: number
-  }
-
-  interface EligibleNode {
-    node_id: string
-    hostname: string
-    ip_address: string
-    current_roles: string[]
-    available_capacity: number
-    status: string
-  }
-
   async function getBlueGreenDeployments(options?: {
     status?: string
     page?: number
@@ -1124,13 +845,13 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getBlueGreenDeployment(deploymentId: string): Promise<BlueGreenDeployment> {
-    const response = await client.get<BlueGreenDeployment>(`/blue-green/${deploymentId}`)
+  async function getBlueGreenDeployment(deploymentId: string): Promise<BlueGreenDeploymentApi> {
+    const response = await client.get<BlueGreenDeploymentApi>(`/blue-green/${deploymentId}`)
     return response.data
   }
 
-  async function createBlueGreenDeployment(data: BlueGreenCreate): Promise<BlueGreenDeployment> {
-    const response = await client.post<BlueGreenDeployment>('/blue-green', data)
+  async function createBlueGreenDeployment(data: BlueGreenCreate): Promise<BlueGreenDeploymentApi> {
+    const response = await client.post<BlueGreenDeploymentApi>('/blue-green', data)
     return response.data
   }
 
@@ -1179,25 +900,6 @@ export function useSlmApi() {
   // =============================================================================
   // NPU Management API (Issue #255 - NPU Fleet Integration)
   // =============================================================================
-
-  interface NPUNodesResponse {
-    nodes: NPUNodeStatus[]
-    total: number
-  }
-
-  interface NPURoleResponse {
-    success: boolean
-    message: string
-    node_id: string
-    detection_triggered?: boolean
-  }
-
-  interface NPUDetectionResponse {
-    success: boolean
-    message: string
-    node_id: string
-    capabilities: NPUNodeStatus['capabilities'] | null
-  }
 
   async function getNpuNodes(): Promise<NPUNodeStatus[]> {
     const response = await client.get<NPUNodesResponse>('/npu/nodes')
@@ -1266,133 +968,6 @@ export function useSlmApi() {
   // =============================================================================
   // Error Monitoring API (Issue #563)
   // =============================================================================
-
-  interface ErrorStatistics {
-    total_errors: number
-    errors_24h: number
-    errors_7d: number
-    errors_30d: number
-    resolved_count: number
-    unresolved_count: number
-    error_rate_per_hour: number
-    trend: 'increasing' | 'decreasing' | 'stable'
-  }
-
-  interface RecentError {
-    event_id: string
-    node_id: string
-    hostname: string
-    event_type: string
-    severity: string
-    message: string
-    timestamp: string
-    resolved: boolean
-    resolved_at: string | null
-    resolved_by: string | null
-  }
-
-  interface RecentErrorsResponse {
-    errors: RecentError[]
-    total: number
-    page: number
-    per_page: number
-  }
-
-  interface CategoryBreakdown {
-    category: string
-    count: number
-    percentage: number
-  }
-
-  interface CategoriesResponse {
-    categories: CategoryBreakdown[]
-    total: number
-  }
-
-  interface ComponentBreakdown {
-    node_id: string
-    hostname: string
-    count: number
-    percentage: number
-  }
-
-  interface ComponentsResponse {
-    components: ComponentBreakdown[]
-    total: number
-  }
-
-  interface ErrorHealthResponse {
-    status: 'healthy' | 'warning' | 'critical'
-    error_rate_current: number
-    error_rate_threshold_warning: number
-    error_rate_threshold_critical: number
-    recent_critical_count: number
-    message: string
-  }
-
-  interface MetricsSummary {
-    total_errors: number
-    unresolved_errors: number
-    critical_errors: number
-    error_rate_per_hour: number
-    mean_time_to_resolve_hours: number | null
-    top_error_type: string | null
-    most_affected_node: string | null
-  }
-
-  interface TimelinePoint {
-    timestamp: string
-    count: number
-    critical: number
-    error: number
-  }
-
-  interface TimelineResponse {
-    timeline: TimelinePoint[]
-    interval: string
-    start: string
-    end: string
-  }
-
-  interface TopError {
-    event_type: string
-    message: string
-    count: number
-    last_occurred: string
-    affected_nodes: string[]
-  }
-
-  interface TopErrorsResponse {
-    errors: TopError[]
-  }
-
-  interface AlertThresholdConfig {
-    warning_threshold: number
-    critical_threshold: number
-    retention_days: number
-  }
-
-  interface AlertThresholdResponse extends AlertThresholdConfig {
-    updated: boolean
-  }
-
-  interface CleanupResponse {
-    deleted_count: number
-    retention_days: number
-    message: string
-  }
-
-  interface ClearResponse {
-    deleted_count: number
-    message: string
-  }
-
-  interface ResolveResponse {
-    event_id: string
-    resolved: boolean
-    resolved_at: string
-    resolved_by: string
-  }
 
   async function getErrorStatistics(): Promise<ErrorStatistics> {
     const response = await client.get<ErrorStatistics>('/errors/statistics')
@@ -1490,123 +1065,6 @@ export function useSlmApi() {
 
   // Security (Issue #813)
 
-  interface SecurityEventResponse {
-    id: number
-    event_id: string
-    timestamp: string
-    event_type: string
-    severity: string
-    category: string | null
-    source_ip: string | null
-    source_user: string | null
-    source_node_id: string | null
-    target_resource: string | null
-    target_node_id: string | null
-    title: string
-    description: string | null
-    threat_indicator: string | null
-    threat_score: number | null
-    mitre_technique: string | null
-    is_acknowledged: boolean
-    acknowledged_by: string | null
-    acknowledged_at: string | null
-    is_resolved: boolean
-    resolved_by: string | null
-    resolved_at: string | null
-    resolution_notes: string | null
-    created_at: string
-  }
-
-  interface SecurityOverviewResponse {
-    security_score: number
-    active_threats: number
-    failed_logins_24h: number
-    policy_violations: number
-    total_events_24h: number
-    critical_events: number
-    certificates_expiring: number
-    recent_events: SecurityEventResponse[]
-  }
-
-  interface AuditLogResponse {
-    id: number
-    log_id: string
-    timestamp: string
-    user_id: string | null
-    username: string | null
-    ip_address: string | null
-    category: string
-    action: string
-    resource_type: string | null
-    resource_id: string | null
-    description: string | null
-    request_method: string | null
-    request_path: string | null
-    response_status: number | null
-    success: boolean
-    error_message: string | null
-    created_at: string
-  }
-
-  interface AuditLogListResponse {
-    logs: AuditLogResponse[]
-    total: number
-    page: number
-    per_page: number
-  }
-
-  interface SecurityEventListResponse {
-    events: SecurityEventResponse[]
-    total: number
-    page: number
-    per_page: number
-    unacknowledged_count: number
-    critical_count: number
-  }
-
-  interface ThreatSummary {
-    total_threats: number
-    critical: number
-    high: number
-    medium: number
-    low: number
-    acknowledged: number
-    resolved: number
-    by_type: Record<string, number>
-    by_source_ip: Record<string, number>
-    trend_24h: Array<Record<string, unknown>>
-  }
-
-  interface SecurityPolicyResponse {
-    id: number
-    policy_id: string
-    name: string
-    description: string | null
-    category: string
-    policy_type: string
-    rules: unknown[]
-    parameters: Record<string, unknown>
-    applies_to_nodes: unknown[]
-    applies_to_roles: unknown[]
-    status: string
-    is_enforced: boolean
-    last_evaluated: string | null
-    compliance_score: number | null
-    violations_count: number
-    version: number
-    created_by: string | null
-    updated_by: string | null
-    created_at: string
-    updated_at: string
-  }
-
-  interface SecurityPolicyListResponse {
-    policies: SecurityPolicyResponse[]
-    total: number
-    page: number
-    per_page: number
-  }
-
   async function getSecurityOverview(): Promise<SecurityOverviewResponse> {
     const response = await client.get<SecurityOverviewResponse>('/security/overview')
     return response.data
@@ -1664,14 +1122,6 @@ export function useSlmApi() {
   }
 
   // Fleet cert expiry (Issue #926 Phase 7)
-  interface FleetCert {
-    node_id: string
-    hostname: string
-    certificate: string
-    expiry: string
-    status: string
-  }
-
   async function getFleetCerts(nodeId?: string): Promise<FleetCert[]> {
     const params = nodeId ? `?node_id=${nodeId}` : ''
     const response = await client.get<FleetCert[]>(`/security/certificates${params}`)
@@ -1722,14 +1172,6 @@ export function useSlmApi() {
   }
 
   // Setup Wizard (Issue #1294)
-  interface WizardStatusResponse {
-    completed: boolean
-    current_step: string
-    current_step_index: number
-    total_steps: number
-    steps: { name: string; index: number; completed: boolean; current: boolean }[]
-  }
-
   async function getWizardStatus(): Promise<WizardStatusResponse> {
     const response = await client.get<WizardStatusResponse>('/setup/status')
     return response.data

@@ -42,7 +42,8 @@ KEYWORD_INTENT_FALLBACKS: Dict[Tuple[str, ...], "QueryIntent"] = (
     {}
 )  # Populated after enum defined
 
-router = APIRouter(prefix="/nl-search", tags=["natural-language-search", "code-search"])
+# Issue #3355: prefix moved to router registry (feature_routers.py)
+router = APIRouter(tags=["natural-language-search", "code-search"])
 
 
 # =============================================================================
@@ -1293,10 +1294,20 @@ async def list_supported_domains():
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint.
+
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
+    """
+    logger.warning(
+        "Deprecated health endpoint called: /api/health (natural_language_search) — "
+        "use /api/system/health instead (#3333)"
+    )
     return {
         "status": "healthy",
         "service": "natural-language-search",
+        "deprecated": True,
+        "use_instead": "/api/system/health",
         "features": [
             "query_parsing",
             "intent_classification",

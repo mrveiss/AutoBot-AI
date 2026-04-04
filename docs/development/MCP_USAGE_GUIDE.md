@@ -19,7 +19,7 @@ This guide demonstrates how to leverage all available MCP (Model Context Protoco
 ```javascript
 // Find all Vue components with specific patterns
 mcp.filesystem.search_files({
-  path: "/home/kali/Desktop/AutoBot/autobot-vue",
+  path: "autobot-vue",
   pattern: "*.vue",
   excludePatterns: ["node_modules/**"]
 })

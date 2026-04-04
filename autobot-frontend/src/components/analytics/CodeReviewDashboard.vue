@@ -16,6 +16,8 @@
           {{ $t('analytics.codeReview.title') }}
         </h2>
         <p class="subtitle">{{ $t('analytics.codeReview.subtitle') }}</p>
+        <!-- Issue #3436: show project scope when rendered under a codebase -->
+        <p v-if="sourceId" class="project-scope-badge">{{ sourceId }}</p>
       </div>
       <div class="header-actions">
         <button class="action-btn secondary" @click="loadPatterns" :disabled="loading">
@@ -345,6 +347,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
@@ -352,6 +355,17 @@ import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
 const logger = createLogger('CodeReviewDashboard')
+
+// Issue #3436: read sourceId from route param set by codebase/:sourceId parent
+const route = useRoute()
+const sourceId = computed(() => route.params.sourceId as string | undefined)
+
+/** Return params object merged with source_id when a sourceId is available. */
+function withSourceIdParams(params: Record<string, unknown> = {}): Record<string, unknown> {
+  const id = sourceId.value
+  if (!id) return params
+  return { ...params, source_id: id }
+}
 
 // Issue #701: Type for API response with data property
 interface ApiDataResponse {
@@ -570,11 +584,12 @@ async function runAnalysis() {
 
   try {
     // Issue #701: Fixed api.get call to use params option and type assertion
+    // Issue #3436: scope to project when sourceId is present
     const response = await api.get<ApiDataResponse>('/api/code-review/analyze', {
-      params: {
+      params: withSourceIdParams({
         path: selectedPath.value,
         languages: selectedLanguages.value.join(',')
-      }
+      })
     })
 
     // Issue #701: Response is returned directly, access .issues or .data.issues
@@ -601,7 +616,10 @@ async function runAnalysis() {
 async function loadHistory() {
   try {
     // Issue #701: Added type assertion for response
-    const response = await api.get<ApiDataResponse>('/api/code-review/history')
+    // Issue #3436: scope to project when sourceId is present
+    const response = await api.get<ApiDataResponse>('/api/code-review/history', {
+      params: withSourceIdParams()
+    })
     reviewHistory.value = (response as ApiDataResponse).reviews || (response as ApiDataResponse).data?.reviews || []
   } catch (error) {
     logger.warn('Failed to load review history:', error)

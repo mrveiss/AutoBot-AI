@@ -108,7 +108,7 @@ Before every `git commit`, automatically runs:
         "hooks": [
           {
             "type": "command",
-            "command": "cd /home/kali/Desktop/AutoBot && FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '.py$') && [ -n \"$FILES\" ] && echo \"$FILES\" | xargs flake8 --max-line-length=100 --count --select=E,W --show-source || true",
+            "command": "cd /opt/autobot && FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '.py$') && [ -n \"$FILES\" ] && echo \"$FILES\" | xargs flake8 --max-line-length=100 --count --select=E,W --show-source || true",
             "statusMessage": "Running flake8 on staged Python files..."
           }
         ]
@@ -386,7 +386,7 @@ Only use Task agents for unfamiliar code exploration."
 
 ## Support
 
-- **CLAUDE.md:** `/home/kali/Desktop/AutoBot/CLAUDE.md`
+- **CLAUDE.md:** `CLAUDE.md`
 - **Issue skill:** `~/.claude/skills/issue/SKILL.md`
 - **Hooks config:** `~/.claude/settings.json`
 - **This doc:** `docs/developer/INSIGHTS_IMPROVEMENTS.md`

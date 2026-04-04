@@ -136,7 +136,7 @@ Scalability: Millions of vectors
 
 ### Migration Script
 
-Location: `/home/kali/Desktop/AutoBot/scripts/utilities/migrate_redis_to_chromadb.py`
+Location: `scripts/utilities/migrate_redis_to_chromadb.py`
 
 **What it does:**
 1. Connects to Redis and exports all vectors
@@ -320,7 +320,7 @@ for doc_id in sample_ids:
 
 ```bash
 # Remove vector data from Redis (keep cache/state)
-redis-cli -h 172.16.168.23 DEL llama_index:*
+redis-cli -h <database-ip> DEL llama_index:*
 
 # Verify Redis size reduced
 redis-cli INFO memory | grep used_memory_human
@@ -346,7 +346,7 @@ redis:
 
 ### 3. Documentation Updates
 
-- Update `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- Update `docs/developer/DEVELOPER_SETUP.md`
 - Update `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - Update `CLAUDE.md` with new vector store info
 

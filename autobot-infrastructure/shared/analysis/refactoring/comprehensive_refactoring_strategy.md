@@ -41,7 +41,7 @@ This document outlines a systematic refactoring strategy for the AutoBot platfor
 **Step 1.1: Create Unified Config Manager (4 hours)**
 ```bash
 # Create unified implementation
-touch /home/kali/Desktop/AutoBot/src/unified_config_manager.py
+touch src/unified_config_manager.py
 ```
 
 **Features to Consolidate:**
@@ -111,7 +111,7 @@ backend/api/chat_unified.py         # Unused (8KB)
 **Step 2.1: Archive Legacy Chat Files (1 hour)**
 ```bash
 # Create archive directory
-mkdir -p /home/kali/Desktop/AutoBot/backend/api/archive/deprecated_chat_routers
+mkdir -p backend/api/archive/deprecated_chat_routers
 
 # Archive unused files
 mv backend/api/chat.py backend/api/archive/deprecated_chat_routers/
@@ -167,7 +167,7 @@ routers_config = [
 **Step 3.1: Analyze Memory Manager Patterns (2 hours)**
 ```bash
 # Identify all memory manager implementations
-find /home/kali/Desktop/AutoBot -name "*memory*" -type f | grep -E "\.(py)$"
+find /opt/autobot -name "*memory*" -type f | grep -E "\.(py)$"
 ```
 
 **Step 3.2: Create Unified Memory Interface (3 hours)**
@@ -205,7 +205,7 @@ enhanced_memory_manager_async = UnifiedMemoryManager(async_mode=True)
 **Step 3.4: Archive Duplicate Managers (1 hour)**
 ```bash
 # Archive replaced implementations
-mkdir -p /home/kali/Desktop/AutoBot/src/archive/deprecated_memory_managers
+mkdir -p src/archive/deprecated_memory_managers
 mv src/enhanced_memory_manager*.py src/archive/deprecated_memory_managers/
 ```
 
@@ -232,9 +232,9 @@ mv src/enhanced_memory_manager*.py src/archive/deprecated_memory_managers/
 **Step 4.1: Network Constants Audit (4 hours)**
 ```bash
 # Comprehensive search for network constants
-rg -n "172\.16\.168\." /home/kali/Desktop/AutoBot --type py
-rg -n "localhost:\d+" /home/kali/Desktop/AutoBot --type py
-rg -n ":\d{4,5}" /home/kali/Desktop/AutoBot --type py
+rg -n "172\.16\.168\." /opt/autobot --type py
+rg -n "localhost:\d+" /opt/autobot --type py
+rg -n ":\d{4,5}" /opt/autobot --type py
 ```
 
 **Step 4.2: Create Network Constants Module (3 hours)**

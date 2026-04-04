@@ -78,7 +78,7 @@ Average Reduction:      39.3%
 ### Step 1: Run Optimization
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 ./scripts/utilities/agent-optimize.sh --stats
 ```
 

@@ -153,7 +153,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 
 1. **Configure SSH**:
    ```bash
-   cd /home/kali/Desktop/AutoBot/scripts/security/ssh-hardening
+   cd scripts/security/ssh-hardening
    ./configure-ssh.sh
    ```
 
@@ -212,7 +212,7 @@ This directory contains scripts to fix the critical SSH man-in-the-middle vulner
 8. **Test Critical Operations**:
    ```bash
    # Test sync script
-   cd /home/kali/Desktop/AutoBot
+   cd /opt/autobot
    ./scripts/utilities/sync-to-vm.sh --test-connection all
 
    # Test frontend sync
@@ -348,9 +348,9 @@ scripts/security/ssh-hardening/
 
 ## Related Documentation
 
-- **Security Audit Report**: `/home/kali/Desktop/AutoBot/reports/security/CVE-AUTOBOT-2025-001-SSH-MITM-VULNERABILITY.md`
-- **AutoBot Documentation**: `/home/kali/Desktop/AutoBot/docs/`
-- **Development Guidelines**: `/home/kali/Desktop/AutoBot/CLAUDE.md`
+- **Security Audit Report**: `reports/security/CVE-AUTOBOT-2025-001-SSH-MITM-VULNERABILITY.md`
+- **AutoBot Documentation**: `docs/`
+- **Development Guidelines**: `CLAUDE.md`
 
 ## Support
 

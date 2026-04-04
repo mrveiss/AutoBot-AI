@@ -1,3 +1,14 @@
+---
+tags:
+  - index
+  - home
+aliases:
+  - Home
+  - AutoBot Docs
+cssclasses:
+  - home-note
+---
+
 # AutoBot Documentation Index
 
 > **AutoBot: Autonomous AI-Powered Linux Administration Platform**
@@ -14,6 +25,9 @@
 | [Browser VNC Quick Start](QUICK_START_BROWSER_VNC.md) | VNC desktop access |
 | [System State](system-state.md) | Current system status |
 | [Glossary](GLOSSARY.md) | Terminology reference |
+| [Changelog](../changelog/_index.md) | Per-version release notes and unreleased fragments |
+| [Dependencies](DEPENDENCIES.md) | Dependency reference |
+| [Roadmap 2025](ROADMAP_2025.md) | Product roadmap |
 
 ---
 
@@ -21,6 +35,7 @@
 
 | Guide | Description |
 |-------|-------------|
+| [User Docs Index](user/_index.md) | All user documentation |
 | [01 - Installation](user-guide/01-installation.md) | Complete setup instructions |
 | [02 - Quick Start](user-guide/02-quickstart.md) | Get running in 5 minutes |
 | [03 - Configuration](user-guide/03-configuration.md) | System configuration |
@@ -32,18 +47,41 @@
 
 ## Developer Documentation
 
-### Core Development
 | Document | Description |
 |----------|-------------|
-| [Developer Setup](developer/PHASE_5_DEVELOPER_SETUP.md) | Complete developer onboarding |
+| [Developer Docs Index](developer/_index.md) | All developer documentation |
+| [Developer Setup](developer/DEVELOPER_SETUP.md) | Developer onboarding |
 | [Architecture Guide](developer/01-architecture.md) | System design principles |
 | [Process Flow](developer/02-process-flow.md) | Request handling flow |
 | [API Reference](developer/03-api-reference.md) | Complete API documentation |
 | [Configuration Reference](developer/04-configuration.md) | Configuration options |
+| [CLAUDE Rules](developer/CLAUDE_RULES.md) | Core development rules |
+| [CLAUDE Workflow](developer/CLAUDE_WORKFLOW.md) | Development workflow |
+| [AutoBot Reference](developer/AUTOBOT_REFERENCE.md) | IPs, playbooks, quick reference |
 
-### API Documentation
+---
+
+## Architecture
+
 | Document | Description |
 |----------|-------------|
+| [Architecture Index](architecture/_index.md) | All architecture documentation |
+| [Architecture Overview](architecture/README.md) | System architecture |
+| [Agent System Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md) | Agent design |
+| [Memory Graph Architecture](architecture/AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md) | Knowledge graph |
+| [Distributed Architecture](architecture/DISTRIBUTED_6VM_ARCHITECTURE.md) | Multi-VM design |
+| [Communication Architecture](architecture/COMMUNICATION_ARCHITECTURE.md) | Service communication |
+| [Monitoring Architecture](architecture/MONITORING_ARCHITECTURE.md) | System monitoring |
+| [SSOT Configuration](architecture/SSOT_CONFIGURATION_ARCHITECTURE.md) | Single source of truth |
+| [ADR Index](adr/_index.md) | Architecture decision records |
+
+---
+
+## API Documentation
+
+| Document | Description |
+|----------|-------------|
+| [API Index](api/_index.md) | All API documentation |
 | [Comprehensive API](api/COMPREHENSIVE_API_DOCUMENTATION.md) | Full API reference |
 | [API Endpoint Mapping](api/API_ENDPOINT_MAPPING.md) | Endpoint overview |
 | [WebSocket Integration](api/WEBSOCKET_INTEGRATION_GUIDE.md) | Real-time communication |
@@ -52,47 +90,27 @@
 
 ---
 
-## Architecture
-
-| Document | Description |
-|----------|-------------|
-| [Architecture Overview](architecture/README.md) | System architecture |
-| [Agent System Architecture](architecture/AGENT_SYSTEM_ARCHITECTURE.md) | Agent design |
-| [Phase Validation System](architecture/PHASE_VALIDATION_SYSTEM.md) | Validation architecture |
-| [Memory Graph Architecture](architecture/AUTOBOT_MEMORY_GRAPH_ARCHITECTURE.md) | Knowledge graph |
-| [Distributed Architecture](architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md) | Multi-VM design |
-| [Communication Architecture](architecture/COMMUNICATION_ARCHITECTURE.md) | Service communication |
-| [Monitoring Architecture](architecture/MONITORING_ARCHITECTURE.md) | System monitoring |
-| [SSOT Configuration](architecture/SSOT_CONFIGURATION_ARCHITECTURE.md) | Single source of truth |
-
-### Architecture Decision Records
-- [ADR Index](adr/) - Historical architectural decisions
-
----
-
 ## Agent System
 
 | Document | Description |
 |----------|-------------|
-| [Agent System Guide](guides/AGENT_SYSTEM_GUIDE.md) | Complete agent guide |
+| [Agents Index](agents/_index.md) | All agent documentation |
 | [Multi-Agent Architecture](agents/multi-agent-architecture.md) | Agent coordination |
 | [Helper Agents Guide](agents/helper-agents-guide.md) | Specialized agents |
 | [Librarian Agents Guide](agents/librarian-agents-guide.md) | Knowledge agents |
-| [Multi-Agent Setup](guides/MULTI_AGENT_SETUP.md) | Deployment config |
-| [Intelligent Agent System](guides/intelligent_agent_system.md) | Agent intelligence |
 
 ---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
+| Document | Description |
+|----------|-------------|
+| [Features Index](features/_index.md) | All feature documentation |
 | [Knowledge Graph](features/KNOWLEDGE_GRAPH.md) | Knowledge management |
 | [Advanced Analytics](features/ADVANCED_ANALYTICS.md) | Codebase analytics |
-| [Advanced Visualizations](features/ADVANCED_VISUALIZATIONS.md) | Data visualization |
+| [Multimodal AI](features/MULTIMODAL_AI_INTEGRATION.md) | Multimodal integration |
 | [Log Forwarding](features/LOG_FORWARDING.md) | Centralized logging |
 | [MCP Integration](features/mcp-knowledge-base-integration.md) | MCP tools |
-| [Metrics Monitoring](features/METRICS_MONITORING_SUMMARY.md) | Performance tracking |
 
 ---
 
@@ -100,52 +118,51 @@
 
 | Document | Description |
 |----------|-------------|
+| [Security Index](security/_index.md) | All security documentation |
 | [Security Implementation](security/SECURITY_IMPLEMENTATION_SUMMARY.md) | Core security |
-| [Security Agents](security/SECURITY_AGENTS_SUMMARY.md) | Automated monitoring |
-| [MCP Security Testing](security/MCP_SECURITY_TESTING.md) | Security testing |
 | [Service Auth Enforcement](security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md) | Authentication |
 | [Access Control Guide](security/ACCESS_CONTROL_SAFE_ROLLOUT_GUIDE.md) | Authorization |
-| [File Permissions](security/FILE_PERMISSIONS_SECURITY_ARCHITECTURE.md) | File security |
+| [TLS Certificate Management](security/TLS_CERTIFICATE_MANAGEMENT.md) | Certificate management |
 
 ---
 
 ## Infrastructure & Deployment
 
-### Infrastructure
 | Document | Description |
 |----------|-------------|
-| [Infrastructure Deployment](developer/INFRASTRUCTURE_DEPLOYMENT.md) | VM deployment |
-| [Browser VNC Setup](infrastructure/BROWSER_VNC_SETUP.md) | VNC configuration |
-| [Hardware Acceleration](infrastructure/hardware-acceleration.md) | NPU/GPU setup |
-
-### Deployment
-| Document | Description |
-|----------|-------------|
-| [CI Pipeline Setup](deployment/CI_PIPELINE_SETUP.md) | Continuous integration |
-| [MCP Bridge Activation](deployment/MCP_BRIDGE_ACTIVATION.md) | MCP deployment |
+| [Infrastructure Index](infrastructure/_index.md) | All infrastructure documentation |
+| [Deployment Index](deployment/_index.md) | All deployment documentation |
+| [Operations Index](operations/_index.md) | All operations documentation |
 | [Deployment Guide](deployment/comprehensive_deployment_guide.md) | Full deployment |
+| [CI Pipeline Setup](deployment/CI_PIPELINE_SETUP.md) | Continuous integration |
+| [Disaster Recovery](operations/disaster-recovery.md) | Recovery procedures |
+| [Scaling Strategy](operations/scaling-strategy.md) | Scaling strategy |
 
-### Operations
+---
+
+## Runbooks
+
 | Document | Description |
 |----------|-------------|
-| [Disaster Recovery](operations/disaster-recovery.md) | Recovery procedures |
+| [Runbooks Index](runbooks/_index.md) | All runbooks |
+| [Code Update](runbooks/CODE_UPDATE.md) | Code update runbook |
+| [Deploy New Node](runbooks/DEPLOY_NEW_NODE.md) | Deploy new node |
+| [Emergency Recovery](runbooks/EMERGENCY_RECOVERY.md) | Emergency recovery |
+| [Rotate Certs](runbooks/ROTATE_CERTS.md) | Rotate TLS certificates |
 
 ---
 
 ## How-To Guides
 
-| Guide | Description |
-|-------|-------------|
-| [SLM Bash Execution](guides/slm-bash-execution.md) | Execute bash commands on target node groups via SLM |
-| [Chat Ollama Configuration](guides/chat-ollama-configuration.md) | Configure Chat module with local Ollama instance |
-| [Visual Workflow Parallel Execution](guides/visual-workflow-parallel-execution.md) | Define parallel shell script workflows across fleet |
-| [Codebase Analytics API](guides/codebase-analytics-api.md) | Retrieve API coverage reports programmatically |
-| [RAG Workflow with PDF](guides/rag-pdf-workflow.md) | RAG pipeline with PDF document repository |
-| [Vision VNC UI Testing](guides/vision-vnc-ui-testing.md) | Automated UI testing via Vision module and VNC |
-| [SLM Docker Ansible Deployment](guides/slm-docker-ansible-deployment.md) | Deploy Docker containers via SLM Ansible playbooks |
-| [Real-Time Monitoring](guides/realtime-monitoring-notifications.md) | Service monitoring with alert notifications |
-| [LLM Middleware & Telemetry](guides/llm-middleware-telemetry.md) | Custom middleware for LLM prompt interception |
-| [Distributed Task Failover](guides/distributed-task-failover-redis.md) | Redis-backed task failover between worker nodes |
+| Document | Description |
+|----------|-------------|
+| [Guides Index](guides/_index.md) | All guides |
+| [SLM Bash Execution](guides/slm-bash-execution.md) | Execute bash commands via SLM |
+| [Visual Workflow Execution](guides/visual-workflow-parallel-execution.md) | Parallel shell script workflows |
+| [RAG PDF Workflow](guides/rag-pdf-workflow.md) | RAG pipeline with PDF documents |
+| [Vision VNC UI Testing](guides/vision-vnc-ui-testing.md) | Automated UI testing via Vision |
+| [Distributed Task Failover](guides/distributed-task-failover-redis.md) | Redis-backed task failover |
+| [Ansible Playbook Reference](guides/ANSIBLE_PLAYBOOK_REFERENCE.md) | Ansible playbook reference |
 
 ---
 
@@ -153,6 +170,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [Workflow Index](workflow/_index.md) | All workflow documentation |
 | [Workflow API](workflow/WORKFLOW_API_DOCUMENTATION.md) | API reference |
 | [Advanced Features](workflow/ADVANCED_WORKFLOW_FEATURES.md) | Advanced capabilities |
 | [Workflow Orchestration](workflow/WORKFLOW_ORCHESTRATION_SUMMARY.md) | System overview |
@@ -163,9 +181,10 @@
 
 | Document | Description |
 |----------|-------------|
+| [Testing Index](testing/_index.md) | All testing documentation |
 | [Testing Framework](testing/TESTING_FRAMEWORK_SUMMARY.md) | Test infrastructure |
+| [Performance Benchmarks](testing/PERFORMANCE_BENCHMARKS.md) | Performance benchmarks |
 | [Frontend Tests](testing/FRONTEND_TEST_REPORT.md) | UI/UX validation |
-| [Ready for Testing](testing/READY_FOR_TESTING.md) | Test readiness |
 
 ---
 
@@ -173,8 +192,10 @@
 
 | Document | Description |
 |----------|-------------|
+| [Troubleshooting Index](troubleshooting/_index.md) | All troubleshooting guides |
 | [Comprehensive Guide](troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md) | All issues |
-| [Knowledge Manager](troubleshooting/KNOWLEDGE_MANAGER_CATEGORIES.md) | KB troubleshooting |
+| [Ansible Deployment Failures](troubleshooting/guides/ansible-role-deployment-failures.md) | Ansible failures |
+| [Frontend 404/401 Errors](troubleshooting/guides/frontend-api-calls-404-401-errors.md) | Frontend errors |
 
 ---
 
@@ -188,53 +209,63 @@
 
 ---
 
-## Planning & Roadmap
+## SDK
 
 | Document | Description |
 |----------|-------------|
-| [Roadmap 2025](ROADMAP_2025.md) | Main roadmap |
-| [Documentation Roadmap](planning/documentation-roadmap.md) | Docs improvement |
-| [Plans Directory](plans/) | Implementation plans |
+| [SDK Index](sdk/_index.md) | All SDK documentation |
+| [Python Quickstart](sdk/python-quickstart.md) | Python SDK quickstart |
+| [TypeScript Quickstart](sdk/typescript-quickstart.md) | TypeScript SDK quickstart |
 
 ---
 
-## Reports & Analysis
+## Frontend
 
-| Category | Location |
-|----------|----------|
-| Current Reports | [reports/](reports/) |
-| Phase Validation | [reports/phase-validation-report.md](reports/phase-validation-report.md) |
-| Legacy Reports | [reports/legacy/](reports/legacy/) |
-| Archived Reports | [archives/](archives/) |
+| Document | Description |
+|----------|-------------|
+| [Frontend Index](frontend/_index.md) | All frontend documentation |
+| [Design System](frontend/DESIGN_SYSTEM_COMPLETE.md) | Design system |
+| [Settings Panel Guide](frontend/settings-panel-guide.md) | Settings panel guide |
+
+---
+
+## Implementation Reports
+
+| Document | Description |
+| --- | --- |
+| [Implementation Index](implementation/_index.md) | All implementation reports |
+| [Reports Index](reports/_index.md) | All reports |
+| [Refactoring Index](refactoring/_index.md) | All refactoring documentation |
+
+---
+
+## Planning & Historical
+
+| Document | Description |
+| --- | --- |
+| [Planning Index](planning/_index.md) | Historical planning documents |
+| [Development Index](development/_index.md) | Development documentation |
+| [Plans Archive](archives/plans/_index.md) | Dated implementation plans (Jan–Mar 2026) |
+| [ADR Index](adr/_index.md) | Architecture decision records |
 
 ---
 
 ## Configuration
 
 | Document | Description |
-|----------|-------------|
-| [Environment Variables](configuration/environment-variables.md) | Env config |
-| [Database Documentation](database/) | Database setup |
+| --- | --- |
+| [Environment Variables](configuration/environment-variables.md) | Environment config |
+| [VNC Port Configuration](configuration/VNC_PORT_CONFIGURATION.md) | VNC port config |
 
 ---
 
 ## Key Directories
 
 | Directory | Purpose |
-|-----------|---------|
+| --- | --- |
 | `autobot-backend/` | Main backend API |
 | `autobot-frontend/` | User chat interface |
 | `autobot-slm-backend/` | SLM backend |
 | `autobot-slm-frontend/` | SLM dashboard |
 | `autobot_shared/` | Shared utilities |
 | `autobot-infrastructure/` | Deployment infrastructure |
-
----
-
-## Version History
-
-- [Changelog](CHANGELOG.md) - Documentation version history
-
----
-
-**Last Updated:** 2026-03-15

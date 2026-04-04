@@ -31,7 +31,7 @@ This document provides a comprehensive implementation plan for adding 4 integrat
 
 ### Existing Infrastructure
 
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py`
+**File:** `src/unified_config_manager.py`
 
 **What Works:**
 - Environment variable override system with `AUTOBOT_*` prefix (line 260-317)
@@ -51,7 +51,7 @@ This document provides a comprehensive implementation plan for adding 4 integrat
 
 ### Integration Points
 
-**File:** `/home/kali/Desktop/AutoBot/backend/app_factory.py`
+**File:** `backend/app_factory.py`
 
 **Startup Sequence:**
 ```python
@@ -1172,10 +1172,10 @@ VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
 4. **Verify Deployment:**
    ```bash
    # Check validation endpoint
-   curl https://172.16.168.20:8443/api/config/validate
+   curl https://<backend-ip>:8443/api/config/validate
 
    # Check sync status
-   curl https://172.16.168.20:8443/api/settings/sync-status
+   curl https://<backend-ip>:8443/api/settings/sync-status
    ```
 
 5. **Enable Hot Reload:**

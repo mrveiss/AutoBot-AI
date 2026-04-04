@@ -17,73 +17,33 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import type { TLSEndpointResponse } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
+import type {
+  SecurityEventResponse,
+  SecurityOverviewResponse,
+  AuditLogResponse,
+  AuditLogListResponse,
+  SecurityEventListResponse,
+  ThreatSummary as ThreatSummaryType,
+  SecurityPolicyResponse,
+  SecurityPolicyListResponse,
+} from '@/types/slm'
 
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
 const route = useRoute()
 const router = useRouter()
 
-interface SecurityEvent {
-  id: number
-  event_id: string
-  timestamp: string
-  event_type: string
-  severity: string
-  title: string
-  description?: string
-  source_ip?: string
-  source_user?: string
-  is_acknowledged: boolean
-  is_resolved: boolean
-}
+// Type aliases using shared security response interfaces (Issue #3184)
+type SecurityEvent = SecurityEventResponse
+type AuditLog = AuditLogResponse
+type SecurityPolicy = SecurityPolicyResponse
+type SecurityOverview = SecurityOverviewResponse
+type ThreatSummary = ThreatSummaryType
 
-interface AuditLog {
-  id: number
-  log_id: string
-  timestamp: string
-  username?: string
-  ip_address?: string
-  category: string
-  action: string
-  resource_type?: string
-  success: boolean
-}
-
-interface SecurityPolicy {
-  id: number
-  policy_id: string
-  name: string
-  description?: string
-  category: string
-  status: string
-  is_enforced: boolean
-  compliance_score?: number
-  violations_count: number
-}
-
-interface SecurityOverview {
-  security_score: number
-  active_threats: number
-  failed_logins_24h: number
-  policy_violations: number
-  total_events_24h: number
-  critical_events: number
-  certificates_expiring: number
-  recent_events: SecurityEvent[]
-}
-
-interface ThreatSummary {
-  total_threats: number
-  critical: number
-  high: number
-  medium: number
-  low: number
-  acknowledged: number
-  resolved: number
-  by_type: Record<string, number>
-}
 
 interface FleetCert {
   cert_id: string
@@ -95,18 +55,6 @@ interface FleetCert {
   not_before: string | null
   not_after: string | null
   status: string
-  days_until_expiry: number | null
-}
-
-interface TLSEndpoint {
-  credential_id: string
-  node_id: string
-  hostname: string
-  ip_address: string
-  name: string | null
-  common_name: string | null
-  expires_at: string | null
-  is_active: boolean
   days_until_expiry: number | null
 }
 
@@ -138,7 +86,7 @@ const fleetCerts = ref<FleetCert[]>([])
 const fleetCertsLoading = ref(false)
 
 // TLS Certificates Data (Issue #725)
-const tlsEndpoints = ref<TLSEndpoint[]>([])
+const tlsEndpoints = ref<TLSEndpointResponse[]>([])
 const tlsEndpointsTotal = ref(0)
 const tlsExpiringSoon = ref(0)
 const showUploadModal = ref(false)
@@ -198,19 +146,7 @@ const severityColors: Record<string, string> = {
 }
 
 // Format relative time
-function formatRelativeTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
 
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-  return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-}
 
 // API calls
 async function fetchOverview() {

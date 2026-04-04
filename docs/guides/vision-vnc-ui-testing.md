@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 BACKEND_URL = f"https://{config.vm.main}:{config.port.backend}"
 
 
-async def run_vnc_ui_test(token: str, target_host: str = "172.16.168.25"):
+async def run_vnc_ui_test(token: str, target_host: str = "<browser-ip>"):
     """Capture a VNC desktop, detect UI elements, click a button, and verify.
 
     Args:
@@ -909,7 +909,7 @@ Authorization: Bearer <token>
 ```json
 {
     "vnc_type": "browser",
-    "endpoint": "http://172.16.168.25:6080",
+    "endpoint": "http://<browser-ip>:6080",
     "accessible": true,
     "status": 200
 }
@@ -1066,7 +1066,7 @@ logger = logging.getLogger("vision_ui_test")
 # ---------------------------------------------------------------------------
 
 # Backend runs HTTPS on port 8443. Adjust if your deployment differs.
-DEFAULT_BACKEND_URL = "https://172.16.168.20:8443"
+DEFAULT_BACKEND_URL = "https://<backend-ip>:8443"
 
 # Self-signed certificate -- disable verification for internal network.
 # In production, supply a proper CA bundle instead.
@@ -1784,7 +1784,7 @@ asyncio.run(custom_test())
 ## 5. Playwright Integration
 
 For browser-based UI testing (as opposed to desktop VNC testing), AutoBot
-provides a Playwright API that runs on the Browser VM (172.16.168.25, port 3000).
+provides a Playwright API that runs on the Browser VM (<browser-ip>, port 3000).
 
 The Playwright API is mounted at `/api/playwright` and requires admin
 authentication.
@@ -1901,7 +1901,7 @@ import ssl
 
 import aiohttp
 
-BACKEND_URL = "https://172.16.168.20:8443"
+BACKEND_URL = "https://<backend-ip>:8443"
 
 SSL_CTX = ssl.create_default_context()
 SSL_CTX.check_hostname = False
@@ -2351,14 +2351,14 @@ sudo apt-get install scrot
 1. Check that the VNC screenshot is capturing correctly:
 
     ```bash
-    curl -sk https://172.16.168.20:8443/api/vnc/screenshot \
+    curl -sk https://<backend-ip>:8443/api/vnc/screenshot \
         -H "Authorization: Bearer <token>" | jq '.status'
     ```
 
 2. Verify the Vision service is healthy:
 
     ```bash
-    curl -sk https://172.16.168.20:8443/api/vision/health \
+    curl -sk https://<backend-ip>:8443/api/vision/health \
         -H "Authorization: Bearer <token>" | jq '.'
     ```
 

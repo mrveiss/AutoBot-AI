@@ -22,22 +22,22 @@ Developers would accidentally start frontend servers locally while the VM was al
 
 ## Decision
 
-**Only VM1 (172.16.168.21:5173) may run the frontend server.**
+**Only VM1 (<frontend-ip>:5173) may run the frontend server.**
 
 This is an absolute mandate with zero exceptions:
 
 | Machine | Frontend Server | Status |
 |---------|-----------------|--------|
-| Main (172.16.168.20) | **FORBIDDEN** | Never start Vite here |
-| VM1 (172.16.168.21) | **REQUIRED** | Only frontend server |
+| Main (<backend-ip>) | **FORBIDDEN** | Never start Vite here |
+| VM1 (<frontend-ip>) | **REQUIRED** | Only frontend server |
 | All other VMs | **FORBIDDEN** | No frontend capability |
 
 ### Development Workflow
 
-1. **Edit locally** in `/home/kali/Desktop/AutoBot/autobot-frontend/`
+1. **Edit locally** in `autobot-frontend/`
 2. **Sync to VM1** using `./sync-frontend.sh` or sync scripts
 3. **VM1 serves** the frontend (dev or production mode)
-4. **Access** via `http://172.16.168.21:5173`
+4. **Access** via `http://<frontend-ip>:5173`
 
 ### Alternatives Considered
 
@@ -84,7 +84,7 @@ This is an absolute mandate with zero exceptions:
 
 ### Forbidden Commands
 
-**NEVER run these on the main machine (172.16.168.20):**
+**NEVER run these on the main machine (<backend-ip>):**
 
 ```bash
 # ALL FORBIDDEN - Will cause conflicts
@@ -108,7 +108,7 @@ vim autobot-frontend/src/components/MyComponent.vue
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/ /home/autobot/autobot-frontend/
 
 # 3. Access in browser
-firefox http://172.16.168.21:5173
+firefox http://<frontend-ip>:5173
 ```
 
 ### Enforcement
@@ -127,7 +127,7 @@ The systemd service configuration enforces this by:
 # Warn if Vite process running locally
 if pgrep -f "vite" > /dev/null; then
     echo "WARNING: Vite is running locally. This violates ADR-005."
-    echo "Only VM1 (172.16.168.21) should run the frontend."
+    echo "Only VM1 (<frontend-ip>) should run the frontend."
     exit 1
 fi
 ```
@@ -138,7 +138,7 @@ fi
 **Solution**: Run sync script, then hard refresh (Ctrl+Shift+R)
 
 **Symptom**: WebSocket connection failed
-**Solution**: Ensure connecting to 172.16.168.21:5173, not localhost
+**Solution**: Ensure connecting to <frontend-ip>:5173, not localhost
 
 **Symptom**: Port 5173 already in use on main machine
 **Solution**: Kill local process: `pkill -f vite`

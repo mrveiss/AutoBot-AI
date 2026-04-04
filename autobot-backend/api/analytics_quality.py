@@ -26,6 +26,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["code-quality", "analytics"])  # Prefix set in router_registry
 
 
+async def _resolve_source_or_404(source_id: Optional[str]) -> None:
+    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
+
+    Uses a lazy import of resolve_source_root to avoid loading the full
+    codebase_analytics package at module import time.
+    """
+    if source_id is None:
+        return
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
+    from fastapi import HTTPException
+
+    source_root = await resolve_source_root(source_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
+
+
 # ============================================================================
 # Models
 # ============================================================================
@@ -922,6 +938,7 @@ manager = ConnectionManager()
 @router.get("/health-score")
 async def get_health_score(
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get current codebase health score with breakdown.
@@ -929,7 +946,9 @@ async def get_health_score(
     Returns overall health score, grade, and recommendations.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     # Issue #543: Handle no data case
@@ -957,6 +976,7 @@ async def get_health_score(
 async def get_quality_metrics(
     category: Optional[MetricCategory] = Query(None, description="Filter by category"),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get all quality metrics or filter by category.
@@ -964,7 +984,9 @@ async def get_quality_metrics(
     Returns detailed metrics with grades and trends.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     # Issue #543: Handle no data case
@@ -1013,6 +1035,7 @@ async def get_pattern_distribution(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     limit: int = Query(20, ge=1, le=100),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get distribution of code patterns detected in the codebase.
@@ -1020,7 +1043,9 @@ async def get_pattern_distribution(
     Returns pattern types with counts, percentages, and severity.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     # Issue #543: Handle no data case
@@ -1061,6 +1086,7 @@ async def get_pattern_distribution(
 async def get_complexity_metrics(
     top_n: int = Query(10, ge=1, le=50, description="Number of hotspots to return"),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get code complexity analysis with hotspots.
@@ -1068,7 +1094,9 @@ async def get_complexity_metrics(
     Returns cyclomatic and cognitive complexity metrics.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     # Issue #543: Handle no data case
@@ -1175,6 +1203,7 @@ async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get quality score trends over time.
@@ -1182,7 +1211,9 @@ async def get_quality_trends(
     Returns historical data for trend analysis.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     if data is None:
@@ -1204,6 +1235,7 @@ async def get_quality_trends(
 @router.get("/snapshot")
 async def get_quality_snapshot(
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get complete quality snapshot for the current state.
@@ -1211,7 +1243,9 @@ async def get_quality_snapshot(
     Returns all metrics, patterns, and statistics in one response.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     data = await get_quality_data_from_storage()
 
     # Issue #543: Handle no data case
@@ -1272,6 +1306,7 @@ async def drill_down_category(
     severity: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Drill down into a specific quality category.
@@ -1280,7 +1315,9 @@ async def drill_down_category(
     Issue #543: Now queries real ChromaDB data instead of demo data.
     Issue #665: Refactored using helper functions for clarity.
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     problems, stats = await _get_problems_from_chromadb()
 
     if not problems:

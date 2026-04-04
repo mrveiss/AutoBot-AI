@@ -27,7 +27,7 @@
 
 ### 1.1 Configuration Flag Analysis
 
-**Location**: `/home/kali/Desktop/AutoBot/config/config.yaml.template`
+**Location**: `config/config.yaml.template`
 
 **Current State**:
 ```yaml
@@ -53,7 +53,7 @@ security_config:
 **Configuration Verification Required**:
 ```bash
 # Verify actual config.yaml has enable_auth: true
-grep -A 5 "security_config:" /home/kali/Desktop/AutoBot/config/config.yaml
+grep -A 5 "security_config:" config/config.yaml
 
 # If missing, copy from template
 if [ ! -f config/config.yaml ]; then
@@ -206,7 +206,7 @@ from src.auth_middleware import get_current_user
 
 **Step 2: Update All 11 File Endpoints**:
 
-Endpoints requiring updates (all in `/home/kali/Desktop/AutoBot/autobot-backend/api/files.py`):
+Endpoints requiring updates (all in `autobot-backend/api/files.py`):
 
 1. **GET /view** (line 616) - View file content
 2. **DELETE /delete** (line 658) - Delete single file
@@ -364,7 +364,7 @@ interface AuthTokens {
 }
 ```
 
-**Token Storage Service** (Create: `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/AuthTokenService.ts`):
+**Token Storage Service** (Create: `autobot-frontend/src/services/AuthTokenService.ts`):
 ```typescript
 export class AuthTokenService {
   private static readonly TOKEN_KEY = 'autobot_auth_tokens';
@@ -414,7 +414,7 @@ export class AuthTokenService {
 
 ### 3.3 ApiClient Enhancement
 
-**Update ApiClient.ts** (`/home/kali/Desktop/AutoBot/autobot-frontend/autobot-backend/utils/ApiClient.ts`):
+**Update ApiClient.ts** (`autobot-frontend/autobot-backend/utils/ApiClient.ts`):
 
 ```typescript
 import { AuthTokenService } from '@/services/AuthTokenService';
@@ -510,7 +510,7 @@ export default new ApiClient();
 **Update Login Component** (or create if missing):
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-frontend/src/components/auth/LoginForm.vue
+// File: autobot-frontend/src/components/auth/LoginForm.vue
 
 <script setup lang="ts">
 import { ref } from 'vue';
@@ -584,7 +584,7 @@ async function handleLogin() {
 
 ### 3.5 Router Navigation Guards
 
-**Update Router** (`/home/kali/Desktop/AutoBot/autobot-frontend/src/router/index.ts`):
+**Update Router** (`autobot-frontend/src/router/index.ts`):
 
 ```typescript
 import { createRouter, createWebHistory } from 'vue-router';
@@ -649,7 +649,7 @@ export default router;
 
 ### 3.6 Global Authentication Event Handling
 
-**App-wide Auth State** (`/home/kali/Desktop/AutoBot/autobot-frontend/src/main.ts`):
+**App-wide Auth State** (`autobot-frontend/src/main.ts`):
 
 ```typescript
 // Add global event listeners for auth state changes
@@ -685,7 +685,7 @@ window.addEventListener('auth:login', (event: CustomEvent) => {
 **Example: Update File List Component**:
 
 ```typescript
-// File: /home/kali/Desktop/AutoBot/autobot-frontend/src/components/files/FileList.vue
+// File: autobot-frontend/src/components/files/FileList.vue
 
 async function loadFiles(path: string) {
   try {
@@ -764,7 +764,7 @@ async function loadFiles(path: string) {
 
 ### 4.1 Unit Tests - Backend Authentication
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/unit/test_file_auth.py`
+**Test File**: `tests/unit/test_file_auth.py`
 
 ```python
 import pytest
@@ -858,7 +858,7 @@ class TestFileAuthentication:
 
 ### 4.2 Integration Tests - Full Auth Flow
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/integration/test_file_auth_integration.py`
+**Test File**: `tests/integration/test_file_auth_integration.py`
 
 ```python
 import pytest
@@ -959,7 +959,7 @@ class TestFileAuthIntegration:
 
 ### 4.3 Security Penetration Tests
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/security/test_file_auth_security.py`
+**Test File**: `tests/security/test_file_auth_security.py`
 
 ```python
 import pytest
@@ -1069,7 +1069,7 @@ class TestFileAuthSecurity:
 
 ### 4.4 End-to-End Tests - Frontend + Backend
 
-**Test File**: `/home/kali/Desktop/AutoBot/tests/e2e/test_file_auth_e2e.py`
+**Test File**: `tests/e2e/test_file_auth_e2e.py`
 
 ```python
 import pytest
@@ -1092,7 +1092,7 @@ class TestFileAuthE2E:
         page = browser_page
 
         # Navigate to login page
-        page.goto("http://172.16.168.21:5173/login")
+        page.goto("http://<frontend-ip>:5173/login")
 
         # Fill login form
         page.fill('input[type="text"]', "developer")
@@ -1118,7 +1118,7 @@ class TestFileAuthE2E:
         page = browser_page
 
         # Try to access protected page without authentication
-        page.goto("http://172.16.168.21:5173/files")
+        page.goto("http://<frontend-ip>:5173/files")
 
         # Should redirect to login
         page.wait_for_url("**/login", timeout=5000)
@@ -1131,14 +1131,14 @@ class TestFileAuthE2E:
         page = browser_page
 
         # Login first
-        page.goto("http://172.16.168.21:5173/login")
+        page.goto("http://<frontend-ip>:5173/login")
         page.fill('input[type="text"]', "developer")
         page.fill('input[type="password"]', "dev123secure")
         page.click('button[type="submit"]')
         page.wait_for_url("**/dashboard", timeout=5000)
 
         # Navigate to files page
-        page.goto("http://172.16.168.21:5173/files")
+        page.goto("http://<frontend-ip>:5173/files")
 
         # Monitor network requests
         requests_with_auth = []
@@ -1161,7 +1161,7 @@ class TestFileAuthE2E:
         page = browser_page
 
         # Login
-        page.goto("http://172.16.168.21:5173/login")
+        page.goto("http://<frontend-ip>:5173/login")
         page.fill('input[type="text"]', "developer")
         page.fill('input[type="password"]', "dev123secure")
         page.click('button[type="submit"]')
@@ -1221,16 +1221,16 @@ pytest tests/ -v --cov=autobot-backend/api/files --cov=src/auth_middleware
 **Environment Verification**:
 ```bash
 # 1. Verify configuration
-grep "enable_auth: true" /home/kali/Desktop/AutoBot/config/config.yaml
+grep "enable_auth: true" config/config.yaml
 
 # 2. Verify dependencies installed
 pip list | grep -E "fastapi|pydantic|jwt"
 
 # 3. Verify backend running
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 
 # 4. Verify frontend accessible
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 ```
 
 **Backup Critical Files**:
@@ -1273,7 +1273,7 @@ sudo systemctl restart autobot-backend
 ./scripts/utilities/sync-to-vm.sh ai-stack autobot-backend/api/files.py /home/autobot/autobot-backend/api/
 
 # Step 2.5: Restart backend
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
+ssh -i ~/.ssh/autobot_key autobot@<aiml-ip> "supervisorctl restart autobot-backend"
 ```
 
 **Phase 3: Backend Testing** (15 minutes)
@@ -1286,14 +1286,14 @@ pytest tests/integration/test_file_auth_integration.py -v
 
 # Step 3.3: Manual API testing
 # Try to access file endpoint without auth (should fail with 401)
-curl https://172.16.168.20:8443/api/files/view?path=test.txt
+curl https://<backend-ip>:8443/api/files/view?path=test.txt
 
 # Try with valid token (should succeed)
-TOKEN=$(curl -X POST https://172.16.168.20:8443/api/auth/login \
+TOKEN=$(curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"developer","password":"dev123secure"}' | jq -r .token)
 
-curl https://172.16.168.20:8443/api/files/view?path=test.txt \
+curl https://<backend-ip>:8443/api/files/view?path=test.txt \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1319,10 +1319,10 @@ curl https://172.16.168.20:8443/api/files/view?path=test.txt \
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
 
 # Step 4.6: Rebuild frontend
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "cd /home/autobot/autobot-vue && npm run build"
 
 # Step 4.7: Restart frontend
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-frontend"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "supervisorctl restart autobot-frontend"
 ```
 
 **Phase 5: End-to-End Testing** (30 minutes)
@@ -1331,7 +1331,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-f
 pytest tests/e2e/test_file_auth_e2e.py -v
 
 # Step 5.2: Manual browser testing
-# Open http://172.16.168.21:5173
+# Open http://<frontend-ip>:5173
 # Try to access /files without login (should redirect to /login)
 # Login with credentials
 # Access /files (should work)
@@ -1366,21 +1366,21 @@ tail -f logs/backend.log | grep ERROR
 # Step 1: Restore backend files
 cp autobot-backend/api/files.py.backup.* autobot-backend/api/files.py
 ./scripts/utilities/sync-to-vm.sh ai-stack autobot-backend/api/files.py /home/autobot/autobot-backend/api/
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
+ssh -i ~/.ssh/autobot_key autobot@<aiml-ip> "supervisorctl restart autobot-backend"
 
 # Step 2: Restore frontend files
 cp autobot-frontend/autobot-backend/utils/ApiClient.ts.backup.* autobot-frontend/autobot-backend/utils/ApiClient.ts
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build"
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-frontend"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "cd /home/autobot/autobot-vue && npm run build"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "supervisorctl restart autobot-frontend"
 
 # Step 3: Disable auth temporarily (emergency only)
 # Edit config/config.yaml and set enable_auth: false
 sudo systemctl restart autobot-backend
 
 # Step 4: Verify system operational
-curl https://172.16.168.20:8443/api/health
-curl http://172.16.168.21:5173
+curl https://<backend-ip>:8443/api/health
+curl http://<frontend-ip>:5173
 ```
 
 ### 5.4 Post-Deployment Validation
@@ -1390,7 +1390,7 @@ curl http://172.16.168.21:5173
 # 1. All file endpoints return 401 without auth
 for endpoint in view upload delete download create list; do
   echo "Testing /api/files/$endpoint"
-  response=$(curl -s -o /dev/null -w "%{http_code}" https://172.16.168.20:8443/api/files/$endpoint)
+  response=$(curl -s -o /dev/null -w "%{http_code}" https://<backend-ip>:8443/api/files/$endpoint)
   if [ "$response" = "401" ]; then
     echo "✓ $endpoint requires auth"
   else
@@ -1399,7 +1399,7 @@ for endpoint in view upload delete download create list; do
 done
 
 # 2. Authenticated requests work correctly
-TOKEN=$(curl -X POST https://172.16.168.20:8443/api/auth/login \
+TOKEN=$(curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"developer","password":"dev123secure"}' | jq -r .token)
 
@@ -1407,7 +1407,7 @@ for endpoint in view list; do
   echo "Testing authenticated /api/files/$endpoint"
   response=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $TOKEN" \
-    "https://172.16.168.20:8443/api/files/$endpoint?path=.")
+    "https://<backend-ip>:8443/api/files/$endpoint?path=.")
   if [ "$response" = "200" ]; then
     echo "✓ $endpoint works with auth"
   else
@@ -1541,14 +1541,14 @@ Authorization: Bearer {jwt_token}
 
 **Getting a Token**:
 ```bash
-curl -X POST https://172.16.168.20:8443/api/auth/login \
+curl -X POST https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_username","password":"your_password"}'
 ```
 
 **Example Authenticated Request**:
 ```bash
-curl -X GET https://172.16.168.20:8443/api/files/view?path=test.txt \
+curl -X GET https://<backend-ip>:8443/api/files/view?path=test.txt \
   -H "Authorization: Bearer {your_token}"
 ```
 
@@ -1613,22 +1613,22 @@ Security Team
 ## Appendix A: Code Diff Summary
 
 **Files Modified**:
-1. `/home/kali/Desktop/AutoBot/autobot-backend/api/files.py`
+1. `autobot-backend/api/files.py`
    - Lines added: ~150 (auth checks, audit logging)
    - Lines removed: ~60 (deprecated function)
    - Net change: +90 lines
 
-2. `/home/kali/Desktop/AutoBot/autobot-frontend/autobot-backend/utils/ApiClient.ts`
+2. `autobot-frontend/autobot-backend/utils/ApiClient.ts`
    - Lines added: ~40 (auth header injection, error handling)
    - Lines removed: 0
    - Net change: +40 lines
 
-3. `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/AuthTokenService.ts`
+3. `autobot-frontend/src/services/AuthTokenService.ts`
    - New file
    - Lines added: ~80
    - Net change: +80 lines
 
-4. `/home/kali/Desktop/AutoBot/autobot-frontend/src/router/index.ts`
+4. `autobot-frontend/src/router/index.ts`
    - Lines added: ~30 (navigation guards)
    - Lines removed: 0
    - Net change: +30 lines
@@ -1653,7 +1653,7 @@ vim autobot-backend/api/files.py
 ./scripts/utilities/sync-to-vm.sh ai-stack autobot-backend/api/files.py /home/autobot/autobot-backend/api/
 
 # Restart backend
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.24 "supervisorctl restart autobot-backend"
+ssh -i ~/.ssh/autobot_key autobot@<aiml-ip> "supervisorctl restart autobot-backend"
 ```
 
 **Frontend Deployment**:
@@ -1665,7 +1665,7 @@ vim autobot-frontend/autobot-backend/utils/ApiClient.ts
 ./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
 
 # Rebuild and restart
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "cd /home/autobot/autobot-vue && npm run build && supervisorctl restart autobot-frontend"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "cd /home/autobot/autobot-vue && npm run build && supervisorctl restart autobot-frontend"
 ```
 
 **Testing**:

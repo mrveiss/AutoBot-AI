@@ -10,9 +10,12 @@
  * NTP sync triggers Ansible time_sync role across all fleet nodes.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDarkMode } from '@/composables/useAccessibility'
+
+const darkMode = useDarkMode()
 
 interface Setting {
   key: string
@@ -41,6 +44,11 @@ const settings = ref({
   dark_mode: true,
   auto_refresh: true,
   refresh_interval: '30',
+})
+
+// Issue #3305: Apply dark mode immediately when the toggle changes
+watch(() => settings.value.dark_mode, (enabled: boolean) => {
+  darkMode.set(Boolean(enabled))
 })
 
 const timeConfig = ref<TimeConfig>({

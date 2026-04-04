@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented real MCP server integration to replace mock functions in `/home/kali/Desktop/AutoBot/src/mcp_manual_integration.py`. This implementation provides working manual page and help documentation lookup services that integrate with the existing MCP infrastructure.
+Successfully implemented real MCP server integration to replace mock functions in `src/mcp_manual_integration.py`. This implementation provides working manual page and help documentation lookup services that integrate with the existing MCP infrastructure.
 
 ## Changes Made
 
@@ -35,7 +35,7 @@ Successfully implemented real MCP server integration to replace mock functions i
 
 - Searches multiple documentation sources:
   - System documentation directories (`/usr/share/doc`, etc.)
-  - AutoBot project documentation (`/home/kali/Desktop/AutoBot/docs`)
+  - AutoBot project documentation (`docs`)
   - GNU info files
   - Stored command manuals via CommandManualManager
 - Performs content-based search with relevance scoring
@@ -57,7 +57,7 @@ Successfully implemented real MCP server integration to replace mock functions i
 
 ## Test Results
 
-Created comprehensive test suite at `/home/kali/Desktop/AutoBot/tests/test_mcp_manual_integration.py`:
+Created comprehensive test suite at `tests/test_mcp_manual_integration.py`:
 
 ### ✅ Manual Lookup Tests
 - ✓ `ls` - Found complete manual page
@@ -106,7 +106,7 @@ def _is_safe_command(self, cmd_args: List[str]) -> bool:
 ```python
 async def _get_documentation_sources(self) -> List[Dict[str, Any]]:
     """Discover available documentation sources dynamically."""
-    sources = ['/usr/share/doc', '/home/kali/Desktop/AutoBot/docs', ...]
+    sources = ['/usr/share/doc', 'docs', ...]
 ```
 
 ## Performance Optimizations

@@ -960,8 +960,8 @@ if hardware_config.cpu_cores >= 16:
 
 **Related Documentation**:
 - [API Documentation](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
-- [Architecture Guide](../architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md)  
-- [Developer Setup](../developer/PHASE_5_DEVELOPER_SETUP.md)
+- [Architecture Guide](../architecture/DISTRIBUTED_ARCHITECTURE.md)  
+- [Developer Setup](../developer/DEVELOPER_SETUP.md)
 - [Performance Tuning](../optimization/PERFORMANCE_OPTIMIZATION.md)
 
 **Example Code Repository**:

@@ -210,7 +210,11 @@ class TerminalTool:
             return self._format_execution_result(result, command, description)
         except Exception as e:
             logger.error("Error executing command: %s", e, exc_info=True)
-            return {"status": "error", "error": "Command execution failed", "command": command}
+            return {
+                "status": "error",
+                "error": "Command execution failed",
+                "command": command,
+            }
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
         """

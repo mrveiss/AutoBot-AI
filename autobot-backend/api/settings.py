@@ -81,7 +81,16 @@ async def get_settings():
 )
 @router.get("/settings")
 async def get_settings_explicit():
-    """Get application settings - explicit /settings endpoint for frontend compatibility"""
+    """Get application settings.
+
+    Issue #3334: Deprecated duplicate — use GET /api/settings/ instead.
+    This endpoint remains for backward compatibility but will be removed in a
+    future release.
+    """
+    logger.warning(
+        "Deprecated endpoint called: GET /api/settings/settings. "
+        "Use GET /api/settings/ instead. (#3334)"
+    )
     try:
         return ConfigService.get_full_config()
     except Exception as e:
@@ -133,7 +142,16 @@ async def save_settings_explicit(
     settings_data: dict,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Save application settings — frontend compat (#1747: audit trail)."""
+    """Save application settings.
+
+    Issue #3334: Deprecated duplicate — use POST /api/settings/ instead.
+    This endpoint remains for backward compatibility but will be removed in a
+    future release.
+    """
+    logger.warning(
+        "Deprecated endpoint called: POST /api/settings/settings. "
+        "Use POST /api/settings/ instead. (#3334)"
+    )
     try:
         if not settings_data:
             logger.warning("Received empty settings data, skipping save")

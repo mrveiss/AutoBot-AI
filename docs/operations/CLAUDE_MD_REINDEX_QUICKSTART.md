@@ -10,7 +10,7 @@ CLAUDE.md vector database is **15+ hours OUT OF SYNC**
 
 ### One-Command Fix
 ```bash
-bash /home/kali/Desktop/AutoBot/scripts/database/reindex_claude_md.sh
+bash scripts/database/reindex_claude_md.sh
 ```
 
 **Time:** ~10 minutes | **Risk:** Low (auto-backup)
@@ -25,10 +25,10 @@ bash /home/kali/Desktop/AutoBot/scripts/database/reindex_claude_md.sh
 ## ✅ Verification
 ```bash
 # Check stats
-curl https://172.16.168.20:8443/api/knowledge_base/stats | jq
+curl https://<backend-ip>:8443/api/knowledge_base/stats | jq
 
 # Test search for new content
-curl "https://172.16.168.20:8443/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1"
+curl "https://<backend-ip>:8443/api/knowledge_base/search?q=MANDATORY+WORKFLOW&limit=1"
 ```
 
 ## 📚 Full Documentation

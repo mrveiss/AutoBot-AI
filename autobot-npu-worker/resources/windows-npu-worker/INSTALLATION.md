@@ -446,7 +446,7 @@ This checks:
 - Check logs: `C:\Program Files\AutoBot\NPU\logs\`
 - Run health check: `.\scripts\check-health.ps1`
 - View statistics: `curl http://localhost:8082/stats`
-- AutoBot documentation: `/home/kali/Desktop/AutoBot/docs/`
+- AutoBot documentation: `docs/`
 
 ### Useful Commands
 

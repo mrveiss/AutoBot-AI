@@ -52,10 +52,7 @@ class OllamaProvider(BaseProvider):
         """Resolve the Ollama base URL from settings, SSOT config, or env."""
         if self._base_url:
             return self._base_url
-        self._base_url = (
-            self._get_setting("base_url")
-            or get_ollama_url()
-        )
+        self._base_url = self._get_setting("base_url") or get_ollama_url()
         return self._base_url
 
     def _ensure_delegate(self):
@@ -68,9 +65,7 @@ class OllamaProvider(BaseProvider):
         if self._delegate is not None:
             return self._delegate
         from llm_interface_pkg.models import LLMSettings
-        from llm_interface_pkg.providers.ollama import (
-            OllamaProvider as _OllamaProvider,
-        )
+        from llm_interface_pkg.providers.ollama import OllamaProvider as _OllamaProvider
         from llm_interface_pkg.streaming import StreamingManager
 
         settings = LLMSettings()
@@ -98,6 +93,7 @@ class OllamaProvider(BaseProvider):
             self._total_errors += 1
             logger.error("OllamaProvider delegation error: %s", exc)
             import time
+
             return LLMResponse(
                 content="",
                 model=request.model_name or "",

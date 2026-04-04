@@ -2542,6 +2542,10 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "fitToView": "Fit to view",
+      "switchTo3d": "التبديل إلى عرض ثلاثي الأبعاد",
+      "switchTo2d": "التبديل إلى عرض ثنائي الأبعاد",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Fullscreen",
       "exitFullscreen": "Exit fullscreen",
       "typeLabel": "Type:",
@@ -2601,7 +2605,8 @@
         "searching": "Searching entities...",
         "noResults": "No entities found matching your search",
         "sourcesCount": "{count} sources"
-      }
+      },
+      "noEntities3D": "لا توجد كيانات للعرض"
     },
     "connectors": {
       "title": "Source Connectors",
@@ -4766,7 +4771,8 @@
       "accountLocked": "Account temporarily locked due to multiple failed attempts",
       "tooManyAttempts": "Too many login attempts. Please try again later.",
       "serverError": "Server error. Please try again later.",
-      "unexpectedError": "حدث خطأ غير متوقع"
+      "unexpectedError": "حدث خطأ غير متوقع",
+      "footer": "© 2026 AutoBot. جميع الحقوق محفوظة."
     }
   },
   "browser": {

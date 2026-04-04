@@ -19,7 +19,7 @@ python scripts/validate_timeout_config.py
 
 # 4. Verify no regression
 scripts/start-services.sh start
-curl http://172.16.168.21:5173  # Frontend accessible?
+curl http://<frontend-ip>:5173  # Frontend accessible?
 ```
 
 ## Implementation Steps
@@ -227,7 +227,7 @@ def is_feature_enabled(self, feature: str) -> bool:
 
 ### Step 2: Create Compatibility Shim
 
-Replace entire content of `/home/kali/Desktop/AutoBot/src/unified_config.py`:
+Replace entire content of `src/unified_config.py`:
 
 ```python
 """
@@ -319,7 +319,7 @@ python -m pytest tests/unit/test_timeout_configuration.py -v
 
 ### Step 4: Mass Migration Script
 
-Create `/home/kali/Desktop/AutoBot/scripts/migrate_config_imports.py`:
+Create `scripts/migrate_config_imports.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -406,11 +406,11 @@ python scripts/validate_timeout_config.py
 curl http://localhost:8001/api/health
 
 # 4. Frontend connectivity (CRITICAL!)
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 
 # 5. Full system test
 scripts/start-services.sh start
-# Open browser to http://172.16.168.21:5173
+# Open browser to http://<frontend-ip>:5173
 # Test model selection in GUI
 ```
 

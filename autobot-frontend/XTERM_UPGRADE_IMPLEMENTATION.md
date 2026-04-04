@@ -188,7 +188,7 @@ import ToolsTerminal from '@/components/ToolsTerminal.vue'
 ## Deployment Instructions
 
 ### 1. Verify Files Created
-All files have been created locally in `/home/kali/Desktop/AutoBot/autobot-vue/`:
+All files have been created locally in `autobot-vue/`:
 - ✅ `src/components/terminal/BaseXTerminal.vue`
 - ✅ `src/components/terminal/HostSelector.vue`
 - ✅ `src/components/ChatTerminal.vue`
@@ -199,7 +199,7 @@ All files have been created locally in `/home/kali/Desktop/AutoBot/autobot-vue/`
 
 ### 2. Sync to Frontend VM
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # Sync new terminal components
 ./scripts/utilities/sync-frontend.sh src/components/terminal/

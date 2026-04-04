@@ -12,7 +12,7 @@ This runbook describes how to bring a new Ubuntu 22.04 VM into the AutoBot fleet
 
 ## Prerequisites
 
-- Ubuntu 22.04 VM with network access to `172.16.168.0/24`
+- Ubuntu 22.04 VM with network access to `<network-subnet>`
 - VM is reachable from dev machine via SSH (password or initial key)
 - `autobot-slm-backend/ansible/` is the working directory
 - SLM server (`.19`) is running and healthy
@@ -25,15 +25,15 @@ Pick the next available IP from the fleet subnet. Currently assigned:
 
 | IP | Role |
 |----|------|
-| `172.16.168.19` | SLM Server |
-| `172.16.168.20` | Backend |
-| `172.16.168.21` | Frontend |
-| `172.16.168.22` | NPU |
-| `172.16.168.23` | Database |
-| `172.16.168.24` | AI Stack |
-| `172.16.168.25` | Browser |
-| `172.16.168.26` | Reserved |
-| `172.16.168.27` | Reserved |
+| `<slm-manager-ip>` | SLM Server |
+| `<backend-ip>` | Backend |
+| `<frontend-ip>` | Frontend |
+| `<npu-ip>` | NPU |
+| `<database-ip>` | Database |
+| `<aiml-ip>` | AI Stack |
+| `<browser-ip>` | Browser |
+| `<reserved-ip>` | Reserved |
+| `<reserved-ip>` | Reserved |
 
 Configure static IP on the new VM (via `/etc/netplan/` or your hypervisor's DHCP reservation).
 
@@ -101,7 +101,7 @@ Add the node to the SLM database. Either via SLM API or seed script:
 
 ```bash
 # Via API
-curl -sk -X POST https://172.16.168.19/api/nodes \
+curl -sk -X POST https://<slm-manager-ip>/api/nodes \
   -H "Authorization: Bearer ${SLM_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -152,7 +152,7 @@ This generates a CA-signed cert and reports it to SLM's `security/certificates` 
 
 ```bash
 # Check node appears in SLM dashboard
-curl -sk https://172.16.168.19/api/nodes | jq '.[] | select(.node_id=="08-NewRole")'
+curl -sk https://<slm-manager-ip>/api/nodes | jq '.[] | select(.node_id=="08-NewRole")'
 
 # Test role health endpoint
 curl -sk https://172.16.168.XX:<port>/health

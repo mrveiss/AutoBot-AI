@@ -70,7 +70,7 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 ### Task 1.1: Fix Knowledge Base Database Fallback
 
 **Priority:** CRITICAL - P0 (HIGHEST)
-**File:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+**File:** `src/knowledge_base_v2.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
@@ -107,15 +107,15 @@ This project plan addresses **147 hardcoded configuration violations** identifie
 ### Task 1.2: Fix Celery Hardcoded Redis URLs
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/backend/celery_app.py`
+**File:** `backend/celery_app.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
 **Issue:**
 - Lines 15-16: Hardcoded Redis URLs with specific database numbers
 ```python
-broker=os.environ.get("CELERY_BROKER_URL", "redis://172.16.168.23:6379/1"),
-backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://172.16.168.23:6379/2"),
+broker=os.environ.get("CELERY_BROKER_URL", "redis://<database-ip>:6379/1"),
+backend=os.environ.get("CELERY_RESULT_BACKEND", "redis://<database-ip>:6379/2"),
 ```
 
 **Should Be:**
@@ -166,7 +166,7 @@ celery_results: 2
 ### Task 1.3: Fix Chat Workflow Manager Ollama Endpoints
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py`
+**File:** `src/chat_workflow_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -219,20 +219,20 @@ ollama_endpoint = config.get(
 ### Task 1.4: Fix UnifiedConfig Hardcoded Default IPs
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config.py`
+**File:** `src/unified_config.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 3 hours
 
 **Issue:**
 - Lines 233-239: Hardcoded IPs as defaults in the config manager itself
 ```python
-"backend": "172.16.168.20",
-"frontend": "172.16.168.21",
-"redis": "172.16.168.23",
-"ollama": "172.16.168.20",
-"ai_stack": "172.16.168.24",
-"npu_worker": "172.16.168.22",
-"browser_service": "172.16.168.25",
+"backend": "<backend-ip>",
+"frontend": "<frontend-ip>",
+"redis": "<database-ip>",
+"ollama": "<backend-ip>",
+"ai_stack": "<aiml-ip>",
+"npu_worker": "<npu-ip>",
+"browser_service": "<browser-ip>",
 ```
 
 **Should Be:** Read from `config/complete.yaml` infrastructure section, with NO hardcoded fallbacks
@@ -267,7 +267,7 @@ ollama_endpoint = config.get(
 ### Task 1.5: Fix Backend App Factory CORS Origins
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/backend/app_factory.py`
+**File:** `backend/app_factory.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -279,11 +279,11 @@ allow_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://172.16.168.20:5173",
-    "http://172.16.168.21:5173",
-    "http://172.16.168.20:3000",
-    "http://172.16.168.21:3000",
-    "http://172.16.168.25:3000",
+    "http://<backend-ip>:5173",
+    "http://<frontend-ip>:5173",
+    "http://<backend-ip>:3000",
+    "http://<frontend-ip>:3000",
+    "http://<browser-ip>:3000",
 ]
 ```
 
@@ -335,7 +335,7 @@ security:
 ### Task 1.6: Fix Chat History Manager Redis Host
 
 **Priority:** CRITICAL - P0
-**File:** `/home/kali/Desktop/AutoBot/src/chat_history_manager.py`
+**File:** `src/chat_history_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
@@ -343,7 +343,7 @@ security:
 - Line 63: Hardcoded fallback to VM IP
 ```python
 self.redis_host = redis_host or redis_config.get(
-    "host", os.getenv("REDIS_HOST", "172.16.168.23")  # HARDCODED IP
+    "host", os.getenv("REDIS_HOST", "<database-ip>")  # HARDCODED IP
 )
 ```
 
@@ -379,14 +379,14 @@ self.redis_host = redis_host or redis_config.get(
 ### Task 1.7: Fix UnifiedConfig Manager Ollama Endpoint
 
 **Priority:** CRITICAL - P1
-**File:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py`
+**File:** `src/unified_config_manager.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 1 hour
 
 **Issue:**
 - Line 557: Hardcoded Ollama endpoint fallback
 ```python
-.get("endpoint", "http://172.16.168.20:11434"),  # HARDCODED
+.get("endpoint", "http://<backend-ip>:11434"),  # HARDCODED
 ```
 
 **Should Be:**
@@ -599,15 +599,15 @@ redis:
 ### Task Group 2.4: Update NetworkConstants to Use Config
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/src/constants/network_constants.py`
+**File:** `src/constants/network_constants.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 4 hours
 
 **Issue:**
 - Lines 30-37: Hardcoded VM IPs as class constants
 ```python
-MAIN_MACHINE_IP: str = "172.16.168.20"
-FRONTEND_VM_IP: str = "172.16.168.21"
+MAIN_MACHINE_IP: str = "<backend-ip>"
+FRONTEND_VM_IP: str = "<frontend-ip>"
 # ... etc
 ```
 
@@ -638,7 +638,7 @@ FRONTEND_VM_IP: str = "172.16.168.21"
 ### Task Group 2.5: Fix Service Export Script
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/scripts/export_service_keys.py`
+**File:** `scripts/export_service_keys.py`
 **Agent:** `devops-engineer`
 **Estimated Time:** 2 hours
 
@@ -666,7 +666,7 @@ FRONTEND_VM_IP: str = "172.16.168.21"
 ### Task Group 2.6: Fix Monitoring Service Endpoints
 
 **Priority:** HIGH - P2
-**File:** `/home/kali/Desktop/AutoBot/monitoring/performance_monitor.py`
+**File:** `monitoring/performance_monitor.py`
 **Agent:** `devops-engineer`
 **Estimated Time:** 3 hours
 
@@ -901,7 +901,7 @@ timeouts:
 ### Task Group 3.5: Fix API Hardcoded Ports
 
 **Priority:** MEDIUM - P3
-**File:** `/home/kali/Desktop/AutoBot/autobot-backend/api/playwright.py`
+**File:** `autobot-backend/api/playwright.py`
 **Agent:** `senior-backend-engineer`
 **Estimated Time:** 2 hours
 
@@ -1315,7 +1315,7 @@ timeouts:
 ```python
 def test_get_host_from_config():
     """Test host retrieval from config"""
-    assert config.get_host("redis") == "172.16.168.23"
+    assert config.get_host("redis") == "<database-ip>"
 
 def test_get_host_with_env_override():
     """Test environment variable override"""
@@ -1325,7 +1325,7 @@ def test_get_host_with_env_override():
 def test_get_cors_origins():
     """Test CORS origin generation"""
     origins = config.get_cors_origins()
-    assert "http://172.16.168.21:5173" in origins
+    assert "http://<frontend-ip>:5173" in origins
     assert "http://localhost:5173" in origins
 ```
 
@@ -2468,7 +2468,7 @@ backend:
 
 # 1. Add to config/complete.yaml
 new_service:
-  host: "172.16.168.30"
+  host: "<example-ip>"
   port: 9000
   timeout: 5.0
 
@@ -2481,7 +2481,7 @@ timeout = config.get("new_service.timeout", 5.0)
 
 # 3. Add tests
 def test_new_service_config():
-    assert config.get_host("new_service") == "172.16.168.30"
+    assert config.get_host("new_service") == "<example-ip>"
 ```
 
 ---

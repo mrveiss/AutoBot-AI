@@ -1,6 +1,6 @@
 # Redis Memory Graph Quick Reference
 
-**Database:** DB 0 @ 172.16.168.23:6379
+**Database:** DB 0 @ <database-ip>:6379
 **Key Prefixes:** `memory:graph:entity:*`, `memory:graph:relations:*`
 **Indexes:** `memory_graph_entity_idx`, `memory_graph_fulltext_idx`
 
@@ -33,19 +33,19 @@ python scripts/utilities/init_memory_graph_redis.py --rollback
 
 ```bash
 # Count entities
-redis-cli -h 172.16.168.23 KEYS "memory:graph:entity:*" | wc -l
+redis-cli -h <database-ip> KEYS "memory:graph:entity:*" | wc -l
 
 # Count relations
-redis-cli -h 172.16.168.23 KEYS "memory:graph:relations:*" | wc -l
+redis-cli -h <database-ip> KEYS "memory:graph:relations:*" | wc -l
 
 # Index statistics
-redis-cli -h 172.16.168.23 FT.INFO memory_graph_entity_idx | grep -E "num_docs|num_records"
+redis-cli -h <database-ip> FT.INFO memory_graph_entity_idx | grep -E "num_docs|num_records"
 
 # Memory usage
-redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human
+redis-cli -h <database-ip> INFO memory | grep used_memory_human
 
 # List all indexes
-redis-cli -h 172.16.168.23 FT._LIST
+redis-cli -h <database-ip> FT._LIST
 ```
 
 ---
@@ -56,21 +56,21 @@ redis-cli -h 172.16.168.23 FT._LIST
 
 ```bash
 # All conversations
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@type:{conversation}" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@type:{conversation}" LIMIT 0 10
 
 # All bug fixes
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@type:{bug_fix}" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@type:{bug_fix}" LIMIT 0 10
 ```
 
 ### By Status & Priority
 
 ```bash
 # Active high-priority items
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@status:{active} @priority:{high}" LIMIT 0 10
 
 # Archived conversations
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@type:{conversation} @status:{archived}" LIMIT 0 10
 ```
 
@@ -78,20 +78,20 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
 
 ```bash
 # Entities about Redis
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{redis}" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@tags:{redis}" LIMIT 0 10
 
 # Multiple tags (OR)
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{redis|database}" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@tags:{redis|database}" LIMIT 0 10
 ```
 
 ### Full-Text Search
 
 ```bash
 # Search in names and observations
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "memory graph optimization" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "memory graph optimization" LIMIT 0 10
 
 # Phonetic search (typo-tolerant)
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_fulltext_idx "performans" LIMIT 0 10
+redis-cli -h <database-ip> FT.SEARCH memory_graph_fulltext_idx "performans" LIMIT 0 10
 ```
 
 ### Date Range
@@ -99,13 +99,13 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_fulltext_idx "performans" LIMI
 ```bash
 # Last 7 days
 TIMESTAMP=$(date -d '7 days ago' +%s)000
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@created_at:[$TIMESTAMP +inf]" SORTBY created_at DESC LIMIT 0 10
 
 # Specific date range
 START=1728000000000  # Unix timestamp ms
 END=1728086400000
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@created_at:[$START $END]" LIMIT 0 10
 ```
 
@@ -113,10 +113,10 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
 
 ```bash
 # Count by type (fast)
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@type:{conversation}" LIMIT 0 0
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@type:{conversation}" LIMIT 0 0
 
 # Count active tasks
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@type:{task} @status:{active}" LIMIT 0 0
 ```
 
@@ -130,7 +130,7 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
 import redis
 import time
 
-r = redis.Redis(host='172.16.168.23', port=6379, db=0)
+r = redis.Redis(host='<database-ip>', port=6379, db=0)
 
 entity = {
     "id": "new-entity-uuid",
@@ -153,10 +153,10 @@ r.json().set(f"memory:graph:entity:{entity['id']}", '$', entity)
 
 ```bash
 # Get complete entity
-redis-cli -h 172.16.168.23 JSON.GET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4"
+redis-cli -h <database-ip> JSON.GET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4"
 
 # Get specific fields
-redis-cli -h 172.16.168.23 JSON.GET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
+redis-cli -h <database-ip> JSON.GET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
   $.name $.type $.metadata.topics
 ```
 
@@ -164,15 +164,15 @@ redis-cli -h 172.16.168.23 JSON.GET "memory:graph:entity:267ab75b-8c44-46bb-b038
 
 ```bash
 # Update status
-redis-cli -h 172.16.168.23 JSON.SET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
+redis-cli -h <database-ip> JSON.SET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
   '$.metadata.status' '"completed"'
 
 # Add observation
-redis-cli -h 172.16.168.23 JSON.ARRAPPEND "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
+redis-cli -h <database-ip> JSON.ARRAPPEND "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
   '$.observations' '"New observation added"'
 
 # Update timestamp
-redis-cli -h 172.16.168.23 JSON.SET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
+redis-cli -h <database-ip> JSON.SET "memory:graph:entity:267ab75b-8c44-46bb-b038-e5ee72096de4" \
   '$.updated_at' $(date +%s)000
 ```
 
@@ -180,9 +180,9 @@ redis-cli -h 172.16.168.23 JSON.SET "memory:graph:entity:267ab75b-8c44-46bb-b038
 
 ```bash
 # Delete entity (also delete relations!)
-redis-cli -h 172.16.168.23 DEL "memory:graph:entity:entity-uuid"
-redis-cli -h 172.16.168.23 DEL "memory:graph:relations:out:entity-uuid"
-redis-cli -h 172.16.168.23 DEL "memory:graph:relations:in:entity-uuid"
+redis-cli -h <database-ip> DEL "memory:graph:entity:entity-uuid"
+redis-cli -h <database-ip> DEL "memory:graph:relations:out:entity-uuid"
+redis-cli -h <database-ip> DEL "memory:graph:relations:in:entity-uuid"
 ```
 
 ---
@@ -194,7 +194,7 @@ redis-cli -h 172.16.168.23 DEL "memory:graph:relations:in:entity-uuid"
 ```python
 import redis
 
-r = redis.Redis(host='172.16.168.23', port=6379, db=0)
+r = redis.Redis(host='<database-ip>', port=6379, db=0)
 
 relation = {
     "to": "target-entity-uuid",
@@ -219,10 +219,10 @@ r.json().arrappend(in_key, '$.relations', reverse_rel)
 
 ```bash
 # Get outgoing relations
-redis-cli -h 172.16.168.23 JSON.GET "memory:graph:relations:out:267ab75b-8c44-46bb-b038-e5ee72096de4"
+redis-cli -h <database-ip> JSON.GET "memory:graph:relations:out:267ab75b-8c44-46bb-b038-e5ee72096de4"
 
 # Get incoming relations
-redis-cli -h 172.16.168.23 JSON.GET "memory:graph:relations:in:267ab75b-8c44-46bb-b038-e5ee72096de4"
+redis-cli -h <database-ip> JSON.GET "memory:graph:relations:in:267ab75b-8c44-46bb-b038-e5ee72096de4"
 ```
 
 ### Traverse Graph
@@ -230,7 +230,7 @@ redis-cli -h 172.16.168.23 JSON.GET "memory:graph:relations:in:267ab75b-8c44-46b
 ```python
 def traverse_relations(entity_id, relation_type="relates_to", max_depth=3):
     """BFS traversal of entity graph"""
-    r = redis.Redis(host='172.16.168.23', port=6379, db=0)
+    r = redis.Redis(host='<database-ip>', port=6379, db=0)
 
     visited = set()
     queue = [(entity_id, 0)]
@@ -270,14 +270,14 @@ print(f"Found {len(related)} related entities")
 ### Check Connection
 
 ```bash
-redis-cli -h 172.16.168.23 -p 6379 PING
+redis-cli -h <database-ip> -p 6379 PING
 # Expected: PONG
 ```
 
 ### Verify Modules
 
 ```bash
-redis-cli -h 172.16.168.23 MODULE LIST
+redis-cli -h <database-ip> MODULE LIST
 # Must include: search, ReJSON
 ```
 
@@ -285,31 +285,31 @@ redis-cli -h 172.16.168.23 MODULE LIST
 
 ```bash
 # List indexes
-redis-cli -h 172.16.168.23 FT._LIST
+redis-cli -h <database-ip> FT._LIST
 
 # Get detailed index info
-redis-cli -h 172.16.168.23 FT.INFO memory_graph_entity_idx
+redis-cli -h <database-ip> FT.INFO memory_graph_entity_idx
 ```
 
 ### View Logs
 
 ```bash
 # Recent logs
-tail -50 /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+tail -50 logs/database/memory_graph_init.log
 
 # Follow logs
-tail -f /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+tail -f logs/database/memory_graph_init.log
 
 # Search for errors
-grep -i error /home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log
+grep -i error logs/database/memory_graph_init.log
 ```
 
 ### Rebuild Indexes
 
 ```bash
 # Drop indexes (keeps data)
-redis-cli -h 172.16.168.23 FT.DROPINDEX memory_graph_entity_idx
-redis-cli -h 172.16.168.23 FT.DROPINDEX memory_graph_fulltext_idx
+redis-cli -h <database-ip> FT.DROPINDEX memory_graph_entity_idx
+redis-cli -h <database-ip> FT.DROPINDEX memory_graph_fulltext_idx
 
 # Recreate
 python scripts/utilities/init_memory_graph_redis.py
@@ -323,7 +323,7 @@ python scripts/utilities/init_memory_graph_redis.py
 
 ```bash
 # Last 20 updates
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "*" \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "*" \
   SORTBY updated_at DESC LIMIT 0 20 \
   RETURN 4 $.name $.type $.updated_at $.metadata.status
 ```
@@ -332,7 +332,7 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "*" \
 
 ```bash
 # Active high-priority tasks
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx \
   "@type:{task} @status:{active} @priority:{high}" \
   SORTBY created_at DESC LIMIT 0 10
 ```
@@ -341,9 +341,9 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx \
 
 ```bash
 # Group by topic (manual aggregation needed)
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{redis}" LIMIT 0 0
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{database}" LIMIT 0 0
-redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{frontend}" LIMIT 0 0
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@tags:{redis}" LIMIT 0 0
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@tags:{database}" LIMIT 0 0
+redis-cli -h <database-ip> FT.SEARCH memory_graph_entity_idx "@tags:{frontend}" LIMIT 0 0
 ```
 
 ---
@@ -354,8 +354,8 @@ redis-cli -h 172.16.168.23 FT.SEARCH memory_graph_entity_idx "@tags:{frontend}" 
 
 ```bash
 # Export all Memory Graph data
-redis-cli -h 172.16.168.23 --scan --pattern "memory:graph:*" | \
-  xargs redis-cli -h 172.16.168.23 DUMP | \
+redis-cli -h <database-ip> --scan --pattern "memory:graph:*" | \
+  xargs redis-cli -h <database-ip> DUMP | \
   gzip > memory_graph_backup_$(date +%Y%m%d).json.gz
 ```
 
@@ -382,10 +382,10 @@ python scripts/utilities/init_memory_graph_redis.py
 
 ## 📚 Quick Links
 
-- **Full Guide**: `/home/kali/Desktop/AutoBot/docs/database/MEMORY_GRAPH_INITIALIZATION_GUIDE.md`
-- **Specification**: `/home/kali/Desktop/AutoBot/docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md`
-- **Script**: `/home/kali/Desktop/AutoBot/scripts/utilities/init_memory_graph_redis.py`
-- **Logs**: `/home/kali/Desktop/AutoBot/logs/database/memory_graph_init.log`
+- **Full Guide**: `docs/database/MEMORY_GRAPH_INITIALIZATION_GUIDE.md`
+- **Specification**: `docs/database/REDIS_MEMORY_GRAPH_SPECIFICATION.md`
+- **Script**: `scripts/utilities/init_memory_graph_redis.py`
+- **Logs**: `logs/database/memory_graph_init.log`
 
 ---
 

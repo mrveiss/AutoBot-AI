@@ -270,7 +270,7 @@ Week 4 │ DOCUMENTATION & FINALIZATION
 ### Immediate Actions:
 
 1. **Review and Approve Plan**
-   - Review full plan: `/home/kali/Desktop/AutoBot/docs/project/CONFIG_REMEDIATION_PLAN.md`
+   - Review full plan: `docs/project/CONFIG_REMEDIATION_PLAN.md`
    - Approve timeline and resource allocation
    - Confirm agent assignments
 
@@ -305,7 +305,7 @@ Week 4 │ DOCUMENTATION & FINALIZATION
 
 ## Documentation
 
-**Full Project Plan:** `/home/kali/Desktop/AutoBot/docs/project/CONFIG_REMEDIATION_PLAN.md`
+**Full Project Plan:** `docs/project/CONFIG_REMEDIATION_PLAN.md`
 
 **Sections include:**
 - Detailed task breakdown for all 4 phases
@@ -317,7 +317,7 @@ Week 4 │ DOCUMENTATION & FINALIZATION
 - Configuration key reference
 - Testing checklists
 
-**Audit Report:** `/home/kali/Desktop/AutoBot/reports/config_hardcoding_audit.md`
+**Audit Report:** `reports/config_hardcoding_audit.md`
 
 ---
 

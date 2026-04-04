@@ -273,10 +273,10 @@ def config():
 
 ```bash
 # Ensure project root in PYTHONPATH
-export PYTHONPATH=/home/kali/Desktop/AutoBot:$PYTHONPATH
+export PYTHONPATH=/opt/autobot:$PYTHONPATH
 
 # Or use pytest from project root
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 pytest tests/unit/test_knowledge_*.py
 ```
 
@@ -339,8 +339,8 @@ def mock_redis_client():
 ## Support
 
 **Issue Tracker**: https://github.com/mrveiss/AutoBot-AI/issues/163
-**Test Summary**: `/home/kali/Desktop/AutoBot/tests/TEST_SUITE_SUMMARY.md`
-**Project Docs**: `/home/kali/Desktop/AutoBot/docs/`
+**Test Summary**: `tests/TEST_SUITE_SUMMARY.md`
+**Project Docs**: `docs/`
 
 ---
 

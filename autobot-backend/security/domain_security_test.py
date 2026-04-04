@@ -176,7 +176,9 @@ class TestCompilePatternsMidStringWildcard:
         )
 
     def test_matches_with_content_between(self):
-        assert self.mgr._check_blacklist("pre-anything-fix.example.com")["blocked"] is True
+        assert (
+            self.mgr._check_blacklist("pre-anything-fix.example.com")["blocked"] is True
+        )
 
     def test_matches_when_wildcard_is_empty(self):
         assert self.mgr._check_blacklist("prefix.example.com")["blocked"] is True
@@ -299,7 +301,9 @@ class TestCompilePatternsDefaultConfig:
         cfg = DomainSecurityConfig.__new__(DomainSecurityConfig)
         cfg.config_path = ""
         cfg.config = cfg._get_default_config()
-        with patch("security.domain_security.get_http_client", return_value=MagicMock()):
+        with patch(
+            "security.domain_security.get_http_client", return_value=MagicMock()
+        ):
             mgr = DomainSecurityManager.__new__(DomainSecurityManager)
             mgr.config = cfg
             mgr.domain_cache = {}

@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-cd /home/kali/Desktop/AutoBot/slm-server
+cd slm-server
 pip install paramiko>=3.0.0
 python migrations/add_events_certificates_updates_tables.py
 python main.py

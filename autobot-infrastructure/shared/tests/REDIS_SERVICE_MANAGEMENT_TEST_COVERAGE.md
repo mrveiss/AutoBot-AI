@@ -288,7 +288,7 @@
 ### Backend Unit Tests
 ```bash
 # Run unit tests with coverage
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python -m pytest tests/unit/test_redis_service_manager.py -v \
   --cov=backend.services.redis_service_manager \
   --cov-report=term-missing \
@@ -314,7 +314,7 @@ python -m pytest tests/integration/test_redis_service_api.py::TestStartServiceEn
 ### Frontend Component Tests
 ```bash
 # Run Vitest unit tests
-cd /home/kali/Desktop/AutoBot/autobot-vue
+cd autobot-vue
 npm run test:unit
 
 # Run with coverage
@@ -330,7 +330,7 @@ npx vitest run tests/unit/components/RedisServiceControl.spec.js
 ### E2E Tests (Playwright)
 ```bash
 # Run E2E tests (requires frontend and backend running)
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python -m pytest tests/e2e/test_redis_service_management.py -v \
   -m e2e \
   --html=tests/results/e2e_report.html \
@@ -346,7 +346,7 @@ python -m pytest tests/e2e/test_redis_service_management.py -v --video=on
 ### Run All Tests
 ```bash
 # Complete test suite execution
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # 1. Backend tests
 python -m pytest tests/unit/test_redis_service_manager.py tests/integration/test_redis_service_api.py -v --cov

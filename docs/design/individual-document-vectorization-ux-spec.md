@@ -2149,6 +2149,6 @@ const getNodeIcon = computed(() => {
 **Next Review**: After Phase 1 completion
 
 For implementation questions or design clarifications, refer to:
-- **Frontend Standards**: `/docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- **Frontend Standards**: `/docs/developer/DEVELOPER_SETUP.md`
 - **API Documentation**: `/docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
 - **Accessibility Guidelines**: WCAG 2.1 AAA Standards

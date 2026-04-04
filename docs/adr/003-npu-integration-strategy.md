@@ -29,7 +29,7 @@ Intel NPUs (Neural Processing Units) offer an alternative:
 
 ## Decision
 
-We create a dedicated NPU Worker VM (VM2: 172.16.168.22) that:
+We create a dedicated NPU Worker VM (VM2: <npu-ip>) that:
 1. Has direct hardware passthrough to the Intel NPU
 2. Runs OpenVINO for model optimization
 3. Exposes an HTTP API for AI inference requests
@@ -90,7 +90,7 @@ The main backend routes appropriate workloads to the NPU worker.
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Backend API    │────▶│   NPU Worker     │────▶│  Intel NPU      │
-│  (172.16.168.20)│     │  (172.16.168.22) │     │  Hardware       │
+│  (<backend-ip>)│     │  (<npu-ip>) │     │  Hardware       │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
          │
          ▼ (fallback)
@@ -104,17 +104,17 @@ The main backend routes appropriate workloads to the NPU worker.
 
 ```python
 # Health check
-GET http://172.16.168.22:8081/health
+GET http://<npu-ip>:8081/health
 
 # Embedding generation
-POST http://172.16.168.22:8081/embeddings
+POST http://<npu-ip>:8081/embeddings
 {
     "texts": ["text to embed"],
     "model": "bge-small-en"
 }
 
 # Inference
-POST http://172.16.168.22:8081/inference
+POST http://<npu-ip>:8081/inference
 {
     "prompt": "...",
     "model": "llama-7b-openvino"

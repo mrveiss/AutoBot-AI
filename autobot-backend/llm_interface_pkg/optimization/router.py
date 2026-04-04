@@ -266,7 +266,7 @@ class OptimizationRouter:
         if not self.config.quantization_enabled:
             return {}
 
-        from .hf_quantizer import HfQuantizerWrapper, QuantizerConfig, QuantizationType
+        from .hf_quantizer import HfQuantizerWrapper, QuantizationType, QuantizerConfig
 
         quant_type_str = self.config.quantization_type
         type_map = {

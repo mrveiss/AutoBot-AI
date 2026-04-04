@@ -3,7 +3,7 @@
 **Version:** 1.0
 **Date:** 2025-10-03
 **Status:** Design Complete - Ready for Implementation
-**Database:** Redis Stack DB 2 (172.16.168.23:6379)
+**Database:** Redis Stack DB 2 (<database-ip>:6379)
 
 ---
 
@@ -267,7 +267,7 @@ import redis
 from redis.commands.json.path import Path
 
 # Connect to DB 2
-r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+r = redis.Redis(host='<database-ip>', port=6379, db=2)
 
 # Step 1: Get conversation entity
 conversation = r.json().get('memory:entity:267ab75b-8c44-46bb-b038-e5ee72096de4')
@@ -309,7 +309,7 @@ def traverse_relations(entity_id, relation_type, max_depth=3):
     Returns:
         List of entities in traversal order
     """
-    r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+    r = redis.Redis(host='<database-ip>', port=6379, db=2)
 
     visited = set()
     queue = [(entity_id, 0)]  # (id, depth)
@@ -377,7 +377,7 @@ def get_entity_with_cache(entity_id):
 
     Hot entities cached for 1 hour to reduce DB load.
     """
-    r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+    r = redis.Redis(host='<database-ip>', port=6379, db=2)
     cache_key = f"memory:cache:hot:{entity_id}"
 
     # Try cache first
@@ -411,7 +411,7 @@ def create_entities_batch(entities):
 
     Reduces round-trips from N to 1.
     """
-    r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+    r = redis.Redis(host='<database-ip>', port=6379, db=2)
     pipeline = r.pipeline()
 
     for entity in entities:
@@ -468,7 +468,7 @@ def search_entities_paginated(query, page=1, page_size=20):
     Returns:
         Dict with results and pagination metadata
     """
-    r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+    r = redis.Redis(host='<database-ip>', port=6379, db=2)
     offset = (page - 1) * page_size
 
     result = r.ft('memory_entity_idx').search(
@@ -704,7 +704,7 @@ def migrate_conversations_to_memory_graph():
     3. Batch write to Redis DB 2
     """
     # Connect to Redis DB 2
-    r = redis.Redis(host='172.16.168.23', port=6379, db=2)
+    r = redis.Redis(host='<database-ip>', port=6379, db=2)
 
     # Get all transcript files
     transcript_dir = Path('data/conversation_transcripts')

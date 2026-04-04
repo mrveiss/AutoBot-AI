@@ -23,7 +23,7 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
        │ VNC requests
        ↓
 ┌──────────────────────────────────────────────────┐
-│          Backend (172.16.168.20:8443)            │
+│          Backend (<backend-ip>:8443)            │
 │                                                  │
 │  ┌────────────────────┐  ┌────────────────────┐ │
 │  │  VNC Proxy         │  │  VNC MCP Bridge    │ │
@@ -40,7 +40,7 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
     ┌──────────────┐        ┌──────────────┐
     │  Browser VM  │        │ AutoBot LLM  │
     │  VNC Server  │        │    Agents    │
-    │ (172.16.168  │        │              │
+    │ <network-subnet>  │        │              │
     │    .25:6080) │        │ • Human loop │
     └──────────────┘        │ • Approvals  │
                             └──────────────┘
@@ -61,8 +61,8 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
 - `GET  /api/vnc-proxy/{type}/status` - Check VNC availability
 
 **VNC Types**:
-- `desktop` - Main machine desktop VNC (172.16.168.20:6080)
-- `browser` - Browser VM Playwright VNC (172.16.168.25:6080)
+- `desktop` - Main machine desktop VNC (<backend-ip>:6080)
+- `browser` - Browser VM Playwright VNC (<browser-ip>:6080)
 
 **Observation Recording**:
 ```python
@@ -106,10 +106,10 @@ await record_observation(vnc_type, "disconnection", {"status": "closed"})
 
 ```javascript
 // Before (BROKEN):
-http://172.16.168.25:6080/vnc.html/vnc.html  // ❌ duplicate
+http://<browser-ip>:6080/vnc.html/vnc.html  // ❌ duplicate
 
 // After (FIXED):
-https://172.16.168.20:8443/api/vnc-proxy/browser/vnc.html  // ✅ via backend
+https://<backend-ip>:8443/api/vnc-proxy/browser/vnc.html  // ✅ via backend
 ```
 
 ---
@@ -177,7 +177,7 @@ Response:
 {
   "success": true,
   "accessible": true,
-  "endpoint": "http://172.16.168.25:6080",
+  "endpoint": "http://<browser-ip>:6080",
   "message": "VNC browser is accessible"
 }
 ```
@@ -303,24 +303,24 @@ VNC proxy records: All WebSocket frames to MCP
 ### Test VNC Proxy
 ```bash
 # Check browser VNC status
-curl https://172.16.168.20:8443/api/vnc-proxy/browser/status
+curl https://<backend-ip>:8443/api/vnc-proxy/browser/status
 
 # Access noVNC client
-curl https://172.16.168.20:8443/api/vnc-proxy/browser/vnc.html
+curl https://<backend-ip>:8443/api/vnc-proxy/browser/vnc.html
 ```
 
 ### Test MCP Tools
 ```bash
 # List available VNC MCP tools
-curl https://172.16.168.20:8443/api/vnc/mcp/tools
+curl https://<backend-ip>:8443/api/vnc/mcp/tools
 
 # Check VNC status via MCP
-curl -X POST https://172.16.168.20:8443/api/vnc/mcp/check_vnc_status \
+curl -X POST https://<backend-ip>:8443/api/vnc/mcp/check_vnc_status \
   -H "Content-Type: application/json" \
   -d '{"vnc_type": "browser"}'
 
 # Get browser VNC context
-curl -X POST https://172.16.168.20:8443/api/vnc/mcp/get_browser_vnc_context
+curl -X POST https://<backend-ip>:8443/api/vnc/mcp/get_browser_vnc_context
 ```
 
 ---

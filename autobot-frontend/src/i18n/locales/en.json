@@ -2580,6 +2580,10 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "fitToView": "Fit to view",
+      "switchTo3d": "Switch to 3D view",
+      "switchTo2d": "Switch to 2D view",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Fullscreen",
       "exitFullscreen": "Exit fullscreen",
       "typeLabel": "Type:",
@@ -2639,7 +2643,8 @@
         "searching": "Searching entities...",
         "noResults": "No entities found matching your search",
         "sourcesCount": "{count} sources"
-      }
+      },
+      "noEntities3D": "No entities to display"
     },
     "connectors": {
       "title": "Source Connectors",
@@ -3407,7 +3412,12 @@
       "noActiveDescription": "Start a workflow to see live execution progress here.",
       "loading": "Loading workflows...",
       "stepOf": "Step {current} of {total}",
-      "stepN": "Step {n}"
+      "stepN": "Step {n}",
+      "cancelled": "Cancelled",
+      "pending": "Pending",
+      "connectionLive": "Live",
+      "connectionConnecting": "Connecting...",
+      "connectionDisconnected": "Disconnected"
     },
     "agentObservability": {
       "title": "Agent Observability",
@@ -3418,6 +3428,19 @@
       "success": "Success",
       "failed": "Failed",
       "avgTime": "Avg Time"
+    },
+    "phaseProgression": {
+      "title": "System Phase Status",
+      "loadData": "Load Validation Data",
+      "loading": "Loading...",
+      "systemMaturity": "System Maturity",
+      "errorTitle": "Phase validation temporarily unavailable",
+      "errorBody": "The validation system is currently not accessible, but the application continues to work normally.",
+      "retry": "Retry",
+      "readyTitle": "Phase Validation Ready",
+      "readyHint": "Click \"Load Validation Data\" above to fetch phase status from the validation dashboard.",
+      "capabilities": "Capabilities",
+      "unknownPhase": "Unknown Phase"
     }
   },
   "agent": {
@@ -4934,7 +4957,8 @@
       "accountLocked": "Account temporarily locked due to multiple failed attempts",
       "tooManyAttempts": "Too many login attempts. Please try again later.",
       "serverError": "Server error. Please try again later.",
-      "unexpectedError": "An unexpected error occurred"
+      "unexpectedError": "An unexpected error occurred",
+      "footer": "© 2026 AutoBot. All rights reserved."
     }
   },
   "browser": {

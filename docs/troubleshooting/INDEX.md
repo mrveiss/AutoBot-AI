@@ -172,16 +172,16 @@ python3 scripts/health_check_comprehensive.py
 tail -f logs/autobot.log | grep -i error
 
 # 4. VM network
-ping -c 3 172.16.168.19  # SLM
-ping -c 3 172.16.168.21  # Frontend
-ping -c 3 172.16.168.22  # NPU
-ping -c 3 172.16.168.23  # Redis
-ping -c 3 172.16.168.24  # AI Stack
-ping -c 3 172.16.168.25  # Browser
+ping -c 3 <slm-manager-ip>  # SLM
+ping -c 3 <frontend-ip>  # Frontend
+ping -c 3 <npu-ip>  # NPU
+ping -c 3 <database-ip>  # Redis
+ping -c 3 <aiml-ip>  # AI Stack
+ping -c 3 <browser-ip>  # Browser
 
 # 5. Critical services
 curl -s http://127.0.0.1:8001/api/health | jq .
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 ```
 
 ---

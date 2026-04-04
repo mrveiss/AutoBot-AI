@@ -1338,11 +1338,20 @@ async def health_check(admin_check: bool = Depends(check_admin_permission)):
     """
     Health check endpoint.
 
+    Deprecated: Use /api/system/health for system-wide health checks.
+    This per-module endpoint will be removed in a future release. (#3333)
+
     Issue #744: Requires admin authentication.
     """
+    logger.warning(
+        "Deprecated health endpoint called: /api/dfa-analytics/health — "
+        "use /api/system/health instead (#3333)"
+    )
     return {
         "status": "healthy",
         "service": "data-flow-analysis",
+        "deprecated": True,
+        "use_instead": "/api/system/health",
         "features": [
             "variable_tracking",
             "def_use_chains",

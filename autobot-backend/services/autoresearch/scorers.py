@@ -18,7 +18,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +56,21 @@ class PromptScorer(ABC):
         """Unique scorer identifier."""
 
     @abstractmethod
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
         """Score a prompt variant's output.
 
         Args:
             prompt_output: The text produced by running the prompt variant.
             context: Scorer-specific context (hyperparams, criteria, etc.).
+            subset_fraction: If provided (0 < value <= 1), evaluate on this
+                fraction of benchmark samples instead of the full set.
+                Scorers that do not support subset evaluation ignore this
+                parameter.  Pass None (default) for full evaluation.
 
         Returns:
             ScorerResult with normalized score.
@@ -85,7 +94,9 @@ class ValBpbScorer(PromptScorer):
         baseline_val_bpb: float,
     ) -> None:
         if baseline_val_bpb <= 0:
-            raise ValueError(f"baseline_val_bpb must be positive, got {baseline_val_bpb}")
+            raise ValueError(
+                f"baseline_val_bpb must be positive, got {baseline_val_bpb}"
+            )
         self._runner = runner
         self._baseline = baseline_val_bpb
 
@@ -93,7 +104,19 @@ class ValBpbScorer(PromptScorer):
     def name(self) -> str:
         return "val_bpb"
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction is informational for this scorer; full experiment
+        # is always required to get a valid val_bpb reading.
+        if subset_fraction is not None:
+            logger.debug(
+                "ValBpbScorer: subset_fraction=%s ignored — full experiment required",
+                subset_fraction,
+            )
         hp_data = context.get("hyperparams", {})
         hp = HyperParams.from_dict(hp_data) if hp_data else HyperParams()
 
@@ -127,7 +150,9 @@ class ValBpbScorer(PromptScorer):
 
         # Normalize: improvement as fraction of baseline, clamped 0-1
         improvement = self._baseline - val_bpb
-        normalized = max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
+        normalized = (
+            max(0.0, improvement / self._baseline) if self._baseline > 0 else 0.0
+        )
 
         return ScorerResult(
             score=normalized,
@@ -146,7 +171,7 @@ _RATING_PATTERN = re.compile(r"(\d+)\s*(?:/\s*10|out of\s*10)")
 _JUDGE_SYSTEM_PROMPT = (
     "You are a prompt quality evaluator. Rate the following output on a scale "
     "of 0-10 based on these criteria: {criteria}.\n\n"
-    "Respond with JSON: {{\"rating\": <0-10>, \"reasoning\": \"<brief explanation>\"}}"
+    'Respond with JSON: {{"rating": <0-10>, "reasoning": "<brief explanation>"}}'
 )
 
 
@@ -169,7 +194,14 @@ class LLMJudgeScorer(PromptScorer):
     def name(self) -> str:
         return "llm_judge"
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction: LLMJudgeScorer evaluates a single output text so
+        # sub-sampling is not applicable; parameter accepted for interface compat.
         criteria_str = ", ".join(self._criteria)
         system_msg = _JUDGE_SYSTEM_PROMPT.format(criteria=criteria_str)
 
@@ -260,7 +292,14 @@ class HumanReviewScorer(PromptScorer):
             )
         return value
 
-    async def score(self, prompt_output: str, context: Dict[str, Any]) -> ScorerResult:
+    async def score(
+        self,
+        prompt_output: str,
+        context: Dict[str, Any],
+        subset_fraction: Optional[float] = None,
+    ) -> ScorerResult:
+        # subset_fraction: HumanReviewScorer queues the variant for a human;
+        # sub-sampling does not apply — parameter accepted for interface compat.
         session_id = self._validate_key_component(
             context.get("session_id", "unknown"), "session_id"
         )
@@ -276,11 +315,13 @@ class HumanReviewScorer(PromptScorer):
         )
         await redis.set(
             pending_key,
-            json.dumps({
-                "prompt_output": prompt_output[:5000],
-                "session_id": session_id,
-                "variant_id": variant_id,
-            }),
+            json.dumps(
+                {
+                    "prompt_output": prompt_output[:5000],
+                    "session_id": session_id,
+                    "variant_id": variant_id,
+                }
+            ),
             ex=self._TTL_SECONDS,
         )
 

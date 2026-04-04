@@ -578,7 +578,7 @@ optional roles:
 └──────────────────┘    └──────────────────┘    └────────────────────────────────┘
 
   ─── Required service boundary     ···  Optional / degraded-without
-  ══  External HTTPS                 ──  Internal subnet 172.16.168.0/24
+  ══  External HTTPS                 ──  Internal subnet <network-subnet>
 ```
 
 ---

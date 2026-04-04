@@ -10,7 +10,6 @@ lookup, fallback behavior, and per-agent configuration.
 
 from .ai_stack_adapter import AIStackAdapter
 from .anthropic_adapter import AnthropicAdapter
-from .layer_inference_adapter import LayerInferenceAdapter
 from .base import (
     AdapterBase,
     AdapterConfig,
@@ -19,6 +18,7 @@ from .base import (
     EnvironmentTestResult,
     SessionCodec,
 )
+from .layer_inference_adapter import LayerInferenceAdapter
 from .ollama_adapter import OllamaAdapter
 from .openai_adapter import OpenAIAdapter
 from .process_adapter import ProcessAdapter

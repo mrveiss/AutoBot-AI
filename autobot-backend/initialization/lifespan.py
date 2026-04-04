@@ -645,13 +645,14 @@ async def _init_trigger_service(app: FastAPI) -> None:
             """Launcher callback invoked by TriggerService when a trigger fires."""
             from services.workflow_automation import get_workflow_manager
 
-            logger.info("Trigger fired for workflow %s with payload keys=%s",
-                        workflow_id, list(payload.keys()) if payload else [])
+            logger.info(
+                "Trigger fired for workflow %s with payload keys=%s",
+                workflow_id,
+                list(payload.keys()) if payload else [],
+            )
             mgr = get_workflow_manager()
             if mgr:
-                await mgr.start_workflow_execution(
-                    workflow_id, trigger_payload=payload
-                )
+                await mgr.start_workflow_execution(workflow_id, trigger_payload=payload)
 
         await trigger_service.start(launcher=_launch_workflow)
         app.state.trigger_service = trigger_service
@@ -801,6 +802,11 @@ async def _init_slm_client():
 
         await init_slm_client(slm_url, slm_token)
         logger.info("✅ [ 89%] SLM Client: Connected to SLM server at %s", slm_url)
+        from services.slm.deployment_orchestrator import init_orchestrator
+        from services.slm_client import get_slm_client as _get_slm_client
+
+        init_orchestrator(_get_slm_client())
+        logger.info("✅ [ 89%] SLM Client: DeploymentOrchestrator initialised")
     except Exception as slm_error:
         logger.warning(
             "SLM client initialization failed (continuing without): %s", slm_error

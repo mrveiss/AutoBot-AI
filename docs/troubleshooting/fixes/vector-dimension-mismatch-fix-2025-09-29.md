@@ -29,7 +29,7 @@ Attempting to index embeddings of dim 768 which doesn't match the index schema e
 ## ✅ Solution Implemented
 
 ### Changed File:
-`/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+`src/knowledge_base_v2.py`
 
 ### Key Changes:
 
@@ -205,7 +205,7 @@ To make the 10 existing facts searchable:
 
 - **LlamaIndex Redis Vector Store:** [GitHub Examples](https://github.com/run-llama/llama_index/blob/main/docs/docs/examples/vector_stores/RedisIndexDemo.ipynb)
 - **RedisVL Schema:** [redisvl.schema.IndexSchema Documentation](https://www.redisvl.com/api/schema.html)
-- **AutoBot Knowledge Base:** `/home/kali/Desktop/AutoBot/src/knowledge_base_v2.py`
+- **AutoBot Knowledge Base:** `src/knowledge_base_v2.py`
 
 ---
 

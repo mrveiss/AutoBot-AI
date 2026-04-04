@@ -147,7 +147,7 @@ Performance tuning and risk mitigation including:
 ## Related Documentation
 
 ### Existing AutoBot Architecture
-- `../developer/PHASE_5_DEVELOPER_SETUP.md` - Development setup
+- `../developer/DEVELOPER_SETUP.md` - Development setup
 - `../api/COMPREHENSIVE_API_DOCUMENTATION.md` - Existing API docs
 - `../system-state.md` - Current system status
 

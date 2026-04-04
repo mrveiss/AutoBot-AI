@@ -24,7 +24,7 @@ The Vue-specific fix agent has successfully analyzed and fixed critical Vue.js i
 
 **Files Fixed**:
 
-#### `/home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue`
+#### `autobot-vue/src/components/ChatInterface.vue`
 ```diff
 - <div v-for="(message, index) in filteredMessages" :key="index"
 + <div v-for="(message, index) in filteredMessages" :key="message.id || message.timestamp || `msg-${index}`"
@@ -33,13 +33,13 @@ The Vue-specific fix agent has successfully analyzed and fixed critical Vue.js i
 + <div v-for="(file, index) in attachedFiles" :key="file.name || file.id || `file-${index}`"
 ```
 
-#### `/home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue`
+#### `autobot-vue/src/components/HistoryView.vue`
 ```diff
 - <div v-for="(entry, index) in history" :key="index"
 + <div v-for="(entry, index) in history" :key="entry.id || `history-${entry.date}`"
 ```
 
-#### `/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue`
+#### `autobot-vue/src/components/KnowledgeManager.vue`
 ```diff
 - <div v-for="(result, index) in searchResults" :key="index"
 + <div v-for="(result, index) in searchResults" :key="result.id || `result-${index}`"
@@ -48,7 +48,7 @@ The Vue-specific fix agent has successfully analyzed and fixed critical Vue.js i
 + <div v-for="(link, index) in currentEntry.links" :key="link.url || link.href || `link-${index}`"
 ```
 
-#### `/home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue`
+#### `autobot-vue/src/components/FileBrowser.vue`
 ```diff
 - <tr v-for="(file, index) in files" :key="index"
 + <tr v-for="(file, index) in files" :key="file.name || file.id || `file-${index}`"

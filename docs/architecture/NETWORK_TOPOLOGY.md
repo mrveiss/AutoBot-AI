@@ -1,7 +1,7 @@
 # AutoBot Network Topology
 
 > **Status:** Active — defined in Phase 1-2 of [#926](https://github.com/mrveiss/AutoBot-AI/issues/926)
-> **Subnet:** `172.16.168.0/24` (all fleet nodes)
+> **Subnet:** `<network-subnet>` (all fleet nodes)
 
 ---
 
@@ -9,16 +9,16 @@
 
 | Node | IP | OS | Roles |
 |------|----|----|-------|
-| SLM Server | `172.16.168.19` | Ubuntu 22.04 | slm-backend, slm-frontend, slm-database, monitoring, slm-agent |
-| Backend (WSL) | `172.16.168.20` | Kali Rolling | backend, ollama, slm-agent |
-| Frontend VM | `172.16.168.21` | Ubuntu 22.04 | frontend, slm-agent |
-| NPU VM | `172.16.168.22` | Ubuntu 22.04 | npu-worker, slm-agent |
-| Database VM | `172.16.168.23` | Ubuntu 22.04 | database, slm-agent |
-| AI Stack VM | `172.16.168.24` | Ubuntu 22.04 | ai-stack, slm-agent |
-| Browser VM | `172.16.168.25` | Ubuntu 22.04 | browser-worker, slm-agent |
-| Reserved (.26) | `172.16.168.26` | Ubuntu 22.04 | slm-agent |
-| Reserved (.27) | `172.16.168.27` | Ubuntu 22.04 | slm-agent |
-| Dev Machine | `172.16.168.20` ¹ | Kali Rolling (WSL2) | git, Ansible control |
+| SLM Server | `<slm-manager-ip>` | Ubuntu 22.04 | slm-backend, slm-frontend, slm-database, monitoring, slm-agent |
+| Backend (WSL) | `<backend-ip>` | Kali Rolling | backend, ollama, slm-agent |
+| Frontend VM | `<frontend-ip>` | Ubuntu 22.04 | frontend, slm-agent |
+| NPU VM | `<npu-ip>` | Ubuntu 22.04 | npu-worker, slm-agent |
+| Database VM | `<database-ip>` | Ubuntu 22.04 | database, slm-agent |
+| AI Stack VM | `<aiml-ip>` | Ubuntu 22.04 | ai-stack, slm-agent |
+| Browser VM | `<browser-ip>` | Ubuntu 22.04 | browser-worker, slm-agent |
+| Reserved (.26) | `<reserved-ip>` | Ubuntu 22.04 | slm-agent |
+| Reserved (.27) | `<reserved-ip>` | Ubuntu 22.04 | slm-agent |
+| Dev Machine | `<backend-ip>` ¹ | Kali Rolling (WSL2) | git, Ansible control |
 
 ¹ Dev machine is the WSL2 host at `.20`. Backend also runs here.
 
@@ -135,13 +135,13 @@ All inter-service HTTPS uses internal CA-signed certs issued by `setup-internal-
 
 | Node | Cert Path | Subject CN | Signed By |
 |------|-----------|------------|-----------|
-| `.19` | `/etc/autobot/certs/autobot-slm-backend.crt` | `172.16.168.19` | AutoBot Internal CA |
-| `.20` | `/etc/autobot/certs/autobot-backend.crt` | `172.16.168.20` | AutoBot Internal CA |
-| `.21` | `/etc/autobot/certs/autobot-frontend.crt` | `172.16.168.21` | AutoBot Internal CA |
-| `.22` | `/etc/autobot/certs/autobot-npu-worker.crt` | `172.16.168.22` | AutoBot Internal CA |
-| `.23` | `/etc/autobot/certs/autobot-database.crt` | `172.16.168.23` | AutoBot Internal CA |
-| `.24` | `/etc/autobot/certs/autobot-ai-stack.crt` | `172.16.168.24` | AutoBot Internal CA |
-| `.25` | `/etc/autobot/certs/autobot-browser-worker.crt` | `172.16.168.25` | AutoBot Internal CA |
+| `.19` | `/etc/autobot/certs/autobot-slm-backend.crt` | `<slm-manager-ip>` | AutoBot Internal CA |
+| `.20` | `/etc/autobot/certs/autobot-backend.crt` | `<backend-ip>` | AutoBot Internal CA |
+| `.21` | `/etc/autobot/certs/autobot-frontend.crt` | `<frontend-ip>` | AutoBot Internal CA |
+| `.22` | `/etc/autobot/certs/autobot-npu-worker.crt` | `<npu-ip>` | AutoBot Internal CA |
+| `.23` | `/etc/autobot/certs/autobot-database.crt` | `<database-ip>` | AutoBot Internal CA |
+| `.24` | `/etc/autobot/certs/autobot-ai-stack.crt` | `<aiml-ip>` | AutoBot Internal CA |
+| `.25` | `/etc/autobot/certs/autobot-browser-worker.crt` | `<browser-ip>` | AutoBot Internal CA |
 
 CA root cert: `/etc/autobot/ca/ca-cert.pem` on `.19`.
 All nodes receive the CA cert at `/etc/autobot/certs/ca-cert.pem`.

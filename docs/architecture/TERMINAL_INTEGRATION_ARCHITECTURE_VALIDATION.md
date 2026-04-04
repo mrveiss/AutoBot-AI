@@ -25,7 +25,7 @@ This document provides a comprehensive validation of the terminal integration ar
 
 ### 1.1 Existing Components
 
-#### Frontend Layer (`172.16.168.21`)
+#### Frontend Layer (`<frontend-ip>`)
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Terminal.vue (Custom Rendering)                        │
@@ -46,7 +46,7 @@ This document provides a comprehensive validation of the terminal integration ar
 │  │ • Session management (create/connect/close)      │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
-                           ▼ WebSocket (wss://172.16.168.20:8443)
+                           ▼ WebSocket (wss://<backend-ip>:8443)
 ┌─────────────────────────────────────────────────────────┐
 │  Backend API (terminal.py) - Main Machine                │
 │  ┌─────────────────────────────────────────────────┐   │
@@ -223,7 +223,7 @@ async def get_session_audit_log(
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  AutoBot Frontend (172.16.168.21)                                   │
+│  AutoBot Frontend (<frontend-ip>)                                   │
 │                                                                       │
 │  ┌────────────────────────────┐  ┌────────────────────────────┐   │
 │  │  Chat Terminal              │  │  Tools Terminal             │   │
@@ -251,7 +251,7 @@ async def get_session_audit_log(
 └───────────────────────────────┬─────────────────────────────────────┘
                                  ▼ WebSocket
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Backend API (172.16.168.20:8443)                                   │
+│  Backend API (<backend-ip>:8443)                                   │
 │                                                                       │
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │  EnhancedTerminalOrchestrator (NEW)                          │   │
@@ -275,7 +275,7 @@ async def get_session_audit_log(
                     ▼                           ▼
            ┌────────────────┐        ┌──────────────────────────┐
            │  Local PTY     │        │  SSH to Remote VMs       │
-           │  bash/zsh      │        │  (172.16.168.21-25)      │
+           │  bash/zsh      │        │  (<frontend-ip>-25)      │
            │  (Main VM)     │        └──────────────────────────┘
            └────────────────┘
 ```
@@ -332,7 +332,7 @@ interface ChatTerminalState {
 **Props:**
 ```typescript
 interface ToolsTerminalProps {
-  hostTarget: string;                // VM IP (172.16.168.20-25)
+  hostTarget: string;                // VM IP (<backend-ip>-25)
   sshConfig?: SSHConfig;             // SSH credentials and settings
   initialDirectory?: string;         // Starting working directory
   multiSession?: boolean;            // Allow multiple tabs
@@ -482,7 +482,7 @@ class EnhancedTerminalOrchestrator:
 **Features:**
 - **Connection Pooling**: Reuse SSH connections for performance
 - **PTY Forwarding**: Forward PTY over SSH for interactive sessions
-- **Host Selection**: Support all 5 VMs (172.16.168.20-25)
+- **Host Selection**: Support all 5 VMs (<backend-ip>-25)
 - **SSH Key Authentication**: Use autobot_key for passwordless access
 - **Error Recovery**: Reconnect on connection loss
 
@@ -495,13 +495,13 @@ class MultiMachineSSHAdapter:
 
     def __init__(self):
         self.connections = {}  # host -> paramiko.SSHClient
-        self.ssh_key_path = "/home/kali/.ssh/autobot_key"
+        self.ssh_key_path = "$HOME/.ssh/autobot_key"
         self.host_mapping = {
-            "frontend": "172.16.168.21",
-            "npu-worker": "172.16.168.22",
-            "redis": "172.16.168.23",
-            "ai-stack": "172.16.168.24",
-            "browser": "172.16.168.25",
+            "frontend": "<frontend-ip>",
+            "npu-worker": "<npu-ip>",
+            "redis": "<database-ip>",
+            "ai-stack": "<aiml-ip>",
+            "browser": "<browser-ip>",
         }
 
     async def create_ssh_session(
@@ -555,11 +555,11 @@ class MultiMachineSSHAdapter:
 ### 3.1 SSH Integration Architecture
 
 **Target Machines:**
-- **VM1 Frontend** (`172.16.168.21`): Web interface operations
-- **VM2 NPU Worker** (`172.16.168.22`): AI hardware commands
-- **VM3 Redis** (`172.16.168.23`): Database operations
-- **VM4 AI Stack** (`172.16.168.24`): AI model operations
-- **VM5 Browser** (`172.16.168.25`): Browser automation
+- **VM1 Frontend** (`<frontend-ip>`): Web interface operations
+- **VM2 NPU Worker** (`<npu-ip>`): AI hardware commands
+- **VM3 Redis** (`<database-ip>`): Database operations
+- **VM4 AI Stack** (`<aiml-ip>`): AI model operations
+- **VM5 Browser** (`<browser-ip>`): Browser automation
 
 **SSH Connection Flow:**
 ```
@@ -575,7 +575,7 @@ class MultiMachineSSHAdapter:
          ▼ WebSocket message
 ┌──────────────────────────────────────────┐
 │  Backend: EnhancedTerminalOrchestrator   │
-│  route_to_ssh_adapter("172.16.168.24")   │
+│  route_to_ssh_adapter("<aiml-ip>")   │
 └────────┬─────────────────────────────────┘
          ▼
 ┌──────────────────────────────────────────┐
@@ -586,7 +586,7 @@ class MultiMachineSSHAdapter:
 └────────┬─────────────────────────────────┘
          ▼ SSH (port 22, key auth)
 ┌──────────────────────────────────────────┐
-│  Remote VM (172.16.168.24)                │
+│  Remote VM (<aiml-ip>)                │
 │  bash/zsh session as autobot user         │
 └───────────────────────────────────────────┘
 ```
@@ -600,11 +600,11 @@ class MultiMachineSSHAdapter:
     <label>Target Machine:</label>
     <select v-model="selectedHost" @change="switchHost">
       <option value="local">Main VM (Local)</option>
-      <option value="frontend">Frontend VM (172.16.168.21)</option>
-      <option value="npu-worker">NPU Worker (172.16.168.22)</option>
-      <option value="redis">Redis VM (172.16.168.23)</option>
-      <option value="ai-stack">AI Stack (172.16.168.24)</option>
-      <option value="browser">Browser VM (172.16.168.25)</option>
+      <option value="frontend">Frontend VM (<frontend-ip>)</option>
+      <option value="npu-worker">NPU Worker (<npu-ip>)</option>
+      <option value="redis">Redis VM (<database-ip>)</option>
+      <option value="ai-stack">AI Stack (<aiml-ip>)</option>
+      <option value="browser">Browser VM (<browser-ip>)</option>
     </select>
 
     <div class="connection-status">

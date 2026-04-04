@@ -46,7 +46,7 @@ Redis is a critical component of AutoBot that provides:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend UI (VM1)                         │
-│              http://172.16.168.21:5173                       │
+│              http://<frontend-ip>:5173                       │
 │                                                              │
 │  [Redis Service Controls]                                   │
 │   - Service Status Display                                  │
@@ -59,7 +59,7 @@ Redis is a critical component of AutoBot that provides:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Backend API (Main Machine)                      │
-│           https://172.16.168.20:8443                         │
+│           https://<backend-ip>:8443                         │
 │                                                              │
 │  [Redis Service Manager]                                    │
 │   - Service Control Logic                                   │
@@ -71,7 +71,7 @@ Redis is a critical component of AutoBot that provides:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                Redis VM (VM3)                                │
-│           172.16.168.23:6379                                │
+│           <database-ip>:6379                                │
 │                                                              │
 │  [Redis Service]                                            │
 │   - Redis Server Process                                    │
@@ -85,7 +85,7 @@ Redis is a critical component of AutoBot that provides:
 
 ### Step 1: Login to AutoBot
 
-1. Navigate to AutoBot frontend: `http://172.16.168.21:5173`
+1. Navigate to AutoBot frontend: `http://<frontend-ip>:5173`
 2. Login with your credentials
 3. Ensure you have appropriate role permissions (see [Role-Based Access](#role-based-access))
 
@@ -541,7 +541,7 @@ Manual intervention required. Please contact administrator.
 - Failure threshold: **3 consecutive failures**
 
 Administrators can configure these settings in:
-`/home/kali/Desktop/AutoBot/config/services/redis_service_management.yaml`
+`config/services/redis_service_management.yaml`
 
 ---
 
@@ -995,15 +995,15 @@ If issues persist after troubleshooting:
 ## Additional Resources
 
 **Documentation:**
-- [API Documentation](/home/kali/Desktop/AutoBot/docs/api/REDIS_SERVICE_MANAGEMENT_API.md)
-- [Operational Runbook](/home/kali/Desktop/AutoBot/docs/operations/REDIS_SERVICE_RUNBOOK.md)
-- [Architecture Document](/home/kali/Desktop/AutoBot/docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
-- [Troubleshooting Guide](/home/kali/Desktop/AutoBot/docs/troubleshooting/comprehensive_troubleshooting_guide.md)
+- [API Documentation](docs/api/REDIS_SERVICE_MANAGEMENT_API.md)
+- [Operational Runbook](docs/operations/REDIS_SERVICE_RUNBOOK.md)
+- [Architecture Document](docs/architecture/REDIS_SERVICE_MANAGEMENT_ARCHITECTURE.md)
+- [Troubleshooting Guide](docs/troubleshooting/comprehensive_troubleshooting_guide.md)
 
 **Support:**
 - Email: support@autobot.local
 - Emergency: emergency@autobot.local
-- Documentation: `/home/kali/Desktop/AutoBot/docs/`
+- Documentation: `docs/`
 
 ---
 

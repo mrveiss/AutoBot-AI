@@ -224,8 +224,8 @@ assessment = await engine.get_user_risk_assessment("user123")
 
 ## Files Modified
 
-- `/home/kali/Desktop/AutoBot/src/security/enterprise/threat_detection.py` (refactored)
-- `/home/kali/Desktop/AutoBot/tests/security/test_threat_detection_refactor.py` (new test suite)
+- `src/security/enterprise/threat_detection.py` (refactored)
+- `tests/security/test_threat_detection_refactor.py` (new test suite)
 
 ## Commit Information
 

@@ -106,10 +106,10 @@ from backend.services.agent_terminal import ...
 ```
 
 Updated files:
-- `/home/kali/Desktop/AutoBot/backend/api/agent_terminal.py`
-- `/home/kali/Desktop/AutoBot/backend/api/websockets.py`
-- `/home/kali/Desktop/AutoBot/src/chat_workflow_manager.py`
-- `/home/kali/Desktop/AutoBot/src/tools/terminal_tool.py`
+- `backend/api/agent_terminal.py`
+- `backend/api/websockets.py`
+- `src/chat_workflow_manager.py`
+- `src/tools/terminal_tool.py`
 
 Note: `AgentRole` imports changed to:
 ```python

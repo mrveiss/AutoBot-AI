@@ -217,7 +217,7 @@ def generate_api_reference(module_name: str):
 [Code example removed for token optimization]
 ```bash
 # Edit locally first
-vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
+vim autobot-vue/src/components/MyComponent.vue
 
 # Then sync to VM1 (172.16.168.21)
 ./scripts/utilities/sync-frontend.sh components/MyComponent.vue
@@ -227,7 +227,7 @@ vim /home/kali/Desktop/AutoBot/autobot-vue/src/components/MyComponent.vue
 [Code example removed for token optimization]
 ```bash
 # Edit locally first
-vim /home/kali/Desktop/AutoBot/backend/api/chat.py
+vim backend/api/chat.py
 
 # Then sync to VM4 (172.16.168.24)
 ./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
@@ -237,7 +237,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
 [Code example removed for token optimization]
 ```bash
 # Edit locally first
-vim /home/kali/Desktop/AutoBot/config/redis.conf
+vim config/redis.conf
 
 # Then deploy via Ansible
 ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
@@ -245,7 +245,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
 [Code example removed for token optimization]
 ```bash
 # Edit locally first
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
+vim docker-compose.yml
 
 # Then deploy via Ansible
 ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
@@ -264,15 +264,15 @@ ssh autobot@172.16.168.24 "docker-compose up -d"
 [Code example removed for token optimization]
 ```bash
 # RIGHT - Local edit + sync
-vim /home/kali/Desktop/AutoBot/app.py
+vim app.py
 ./scripts/utilities/sync-to-vm.sh ai-stack app.py /home/autobot/app.py
 
 # RIGHT - Local config + Ansible
-vim /home/kali/Desktop/AutoBot/config/redis.conf  
+vim config/redis.conf  
 ansible-playbook ansible/playbooks/update-redis.yml
 
 # RIGHT - Local Docker + deployment
-vim /home/kali/Desktop/AutoBot/docker-compose.yml
+vim docker-compose.yml
 ansible-playbook ansible/playbooks/deploy-containers.yml
 ```
 

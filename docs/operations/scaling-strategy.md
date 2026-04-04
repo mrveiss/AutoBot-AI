@@ -20,12 +20,12 @@ AutoBot's 6-VM architecture enables independent scaling of each component. This 
 
 | VM | IP | vCPUs | RAM | Storage | Purpose |
 |----|-----|-------|-----|---------|---------|
-| Main (WSL) | 172.16.168.20 | 4 | 8 GB | 50 GB | Backend API + VNC |
-| VM1 Frontend | 172.16.168.21 | 2 | 4 GB | 20 GB | Web interface |
-| VM2 NPU Worker | 172.16.168.22 | 4 | 8 GB | 30 GB | Hardware AI |
-| VM3 Redis | 172.16.168.23 | 2 | 8 GB | 50 GB | Data layer |
-| VM4 AI Stack | 172.16.168.24 | 4 | 16 GB | 100 GB | LLM models |
-| VM5 Browser | 172.16.168.25 | 2 | 4 GB | 20 GB | Playwright |
+| Main (WSL) | <backend-ip> | 4 | 8 GB | 50 GB | Backend API + VNC |
+| VM1 Frontend | <frontend-ip> | 2 | 4 GB | 20 GB | Web interface |
+| VM2 NPU Worker | <npu-ip> | 4 | 8 GB | 30 GB | Hardware AI |
+| VM3 Redis | <database-ip> | 2 | 8 GB | 50 GB | Data layer |
+| VM4 AI Stack | <aiml-ip> | 4 | 16 GB | 100 GB | LLM models |
+| VM5 Browser | <browser-ip> | 2 | 4 GB | 20 GB | Playwright |
 
 ---
 
@@ -68,7 +68,7 @@ Start-VM -Name "AutoBot-Frontend"
 
 **Post-scaling verification**:
 ```bash
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
 free -h  # Verify RAM
 nproc    # Verify CPUs
 ```
@@ -88,7 +88,7 @@ nproc    # Verify CPUs
            │                 │                 │
     ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
     │ Frontend A  │   │ Frontend B  │   │ Frontend C  │
-    │ 172.16.168.21│   │ 172.16.168.26│   │ 172.16.168.27│
+    │ <frontend-ip>│   │ <reserved-ip>│   │ <reserved-ip>│
     └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
@@ -105,7 +105,7 @@ nproc    # Verify CPUs
 
 2. **Configure new VM**
    ```bash
-   # Set new static IP (e.g., 172.16.168.26)
+   # Set new static IP (e.g., <reserved-ip>)
    sudo nano /etc/netplan/00-installer-config.yaml
    sudo netplan apply
    ```
@@ -115,8 +115,8 @@ nproc    # Verify CPUs
    # /etc/nginx/conf.d/frontend-lb.conf
    upstream frontend_pool {
        least_conn;
-       server 172.16.168.21:5173;
-       server 172.16.168.26:5173;
+       server <frontend-ip>:5173;
+       server <reserved-ip>:5173;
    }
 
    server {
@@ -168,7 +168,7 @@ python3 -c "from openvino.runtime import Core; print(Core().available_devices)"
            │                 │                 │
     ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
     │ NPU Worker A│   │ NPU Worker B│   │ Cloud API   │
-    │ 172.16.168.22│   │ 172.16.168.28│   │ (Fallback)  │
+    │ <npu-ip>│   │ <reserved-ip>│   │ (Fallback)  │
     └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
@@ -176,8 +176,8 @@ python3 -c "from openvino.runtime import Core; print(Core().available_devices)"
 ```python
 # In backend/core/config.py
 NPU_WORKERS = [
-    "http://172.16.168.22:8081",
-    "http://172.16.168.28:8081",
+    "http://<npu-ip>:8081",
+    "http://<reserved-ip>:8081",
 ]
 
 # Round-robin or least-connections load balancing
@@ -204,7 +204,7 @@ Start-VM -Name "AutoBot-Redis"
 
 **Configure Redis for new memory**:
 ```bash
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.23
+ssh -i ~/.ssh/autobot_key autobot@<database-ip>
 
 # Update Redis config
 sudo nano /etc/redis-stack.conf
@@ -246,8 +246,8 @@ sudo systemctl restart redis-stack-server
 3. **Initialize cluster**:
    ```bash
    redis-cli --cluster create \
-     172.16.168.23:6379 172.16.168.29:6379 172.16.168.30:6379 \
-     172.16.168.31:6379 172.16.168.32:6379 172.16.168.33:6379 \
+     <database-ip>:6379 <reserved-ip>:6379 <example-ip>:6379 \
+     <example-ip>:6379 <example-ip>:6379 <example-ip>:6379 \
      --cluster-replicas 1
    ```
 
@@ -256,7 +256,7 @@ sudo systemctl restart redis-stack-server
    from redis.cluster import RedisCluster
 
    redis = RedisCluster(
-       host="172.16.168.23",
+       host="<database-ip>",
        port=6379,
        decode_responses=True
    )
@@ -303,7 +303,7 @@ Set-VMGpuPartitionAdapter -VMName "AutoBot-AI" -MinPartitionVRAM 2GB
            │                 │                 │
     ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
     │ Ollama A    │   │ Ollama B    │   │ Cloud LLM   │
-    │ 172.16.168.24│   │ 172.16.168.34│   │ (Overflow)  │
+    │ <aiml-ip>│   │ <example-ip>│   │ (Overflow)  │
     └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
@@ -311,8 +311,8 @@ Set-VMGpuPartitionAdapter -VMName "AutoBot-AI" -MinPartitionVRAM 2GB
 ```python
 # In LLM interface
 OLLAMA_ENDPOINTS = [
-    "http://172.16.168.24:8080",
-    "http://172.16.168.34:8080",
+    "http://<aiml-ip>:8080",
+    "http://<example-ip>:8080",
 ]
 
 async def get_available_ollama():
@@ -357,16 +357,16 @@ Start-VM -Name "AutoBot-Browser"
            │                 │                 │
     ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼──────┐
     │ Browser A   │   │ Browser B   │   │ Browser C   │
-    │ 172.16.168.25│   │ 172.16.168.35│   │ 172.16.168.36│
+    │ <browser-ip>│   │ <example-ip>│   │ <new-node-ip>│
     └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
 **Pool Manager**:
 ```python
 BROWSER_POOL = [
-    "http://172.16.168.25:3000",
-    "http://172.16.168.35:3000",
-    "http://172.16.168.36:3000",
+    "http://<browser-ip>:3000",
+    "http://<example-ip>:3000",
+    "http://<new-node-ip>:3000",
 ]
 
 async def get_browser_session():
@@ -426,14 +426,14 @@ Deploy multiple backend instances behind load balancer. Requires:
 curl -w "%{time_total}\n" -o /dev/null -s http://localhost:8001/api/health
 
 # Redis Memory
-redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human
+redis-cli -h <database-ip> INFO memory | grep used_memory_human
 
 # Ollama Queue
-curl -s http://172.16.168.24:8080/api/ps | jq '.models | length'
+curl -s http://<aiml-ip>:8080/api/ps | jq '.models | length'
 
 # VM CPU Usage
-ssh autobot@172.16.168.21 "top -bn1 | grep 'Cpu(s)'"
-ssh autobot@172.16.168.24 "top -bn1 | grep 'Cpu(s)'"
+ssh autobot@<frontend-ip> "top -bn1 | grep 'Cpu(s)'"
+ssh autobot@<aiml-ip> "top -bn1 | grep 'Cpu(s)'"
 ```
 
 ### Alerting Thresholds

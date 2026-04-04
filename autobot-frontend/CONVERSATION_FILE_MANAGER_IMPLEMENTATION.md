@@ -9,7 +9,7 @@ All conversation-specific file manager UI components have been successfully impl
 ## 📦 Components Implemented
 
 ### 1. **useConversationFiles.ts** (Composable)
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/composables/useConversationFiles.ts`
+**Location:** `autobot-vue/src/composables/useConversationFiles.ts`
 
 **Features:**
 - Reactive state management for conversation files
@@ -41,7 +41,7 @@ All conversation-specific file manager UI components have been successfully impl
 ---
 
 ### 2. **ChatFilePanel.vue** (Component)
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/components/chat/ChatFilePanel.vue`
+**Location:** `autobot-vue/src/components/chat/ChatFilePanel.vue`
 
 **Features:**
 - Right sidebar panel (280px width)
@@ -71,7 +71,7 @@ Already integrated in `ChatInterface.vue`:
 ---
 
 ### 3. **DeleteConversationDialog.vue** (Component)
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/components/chat/DeleteConversationDialog.vue`
+**Location:** `autobot-vue/src/components/chat/DeleteConversationDialog.vue`
 
 **Features:**
 - Modal dialog with backdrop overlay
@@ -116,7 +116,7 @@ Integrated in `ChatSidebar.vue`:
 ### Updated Files:
 
 #### 1. **ChatRepository.ts**
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/models/repositories/ChatRepository.ts`
+**Location:** `autobot-vue/src/models/repositories/ChatRepository.ts`
 
 **Enhancement:**
 ```typescript
@@ -135,7 +135,7 @@ async deleteChat(
 ---
 
 #### 2. **ChatController.ts**
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/models/controllers/ChatController.ts`
+**Location:** `autobot-vue/src/models/controllers/ChatController.ts`
 
 **Enhancement:**
 ```typescript
@@ -154,7 +154,7 @@ async deleteChatSession(
 ---
 
 #### 3. **ChatSidebar.vue**
-**Location:** `/home/kali/Desktop/AutoBot/autobot-vue/src/components/chat/ChatSidebar.vue`
+**Location:** `autobot-vue/src/components/chat/ChatSidebar.vue`
 
 **Enhancements:**
 - Imported `DeleteConversationDialog` component

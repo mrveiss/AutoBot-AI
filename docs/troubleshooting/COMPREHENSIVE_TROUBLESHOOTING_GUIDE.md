@@ -20,15 +20,15 @@ python3 scripts/health_check_comprehensive.py
 tail -f logs/autobot.log | grep -i error
 
 # 4. Check VM network connectivity
-ping -c 3 172.16.168.21  # Frontend
-ping -c 3 172.16.168.22  # NPU Worker  
-ping -c 3 172.16.168.23  # Redis
-ping -c 3 172.16.168.24  # AI Stack
-ping -c 3 172.16.168.25  # Browser Service
+ping -c 3 <frontend-ip>  # Frontend
+ping -c 3 <npu-ip>  # NPU Worker  
+ping -c 3 <database-ip>  # Redis
+ping -c 3 <aiml-ip>  # AI Stack
+ping -c 3 <browser-ip>  # Browser Service
 
 # 5. Verify critical services
 curl -s http://127.0.0.1:8001/api/health | jq .
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
@@ -75,7 +75,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```bash
 # Check if Redis is running
 docker ps | grep redis
-redis-cli -h 172.16.168.23 ping
+redis-cli -h <database-ip> ping
 
 # If Redis is down, restart it
 docker restart autobot-redis
@@ -137,14 +137,14 @@ for vm in 21 22 23 24 25; do
 done
 
 # Check firewall rules
-sudo iptables -L -n | grep 172.16.168
+sudo iptables -L -n | grep "<network-subnet>"
 
 # Test specific service ports
-nc -zv 172.16.168.21 5173  # Frontend dev server
-nc -zv 172.16.168.22 8081  # NPU Worker
-nc -zv 172.16.168.23 6379  # Redis
-nc -zv 172.16.168.24 8080  # AI Stack
-nc -zv 172.16.168.25 3000  # Browser Service
+nc -zv <frontend-ip> 5173  # Frontend dev server
+nc -zv <npu-ip> 8081  # NPU Worker
+nc -zv <database-ip> 6379  # Redis
+nc -zv <aiml-ip> 8080  # AI Stack
+nc -zv <browser-ip> 3000  # Browser Service
 ```
 
 **Solutions**:
@@ -160,7 +160,7 @@ for vm in 21 22 23 24 25; do
 done
 
 # Test SSH connectivity
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "echo 'VM1 accessible'"
+ssh -i ~/.ssh/autobot_key autobot@<frontend-ip> "echo 'VM1 accessible'"
 ```
 
 #### B. Network Configuration Issues
@@ -170,7 +170,7 @@ ip addr show
 ip route show
 
 # Verify VM network is properly configured
-ping -c 3 172.16.168.1  # Network gateway
+ping -c 3 <network-gateway>  # Network gateway
 
 # Reset network if needed (WSL2)
 wsl --shutdown
@@ -191,13 +191,13 @@ docker ps | grep redis
 docker logs autobot-redis --tail=50
 
 # 2. Test Redis connectivity from different VMs
-redis-cli -h 172.16.168.23 -p 6379 ping
+redis-cli -h <database-ip> -p 6379 ping
 
 # 3. Check Redis memory usage
-redis-cli -h 172.16.168.23 info memory
+redis-cli -h <database-ip> info memory
 
 # 4. Check database configuration
-redis-cli -h 172.16.168.23 config get databases
+redis-cli -h <database-ip> config get databases
 ```
 
 **Solutions**:
@@ -212,7 +212,7 @@ docker rm autobot-redis
 docker run -d \
   --name autobot-redis \
   --network autobot \
-  --ip 172.16.168.23 \
+  --ip <database-ip> \
   -p 6379:6379 \
   -v redis_data:/data \
   redis/redis-stack:7.4.0-v1
@@ -221,10 +221,10 @@ docker run -d \
 #### B. Redis Memory Issues
 ```bash
 # Check available memory
-redis-cli -h 172.16.168.23 info memory | grep used_memory_human
+redis-cli -h <database-ip> info memory | grep used_memory_human
 
 # If Redis is out of memory, clear unnecessary data
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 SELECT 3  # Cache database
 FLUSHDB  # Clear cache only
 
@@ -235,7 +235,7 @@ docker restart autobot-redis
 #### C. Database Configuration Issues
 ```bash
 # Verify Redis database separation
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 INFO keyspace  # Should show multiple databases
 
 # If databases are mixed up, run database migration
@@ -256,7 +256,7 @@ python3 scripts/migrate_redis_databases.py --fix-separation
 **Diagnostic Commands**:
 ```bash
 # 1. Check NPU Worker status
-curl -s http://172.16.168.22:8081/health | jq .
+curl -s http://<npu-ip>:8081/health | jq .
 
 # 2. Verify GPU availability
 nvidia-smi
@@ -266,7 +266,7 @@ python3 -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 python3 -c "from openvino.runtime import Core; print(f'NPU available: {\"NPU\" in Core().available_devices}')"
 
 # 4. Test AI Stack orchestrator
-curl -s http://172.16.168.24:8080/health | jq .
+curl -s http://<aiml-ip>:8080/health | jq .
 ```
 
 **Solutions**:
@@ -274,13 +274,13 @@ curl -s http://172.16.168.24:8080/health | jq .
 #### A. NPU Worker Issues
 ```bash
 # Check NPU service logs
-ssh autobot@172.16.168.22 'sudo journalctl -u autobot-npu-worker -f'
+ssh autobot@<npu-ip> 'sudo journalctl -u autobot-npu-worker -f'
 
 # Restart NPU service
-ssh autobot@172.16.168.22 'sudo systemctl restart autobot-npu-worker'
+ssh autobot@<npu-ip> 'sudo systemctl restart autobot-npu-worker'
 
 # If NPU not detected, fallback to GPU
-curl -X POST http://172.16.168.22:8081/config \
+curl -X POST http://<npu-ip>:8081/config \
   -H "Content-Type: application/json" \
   -d '{"fallback_to_gpu": true, "primary_device": "GPU"}'
 ```
@@ -324,12 +324,12 @@ python3 scripts/download_ai_models.py --force-refresh
 curl -s http://127.0.0.1:8001/api/knowledge_base/stats/comprehensive | jq .
 
 # 2. Test direct Redis vector search
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 SELECT 8  # Vector database
 FT.INFO knowledge_idx
 
 # 3. Check embedding service
-curl -s http://172.16.168.22:8081/embeddings/health | jq .
+curl -s http://<npu-ip>:8081/embeddings/health | jq .
 ```
 
 **Solutions**:
@@ -340,7 +340,7 @@ curl -s http://172.16.168.22:8081/embeddings/health | jq .
 curl -X POST http://127.0.0.1:8001/api/knowledge_base/rebuild_index
 
 # Or manually rebuild
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 SELECT 8
 FT.DROPINDEX knowledge_idx
 # Index will be rebuilt automatically on next search
@@ -349,10 +349,10 @@ FT.DROPINDEX knowledge_idx
 #### B. Embedding Service Issues
 ```bash
 # Restart embedding service on NPU worker
-ssh autobot@172.16.168.22 'sudo systemctl restart autobot-embedding-service'
+ssh autobot@<npu-ip> 'sudo systemctl restart autobot-embedding-service'
 
 # Test embedding generation
-curl -X POST http://172.16.168.22:8081/embeddings/generate \
+curl -X POST http://<npu-ip>:8081/embeddings/generate \
   -H "Content-Type: application/json" \
   -d '{"text": "test embedding generation"}'
 ```
@@ -360,10 +360,10 @@ curl -X POST http://172.16.168.22:8081/embeddings/generate \
 #### C. Database Corruption
 ```bash
 # Check Redis database integrity
-redis-cli -h 172.16.168.23 --latency-history -i 1
+redis-cli -h <database-ip> --latency-history -i 1
 
 # If corrupted, restore from backup
-redis-cli -h 172.16.168.23 --rdb backup/dump.rdb
+redis-cli -h <database-ip> --rdb backup/dump.rdb
 
 # Or rebuild knowledge base from source
 python3 scripts/rebuild_knowledge_base.py --from-source
@@ -379,10 +379,10 @@ python3 scripts/rebuild_knowledge_base.py --from-source
 **Diagnostic Commands**:
 ```bash
 # 1. Check frontend service
-curl -s http://172.16.168.21:5173/ | head -10
+curl -s http://<frontend-ip>:5173/ | head -10
 
 # 2. Test API proxy
-curl -s http://172.16.168.21:5173/api/health
+curl -s http://<frontend-ip>:5173/api/health
 
 # 3. Check WebSocket connection
 wscat -c ws://127.0.0.1:8001/ws/test
@@ -399,7 +399,7 @@ cat vite.config.ts | grep -A 10 proxy
 # Expected proxy configuration:
 # proxy: {
 #   '/api': {
-#     target: 'https://172.16.168.20:8443',
+#     target: 'https://<backend-ip>:8443',
 #     changeOrigin: true
 #   }
 # }
@@ -411,7 +411,7 @@ npm run dev
 #### B. CORS Issues
 ```bash
 # Check CORS headers
-curl -H "Origin: http://172.16.168.21:5173" \
+curl -H "Origin: http://<frontend-ip>:5173" \
      -H "Access-Control-Request-Method: POST" \
      -H "Access-Control-Request-Headers: Content-Type" \
      -X OPTIONS \
@@ -432,7 +432,7 @@ curl --include \
      http://127.0.0.1:8001/ws/test
 
 # Test WebSocket proxy through Nginx
-curl -I http://172.16.168.21:5173/ws/test
+curl -I http://<frontend-ip>:5173/ws/test
 ```
 
 ---
@@ -489,7 +489,7 @@ ps aux | grep -i terminal | grep -v grep
 pkill -f "terminal_session"
 
 # Clear session storage
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 SELECT 2  # Session database
 KEYS "terminal_session:*"
 DEL terminal_session:*  # Clear all terminal sessions
@@ -505,13 +505,13 @@ DEL terminal_session:*  # Clear all terminal sessions
 **Diagnostic Commands**:
 ```bash
 # 1. Check browser service status
-curl -s http://172.16.168.25:3000/health | jq .
+curl -s http://<browser-ip>:3000/health | jq .
 
 # 2. Check available browsers
-curl -s http://172.16.168.25:3000/browsers | jq .
+curl -s http://<browser-ip>:3000/browsers | jq .
 
 # 3. List active sessions
-curl -s http://172.16.168.25:3000/sessions | jq .
+curl -s http://<browser-ip>:3000/sessions | jq .
 ```
 
 **Solutions**:
@@ -519,35 +519,35 @@ curl -s http://172.16.168.25:3000/sessions | jq .
 #### A. Browser Pool Exhaustion
 ```bash
 # Check active sessions
-curl -s http://172.16.168.25:3000/sessions/stats | jq .
+curl -s http://<browser-ip>:3000/sessions/stats | jq .
 
 # Close idle sessions
-curl -X DELETE http://172.16.168.25:3000/sessions/cleanup
+curl -X DELETE http://<browser-ip>:3000/sessions/cleanup
 
 # Increase browser pool size
-ssh autobot@172.16.168.25 'echo "MAX_BROWSER_SESSIONS=20" >> /opt/autobot/browser/.env'
-ssh autobot@172.16.168.25 'sudo systemctl restart autobot-browser-service'
+ssh autobot@<browser-ip> 'echo "MAX_BROWSER_SESSIONS=20" >> /opt/autobot/browser/.env'
+ssh autobot@<browser-ip> 'sudo systemctl restart autobot-browser-service'
 ```
 
 #### B. Playwright Installation Issues
 ```bash
 # Reinstall Playwright browsers
-ssh autobot@172.16.168.25 'cd /opt/autobot/browser && npx playwright install --with-deps'
+ssh autobot@<browser-ip> 'cd /opt/autobot/browser && npx playwright install --with-deps'
 
 # Check browser installation
-ssh autobot@172.16.168.25 'npx playwright install --dry-run'
+ssh autobot@<browser-ip> 'npx playwright install --dry-run'
 ```
 
 #### C. Display/X11 Issues
 ```bash
 # Check X11 forwarding
-ssh autobot@172.16.168.25 'echo $DISPLAY'
+ssh autobot@<browser-ip> 'echo $DISPLAY'
 
 # Start virtual display if needed
-ssh autobot@172.16.168.25 'sudo systemctl start xvfb'
+ssh autobot@<browser-ip> 'sudo systemctl start xvfb'
 
 # Test browser launch
-ssh autobot@172.16.168.25 'timeout 10s chromium-browser --headless --dump-dom http://example.com'
+ssh autobot@<browser-ip> 'timeout 10s chromium-browser --headless --dump-dom http://example.com'
 ```
 
 ### 9. File Upload & Management Issues
@@ -627,7 +627,7 @@ iostat 1 5
 free -m
 
 # 3. Check cache hit rates
-redis-cli -h 172.16.168.23 info stats | grep cache
+redis-cli -h <database-ip> info stats | grep cache
 
 # 4. Profile application
 python3 -m cProfile -o profile.stats backend/main.py
@@ -638,13 +638,13 @@ python3 -m cProfile -o profile.stats backend/main.py
 #### A. Database Query Optimization
 ```bash
 # Check slow Redis queries
-redis-cli -h 172.16.168.23 SLOWLOG GET 10
+redis-cli -h <database-ip> SLOWLOG GET 10
 
 # Optimize knowledge base index
 curl -X POST http://127.0.0.1:8001/api/knowledge_base/optimize_index
 
 # Clear query cache if needed
-redis-cli -h 172.16.168.23
+redis-cli -h <database-ip>
 SELECT 3  # Cache database
 FLUSHDB
 ```
@@ -706,11 +706,11 @@ fi
 
 # 4. Database Health
 echo "=== Database Health ==="
-redis_ping=$(redis-cli -h 172.16.168.23 ping 2>/dev/null || echo "FAILED")
+redis_ping=$(redis-cli -h <database-ip> ping 2>/dev/null || echo "FAILED")
 echo "Redis: $redis_ping"
 
 if [ "$redis_ping" = "PONG" ]; then
-    kb_count=$(redis-cli -h 172.16.168.23 -n 8 DBSIZE 2>/dev/null || echo 0)
+    kb_count=$(redis-cli -h <database-ip> -n 8 DBSIZE 2>/dev/null || echo 0)
     echo "Knowledge base vectors: $kb_count"
 fi
 
@@ -747,7 +747,7 @@ find /data/autobot/temp/ -type f -mtime +7 -delete
 
 # 3. Database Optimization
 echo "Optimizing databases..."
-redis-cli -h 172.16.168.23 BGREWRITEAOF
+redis-cli -h <database-ip> BGREWRITEAOF
 curl -X POST http://127.0.0.1:8001/api/knowledge_base/optimize
 
 # 4. Update System Packages
@@ -871,10 +871,10 @@ python3 scripts/log_analyzer.py --last=24h --severity=error
 ### External Resources
 
 **Documentation**:
-- Architecture Guide: `docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+- Architecture Guide: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - API Documentation: `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
-- Security Guide: `docs/security/PHASE_5_SECURITY_IMPLEMENTATION.md`
-- Developer Setup: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- Security Guide: `docs/security/SECURITY_FRAMEWORK.md`
+- Developer Setup: `docs/developer/DEVELOPER_SETUP.md`
 
 **Support Channels**:
 - GitHub Issues: For reproducible bugs

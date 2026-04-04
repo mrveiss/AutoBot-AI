@@ -1,7 +1,7 @@
 # Database MCP - Technical Deep Dive & Fix Examples
 
 **Issue**: #49 - Additional MCP Bridges  
-**File**: `/home/kali/Desktop/AutoBot/backend/api/database_mcp.py`  
+**File**: `backend/api/database_mcp.py`  
 **Analysis Date**: 2025-01-17
 
 ---

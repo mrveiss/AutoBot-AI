@@ -164,6 +164,6 @@ The AutoBot platform is now ready for full operation with a functional web inter
 3. Development can continue with confidence in the working infrastructure
 
 **Test Artifacts:**
-- Python test script: `/home/kali/Desktop/AutoBot/tests/test_frontend_final.py`
-- Browser test page: `/home/kali/Desktop/AutoBot/tests/test_frontend_browser.html`
-- This report: `/home/kali/Desktop/AutoBot/tests/results/FRONTEND_FINAL_TEST_REPORT.md`
+- Python test script: `tests/test_frontend_final.py`
+- Browser test page: `tests/test_frontend_browser.html`
+- This report: `tests/results/FRONTEND_FINAL_TEST_REPORT.md`

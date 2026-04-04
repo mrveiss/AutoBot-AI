@@ -30,7 +30,8 @@ from services.analytics_service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/advanced", tags=["analytics", "advanced"])
+# Issue #3355: prefix moved to router registry (analytics_routers.py)
+router = APIRouter(tags=["analytics", "advanced"])
 
 
 # ============================================================================

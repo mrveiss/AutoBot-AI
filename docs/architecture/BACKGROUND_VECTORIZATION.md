@@ -262,7 +262,7 @@ const checkStatus = async () => {
 tail -f logs/backend.log | grep -i error
 
 # Verify knowledge base initialized
-curl https://172.16.168.20:8443/api/knowledge_base/stats
+curl https://<backend-ip>:8443/api/knowledge_base/stats
 ```
 
 **Issue**: Slow vectorization
@@ -271,7 +271,7 @@ curl https://172.16.168.20:8443/api/knowledge_base/stats
 redis-cli CONFIG GET io-threads  # Should be 10
 
 # Check batch size
-curl https://172.16.168.20:8443/api/knowledge_base/vectorize_facts/status
+curl https://<backend-ip>:8443/api/knowledge_base/vectorize_facts/status
 ```
 
 **Issue**: High resource usage

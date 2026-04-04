@@ -65,6 +65,7 @@ class OpenAIProvider(BaseProvider):
         if not key:
             try:
                 from config import ConfigManager
+
                 key = ConfigManager().get_api_key("openai")
             except Exception:
                 pass

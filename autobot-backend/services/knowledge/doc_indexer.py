@@ -36,11 +36,11 @@ TIER_1_FILES = [
     "CLAUDE.md",
     "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
-    "docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md",
+    "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
     "docs/architecture/README.md",
     "docs/architecture/data-flows.md",
     "docs/architecture/redis-schema.md",
-    "docs/developer/PHASE_5_DEVELOPER_SETUP.md",
+    "docs/developer/DEVELOPER_SETUP.md",
     "docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md",
     "docs/features/MULTIMODAL_AI_INTEGRATION.md",
     "docs/GLOSSARY.md",
@@ -68,7 +68,6 @@ TIER_3_DIRS = [
 TIER_3_DIRS_EXTRA = [
     "docs/user-guide",
     "docs/developer",
-    "docs/plans",
 ]
 
 EXCLUDE_PATTERNS = [
@@ -80,6 +79,7 @@ EXCLUDE_PATTERNS = [
     r".*/archives/.*",
     r".*/reports/finished/.*",
     r".*/changelog/.*",
+    r".*/_index\.md$",
 ]
 
 # ============================================================================
@@ -203,6 +203,44 @@ def _extract_tags(content: str, file_path: str) -> List[str]:
             tags.add(keyword)
 
     return list(tags)[:15]
+
+
+def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
+    """Strip Obsidian YAML frontmatter and return (body, tags, aliases).
+
+    Recognises a leading ``---`` block. Returns the content after the closing
+    ``---`` together with any ``tags`` and ``aliases`` values found inside it.
+    If no frontmatter is present the original content is returned unchanged
+    with empty tag and alias lists.
+    """
+    if not content.startswith("---"):
+        return content, [], []
+
+    end = content.find("\n---", 3)
+    if end == -1:
+        return content, [], []
+
+    fm_block = content[3:end]
+    body = content[end + 4 :].lstrip("\n")
+
+    fm_tags: List[str] = []
+    fm_aliases: List[str] = []
+
+    # Parse simple YAML list values for 'tags' and 'aliases' keys.
+    current_key: Optional[str] = None
+    for line in fm_block.splitlines():
+        key_match = re.match(r"^(\w+)\s*:", line)
+        if key_match:
+            current_key = key_match.group(1)
+            inline = line[key_match.end() :].strip()
+            if inline and current_key in ("tags", "aliases"):
+                target = fm_tags if current_key == "tags" else fm_aliases
+                target.append(inline.lstrip("- ").strip())
+        elif line.strip().startswith("-") and current_key in ("tags", "aliases"):
+            target = fm_tags if current_key == "tags" else fm_aliases
+            target.append(line.strip().lstrip("- ").strip())
+
+    return body, fm_tags, fm_aliases
 
 
 def _estimate_tokens(text: str) -> int:
@@ -693,11 +731,13 @@ class DocIndexerService:
         """
         import asyncio
 
-        chunks = _chunk_markdown(content, file_str)
+        body, fm_tags, fm_aliases = _parse_frontmatter(content)
+        chunks = _chunk_markdown(body, file_str)
         if not chunks:
             return 0, 0
 
-        file_tags = _extract_tags(content, file_str)
+        file_tags = _extract_tags(body, file_str)
+        file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
         indexed = 0
         for i, chunk in enumerate(chunks):
             ok = await asyncio.to_thread(
@@ -773,12 +813,14 @@ class DocIndexerService:
                 result.skipped += 1
                 return
 
-            chunks = _chunk_markdown(content, file_path)
+            body, fm_tags, fm_aliases = _parse_frontmatter(content)
+            chunks = _chunk_markdown(body, file_path)
             if not chunks:
                 result.skipped += 1
                 return
 
-            file_tags = _extract_tags(content, file_path)
+            file_tags = _extract_tags(body, file_path)
+            file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
             indexed = 0
             for i, chunk in enumerate(chunks):
                 ok = await asyncio.to_thread(

@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from services.autoresearch.models import Experiment, ExperimentResult, ExperimentState
 from services.autoresearch.scorers import (
@@ -131,6 +131,48 @@ class TestLLMJudgeScorer:
         result = await scorer.score("A hypothesis", {})
         assert result.score == 0.0
         assert "error" in result.metadata
+
+
+class TestSubsetFractionPassthrough:
+    """Verify subset_fraction=None is a no-op for all concrete scorers."""
+
+    @pytest.mark.asyncio
+    async def test_llm_judge_accepts_subset_fraction_none(self):
+        llm = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.content = '{"rating": 7, "reasoning": "ok"}'
+        llm.chat.return_value = mock_response
+
+        scorer = LLMJudgeScorer(llm_service=llm, criteria=["quality"])
+        result = await scorer.score("output text", {}, subset_fraction=None)
+        assert result.score == 0.7
+
+    @pytest.mark.asyncio
+    async def test_llm_judge_accepts_subset_fraction_value(self):
+        llm = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.content = '{"rating": 6, "reasoning": "ok"}'
+        llm.chat.return_value = mock_response
+
+        scorer = LLMJudgeScorer(llm_service=llm, criteria=["quality"])
+        # subset_fraction is accepted and ignored for LLMJudgeScorer
+        result = await scorer.score("output text", {}, subset_fraction=0.3)
+        assert result.score == 0.6
+
+    @pytest.mark.asyncio
+    async def test_val_bpb_accepts_subset_fraction(self):
+        runner = AsyncMock()
+        experiment = MagicMock()
+        experiment.result = MagicMock()
+        experiment.result.val_bpb = 4.0
+        experiment.state = MagicMock()
+        experiment.state.value = "kept"
+        runner.run_experiment.return_value = experiment
+
+        scorer = ValBpbScorer(runner=runner, baseline_val_bpb=5.0)
+        result = await scorer.score("hypothesis", {}, subset_fraction=0.3)
+        # full experiment still runs; subset_fraction is logged and ignored
+        assert result.score > 0.0
 
 
 class TestHumanReviewScorer:

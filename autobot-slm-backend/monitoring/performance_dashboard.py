@@ -568,7 +568,9 @@ class PerformanceDashboard:
 
         except Exception as e:
             logger.error("Error getting metrics history: %s", e)
-            return web.json_response({"error": "Internal server error", "history": []}, status=500)
+            return web.json_response(
+                {"error": "Internal server error", "history": []}, status=500
+            )
 
     async def get_system_status(self, request):
         """Get overall system status summary."""

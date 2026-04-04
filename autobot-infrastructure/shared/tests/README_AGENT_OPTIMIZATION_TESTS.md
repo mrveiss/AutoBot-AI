@@ -152,7 +152,7 @@ Tests robustness and error handling:
 ### Run All Tests
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 pytest tests/test_optimized_agent_loader.py -v --tb=short
 ```
 
@@ -280,7 +280,7 @@ ModuleNotFoundError: No module named 'src.utils.optimized_agent_loader'
 ```
 **Solution:** Ensure PYTHONPATH includes project root:
 ```bash
-export PYTHONPATH=/home/kali/Desktop/AutoBot:$PYTHONPATH
+export PYTHONPATH=/opt/autobot:$PYTHONPATH
 pytest tests/test_optimized_agent_loader.py -v
 ```
 
@@ -290,7 +290,7 @@ FileNotFoundError: Agent file not found: .claude/agents/...
 ```
 **Solution:** Run tests from project root, not tests/ directory:
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 pytest tests/test_optimized_agent_loader.py -v
 ```
 

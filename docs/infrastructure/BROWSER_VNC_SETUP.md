@@ -2,16 +2,16 @@
 
 ## Overview
 
-Real-time collaborative browser viewing system for AutoBot - enables both users and AI agents to observe and control the same browser instance through VNC on Browser VM (172.16.168.25).
+Real-time collaborative browser viewing system for AutoBot - enables both users and AI agents to observe and control the same browser instance through VNC on Browser VM (<browser-ip>).
 
 ## Architecture
 
 ```
-Frontend (172.16.168.21:5173)
+Frontend (<frontend-ip>:5173)
     ↓
 Browser Tab Component (PopoutChromiumBrowser.vue)
     ↓
-noVNC iframe → Browser VM (172.16.168.25:6080/vnc.html)
+noVNC iframe → Browser VM (<browser-ip>:6080/vnc.html)
     ↓
 websockify (port 6080) → VNC Server (port 5901)
     ↓
@@ -60,10 +60,10 @@ If needed, deploy manually:
 
 ```bash
 # Copy service files
-scp scripts/infrastructure/browser-*.service autobot@172.16.168.25:/tmp/
+scp scripts/infrastructure/browser-*.service autobot@<browser-ip>:/tmp/
 
 # Install on Browser VM
-ssh autobot@172.16.168.25
+ssh autobot@<browser-ip>
 sudo mv /tmp/browser-*.service /etc/systemd/system/
 sudo chmod 644 /etc/systemd/system/browser-*.service
 sudo systemctl daemon-reload
@@ -76,40 +76,40 @@ sudo systemctl start browser-vnc browser-vnc-websockify browser-playwright
 ### Check Status
 
 ```bash
-ssh autobot@172.16.168.25 'sudo systemctl status browser-vnc browser-vnc-websockify browser-playwright'
+ssh autobot@<browser-ip> 'sudo systemctl status browser-vnc browser-vnc-websockify browser-playwright'
 ```
 
 ### View Logs
 
 ```bash
 # Playwright logs (includes browser activity)
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-playwright -f'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-playwright -f'
 
 # VNC server logs
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-vnc -f'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-vnc -f'
 
 # websockify logs
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-vnc-websockify -f'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-vnc-websockify -f'
 ```
 
 ### Restart Services
 
 ```bash
 # Restart all browser services
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-*.service'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-*.service'
 
 # Restart individual service
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-playwright'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-playwright'
 ```
 
 ### Stop/Start Services
 
 ```bash
 # Stop all
-ssh autobot@172.16.168.25 'sudo systemctl stop browser-*.service'
+ssh autobot@<browser-ip> 'sudo systemctl stop browser-*.service'
 
 # Start all
-ssh autobot@172.16.168.25 'sudo systemctl start browser-vnc browser-vnc-websockify browser-playwright'
+ssh autobot@<browser-ip> 'sudo systemctl start browser-vnc browser-vnc-websockify browser-playwright'
 ```
 
 ## Configuration
@@ -170,8 +170,8 @@ vncUrl.value = await appConfig.getVncUrl('playwright', {
 
 ### Direct VNC Access
 
-- **noVNC Web**: http://172.16.168.25:6080/vnc.html
-- **VNC Protocol**: vnc://172.16.168.25:5901
+- **noVNC Web**: http://<browser-ip>:6080/vnc.html
+- **VNC Protocol**: vnc://<browser-ip>:5901
 
 ### Frontend Browser Tab
 
@@ -187,7 +187,7 @@ Navigate to Browser tab in AutoBot interface:
 
 ```bash
 # Check all ports listening
-ssh autobot@172.16.168.25 "ss -tuln | grep -E ':(5901|6080|3000)'"
+ssh autobot@<browser-ip> "ss -tuln | grep -E ':(5901|6080|3000)'"
 
 # Should show:
 # - Port 5901 (VNC)
@@ -197,7 +197,7 @@ ssh autobot@172.16.168.25 "ss -tuln | grep -E ':(5901|6080|3000)'"
 
 ### Test VNC Connection
 
-1. Open http://172.16.168.25:6080/vnc.html
+1. Open http://<browser-ip>:6080/vnc.html
 2. Click "Connect"
 3. Should see XFCE desktop
 
@@ -205,7 +205,7 @@ ssh autobot@172.16.168.25 "ss -tuln | grep -E ':(5901|6080|3000)'"
 
 ```bash
 # Navigate to a page via API
-curl -X POST http://172.16.168.25:3000/navigate \
+curl -X POST http://<browser-ip>:3000/navigate \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com"}'
 
@@ -246,30 +246,30 @@ curl -X POST http://172.16.168.25:3000/navigate \
 
 ```bash
 # Check VNC server
-ssh autobot@172.16.168.25 'ps aux | grep Xtigervnc'
+ssh autobot@<browser-ip> 'ps aux | grep Xtigervnc'
 
 # Restart if needed
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-vnc'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-vnc'
 ```
 
 ### websockify Not Working
 
 ```bash
 # Check logs
-ssh autobot@172.16.168.25 'sudo journalctl -u browser-vnc-websockify -n 50'
+ssh autobot@<browser-ip> 'sudo journalctl -u browser-vnc-websockify -n 50'
 
 # Verify noVNC installed
-ssh autobot@172.16.168.25 'dpkg -l | grep novnc'
+ssh autobot@<browser-ip> 'dpkg -l | grep novnc'
 
 # Install if missing
-ssh autobot@172.16.168.25 'sudo apt-get install -y novnc'
+ssh autobot@<browser-ip> 'sudo apt-get install -y novnc'
 ```
 
 ### Playwright Still Headless
 
 ```bash
 # Check environment variables
-ssh autobot@172.16.168.25 'sudo systemctl show browser-playwright | grep Environment'
+ssh autobot@<browser-ip> 'sudo systemctl show browser-playwright | grep Environment'
 
 # Should show:
 # Environment=HEADLESS=false DISPLAY=:1
@@ -279,13 +279,13 @@ ssh autobot@172.16.168.25 'sudo systemctl show browser-playwright | grep Environ
 
 ```bash
 # Check DISPLAY variable
-ssh autobot@172.16.168.25 'echo $DISPLAY'
+ssh autobot@<browser-ip> 'echo $DISPLAY'
 
 # Check X server
-ssh autobot@172.16.168.25 'ps aux | grep Xtigervnc'
+ssh autobot@<browser-ip> 'ps aux | grep Xtigervnc'
 
 # Restart Playwright with correct DISPLAY
-ssh autobot@172.16.168.25 'sudo systemctl restart browser-playwright'
+ssh autobot@<browser-ip> 'sudo systemctl restart browser-playwright'
 ```
 
 ## Maintenance
@@ -300,10 +300,10 @@ ssh autobot@172.16.168.25 'sudo systemctl restart browser-playwright'
 
 ```bash
 # Check system resources
-ssh autobot@172.16.168.25 'top -b -n 1 | head -20'
+ssh autobot@<browser-ip> 'top -b -n 1 | head -20'
 
 # Check service memory usage
-ssh autobot@172.16.168.25 'systemctl status browser-playwright --no-pager | grep Memory'
+ssh autobot@<browser-ip> 'systemctl status browser-playwright --no-pager | grep Memory'
 ```
 
 ## Security Notes

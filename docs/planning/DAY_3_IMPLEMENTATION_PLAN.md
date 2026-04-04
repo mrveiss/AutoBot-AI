@@ -12,7 +12,7 @@
 Day 3 focuses on distributing the 6 pre-generated service API keys to their respective VMs and configuring each service to use HMAC-SHA256 authentication for service-to-service calls. This is a **configuration deployment only** - no code changes required.
 
 **Current Status**:
-- ✅ All 6 service keys generated and stored in Redis (172.16.168.23:6379)
+- ✅ All 6 service keys generated and stored in Redis (<database-ip>:6379)
 - ✅ Ansible playbook created and ready
 - ✅ Logging middleware deployed and collecting data
 - ⏳ Service keys NOT YET distributed to VMs
@@ -41,7 +41,7 @@ Day 3 focuses on distributing the 6 pre-generated service API keys to their resp
 7. `/api/settings/*` - 11 requests (settings)
 
 **Request Sources**:
-- 100% from Frontend VM (172.16.168.21) - browser/user requests
+- 100% from Frontend VM (<frontend-ip>) - browser/user requests
 - 0% service-to-service calls (services not configured yet)
 
 **Authentication Pattern**:
@@ -62,16 +62,16 @@ Unknown Service: 0%
 
 ## Service Key Inventory
 
-All 6 service keys generated and stored in Redis at `172.16.168.23:6379`:
+All 6 service keys generated and stored in Redis at `<database-ip>:6379`:
 
 | Service ID | VM | IP Address | Key Location | Purpose |
 |------------|-----|-----------|-------------|---------|
-| **main-backend** | Main (WSL) | 172.16.168.20 | `service:key:main-backend` | Backend API calls to other services |
-| **frontend** | VM1 | 172.16.168.21 | `service:key:frontend` | Frontend server-side API calls |
-| **npu-worker** | VM2 | 172.16.168.22 | `service:key:npu-worker` | NPU worker calls to backend |
-| **redis-stack** | VM3 | 172.16.168.23 | `service:key:redis-stack` | Redis Stack admin operations |
-| **ai-stack** | VM4 | 172.16.168.24 | `service:key:ai-stack` | AI/ML service API calls |
-| **browser-service** | VM5 | 172.16.168.25 | `service:key:browser-service` | Browser automation API calls |
+| **main-backend** | Main (WSL) | <backend-ip> | `service:key:main-backend` | Backend API calls to other services |
+| **frontend** | VM1 | <frontend-ip> | `service:key:frontend` | Frontend server-side API calls |
+| **npu-worker** | VM2 | <npu-ip> | `service:key:npu-worker` | NPU worker calls to backend |
+| **redis-stack** | VM3 | <database-ip> | `service:key:redis-stack` | Redis Stack admin operations |
+| **ai-stack** | VM4 | <aiml-ip> | `service:key:ai-stack` | AI/ML service API calls |
+| **browser-service** | VM5 | <browser-ip> | `service:key:browser-service` | Browser automation API calls |
 
 **Key Properties**:
 - **Format**: 256-bit (64 hex characters)
@@ -88,7 +88,7 @@ All 6 service keys generated and stored in Redis at `172.16.168.23:6379`:
 **Task 3.1: Verify Service Keys in Redis**
 ```bash
 # Connect to Redis and verify all 6 keys exist
-redis-cli -h 172.16.168.23 -p 6379
+redis-cli -h <database-ip> -p 6379
 
 # Check each service key
 EXISTS service:key:main-backend
@@ -162,7 +162,7 @@ This creates:
 
 SERVICE_ID=main-backend
 SERVICE_KEY=<256-bit hex key>
-REDIS_HOST=172.16.168.23
+REDIS_HOST=<database-ip>
 REDIS_PORT=6379
 AUTH_TIMESTAMP_WINDOW=300
 ```
@@ -204,7 +204,7 @@ ansible all -i ansible/inventory/production.yml \
 
 Each service needs to load authentication credentials on startup.
 
-**Main Backend** (172.16.168.20):
+**Main Backend** (<backend-ip>):
 ```bash
 # Edit backend startup to load service keys
 cat >> /home/autobot/backend/.env << 'EOF'
@@ -215,7 +215,7 @@ SERVICE_KEY_FILE=/etc/autobot/service-keys/main-backend.env
 EOF
 ```
 
-**Frontend** (172.16.168.21):
+**Frontend** (<frontend-ip>):
 ```bash
 # Frontend needs to send auth headers for server-side API calls
 cat >> /home/autobot/autobot-frontend/.env << 'EOF'
@@ -226,7 +226,7 @@ VITE_SERVICE_KEY_FILE=/etc/autobot/service-keys/frontend.env
 EOF
 ```
 
-**NPU Worker** (172.16.168.22):
+**NPU Worker** (<npu-ip>):
 ```bash
 cat >> /home/autobot/npu-worker/.env << 'EOF'
 
@@ -236,7 +236,7 @@ SERVICE_KEY_FILE=/etc/autobot/service-keys/npu-worker.env
 EOF
 ```
 
-**AI Stack** (172.16.168.24):
+**AI Stack** (<aiml-ip>):
 ```bash
 cat >> /home/autobot/ai-stack/.env << 'EOF'
 
@@ -246,7 +246,7 @@ SERVICE_KEY_FILE=/etc/autobot/service-keys/ai-stack.env
 EOF
 ```
 
-**Browser Service** (172.16.168.25):
+**Browser Service** (<browser-ip>):
 ```bash
 cat >> /home/autobot/browser-service/.env << 'EOF'
 
@@ -279,7 +279,7 @@ ansible-playbook -i ansible/inventory/production.yml \
 # 3. Frontend, NPU, Browser, AI (in parallel)
 
 # Restart backend
-ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
+ssh autobot@<backend-ip> "sudo systemctl restart autobot-backend"
 
 # Wait 30 seconds for backend to be ready
 sleep 30
@@ -293,7 +293,7 @@ ansible frontend,npu-worker,ai-stack,browser-service \
 **Task 3.10: Verify Services Loaded Credentials**
 ```bash
 # Check backend logs for service auth initialization
-ssh autobot@172.16.168.20 \
+ssh autobot@<backend-ip> \
   "grep 'Service credentials loaded' /home/autobot/logs/backend.log"
 
 # Check all services loaded their keys
@@ -306,7 +306,7 @@ ansible all -i ansible/inventory/production.yml \
 **Test 1: Backend → Redis Health Check**
 ```bash
 # Backend should now send auth headers to Redis API
-curl -v https://172.16.168.20:8443/api/redis/health
+curl -v https://<backend-ip>:8443/api/redis/health
 ```
 
 **Expected Log** (backend.log):
@@ -317,8 +317,8 @@ curl -v https://172.16.168.20:8443/api/redis/health
 **Test 2: NPU Worker → Backend Registration**
 ```bash
 # NPU worker should authenticate when registering
-ssh autobot@172.16.168.22 \
-  "curl -X POST https://172.16.168.20:8443/api/npu/register"
+ssh autobot@<npu-ip> \
+  "curl -X POST https://<backend-ip>:8443/api/npu/register"
 ```
 
 **Expected Log** (backend.log):
@@ -329,7 +329,7 @@ ssh autobot@172.16.168.22 \
 **Test 3: Frontend SSR → Backend API**
 ```bash
 # Frontend server-side rendering should authenticate
-curl http://172.16.168.21:5173/
+curl http://<frontend-ip>:5173/
 # This triggers frontend → backend API call with auth
 ```
 
@@ -428,10 +428,10 @@ ansible all -i ansible/inventory/production.yml \
 ansible all -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-*"
 
 # Check frontend accessible
-curl http://172.16.168.21:5173
+curl http://<frontend-ip>:5173
 
 # Check backend accessible
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 ```
 
 ---
@@ -582,7 +582,7 @@ headers = {
 **Diagnosis**:
 ```bash
 # Check service key matches Redis
-redis-cli -h 172.16.168.23 -p 6379 GET service:key:main-backend
+redis-cli -h <database-ip> -p 6379 GET service:key:main-backend
 cat /etc/autobot/service-keys/main-backend.env | grep SERVICE_KEY
 ```
 

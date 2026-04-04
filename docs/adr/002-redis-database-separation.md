@@ -117,7 +117,7 @@ async_redis = await get_redis_client(async_client=True, database="knowledge")
 
 # FORBIDDEN - Never instantiate directly
 import redis
-client = redis.Redis(host="172.16.168.23", db=0)  # DON'T DO THIS
+client = redis.Redis(host="<database-ip>", db=0)  # DON'T DO THIS
 ```
 
 ### Migration Script
@@ -134,15 +134,15 @@ python scripts/migrate_redis_databases.py --from 0 --to 1 --pattern "llama_index
 
 ```bash
 # Backup specific database
-redis-cli -h 172.16.168.23 -n 1 --rdb knowledge_backup.rdb
+redis-cli -h <database-ip> -n 1 --rdb knowledge_backup.rdb
 
 # Backup all databases
-redis-cli -h 172.16.168.23 BGSAVE
+redis-cli -h <database-ip> BGSAVE
 ```
 
 ## Related ADRs
 
-- [ADR-001](001-distributed-vm-architecture.md) - Redis runs on VM3 (172.16.168.23)
+- [ADR-001](001-distributed-vm-architecture.md) - Redis runs on VM3 (<database-ip>)
 
 ---
 

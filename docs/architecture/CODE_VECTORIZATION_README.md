@@ -22,7 +22,7 @@ A comprehensive, functional architecture for adding semantic code analysis to Au
 
 ## 📚 Documentation Structure
 
-All documents are in `/home/kali/Desktop/AutoBot/docs/`:
+All documents are in `docs/`:
 
 ### 1️⃣ **Start Here** - Executive Summary
 📄 `architecture/CODE_VECTORIZATION_SUMMARY.md`

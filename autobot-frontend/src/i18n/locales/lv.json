@@ -2555,6 +2555,10 @@
       "zoomIn": "Tuvināt",
       "zoomOut": "Tālināt",
       "fitToView": "Pielāgot skatam",
+      "switchTo3d": "Pārslēgties uz 3D skatu",
+      "switchTo2d": "Pārslēgties uz 2D skatu",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Pilnekrāns",
       "exitFullscreen": "Iziet no pilnekrāna",
       "typeLabel": "Tips:",
@@ -2614,7 +2618,8 @@
         "searching": "Meklē entītījas...",
         "noResults": "Nav atrasta neviena entītīja, kas atbilst jūsu meklējumam",
         "sourcesCount": "{count} avoti"
-      }
+      },
+      "noEntities3D": "Nav entītiju, ko parādīt"
     },
     "connectors": {
       "title": "Avotu savienotāji",
@@ -4778,7 +4783,8 @@
       "accountLocked": "Konts īslaicīgi bloķēts vairāku neveiksmīgu mēģinājumu dēļ",
       "tooManyAttempts": "Pārāk daudz pieteikšanās mēģinājumu. Lūdzu, mēģiniet vēlāk.",
       "serverError": "Servera kļūda. Lūdzu, mēģiniet vēlāk.",
-      "unexpectedError": "Radās neparedzēta kļūda"
+      "unexpectedError": "Radās neparedzēta kļūda",
+      "footer": "© 2026 AutoBot. Visas tiesības aizsargātas."
     }
   },
   "browser": {

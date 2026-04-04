@@ -105,7 +105,11 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "state_tracking",
     ),
     ("api.project_state", "/project-state", ["project-state"], "project_state"),
-    ("api.phase_management", "/phases", ["phases"], "phase_management"),
+    # Issue #3331: api.phase_management removed — its /phases prefix conflicted and its
+    # scripts.phase_validation_system import never existed; replaced by api.phases below.
+    # Issue #3331: /api/project/* and /api/phases/* endpoints for PhaseProgressionIndicator
+    ("api.project", "/project", ["project"], "project"),
+    ("api.phases", "/phases", ["phases"], "phases"),
     # Services and infrastructure
     ("api.services", "/services", ["services"], "services"),
     ("api.elevation", "/elevation", ["elevation"], "elevation"),
@@ -157,9 +161,10 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["merge-conflicts", "code-intelligence", "git"],
         "merge_conflict_resolution",
     ),
+    # Issue #3355: moved prefix from APIRouter() into registry (was "")
     (
         "api.natural_language_search",
-        "",
+        "/nl-search",
         ["natural-language-search", "code-search"],
         "natural_language_search",
     ),
@@ -285,6 +290,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/chat-knowledge",
         ["chat-knowledge"],
         "chat_knowledge",
+    ),
+    # Issue #3402: KB Librarian agent HTTP surface — registered
+    (
+        "api.kb_librarian",
+        "/kb-librarian",
+        ["kb-librarian", "knowledge"],
+        "kb_librarian",
     ),
     # NPU and Redis
     ("api.npu_workers", "", ["npu-workers"], "npu_workers"),
@@ -429,6 +441,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/conversations",
         ["conversation-export"],
         "conversation_export",
+    ),
+    # Issue #3407: SLM Docker deployment bridge
+    (
+        "api.slm.deployments",
+        "",
+        ["slm-deployments"],
+        "slm_deployments",
     ),
 ]
 

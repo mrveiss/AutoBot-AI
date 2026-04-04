@@ -57,7 +57,7 @@ Transition from **logging-only mode** to **active enforcement mode** to close CV
 
 ### Enforcement Middleware Overview
 
-**File:** `/home/kali/Desktop/AutoBot/backend/middleware/service_auth_enforcement.py`
+**File:** `backend/middleware/service_auth_enforcement.py`
 
 **Capabilities:**
 - Comprehensive endpoint categorization (85 exempt + 16 service-only)
@@ -186,7 +186,7 @@ SERVICE_ONLY_PATHS = [
 
 ### Logging Middleware Status
 
-**File:** `/home/kali/Desktop/AutoBot/backend/middleware/service_auth_logging.py`
+**File:** `backend/middleware/service_auth_logging.py`
 **Status:** ✅ DEPLOYED (Day 3 complete)
 **Mode:** Logging only - does NOT block requests
 
@@ -200,7 +200,7 @@ SERVICE_ONLY_PATHS = [
 
 ### ServiceHTTPClient Implementation
 
-**File:** `/home/kali/Desktop/AutoBot/backend/utils/service_client.py`
+**File:** `backend/utils/service_client.py`
 **Status:** ✅ FULLY IMPLEMENTED
 
 **Capabilities:**
@@ -215,11 +215,11 @@ SERVICE_ONLY_PATHS = [
 ```python
 # Method 1: Create from environment
 client = create_service_client_from_env()
-response = await client.get("http://172.16.168.24:8080/api/inference")
+response = await client.get("http://<aiml-ip>:8080/api/inference")
 
 # Method 2: Explicit credentials
 client = ServiceHTTPClient(service_id="main-backend", service_key="...")
-response = await client.post("http://172.16.168.22:8081/api/process", json={...})
+response = await client.post("http://<npu-ip>:8081/api/process", json={...})
 ```
 
 **Current Deployment:**
@@ -323,11 +323,11 @@ echo "Current time: $(date)"
 echo "Hours elapsed: (calculate)"
 
 # Verify system stability
-curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
+curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 # Expected: "healthy"
 
 # Check service keys still present
-redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" KEYS "service:key:*" | wc -l
+redis-cli -h <database-ip> -a "$REDIS_PASSWORD" KEYS "service:key:*" | wc -l
 # Expected: 6
 
 # Review authentication logs
@@ -347,7 +347,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 #### Step 1.2: Update NPU Worker Configuration
 
 **Duration:** 30-45 minutes
-**Target:** VM 22 (172.16.168.22)
+**Target:** VM 22 (<npu-ip>)
 
 **Actions:**
 
@@ -356,8 +356,8 @@ grep "Service auth failed" logs/backend.log | tail -50
    Identify where NPU Worker makes backend API calls:
    ```bash
    # On NPU Worker (VM 22), find backend API calls
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.22
-   grep -r "https://172.16.168.20:8443" /home/autobot/npu-worker/
+   ssh -i ~/.ssh/autobot_key autobot@<npu-ip>
+   grep -r "https://<backend-ip>:8443" /home/autobot/npu-worker/
    ```
 
    Example locations to update:
@@ -373,7 +373,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    scp -i ~/.ssh/autobot_key \
      backend/utils/service_client.py \
      backend/security/service_auth.py \
-     autobot@172.16.168.22:/home/autobot/npu-worker/utils/
+     autobot@<npu-ip>:/home/autobot/npu-worker/utils/
    ```
 
    Option B: Create shared library package (better long-term)
@@ -389,7 +389,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    SERVICE_ID=npu-worker
    SERVICE_KEY_FILE=/etc/autobot/service-keys/npu-worker.env
    AUTH_TIMESTAMP_WINDOW=300
-   BACKEND_HOST=172.16.168.20
+   BACKEND_HOST=<backend-ip>
    BACKEND_PORT=8001
    ```
 
@@ -402,7 +402,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    async def send_results(results):
        async with httpx.AsyncClient() as client:
            response = await client.post(
-               "https://172.16.168.20:8443/api/npu/results",
+               "https://<backend-ip>:8443/api/npu/results",
                json=results
            )
    ```
@@ -414,7 +414,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    async def send_results(results):
        client = create_service_client_from_env()
        response = await client.post(
-           "https://172.16.168.20:8443/api/npu/results",
+           "https://<backend-ip>:8443/api/npu/results",
            json=results
        )
        await client.close()
@@ -423,7 +423,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 5. **Restart NPU Worker service**
 
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.22
+   ssh -i ~/.ssh/autobot_key autobot@<npu-ip>
    sudo systemctl restart npu-worker
    # OR
    pkill -f npu_worker && python -m npu_worker &
@@ -457,14 +457,14 @@ grep "Service auth failed" logs/backend.log | tail -50
 #### Step 1.3: Update AI Stack Configuration
 
 **Duration:** 30-45 minutes
-**Target:** VM 24 (172.16.168.24)
+**Target:** VM 24 (<aiml-ip>)
 
 **Actions:** (Similar to Step 1.2)
 
 1. **Identify backend API call locations in AI Stack**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.24
-   grep -r "https://172.16.168.20:8443" /home/autobot/ai-stack/
+   ssh -i ~/.ssh/autobot_key autobot@<aiml-ip>
+   grep -r "https://<backend-ip>:8443" /home/autobot/ai-stack/
    ```
 
 2. **Deploy ServiceHTTPClient to AI Stack**
@@ -472,7 +472,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    scp -i ~/.ssh/autobot_key \
      backend/utils/service_client.py \
      backend/security/service_auth.py \
-     autobot@172.16.168.24:/home/autobot/ai-stack/utils/
+     autobot@<aiml-ip>:/home/autobot/ai-stack/utils/
    ```
 
 3. **Verify .env configuration on VM 24**
@@ -480,7 +480,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    SERVICE_ID=ai-stack
    SERVICE_KEY_FILE=/etc/autobot/service-keys/ai-stack.env
    AUTH_TIMESTAMP_WINDOW=300
-   BACKEND_HOST=172.16.168.20
+   BACKEND_HOST=<backend-ip>
    BACKEND_PORT=8001
    ```
 
@@ -488,7 +488,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 
 5. **Restart AI Stack services**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.24
+   ssh -i ~/.ssh/autobot_key autobot@<aiml-ip>
    sudo systemctl restart ai-stack
    ```
 
@@ -509,14 +509,14 @@ grep "Service auth failed" logs/backend.log | tail -50
 #### Step 1.4: Update Browser Service Configuration
 
 **Duration:** 30-45 minutes
-**Target:** VM 25 (172.16.168.25)
+**Target:** VM 25 (<browser-ip>)
 
 **Actions:** (Similar to Steps 1.2 and 1.3)
 
 1. **Identify backend API call locations in Browser Service**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.25
-   grep -r "https://172.16.168.20:8443" /home/autobot/browser-service/
+   ssh -i ~/.ssh/autobot_key autobot@<browser-ip>
+   grep -r "https://<backend-ip>:8443" /home/autobot/browser-service/
    ```
 
 2. **Deploy ServiceHTTPClient to Browser Service**
@@ -524,7 +524,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    scp -i ~/.ssh/autobot_key \
      backend/utils/service_client.py \
      backend/security/service_auth.py \
-     autobot@172.16.168.25:/home/autobot/browser-service/utils/
+     autobot@<browser-ip>:/home/autobot/browser-service/utils/
    ```
 
 3. **Verify .env configuration on VM 25**
@@ -532,7 +532,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    SERVICE_ID=browser-service
    SERVICE_KEY_FILE=/etc/autobot/service-keys/browser-service.env
    AUTH_TIMESTAMP_WINDOW=300
-   BACKEND_HOST=172.16.168.20
+   BACKEND_HOST=<backend-ip>
    BACKEND_PORT=8001
    ```
 
@@ -540,7 +540,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 
 5. **Restart Browser Service**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.25
+   ssh -i ~/.ssh/autobot_key autobot@<browser-ip>
    sudo systemctl restart browser-service
    ```
 
@@ -561,14 +561,14 @@ grep "Service auth failed" logs/backend.log | tail -50
 #### Step 1.5: Evaluate Frontend Service Authentication Need
 
 **Duration:** 15-30 minutes
-**Target:** VM 21 (172.16.168.21)
+**Target:** VM 21 (<frontend-ip>)
 
 **Evaluation Questions:**
 
 1. **Does Frontend VM make server-side API calls to backend?**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
-   grep -r "https://172.16.168.20:8443" /home/autobot/autobot-frontend/
+   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
+   grep -r "https://<backend-ip>:8443" /home/autobot/autobot-frontend/
    ```
 
 2. **Are these calls from browser or from server-side code?**
@@ -625,7 +625,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    # End-to-end workflow tests
 
    # Test 1: Chat with AI (involves AI Stack)
-   curl -X POST https://172.16.168.20:8443/api/chat \
+   curl -X POST https://<backend-ip>:8443/api/chat \
      -H "Content-Type: application/json" \
      -d '{"message": "Hello", "session_id": "test"}'
 
@@ -641,7 +641,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    # Verify authentication overhead is minimal (< 10ms)
    # Compare pre-auth vs post-auth response times
 
-   ab -n 100 -c 10 https://172.16.168.20:8443/api/health
+   ab -n 100 -c 10 https://<backend-ip>:8443/api/health
    # Note: Average response time
 
    # Should be similar to pre-authentication baseline
@@ -668,7 +668,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 
 ```bash
 # Example: Rollback NPU Worker
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.22
+ssh -i ~/.ssh/autobot_key autobot@<npu-ip>
 
 # Revert code to previous version
 cd /home/autobot/npu-worker
@@ -678,7 +678,7 @@ git checkout HEAD~1  # Or specific commit
 sudo systemctl restart npu-worker
 
 # Verify functionality restored
-curl http://172.16.168.22:8081/health
+curl http://<npu-ip>:8081/health
 ```
 
 **Service continues working with unauthenticated calls** (logging mode allows this)
@@ -790,7 +790,7 @@ curl http://172.16.168.22:8081/health
 
        # Service health
        echo "Service Health:"
-       curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
+       curl -s https://<backend-ip>:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
 
        sleep 10
    done
@@ -826,7 +826,7 @@ curl http://172.16.168.22:8081/health
 
    # Verify rollback
    sleep 5
-   status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
+   status=$(curl -s https://<backend-ip>:8443/api/health | jq -r '.status')
 
    if [ "$status" = "healthy" ]; then
        echo "✅ Rollback successful - Enforcement mode disabled"
@@ -846,7 +846,7 @@ curl http://172.16.168.22:8081/health
 
    ```bash
    # Edit .env file
-   vim /home/kali/Desktop/AutoBot/.env
+   vim .env
 
    # Change:
    SERVICE_AUTH_ENFORCEMENT_MODE=false
@@ -874,15 +874,15 @@ curl http://172.16.168.22:8081/health
 
    ```bash
    # Backend health check
-   curl -s https://172.16.168.20:8443/api/health | jq
+   curl -s https://<backend-ip>:8443/api/health | jq
    # Expected: {"status": "healthy", ...}
 
    # Frontend accessibility test (should still work)
-   curl -s https://172.16.168.20:8443/api/settings | jq
+   curl -s https://<backend-ip>:8443/api/settings | jq
    # Expected: 200 OK (exempt path)
 
    # Service-only path test (should require auth)
-   curl -s https://172.16.168.20:8443/api/npu/internal
+   curl -s https://<backend-ip>:8443/api/npu/internal
    # Expected: 401 Unauthorized (if called without auth)
    ```
 
@@ -909,7 +909,7 @@ curl http://172.16.168.22:8081/health
 
 ```bash
 # 1. Backend health
-curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
+curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 
 # 2. Authentication metrics (last hour)
 cutoff=$(date -d '1 hour ago' '+%Y-%m-%d %H:%M')
@@ -929,7 +929,7 @@ echo "Auth Success: $success | Failed: $failed | Blocked: $blocked"
 # - Trigger browser automation → Verify completion
 
 # 4. Frontend accessibility
-curl -s https://172.16.168.20:8443/api/settings > /dev/null
+curl -s https://<backend-ip>:8443/api/settings > /dev/null
 echo "Frontend access: $?"  # Should be 0 (success)
 ```
 
@@ -987,7 +987,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    for path in "/api/chat" "/api/settings" "/api/knowledge" "/api/terminal"; do
        echo "Testing: $path"
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "https://172.16.168.20:8443$path")
+                "https://<backend-ip>:8443$path")
 
        if [ "$status" != "200" ] && [ "$status" != "404" ]; then
            echo "❌ FAILED: $path returned $status (expected 200 or 404)"
@@ -1005,7 +1005,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
        echo "Testing: $path (should be blocked)"
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "https://172.16.168.20:8443$path")
+                "https://<backend-ip>:8443$path")
 
        if [ "$status" = "401" ] || [ "$status" = "403" ]; then
            echo "✅ PASSED: $path properly blocked ($status)"
@@ -1020,7 +1020,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    ```bash
    # Test emergency override mechanism
 
-   curl -X GET "https://172.16.168.20:8443/api/npu/internal" \
+   curl -X GET "https://<backend-ip>:8443/api/npu/internal" \
         -H "X-Override-Token: YOUR_OVERRIDE_TOKEN" \
         -v
 
@@ -1061,7 +1061,7 @@ sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false
 sudo systemctl restart autobot-backend
 
 # Verify rollback
-curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
+curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 # Expected: "healthy"
 
 # Confirm enforcement disabled
@@ -1192,7 +1192,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
        # Verify backend healthy
        sleep 5
-       status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
+       status=$(curl -s https://<backend-ip>:8443/api/health | jq -r '.status')
 
        if [ "$status" != "healthy" ]; then
            echo "❌ Backend health check failed at ${pct}% - Rolling back"
@@ -1272,7 +1272,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
        echo
        echo "Service Health:"
-       curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
+       curl -s https://<backend-ip>:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
 
        sleep 10
    done
@@ -1293,7 +1293,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
    echo "Current time: $(date)"
 
    # Verify all services still healthy
-   curl -s https://172.16.168.20:8443/api/health | jq
+   curl -s https://<backend-ip>:8443/api/health | jq
 
    # Review recent authentication logs
    grep "Service authenticated successfully" logs/backend.log | tail -20
@@ -1371,7 +1371,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
    ```bash
    # Load testing with authentication
-   ab -n 1000 -c 50 https://172.16.168.20:8443/api/health
+   ab -n 1000 -c 50 https://<backend-ip>:8443/api/health
 
    # Compare to baseline (from Phase 2)
    # Authentication overhead should still be < 10ms
@@ -1383,7 +1383,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
    # Attempt unauthenticated access to service-only paths
    for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "https://172.16.168.20:8443$path")
+                "https://<backend-ip>:8443$path")
 
        if [ "$status" = "401" ] || [ "$status" = "403" ]; then
            echo "✅ $path properly secured"
@@ -1422,7 +1422,7 @@ System automatically executes rollback script - no manual intervention needed.
 bash scripts/rollback-enforcement.sh
 
 # Verify system restored
-curl -s https://172.16.168.20:8443/api/health | jq
+curl -s https://<backend-ip>:8443/api/health | jq
 
 # Review logs to identify issue
 grep "ERROR\|FAILED" logs/backend.log | tail -50
@@ -1473,7 +1473,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
    sudo systemctl restart autobot-backend
 
    # Verify configuration
-   curl -s https://172.16.168.20:8443/api/health | jq
+   curl -s https://<backend-ip>:8443/api/health | jq
    ```
 
 #### Step 4.2: Production Hardening
@@ -1716,7 +1716,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
    # Service key status
    echo "Service Key Status:"
    for key in main-backend frontend npu-worker redis-stack ai-stack browser-service; do
-       ttl=$(redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
+       ttl=$(redis-cli -h <database-ip> -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
        days=$((ttl / 86400))
        echo "  $key: $days days remaining"
    done
@@ -1724,7 +1724,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
 
    # System health
    echo "Backend Health:"
-   curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
+   curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 
    echo
    echo "=== Report Complete ==="
@@ -1733,7 +1733,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
    Schedule daily execution:
    ```bash
    # Add to crontab
-   0 8 * * * /home/kali/Desktop/AutoBot/scripts/monitoring/daily-service-auth-report.sh | mail -s "AutoBot Service Auth Daily Report" admin@autobot.local
+   0 8 * * * scripts/monitoring/daily-service-auth-report.sh | mail -s "AutoBot Service Auth Daily Report" admin@autobot.local
    ```
 
 ### Phase 4 Success Criteria
@@ -1770,14 +1770,14 @@ sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false
 # Step 2: Fast backend restart
 pkill -f "uvicorn.*backend"
 sleep 2
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 nohup python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 > logs/backend.log 2>&1 &
 
 # Step 3: Wait for startup
 sleep 5
 
 # Step 4: Verify rollback
-status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null)
+status=$(curl -s https://<backend-ip>:8443/api/health | jq -r '.status' 2>/dev/null)
 
 if [ "$status" = "healthy" ]; then
     echo "✅ EMERGENCY ROLLBACK SUCCESSFUL"
@@ -1795,7 +1795,7 @@ echo "Rollback executed at $(date)" | mail -s "CRITICAL: AutoBot Service Auth Em
 echo "=== Rollback Complete ==="
 ```
 
-**Save as:** `/home/kali/Desktop/AutoBot/scripts/EMERGENCY-ROLLBACK.sh`
+**Save as:** `scripts/EMERGENCY-ROLLBACK.sh`
 **Permissions:** `chmod +x scripts/EMERGENCY-ROLLBACK.sh`
 
 **Execution:** `bash scripts/EMERGENCY-ROLLBACK.sh`
@@ -1837,7 +1837,7 @@ sudo systemctl restart autobot-backend
 sleep 10
 
 # Backend health
-health=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
+health=$(curl -s https://<backend-ip>:8443/api/health | jq -r '.status')
 echo "Backend health: $health"
 
 # Service connectivity
@@ -1848,7 +1848,7 @@ done
 
 # Frontend accessibility
 for path in "/api/chat" "/api/settings" "/api/knowledge"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://<backend-ip>:8443$path")
     echo "Frontend path $path: $status"
 done
 
@@ -1957,7 +1957,7 @@ echo "System restored to logging-only mode"
 
 **Quick Health Check:**
 ```bash
-curl -s https://172.16.168.20:8443/api/health | jq
+curl -s https://<backend-ip>:8443/api/health | jq
 ```
 
 **Authentication Metrics (Last Hour):**
@@ -1980,7 +1980,7 @@ grep "Service authenticated successfully" logs/backend.log | \
 **Service Key Status:**
 ```bash
 for key in main-backend frontend npu-worker redis-stack ai-stack browser-service; do
-  ttl=$(redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
+  ttl=$(redis-cli -h <database-ip> -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
   days=$((ttl / 86400))
   echo "$key: $days days"
 done
@@ -2008,7 +2008,7 @@ echo
 
 # Test 1: Backend Health
 echo "[Test 1] Backend Health Check"
-health=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
+health=$(curl -s https://<backend-ip>:8443/api/health | jq -r '.status')
 if [ "$health" = "healthy" ]; then
     echo "✅ PASSED: Backend is healthy"
 else
@@ -2022,7 +2022,7 @@ passed=0
 failed=0
 
 for path in "/api/chat" "/api/settings" "/api/knowledge" "/api/terminal"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://<backend-ip>:8443$path")
     if [ "$status" = "200" ] || [ "$status" = "404" ]; then
         echo "✅ $path: $status"
         ((passed++))
@@ -2041,7 +2041,7 @@ passed=0
 failed=0
 
 for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://<backend-ip>:8443$path")
     if [ "$status" = "401" ] || [ "$status" = "403" ]; then
         echo "✅ $path: Blocked ($status)"
         ((passed++))
@@ -2075,7 +2075,7 @@ echo "[Test 5] Service Key Status"
 
 all_keys_ok=true
 for key in main-backend frontend npu-worker redis-stack ai-stack browser-service; do
-    ttl=$(redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
+    ttl=$(redis-cli -h <database-ip> -a "$REDIS_PASSWORD" TTL "service:key:$key" 2>/dev/null)
 
     if [ "$ttl" -gt 2592000 ]; then  # > 30 days
         days=$((ttl / 86400))
@@ -2292,7 +2292,7 @@ echo "=== Validation Complete ==="
 
 **During Rollout:**
 
-1. Update `/home/kali/Desktop/AutoBot/docs/security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md` (this document)
+1. Update `docs/security/SERVICE_AUTH_ENFORCEMENT_ROLLOUT_PLAN.md` (this document)
 2. Update `docs/deployment/SERVICE_AUTHENTICATION.md` with final configuration
 3. Update `docs/api/SERVICE_TO_SERVICE_API.md` with authentication requirements
 4. Update `docs/troubleshooting/SERVICE_AUTH_ISSUES.md` with common problems
@@ -2302,7 +2302,7 @@ echo "=== Validation Complete ==="
 
 1. Create `docs/operations/SERVICE_AUTH_RUNBOOK.md` for daily operations
 2. Create `docs/security/SERVICE_AUTH_INCIDENT_RESPONSE.md` for incident handling
-3. Update `docs/developer/PHASE_5_DEVELOPER_SETUP.md` with service auth setup
+3. Update `docs/developer/DEVELOPER_SETUP.md` with service auth setup
 4. Document lessons learned in `docs/retrospectives/SERVICE_AUTH_ROLLOUT.md`
 
 ---
@@ -2397,7 +2397,7 @@ See "Endpoint Categorization" section for complete list.
 SERVICE_ID=npu-worker
 SERVICE_KEY_FILE=/etc/autobot/service-keys/npu-worker.env
 AUTH_TIMESTAMP_WINDOW=300
-BACKEND_HOST=172.16.168.20
+BACKEND_HOST=<backend-ip>
 BACKEND_PORT=8001
 ```
 
@@ -2424,19 +2424,19 @@ grep "Service authenticated successfully" logs/backend.log | \
 **Service Key Management:**
 ```bash
 # Check service key TTL
-redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" TTL "service:key:main-backend"
+redis-cli -h <database-ip> -a "$REDIS_PASSWORD" TTL "service:key:main-backend"
 
 # List all service keys
-redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" KEYS "service:key:*"
+redis-cli -h <database-ip> -a "$REDIS_PASSWORD" KEYS "service:key:*"
 
 # View service key value (for verification only)
-redis-cli -h 172.16.168.23 -a "$REDIS_PASSWORD" GET "service:key:main-backend"
+redis-cli -h <database-ip> -a "$REDIS_PASSWORD" GET "service:key:main-backend"
 ```
 
 **Clock Synchronization:**
 ```bash
 # Force NTP sync on VM
-ssh -i ~/.ssh/autobot_key autobot@172.16.168.22 "sudo ntpdate -u pool.ntp.org"
+ssh -i ~/.ssh/autobot_key autobot@<npu-ip> "sudo ntpdate -u pool.ntp.org"
 
 # Check time across all VMs
 for vm in 20 21 22 23 24 25; do

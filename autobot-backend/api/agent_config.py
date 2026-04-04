@@ -109,6 +109,20 @@ async def _get_available_models() -> list:
         return []
 
 
+async def _get_available_providers() -> list:
+    """Return names of LLM providers that are currently reachable."""
+    try:
+        from services.provider_health import ProviderHealthManager
+
+        results = await ProviderHealthManager.check_all_providers(
+            timeout=3.0, use_cache=True
+        )
+        return [name for name, result in results.items() if result.available]
+    except Exception as e:
+        logger.warning("Could not check provider availability: %s", e)
+        return []
+
+
 class AgentConfig(BaseModel):
     """Agent configuration model"""
 
@@ -835,7 +849,7 @@ async def get_agent_config(
         "config_source": config_source,
         "configuration_options": {
             "available_models": await _get_available_models(),
-            "available_providers": ["ollama", "openai", "anthropic"],
+            "available_providers": await _get_available_providers(),
             "configurable_settings": ["model", "provider", "enabled", "priority"],
         },
         "health_check": {

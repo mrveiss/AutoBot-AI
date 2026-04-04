@@ -25,7 +25,7 @@ def test_rest_api_approach():
             json={
                 "shell": "/bin/bash", 
                 "environment": {},
-                "working_directory": "/home/kali"
+                "working_directory": "/home/autobot"
             },
             timeout=5
         )

@@ -8,7 +8,7 @@
 
 AutoBot has two Ansible roles that can deploy Grafana:
 
-1. **`slm_manager`** - Deploys Grafana on SLM server (172.16.168.19)
+1. **`slm_manager`** - Deploys Grafana on SLM server (<slm-manager-ip>)
 2. **`monitoring`** - Deploys Grafana on any node (dedicated monitoring VMs)
 
 Both roles now ensure **repeatable, consistent configuration** regardless of where Grafana is deployed.
@@ -72,7 +72,7 @@ Both roles deploy the same 14 AutoBot dashboards:
 grafana_mode: local
 grafana_install: true
 ```
-**Result:** Grafana installed and configured on 172.16.168.19
+**Result:** Grafana installed and configured on <slm-manager-ip>
 
 ### Scenario 2: External Grafana on Dedicated VM
 ```yaml
@@ -80,13 +80,13 @@ grafana_install: true
 monitoring_install_grafana: true
 grafana_allow_anonymous: true
 ```
-**Result:** Grafana installed on monitoring VM (e.g., 172.16.168.28)
+**Result:** Grafana installed on monitoring VM (e.g., <reserved-ip>)
 
 ### Scenario 3: Proxied External Grafana
 ```yaml
 # slm_manager points to external host
 grafana_mode: external
-grafana_external_host: 172.16.168.28
+grafana_external_host: <reserved-ip>
 grafana_enable_cors: true
 ```
 **Result:** SLM server proxies requests to external Grafana
@@ -128,7 +128,7 @@ grep -E "serve_from_sub_path|allow_embedding|cookie_samesite" /etc/grafana/grafa
 for dash in autobot-system autobot-overview autobot-performance \
             autobot-multi-machine autobot-redis autobot-api-health; do
   curl -k -s -o /dev/null -w "$dash: %{http_code}\n" \
-    "https://172.16.168.19/grafana/d/${dash}?kiosk=tv"
+    "https://<slm-manager-ip>/grafana/d/${dash}?kiosk=tv"
 done
 ```
 
@@ -158,7 +158,7 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini --tags grafana
 
 # Verify settings
-ssh autobot@172.16.168.19 "grep -E 'serve_from_sub_path|allow_embedding' /etc/grafana/grafana.ini"
+ssh autobot@<slm-manager-ip> "grep -E 'serve_from_sub_path|allow_embedding' /etc/grafana/grafana.ini"
 ```
 
 ---

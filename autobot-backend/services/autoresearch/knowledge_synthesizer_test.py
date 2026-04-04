@@ -6,9 +6,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.autoresearch.knowledge_synthesizer import (
     ExperimentInsight,
@@ -66,14 +66,16 @@ class TestKnowledgeSynthesizer:
     def mock_llm(self):
         llm = AsyncMock()
         mock_response = MagicMock()
-        mock_response.content = json.dumps([
-            {
-                "statement": "Warmup steps >= 300 improve convergence",
-                "confidence": 0.8,
-                "supporting_experiments": ["e2"],
-                "related_hyperparams": ["warmup_steps"],
-            }
-        ])
+        mock_response.content = json.dumps(
+            [
+                {
+                    "statement": "Warmup steps >= 300 improve convergence",
+                    "confidence": 0.8,
+                    "supporting_experiments": ["e2"],
+                    "related_hyperparams": ["warmup_steps"],
+                }
+            ]
+        )
         llm.chat.return_value = mock_response
         return llm
 
@@ -106,12 +108,16 @@ class TestKnowledgeSynthesizer:
         mock_chromadb.query.return_value = {
             "ids": [["i1"]],
             "documents": [["Warmup steps >= 300 improve convergence"]],
-            "metadatas": [[{
-                "confidence": 0.8,
-                "supporting_experiments": "e2",
-                "related_hyperparams": "warmup_steps",
-                "session_id": "s1",
-            }]],
+            "metadatas": [
+                [
+                    {
+                        "confidence": 0.8,
+                        "supporting_experiments": "e2",
+                        "related_hyperparams": "warmup_steps",
+                        "session_id": "s1",
+                    }
+                ]
+            ],
         }
         results = await synthesizer.query_insights("warmup", limit=5)
         assert len(results) == 1

@@ -1,14 +1,14 @@
 # WSL2 Networking — Known Limitations
 
-**TL;DR**: The backend at `172.16.168.20:8443` **cannot be reached from within .20 itself**.
+**TL;DR**: The backend at `<backend-ip>:8443` **cannot be reached from within .20 itself**.
 Always test backend connectivity **from another VM** (e.g., .19 or .21).
 
 ---
 
 ## The Problem
 
-When running `curl` or any TCP connection to `127.0.0.1:8443` or `172.16.168.20:8443`
-from **within** the WSL2 host (172.16.168.20), you get immediate `ECONNREFUSED` even though
+When running `curl` or any TCP connection to `127.0.0.1:8443` or `<backend-ip>:8443`
+from **within** the WSL2 host (<backend-ip>), you get immediate `ECONNREFUSED` even though
 `ss -tlnp` shows the uvicorn socket in `LISTEN` state.
 
 ## Root Cause
@@ -27,7 +27,7 @@ interface where uvicorn actually listens.
 
 Since Windows has no listener on port 8443, the connection is immediately refused.
 
-The same applies to the machine's own external IP (`172.16.168.20`): WSL2's routing
+The same applies to the machine's own external IP (`<backend-ip>`): WSL2's routing
 intercepts the connection before it reaches the Linux socket.
 
 ## Evidence
@@ -44,7 +44,7 @@ intercepts the connection before it reaches the Linux socket.
 
 | Scenario | Status |
 |----------|--------|
-| Connect from within .20 (127.0.0.1 or 172.16.168.20) | ❌ Connection refused |
+| Connect from within .20 (127.0.0.1 or <backend-ip>) | ❌ Connection refused |
 | Connect from .19, .21, or any other VM | ✅ Works normally |
 | Frontend (.21) → Backend (.20) API calls | ✅ Works normally |
 | Production use | ✅ Unaffected |
@@ -53,17 +53,17 @@ intercepts the connection before it reaches the Linux socket.
 
 ```bash
 # Health check
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
+ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'
 
 # Authenticated endpoint
-TOKEN=$(ssh autobot@172.16.168.19 'curl --insecure -s -X POST \
-  https://172.16.168.20:8443/api/auth/login \
+TOKEN=$(ssh autobot@<slm-manager-ip> 'curl --insecure -s -X POST \
+  https://<backend-ip>:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d "{\"username\":\"admin\",\"password\":\"admin\"}" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)[\"token\"])"')
 
-ssh autobot@172.16.168.19 "curl --insecure -s \
-  https://172.16.168.20:8443/api/knowledge_base/categories/main \
+ssh autobot@<slm-manager-ip> "curl --insecure -s \
+  https://<backend-ip>:8443/api/knowledge_base/categories/main \
   -H 'Authorization: Bearer $TOKEN'"
 ```
 
@@ -75,7 +75,7 @@ Change the Ansible backend role to bind only to the eth2 interface:
 
 ```yaml
 # autobot-slm-backend/ansible/roles/backend/defaults/main.yml
-backend_host: "172.16.168.20"  # eth2 only, instead of 0.0.0.0
+backend_host: "<backend-ip>"  # eth2 only, instead of 0.0.0.0
 ```
 
 This makes local-loopback tests impossible but has no production impact since all
@@ -107,9 +107,9 @@ ansible-playbook playbooks/deploy-full.yml --tags backend,nginx --limit main_bac
 **Verify:**
 ```bash
 # From another VM:
-ssh autobot@172.16.168.19 'curl -sk https://172.16.168.20:8443/api/health'
+ssh autobot@<slm-manager-ip> 'curl -sk https://<backend-ip>:8443/api/health'
 # nginx status on .20:
-ssh autobot@172.16.168.20 'sudo systemctl status nginx'
+ssh autobot@<backend-ip> 'sudo systemctl status nginx'
 ```
 
 ### Option 3: Disable WSL2 mirrored networking

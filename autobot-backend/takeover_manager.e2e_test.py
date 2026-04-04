@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 
 # Import system components
 try:
-    from api.simple_terminal_websocket import SimpleTerminalSession
+    from api.terminal_handlers import ConsolidatedTerminalWebSocket
     from api.workflow_automation import (
         AutomationMode,
         WorkflowAutomationManager,
@@ -67,7 +67,11 @@ class SessionTakeoverTestSuite:
             except Exception as e:
                 logger.error(f"❌ {test_method.__name__} FAILED: {e}")
                 self.test_results.append(
-                    {"test": test_method.__name__, "status": "FAILED", "error": "Test execution failed"}
+                    {
+                        "test": test_method.__name__,
+                        "status": "FAILED",
+                        "error": "Test execution failed",
+                    }
                 )
 
         await self.print_test_summary()
@@ -247,8 +251,11 @@ class SessionTakeoverTestSuite:
             return
 
         # Create mock terminal session
-        terminal_session = SimpleTerminalSession(self.test_session_id)
-        terminal_session.websocket = AsyncMock()
+        mock_websocket = AsyncMock()
+        terminal_session = ConsolidatedTerminalWebSocket(
+            websocket=mock_websocket,
+            session_id=self.test_session_id,
+        )
         terminal_session.active = True
 
         # Simulate running processes
@@ -257,14 +264,14 @@ class SessionTakeoverTestSuite:
             {"pid": 1002, "command": "background_process &", "startTime": time.time()},
         ]
 
-        # Test emergency kill message handling
+        # Test emergency kill message handling via public dispatch method
         kill_data = {
-            "type": "automation_control",
+            "type": "workflow_control",
             "action": "emergency_kill",
             "session_id": self.test_session_id,
         }
 
-        await terminal_session.handle_workflow_control(kill_data)
+        await terminal_session.handle_message(kill_data)
 
         # Verify emergency kill message was sent
         terminal_session.websocket.send_text.assert_called()
@@ -425,34 +432,32 @@ class SessionTakeoverTestSuite:
             return
 
         # Create mock terminal session
-        terminal_session = SimpleTerminalSession(self.test_session_id)
-        terminal_session.websocket = AsyncMock()
+        mock_websocket = AsyncMock()
+        terminal_session = ConsolidatedTerminalWebSocket(
+            websocket=mock_websocket,
+            session_id=self.test_session_id,
+        )
         terminal_session.active = True
 
-        # Test workflow control messages
+        # Test workflow control messages via the public dispatch method
         test_messages = [
             {
-                "type": "automation_control",
+                "type": "workflow_control",
                 "action": "pause",
                 "session_id": self.test_session_id,
             },
             {
-                "type": "automation_control",
+                "type": "workflow_control",
                 "action": "resume",
                 "session_id": self.test_session_id,
             },
             {
-                "type": "workflow_message",
-                "subtype": "start_workflow",
-                "workflow": {"name": "Test Workflow", "steps": []},
+                "type": "ping",
             },
         ]
 
         for message in test_messages:
-            if message["type"] == "automation_control":
-                await terminal_session.handle_workflow_control(message)
-            elif message["type"] == "workflow_message":
-                await terminal_session.handle_workflow_message(message)
+            await terminal_session.handle_message(message)
 
         # Verify WebSocket send_text was called for each message
         assert terminal_session.websocket.send_text.call_count >= len(
@@ -530,14 +535,17 @@ class SessionTakeoverTestSuite:
         except Exception as e:
             logger.info(f"✅ Properly handled error: {e}")
 
-        # Test malformed messages
-        terminal_session = SimpleTerminalSession(self.test_session_id)
-        terminal_session.websocket = AsyncMock()
+        # Test malformed messages via public dispatch method
+        mock_websocket = AsyncMock()
+        terminal_session = ConsolidatedTerminalWebSocket(
+            websocket=mock_websocket,
+            session_id=self.test_session_id,
+        )
 
         malformed_data = {"type": "invalid_type", "data": "malformed"}
 
         try:
-            await terminal_session.handle_workflow_control(malformed_data)
+            await terminal_session.handle_message(malformed_data)
         except Exception as e:
             logger.info(f"✅ Properly handled malformed message: {e}")
 

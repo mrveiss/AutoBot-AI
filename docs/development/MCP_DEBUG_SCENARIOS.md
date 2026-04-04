@@ -89,10 +89,10 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "au
 echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_run_tests", "arguments": {"pattern": "**/*.spec.js", "verbose": true}}}' | node .mcp/autobot-mcp-server.js
 
 # Step 3: Read error files
-echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "read_multiple_files", "arguments": {"paths": ["tsconfig.json", "vite.config.ts", "package.json"]}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "read_multiple_files", "arguments": {"paths": ["tsconfig.json", "vite.config.ts", "package.json"]}}}' | mcp-server-filesystem /opt/autobot
 
 # Step 4: Search for problematic imports
-echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "autobot-frontend/src", "pattern": "*.vue", "searchTerm": "import.*from.*undefined"}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "search_files", "arguments": {"path": "autobot-frontend/src", "pattern": "*.vue", "searchTerm": "import.*from.*undefined"}}}' | mcp-server-filesystem /opt/autobot
 ```
 
 ## Scenario 5: Database or State Issues
@@ -112,7 +112,7 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "li
 echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "query", "arguments": {"sql": "SELECT * FROM development_log ORDER BY timestamp DESC LIMIT 10"}}}' | npx -y mcp-sqlite data/autobot.db
 
 # Step 3: Check file system data
-echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "read_file", "arguments": {"path": "data/chat_history.json"}}}' | mcp-server-filesystem /home/kali/Desktop/AutoBot
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "read_file", "arguments": {"path": "data/chat_history.json"}}}' | mcp-server-filesystem /opt/autobot
 
 # Step 4: Analyze state management
 echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "autobot_debug_frontend", "arguments": {"action": "component-tree", "filter": "store"}}}' | node .mcp/autobot-mcp-server.js

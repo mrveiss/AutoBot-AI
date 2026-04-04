@@ -25,7 +25,7 @@ AutoBot uses a unified Prometheus/Grafana monitoring stack for comprehensive obs
 +--------+-----------------------+-----------------------+---------+
 |                                                                   |
 |                         Prometheus                                |
-|                         (VM3: 172.16.168.23:9090)                |
+|                         (VM3: <database-ip>:9090)                |
 |                                                                   |
 |   - Scrapes all /metrics endpoints every 15s                    |
 |   - Stores time-series data (30 day retention)                  |
@@ -76,7 +76,7 @@ Location: `src/monitoring/`
 
 ### 2. Prometheus Server
 
-**Location**: VM3 (172.16.168.23:9090)
+**Location**: VM3 (<database-ip>:9090)
 
 **Configuration**: `config/prometheus/prometheus.yml`
 
@@ -88,12 +88,12 @@ global:
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8443']
+      - targets: ['<backend-ip>:8443']
     metrics_path: '/api/monitoring/metrics'
 
   - job_name: 'npu-worker'
     static_configs:
-      - targets: ['172.16.168.22:8081']
+      - targets: ['<npu-ip>:8081']
     metrics_path: '/metrics'
 ```
 
@@ -101,7 +101,7 @@ scrape_configs:
 
 ### 3. Grafana Dashboards
 
-**Location**: VM3 (172.16.168.23:3000)
+**Location**: VM3 (<database-ip>:3000)
 
 **Datasource UID**: `PBFA97CFB590B2093`
 
@@ -386,17 +386,17 @@ type DashboardType =
 
 1. Check backend metrics endpoint:
    ```bash
-   curl https://172.16.168.20:8443/api/monitoring/metrics | head
+   curl https://<backend-ip>:8443/api/monitoring/metrics | head
    ```
 
 2. Check Prometheus targets:
    ```bash
-   curl http://172.16.168.23:9090/api/v1/targets | jq '.data.activeTargets'
+   curl http://<database-ip>:9090/api/v1/targets | jq '.data.activeTargets'
    ```
 
 3. Verify Grafana datasource:
    ```bash
-   curl http://172.16.168.23:3000/api/datasources
+   curl http://<database-ip>:3000/api/datasources
    ```
 
 ### Missing New Metrics
@@ -405,7 +405,7 @@ After adding new metrics recorders:
 
 1. Restart backend to register new metrics
 2. Wait 15 seconds for Prometheus scrape
-3. Verify in Prometheus: `http://172.16.168.23:9090/graph`
+3. Verify in Prometheus: `http://<database-ip>:9090/graph`
 4. Refresh Grafana dashboard
 
 ### High Cardinality Warnings

@@ -14,6 +14,8 @@
         <p class="page-subtitle">
           {{ $t('analytics.evolution.subtitle') }}
         </p>
+        <!-- Issue #3436: show project scope when rendered under a codebase -->
+        <p v-if="sourceId" class="project-scope-label">{{ sourceId }}</p>
       </div>
       <button
         @click="showAnalysisModal = true"
@@ -349,12 +351,17 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useEvolution } from '@/composables/useEvolution'
 import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.vue'
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
 
-const evolution = useEvolution()
+// Issue #3436: read sourceId from route param set by codebase/:sourceId parent
+const route = useRoute()
+const sourceId = computed(() => route.params.sourceId as string | undefined)
+
+const evolution = useEvolution(sourceId)
 const { t } = useI18n()
 const showAnalysisModal = ref(false)
 

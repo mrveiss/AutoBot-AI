@@ -26,23 +26,23 @@ The NPU worker deployed via Ansible was a **placeholder implementation**:
 
 ```bash
 # Check if NPU worker has FastAPI installed
-ssh autobot@172.16.168.22 "pip list | grep fastapi"
+ssh autobot@<npu-ip> "pip list | grep fastapi"
 
 # If missing, install dependencies
-ssh autobot@172.16.168.22 "cd /opt/autobot/npu-worker && ./venv/bin/pip install 'fastapi>=0.100.0' 'uvicorn[standard]>=0.20.0'"
+ssh autobot@<npu-ip> "cd /opt/autobot/npu-worker && ./venv/bin/pip install 'fastapi>=0.100.0' 'uvicorn[standard]>=0.20.0'"
 
 # Restart service
-ssh autobot@172.16.168.22 "sudo systemctl restart autobot-npu-worker"
+ssh autobot@<npu-ip> "sudo systemctl restart autobot-npu-worker"
 
 # Verify port is accessible
-curl http://172.16.168.22:8081/health
+curl http://<npu-ip>:8081/health
 ```
 
 ## Detailed Resolution Steps
 
 ### Step 1: Verify Service Status
 ```bash
-ssh autobot@172.16.168.22 "sudo systemctl status autobot-npu-worker"
+ssh autobot@<npu-ip> "sudo systemctl status autobot-npu-worker"
 ```
 **Expected Output**:
 ```
@@ -52,7 +52,7 @@ ssh autobot@172.16.168.22 "sudo systemctl status autobot-npu-worker"
 
 ### Step 2: Check Port Binding
 ```bash
-ssh autobot@172.16.168.22 "sudo netstat -tlnp | grep 8081"
+ssh autobot@<npu-ip> "sudo netstat -tlnp | grep 8081"
 ```
 **Expected Output** (if broken):
 ```
@@ -61,7 +61,7 @@ ssh autobot@172.16.168.22 "sudo netstat -tlnp | grep 8081"
 
 ### Step 3: Review NPU Worker Code
 ```bash
-ssh autobot@172.16.168.22 "head -30 /opt/autobot/npu-worker/npu-worker.py"
+ssh autobot@<npu-ip> "head -30 /opt/autobot/npu-worker/npu-worker.py"
 ```
 Look for:
 - FastAPI imports
@@ -77,12 +77,12 @@ cd autobot-slm-backend/ansible
 ansible-playbook -i inventory.yml setup-npu-worker.yml --limit vm2
 
 # Or manually copy updated npu-worker.py template
-scp roles/npu-worker/templates/npu-worker.py.j2 autobot@172.16.168.22:/opt/autobot/npu-worker/npu-worker.py
+scp roles/npu-worker/templates/npu-worker.py.j2 autobot@<npu-ip>:/opt/autobot/npu-worker/npu-worker.py
 ```
 
 ### Step 5: Install Dependencies
 ```bash
-ssh autobot@172.16.168.22 "cd /opt/autobot/npu-worker && sudo -u autobot ./venv/bin/pip install 'fastapi>=0.100.0' 'uvicorn[standard]>=0.20.0'"
+ssh autobot@<npu-ip> "cd /opt/autobot/npu-worker && sudo -u autobot ./venv/bin/pip install 'fastapi>=0.100.0' 'uvicorn[standard]>=0.20.0'"
 ```
 **Expected Output**:
 ```
@@ -91,21 +91,21 @@ Successfully installed fastapi-0.129.0 uvicorn-0.40.0 [...]
 
 ### Step 6: Configure Firewall
 ```bash
-ssh autobot@172.16.168.22 "sudo ufw allow 8081/tcp comment 'NPU Worker API'"
+ssh autobot@<npu-ip> "sudo ufw allow 8081/tcp comment 'NPU Worker API'"
 ```
 
 ### Step 7: Restart Service
 ```bash
-ssh autobot@172.16.168.22 "sudo systemctl restart autobot-npu-worker"
+ssh autobot@<npu-ip> "sudo systemctl restart autobot-npu-worker"
 sleep 3
-ssh autobot@172.16.168.22 "sudo systemctl status autobot-npu-worker"
+ssh autobot@<npu-ip> "sudo systemctl status autobot-npu-worker"
 ```
 
 ## Verification
 
 ```bash
 # Test health endpoint from main server
-curl http://172.16.168.22:8081/health
+curl http://<npu-ip>:8081/health
 
 # Expected response:
 # {
@@ -119,7 +119,7 @@ curl http://172.16.168.22:8081/health
 # }
 
 # Check logs for startup messages
-ssh autobot@172.16.168.22 "tail -20 /var/log/autobot/npu-worker.log"
+ssh autobot@<npu-ip> "tail -20 /var/log/autobot/npu-worker.log"
 
 # Should show:
 # INFO:     Uvicorn running on http://0.0.0.0:8081
@@ -136,7 +136,7 @@ ssh autobot@172.16.168.22 "tail -20 /var/log/autobot/npu-worker.log"
 1. **Always deploy using Ansible roles** instead of manual file copies
 2. **Test endpoints after deployment**:
    ```bash
-   curl http://172.16.168.22:8081/health
+   curl http://<npu-ip>:8081/health
    ```
 3. **Monitor startup logs** during service restart:
    ```bash

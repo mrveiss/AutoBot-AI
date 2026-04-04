@@ -334,4 +334,4 @@ AutoBot now has a **production-ready, professional design system** with:
 - Global scrollbar styling
 
 **Status:** ✅ **FUNCTIONAL**
-**Deployment:** All changes synced to [http://172.16.168.21:5173](http://172.16.168.21:5173)
+**Deployment:** All changes synced to [http://<frontend-ip>:5173](http://<frontend-ip>:5173)

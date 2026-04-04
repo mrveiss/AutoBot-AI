@@ -245,7 +245,7 @@ Load Time: 0.002s
    ```bash
    # Kill current process and restart
    pkill -f "python backend/fast_app_factory_fix.py"
-   PYTHONPATH=/home/kali/Desktop/AutoBot python backend/fast_app_factory_fix.py
+   PYTHONPATH=/opt/autobot python backend/fast_app_factory_fix.py
    ```
 
 2. **Frontend Proxy**: Fix Vite proxy configuration for API routing

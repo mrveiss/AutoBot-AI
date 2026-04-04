@@ -27,12 +27,12 @@ This architectural analysis examines how 6 critical backend issues identified in
 AutoBot operates as a sophisticated distributed system across 6 virtual machines:
 
 ```
-VM0 (Main Host WSL): Backend API (172.16.168.20:8443) + Ollama + VNC Desktop
-VM1 (Frontend): Vue.js web interface (172.16.168.21:5173)
-VM2 (NPU Worker): Intel NPU + GPU acceleration (172.16.168.22:8081)
-VM3 (Redis Stack): Centralized data layer (172.16.168.23:6379) - 11 specialized databases
-VM4 (AI Stack): Multi-provider AI orchestration (172.16.168.24:8080)
-VM5 (Browser): Playwright automation (172.16.168.25:3000)
+VM0 (Main Host WSL): Backend API (<backend-ip>:8443) + Ollama + VNC Desktop
+VM1 (Frontend): Vue.js web interface (<frontend-ip>:5173)
+VM2 (NPU Worker): Intel NPU + GPU acceleration (<npu-ip>:8081)
+VM3 (Redis Stack): Centralized data layer (<database-ip>:6379) - 11 specialized databases
+VM4 (AI Stack): Multi-provider AI orchestration (<aiml-ip>:8080)
+VM5 (Browser): Playwright automation (<browser-ip>:3000)
 ```
 
 The backend API on VM0 serves as the central orchestrator coordinating all services. Any critical backend issues directly impact the entire distributed system's reliability, security, and performance.
@@ -260,7 +260,7 @@ class ConversationFileManager:
 ### Distributed System Impact
 
 **Redis Blocking Across Network:**
-- Every synchronous `redis_client.get(key)` call to VM3 (172.16.168.23) blocks VM0's entire event loop
+- Every synchronous `redis_client.get(key)` call to VM3 (<database-ip>) blocks VM0's entire event loop
 - Network round-trip time (2-5ms) becomes complete event loop freeze
 - All concurrent requests queue waiting for single Redis operation to complete
 
@@ -397,7 +397,7 @@ Context window in `autobot-backend/api/chat_enhanced.py` increased 50x (10→500
 ### Distributed System Impact
 
 **AI Stack Overload:**
-- chat_enhanced.py sends 200 messages to AI Stack VM (172.16.168.24:8080)
+- chat_enhanced.py sends 200 messages to AI Stack VM (<aiml-ip>:8080)
 - AI Stack routes to Ollama on VM0 (127.0.0.1:11434)
 - Round-trip: VM0→VM4→VM0 with massive context payload
 
@@ -618,7 +618,7 @@ class TestDistributedFileOperations:
     async def test_file_upload_from_frontend_vm(self):
         """Test file upload flow: Frontend VM → Backend → Redis → Storage."""
         # Simulate frontend VM uploading file
-        client = AsyncTestClient(backend_url="https://172.16.168.20:8443")
+        client = AsyncTestClient(backend_url="https://<backend-ip>:8443")
 
         file_content = b"test content"
         response = await client.post(
@@ -631,16 +631,16 @@ class TestDistributedFileOperations:
         file_id = response.json()["file_id"]
 
         # Verify file stored on VM0
-        assert Path(f"/home/kali/Desktop/AutoBot/data/conversation_files/{file_id}").exists()
+        assert Path(f"data/conversation_files/{file_id}").exists()
 
         # Verify metadata in SQLite on VM0
-        db = sqlite3.connect("/home/kali/Desktop/AutoBot/data/conversation_files.db")
+        db = sqlite3.connect("data/conversation_files.db")
         cursor = db.cursor()
         cursor.execute("SELECT * FROM conversation_files WHERE file_id = ?", (file_id,))
         assert cursor.fetchone() is not None
 
         # Verify cache in Redis on VM3
-        redis_client = await get_async_redis_client(host="172.16.168.23")
+        redis_client = await get_async_redis_client(host="<database-ip>")
         cached_metadata = await redis_client.get(f"file:{file_id}")
         assert cached_metadata is not None
 
@@ -725,7 +725,7 @@ class TestDistributedFailureScenarios:
     async def test_redis_vm_unreachable(self):
         """Test graceful degradation when Redis VM fails."""
         # Block network to Redis VM
-        await block_network("172.16.168.23")
+        await block_network("<database-ip>")
 
         try:
             # File upload should still work (degraded mode)
@@ -739,7 +739,7 @@ class TestDistributedFailureScenarios:
             assert "cache_unavailable" in response.json().get("warnings", [])
 
         finally:
-            await restore_network("172.16.168.23")
+            await restore_network("<database-ip>")
 ```
 
 **Required Test Categories:**
@@ -1915,13 +1915,13 @@ class AutoBotConfig(BaseSettings):
     """Centralized configuration with validation."""
 
     # Service endpoints
-    backend_host: str = "172.16.168.20"
+    backend_host: str = "<backend-ip>"
     backend_port: int = 8001
-    redis_host: str = "172.16.168.23"
+    redis_host: str = "<database-ip>"
     redis_port: int = 6379
 
     # File management
-    storage_dir: Path = Path("/home/kali/Desktop/AutoBot/data/conversation_files")
+    storage_dir: Path = Path("data/conversation_files")
     max_file_size_mb: int = 100
 
     # LLM configuration
@@ -2070,7 +2070,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 # Initialize tracer
 tracer_provider = TracerProvider()
 jaeger_exporter = JaegerExporter(
-    agent_host_name="172.16.168.20",
+    agent_host_name="<backend-ip>",
     agent_port=6831
 )
 tracer_provider.add_span_processor(

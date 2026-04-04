@@ -140,8 +140,8 @@ ansible 01-Backend -i inventory/slm-nodes.yml -m reboot --become
 ansible-playbook playbooks/system-update.yml --tags check -i inventory/slm-nodes.yml
 
 # Check services are healthy
-ssh autobot@172.16.168.19 "systemctl is-active autobot-slm-backend"
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health | jq .status'
+ssh autobot@<slm-manager-ip> "systemctl is-active autobot-slm-backend"
+ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health | jq .status'
 ```
 
 ---
@@ -154,7 +154,7 @@ Kernel updates require a reboot to take effect. Use the same reboot procedure ab
 - Reboot `.23` (database/Redis) only during scheduled maintenance — all backends will lose Redis connection temporarily
 
 After rebooting `.19`:
-1. Wait for SLM health check: `curl -sk https://172.16.168.19/api/health`
+1. Wait for SLM health check: `curl -sk https://<slm-manager-ip>/api/health`
 2. Verify SLM agents reconnect: SLM GUI → Fleet Overview → all nodes reconnect within 60s
 
 ---

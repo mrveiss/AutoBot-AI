@@ -409,7 +409,7 @@ launch-gui.bat
 
 - PySide6 Documentation: https://doc.qt.io/qtforpython-6/
 - Qt Widgets: https://doc.qt.io/qt-6/qtwidgets-index.html
-- AutoBot Docs: `/home/kali/Desktop/AutoBot/docs/`
+- AutoBot Docs: `docs/`
 
 ## Deployment
 

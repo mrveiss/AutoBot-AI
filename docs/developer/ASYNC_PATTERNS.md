@@ -441,9 +441,9 @@ async def operation(self):
 
 ## 📚 Additional Resources
 
-- **AsyncRedisManager Implementation**: `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py`
-- **Knowledge Base Async Conversion**: `/home/kali/Desktop/AutoBot/src/knowledge_base.py`
-- **Async Migration Guide**: `/home/kali/Desktop/AutoBot/docs/developer/ASYNC_MIGRATION_GUIDE.md`
+- **AsyncRedisManager Implementation**: `backend/utils/async_redis_manager.py`
+- **Knowledge Base Async Conversion**: `src/knowledge_base.py`
+- **Async Migration Guide**: `docs/developer/ASYNC_MIGRATION_GUIDE.md`
 - **FastAPI Async Best Practices**: https://fastapi.tiangolo.com/async/
 
 ---

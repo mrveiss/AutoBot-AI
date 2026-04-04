@@ -4,6 +4,8 @@
     <div class="dashboard-header">
       <h2>{{ $t('analytics.codeGeneration.title') }}</h2>
       <p class="subtitle">{{ $t('analytics.codeGeneration.subtitle') }}</p>
+      <!-- Issue #3436: show project scope when rendered under a codebase -->
+      <p v-if="sourceId" class="project-scope-badge">{{ sourceId }}</p>
     </div>
 
     <!-- Stats Cards -->
@@ -326,11 +328,24 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { escapeHtml } from '@/utils/sanitize'
 
 const logger = createLogger('CodeGenerationDashboard')
+
+// Issue #3436: read sourceId from route param set by codebase/:sourceId parent
+const route = useRoute()
+const sourceId = computed(() => route.params.sourceId as string | undefined)
+
+/** Append ?source_id=<id> to a URL when a sourceId is available. */
+function withSourceId(url: string): string {
+  const id = sourceId.value
+  if (!id) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}source_id=${encodeURIComponent(id)}`
+}
 
 
 // Types
@@ -545,7 +560,8 @@ const validateCodeSubmit = async () => {
 
 const fetchStats = async () => {
   try {
-    const response = await fetchWithAuth('/api/code-generation/stats')
+    // Issue #3436: scope to project when sourceId is present
+    const response = await fetchWithAuth(withSourceId('/api/code-generation/stats'))
     if (response.ok) {
       const data = await response.json()
       stats.value = data

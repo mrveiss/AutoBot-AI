@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Created a comprehensive refactoring plan to fix 41 instances of Feature Envy code smell in `/home/kali/Desktop/AutoBot/src/code_intelligence/code_fingerprinting.py`.
+Created a comprehensive refactoring plan to fix 41 instances of Feature Envy code smell in `src/code_intelligence/code_fingerprinting.py`.
 
 The refactoring applies the **"Tell, Don't Ask"** principle by creating wrapper classes that encapsulate AST node behavior, eliminating excessive attribute access on `ast` module objects.
 
@@ -43,7 +43,7 @@ The `code_fingerprinting.py` module has **41 instances of Feature Envy**, where 
 ## Deliverables
 
 ### 1. Comprehensive Design Document
-**Location**: `/home/kali/Desktop/AutoBot/docs/developer/CODE_FINGERPRINTING_REFACTORING.md`
+**Location**: `docs/developer/CODE_FINGERPRINTING_REFACTORING.md`
 
 **Contents**:
 - Complete refactoring design with code examples
@@ -56,7 +56,7 @@ The `code_fingerprinting.py` module has **41 instances of Feature Envy**, where 
 **Size**: 600+ lines of detailed documentation
 
 ### 2. Verification Script
-**Location**: `/home/kali/Desktop/AutoBot/scripts/apply_fingerprinting_refactoring.py`
+**Location**: `scripts/apply_fingerprinting_refactoring.py`
 
 **Features**:
 - Tests module import
@@ -68,7 +68,7 @@ The `code_fingerprinting.py` module has **41 instances of Feature Envy**, where 
 **Verification Results**: ✓ ALL TESTS PASSED
 
 ### 3. Backup Created
-**Location**: `/home/kali/Desktop/AutoBot/src/code_intelligence/code_fingerprinting.py.backup`
+**Location**: `src/code_intelligence/code_fingerprinting.py.backup`
 
 Original file backed up before any refactoring changes.
 

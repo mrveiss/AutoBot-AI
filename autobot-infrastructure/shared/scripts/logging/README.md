@@ -315,7 +315,7 @@ This enhanced centralized logging system is specifically designed to address:
 ## 📚 Documentation
 
 - **Complete Guide**: `docs/CENTRALIZED_LOGGING_SYSTEM.md`
-- **Architecture Docs**: `docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
+- **Architecture Docs**: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
 - **Troubleshooting**: Built into interactive scripts
 
 ## 🚀 Get Started Now

@@ -166,11 +166,11 @@ Successfully deployed service-to-service authentication infrastructure across Au
 
 ## Configuration Files
 
-### Main Backend: `/home/kali/Desktop/AutoBot/.env`
+### Main Backend: `.env`
 
 ```env
 SERVICE_ID=main-backend
-SERVICE_KEY_FILE=/home/kali/.autobot/service-keys/main-backend.env
+SERVICE_KEY_FILE=/etc/autobot/service-keys/main-backend.env
 AUTH_TIMESTAMP_WINDOW=300
 ```
 
@@ -214,7 +214,7 @@ client = create_service_client_from_env()
 ### Test 3: Authenticated HTTP Request ✅
 
 ```python
-response = await client.get("https://172.16.168.20:8443/api/system/health")
+response = await client.get("https://<backend-ip>:8443/api/system/health")
 # Returns: 200 OK with auth headers
 ```
 
@@ -300,7 +300,7 @@ response = await client.get("https://172.16.168.20:8443/api/system/health")
 **Monitoring Commands**:
 ```bash
 # Quick health check (run every 4 hours)
-curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
+curl -s https://<backend-ip>:8443/api/health | jq -r '.status'
 
 # Authentication warnings (last hour)
 grep "Service auth failed" logs/backend.log | tail -100

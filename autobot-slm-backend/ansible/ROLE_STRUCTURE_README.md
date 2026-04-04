@@ -404,7 +404,7 @@ export ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/autobot_key
 ## Additional Resources
 
 - **Ansible Documentation**: https://docs.ansible.com/
-- **AutoBot Setup Guide**: `docs/developer/PHASE_5_DEVELOPER_SETUP.md`
+- **AutoBot Setup Guide**: `docs/developer/DEVELOPER_SETUP.md`
 - **API Documentation**: `docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`
 - **System State**: `docs/system-state.md`
 

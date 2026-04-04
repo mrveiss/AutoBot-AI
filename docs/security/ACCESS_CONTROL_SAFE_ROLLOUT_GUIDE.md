@@ -51,7 +51,7 @@ All chat endpoints now include `ownership: Dict = Depends(validate_session_owner
 
 ### Code Changes Summary
 
-**File Modified:** `/home/kali/Desktop/AutoBot/autobot-backend/api/chat.py`
+**File Modified:** `autobot-backend/api/chat.py`
 
 **Lines Changed:** 7 lines (5 endpoint signatures + 1 import + 1 comment)
 
@@ -125,14 +125,14 @@ sudo systemctl restart autobot-backend
 
 # Method 2: Backend-only restart
 pkill -f "uvicorn.*backend"
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 ### Step 2: Verify Backend Running
 
 ```bash
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 # Expected: {"status": "healthy", ...}
 ```
 
@@ -155,7 +155,7 @@ python -m pytest tests/security/test_access_control_penetration.py -v
 
 ```bash
 # Check that unauthorized access attempts are being logged
-redis-cli -h 172.16.168.23 -p 6379 -n 10
+redis-cli -h <database-ip> -p 6379 -n 10
 > KEYS audit:*
 > ZRANGE audit:log:2025-10-06 0 -1 WITHSCORES
 ```
@@ -175,12 +175,12 @@ Expected audit entries for denied access:
 
 ```bash
 # Test 1: Authorized access (should succeed)
-curl -X GET https://172.16.168.20:8443/api/chat/sessions/YOUR_SESSION_ID \
+curl -X GET https://<backend-ip>:8443/api/chat/sessions/YOUR_SESSION_ID \
   -H "X-Username: admin"
 # Expected: 200 OK with messages
 
 # Test 2: Unauthorized access (should be blocked)
-curl -X GET https://172.16.168.20:8443/api/chat/sessions/SOMEONE_ELSES_SESSION \
+curl -X GET https://<backend-ip>:8443/api/chat/sessions/SOMEONE_ELSES_SESSION \
   -H "X-Username: attacker"
 # Expected: 403 Forbidden {"detail": "You do not have permission to access this conversation"}
 ```
@@ -238,7 +238,7 @@ pytest tests/security/test_access_control_penetration.py -v
 ```bash
 # Ownership validation should add < 10ms overhead
 curl -w "@curl-format.txt" -o /dev/null -s \
-  https://172.16.168.20:8443/api/chat/sessions/YOUR_SESSION
+  https://<backend-ip>:8443/api/chat/sessions/YOUR_SESSION
 # time_total should be < previous_time + 10ms
 ```
 
@@ -251,7 +251,7 @@ If validation fails or issues discovered:
 ### Quick Rollback (< 2 minutes)
 
 ```bash
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 
 # 1. Revert chat.py changes
 git checkout autobot-backend/api/chat.py
@@ -261,7 +261,7 @@ pkill -f "uvicorn.*backend"
 python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 --reload
 
 # 3. Verify rollback
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 ```
 
 ### Full Rollback with Git

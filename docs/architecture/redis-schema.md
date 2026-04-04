@@ -10,7 +10,7 @@ This document describes the data structures and key patterns used in AutoBot's R
 
 ## Database Overview
 
-AutoBot uses Redis Stack on VM3 (`172.16.168.23:6379`) with named database abstraction:
+AutoBot uses Redis Stack on VM3 (`<database-ip>:6379`) with named database abstraction:
 
 | Database | Name | Purpose | Key Count (Typical) |
 |----------|------|---------|---------------------|
@@ -388,33 +388,33 @@ redis.rpush("conversation:conv_001:messages", json.dumps(message))
 
 ```bash
 # Full backup
-redis-cli -h 172.16.168.23 BGSAVE
+redis-cli -h <database-ip> BGSAVE
 
 # Database-specific backup
-redis-cli -h 172.16.168.23 -n 1 --rdb knowledge_backup.rdb
+redis-cli -h <database-ip> -n 1 --rdb knowledge_backup.rdb
 ```
 
 ### Key Analysis
 
 ```bash
 # Count keys by pattern
-redis-cli -h 172.16.168.23 -n 0 KEYS "session:*" | wc -l
+redis-cli -h <database-ip> -n 0 KEYS "session:*" | wc -l
 
 # Memory usage
-redis-cli -h 172.16.168.23 INFO memory
+redis-cli -h <database-ip> INFO memory
 
 # Key distribution
-redis-cli -h 172.16.168.23 DBSIZE
+redis-cli -h <database-ip> DBSIZE
 ```
 
 ### Cleanup
 
 ```bash
 # Flush cache only (DB 0 cache keys)
-redis-cli -h 172.16.168.23 -n 0 KEYS "cache:*" | xargs redis-cli -h 172.16.168.23 -n 0 DEL
+redis-cli -h <database-ip> -n 0 KEYS "cache:*" | xargs redis-cli -h <database-ip> -n 0 DEL
 
 # Expire old analytics
-redis-cli -h 172.16.168.23 -n 3 KEYS "metrics:*:2024-*" | xargs redis-cli -h 172.16.168.23 -n 3 DEL
+redis-cli -h <database-ip> -n 3 KEYS "metrics:*:2024-*" | xargs redis-cli -h <database-ip> -n 3 DEL
 ```
 
 ---

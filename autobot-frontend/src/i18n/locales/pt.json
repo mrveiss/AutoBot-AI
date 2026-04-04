@@ -2555,6 +2555,10 @@
       "zoomIn": "Aumentar zoom",
       "zoomOut": "Diminuir zoom",
       "fitToView": "Ajustar à tela",
+      "switchTo3d": "Mudar para vista 3D",
+      "switchTo2d": "Mudar para vista 2D",
+      "label3d": "3D",
+      "label2d": "2D",
       "fullscreen": "Tela cheia",
       "exitFullscreen": "Sair da tela cheia",
       "typeLabel": "Tipo:",
@@ -2614,7 +2618,8 @@
         "searching": "Pesquisando entidades...",
         "noResults": "Nenhuma entidade encontrada para sua pesquisa",
         "sourcesCount": "{count} fontes"
-      }
+      },
+      "noEntities3D": "Nenhuma entidade para exibir"
     },
     "connectors": {
       "title": "Conectores de fontes",
@@ -4778,7 +4783,8 @@
       "accountLocked": "Conta temporariamente bloqueada devido a múltiplas tentativas falhadas",
       "tooManyAttempts": "Demasiadas tentativas de início de sessão. Tente mais tarde.",
       "serverError": "Erro do servidor. Tente novamente mais tarde.",
-      "unexpectedError": "Ocorreu um erro inesperado"
+      "unexpectedError": "Ocorreu um erro inesperado",
+      "footer": "© 2026 AutoBot. Todos os direitos reservados."
     }
   },
   "browser": {

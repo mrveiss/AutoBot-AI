@@ -29,27 +29,27 @@ Generated on: 2025-08-12
 
 ### v-for Key Improvements (6 fixes)
 
-**/home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue**:
+**autobot-vue/src/components/ChatInterface.vue**:
 - Line 125: Changed `:key="index"` to `:key="message.id || message.timestamp || `msg-${index}`"`
 - Line 137: Changed `:key="index"` to `:key="file.name || file.id || `file-${index}`"`
 
-**/home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue**:
+**autobot-vue/src/components/HistoryView.vue**:
 - Line 11: Changed `:key="index"` to `:key="entry.id || `history-${entry.date}`"`
 
-**/home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue**:
+**autobot-vue/src/components/KnowledgeManager.vue**:
 - Line 32: Changed `:key="index"` to `:key="result.id || `result-${index}`"`
 - Line 457: Changed `:key="index"` to `:key="link.url || link.href || `link-${index}`"`
 
-**/home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue**:
+**autobot-vue/src/components/FileBrowser.vue**:
 - Line 70: Changed `:key="index"` to `:key="file.name || file.id || `file-${index}`"`
 
 ### Event Listener Cleanup (0 fixes)
 
 ## Files Modified
-- /home/kali/Desktop/AutoBot/autobot-vue/src/components/HistoryView.vue
-- /home/kali/Desktop/AutoBot/autobot-vue/src/components/FileBrowser.vue
-- /home/kali/Desktop/AutoBot/autobot-vue/src/components/KnowledgeManager.vue
-- /home/kali/Desktop/AutoBot/autobot-vue/src/components/ChatInterface.vue
+- autobot-vue/src/components/HistoryView.vue
+- autobot-vue/src/components/FileBrowser.vue
+- autobot-vue/src/components/KnowledgeManager.vue
+- autobot-vue/src/components/ChatInterface.vue
 
 ## Recommendations for Further Improvement
 

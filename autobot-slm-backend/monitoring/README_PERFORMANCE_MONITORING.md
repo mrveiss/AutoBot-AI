@@ -154,7 +154,7 @@ sudo apt-get install -y python3-pip python3-venv python3-dev build-essential \
     redis-tools htop iotop netstat-nat sysstat nodejs npm nginx
 
 # Python packages
-cd /home/kali/Desktop/AutoBot
+cd /opt/autobot
 python3 -m venv venv
 source venv/bin/activate
 pip install -r monitoring/requirements.txt
@@ -392,7 +392,7 @@ python monitoring/performance_optimizer.py --analyze
 
 #### Log Locations
 ```
-/home/kali/Desktop/AutoBot/logs/
+logs/
 ├── monitoring_control.log          # Main monitoring logs
 ├── performance_monitor.log         # Performance data logs
 ├── optimization.log                # Optimization activities

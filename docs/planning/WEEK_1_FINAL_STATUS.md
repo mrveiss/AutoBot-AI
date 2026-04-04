@@ -12,9 +12,9 @@
 
 **Single Environment Architecture:**
 - **Dev/Production:** Same environment (no separate staging)
-- **Backend:** https://172.16.168.20:8443 ✅ RUNNING
-- **Frontend:** http://172.16.168.21:5173 ✅ RUNNING
-- **Database:** `/home/kali/Desktop/AutoBot/data/conversation_files.db` ✅ EXISTS (96KB)
+- **Backend:** https://<backend-ip>:8443 ✅ RUNNING
+- **Frontend:** http://<frontend-ip>:5173 ✅ RUNNING
+- **Database:** `data/conversation_files.db` ✅ EXISTS (96KB)
 - **All 6 VMs:** ✅ OPERATIONAL
 
 ### Deployment Confirmation
@@ -33,7 +33,7 @@ Since we only have one environment (dev = production), all Week 1 bug fixes were
 - **Timestamp:** 2025-10-06T07:33:40
 
 ### Database Status
-- **File Location:** `/home/kali/Desktop/AutoBot/data/conversation_files.db`
+- **File Location:** `data/conversation_files.db`
 - **File Size:** 96KB
 - **Last Modified:** Oct 6 07:32 (recently initialized)
 - **Status:** ✅ Operational
@@ -194,8 +194,8 @@ All 5 critical bugs are now FIXED in production:
 ## 📞 Production Support
 
 ### Monitoring
-- **Health Check:** https://172.16.168.20:8443/api/health
-- **Database:** `/home/kali/Desktop/AutoBot/data/conversation_files.db`
+- **Health Check:** https://<backend-ip>:8443/api/health
+- **Database:** `data/conversation_files.db`
 - **Logs:** Check backend logs for initialization messages
 
 ### Documentation

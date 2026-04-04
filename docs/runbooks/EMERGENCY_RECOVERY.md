@@ -34,8 +34,8 @@ If `autobot_ed25519` and `autobot_admin_temp_ed25519` both fail, you need consol
 
 ```bash
 # Test each key explicitly
-ssh -i ~/.ssh/autobot_ed25519 -o BatchMode=yes autobot@172.16.168.19 "echo ok" 2>&1
-ssh -i ~/.ssh/autobot_admin_temp_ed25519 -o BatchMode=yes autobot@172.16.168.19 "echo ok" 2>&1
+ssh -i ~/.ssh/autobot_ed25519 -o BatchMode=yes autobot@<slm-manager-ip> "echo ok" 2>&1
+ssh -i ~/.ssh/autobot_admin_temp_ed25519 -o BatchMode=yes autobot@<slm-manager-ip> "echo ok" 2>&1
 ```
 
 **Step 2: Use VM console (Hyper-V / VMware / KVM)**
@@ -68,32 +68,32 @@ ansible-playbook playbooks/rotate-ssh-keys.yml -i inventory/slm-nodes.yml
 
 ## SLM Recovery
 
-### Scenario: SLM server unreachable (172.16.168.19)
+### Scenario: SLM server unreachable (<slm-manager-ip>)
 
 **Step 1: Check SLM service status via SSH**
 
 ```bash
-ssh autobot@172.16.168.19 "sudo systemctl status autobot-slm-backend"
+ssh autobot@<slm-manager-ip> "sudo systemctl status autobot-slm-backend"
 ```
 
 **Step 2: Check logs**
 
 ```bash
-ssh autobot@172.16.168.19 "sudo journalctl -u autobot-slm-backend -n 100 --no-pager"
+ssh autobot@<slm-manager-ip> "sudo journalctl -u autobot-slm-backend -n 100 --no-pager"
 ```
 
 **Step 3: Restart SLM services**
 
 ```bash
-ssh autobot@172.16.168.19 "sudo systemctl restart autobot-slm-backend nginx"
+ssh autobot@<slm-manager-ip> "sudo systemctl restart autobot-slm-backend nginx"
 ```
 
 **Step 4: If DB is corrupt, recover from backup**
 
 ```bash
-ssh autobot@172.16.168.19 "sudo systemctl stop autobot-slm-backend"
-ssh autobot@172.16.168.19 "sudo -u postgres pg_restore -d autobot_slm /opt/autobot/data/backups/latest.dump"
-ssh autobot@172.16.168.19 "sudo systemctl start autobot-slm-backend"
+ssh autobot@<slm-manager-ip> "sudo systemctl stop autobot-slm-backend"
+ssh autobot@<slm-manager-ip> "sudo -u postgres pg_restore -d autobot_slm /opt/autobot/data/backups/latest.dump"
+ssh autobot@<slm-manager-ip> "sudo systemctl start autobot-slm-backend"
 ```
 
 **Step 5: If full redeploy needed**
@@ -113,20 +113,20 @@ ansible-playbook playbooks/deploy-slm-manager.yml -i inventory/slm-nodes.yml --l
 **Step 1: Ping check**
 
 ```bash
-ping -c 3 172.16.168.<node-ip>
+ping -c 3 <new-node-ip>
 ```
 
 **Step 2: Check if service is running (via another reachable node)**
 
 ```bash
 # From SLM server
-ssh autobot@172.16.168.19 "curl -sk https://172.16.168.<node-ip>:8443/api/health"
+ssh autobot@<slm-manager-ip> "curl -sk https://<new-node-ip>:8443/api/health"
 ```
 
 **Step 3: If node OS is up but service is down**
 
 ```bash
-ssh autobot@172.16.168.<node-ip> "sudo systemctl restart autobot-<role>"
+ssh autobot@<new-node-ip> "sudo systemctl restart autobot-<role>"
 ```
 
 **Step 4: Reprovision the node**
@@ -176,7 +176,7 @@ The SLM backend sets the admin password from `/etc/autobot/slm-secrets.env` on s
 **Step 1: Read current password from secrets file**
 
 ```bash
-ssh autobot@172.16.168.19 "sudo cat /etc/autobot/slm-secrets.env | grep ADMIN_PASSWORD"
+ssh autobot@<slm-manager-ip> "sudo cat /etc/autobot/slm-secrets.env | grep ADMIN_PASSWORD"
 ```
 
 **Step 2: If file is missing, regenerate via Ansible**
@@ -190,7 +190,7 @@ ansible-playbook playbooks/deploy-slm-manager.yml --tags secrets -i inventory/sl
 **Step 3: Reset password directly in DB (last resort)**
 
 ```bash
-ssh autobot@172.16.168.19
+ssh autobot@<slm-manager-ip>
 # Generate hash:
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'NEW_PASSWORD', bcrypt.gensalt()).decode())"
 # Update DB:
@@ -214,7 +214,7 @@ reconstruct the break-glass credentials.
 
 ```bash
 # Fetch Part A from SLM
-ssh autobot@172.16.168.19 "sudo cat /etc/autobot/keys/break-glass-a.enc"
+ssh autobot@<slm-manager-ip> "sudo cat /etc/autobot/keys/break-glass-a.enc"
 
 # Decrypt using Parts B and C (GPG)
 gpg --decrypt break-glass.enc

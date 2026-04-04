@@ -48,7 +48,7 @@ test.describe('Terminal Functionality Tests', () => {
       data: {
         shell: '/bin/bash',
         environment: {},
-        working_directory: '/home/kali'
+        working_directory: '/home/autobot'
       }
     });
 

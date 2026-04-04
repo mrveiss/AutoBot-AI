@@ -46,7 +46,7 @@ Add to `.env` or `.env.example`:
 
 ```bash
 # Jaeger OTLP endpoint (default: Redis VM)
-AUTOBOT_JAEGER_ENDPOINT=http://172.16.168.23:4317
+AUTOBOT_JAEGER_ENDPOINT=http://<database-ip>:4317
 
 # Trace sampling rate (0.0-1.0)
 # 1.0 = trace everything (development)
@@ -127,7 +127,7 @@ Examples:
 #### SSH Spans
 ```python
 "ssh.target_vm": "frontend",
-"ssh.target_ip": "172.16.168.21",
+"ssh.target_ip": "<frontend-ip>",
 "ssh.user": "autobot",
 "ssh.files_copied": 3,
 "pki.operation": "distribute",
@@ -228,7 +228,7 @@ async with TracedHttpClient() as client:
      jaegertracing/all-in-one:1.50
    ```
 
-2. Access Jaeger UI: http://172.16.168.23:16686
+2. Access Jaeger UI: http://<database-ip>:16686
 
 ### Example Trace Queries
 
@@ -258,7 +258,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
 
 1. **Check Jaeger is running:**
    ```bash
-   curl http://172.16.168.23:4317/health
+   curl http://<database-ip>:4317/health
    ```
 
 2. **Enable console export for debugging:**

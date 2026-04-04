@@ -361,7 +361,9 @@ async def submit_variant_score(
 
     # Validate key components to prevent Redis key injection
     if not _UUID_PATTERN.match(session_id) or not _UUID_PATTERN.match(variant_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id or variant_id format")
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id or variant_id format"
+        )
 
     redis = get_redis_client(async_client=True, database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
@@ -395,13 +397,13 @@ async def list_pending_approvals(
             key_str = key if isinstance(key, str) else key.decode("utf-8")
             parts = key_str.split(":")
             if len(parts) >= 5:
-                status_key = (
-                    f"autoresearch:approval:status:{parts[3]}:{parts[4]}"
-                )
+                status_key = f"autoresearch:approval:status:{parts[3]}:{parts[4]}"
                 status = await redis.get(status_key)
                 status_str = (
-                    status.decode("utf-8") if isinstance(status, bytes) else status
-                ) if status else "unknown"
+                    (status.decode("utf-8") if isinstance(status, bytes) else status)
+                    if status
+                    else "unknown"
+                )
                 if status_str == "pending":
                     data["status"] = "pending"
                     approvals.append(data)

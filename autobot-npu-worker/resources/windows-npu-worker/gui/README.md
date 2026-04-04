@@ -315,7 +315,7 @@ See LICENSE.txt for details.
 
 For issues or questions:
 1. Check logs in `logs/` directory
-2. Review AutoBot documentation: `/home/kali/Desktop/AutoBot/docs/`
+2. Review AutoBot documentation: `docs/`
 3. Report issues via AutoBot issue tracker
 
 ---

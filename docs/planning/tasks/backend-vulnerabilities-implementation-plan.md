@@ -422,7 +422,7 @@ USE_ASYNC_REDIS = os.getenv("USE_ASYNC_REDIS", "false").lower() == "true"
     "session_id": "abc123",
     "user_id": "user_b",
     "owner_id": "user_a",
-    "ip_address": "172.16.168.21",
+    "ip_address": "<frontend-ip>",
     "vm_source": "frontend"
   }
   ```
@@ -1145,7 +1145,7 @@ USE_DISTRIBUTED_LOCKS = os.getenv("USE_DISTRIBUTED_LOCKS", "false") == "true"
 **3. Rollback Procedures**
 ```bash
 # Quick rollback (disable feature flag)
-curl -X POST https://172.16.168.20:8443/api/admin/feature-flags \
+curl -X POST https://<backend-ip>:8443/api/admin/feature-flags \
   -d '{"USE_ASYNC_REDIS": false}'
 
 # Full rollback (revert deployment)
@@ -1511,7 +1511,7 @@ await memory_graph.create_relation(
 **Level 1: Feature Flag Disable (30 seconds)**
 ```bash
 # Instant rollback via API
-curl -X POST https://172.16.168.20:8443/api/admin/feature-flags \
+curl -X POST https://<backend-ip>:8443/api/admin/feature-flags \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
     "USE_ASYNC_REDIS": false,
@@ -1748,5 +1748,5 @@ kubectl scale deployment/backend-api-v1.4.0 --replicas=3
 
 **Document Status:** READY FOR EXECUTION
 **Next Action:** User approval to begin implementation
-**Storage Location:** `/home/kali/Desktop/AutoBot/planning/tasks/backend-vulnerabilities-implementation-plan.md`
+**Storage Location:** `planning/tasks/backend-vulnerabilities-implementation-plan.md`
 **Memory MCP:** Task entities ready for creation upon approval

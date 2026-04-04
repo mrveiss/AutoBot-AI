@@ -1,0 +1,38 @@
+name: Build AutoResearch Docker Image
+
+on:
+  push:
+    paths:
+      - 'autobot-backend/services/autoresearch/Dockerfile'
+      - 'autobot-backend/services/autoresearch/run_experiment.py'
+      - 'autobot-backend/services/autoresearch/requirements*.txt'
+    branches:
+      - Dev_new_gui
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: autobot-backend/services/autoresearch
+          file: autobot-backend/services/autoresearch/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/mrveiss/autobot-autoresearch:${{ github.sha }}
+            ${{ github.ref == 'refs/heads/main' && 'ghcr.io/mrveiss/autobot-autoresearch:latest' || '' }}

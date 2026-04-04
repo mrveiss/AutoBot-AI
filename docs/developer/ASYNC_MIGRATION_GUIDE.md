@@ -693,10 +693,10 @@ async def search(self, query: str):
 
 ## 📚 Additional Resources
 
-- **Async Patterns Guide**: `/home/kali/Desktop/AutoBot/docs/developer/ASYNC_PATTERNS.md`
-- **AsyncRedisManager Implementation**: `/home/kali/Desktop/AutoBot/backend/utils/async_redis_manager.py`
-- **Knowledge Base Reference**: `/home/kali/Desktop/AutoBot/src/knowledge_base.py`
-- **Test Suite**: `/home/kali/Desktop/AutoBot/tests/unit/test_knowledge_base_async.py`
+- **Async Patterns Guide**: `docs/developer/ASYNC_PATTERNS.md`
+- **AsyncRedisManager Implementation**: `backend/utils/async_redis_manager.py`
+- **Knowledge Base Reference**: `src/knowledge_base.py`
+- **Test Suite**: `tests/unit/test_knowledge_base_async.py`
 
 ---
 

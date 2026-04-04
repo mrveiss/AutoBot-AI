@@ -37,26 +37,26 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 | Service | IP:Port | Component | Purpose |
 |---------|---------|-----------|---------|
-| SLM Server | 172.16.168.19:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
-| Main (WSL) | 172.16.168.20:8443 | `autobot-backend/` | Backend API + VNC (6080) |
-| Frontend VM | 172.16.168.21:443 | `autobot-frontend/` | User frontend (nginx+SSL, production build) |
-| NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
-| Redis VM | 172.16.168.23:6379 | - | Data layer (Redis Stack) |
-| AI Stack VM | 172.16.168.24:8080 | - | AI processing |
-| Browser VM | 172.16.168.25:3000 | `autobot-browser-worker/` | Playwright automation |
-| LLM CPU | 172.16.168.26 | - | LLM CPU node (05-LLM-CPU, role: llm-cpu) |
-| Reserved | 172.16.168.27 | - | (Unassigned) |
+| SLM Server | <slm-manager-ip>:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
+| Main (WSL) | <backend-ip>:8443 | `autobot-backend/` | Backend API + VNC (6080) |
+| Frontend VM | <frontend-ip>:443 | `autobot-frontend/` | User frontend (nginx+SSL, production build) |
+| NPU VM | <npu-ip>:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
+| Redis VM | <database-ip>:6379 | - | Data layer (Redis Stack) |
+| AI Stack VM | <aiml-ip>:8080 | - | AI processing |
+| Browser VM | <browser-ip>:3000 | `autobot-browser-worker/` | Playwright automation |
+| LLM CPU | <reserved-ip> | - | LLM CPU node (05-LLM-CPU, role: llm-cpu) |
+| Reserved | <reserved-ip> | - | (Unassigned) |
 
 ### Component Architecture
 
 | Directory | Deploys To | Description |
 |-----------|------------|-------------|
-| `autobot-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
-| `autobot-frontend/` | 172.16.168.21 (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
-| `autobot-slm-backend/` | 172.16.168.19 (SLM) | SLM backend - Fleet management, monitoring |
-| `autobot-slm-frontend/` | 172.16.168.19 (SLM) | SLM admin dashboard - Vue 3 UI (nginx+SSL) |
-| `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
-| `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
+| `autobot-backend/` | <backend-ip> (Main) | Core AutoBot backend - AI agents, chat, tools |
+| `autobot-frontend/` | <frontend-ip> (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
+| `autobot-slm-backend/` | <slm-manager-ip> (SLM) | SLM backend - Fleet management, monitoring |
+| `autobot-slm-frontend/` | <slm-manager-ip> (SLM) | SLM admin dashboard - Vue 3 UI (nginx+SSL) |
+| `autobot-npu-worker/` | <npu-ip> (NPU) | NPU acceleration worker |
+| `autobot-browser-worker/` | <browser-ip> (Browser) | Playwright automation worker |
 | `autobot_shared/` | All backends | Common utilities (redis, config, logging) |
 | `autobot-infrastructure/` | Dev machine | Per-role infrastructure (not deployed) |
 
@@ -164,7 +164,7 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 
 **NEVER edit on remote VMs** — no version control, no backup, VMs are ephemeral.
 
-1. Edit in `/home/kali/Desktop/AutoBot/`
+1. Edit in `/opt/autobot`
 2. Deploy via Ansible or sync script
 
 ---
@@ -182,8 +182,8 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 ```bash
 # Health checks
 # NOTE: .20 must be tested from another VM (WSL2 loopback limitation)
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
-redis-cli -h 172.16.168.23 ping
+ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/health'
+redis-cli -h <database-ip> ping
 
 # Ansible Deployment
 cd autobot-slm-backend/ansible
@@ -205,7 +205,7 @@ mcp__memory__create_entities --entities '[{"name": "...", "entityType": "...", "
 ## Documentation
 
 **Key docs:**
-- [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](PHASE_5_DEVELOPER_SETUP.md)
+- [`docs/developer/DEVELOPER_SETUP.md`](DEVELOPER_SETUP.md)
 - [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](../api/COMPREHENSIVE_API_DOCUMENTATION.md)
 - [`docs/system-state.md`](../system-state.md)
 

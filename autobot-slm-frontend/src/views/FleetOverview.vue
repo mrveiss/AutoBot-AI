@@ -20,6 +20,7 @@ import { useRoles } from '@/composables/useRoles'
 
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
+import { formatRelativeTime } from '@/utils/dateUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
@@ -366,6 +367,24 @@ async function handleReenroll(nodeId: string): Promise<void> {
     alert(`Failed to re-enroll: ${err instanceof Error ? err.message : 'Unknown error'}`)
   }
 }
+
+// Issue #3306: Node summary helpers for the details slide-over panel
+function nodeStatusBadgeClass(status: string): string {
+  switch (status) {
+    case 'online':
+    case 'healthy':
+      return 'bg-green-100 text-green-800'
+    case 'degraded':
+      return 'bg-yellow-100 text-yellow-800'
+    case 'error':
+    case 'unhealthy':
+      return 'bg-red-100 text-red-800'
+    default:
+      return 'bg-gray-100 text-gray-600'
+  }
+}
+
+const formatLastSeen = formatRelativeTime
 </script>
 
 <template>
@@ -558,7 +577,7 @@ async function handleReenroll(nodeId: string): Promise<void> {
           aria-labelledby="delete-dialog-title"
           @keydown.escape="closeDeleteConfirm"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeDeleteConfirm"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeDeleteConfirm"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
               <div class="shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center" aria-hidden="true">
@@ -622,7 +641,7 @@ async function handleReenroll(nodeId: string): Promise<void> {
           aria-label="Connection test result"
           @keydown.escape="closeConnectionTestResult"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeConnectionTestResult"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeConnectionTestResult"></div>
           <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div class="flex items-center gap-4 mb-4">
               <div
@@ -684,7 +703,7 @@ async function handleReenroll(nodeId: string): Promise<void> {
           aria-label="Node details panel"
           @keydown.escape="closeLifecyclePanel"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeLifecyclePanel"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeLifecyclePanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
             <Transition
               enter-active-class="transform transition duration-300 ease-out"
@@ -708,6 +727,50 @@ async function handleReenroll(nodeId: string): Promise<void> {
                     </button>
                   </div>
                   <div class="flex-1 overflow-y-auto">
+                    <!-- Issue #3306: Node summary section above event log -->
+                    <div v-if="selectedNode" class="border-b border-gray-200 px-6 py-4 bg-white">
+                      <div class="flex items-center justify-between mb-3">
+                        <div>
+                          <p class="text-sm font-medium text-gray-900">{{ selectedNode.hostname }}</p>
+                          <p class="text-xs text-gray-500 mt-0.5">{{ selectedNode.ip_address }}</p>
+                        </div>
+                        <span
+                          class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize"
+                          :class="nodeStatusBadgeClass(selectedNode.status)"
+                        >
+                          {{ selectedNode.status }}
+                        </span>
+                      </div>
+                      <div class="text-xs text-gray-500 mb-3">
+                        Last seen:
+                        <span class="text-gray-700 font-medium">
+                          {{ formatLastSeen(selectedNode.health?.last_heartbeat ?? selectedNode.updated_at) }}
+                        </span>
+                      </div>
+                      <div v-if="selectedNode.health" class="grid grid-cols-3 gap-3 mb-3">
+                        <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
+                          <p class="text-xs text-gray-500">CPU</p>
+                          <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.cpu_percent.toFixed(1) }}%</p>
+                        </div>
+                        <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
+                          <p class="text-xs text-gray-500">Memory</p>
+                          <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.memory_percent.toFixed(1) }}%</p>
+                        </div>
+                        <div class="rounded-md border border-gray-200 px-3 py-2 text-center">
+                          <p class="text-xs text-gray-500">Disk</p>
+                          <p class="text-sm font-semibold text-gray-900">{{ selectedNode.health.disk_percent.toFixed(1) }}%</p>
+                        </div>
+                      </div>
+                      <div v-if="selectedNode.roles && selectedNode.roles.length > 0" class="flex flex-wrap gap-1.5">
+                        <span
+                          v-for="role in selectedNode.roles"
+                          :key="role"
+                          class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                        >
+                          {{ role }}
+                        </span>
+                      </div>
+                    </div>
                     <NodeLifecyclePanel v-if="selectedNode" :node-id="selectedNode.node_id" @close="closeLifecyclePanel" />
                   </div>
                 </div>
@@ -736,7 +799,7 @@ async function handleReenroll(nodeId: string): Promise<void> {
           aria-label="Node services panel"
           @keydown.escape="closeServicesPanel"
         >
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75" @click="closeServicesPanel"></div>
+          <div class="fixed inset-0 bg-gray-500/75" @click="closeServicesPanel"></div>
           <div class="fixed inset-y-0 right-0 flex max-w-full pl-10">
             <Transition
               enter-active-class="transform transition duration-300 ease-out"

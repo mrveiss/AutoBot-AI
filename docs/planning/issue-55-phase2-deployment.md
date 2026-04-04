@@ -31,7 +31,7 @@ sudo systemctl restart autobot-backend
 # ✅ [ 88%] Entity Extractor: Entity extractor initialized successfully
 
 # 4. Verify new endpoints are available
-curl https://172.16.168.20:8443/api/entities/extract/health
+curl https://<backend-ip>:8443/api/entities/extract/health
 
 # Expected response:
 # {
@@ -49,7 +49,7 @@ curl https://172.16.168.20:8443/api/entities/extract/health
 
 ```bash
 # Test entity extraction with sample conversation
-curl -X POST https://172.16.168.20:8443/api/entities/extract \
+curl -X POST https://<backend-ip>:8443/api/entities/extract \
   -H "Content-Type: application/json" \
   -d '{
     "conversation_id": "test-123",
@@ -115,7 +115,7 @@ git revert HEAD  # Or specific commit
 sudo systemctl start autobot-backend
 
 # 4. Verify core services still working
-curl https://172.16.168.20:8443/api/health
+curl https://<backend-ip>:8443/api/health
 ```
 
 The new routers are optional - if they fail to load, backend continues with core functionality.

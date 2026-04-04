@@ -69,9 +69,7 @@ class CustomOpenAIProvider(BaseProvider):
 
     def _resolve_base_url(self) -> str:
         """Resolve the endpoint base URL from settings or environment."""
-        url = self._get_setting("base_url") or os.getenv(
-            "CUSTOM_OPENAI_BASE_URL", ""
-        )
+        url = self._get_setting("base_url") or os.getenv("CUSTOM_OPENAI_BASE_URL", "")
         if not url:
             raise ValueError(
                 "Custom OpenAI base_url not configured. "
@@ -82,9 +80,7 @@ class CustomOpenAIProvider(BaseProvider):
     def _resolve_api_key(self) -> str:
         """Resolve the API key (many local servers accept any non-empty string)."""
         return (
-            self._get_setting("api_key")
-            or os.getenv("CUSTOM_OPENAI_API_KEY")
-            or "none"
+            self._get_setting("api_key") or os.getenv("CUSTOM_OPENAI_API_KEY") or "none"
         )
 
     def _ensure_client(self):

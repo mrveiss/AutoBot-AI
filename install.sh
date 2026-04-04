@@ -374,15 +374,15 @@ system_setup() {
         success "  SSH key pair already exists"
     fi
 
-    # Issue #2828: Copy SSH key to shared location so any user in the autobot
-    # group can run Ansible without needing the key in their own ~/.ssh/.
+    # Issue #2828: Copy SSH key to shared location for Ansible (#3268: must be
+    # autobot:autobot 0600 — SSH client refuses group-readable private keys).
     if [[ -f "${ssh_key}" ]]; then
         cp "${ssh_key}" /etc/autobot/ssh/autobot_key
         cp "${ssh_key}.pub" /etc/autobot/ssh/autobot_key.pub
-        chown root:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
-        chmod 0640 /etc/autobot/ssh/autobot_key
+        chown autobot:autobot /etc/autobot/ssh/autobot_key /etc/autobot/ssh/autobot_key.pub
+        chmod 0600 /etc/autobot/ssh/autobot_key
         chmod 0644 /etc/autobot/ssh/autobot_key.pub
-        success "  SSH key published to /etc/autobot/ssh/ (group-readable)"
+        success "  SSH key published to /etc/autobot/ssh/"
     fi
 }
 
@@ -502,12 +502,31 @@ EOF
         network_gateway=$(ip route | awk '/^default/ {print $3}' | head -1)
         [[ -z "$network_subnet" ]] && network_subnet="${local_ip%.*}.0/24"
         [[ -z "$network_gateway" ]] && network_gateway="${local_ip%.*}.1"
-        sed -i "s|^SLM_EXTERNAL_URL=.*|SLM_EXTERNAL_URL=https://${local_ip}|" "${SECRETS_FILE}"
-        sed -i "s|^SLM_HOST=.*|SLM_HOST=${local_ip}|" "${SECRETS_FILE}"
-        sed -i "s|^NETWORK_SUBNET=.*|NETWORK_SUBNET=${network_subnet}|" "${SECRETS_FILE}"
-        sed -i "s|^NETWORK_GATEWAY=.*|NETWORK_GATEWAY=${network_gateway}|" "${SECRETS_FILE}"
+        # Upsert each key: replace the line if it exists, append if missing.
+        # Plain sed s/// silently does nothing when the key is absent — which
+        # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
+        # before those keys were introduced (#3194).
+        _upsert_secrets_key() {
+            local key="$1" value="$2" file="$3"
+            if grep -q "^${key}=" "${file}"; then
+                sed -i "s|^${key}=.*|${key}=${value}|" "${file}"
+            else
+                echo "${key}=${value}" >> "${file}"
+            fi
+        }
+        _upsert_secrets_key "SLM_EXTERNAL_URL" "https://${local_ip}" "${SECRETS_FILE}"
+        _upsert_secrets_key "SLM_HOST"         "${local_ip}"          "${SECRETS_FILE}"
+        _upsert_secrets_key "NETWORK_SUBNET"   "${network_subnet}"    "${SECRETS_FILE}"
+        _upsert_secrets_key "NETWORK_GATEWAY"  "${network_gateway}"   "${SECRETS_FILE}"
         success "  Secrets file preserved (IP/network fields updated to ${local_ip})"
     fi
+
+    # Ensure ansible tmp dirs are owned by autobot user (#3298).
+    # When install.sh runs ansible as root during bootstrap, these dirs get
+    # created as root-owned. Later ansible runs (and become operations) need
+    # write access as the autobot user, causing permission denied errors.
+    mkdir -p /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
+    chown autobot:autobot /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp /tmp/ansible_local_tmp
 
     info "Running Ansible deployment (this may take several minutes)..."
     log "  Playbook: deploy-slm-manager.yml --skip-tags seed,provision"
