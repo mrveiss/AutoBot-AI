@@ -11,10 +11,13 @@ Related to Issue #1120.
 
 import logging
 import os
+from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+
+from services.auth import get_current_user, require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,9 @@ class NavigateRequest(BaseModel):
 
 
 @router.get("/status")
-async def browser_status() -> dict:
+async def browser_status(
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
     """Return status of the persistent browser page."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -43,7 +48,10 @@ async def browser_status() -> dict:
 
 
 @router.post("/navigate")
-async def browser_navigate(body: NavigateRequest) -> dict:
+async def browser_navigate(
+    body: NavigateRequest,
+    _: Annotated[dict, Depends(require_admin)],
+) -> dict:
     """Navigate the persistent browser page to a URL.
 
     Handles javascript: scheme shortcuts used by BrowserTool.vue for
@@ -65,7 +73,9 @@ async def browser_navigate(body: NavigateRequest) -> dict:
 
 
 @router.post("/screenshot")
-async def browser_screenshot() -> dict:
+async def browser_screenshot(
+    _: Annotated[dict, Depends(require_admin)],
+) -> dict:
     """Capture a screenshot of the current browser page as base64 PNG."""
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
