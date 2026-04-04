@@ -79,6 +79,16 @@
     - "{{ tts_voices_dir }}"
   tags: ['tts', 'dirs']
 
+- name: "TTS Worker | Fix HF model cache ownership (hub/xet may be owned by earlier user)"
+  ansible.builtin.command:
+    cmd: "chown -R {{ tts_user }}:{{ tts_group }} {{ tts_models_dir }}/{{ item }}"
+    removes: "{{ tts_models_dir }}/{{ item }}"
+  loop:
+    - hub
+    - xet
+  become: true
+  tags: ['tts', 'dirs']
+
 # ============================================================
 # Python venv
 # ============================================================

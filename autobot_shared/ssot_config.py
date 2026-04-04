@@ -135,7 +135,9 @@ class PortConfig(BaseSettings):
         default=8100, alias="AUTOBOT_CHROMADB_PORT"
     )  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
-    tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
+    tts: int = Field(
+        default=8083, alias="AUTOBOT_TTS_WORKER_PORT"
+    )  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")

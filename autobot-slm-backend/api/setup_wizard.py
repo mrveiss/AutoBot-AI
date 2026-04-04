@@ -146,6 +146,10 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "ai-stack": ("ai_stack_host", 8080),
     "npu-worker": ("npu_worker_host", 8081),
     "browser-service": ("browser_host", 3000),
+    "tts-worker": (
+        "tts_host",
+        8083,
+    ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
 

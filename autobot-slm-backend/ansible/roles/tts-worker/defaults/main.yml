@@ -13,7 +13,7 @@ tts_voices_dir: /var/lib/autobot/voices
 
 # Server settings
 tts_host: "0.0.0.0"
-tts_port: 8082
+tts_port: 8083  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU worker)
 
 # HuggingFace token (required for gated models like voice cloning)
 tts_hf_token: "{{ vault_hf_token | default('') }}"
