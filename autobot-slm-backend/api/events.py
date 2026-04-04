@@ -15,11 +15,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import EventSeverity, Node, NodeEvent
+from services.auth import get_current_user
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/events", tags=["events"])
+router = APIRouter(
+    prefix="/events",
+    tags=["events"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class BufferedEvent(BaseModel):
