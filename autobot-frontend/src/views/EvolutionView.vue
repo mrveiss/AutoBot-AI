@@ -361,7 +361,7 @@ import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue
 const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
-const evolution = useEvolution(sourceId.value)
+const evolution = useEvolution(sourceId)
 const { t } = useI18n()
 const showAnalysisModal = ref(false)
 

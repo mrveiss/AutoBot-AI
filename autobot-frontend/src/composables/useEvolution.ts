@@ -7,7 +7,7 @@
  * Provides reactive state and methods for code evolution mining and analysis.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, isRef, type ComputedRef } from 'vue'
 import axios from 'axios'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage, extractErrorMessage } from '@/utils/errorExtract'
@@ -79,7 +79,7 @@ export interface EvolutionSummary {
   pattern_counts: Record<string, number>
 }
 
-export function useEvolution(sourceId?: string) {
+export function useEvolution(sourceId?: string | ComputedRef<string | undefined>) {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -100,10 +100,13 @@ export function useEvolution(sourceId?: string) {
 
   /**
    * Merge source_id into params when sourceId is provided (Issue #3436).
+   * Accepts a plain string or ComputedRef so callers pass a reactive route
+   * param without freezing the value at setup time.
    */
   function withSourceId(params: Record<string, string> = {}): Record<string, string> {
-    if (!sourceId) return params
-    return { ...params, source_id: sourceId }
+    const id = isRef(sourceId) ? sourceId.value : sourceId
+    if (!id) return params
+    return { ...params, source_id: id }
   }
 
   // Add auth token to requests
