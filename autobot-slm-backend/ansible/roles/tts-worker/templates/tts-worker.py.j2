@@ -68,11 +68,11 @@ TTS_MODEL_ID: str = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
 
 
 def _check_cache_writable(models_dir: Path) -> None:
-    """Validate that the TTS model cache directory is writable before loading.
+    """Validate that the TTS model cache directory and its HF subdirs are writable.
 
     pocket_tts catches PermissionError and re-raises with a misleading
     'accept terms / hf auth login' message. This check surfaces the real
-    cause early so the operator sees the correct fix (#3466).
+    cause early so the operator sees the correct fix (#3466, #3471).
     """
     import getpass
 
@@ -81,17 +81,26 @@ def _check_cache_writable(models_dir: Path) -> None:
     except PermissionError:
         pass  # fall through to the access check below
 
-    if not os.access(models_dir, os.W_OK):
-        user = getpass.getuser()
-        logger.error(
-            "TTS model cache directory %s is not writable by %s. "
-            "Run: sudo chown -R autobot-tts:autobot-tts %s  "
-            "Or re-run setup provisioning to fix automatically. (#3466)",
-            models_dir,
-            user,
-            models_dir,
-        )
-        raise SystemExit(1)
+    # Check root dir plus the HuggingFace Hub cache subdirs where
+    # pocket_tts actually reads/writes model shards (#3471).
+    subdirs_to_check = [models_dir]
+    for subdir_name in ("hub", "xet"):
+        subdir = models_dir / subdir_name
+        if subdir.exists():
+            subdirs_to_check.append(subdir)
+
+    for check_path in subdirs_to_check:
+        if not os.access(check_path, os.W_OK):
+            user = getpass.getuser()
+            logger.error(
+                "TTS model cache directory %s is not writable by %s. "
+                "Run: sudo chown -R autobot-tts:autobot-tts %s  "
+                "Or re-run setup provisioning to fix automatically. (#3466)",
+                check_path,
+                user,
+                models_dir,
+            )
+            raise SystemExit(1)
 
 
 def _is_gated_model(model_id: str) -> bool:
