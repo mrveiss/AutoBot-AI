@@ -290,6 +290,92 @@ class TestGitSubcommandGuard:
         assert exc_info.value.status_code == 400
         assert "not permitted" in exc_info.value.detail
 
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git stash list",
+            "git stash show",
+            "git stash show stash@{0}",
+        ],
+    )
+    def test_git_stash_read_only_passes(self, cmd):
+        """git stash list/show are the only permitted stash operations."""
+        executable = _validate_command(cmd)
+        assert executable == "git"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git stash",
+            "git stash push",
+            "git stash pop",
+            "git stash drop",
+            "git stash clear",
+            "git stash apply",
+            "git stash branch newbranch",
+        ],
+    )
+    def test_git_stash_write_ops_rejected(self, cmd):
+        """git stash write operations (pop/drop/clear/push/apply) are rejected."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+        assert "not permitted" in exc_info.value.detail
+
+
+# ---------------------------------------------------------------------------
+# #3450 — dpkg argument guard
+# ---------------------------------------------------------------------------
+
+
+class TestDpkgArgumentGuard:
+    """dpkg is restricted to read-only query flags."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "dpkg -l",
+            "dpkg --list",
+            "dpkg -s nginx",
+            "dpkg --status nginx",
+            "dpkg -L nginx",
+            "dpkg --listfiles nginx",
+            "dpkg -S /usr/bin/python3",
+            "dpkg --search /usr/bin/python3",
+            "dpkg -p nginx",
+            "dpkg --print-avail nginx",
+            "dpkg --get-selections",
+            "dpkg --print-architecture",
+            "dpkg --print-foreign-architectures",
+        ],
+    )
+    def test_dpkg_read_flags_pass(self, cmd):
+        """Read-only dpkg query flags are accepted."""
+        executable = _validate_command(cmd)
+        assert executable == "dpkg"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "dpkg -i evil.deb",
+            "dpkg --install evil.deb",
+            "dpkg -r nginx",
+            "dpkg --remove nginx",
+            "dpkg --purge nginx",
+            "dpkg -P nginx",
+            "dpkg --unpack evil.deb",
+            "dpkg --configure nginx",
+            "dpkg --triggers-only nginx",
+            "dpkg",
+        ],
+    )
+    def test_dpkg_write_flags_rejected(self, cmd):
+        """Write/install/remove dpkg flags are rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+        assert "not permitted" in exc_info.value.detail
+
 
 # ---------------------------------------------------------------------------
 # #3450 — find -exec guard

@@ -84,7 +84,8 @@ ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
         "find",
         "stat",
         "file",
-        # Package management (query-only helpers — apt/yum/dnf/rpm excluded)
+        # Package management (query-only; argument guard in _validate_command
+        # restricts dpkg to -l/-s/-L/-S/--list/--status/--listfiles flags)
         "dpkg",
         # AutoBot-specific helpers
         "autobot-status",
@@ -111,7 +112,9 @@ _GIT_ALLOWED_SUBCOMMANDS: frozenset[str] = frozenset(
         "rev-parse",
         "ls-files",
         "ls-remote",
-        "stash",  # read-only usage: stash list / stash show
+        # stash: only list/show are permitted; sub-subcommand enforced in
+        # _validate_command to block stash pop/drop/clear/push
+        "stash",
     }
 )
 
@@ -124,8 +127,10 @@ def _validate_command(script: str) -> str:
     not in ALLOWED_EXECUTABLES.
 
     Additional per-executable argument guards (#3450):
-    - git: first argument must be in _GIT_ALLOWED_SUBCOMMANDS.
-    - find: -exec flag is rejected.
+    - git: first argument must be in _GIT_ALLOWED_SUBCOMMANDS;
+      'stash' is further restricted to list/show sub-subcommands.
+    - dpkg: first argument must be a read-only query flag.
+    - find: -exec/-execdir flags are rejected.
     """
     try:
         tokens = shlex.split(script)
@@ -173,6 +178,43 @@ def _validate_command(script: str) -> str:
                 detail=(
                     f"Command rejected: git subcommand {subcommand!r} is not "
                     "permitted. Only read-only subcommands are allowed."
+                ),
+            )
+        # git stash: only list and show are read-only; block pop/drop/clear/push.
+        if subcommand == "stash":
+            stash_op = tokens[2] if len(tokens) > 2 else "list"
+            if stash_op not in ("list", "show"):
+                logger.warning(
+                    "Command rejected — git stash %r is not a read-only operation",
+                    stash_op,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Command rejected: git stash {stash_op!r} is not "
+                        "permitted. Only 'stash list' and 'stash show' are allowed."
+                    ),
+                )
+
+    if executable == "dpkg":
+        # Allow only read-only query flags; block install/remove/unpack/configure.
+        _DPKG_READ_FLAGS = {
+            "-l", "--list", "-s", "--status", "-L", "--listfiles",
+            "-S", "--search", "-p", "--print-avail",
+            "--get-selections", "--print-architecture",
+            "--print-foreign-architectures",
+        }
+        flag = tokens[1] if len(tokens) > 1 else ""
+        if flag not in _DPKG_READ_FLAGS:
+            logger.warning(
+                "Command rejected — dpkg flag %r is not a read-only query flag",
+                flag,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Command rejected: dpkg flag {flag!r} is not permitted. "
+                    "Only read-only query flags are allowed."
                 ),
             )
 
