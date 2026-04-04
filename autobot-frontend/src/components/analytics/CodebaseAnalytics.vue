@@ -342,6 +342,76 @@
       @saved="handleShareSaved"
       @close="showShareSourceModal = false; shareTargetSource = null"
     />
+
+    <!-- Issue #3436: Per-project sub-tab navigation and child route outlet -->
+    <div v-if="sourceIdParam" class="project-sub-tabs-container">
+      <nav class="project-sub-tabs" role="tablist" aria-label="Project analytics tabs">
+        <router-link
+          :to="`/analytics/codebase/${sourceIdParam}`"
+          class="project-sub-tab"
+          :class="{ 'project-sub-tab-active': isOverviewTabActive }"
+          role="tab"
+          :aria-selected="isOverviewTabActive"
+        >
+          <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <span>{{ $t('analytics.codebase.tabs.overview', 'Overview') }}</span>
+        </router-link>
+        <router-link
+          :to="`/analytics/codebase/${sourceIdParam}/code-quality`"
+          class="project-sub-tab"
+          :class="{ 'project-sub-tab-active': isCodeQualityTabActive }"
+          role="tab"
+          :aria-selected="isCodeQualityTabActive"
+        >
+          <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{{ $t('analytics.codebase.tabs.codeQuality', 'Code Quality') }}</span>
+        </router-link>
+        <router-link
+          :to="`/analytics/codebase/${sourceIdParam}/code-review`"
+          class="project-sub-tab"
+          :class="{ 'project-sub-tab-active': isCodeReviewTabActive }"
+          role="tab"
+          :aria-selected="isCodeReviewTabActive"
+        >
+          <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <span>{{ $t('analytics.codebase.tabs.codeReview', 'Code Review') }}</span>
+        </router-link>
+        <router-link
+          :to="`/analytics/codebase/${sourceIdParam}/evolution`"
+          class="project-sub-tab"
+          :class="{ 'project-sub-tab-active': isEvolutionTabActive }"
+          role="tab"
+          :aria-selected="isEvolutionTabActive"
+        >
+          <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+          <span>{{ $t('analytics.codebase.tabs.evolution', 'Evolution') }}</span>
+        </router-link>
+        <router-link
+          :to="`/analytics/codebase/${sourceIdParam}/code-generation`"
+          class="project-sub-tab"
+          :class="{ 'project-sub-tab-active': isCodeGenerationTabActive }"
+          role="tab"
+          :aria-selected="isCodeGenerationTabActive"
+        >
+          <svg class="sub-tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span>{{ $t('analytics.codebase.tabs.codeGeneration', 'Code Generation') }}</span>
+        </router-link>
+      </nav>
+
+      <!-- Child route view renders here when a sub-tab is active -->
+      <router-view v-if="!isOverviewTabActive" class="project-sub-tab-view" />
+    </div>
   </div>
 </template>
 
@@ -362,7 +432,7 @@
  *   useDashboardLoaders    - Dashboard overview panel loaders (pre-existing)
  *   useCodebaseExport      - Report/section export (pre-existing)
  */
-import { ref, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -407,6 +477,17 @@ const logger = createLogger('CodebaseAnalytics')
 const { t } = useI18n()
 const route = useRoute()
 const analyticsRouter = useRouter()
+
+// Issue #3436: Sub-tab active-state computed properties
+const isOverviewTabActive = computed(() => {
+  const path = route.path
+  // Active when on the exact project path (no child segment)
+  return /^\/analytics\/codebase\/[^/]+\/?$/.test(path)
+})
+const isCodeQualityTabActive = computed(() => route.path.includes('/code-quality'))
+const isCodeReviewTabActive = computed(() => route.path.includes('/code-review'))
+const isEvolutionTabActive = computed(() => route.path.endsWith('/evolution'))
+const isCodeGenerationTabActive = computed(() => route.path.includes('/code-generation'))
 
 // Toast notifications
 const { showToast } = useToast()
@@ -1132,5 +1213,62 @@ onUnmounted(() => {
 
 .kb-optin-dismiss:hover {
   color: var(--text-primary);
+}
+
+/* Issue #3436: Per-project sub-tab bar */
+.project-sub-tabs-container {
+  margin-top: 24px;
+  border-top: 1px solid var(--border-default);
+}
+
+.project-sub-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 0 0 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--bg-secondary);
+}
+
+.project-sub-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  top: 1px;
+  white-space: nowrap;
+}
+
+.project-sub-tab:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-tertiary);
+}
+
+.project-sub-tab-active {
+  color: var(--color-info);
+  border-bottom-color: var(--color-info);
+  background-color: transparent;
+}
+
+.project-sub-tab-active:hover {
+  color: var(--color-info);
+  background-color: var(--color-info-bg);
+}
+
+.sub-tab-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.project-sub-tab-view {
+  margin-top: 16px;
 }
 </style>

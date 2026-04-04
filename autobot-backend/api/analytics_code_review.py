@@ -33,6 +33,22 @@ _VALID_GIT_REF_RE = re.compile(
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
 
+
+async def _resolve_source_or_404(source_id: Optional[str]) -> None:
+    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
+
+    Uses a lazy import of resolve_source_root to avoid loading the full
+    codebase_analytics package at module import time.
+    """
+    if source_id is None:
+        return
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
+
+    source_root = await resolve_source_root(source_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
+
+
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
 REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}
 
@@ -456,14 +472,17 @@ async def analyze_diff(
     commit_range: Optional[str] = Query(
         None, description="Git commit range (e.g., HEAD~1..HEAD)"
     ),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Analyze git diff and generate review comments.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope analysis to a project.
 
     Returns review findings with severity and suggestions.
     """
+    await _resolve_source_or_404(source_id)
     diff_content = await get_git_diff(commit_range)
 
     if not diff_content:
@@ -581,14 +600,17 @@ async def get_review_history(
     admin_check: bool = Depends(check_admin_permission),
     limit: int = Query(20, ge=1, le=100),
     since: Optional[str] = Query(None, description="ISO date string"),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get review history.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
 
     Returns past reviews for trend analysis.
     """
+    await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
     return _no_data_response(
         "No review history available. Reviews will be stored here once you run code reviews."
@@ -599,14 +621,17 @@ async def get_review_history(
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
     period: str = Query("30d", pattern="^(7d|30d|90d)$"),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get review metrics over time.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
 
     Returns aggregated statistics for trend analysis.
     """
+    await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
     return _no_data_response(
         "No review metrics available. Metrics will accumulate as you run code reviews."
@@ -662,14 +687,17 @@ async def submit_feedback(
 @router.get("/summary")
 async def get_review_summary(
     admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """
     Get overall review system summary.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
 
     Returns dashboard-level metrics.
     """
+    await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
     return _no_data_response(
         "No review summary available. Summary statistics will be generated after running code reviews."

@@ -326,7 +326,62 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Codebase Analytics',
           parent: 'analytics'
-        }
+        },
+        children: [
+          {
+            path: 'code-quality',
+            name: 'analytics-codebase-code-quality',
+            component: () => import('@/components/analytics/CodeQualityDashboard.vue'),
+            meta: {
+              title: 'Code Quality',
+              parent: 'analytics'
+            }
+          },
+          {
+            path: 'code-review',
+            name: 'analytics-codebase-code-review',
+            component: () => import('@/components/analytics/CodeReviewDashboard.vue'),
+            meta: {
+              title: 'Code Review',
+              parent: 'analytics'
+            }
+          },
+          {
+            path: 'evolution',
+            name: 'analytics-codebase-evolution',
+            component: () => import('@/views/EvolutionView.vue'),
+            meta: {
+              title: 'Code Evolution',
+              parent: 'analytics'
+            }
+          },
+          {
+            path: 'code-generation',
+            name: 'analytics-codebase-code-generation',
+            component: () => import('@/components/analytics/CodeGenerationDashboard.vue'),
+            meta: {
+              title: 'Code Generation',
+              parent: 'analytics'
+            }
+          }
+        ]
+      },
+      // Issue #3436: Legacy redirect routes — old flat paths redirect to codebase landing
+      {
+        path: 'code-quality',
+        redirect: '/analytics/codebase'
+      },
+      {
+        path: 'code-review',
+        redirect: '/analytics/codebase'
+      },
+      {
+        path: 'code-generation',
+        redirect: '/analytics/codebase'
+      },
+      {
+        path: 'evolution',
+        redirect: '/analytics/codebase'
       },
       {
         path: 'bi',
@@ -367,47 +422,9 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
-      {
-        path: 'evolution',
-        name: 'analytics-evolution',
-        component: () => import('@/views/EvolutionView.vue'),
-        meta: {
-          title: 'Code Evolution',
-          parent: 'analytics',
-          icon: 'fas fa-chart-line',
-          description: 'Git history analysis and pattern evolution tracking (Issue #243)',
-          requiresAuth: true
-        }
-      },
       // bug-prediction route removed — functionality in CodebaseBugPredictionPanel
-      {
-        path: 'code-generation',
-        name: 'analytics-code-generation',
-        component: () => import('@/components/analytics/CodeGenerationDashboard.vue'),
-        meta: {
-          title: 'Code Generation',
-          parent: 'analytics'
-        }
-      },
       // code-intelligence route removed — functionality in CodebaseIntelligenceScoresPanel
-      {
-        path: 'code-quality',
-        name: 'analytics-code-quality',
-        component: () => import('@/components/analytics/CodeQualityDashboard.vue'),
-        meta: {
-          title: 'Code Quality',
-          parent: 'analytics'
-        }
-      },
-      {
-        path: 'code-review',
-        name: 'analytics-code-review',
-        component: () => import('@/components/analytics/CodeReviewDashboard.vue'),
-        meta: {
-          title: 'Code Review',
-          parent: 'analytics'
-        }
-      },
+      // evolution, code-generation, code-quality, code-review moved under codebase/:sourceId (Issue #3436)
       {
         path: 'conversation-flow',
         name: 'analytics-conversation-flow',

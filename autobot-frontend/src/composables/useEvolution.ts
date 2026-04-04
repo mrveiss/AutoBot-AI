@@ -79,7 +79,7 @@ export interface EvolutionSummary {
   pattern_counts: Record<string, number>
 }
 
-export function useEvolution() {
+export function useEvolution(sourceId?: string) {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -97,6 +97,14 @@ export function useEvolution() {
       'Content-Type': 'application/json',
     },
   })
+
+  /**
+   * Merge source_id into params when sourceId is provided (Issue #3436).
+   */
+  function withSourceId(params: Record<string, string> = {}): Record<string, string> {
+    if (!sourceId) return params
+    return { ...params, source_id: sourceId }
+  }
 
   // Add auth token to requests
   api.interceptors.request.use((config) => {
@@ -150,7 +158,8 @@ export function useEvolution() {
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
-      const response = await api.get<{ timeline: TimelineData[] }>('/timeline', { params })
+      // Issue #3436: scope to project when sourceId is provided
+      const response = await api.get<{ timeline: TimelineData[] }>('/timeline', { params: withSourceId(params) })
 
       if (response.data.timeline) {
         timelineData.value = response.data.timeline
@@ -182,7 +191,8 @@ export function useEvolution() {
       if (start_date) params.start_date = start_date
       if (end_date) params.end_date = end_date
 
-      const response = await api.get<{ patterns: PatternEvolutionData }>('/patterns', { params })
+      // Issue #3436: scope to project when sourceId is provided
+      const response = await api.get<{ patterns: PatternEvolutionData }>('/patterns', { params: withSourceId(params) })
 
       if (response.data.patterns) {
         patternData.value = response.data.patterns
@@ -202,7 +212,8 @@ export function useEvolution() {
    */
   async function fetchTrends(days: number = 30): Promise<void> {
     try {
-      const response = await api.get<{ trends: TrendsData }>('/trends', { params: { days } })
+      // Issue #3436: scope to project when sourceId is provided
+      const response = await api.get<{ trends: TrendsData }>('/trends', { params: withSourceId({ days: String(days) }) })
       if (response.data.trends) {
         trendsData.value = response.data.trends
       }
@@ -217,7 +228,8 @@ export function useEvolution() {
    */
   async function fetchSummary(): Promise<void> {
     try {
-      const response = await api.get<{ summary: EvolutionSummary }>('/summary')
+      // Issue #3436: scope to project when sourceId is provided
+      const response = await api.get<{ summary: EvolutionSummary }>('/summary', { params: withSourceId() })
       if (response.data.summary) {
         summary.value = response.data.summary
       }

@@ -25,59 +25,7 @@
             </svg>
             <span>{{ $t('analytics.views.tabs.codebase') }}</span>
           </router-link>
-          <router-link
-            to="/analytics/code-quality"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isCodeQualityActive }"
-            role="tab"
-            :aria-selected="isCodeQualityActive"
-            :aria-label="$t('analytics.views.tabs.codeQualityAria')"
-          >
-            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            <span>{{ $t('analytics.views.tabs.codeQuality') }}</span>
-          </router-link>
-          <router-link
-            to="/analytics/code-review"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isCodeReviewActive }"
-            role="tab"
-            :aria-selected="isCodeReviewActive"
-            :aria-label="$t('analytics.views.tabs.codeReviewAria')"
-          >
-            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-            </svg>
-            <span>{{ $t('analytics.views.tabs.codeReview') }}</span>
-          </router-link>
-          <router-link
-            to="/analytics/code-generation"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isCodeGenerationActive }"
-            role="tab"
-            :aria-selected="isCodeGenerationActive"
-            :aria-label="$t('analytics.views.tabs.codeGenerationAria')"
-          >
-            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
-            <span>{{ $t('analytics.views.tabs.codeGeneration') }}</span>
-          </router-link>
-          <router-link
-            to="/analytics/evolution"
-            class="nav-tab"
-            :class="{ 'nav-tab-active': isEvolutionActive }"
-            role="tab"
-            :aria-selected="isEvolutionActive"
-            :aria-label="$t('analytics.views.tabs.evolutionAria')"
-          >
-            <svg class="tab-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-            </svg>
-            <span>{{ $t('analytics.views.tabs.evolution') }}</span>
-          </router-link>
+          <!-- Issue #3436: code-quality, code-review, code-generation, evolution moved under codebase/:sourceId -->
           <router-link
             to="/analytics/bi"
             class="nav-tab"
@@ -138,21 +86,8 @@ const isCodebaseActive = computed(() => {
   return route.path === '/analytics' || route.path === '/analytics/codebase' || route.path.startsWith('/analytics/codebase/')
 })
 
-const isCodeQualityActive = computed(() => {
-  return route.path === '/analytics/code-quality' || route.path.startsWith('/analytics/code-quality/')
-})
-
-const isCodeReviewActive = computed(() => {
-  return route.path === '/analytics/code-review' || route.path.startsWith('/analytics/code-review/')
-})
-
-const isCodeGenerationActive = computed(() => {
-  return route.path === '/analytics/code-generation' || route.path.startsWith('/analytics/code-generation/')
-})
-
-const isEvolutionActive = computed(() => {
-  return route.path === '/analytics/evolution' || route.path.startsWith('/analytics/evolution/')
-})
+// Issue #3436: isCodeQualityActive, isCodeReviewActive, isCodeGenerationActive, isEvolutionActive
+// removed — these dashboards now live under codebase/:sourceId as child routes.
 
 const isBIActive = computed(() => {
   return route.path === '/analytics/bi' || route.path.startsWith('/analytics/bi/')

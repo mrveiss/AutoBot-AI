@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
@@ -46,6 +46,21 @@ except ImportError:
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_source_or_404(source_id: Optional[str]) -> None:
+    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
+
+    Uses a lazy import of resolve_source_root to avoid loading the full
+    codebase_analytics package at module import time.
+    """
+    if source_id is None:
+        return
+    from api.codebase_analytics.endpoints.shared import resolve_source_root
+
+    source_root = await resolve_source_root(source_id)
+    if source_root is None:
+        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name
@@ -1081,14 +1096,19 @@ async def rollback_code(
 
 
 @router.get("/stats")
-async def get_stats(admin_check: bool = Depends(check_admin_permission)):
+async def get_stats(
+    admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID to scope analysis"),
+):
     """
     Get code generation statistics.
 
     Returns usage statistics for generation and refactoring.
 
     Issue #744: Requires admin authentication.
+    Issue #3436: Accepts optional source_id to scope results to a project.
     """
+    await _resolve_source_or_404(source_id)
     engine = get_code_generation_engine()
     return await engine.get_stats()
 
