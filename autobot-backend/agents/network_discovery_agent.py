@@ -69,6 +69,18 @@ class NetworkDiscoveryAgent:
                     "message": f"Unsupported task type: {task_type}",
                 }
 
+            # Guard: all tasks require a network; DEFAULT_SCAN_NETWORK="" until configured
+            network = context.get("network", self.default_network)
+            if not network:
+                return {
+                    "status": "error",
+                    "message": (
+                        "Network range not configured. "
+                        "Set NETWORK_SUBNET env var or pass 'network' in task context."
+                    ),
+                }
+            context = {**context, "network": network}
+
             return await handler(context)
 
         except Exception as e:

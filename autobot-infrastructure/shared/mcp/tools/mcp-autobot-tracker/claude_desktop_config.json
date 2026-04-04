@@ -4,7 +4,7 @@
             "command": "node",
             "args": ["${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/mcp-autobot-tracker/dist/index.js"],
             "env": {
-                "REDIS_HOST": "172.16.168.23",
+                "REDIS_HOST": "",
                 "REDIS_PORT": "6379"
             }
         }
