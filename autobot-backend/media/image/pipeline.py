@@ -25,34 +25,32 @@ try:
 except ImportError:
     _PIL_AVAILABLE = False
 
-# Optional: existing VisionProcessor for AI-powered analysis
-try:
-    from multimodal_processor.processors.vision import (
-        VISION_MODELS_AVAILABLE,
-        VisionProcessor,
-    )
-
-    _VISION_PROCESSOR_AVAILABLE = VISION_MODELS_AVAILABLE
-except ImportError:
-    _VISION_PROCESSOR_AVAILABLE = False
-    VisionProcessor = None  # type: ignore
-
 logger = logging.getLogger(__name__)
 
-# Lazy singleton for VisionProcessor (loads GPU models on first use)
+# Lazy singleton for VisionProcessor (loads GPU models on first use).
+# Import is deferred into _get_vision_processor() to break the circular
+# import chain: multimodal_processor_impl → media.manager → media.image.pipeline
+# → multimodal_processor.processors.vision → multimodal_processor_impl
 _vision_processor: Optional[Any] = None
+_vision_processor_checked: bool = False
 
 
 def _get_vision_processor() -> Optional[Any]:
-    """Lazy-load VisionProcessor; returns None if unavailable."""
-    global _vision_processor
-    if not _VISION_PROCESSOR_AVAILABLE:
-        return None
-    if _vision_processor is None and VisionProcessor is not None:
-        try:
+    """Lazy-load VisionProcessor on first call; returns None if unavailable."""
+    global _vision_processor, _vision_processor_checked
+    if _vision_processor_checked:
+        return _vision_processor
+    _vision_processor_checked = True
+    try:
+        from multimodal_processor.processors.vision import (
+            VISION_MODELS_AVAILABLE,
+            VisionProcessor,
+        )
+
+        if VISION_MODELS_AVAILABLE:
             _vision_processor = VisionProcessor()
-        except Exception as exc:
-            logger.warning("Failed to initialize VisionProcessor: %s", exc)
+    except Exception as exc:
+        logger.warning("VisionProcessor unavailable: %s", exc)
     return _vision_processor
 
 
