@@ -101,6 +101,16 @@ for _m in [
 ]:
     _stub(_m)
 
+# ── python-multipart ─────────────────────────────────────────────────────────
+# FastAPI's ensure_multipart_is_installed() is called when any route uses
+# UploadFile or Form parameters.  It checks for python_multipart.__version__
+# at route-registration time (import time for the router module).  Stub it
+# so that code_source_test.py can import code_source.py without the package
+# being installed in the dev environment.  Issue: #3525
+_pm_mod = types.ModuleType("python_multipart")
+_pm_mod.__version__ = "0.0.99"  # type: ignore[attr-defined]
+sys.modules.setdefault("python_multipart", _pm_mod)
+
 # ── user_management ───────────────────────────────────────────────────────────
 for _m in [
     "user_management",
