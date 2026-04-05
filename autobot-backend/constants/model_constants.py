@@ -56,15 +56,15 @@ from autobot_shared.ssot_config import SYSTEM_MODEL as SSOT_SYSTEM_MODEL
 # Change models in autobot_shared/ssot_config.py to change the entire system.
 
 FALLBACK_MODEL = DEFAULT_LLM_MODEL
-FALLBACK_OPENAI_MODEL = "gpt-4"
-FALLBACK_ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
-FALLBACK_GOOGLE_MODEL = "gemini-pro"
 
 # =============================================================================
 # EXPLICIT MODEL NAME CONSTANTS (#3528)
 # =============================================================================
 # Named constants for every model string used anywhere in the codebase.
 # Add new entries here rather than hardcoding strings in service files.
+
+# OpenAI — preview/reasoning aliases without dated suffix
+OPENAI_O1_PREVIEW = "o1-preview"
 
 # OpenAI — GPT-4 family
 OPENAI_GPT4 = "gpt-4"
@@ -102,6 +102,9 @@ ANTHROPIC_CLAUDE3_OPUS = "claude-3-opus"
 ANTHROPIC_CLAUDE3_SONNET = "claude-3-sonnet"
 ANTHROPIC_CLAUDE3_HAIKU = "claude-3-haiku"
 ANTHROPIC_CLAUDE_SONNET4_SHORT = "claude-sonnet-4"
+# Anthropic — release aliases without dated suffix (latest stable pointers)
+ANTHROPIC_CLAUDE_SONNET4_6 = "claude-sonnet-4-6"
+ANTHROPIC_CLAUDE_OPUS4_6 = "claude-opus-4-6"
 
 # Google — Gemini 2.5
 GOOGLE_GEMINI25_PRO = "gemini-2.5-pro"
@@ -110,7 +113,8 @@ GOOGLE_GEMINI25_FLASH = "gemini-2.5-flash"
 GOOGLE_GEMINI20_FLASH = "gemini-2.0-flash"
 GOOGLE_GEMINI15_PRO = "gemini-1.5-pro"
 GOOGLE_GEMINI15_FLASH = "gemini-1.5-flash"
-# Google — legacy vision model
+# Google — legacy models
+GOOGLE_GEMINI_PRO = "gemini-pro"          # plain base model (distinct from vision)
 GOOGLE_GEMINI_PRO_VISION = "gemini-pro-vision"
 
 # DeepSeek hosted API
@@ -138,6 +142,11 @@ LOCAL_GEMMA3 = "gemma3"
 # These are substrings matched with ``in model.lower()``, not full model IDs.
 EXPENSIVE_MODEL_MARKER_OPUS = "opus"
 EXPENSIVE_MODEL_MARKER_GPT4 = "gpt-4"
+
+# Fallback model aliases — defined after constants to reference them directly
+FALLBACK_OPENAI_MODEL = OPENAI_GPT4
+FALLBACK_ANTHROPIC_MODEL = ANTHROPIC_CLAUDE35_SONNET
+FALLBACK_GOOGLE_MODEL = GOOGLE_GEMINI_PRO
 
 # =============================================================================
 # MODEL_PRICING — SINGLE SOURCE OF TRUTH (#3528)

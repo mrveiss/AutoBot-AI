@@ -439,7 +439,7 @@ class LLMPatternAnalyzer:
             "category": category.value,
             "estimated_tokens": int(token_estimate),
             "estimated_cost": self._calculate_cost(
-                model or "gpt-4o", int(token_estimate), int(token_estimate * 1.5)
+                model or OPENAI_GPT4O, int(token_estimate), int(token_estimate * 1.5)
             ),
             "issues": issues,
             "recommendations": recommendations,

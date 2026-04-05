@@ -12,6 +12,7 @@ import os
 import time
 from typing import List, Optional
 
+from constants.model_constants import ANTHROPIC_CLAUDE_OPUS4_6, ANTHROPIC_CLAUDE_SONNET4_6
 from ..models import LLMRequest, LLMResponse
 from .base import (
     AdapterBase,
@@ -24,8 +25,8 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_MODELS = [
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
+    ANTHROPIC_CLAUDE_OPUS4_6,
+    ANTHROPIC_CLAUDE_SONNET4_6,
     "claude-haiku-4-5-20251001",
     "claude-sonnet-4-20250514",
     "claude-3-5-haiku-20241022",
@@ -79,7 +80,7 @@ class AnthropicAdapter(AdapterBase):
                 )
 
         kwargs = {
-            "model": request.model_name or "claude-sonnet-4-6",
+            "model": request.model_name or ANTHROPIC_CLAUDE_SONNET4_6,
             "max_tokens": request.max_tokens or 4096,
             "messages": messages,
             "temperature": request.temperature,
@@ -139,7 +140,7 @@ class AnthropicAdapter(AdapterBase):
         try:
             client = self._ensure_client()
             resp = await client.messages.count_tokens(
-                model="claude-sonnet-4-6",
+                model=ANTHROPIC_CLAUDE_SONNET4_6,
                 messages=[{"role": "user", "content": "test"}],
             )
             diagnostics.append(

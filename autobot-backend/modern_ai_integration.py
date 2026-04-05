@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
+    GOOGLE_GEMINI_PRO,
     GOOGLE_GEMINI_PRO_VISION,
     OPENAI_GPT4_TURBO_PREVIEW,
     OPENAI_GPT4_VISION_PREVIEW,
@@ -774,7 +775,7 @@ class ModernAIIntegration:
         """Create Google Gemini model configuration. Issue #620."""
         return AIModelConfig(
             provider=AIProvider.GOOGLE_GEMINI,
-            model_name="gemini-pro",
+            model_name=GOOGLE_GEMINI_PRO,
             capabilities=[
                 ModelCapability.TEXT_GENERATION,
                 ModelCapability.IMAGE_ANALYSIS,

@@ -23,7 +23,27 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from constants.model_constants import MODEL_PRICING_PER_1M_TOKENS
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_OPUS4,
+    ANTHROPIC_CLAUDE_SONNET4,
+    DEEPSEEK_R1_API,
+    DEEPSEEK_V3,
+    GOOGLE_GEMINI20_FLASH,
+    GOOGLE_GEMINI25_PRO,
+    GOOGLE_GEMINI15_PRO,
+    MODEL_PRICING_PER_1M_TOKENS,
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT41,
+    OPENAI_GPT4O,
+    OPENAI_GPT4_TURBO,
+    OPENAI_O1,
+    OPENAI_O1_MINI,
+    OPENAI_O3,
+    OPENAI_O3_MINI,
+    OPENAI_O4_MINI,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -212,25 +232,25 @@ class LLMCostTracker:
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.
     _FALLBACK_PATTERNS: List[tuple] = [
-        ("claude-opus", "claude-opus-4-20250514"),
-        ("claude-sonnet", "claude-sonnet-4-20250514"),
-        ("claude-haiku", "claude-haiku-4-5-20251001"),
-        ("claude", "claude-sonnet-4-20250514"),
-        ("gpt-4o", "gpt-4o"),
-        ("gpt-4.1", "gpt-4.1"),
-        ("gpt-4", "gpt-4-turbo"),
-        ("gpt-3.5", "gpt-3.5-turbo"),
-        ("o1-mini", "o1-mini"),
-        ("o3-mini", "o3-mini"),
-        ("o4-mini", "o4-mini"),
-        ("o1", "o1"),
-        ("o3", "o3"),
-        ("gemini-2.5", "gemini-2.5-pro"),
-        ("gemini-2.0", "gemini-2.0-flash"),
-        ("gemini-1.5", "gemini-1.5-pro"),
-        ("gemini", "gemini-2.0-flash"),
-        ("deepseek-v3", "deepseek-v3"),
-        ("deepseek-r1", "deepseek-r1-api"),
+        ("claude-opus", ANTHROPIC_CLAUDE_OPUS4),
+        ("claude-sonnet", ANTHROPIC_CLAUDE_SONNET4),
+        ("claude-haiku", ANTHROPIC_CLAUDE_HAIKU4_5),
+        ("claude", ANTHROPIC_CLAUDE_SONNET4),
+        ("gpt-4o", OPENAI_GPT4O),
+        ("gpt-4.1", OPENAI_GPT41),
+        ("gpt-4", OPENAI_GPT4_TURBO),
+        ("gpt-3.5", OPENAI_GPT35_TURBO),
+        ("o1-mini", OPENAI_O1_MINI),
+        ("o3-mini", OPENAI_O3_MINI),
+        ("o4-mini", OPENAI_O4_MINI),
+        ("o1", OPENAI_O1),
+        ("o3", OPENAI_O3),
+        ("gemini-2.5", GOOGLE_GEMINI25_PRO),
+        ("gemini-2.0", GOOGLE_GEMINI20_FLASH),
+        ("gemini-1.5", GOOGLE_GEMINI15_PRO),
+        ("gemini", GOOGLE_GEMINI20_FLASH),
+        ("deepseek-v3", DEEPSEEK_V3),
+        ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
     def _estimate_pricing_by_pattern(
