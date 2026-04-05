@@ -231,9 +231,12 @@ def _check_sensitive_path(executable: str, tokens: list[str]) -> None:
         return
 
     for arg in tokens[1:]:
-        # Skip option flags (e.g. -n, --lines=10)
-        if arg.startswith("-"):
-            continue
+        # Skip option flags (e.g. -n, --lines=10) and non-path tokens such as
+        # numeric option values (100 in "tail -n 100") or bare words produced
+        # by shlex splitting metachar sequences.  Tokens without any '/' cannot
+        # be file paths, so the absolute-path guard below does not apply.
+        if arg.startswith("-") or "/" not in arg:
+            continue  # skip flags and non-path tokens (option values, metachar-split words)
 
         # Require absolute paths — relative paths bypass the prefix denylist
         # because the working directory on the remote host is unpredictable.
