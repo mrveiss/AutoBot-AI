@@ -157,6 +157,33 @@
     group: "{{ ai_group }}"
   notify: restart ai-stack
 
+- name: Deploy AI Stack application source files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ ai_install_dir }}/{{ item | basename }}"
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    mode: "0644"
+  loop:
+    - "{{ playbook_dir }}/../shared/docker/ai-stack/ai_api_server.py"
+    - "{{ playbook_dir }}/../shared/docker/ai-stack/ai_container_main.py"
+    - "{{ playbook_dir }}/../shared/docker/ai-stack/requirements-ai.txt"
+  notify: restart ai-stack
+  tags: ['ai', 'deploy']
+
+- name: Create src/ symlinks to backend modules (co-located deployment)
+  ansible.builtin.file:
+    src: "{{ backend_install_dir }}/{{ item }}"
+    dest: "{{ ai_install_dir }}/src/{{ item }}"
+    state: link
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    force: true
+  loop:
+    - agents
+    - autobot_shared
+  tags: ['ai', 'deploy']
+
 - name: Deploy ChromaDB systemd service
   ansible.builtin.template:
     src: autobot-chromadb.service.j2
