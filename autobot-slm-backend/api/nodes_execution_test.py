@@ -74,6 +74,7 @@ _FILE_READ_EXECUTABLES = _mod._FILE_READ_EXECUTABLES
 _is_local_ip = _mod._is_local_ip
 _run_command = _mod._run_command
 _run_via_ssh = _mod._run_via_ssh
+_SSH_SYSTEM_KNOWN_HOSTS_PATH = _mod._SSH_SYSTEM_KNOWN_HOSTS_PATH
 _audit_execute_event = _mod._audit_execute_event
 NodeExecuteRequest = _mod.NodeExecuteRequest
 
@@ -633,8 +634,12 @@ class TestRunViaSshKnownHosts:
             await _run_via_ssh("10.0.0.2", "autobot", 22, ["df", "-h"], 10)
 
         ssh_opts = " ".join(captured_cmd)
-        assert "StrictHostKeyChecking=yes" in ssh_opts, f"Expected strict checking: {ssh_opts}"
-        assert str(system_known_hosts) in ssh_opts, f"Expected system known_hosts: {ssh_opts}"
+        assert (
+            "StrictHostKeyChecking=yes" in ssh_opts
+        ), f"Expected strict checking: {ssh_opts}"
+        assert (
+            str(system_known_hosts) in ssh_opts
+        ), f"Expected system known_hosts: {ssh_opts}"
         assert "/dev/null" not in ssh_opts, "Must not use /dev/null as known_hosts"
         assert "accept-new" not in ssh_opts, "Must not use accept-new when file exists"
 
