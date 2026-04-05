@@ -89,18 +89,45 @@ ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
         # AutoBot-specific helpers
         "autobot-status",
         "autobot-health",
-        # Git (read-only operations are enforced at argument level by callers)
+        # Git (subcommand is further validated by _validate_git_subcommand)
         "git",
     }
 )
+
+# Permitted git subcommands (second token after "git").
+# Explicit subcommand is always required — bare "git stash" etc. are rejected.
+_GIT_ALLOWED_SUBCOMMANDS: frozenset[str] = frozenset(
+    {
+        "status",
+        "log",
+        "diff",
+        "show",
+        "branch",
+        "remote",
+        "tag",
+        "describe",
+        "rev-parse",
+        "ls-files",
+        "stash",  # subcommand for stash is further restricted below
+    }
+)
+
+# For "git stash <op>", the operation token must be one of these read-only ops.
+_GIT_STASH_ALLOWED_OPS: frozenset[str] = frozenset({"list", "show"})
 
 
 def _validate_command(script: str) -> str:
     """Parse *script* and enforce the executable allowlist.
 
+    For git commands, additionally enforces:
+    - An explicit subcommand must be provided (bare ``git`` alone is rejected).
+    - The subcommand must be in ``_GIT_ALLOWED_SUBCOMMANDS``.
+    - For ``git stash``, an explicit operation (e.g. ``list`` or ``show``) must
+      be provided — bare ``git stash`` with no operation is rejected (#3478).
+
     Returns the normalised first token for logging.
-    Raises HTTPException 400 if the command is empty or the executable is
-    not in ALLOWED_EXECUTABLES.
+    Raises HTTPException 400 if the command is empty, the executable is not in
+    ALLOWED_EXECUTABLES, or git-specific subcommand rules are violated.
     """
     try:
         tokens = shlex.split(script)
@@ -133,7 +160,68 @@ def _validate_command(script: str) -> str:
             ),
         )
 
+    if executable == "git":
+        _validate_git_subcommand(tokens)
+
     return executable
+
+
+def _validate_git_subcommand(tokens: list[str]) -> None:
+    """Enforce git subcommand allowlist rules.
+
+    Bare ``git`` (no subcommand) and git subcommands not in
+    ``_GIT_ALLOWED_SUBCOMMANDS`` are rejected with HTTP 400.
+
+    For ``git stash``, a further check requires an explicit operation from
+    ``_GIT_STASH_ALLOWED_OPS`` — bare ``git stash`` with no operation token
+    is rejected (#3478, Option A: explicit is safer for allowlists).
+
+    Args:
+        tokens: The full token list from shlex.split(), with tokens[0] == "git".
+
+    Raises:
+        HTTPException: HTTP 400 if any git subcommand rule is violated.
+    """
+    if len(tokens) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Command rejected: git requires an explicit subcommand",
+        )
+
+    subcommand = tokens[1]
+    if subcommand not in _GIT_ALLOWED_SUBCOMMANDS:
+        logger.warning(
+            "Command rejected — git subcommand %r not in allowlist", subcommand
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Command rejected: git subcommand {subcommand!r} is not permitted"
+            ),
+        )
+
+    if subcommand == "stash":
+        if len(tokens) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Command rejected: 'git stash' requires an explicit operation "
+                    f"(one of: {', '.join(sorted(_GIT_STASH_ALLOWED_OPS))})"
+                ),
+            )
+        stash_op = tokens[2]
+        if stash_op not in _GIT_STASH_ALLOWED_OPS:
+            logger.warning(
+                "Command rejected — git stash operation %r not in allowlist",
+                stash_op,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Command rejected: git stash operation {stash_op!r} is not "
+                    f"permitted (allowed: {', '.join(sorted(_GIT_STASH_ALLOWED_OPS))})"
+                ),
+            )
 
 
 # ---------------------------------------------------------------------------

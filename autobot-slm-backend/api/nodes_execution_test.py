@@ -63,7 +63,10 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
 _validate_command = _mod._validate_command
+_validate_git_subcommand = _mod._validate_git_subcommand
 ALLOWED_EXECUTABLES = _mod.ALLOWED_EXECUTABLES
+_GIT_ALLOWED_SUBCOMMANDS = _mod._GIT_ALLOWED_SUBCOMMANDS
+_GIT_STASH_ALLOWED_OPS = _mod._GIT_STASH_ALLOWED_OPS
 _is_local_ip = _mod._is_local_ip
 _run_command = _mod._run_command
 _run_via_ssh = _mod._run_via_ssh
@@ -179,6 +182,96 @@ class TestValidateCommandAllowlist:
         """_validate_command returns the extracted executable name."""
         assert _validate_command("df -h") == "df"
         assert _validate_command("systemctl status nginx") == "systemctl"
+
+
+class TestValidateCommandGitSubcommands:
+    """Git-specific subcommand allowlist enforcement (#3478)."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git status",
+            "git log --oneline -10",
+            "git diff HEAD",
+            "git show HEAD",
+            "git branch -a",
+            "git remote -v",
+            "git tag",
+            "git describe --tags",
+            "git rev-parse HEAD",
+            "git ls-files",
+            "git stash list",
+            "git stash show",
+        ],
+    )
+    def test_allowed_git_commands_pass(self, cmd):
+        """Permitted git subcommands pass validation."""
+        executable = _validate_command(cmd)
+        assert executable == "git"
+
+    def test_bare_git_stash_rejected(self):
+        """Bare 'git stash' with no operation is rejected with HTTP 400 (#3478)."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("git stash")
+        assert exc_info.value.status_code == 400
+        assert "stash" in exc_info.value.detail
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git stash push",
+            "git stash pop",
+            "git stash apply",
+            "git stash drop",
+            "git stash clear",
+            "git stash branch my-branch",
+        ],
+    )
+    def test_disallowed_git_stash_operations_rejected(self, cmd):
+        """Mutating git stash operations are rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git checkout main",
+            "git reset --hard HEAD",
+            "git push origin main",
+            "git pull",
+            "git fetch",
+            "git merge main",
+            "git rebase main",
+            "git commit -m 'msg'",
+            "git add .",
+            "git rm file.txt",
+            "git clean -fd",
+            "git config user.email x@x.com",
+        ],
+    )
+    def test_disallowed_git_subcommands_rejected(self, cmd):
+        """Git subcommands not in the allowlist are rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+
+    def test_bare_git_no_subcommand_rejected(self):
+        """Bare 'git' with no subcommand is rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("git")
+        assert exc_info.value.status_code == 400
+        assert "subcommand" in exc_info.value.detail
+
+    def test_git_stash_list_passes(self):
+        """'git stash list' is explicitly allowed as a read-only operation."""
+        executable = _validate_command("git stash list")
+        assert executable == "git"
+
+    def test_git_stash_show_passes(self):
+        """'git stash show' is explicitly allowed as a read-only operation."""
+        executable = _validate_command("git stash show")
+        assert executable == "git"
 
 
 class TestShellMetacharactersAreInertWithShellFalse:
