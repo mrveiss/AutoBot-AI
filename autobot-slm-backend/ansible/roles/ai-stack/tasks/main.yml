@@ -77,9 +77,24 @@
     - "{{ ai_data_dir }}"
     - "{{ ai_data_dir }}/chromadb"
 
-- name: Create Python virtual environment
+- name: Check existing venv Python version (#3534)
   ansible.builtin.command:
-    cmd: python3 -m venv {{ ai_install_dir }}/venv
+    cmd: "{{ ai_install_dir }}/venv/bin/python --version"
+  register: _ai_venv_python_version
+  changed_when: false
+  failed_when: false
+
+- name: Remove stale venv if not Python 3.12 (#3534)
+  ansible.builtin.file:
+    path: "{{ ai_install_dir }}/venv"
+    state: absent
+  when:
+    - _ai_venv_python_version.rc == 0
+    - "'Python 3.12' not in _ai_venv_python_version.stdout"
+
+- name: Create Python virtual environment (#3534)
+  ansible.builtin.command:
+    cmd: python3.12 -m venv {{ ai_install_dir }}/venv
     creates: "{{ ai_install_dir }}/venv/bin/python"
 
 - name: Fix venv ownership
@@ -90,6 +105,14 @@
     group: "{{ ai_group }}"
     recurse: true
 
+- name: Create pip cache directory for ai user (#3535)
+  ansible.builtin.file:
+    path: "{{ ai_data_dir }}/.cache/pip"
+    state: directory
+    owner: "{{ ai_user }}"
+    group: "{{ ai_group }}"
+    mode: "0755"
+
 - name: Upgrade pip in venv
   ansible.builtin.pip:
     name: pip
@@ -98,6 +121,7 @@
   become_user: "{{ ai_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "120"
+    HOME: "{{ ai_data_dir }}"
   timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
 - name: Check if requirements-ai.txt exists
@@ -114,6 +138,7 @@
   become_user: "{{ ai_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"
+    HOME: "{{ ai_data_dir }}"
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: _ai_requirements_file.stat.exists
 
@@ -145,6 +170,7 @@
   become_user: "{{ ai_user }}"
   environment:
     PIP_DEFAULT_TIMEOUT: "300"
+    HOME: "{{ ai_data_dir }}"
   timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
   when: not _ai_requirements_file.stat.exists
 
