@@ -18,6 +18,7 @@ from typing import Dict, Optional
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from constants.api_constants import PATH_OLLAMA_GENERATE
 from dependencies import get_config
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
@@ -53,15 +54,18 @@ class CommandExplanationService:
         """Get Ollama endpoint from config."""
         try:
             endpoint = get_config().get_ollama_url()
-            if not endpoint.endswith("/api/generate"):
-                endpoint = endpoint.rstrip("/") + "/api/generate"
+            if not endpoint.endswith(PATH_OLLAMA_GENERATE):
+                endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
             return endpoint
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
             from config import ConfigManager
 
             config = ConfigManager()
-            return f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/generate"
+            return (
+                f"http://{config.get_host('ollama')}:{config.get_port('ollama')}"
+                + PATH_OLLAMA_GENERATE
+            )
 
     def _get_model(self) -> str:
         """Get LLM model from config."""

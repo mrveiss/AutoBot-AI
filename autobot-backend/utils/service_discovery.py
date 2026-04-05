@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
@@ -69,7 +70,7 @@ class ServiceEndpoint:
     host: str
     port: int
     protocol: str = "http"
-    health_endpoint: str = "/health"
+    health_endpoint: str = PATH_HEALTH
     required: bool = True
     timeout: float = ServiceDiscoveryConfig.BACKEND_TIMEOUT
     retry_count: int = RetryConfig.DEFAULT_RETRIES
@@ -173,7 +174,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.NPU_WORKER_TIMEOUT,
             required=False,
         )
@@ -214,7 +215,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.AI_STACK_TIMEOUT,
             required=False,
         )
@@ -233,7 +234,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.BROWSER_SERVICE_TIMEOUT,
             required=False,
         )
@@ -257,7 +258,7 @@ class ServiceDiscovery:
             host=backend_host,
             port=int(backend_port),
             protocol="http",
-            health_endpoint="/api/health",
+            health_endpoint=PATH_API_HEALTH,
             timeout=ServiceDiscoveryConfig.BACKEND_TIMEOUT,
             required=True,
         )

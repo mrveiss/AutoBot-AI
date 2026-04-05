@@ -19,6 +19,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from constants.api_constants import PATH_API_HEALTH
 from constants.network_constants import NetworkConstants
 from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
 
@@ -60,14 +61,14 @@ class TestAPIEndpointBenchmarks:
 
         async def health_check():
             async with httpx.AsyncClient() as client:
-                response = await client.get(f"{BASE_URL}/api/health")
+                response = await client.get(f"{BASE_URL}{PATH_API_HEALTH}")
                 return response.json()
 
         result = await runner.run_async_benchmark(
             name="api_health_endpoint",
             func=health_check,
             iterations=20,
-            metadata={"endpoint": "/api/health", "method": "GET"},
+            metadata={"endpoint": PATH_API_HEALTH, "method": "GET"},
         )
 
         logger.info("Health Endpoint Benchmark:")
@@ -162,7 +163,7 @@ class TestAPIEndpointBenchmarks:
 
         async def concurrent_health_checks():
             async with httpx.AsyncClient() as client:
-                tasks = [client.get(f"{BASE_URL}/api/health") for _ in range(5)]
+                tasks = [client.get(f"{BASE_URL}{PATH_API_HEALTH}") for _ in range(5)]
                 responses = await asyncio.gather(*tasks)
                 return [r.json() for r in responses]
 
@@ -170,7 +171,7 @@ class TestAPIEndpointBenchmarks:
             name="api_concurrent_requests",
             func=concurrent_health_checks,
             iterations=10,
-            metadata={"concurrent_requests": 5, "endpoint": "/api/health"},
+            metadata={"concurrent_requests": 5, "endpoint": PATH_API_HEALTH},
         )
 
         logger.info("Concurrent Requests Benchmark (5 concurrent):")
