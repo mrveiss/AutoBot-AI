@@ -229,6 +229,7 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
@@ -492,7 +493,7 @@ async def get_agent_terminal_session(
     session_info = await service.get_session_info(session_id)
 
     if not session_info:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     return {
         "status": "success",
@@ -519,7 +520,7 @@ async def delete_agent_terminal_session(
     success = await service.close_session(session_id)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     return {
         "status": "deleted",

@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Shared error message string constants for HTTP responses and logging."""
 
-# Generic resource errors (use as: f"{ERR_NOT_FOUND.format(resource='Workflow')}")
+# Generic resource errors (use as: ERR_NOT_FOUND.format(resource='Workflow')}")
 ERR_NOT_FOUND = "{resource} not found"
 
 # Specific resource errors (pre-formatted for common cases)

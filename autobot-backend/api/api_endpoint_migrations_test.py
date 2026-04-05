@@ -3910,7 +3910,7 @@ class TestScanForUnimportedFilesEndpoint:
 
         # Should preserve directory validation
         assert "if not scan_path.exists():" in source
-        assert "Directory not found" in source
+        assert ERR_DIRECTORY_NOT_FOUND in source
         assert "status_code=404" in source
 
     def test_scan_for_unimported_files_preserves_import_tracker(self):
@@ -4520,7 +4520,7 @@ class TestBatch26ListFiles:
             'status_code=403, detail="Insufficient permissions for file operations"'
             in source
         )
-        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=404, detail=ERR_DIRECTORY_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_list_files_preserves_business_logic(self):
@@ -4722,7 +4722,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_download_file_preserves_business_logic(self):
@@ -4771,7 +4771,7 @@ class TestBatch27ViewFile:
 
         source = inspect.getsource(view_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_view_file_preserves_business_logic(self):
@@ -4850,7 +4850,7 @@ class TestBatch28RenameFile:
         source = inspect.getsource(rename_file_or_directory)
         assert "status_code=403" in source
         assert 'status_code=400, detail="Invalid file/directory name"' in source
-        assert 'status_code=404, detail="File or directory not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND' in source
         assert "status_code=409" in source
 
     def test_rename_file_preserves_business_logic(self):
@@ -4899,7 +4899,7 @@ class TestBatch28PreviewFile:
 
         source = inspect.getsource(preview_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_preview_file_preserves_business_logic(self):
@@ -4977,7 +4977,7 @@ class TestBatch29DeleteFile:
 
         source = inspect.getsource(delete_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File or directory not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND' in source
 
     def test_delete_file_preserves_business_logic(self):
         import inspect
@@ -5105,7 +5105,7 @@ class TestBatch30GetDirectoryTree:
 
         source = inspect.getsource(get_directory_tree)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=404, detail=ERR_DIRECTORY_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_get_directory_tree_preserves_business_logic(self):
@@ -5269,7 +5269,7 @@ class TestBatch31GetWorkflowDetails:
         from api.workflow import get_workflow_details
 
         source = inspect.getsource(get_workflow_details)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
 
     def test_get_workflow_details_preserves_business_logic(self):
         import inspect
@@ -5343,7 +5343,7 @@ class TestBatch32GetWorkflowStatus:
         from api.workflow import get_workflow_status
 
         source = inspect.getsource(get_workflow_status)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
 
     def test_get_workflow_status_preserves_business_logic(self):
         import inspect
@@ -5389,7 +5389,7 @@ class TestBatch32ApproveWorkflowStep:
         from api.workflow import approve_workflow_step
 
         source = inspect.getsource(approve_workflow_step)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
         assert 'status_code=404, detail="No pending approval' in source
 
     def test_approve_workflow_step_preserves_business_logic(self):
@@ -8403,7 +8403,7 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             "config = session_manager.session_configs.get(session_id)", source
         )
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("stats = {}", source)
@@ -8468,7 +8468,7 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             "config = session_manager.session_configs.get(session_id)", source
         )
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("if session_manager.has_connection(session_id):", source)
         self.assertIn("await session_manager.close_connection(session_id)", source)
@@ -8793,7 +8793,7 @@ class TestBatch55TerminalMigrations(unittest.TestCase):
         )
         self.assertIn("if not config:", source)
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("if not is_active:", source)
@@ -8882,7 +8882,7 @@ class TestBatch56TerminalMigrations(unittest.TestCase):
         )
         self.assertIn("if not config:", source)
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn('"session_id": session_id', source)
         self.assertIn('config.get("enable_logging", False)', source)
@@ -10631,7 +10631,7 @@ class TestBatch65ResearchBrowserMigrations(unittest.TestCase):
                 f"{func.__name__} should preserve HTTPException raises",
             )
             self.assertIn(
-                '"Session not found"',
+                'ERR_SESSION_NOT_FOUND',
                 source,
                 f"{func.__name__} should check for session existence",
             )
@@ -10731,7 +10731,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
 
         source = inspect.getsource(navigate_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         # Should check session existence
         self.assertIn("if not session:", source)
 
@@ -10767,7 +10767,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_browser_info)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         # Should check session existence (after special chat-browser handling)
         self.assertIn("if not session:", source)
 
@@ -10859,7 +10859,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
                 f"{func.__name__} should preserve HTTPException raises",
             )
             self.assertIn(
-                '"Session not found"',
+                'ERR_SESSION_NOT_FOUND',
                 source,
                 f"{func.__name__} should check for session existence",
             )
@@ -10961,7 +10961,7 @@ class TestBatch67AgentTerminalMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_agent_terminal_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         self.assertIn("status_code=404", source)
         # Should check session existence
         self.assertIn("if not session_info:", source)
@@ -11093,7 +11093,7 @@ class TestBatch68AgentTerminalMigrations(unittest.TestCase):
 
         source = inspect.getsource(delete_agent_terminal_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         self.assertIn("status_code=404", source)
         # Should check session close success
         self.assertIn("if not success:", source)
@@ -11237,7 +11237,7 @@ class TestBatch68AgentTerminalMigrations(unittest.TestCase):
             source,
             "delete_agent_terminal_session should preserve HTTPException raises",
         )
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
 
     def test_batch68_business_logic_preservation(self):
         """Test batch 68 preserves all business logic"""
@@ -16538,7 +16538,7 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Session not found", source)
+        self.assertIn(ERR_SESSION_NOT_FOUND, source)
 
     def test_batch_94_list_streaming_sessions_has_decorator(self):
         """Verify list_streaming_sessions has @with_error_handling decorator"""
@@ -16811,7 +16811,7 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Session not found", source)
+        self.assertIn(ERR_SESSION_NOT_FOUND, source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
         self.assertEqual(
@@ -17283,7 +17283,7 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Workflow not found", source)
+        self.assertIn(ERR_WORKFLOW_NOT_FOUND, source)
         # Should have NO try-catch blocks (Mixed Pattern with direct checks)
         try_count = source.count("try:")
         self.assertEqual(

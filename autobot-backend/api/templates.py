@@ -15,6 +15,7 @@ import logging
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from constants.error_constants import ERR_TEMPLATE_NOT_FOUND
 from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
@@ -303,7 +304,7 @@ async def get_template_details(template_id: str):
     try:
         template = workflow_template_manager.get_template(template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=ERR_TEMPLATE_NOT_FOUND)
 
         # Issue #372: Use model method to reduce feature envy
         return {
@@ -331,7 +332,7 @@ async def preview_template_workflow(
     try:
         template = workflow_template_manager.get_template(template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=ERR_TEMPLATE_NOT_FOUND)
 
         # Parse variables if provided
         template_variables = {}
@@ -423,7 +424,7 @@ async def create_workflow_from_template(
         # Validate template exists
         template = workflow_template_manager.get_template(template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=ERR_TEMPLATE_NOT_FOUND)
 
         # Validate variables if provided
         if request.variables:
