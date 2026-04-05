@@ -14,6 +14,7 @@ import uuid
 from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class SessionService:
                 count += 1
 
         # Set expiry
-        await redis_client.expire(key, 86400)  # 24 hours
+        await redis_client.expire(key, TTL_24_HOURS)  # 24 hours
 
         logger.info("Invalidated %d sessions for user %s", count, user_id)
         return count

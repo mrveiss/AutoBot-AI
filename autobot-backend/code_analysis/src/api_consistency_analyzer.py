@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from config import UnifiedConfig
+from constants.ttl_constants import TTL_1_HOUR
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -900,7 +901,7 @@ class APIConsistencyAnalyzer:
             try:
                 key = self.API_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)
+                await self.redis_client.setex(key, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
+from constants.ttl_constants import TIMEOUT_TASK_ANALYSIS
 from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,12 @@ router = APIRouter(tags=["Pattern Analysis"])
 
 # Shared background task manager (#1304)
 # Timeout raised to 1800s (30min) — batched analysis on ~2000 files needs time
-_manager = BackgroundTaskManager(redis_prefix="pattern_task:", task_timeout=1800)
+_manager = BackgroundTaskManager(redis_prefix="pattern_task:", task_timeout=TIMEOUT_TASK_ANALYSIS)
 
 # Redis key prefix for analysis checkpoints
 _CHECKPOINT_PREFIX = "pattern_checkpoint:"
 # Overall analysis timeout (30 minutes)
-_ANALYSIS_TIMEOUT = 1800
+_ANALYSIS_TIMEOUT = TIMEOUT_TASK_ANALYSIS
 
 
 class PatternAnalysisRequest(BaseModel):
@@ -345,7 +346,7 @@ async def get_pattern_summary(
 
 # Background task manager for pattern summary (#1304)
 _summary_manager = BackgroundTaskManager(
-    redis_prefix="patsummary_task:", task_timeout=1800
+    redis_prefix="patsummary_task:", task_timeout=TIMEOUT_TASK_ANALYSIS
 )
 
 

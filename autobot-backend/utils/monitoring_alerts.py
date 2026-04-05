@@ -13,6 +13,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from constants.ttl_constants import TTL_7_DAYS
+
 logger = logging.getLogger(__name__)
 
 
@@ -654,7 +656,7 @@ class MonitoringAlertsManager:
                     "tags": ",".join(alert.tags) if alert.tags else "",
                 }
                 self.redis_client.hset(f"alert:{rule.id}", mapping=alert_data)
-                self.redis_client.expire(f"alert:{rule.id}", 86400 * 7)  # 7 days
+                self.redis_client.expire(f"alert:{rule.id}", TTL_7_DAYS)  # 7 days
             except Exception as e:
                 logger.warning(f"Could not store alert in Redis: {e}")
 

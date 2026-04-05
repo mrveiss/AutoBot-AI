@@ -16,6 +16,8 @@ import logging
 import os
 from typing import Optional
 
+from constants.ttl_constants import TIMEOUT_HTTP_LONG
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,7 +138,7 @@ class LocalLLM:
             }
 
             async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=120.0)
+                timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
                 async with session.post(
                     f"{self._ollama_url}/api/chat", json=data, timeout=timeout
                 ) as response:

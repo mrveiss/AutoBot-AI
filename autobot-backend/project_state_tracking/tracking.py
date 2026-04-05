@@ -15,6 +15,8 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
+from constants.ttl_constants import TTL_24_HOURS
+
 from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS
 
 logger = logging.getLogger(__name__)
@@ -36,7 +38,7 @@ async def track_error_to_redis(
         # Issue #379: Batch Redis operations using pipeline
         async with redis_client.pipeline() as pipe:
             await pipe.incr(error_key)
-            await pipe.expire(error_key, 86400)  # Expire after 24 hours
+            await pipe.expire(error_key, TTL_24_HOURS)  # Expire after 24 hours
             await pipe.execute()
 
     except Exception as e:
@@ -62,10 +64,10 @@ async def track_api_call_to_redis(
         async with redis_client.pipeline() as pipe:
             # Increment API call count for this hour
             await pipe.incr(api_key)
-            await pipe.expire(api_key, 86400)  # Expire after 24 hours
+            await pipe.expire(api_key, TTL_24_HOURS)  # Expire after 24 hours
             # Track specific endpoint stats
             await pipe.incr(endpoint_key)
-            await pipe.expire(endpoint_key, 86400)
+            await pipe.expire(endpoint_key, TTL_24_HOURS)
             await pipe.execute()
 
         logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
@@ -95,10 +97,10 @@ async def track_user_interaction_to_redis(
         async with redis_client.pipeline() as pipe:
             # Increment user interaction count for this hour
             await pipe.incr(interaction_key)
-            await pipe.expire(interaction_key, 86400)  # Expire after 24 hours
+            await pipe.expire(interaction_key, TTL_24_HOURS)  # Expire after 24 hours
             # Track interaction types
             await pipe.incr(type_key)
-            await pipe.expire(type_key, 86400)
+            await pipe.expire(type_key, TTL_24_HOURS)
             await pipe.execute()
 
         logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)
