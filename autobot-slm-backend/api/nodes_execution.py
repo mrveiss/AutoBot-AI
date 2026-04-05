@@ -72,7 +72,7 @@ ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
         "df",
         "du",
         "lsof",
-        # File inspection (read-only)
+        # File inspection (read-only; find destructive flags blocked by _validate_find_args)
         "ls",
         "cat",
         "head",
@@ -114,6 +114,55 @@ _GIT_ALLOWED_SUBCOMMANDS: frozenset[str] = frozenset(
 
 # For "git stash <op>", the operation token must be one of these read-only ops.
 _GIT_STASH_ALLOWED_OPS: frozenset[str] = frozenset({"list", "show"})
+
+# find flags that perform writes or arbitrary execution.  Any argument token
+# that equals one of these is rejected to preserve the read-only intent of the
+# "find" allowlist entry.  The check is case-sensitive (find flag names are
+# always lowercase on Linux).
+_FIND_BLOCKED_FLAGS: frozenset[str] = frozenset(
+    {
+        "-delete",   # deletes matched files/dirs in-place
+        "-fprint",   # writes matched paths to a named file
+        "-fprint0",  # same as -fprint but NUL-separated
+        "-fprintf",  # formatted write to a named file
+        "-exec",     # executes an arbitrary command per match
+        "-execdir",  # like -exec but changes directory first
+        "-ok",       # interactive -exec (still executes commands)
+        "-okdir",    # interactive -execdir
+    }
+)
+
+
+def _validate_find_args(tokens: list[str]) -> None:
+    """Reject ``find`` invocations that carry write or execution flags.
+
+    ``find`` is in ``ALLOWED_EXECUTABLES`` for read-only path enumeration
+    (e.g. ``find /var/log -name "*.log"``).  Several ``find`` primaries
+    cause side effects: ``-delete`` removes matched files, ``-fprint``/
+    ``-fprint0``/``-fprintf`` write paths to an arbitrary file, and
+    ``-exec``/``-execdir``/``-ok``/``-okdir`` run arbitrary commands.
+    All of these are blocked here (#3474).
+
+    Args:
+        tokens: The full token list from shlex.split(), with tokens[0] == "find".
+
+    Raises:
+        HTTPException: HTTP 400 if any blocked flag is present in the argument
+            list.
+    """
+    blocked = [t for t in tokens[1:] if t in _FIND_BLOCKED_FLAGS]
+    if blocked:
+        bad = ", ".join(sorted(blocked))
+        logger.warning(
+            "Command rejected — find contains destructive/exec flag(s): %s", bad
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Command rejected: find flag(s) {bad} are not permitted "
+                "(only read-only find operations are allowed)"
+            ),
+        )
 
 
 def _validate_command(script: str) -> str:
@@ -162,6 +211,9 @@ def _validate_command(script: str) -> str:
 
     if executable == "git":
         _validate_git_subcommand(tokens)
+
+    if executable == "find":
+        _validate_find_args(tokens)
 
     return executable
 

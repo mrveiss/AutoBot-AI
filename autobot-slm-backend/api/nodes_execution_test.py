@@ -64,9 +64,11 @@ _spec.loader.exec_module(_mod)
 
 _validate_command = _mod._validate_command
 _validate_git_subcommand = _mod._validate_git_subcommand
+_validate_find_args = _mod._validate_find_args
 ALLOWED_EXECUTABLES = _mod.ALLOWED_EXECUTABLES
 _GIT_ALLOWED_SUBCOMMANDS = _mod._GIT_ALLOWED_SUBCOMMANDS
 _GIT_STASH_ALLOWED_OPS = _mod._GIT_STASH_ALLOWED_OPS
+_FIND_BLOCKED_FLAGS = _mod._FIND_BLOCKED_FLAGS
 _is_local_ip = _mod._is_local_ip
 _run_command = _mod._run_command
 _run_via_ssh = _mod._run_via_ssh
@@ -272,6 +274,79 @@ class TestValidateCommandGitSubcommands:
         """'git stash show' is explicitly allowed as a read-only operation."""
         executable = _validate_command("git stash show")
         assert executable == "git"
+
+
+class TestValidateCommandFindArgs:
+    """find destructive/exec flag enforcement (#3474)."""
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "find /var/log -name '*.log'",
+            "find /etc -type f",
+            "find . -name '*.conf' -type f",
+            "find /tmp -maxdepth 2 -mtime +7",
+            "find /var -name '*.key' -readable",
+            "find / -name 'autobot' -print",
+        ],
+    )
+    def test_allowed_find_commands_pass(self, cmd):
+        """Read-only find invocations pass validation."""
+        executable = _validate_command(cmd)
+        assert executable == "find"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "find /tmp -name '*.log' -delete",
+            "find /etc -name '*.conf' -fprint /tmp/out.txt",
+            "find /var -name '*.key' -fprint0 /tmp/keys.txt",
+            "find /var -name '*.key' -fprintf /tmp/keys.txt '%p\\n'",
+            "find /tmp -exec rm {} \\;",
+            "find /tmp -exec rm {} +",
+            "find /tmp -execdir rm {} \\;",
+            "find /tmp -ok rm {} \\;",
+            "find /tmp -okdir rm {} \\;",
+        ],
+    )
+    def test_destructive_find_flags_rejected(self, cmd):
+        """find invocations with destructive or exec flags are rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+        assert "not permitted" in exc_info.value.detail
+
+    def test_find_delete_error_message_names_flag(self):
+        """-delete is named in the rejection message."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("find /tmp -name '*.log' -delete")
+        assert "-delete" in exc_info.value.detail
+
+    def test_find_exec_error_message_names_flag(self):
+        """-exec is named in the rejection message."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("find /tmp -exec rm {} \\;")
+        assert "-exec" in exc_info.value.detail
+
+    def test_validate_find_args_directly_blocked(self):
+        """_validate_find_args raises HTTP 400 for blocked flags when called directly."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_find_args(["find", "/tmp", "-delete"])
+        assert exc_info.value.status_code == 400
+
+    def test_validate_find_args_directly_allowed(self):
+        """_validate_find_args does not raise for read-only invocations."""
+        _validate_find_args(["find", "/etc", "-name", "*.conf", "-type", "f"])
+
+    def test_all_blocked_flags_are_actually_blocked(self):
+        """Every flag in _FIND_BLOCKED_FLAGS is rejected by _validate_command."""
+        for flag in _FIND_BLOCKED_FLAGS:
+            cmd = f"find /tmp {flag} extra_arg"
+            with pytest.raises(HTTPException) as exc_info:
+                _validate_command(cmd)
+            assert exc_info.value.status_code == 400, (
+                f"Expected HTTP 400 for find with flag {flag!r}"
+            )
 
 
 class TestShellMetacharactersAreInertWithShellFalse:
