@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
+from constants.error_constants import ERR_CONNECTOR_NOT_FOUND
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
@@ -312,7 +313,7 @@ async def get_connector(connector_id: str):
     """Return config and status for a single connector."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     status = await _get_status_for_config(cfg)
     return {"config": _cfg_to_dict(cfg), "status": status}
 
@@ -322,7 +323,7 @@ async def update_connector(connector_id: str, request: UpdateConnectorRequest):
     """Update mutable fields of an existing connector."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
 
     _apply_updates(cfg, request)
     await _save_connector(cfg)
@@ -341,7 +342,7 @@ async def delete_connector(connector_id: str):
     """Remove a connector, stop its schedule, and delete its Redis keys."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
 
     scheduler = get_connector_scheduler()
     await scheduler.stop(connector_id)
@@ -355,7 +356,7 @@ async def test_connector_connection(connector_id: str):
     """Run a connection test against the connector's target."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     instance = _load_or_create_instance(cfg)
     try:
         healthy = await instance.test_connection()
@@ -374,7 +375,7 @@ async def trigger_sync(
     """Trigger a manual sync for a connector (runs in background)."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     background_tasks.add_task(_run_sync_background, connector_id, incremental)
     logger.info(
         "Triggered sync for connector %s (incremental=%s)", connector_id, incremental
@@ -391,7 +392,7 @@ async def get_sync_history(connector_id: str, limit: int = 20):
     """Return recent sync results for a connector."""
     cfg = await _load_connector(connector_id)
     if cfg is None:
-        raise HTTPException(status_code=404, detail="Connector not found")
+        raise HTTPException(status_code=404, detail=ERR_CONNECTOR_NOT_FOUND)
     if limit > _MAX_HISTORY:
         limit = _MAX_HISTORY
 

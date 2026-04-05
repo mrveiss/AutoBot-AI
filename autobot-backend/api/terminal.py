@@ -134,6 +134,7 @@ from api.terminal_models import (
 )
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
@@ -282,7 +283,7 @@ async def get_terminal_session(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     is_active = session_manager.has_connection(session_id)
 
@@ -316,7 +317,7 @@ async def delete_terminal_session(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # Close WebSocket connection if active
     if session_manager.has_connection(session_id):
@@ -367,7 +368,7 @@ async def setup_ssh_keys(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     try:
         terminal_secrets = get_terminal_secrets_service()
@@ -401,7 +402,7 @@ async def list_session_ssh_keys(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     keys = terminal_secrets.get_session_keys(session_id)
@@ -433,7 +434,7 @@ async def add_key_to_ssh_agent(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     success = await terminal_secrets.add_key_to_agent(
@@ -474,7 +475,7 @@ async def get_ssh_key_path(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     terminal_secrets = get_terminal_secrets_service()
     key_path = terminal_secrets.get_key_path(session_id, key_name)
@@ -617,7 +618,7 @@ async def get_terminal_command_history(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # Check if session has active connection
     is_active = session_manager.has_connection(session_id)
@@ -656,7 +657,7 @@ async def get_session_audit_log(
     """
     config = session_manager.session_configs.get(session_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # In a real implementation, you'd check user permissions here
     # For now, return basic audit information

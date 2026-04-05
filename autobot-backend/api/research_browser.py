@@ -21,6 +21,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from config import ConfigManager
 from constants.network_constants import NetworkConstants
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ async def handle_session_action(request: SessionAction):
     _require_browser()
     session = research_browser_manager.get_session(request.session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     result = {"success": True, "session_id": request.session_id}
 
@@ -173,7 +174,7 @@ async def get_session_status(session_id: str):
     _require_browser()
     session = research_browser_manager.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -202,7 +203,7 @@ async def download_mhtml(session_id: str, filename: str):
     _require_browser()
     session = research_browser_manager.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     # Find the MHTML file
     mhtml_path = None
@@ -299,7 +300,7 @@ async def navigate_session(session_id: str, request: NavigationRequest):
     _require_browser()
     session = research_browser_manager.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     result = await session.navigate_to(request.url)
 
@@ -319,7 +320,7 @@ async def get_browser_info(session_id: str):
     session = _get_or_create_browser_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
     docker_browser_info = await _get_docker_browser_info(session)
 

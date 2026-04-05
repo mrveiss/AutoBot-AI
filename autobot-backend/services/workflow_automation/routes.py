@@ -13,6 +13,7 @@ import threading
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -124,7 +125,7 @@ async def start_workflow(
                 "message": f"Workflow {workflow_id} started successfully",
             }
         else:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     except Exception as e:
         logger.error("Failed to start workflow: %s", e)
@@ -178,7 +179,7 @@ async def get_workflow_status(
         if status:
             return {"success": True, "workflow": status}
         else:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     except Exception as e:
         logger.error("Failed to get workflow status: %s", e)
@@ -341,7 +342,7 @@ async def present_plan(
                 "plan": plan_approval.to_presentation_dict(),
             }
         else:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     except Exception as e:
         logger.error("Failed to present plan: %s", e)
@@ -355,7 +356,7 @@ def _validate_approval_request(workflow_id: str) -> None:
     Raises HTTPException(404) if either check fails.
     """
     if not get_workflow_manager().get_workflow_status(workflow_id):
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
     if not get_workflow_manager().get_pending_approval(workflow_id):
         raise HTTPException(
             status_code=404, detail="No pending approval for this workflow"
@@ -484,7 +485,7 @@ def _find_workflow(workflow_id: str, current_user: dict = None):
     if wf is None:
         wf = mgr.completed_workflows.get(workflow_id)
     if wf is None:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
     if current_user and hasattr(wf, "owner_id") and wf.owner_id:
         user_id = current_user.get("user_id", current_user.get("sub"))
         if user_id and wf.owner_id != user_id:

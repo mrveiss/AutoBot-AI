@@ -8,6 +8,22 @@ AutoBot Constants Package
 Centralized constants to eliminate hardcoded values throughout the codebase.
 """
 
+from .error_constants import (  # Issue #3530: Centralized error message strings
+    ERR_ASSESSMENT_NOT_FOUND,
+    ERR_CONNECTOR_NOT_FOUND,
+    ERR_DIRECTORY_NOT_FOUND,
+    ERR_FILE_NOT_FOUND,
+    ERR_FILE_OR_DIR_NOT_FOUND,
+    ERR_INVALID_CREDENTIALS,
+    ERR_INVALID_TOKEN,
+    ERR_JOB_NOT_FOUND,
+    ERR_NOT_FOUND,
+    ERR_PATH_NOT_FOUND,
+    ERR_SESSION_NOT_FOUND,
+    ERR_TEMPLATE_NOT_FOUND,
+    ERR_WORKFLOW_NOT_FOUND,
+    ERR_FAILED_TO,
+)
 from .network_constants import (  # Legacy compatibility exports
     BACKEND_URL,
     FRONTEND_URL,
@@ -105,4 +121,19 @@ __all__ = [
     "QueryDefaults",
     "CategoryDefaults",
     "ProtocolDefaults",
+    # Issue #3530: Error message string constants
+    "ERR_NOT_FOUND",
+    "ERR_ASSESSMENT_NOT_FOUND",
+    "ERR_SESSION_NOT_FOUND",
+    "ERR_FILE_NOT_FOUND",
+    "ERR_DIRECTORY_NOT_FOUND",
+    "ERR_FILE_OR_DIR_NOT_FOUND",
+    "ERR_PATH_NOT_FOUND",
+    "ERR_CONNECTOR_NOT_FOUND",
+    "ERR_JOB_NOT_FOUND",
+    "ERR_TEMPLATE_NOT_FOUND",
+    "ERR_WORKFLOW_NOT_FOUND",
+    "ERR_INVALID_CREDENTIALS",
+    "ERR_INVALID_TOKEN",
+    "ERR_FAILED_TO",
 ]
