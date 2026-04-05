@@ -731,7 +731,7 @@ async def _generate_llm_stream(
         logger.error("Streaming error: %s", e)
         error_data = {
             "type": "error",
-            "message": "Error generating response",
+            "content": "Error generating response",
             "timestamp": datetime.utcnow().isoformat(),
         }
         yield f"data: {json.dumps(error_data)}\n\n"
@@ -1839,7 +1839,7 @@ async def _stream_ai_stack_response(
         yield _format_sse_event(
             {
                 "type": "error",
-                "message": "Error generating enhanced response",
+                "content": "Error generating enhanced response",
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -1891,7 +1891,7 @@ async def _generate_enhanced_stream(
         yield _format_sse_event(
             {
                 "type": "error",
-                "message": "Error in enhanced streaming",
+                "content": "Error in enhanced streaming",
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )

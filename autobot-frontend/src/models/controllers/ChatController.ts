@@ -351,7 +351,7 @@ export class ChatController {
                   sender: 'assistant'
                 })
                 this.chatStore.updateMessage(errorMsgId, {
-                  content: `Error: ${data.content || 'Stream error'}`,
+                  content: `Error: ${data.content || data.message || 'Unknown error'}`,
                   status: 'error'
                 })
                 continue
@@ -456,7 +456,9 @@ export class ChatController {
           .trim()
 
         if (displayContent) {
-          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+          if (msg.status !== 'error') {
+            this.chatStore.updateMessage(frontendId, { status: 'sent' })
+          }
         } else {
           this.chatStore.deleteMessage(frontendId)
         }
