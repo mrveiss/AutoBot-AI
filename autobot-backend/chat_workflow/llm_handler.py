@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
+from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConstants
 from dependencies import get_config
 from extensions.base import HookContext
@@ -151,8 +152,8 @@ class LLMHandlerMixin:
             )
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 # Ensure /api/generate path is included
-                if not endpoint.endswith("/api/generate"):
-                    endpoint = endpoint.rstrip("/") + "/api/generate"
+                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
+                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return endpoint
             logger.error(
                 "Invalid endpoint URL: %s, using config-based default", endpoint
@@ -171,8 +172,8 @@ class LLMHandlerMixin:
         try:
             base_url = get_config().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith("/api/generate"):
-                    base_url = base_url.rstrip("/") + "/api/generate"
+                if not base_url.endswith(PATH_OLLAMA_GENERATE):
+                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
                 return base_url
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
@@ -374,8 +375,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith("/api/generate"):
-                slm_base = slm_base.rstrip("/") + "/api/generate"
+            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
+                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
             ollama_endpoint = slm_base
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)

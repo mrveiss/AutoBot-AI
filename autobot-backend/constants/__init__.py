@@ -57,6 +57,13 @@ from .threshold_constants import (
 from .threshold_constants import (
     StringParsingConstants,  # Issue #380: Centralized string parsing
 )
+from .api_constants import (  # Issue #3531: Centralized API path constants
+    PATH_API_HEALTH,
+    PATH_HEALTH,
+    PATH_OLLAMA_CHAT,
+    PATH_OLLAMA_GENERATE,
+    PATH_OLLAMA_TAGS,
+)
 from .threshold_constants import (  # Issue #318: Threshold and timing constants
     AgentThresholds,
     BatchConfig,

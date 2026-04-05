@@ -24,6 +24,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from constants.api_constants import PATH_OLLAMA_CHAT, PATH_OLLAMA_TAGS
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -129,7 +130,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
-                f"{base_url}/api/chat",
+                f"{base_url}{PATH_OLLAMA_CHAT}",
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 timeout=timeout,
@@ -160,7 +161,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}/api/tags",
+                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
                 timeout=timeout,
             ) as resp:
                 return resp.status == 200
@@ -173,7 +174,7 @@ class OllamaProvider(BaseProvider):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=10.0)
             async with await http_client.get(
-                f"{self._resolve_base_url()}/api/tags",
+                f"{self._resolve_base_url()}{PATH_OLLAMA_TAGS}",
                 timeout=timeout,
             ) as resp:
                 if resp.status == 200:

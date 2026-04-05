@@ -40,6 +40,7 @@ from config import ConfigManager
 # Create singleton config instance
 config = ConfigManager()
 from autobot_shared.http_client import get_http_client
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 
 
 class ServiceStatus(Enum):
@@ -70,7 +71,7 @@ class ServiceConfig:
     port: int
     scheme: str = "http"
     path: str = ""
-    health_endpoint: str = "/health"
+    health_endpoint: str = PATH_HEALTH
     timeout: int = None  # Will use config
     retries: int = None  # Will use config
     circuit_breaker_threshold: int = None  # Will use config
@@ -121,17 +122,17 @@ class ServiceRegistry:
             },
             "ai-stack": {
                 "port": config.get_port("ai_stack"),
-                "health_endpoint": "/health",
+                "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "npu-worker": {
                 "port": config.get_port("npu_worker"),
-                "health_endpoint": "/health",
+                "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "backend": {
                 "port": config.get_port("backend"),
-                "health_endpoint": "/api/health",  # Fixed endpoint
+                "health_endpoint": PATH_API_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "frontend": {
@@ -141,12 +142,12 @@ class ServiceRegistry:
             },
             "playwright-vnc": {
                 "port": config.get_port("browser_service"),
-                "health_endpoint": "/health",
+                "health_endpoint": PATH_HEALTH,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
             "ollama": {
                 "port": config.get_port("ollama"),
-                "health_endpoint": "/api/tags",
+                "health_endpoint": PATH_OLLAMA_TAGS,
                 "schemes": {"local": "http", "docker": "http", "distributed": "http"},
             },
         }
