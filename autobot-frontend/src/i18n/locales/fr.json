@@ -6083,6 +6083,8 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
+    "desktop": "Desktop",
+    "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
   }
 }
