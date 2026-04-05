@@ -414,13 +414,13 @@ const router = createRouter({
           path: 'terminal',
           name: 'tools-terminal',
           component: () => import('@/views/tools/admin/TerminalTool.vue'),
-          meta: { title: 'Terminal', parent: 'tools' }
+          meta: { title: 'Terminal', parent: 'tools', admin: true }
         },
         {
           path: 'files',
           name: 'tools-files',
           component: () => import('@/views/tools/admin/FileBrowserTool.vue'),
-          meta: { title: 'File Browser', parent: 'tools' }
+          meta: { title: 'File Browser', parent: 'tools', admin: true }
         },
         {
           path: 'browser',
@@ -432,19 +432,19 @@ const router = createRouter({
           path: 'novnc',
           name: 'tools-novnc',
           component: () => import('@/views/tools/admin/NoVNCTool.vue'),
-          meta: { title: 'noVNC', parent: 'tools' }
+          meta: { title: 'noVNC', parent: 'tools', admin: true }
         },
         {
           path: 'voice',
           name: 'tools-voice',
           component: () => import('@/views/tools/admin/VoiceTool.vue'),
-          meta: { title: 'Voice', parent: 'tools' }
+          meta: { title: 'Voice', parent: 'tools', admin: true }
         },
         {
           path: 'mcp',
           name: 'tools-mcp',
           component: () => import('@/views/tools/admin/MCPTool.vue'),
-          meta: { title: 'MCP Registry', parent: 'tools' }
+          meta: { title: 'MCP Registry', parent: 'tools', admin: true }
         },
         {
           path: 'agents',
