@@ -18,6 +18,7 @@ from pydantic import BaseModel, validator
 
 from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_INVALID_CREDENTIALS, ERR_INVALID_TOKEN
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
 
@@ -184,7 +185,7 @@ async def _authenticate_and_build_user_data(
             ip_address=ip_address,
         )
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            raise HTTPException(status_code=401, detail=ERR_INVALID_CREDENTIALS)
         user_data = {
             "username": user.username,
             "user_id": str(user.id),
@@ -554,7 +555,7 @@ def _decode_refresh_token(token: str) -> Dict:
             options={"verify_exp": False},
         )
     except pyjwt.InvalidTokenError as exc:
-        raise HTTPException(status_code=401, detail="Invalid token") from exc
+        raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN) from exc
 
     exp = payload.get("exp")
     if exp:
