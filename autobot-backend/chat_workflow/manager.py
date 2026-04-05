@@ -88,7 +88,7 @@ class ChatWorkflowManager(
         self._lock = asyncio.Lock()
         self.redis_manager = None  # Async Redis manager
         self.redis_client = None  # Main database connection
-        self.conversation_history_ttl = 86400  # 24 hours in seconds
+        self.conversation_history_ttl = TTL_24_HOURS
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
 
         # Error boundary manager for enhanced error tracking

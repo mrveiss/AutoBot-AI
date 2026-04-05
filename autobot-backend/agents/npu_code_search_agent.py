@@ -202,7 +202,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         # Search configuration
         self.index_prefix = "autobot:code:index:"
         self.search_cache_prefix = "autobot:search:cache:"
-        self.cache_ttl = 3600  # 1 hour cache
+        self.cache_ttl = TTL_1_HOUR
 
         # NPU optimization
         self.npu_available = False
@@ -349,7 +349,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             "npu_available": self.npu_available,
         }
         await asyncio.to_thread(
-            self.redis_client.setex, index_key, 86400, json.dumps(metadata)
+            self.redis_client.setex, index_key, TTL_24_HOURS, json.dumps(metadata)
         )
 
     def _build_index_result(

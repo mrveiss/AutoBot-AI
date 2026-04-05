@@ -36,7 +36,7 @@ class SessionService:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     async def add_token_to_blacklist(
-        self, user_id: uuid.UUID, token: str, ttl: int = 86400
+        self, user_id: uuid.UUID, token: str, ttl: int = TTL_24_HOURS
     ) -> None:
         """
         Add token to blacklist.

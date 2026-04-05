@@ -185,7 +185,7 @@ class CommandExecutionQueue:
 
             # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
             def _update_command_ops():
-                self.redis_client.setex(command_key, 86400, command_data)
+                self.redis_client.setex(command_key, TTL_24_HOURS, command_data)
                 if is_pending:
                     self.redis_client.sadd(pending_key, cmd_id)
                 else:

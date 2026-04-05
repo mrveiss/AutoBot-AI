@@ -17,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from constants.ttl_constants import TTL_24_HOURS
 
 from .config import AutoResearchConfig
 from .knowledge_synthesizer import KnowledgeSynthesizer
@@ -370,7 +371,7 @@ async def submit_variant_score(
     await redis.set(
         key,
         _json.dumps({"score": body.score, "comment": body.comment}),
-        ex=86400,
+        ex=TTL_24_HOURS,
     )
     return {"status": "scored", "variant_id": variant_id, "score": body.score}
 
@@ -426,7 +427,7 @@ async def submit_approval_decision(
     current = await redis.get(status_key)
     if current is None:
         raise HTTPException(status_code=404, detail="Approval request not found")
-    await redis.set(status_key, body.decision, ex=86400)
+    await redis.set(status_key, body.decision, ex=TTL_24_HOURS)
     return {
         "session_id": session_id,
         "experiment_id": experiment_id,

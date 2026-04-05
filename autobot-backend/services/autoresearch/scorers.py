@@ -20,6 +20,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
 
+from constants.ttl_constants import TTL_24_HOURS
+
 logger = logging.getLogger(__name__)
 
 # Validation pattern for Redis key components — alphanumeric, hyphens, underscores
@@ -261,7 +263,7 @@ class HumanReviewScorer(PromptScorer):
 
     _REVIEW_KEY = "autoresearch:prompt_review:{session_id}:{variant_id}"
     _PENDING_KEY = "autoresearch:prompt_review:pending:{session_id}:{variant_id}"
-    _TTL_SECONDS = 86400
+    _TTL_SECONDS = TTL_24_HOURS
 
     def __init__(
         self,

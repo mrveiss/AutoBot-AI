@@ -116,7 +116,7 @@ async def _save_checkpoint(
         await redis.set(
             f"{_CHECKPOINT_PREFIX}{task_id}",
             json.dumps(data, default=str),
-            ex=86400,
+            ex=TTL_24_HOURS,
         )
     except Exception as exc:
         logger.debug("Checkpoint save failed (non-fatal): %s", exc)

@@ -15,7 +15,9 @@ TTL_7_DAYS = 86_400 * 7
 TTL_30_DAYS = 86_400 * 30
 TTL_90_DAYS = 86_400 * 90
 
-# HTTP / async task timeouts
-TIMEOUT_HTTP_DEFAULT = 60
-TIMEOUT_HTTP_LONG = 120
+TTL_365_DAYS = 86_400 * 365
+
+# HTTP / async task timeouts (float for aiohttp.ClientTimeout compatibility)
+TIMEOUT_HTTP_DEFAULT: float = 60.0
+TIMEOUT_HTTP_LONG: float = 120.0
 TIMEOUT_TASK_ANALYSIS = 1_800

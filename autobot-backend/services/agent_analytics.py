@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +252,8 @@ class AgentAnalytics:
             redis = await self.get_redis()
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
             await redis.set(
-                running_key, json.dumps(record.to_dict()), ex=3600
-            )  # 1 hour TTL
+                running_key, json.dumps(record.to_dict()), ex=TTL_1_HOUR
+            )
         except Exception as e:
             logger.error("Failed to track task start: %s", e)
 
@@ -334,7 +335,7 @@ class AgentAnalytics:
             agent_key = f"{self.AGENT_HISTORY_KEY}:{record.agent_id}"
             await redis.lpush(agent_key, json.dumps(record.to_dict()))
             await redis.ltrim(agent_key, 0, 999)  # Keep last 1000 per agent
-            await redis.expire(agent_key, 86400 * 30)  # 30 day retention
+            await redis.expire(agent_key, TTL_30_DAYS)
 
         except Exception as e:
             logger.error("Failed to store completed task: %s", e)

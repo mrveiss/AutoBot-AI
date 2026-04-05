@@ -18,6 +18,7 @@ import aiofiles
 import redis.asyncio as redis
 
 from constants.path_constants import PATH
+from constants.ttl_constants import TTL_7_DAYS
 
 from .types import OperationCheckpoint
 
@@ -105,7 +106,7 @@ class OperationCheckpointManager:
                     "timestamp": checkpoint_time.isoformat(),
                 },
             )
-            await self.redis_client.expire(redis_key, 86400 * 7)  # 7 days TTL
+            await self.redis_client.expire(redis_key, TTL_7_DAYS)
         except Exception as e:
             logger.warning("Failed to save checkpoint to Redis: %s", e)
 

@@ -32,10 +32,12 @@ from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
+from constants.ttl_constants import TTL_24_HOURS
+
 logger = logging.getLogger(__name__)
 
 # Defaults
-_DEFAULT_TTL = 86400  # 24 hours
+_DEFAULT_TTL = TTL_24_HOURS
 _DEFAULT_TIMEOUT = 600  # 10 minutes
 _DEFAULT_MAX_CONCURRENT = 1
 

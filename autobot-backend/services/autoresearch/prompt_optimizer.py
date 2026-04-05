@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
+from constants.ttl_constants import TTL_7_DAYS
+
 from .archive import Archive
 from .config import AutoResearchConfig
 from .models import VariantArchiveEntry
@@ -469,7 +471,7 @@ class PromptOptimizer:
         try:
             redis = await self._get_redis()
             key = f"autoresearch:prompt_opt:session:{session.id}"
-            await redis.set(key, json.dumps(session.to_dict()), ex=86400 * 7)
+            await redis.set(key, json.dumps(session.to_dict()), ex=TTL_7_DAYS)
         except Exception:
             logger.exception("Failed to save optimization session %s", session.id)
 
@@ -481,7 +483,7 @@ class PromptOptimizer:
         try:
             redis = await self._get_redis()
             key = f"autoresearch:archive:{session_id}"
-            await redis.set(key, archive.to_json(), ex=86400 * 7)
+            await redis.set(key, archive.to_json(), ex=TTL_7_DAYS)
         except Exception:
             logger.exception("Failed to save archive for session %s", session_id)
 

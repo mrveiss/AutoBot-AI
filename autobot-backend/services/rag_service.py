@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_30_DAYS
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import get_retrieval_learner
 from live_event_manager import publish_live_event
@@ -425,7 +426,7 @@ class RAGService:
             ranked_ids: Final ordered chunk IDs after reranking.
             complexity: QueryComplexity.value string (Issue #2024).
         """
-        _STREAM_TTL_SECONDS = 30 * 24 * 3600
+        _STREAM_TTL_SECONDS = TTL_30_DAYS
         date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
         stream_key = f"rag:feedback:{date_key}"
         entry = {
