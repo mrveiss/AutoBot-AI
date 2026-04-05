@@ -19,6 +19,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
+    GOOGLE_GEMINI_PRO_VISION,
+    OPENAI_GPT4_TURBO_PREVIEW,
+    OPENAI_GPT4_VISION_PREVIEW,
+)
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import task_tracker
 from utils.service_registry import get_service_url
@@ -252,7 +258,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
         return AIResponse(
             request_id=request.request_id,
             provider=self.config.provider,
-            model_name="gpt-4-vision-preview",
+            model_name=OPENAI_GPT4_VISION_PREVIEW,
             content=response.choices[0].message.content,
             usage={
                 "prompt_tokens": response.usage.prompt_tokens,
@@ -289,7 +295,7 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             messages.append({"role": "user", "content": content})
 
             response = await self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model=OPENAI_GPT4_VISION_PREVIEW,
                 messages=messages,
                 max_tokens=request.max_tokens or 1000,
                 temperature=request.temperature or self.config.temperature,
@@ -399,7 +405,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
         return AIResponse(
             request_id=request.request_id,
             provider=self.config.provider,
-            model_name="claude-3-opus-20240229",
+            model_name=ANTHROPIC_CLAUDE3_OPUS_DATED,
             content=response.content[0].text,
             usage={
                 "prompt_tokens": response.usage.input_tokens,
@@ -436,7 +442,7 @@ class AnthropicClaudeProvider(BaseAIProvider):
             messages = [{"role": "user", "content": content}]
 
             response = await self.client.messages.create(
-                model="claude-3-opus-20240229",
+                model=ANTHROPIC_CLAUDE3_OPUS_DATED,
                 max_tokens=request.max_tokens or 1000,
                 temperature=request.temperature or self.config.temperature,
                 system=request.system_message,
@@ -559,7 +565,7 @@ class GoogleGeminiProvider(BaseAIProvider):
         return AIResponse(
             request_id=request.request_id,
             provider=self.config.provider,
-            model_name="gemini-pro-vision",
+            model_name=GOOGLE_GEMINI_PRO_VISION,
             content=response.text,
             usage={"prompt_tokens": 0, "completion_tokens": 0},
             finish_reason="stop",
@@ -585,7 +591,7 @@ class GoogleGeminiProvider(BaseAIProvider):
 
         try:
             start_time = time.time()
-            model = self.client.GenerativeModel("gemini-pro-vision")
+            model = self.client.GenerativeModel(GOOGLE_GEMINI_PRO_VISION)
             content = self._prepare_image_content(request)
 
             response = model.generate_content(
@@ -717,7 +723,7 @@ class ModernAIIntegration:
         """Create OpenAI GPT-4V model configuration. Issue #620."""
         return AIModelConfig(
             provider=AIProvider.OPENAI_GPT4V,
-            model_name="gpt-4-turbo-preview",
+            model_name=OPENAI_GPT4_TURBO_PREVIEW,
             capabilities=[
                 ModelCapability.TEXT_GENERATION,
                 ModelCapability.IMAGE_ANALYSIS,
@@ -742,7 +748,7 @@ class ModernAIIntegration:
         """Create Anthropic Claude model configuration. Issue #620."""
         return AIModelConfig(
             provider=AIProvider.ANTHROPIC_CLAUDE,
-            model_name="claude-3-opus-20240229",
+            model_name=ANTHROPIC_CLAUDE3_OPUS_DATED,
             capabilities=[
                 ModelCapability.TEXT_GENERATION,
                 ModelCapability.IMAGE_ANALYSIS,

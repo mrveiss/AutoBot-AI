@@ -20,6 +20,7 @@ from code_intelligence.llm_pattern_analysis.data_models import (
     UsagePattern,
 )
 from code_intelligence.llm_pattern_analysis.types import UsagePatternType
+from constants.model_constants import MODEL_PRICING_PER_1K_TOKENS, OPENAI_GPT35_TURBO
 
 # =============================================================================
 # Token Tracker
@@ -34,17 +35,9 @@ class TokenTracker:
     to identify optimization opportunities.
     """
 
-    # Token cost estimates per 1K tokens (based on common pricing)
-    DEFAULT_COSTS = {
-        "gpt-4": {"prompt": 0.03, "completion": 0.06},
-        "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
-        "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
-        "claude-3-opus": {"prompt": 0.015, "completion": 0.075},
-        "claude-3-sonnet": {"prompt": 0.003, "completion": 0.015},
-        "claude-3-haiku": {"prompt": 0.00025, "completion": 0.00125},
-        "ollama": {"prompt": 0.0, "completion": 0.0},  # Local, no API cost
-        "default": {"prompt": 0.001, "completion": 0.002},
-    }
+    # Token cost estimates per 1K tokens — single source of truth in
+    # constants/model_constants.MODEL_PRICING_PER_1K_TOKENS (#3528).
+    DEFAULT_COSTS = MODEL_PRICING_PER_1K_TOKENS
 
     def __init__(self):
         """Initialize the token tracker."""
@@ -155,18 +148,9 @@ class CostCalculator:
     Provides cost projections and optimization potential analysis.
     """
 
-    # Model pricing per 1K tokens (USD)
-    MODEL_PRICING = {
-        "gpt-4": {"prompt": 0.03, "completion": 0.06},
-        "gpt-4-turbo": {"prompt": 0.01, "completion": 0.03},
-        "gpt-4o": {"prompt": 0.005, "completion": 0.015},
-        "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
-        "claude-3-opus": {"prompt": 0.015, "completion": 0.075},
-        "claude-3-sonnet": {"prompt": 0.003, "completion": 0.015},
-        "claude-3-haiku": {"prompt": 0.00025, "completion": 0.00125},
-        "claude-sonnet-4": {"prompt": 0.003, "completion": 0.015},
-        "ollama": {"prompt": 0.0, "completion": 0.0},
-    }
+    # Model pricing per 1K tokens — single source of truth in
+    # constants/model_constants.MODEL_PRICING_PER_1K_TOKENS (#3528).
+    MODEL_PRICING = MODEL_PRICING_PER_1K_TOKENS
 
     @classmethod
     def _estimate_avg_tokens(cls, model_pats: List[UsagePattern]) -> tuple:
@@ -264,7 +248,7 @@ class CostCalculator:
 
         for model, model_pats in model_patterns.items():
             pricing = cls.MODEL_PRICING.get(
-                model, cls.MODEL_PRICING.get("gpt-3.5-turbo")
+                model, cls.MODEL_PRICING.get(OPENAI_GPT35_TURBO)
             )
             daily_calls = len(model_pats) * daily_call_multiplier
             avg_prompt, avg_completion = cls._estimate_avg_tokens(model_pats)

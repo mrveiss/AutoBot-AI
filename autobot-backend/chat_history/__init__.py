@@ -94,7 +94,7 @@ class ChatHistoryManager(
         # Get messages with model-aware limits
         messages = await manager.get_session_messages(
             session_id=session["id"],
-            model_name="gpt-4"
+            model_name="gpt-4"  # docstring example — use ModelConstants.DEFAULT_OPENAI_MODEL
         )
 
         # List all sessions

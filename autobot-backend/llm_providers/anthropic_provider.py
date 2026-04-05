@@ -22,6 +22,12 @@ import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_SONNET4,
+)
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -30,12 +36,12 @@ from .base_provider import BaseProvider
 logger = logging.getLogger(__name__)
 
 _ANTHROPIC_MODELS = [
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-sonnet-4-20250514",
-    "claude-haiku-4-5-20251001",
-    "claude-3-5-haiku-20241022",
-    "claude-3-opus-20240229",
+    "claude-opus-4-6",   # release alias — no dated constant yet
+    "claude-sonnet-4-6",  # release alias — no dated constant yet
+    ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
 ]
 
 

@@ -23,6 +23,14 @@ import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from constants.model_constants import (
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT4,
+    OPENAI_GPT4O,
+    OPENAI_GPT4O_MINI,
+    OPENAI_GPT4_TURBO,
+    OPENAI_O1_MINI,  # used in _OPENAI_MODELS list
+)
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -31,13 +39,13 @@ from .base_provider import BaseProvider
 logger = logging.getLogger(__name__)
 
 _OPENAI_MODELS = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
-    "o1-preview",
-    "o1-mini",
+    OPENAI_GPT4O,
+    OPENAI_GPT4O_MINI,
+    OPENAI_GPT4_TURBO,
+    OPENAI_GPT4,
+    OPENAI_GPT35_TURBO,
+    "o1-preview",  # not yet in model_constants — preview variant
+    OPENAI_O1_MINI,
 ]
 
 
@@ -99,7 +107,7 @@ class OpenAIProvider(BaseProvider):
         """Execute a non-streaming chat completion via OpenAI."""
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting("default_model", "gpt-4o-mini")
+        model = request.model_name or self._get_setting("default_model", OPENAI_GPT4O_MINI)
         try:
             client = self._ensure_client()
             params: Dict[str, Any] = {
@@ -142,7 +150,7 @@ class OpenAIProvider(BaseProvider):
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from OpenAI, yielding text chunks."""
         self._total_requests += 1
-        model = request.model_name or self._get_setting("default_model", "gpt-4o-mini")
+        model = request.model_name or self._get_setting("default_model", OPENAI_GPT4O_MINI)
         try:
             client = self._ensure_client()
             params: Dict[str, Any] = {

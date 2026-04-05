@@ -16,6 +16,7 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from circuit_breaker import circuit_breaker_async
+from constants.model_constants import OPENAI_GPT35_TURBO
 
 from ..models import LLMRequest, LLMResponse
 
@@ -147,7 +148,7 @@ class OpenAIProvider:
         import openai
 
         client = openai.AsyncOpenAI(api_key=self.api_key)
-        model = request.model_name or "gpt-3.5-turbo"
+        model = request.model_name or OPENAI_GPT35_TURBO
         span_attrs = self._build_span_attributes(model, request)
 
         with _tracer.start_as_current_span(
