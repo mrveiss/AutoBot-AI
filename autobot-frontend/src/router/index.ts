@@ -550,6 +550,30 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
     },
   },
+  // Issue #3502: Desktop remote view
+  {
+    path: '/desktop',
+    name: 'desktop',
+    component: () => import('@/views/DesktopView.vue'),
+    meta: {
+      title: 'Desktop',
+      description: 'Remote desktop streaming view',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #3502: Custom Dashboard
+  {
+    path: '/custom-dashboard',
+    name: 'custom-dashboard',
+    component: () => import('@/views/CustomDashboard.vue'),
+    meta: {
+      title: 'Custom Dashboard',
+      description: 'Configurable dashboard view',
+      requiresAuth: true,
+      admin: true,
+    },
+  },
 
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
@@ -798,6 +822,13 @@ router.beforeEach(async (to, from) => {
 
       // Redirect to login (no redirect param -- clean URL)
       return { name: 'login' }
+    }
+
+    // Block admin-only routes for non-admin users
+    const requiresAdmin = to.matched.some(record => record.meta.admin === true)
+    if (requiresAdmin && userStore.isAuthenticated && !userStore.isAdmin) {
+      logger.debug('Admin route blocked for non-admin user, redirecting to chat')
+      return { path: '/chat' }
     }
 
     // If user is authenticated and trying to access login page, redirect to chat
