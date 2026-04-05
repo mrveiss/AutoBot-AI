@@ -152,6 +152,12 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
+# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
+# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
+# ansible/roles/backend/defaults/main.yml (#3526).
+_CHROMADB_PORT = 8100
+
 
 def _build_infra_vars(
     node_roles: list,
@@ -523,14 +529,14 @@ async def _generate_dynamic_inventory(
     # that reference {{ ai_stack_host }} resolve correctly (#3515).
     if injected_ai_stack and "ai_stack_host" not in infra_vars:
         infra_vars["ai_stack_host"] = "127.0.0.1"
-        infra_vars["ai_stack_port"] = 8080
+        infra_vars["ai_stack_port"] = _ROLE_INFRA_VARS["ai-stack"][1]
     # Auto-derive backend_chromadb_host from ai_stack_host for fleet deployments (#3523).
     # In co-located setups ai_stack_host is 127.0.0.1 (correct); in fleet setups it
     # is the AI stack node IP (also correct).  backend_chromadb_host in role defaults
     # is always 127.0.0.1 and has no knowledge of fleet topology.
     if "ai_stack_host" in infra_vars and "backend_chromadb_host" not in infra_vars:
         infra_vars["backend_chromadb_host"] = infra_vars["ai_stack_host"]
-        infra_vars["backend_chromadb_port"] = 8100
+        infra_vars["backend_chromadb_port"] = _CHROMADB_PORT
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
