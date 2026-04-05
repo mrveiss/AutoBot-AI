@@ -55,6 +55,10 @@ backend_llm_provider: "ollama"  # Default LLM provider for all agents
 backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
 backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
+# AI Stack connection (co-located: use 127.0.0.1; WSL2: may need 10.255.255.254)
+backend_ai_stack_host: "127.0.0.1"
+backend_ai_stack_port: 8080
+
 # Service Authentication
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
