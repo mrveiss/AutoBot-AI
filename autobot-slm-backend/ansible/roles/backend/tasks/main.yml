@@ -27,6 +27,28 @@
     state: present
   tags: ['backend', 'users']
 
+# ==========================================================
+# WSL2 auto-detection (#3503): 127.0.0.1 is ECONNREFUSED on
+# WSL2 mirrored networking — override backend_ai_stack_host
+# per-host at deploy time if it has not been explicitly set.
+# ==========================================================
+- name: "Backend | Read /proc/version to detect WSL2 (#3503)"
+  ansible.builtin.slurp:
+    src: /proc/version
+  register: _proc_version
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_ai_stack_host=10.255.255.254 on WSL2 hosts (#3503)"
+  ansible.builtin.set_fact:
+    backend_ai_stack_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_ai_stack_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
