@@ -316,7 +316,11 @@ export class ApiClient {
       const errorData = await response.json();
       return {
         status: response.status,
-        message: errorData.message || errorData.detail || 'Unknown error',
+        message: (() => {
+          const raw = errorData.error || errorData.message || errorData.detail;
+          if (raw == null) return JSON.stringify(errorData) || 'Unknown error';
+          return typeof raw === 'string' ? raw : JSON.stringify(raw);
+        })(),
         details: errorData,
       };
     } catch {
