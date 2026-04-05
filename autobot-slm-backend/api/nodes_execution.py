@@ -504,6 +504,9 @@ _SSH_KEY_PATH = os.environ.get(
 _SSH_KNOWN_HOSTS_PATH = os.environ.get(
     "SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts"
 )
+# System-wide known_hosts populated by Ansible — used as fallback when the
+# per-user file is absent.  Defined at module level so tests can patch it.
+_SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
 
 _LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
 try:
@@ -553,22 +556,35 @@ async def _run_via_ssh(
     """Execute a pre-tokenised command on *ip* via SSH.
 
     Uses known_hosts verification (StrictHostKeyChecking=yes) when a
-    known_hosts file exists, falling back to 'accept-new' for first contact
-    rather than the previous insecure 'no' (#3421).
+    per-user or system-wide known_hosts file exists.  Falls back to the
+    system-wide /etc/ssh/ssh_known_hosts (populated by Ansible) if the
+    per-user file is absent.  Refuses the connection if neither file exists
+    rather than falling back to accept-new+/dev/null, which provides no TOFU
+    protection (every connection would accept whatever key is presented #3469).
     """
     known_hosts_path = Path(_SSH_KNOWN_HOSTS_PATH)
     if known_hosts_path.exists():
         host_key_checking = "yes"
         known_hosts_file = str(known_hosts_path)
-    else:
-        # Accept and persist the key on first connection; never silently
-        # accept a changed key (this is safer than StrictHostKeyChecking=no).
-        host_key_checking = "accept-new"
-        known_hosts_file = "/dev/null"
+    elif Path(_SSH_SYSTEM_KNOWN_HOSTS_PATH).exists():
+        host_key_checking = "yes"
+        known_hosts_file = _SSH_SYSTEM_KNOWN_HOSTS_PATH
         logger.warning(
-            "known_hosts file not found at %s — using accept-new for %s",
+            "Per-user known_hosts not found at %s — falling back to system "
+            "known_hosts %s for %s",
             _SSH_KNOWN_HOSTS_PATH,
+            _SSH_SYSTEM_KNOWN_HOSTS_PATH,
             ip,
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"SSH connection to {ip} refused: no known_hosts file found at "
+                f"{_SSH_KNOWN_HOSTS_PATH} or {_SSH_SYSTEM_KNOWN_HOSTS_PATH}. "
+                "Run the Ansible provisioning playbook to populate known_hosts "
+                "before executing remote commands."
+            ),
         )
 
     cmd = [
