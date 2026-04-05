@@ -65,10 +65,12 @@ _spec.loader.exec_module(_mod)
 _validate_command = _mod._validate_command
 _validate_git_subcommand = _mod._validate_git_subcommand
 _validate_find_args = _mod._validate_find_args
+_check_sensitive_path = _mod._check_sensitive_path
 ALLOWED_EXECUTABLES = _mod.ALLOWED_EXECUTABLES
 _GIT_ALLOWED_SUBCOMMANDS = _mod._GIT_ALLOWED_SUBCOMMANDS
 _GIT_STASH_ALLOWED_OPS = _mod._GIT_STASH_ALLOWED_OPS
 _FIND_BLOCKED_FLAGS = _mod._FIND_BLOCKED_FLAGS
+_FILE_READ_EXECUTABLES = _mod._FILE_READ_EXECUTABLES
 _is_local_ip = _mod._is_local_ip
 _run_command = _mod._run_command
 _run_via_ssh = _mod._run_via_ssh
@@ -94,7 +96,7 @@ class TestValidateCommandAllowlist:
             "free -m",
             "uptime",
             "ls /var/log",
-            "cat /etc/os-release",
+            "cat /var/log/autobot.log",
             "ip addr show",
             "ss -tlnp",
             "git status",
@@ -372,7 +374,7 @@ class TestShellMetacharactersAreInertWithShellFalse:
             # shlex treats && as two tokens: '&&' and the next word
             ("df -h && bash", "df"),
             # shlex splits on spaces but ; is treated as part of /tmp;
-            ("cat /etc/os-release; bash", "cat"),
+            ("cat /var/log/autobot.log; bash", "cat"),
         ],
     )
     def test_metachar_cmds_pass_validation_but_shell_is_false(
@@ -390,6 +392,133 @@ class TestShellMetacharactersAreInertWithShellFalse:
         # With shell=False the OS receives exactly these tokens — semicolons and
         # subsequent words are passed as arguments, never interpreted as commands.
         assert tokens[0] == expected_first_token
+
+
+# ---------------------------------------------------------------------------
+# _check_sensitive_path — path denylist for cat/head/tail (#3475)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckSensitivePath:
+    """cat/head/tail must not be allowed to read sensitive file paths."""
+
+    # --- sensitive paths that must be blocked ---
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            # /etc/ prefix — credentials, shadow, sudoers, ssh server keys, etc.
+            "cat /etc/passwd",
+            "cat /etc/shadow",
+            "cat /etc/sudoers",
+            "head /etc/os-release",
+            "tail /etc/hosts",
+            "cat /etc/ssh/sshd_config",
+            # /root/ — root home directory
+            "cat /root/.bashrc",
+            "head /root/secret.txt",
+            # /home/ — user home dirs contain .ssh, .env, credentials
+            "cat /home/autobot/.bashrc",
+            "tail /home/ubuntu/.ssh/authorized_keys",
+            # /proc/ and /sys/ — kernel/process info leaks
+            "cat /proc/1/environ",
+            "head /sys/kernel/security/lsm",
+            # /var/lib/ — databases, docker volumes, etc.
+            "cat /var/lib/docker/volumes/mydata/_data/db.sqlite",
+            # Sensitive filename patterns — any directory
+            "cat /opt/autobot/config.env",
+            "head /tmp/deploy.key",
+            "tail /srv/certs/server.pem",
+            "cat /tmp/id_rsa",
+            "head /tmp/authorized_keys",
+            "cat /opt/app/.htpasswd",
+            "tail /home/user/.netrc",
+            # Path traversal attempts normalised to sensitive prefix
+            "cat /opt/../etc/passwd",
+            "head /var/log/../../etc/shadow",
+        ],
+    )
+    def test_sensitive_paths_rejected(self, cmd):
+        """cat/head/tail targeting sensitive paths/filenames are rejected with HTTP 400."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command(cmd)
+        assert exc_info.value.status_code == 400
+        assert "restricted" in exc_info.value.detail
+
+    # --- safe paths that must be allowed ---
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            # AutoBot log files — primary legitimate use
+            "cat /var/log/autobot.log",
+            "head /var/log/autobot-backend.log",
+            "tail /var/log/syslog",
+            "tail -n 100 /var/log/nginx/access.log",
+            # /tmp — transient scratch files
+            "cat /tmp/autobot_output.txt",
+            "head /tmp/result.json",
+            # /opt/autobot — autobot application files (non-secret)
+            "cat /opt/autobot/version.txt",
+            # Flags only — no path argument
+            "cat --help",
+            "head -n 10",
+        ],
+    )
+    def test_safe_paths_allowed(self, cmd):
+        """cat/head/tail targeting safe paths are not rejected by path check."""
+        # Should not raise for the path check (may still raise for other reasons
+        # but the important thing is _check_sensitive_path does not block these)
+        executable = _validate_command(cmd)
+        assert executable in _FILE_READ_EXECUTABLES
+
+    # --- non-file-read executables are unaffected ---
+
+    def test_non_file_read_executables_skip_path_check(self):
+        """ls, df, ps etc. bypass _check_sensitive_path entirely."""
+        # ls /etc is fine — it only lists, doesn't read content
+        executable = _validate_command("ls /etc")
+        assert executable == "ls"
+
+    def test_path_traversal_into_etc_blocked(self):
+        """Path traversal via ../ that resolves to /etc is blocked."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("cat /var/log/../../etc/shadow")
+        assert exc_info.value.status_code == 400
+        assert "restricted" in exc_info.value.detail
+
+    def test_bare_etc_directory_blocked(self):
+        """cat /etc (without trailing slash) is blocked."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("cat /etc")
+        assert exc_info.value.status_code == 400
+
+    def test_relative_path_rejected(self):
+        """Relative paths bypass the prefix denylist and are always rejected."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("cat etc/passwd")
+        assert exc_info.value.status_code == 400
+        assert "absolute" in exc_info.value.detail
+
+    def test_relative_dotdot_rejected(self):
+        """Relative ../traversal paths are rejected before normalisation."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("cat ../../etc/shadow")
+        assert exc_info.value.status_code == 400
+        assert "absolute" in exc_info.value.detail
+
+    def test_env_file_in_any_directory_blocked(self):
+        """A .env file under any directory is blocked by filename rule."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("cat /opt/myapp/.env")
+        assert exc_info.value.status_code == 400
+        assert "restricted" in exc_info.value.detail
+
+    def test_key_file_in_tmp_blocked(self):
+        """A .key file even under /tmp is blocked by filename rule."""
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_command("head /tmp/server.key")
+        assert exc_info.value.status_code == 400
 
 
 # ---------------------------------------------------------------------------
