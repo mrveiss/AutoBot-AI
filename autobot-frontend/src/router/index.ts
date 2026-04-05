@@ -824,6 +824,13 @@ router.beforeEach(async (to, from) => {
       return { name: 'login' }
     }
 
+    // Block admin-only routes for non-admin users
+    const requiresAdmin = to.matched.some(record => record.meta.admin === true)
+    if (requiresAdmin && userStore.isAuthenticated && !userStore.isAdmin) {
+      logger.debug('Admin route blocked for non-admin user, redirecting to chat')
+      return { path: '/chat' }
+    }
+
     // If user is authenticated and trying to access login page, redirect to chat
     if (to.name === 'login' && userStore.isAuthenticated) {
       logger.debug('User already authenticated, redirecting to chat')
