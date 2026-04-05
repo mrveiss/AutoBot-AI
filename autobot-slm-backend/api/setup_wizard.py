@@ -524,6 +524,13 @@ async def _generate_dynamic_inventory(
     if injected_ai_stack and "ai_stack_host" not in infra_vars:
         infra_vars["ai_stack_host"] = "127.0.0.1"
         infra_vars["ai_stack_port"] = 8080
+    # Auto-derive backend_chromadb_host from ai_stack_host for fleet deployments (#3523).
+    # In co-located setups ai_stack_host is 127.0.0.1 (correct); in fleet setups it
+    # is the AI stack node IP (also correct).  backend_chromadb_host in role defaults
+    # is always 127.0.0.1 and has no knowledge of fleet topology.
+    if "ai_stack_host" in infra_vars and "backend_chromadb_host" not in infra_vars:
+        infra_vars["backend_chromadb_host"] = infra_vars["ai_stack_host"]
+        infra_vars["backend_chromadb_port"] = 8100
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
