@@ -185,6 +185,10 @@ def _build_infra_vars(
 
 _SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
     "hf_token": "tts_hf_token",
+    # Internal API key shared between SLM backend and main backend (#1779, #3512).
+    # Store as "autobot_internal_api_key" in the SLM secrets UI; it is injected
+    # as an Ansible extra_var and rendered into slm-secrets.env and backend.env.
+    "autobot_internal_api_key": "autobot_internal_api_key",
 }
 
 
