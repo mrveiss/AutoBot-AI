@@ -121,14 +121,14 @@ _GIT_STASH_ALLOWED_OPS: frozenset[str] = frozenset({"list", "show"})
 # always lowercase on Linux).
 _FIND_BLOCKED_FLAGS: frozenset[str] = frozenset(
     {
-        "-delete",   # deletes matched files/dirs in-place
-        "-fprint",   # writes matched paths to a named file
+        "-delete",  # deletes matched files/dirs in-place
+        "-fprint",  # writes matched paths to a named file
         "-fprint0",  # same as -fprint but NUL-separated
         "-fprintf",  # formatted write to a named file
-        "-exec",     # executes an arbitrary command per match
+        "-exec",  # executes an arbitrary command per match
         "-execdir",  # like -exec but changes directory first
-        "-ok",       # interactive -exec (still executes commands)
-        "-okdir",    # interactive -execdir
+        "-ok",  # interactive -exec (still executes commands)
+        "-okdir",  # interactive -execdir
     }
 )
 
@@ -198,9 +198,7 @@ def _validate_command(script: str) -> str:
     executable = Path(tokens[0]).name
 
     if executable not in ALLOWED_EXECUTABLES:
-        logger.warning(
-            "Command rejected — executable %r not in allowlist", executable
-        )
+        logger.warning("Command rejected — executable %r not in allowlist", executable)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -369,7 +367,9 @@ async def _audit_execute_event(
     await db.commit()
 
 
-_SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_SSH_KEY_PATH = os.environ.get(
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
+)  # noqa: ssot-path
 _SSH_KNOWN_HOSTS_PATH = os.environ.get(
     "SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts"
 )
@@ -442,11 +442,16 @@ async def _run_via_ssh(
 
     cmd = [
         "ssh",
-        "-p", str(ssh_port),
-        "-o", f"StrictHostKeyChecking={host_key_checking}",
-        "-o", f"UserKnownHostsFile={known_hosts_file}",
-        "-o", "BatchMode=yes",
-        "-o", f"ConnectTimeout={min(timeout, 30)}",
+        "-p",
+        str(ssh_port),
+        "-o",
+        f"StrictHostKeyChecking={host_key_checking}",
+        "-o",
+        f"UserKnownHostsFile={known_hosts_file}",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        f"ConnectTimeout={min(timeout, 30)}",
     ]
     if Path(_SSH_KEY_PATH).exists():
         cmd.extend(["-i", _SSH_KEY_PATH])

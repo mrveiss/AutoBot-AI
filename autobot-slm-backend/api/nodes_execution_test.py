@@ -344,9 +344,9 @@ class TestValidateCommandFindArgs:
             cmd = f"find /tmp {flag} extra_arg"
             with pytest.raises(HTTPException) as exc_info:
                 _validate_command(cmd)
-            assert exc_info.value.status_code == 400, (
-                f"Expected HTTP 400 for find with flag {flag!r}"
-            )
+            assert (
+                exc_info.value.status_code == 400
+            ), f"Expected HTTP 400 for find with flag {flag!r}"
 
 
 class TestShellMetacharactersAreInertWithShellFalse:
@@ -471,9 +471,9 @@ class TestRunViaSshKnownHosts:
             )
 
         ssh_opts = " ".join(captured_cmd)
-        assert "StrictHostKeyChecking=yes" in ssh_opts, (
-            f"Expected StrictHostKeyChecking=yes in: {ssh_opts}"
-        )
+        assert (
+            "StrictHostKeyChecking=yes" in ssh_opts
+        ), f"Expected StrictHostKeyChecking=yes in: {ssh_opts}"
         assert "StrictHostKeyChecking=no" not in ssh_opts
 
     @pytest.mark.asyncio
@@ -499,15 +499,11 @@ class TestRunViaSshKnownHosts:
             await _run_via_ssh("10.0.0.2", "autobot", 22, ["df", "-h"], 10)
 
         ssh_opts = " ".join(captured_cmd)
-        assert "accept-new" in ssh_opts, (
-            f"Expected accept-new in: {ssh_opts}"
-        )
+        assert "accept-new" in ssh_opts, f"Expected accept-new in: {ssh_opts}"
         assert "StrictHostKeyChecking=no" not in ssh_opts
 
     @pytest.mark.asyncio
-    async def test_tokens_passed_as_individual_args_not_shell_string(
-        self, tmp_path
-    ):
+    async def test_tokens_passed_as_individual_args_not_shell_string(self, tmp_path):
         """SSH receives command tokens as individual arguments (shell=False equivalent).
 
         This verifies that shell injection through SSH arguments is impossible:
@@ -538,9 +534,9 @@ class TestRunViaSshKnownHosts:
         # The individual tokens must appear as separate items in the argument
         # list — NOT as a single concatenated string.
         for token in tokens:
-            assert token in captured_args, (
-                f"Token {token!r} not found as individual arg in: {captured_args}"
-            )
+            assert (
+                token in captured_args
+            ), f"Token {token!r} not found as individual arg in: {captured_args}"
 
 
 # ---------------------------------------------------------------------------
