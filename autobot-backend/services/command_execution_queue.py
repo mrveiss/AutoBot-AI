@@ -18,6 +18,7 @@ import logging
 from typing import List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_24_HOURS
 from models.command_execution import CommandExecution, CommandState
 
 logger = logging.getLogger(__name__)
@@ -112,11 +113,11 @@ class CommandExecutionQueue:
 
             # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
             def _add_command_ops():
-                self.redis_client.setex(command_key, 86400, command_data)  # 24 hour TTL
+                self.redis_client.setex(command_key, TTL_24_HOURS, command_data)  # 24 hour TTL
                 self.redis_client.sadd(session_key, command.command_id)
-                self.redis_client.expire(session_key, 86400)
+                self.redis_client.expire(session_key, TTL_24_HOURS)
                 self.redis_client.sadd(chat_key, command.command_id)
-                self.redis_client.expire(chat_key, 86400)
+                self.redis_client.expire(chat_key, TTL_24_HOURS)
                 if is_pending:
                     self.redis_client.sadd(pending_key, command.command_id)
 
@@ -184,7 +185,7 @@ class CommandExecutionQueue:
 
             # Run all Redis operations in thread pool (Issue #361 - avoid blocking)
             def _update_command_ops():
-                self.redis_client.setex(command_key, 86400, command_data)
+                self.redis_client.setex(command_key, TTL_24_HOURS, command_data)
                 if is_pending:
                     self.redis_client.sadd(pending_key, cmd_id)
                 else:

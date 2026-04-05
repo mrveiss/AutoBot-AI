@@ -44,6 +44,7 @@ from constants.model_constants import (
     OPENAI_O3_MINI,
     OPENAI_O4_MINI,
 )
+from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -625,7 +626,7 @@ class LLMCostTracker:
 
                 # Update daily totals
                 await pipe.incrbyfloat(daily_key, record.cost_usd)
-                await pipe.expire(daily_key, 86400 * 90)  # Keep 90 days
+                await pipe.expire(daily_key, TTL_90_DAYS)  # Keep 90 days
 
                 # Update model totals
                 await pipe.hincrby(model_key, "input_tokens", record.input_tokens)
@@ -641,7 +642,7 @@ class LLMCostTracker:
                     await pipe.hincrby(
                         session_key, "output_tokens", record.output_tokens
                     )
-                    await pipe.expire(session_key, 86400 * 30)  # Keep 30 days
+                    await pipe.expire(session_key, TTL_30_DAYS)  # Keep 30 days
 
                 # Update per-agent totals if agent provided (#1401)
                 if record.agent_id:
@@ -654,7 +655,7 @@ class LLMCostTracker:
                         f"{self.AGENT_TOTALS_KEY}:{record.agent_id}" f":daily:{today}"
                     )
                     await pipe.incrbyfloat(daily_agent_key, record.cost_usd)
-                    await pipe.expire(daily_agent_key, 86400 * 90)
+                    await pipe.expire(daily_agent_key, TTL_90_DAYS)
 
                 # Execute all operations in single round-trip
                 await pipe.execute()

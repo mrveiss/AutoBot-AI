@@ -36,6 +36,7 @@ from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_OPUS,
     MODEL_COSTS_PER_1M_TOKENS,
 )
+from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
@@ -469,7 +470,7 @@ class LLMPatternAnalyzer:
             date_key = datetime.now().strftime("%Y-%m-%d")
             usage_key = f"{self._usage_key}:{date_key}"
             await redis.lpush(usage_key, json.dumps(record))
-            await redis.expire(usage_key, 30 * 24 * 60 * 60)  # 30 days
+            await redis.expire(usage_key, TTL_30_DAYS)  # 30 days
 
             # Update cache tracking
             cache_key = f"{self._cache_key}:{prompt_hash}"
@@ -490,7 +491,7 @@ class LLMPatternAnalyzer:
                 }
 
             await redis.set(cache_key, json.dumps(data))
-            await redis.expire(cache_key, 30 * 24 * 60 * 60)
+            await redis.expire(cache_key, TTL_30_DAYS)
 
             # Update stats
             await self._update_stats(request.model, cost, request.success)
@@ -526,7 +527,7 @@ class LLMPatternAnalyzer:
                 if success:
                     await pipe.hincrby(stats_key, "successful_requests", 1)
 
-                await pipe.expire(stats_key, 30 * 24 * 60 * 60)
+                await pipe.expire(stats_key, TTL_30_DAYS)
                 await pipe.execute()
         except RedisError as e:
             logger.warning("Failed to update LLM stats: %s", e)

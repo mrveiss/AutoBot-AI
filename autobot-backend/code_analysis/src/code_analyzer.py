@@ -18,6 +18,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from config import UnifiedConfig
+from constants.ttl_constants import TTL_1_HOUR
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -549,7 +550,7 @@ from utils.{module_name}_utils import {func.name}
                         "complexity": func.complexity,
                     }
                 )
-                await self.redis_client.setex(key, 3600, value)  # 1 hour TTL
+                await self.redis_client.setex(key, TTL_1_HOUR, value)  # 1 hour TTL
             except Exception as e:
                 logger.warning(f"Failed to cache function: {e}")
 
@@ -561,7 +562,7 @@ from utils.{module_name}_utils import {func.name}
                 key = self.EMBEDDING_KEY.format(ast_hash)
                 # Convert numpy array to bytes for Redis storage
                 value = embedding.tobytes()
-                await self.redis_client.setex(key, 3600, value)  # 1 hour TTL
+                await self.redis_client.setex(key, TTL_1_HOUR, value)  # 1 hour TTL
             except Exception as e:
                 logger.warning(f"Failed to cache embedding: {e}")
 
@@ -572,7 +573,7 @@ from utils.{module_name}_utils import {func.name}
             try:
                 key = self.DUPLICATE_KEY
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(key, 3600, value)  # 1 hour TTL
+                await self.redis_client.setex(key, TTL_1_HOUR, value)  # 1 hour TTL
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

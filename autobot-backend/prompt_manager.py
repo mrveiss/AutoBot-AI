@@ -18,6 +18,8 @@ from typing import Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, Template
 
+from constants.ttl_constants import TTL_24_HOURS
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level constant for supported prompt file extensions
@@ -509,7 +511,7 @@ class PromptManager:
                 return
 
             # Cache for 24 hours in dedicated prompts database (DB 2)
-            redis_client.setex(cache_key, 86400, json.dumps(data))
+            redis_client.setex(cache_key, TTL_24_HOURS, json.dumps(data))
             logger.debug(
                 "Saved prompts to Redis prompts database (DB 2): %s", cache_key
             )

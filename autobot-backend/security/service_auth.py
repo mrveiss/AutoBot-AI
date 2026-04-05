@@ -18,6 +18,7 @@ import structlog
 from fastapi import HTTPException, Request
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_90_DAYS
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = structlog.get_logger()
@@ -50,7 +51,7 @@ class ServiceAuthManager:
         key_hex = key.hex()
 
         # Store in Redis with 90-day expiration
-        await self.redis.set(f"service:key:{service_id}", key_hex, ex=86400 * 90)
+        await self.redis.set(f"service:key:{service_id}", key_hex, ex=TTL_90_DAYS)
 
         logger.info(
             "Generated service key for %s", service_id, extra={"service_id": service_id}

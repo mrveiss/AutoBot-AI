@@ -30,6 +30,7 @@ from autobot_shared.message_bus import get_message_bus
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_client import get_redis_client
 from constants.redis_constants import REDIS_KEY
+from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def route_next(state: WorkflowState) -> str:
 # Redis keys
 # ------------------------------------------------------------------
 
-_STATE_TTL = 86400  # 24 hours
+_STATE_TTL = TTL_24_HOURS
 
 
 def _state_key(workflow_id: str) -> str:

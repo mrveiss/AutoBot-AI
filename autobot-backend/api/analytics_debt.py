@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -489,7 +490,7 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
         return
     try:
         key = f"{DEBT_PREFIX}calculation:{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        debt_redis.set(key, json.dumps(debt_result), ex=86400 * 30)  # Keep 30 days
+        debt_redis.set(key, json.dumps(debt_result), ex=TTL_30_DAYS)
         debt_redis.set(f"{DEBT_PREFIX}latest", key)
     except Exception as e:
         logger.warning("Failed to store debt calculation: %s", e)

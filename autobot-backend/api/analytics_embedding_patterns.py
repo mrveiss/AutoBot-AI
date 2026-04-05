@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -249,7 +250,7 @@ class EmbeddingPatternAnalyzer:
 
             # Store in Redis with 30-day retention
             record_key = f"{self._usage_key}:{operation_id}"
-            await redis.setex(record_key, 30 * 24 * 3600, json.dumps(record))
+            await redis.setex(record_key, TTL_30_DAYS, json.dumps(record))
 
             # Update aggregated stats
             await self._update_stats(request, cost)
@@ -299,13 +300,13 @@ class EmbeddingPatternAnalyzer:
                     await pipe.hincrby(daily_key, "successful_operations", 1)
 
                 # Set TTL for daily stats (90 days)
-                await pipe.expire(daily_key, 90 * 24 * 3600)
+                await pipe.expire(daily_key, TTL_90_DAYS)
 
                 # Model-specific stats updates
                 await pipe.hincrby(model_key, "total_operations", 1)
                 await pipe.hincrby(model_key, "total_tokens", request.token_count)
                 await pipe.hincrbyfloat(model_key, "total_cost", cost)
-                await pipe.expire(model_key, 90 * 24 * 3600)
+                await pipe.expire(model_key, TTL_90_DAYS)
 
                 # Execute all operations in single round-trip
                 await pipe.execute()

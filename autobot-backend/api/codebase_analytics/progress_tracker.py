@@ -15,6 +15,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from constants.ttl_constants import TTL_24_HOURS
+
 from .storage import get_redis_connection_async
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ _FILE_HASH_CHUNK_SIZE = 65536
 
 # Redis key prefix for task state (#1179: cross-worker visibility)
 _TASK_REDIS_PREFIX = "indexing_task:"
-_TASK_REDIS_TTL = 86400  # 24 hours
+_TASK_REDIS_TTL = TTL_24_HOURS
 
 # Redis key for persistent index queue (#1717: survive restarts)
 _QUEUE_REDIS_KEY = "codebase:index_queue"

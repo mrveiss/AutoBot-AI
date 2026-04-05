@@ -21,6 +21,7 @@ from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from config import UnifiedConfig
+from constants.ttl_constants import TTL_30_DAYS
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -819,7 +820,7 @@ class CodeQualityDashboard:
                 # Store in Redis list (keep last 30 entries)
                 await self.redis_client.lpush(self.TRENDS_KEY, json.dumps(trend_data))
                 await self.redis_client.ltrim(self.TRENDS_KEY, 0, 29)
-                await self.redis_client.expire(self.TRENDS_KEY, 86400 * 30)  # 30 days
+                await self.redis_client.expire(self.TRENDS_KEY, TTL_30_DAYS)  # 30 days
             except Exception as e:
                 logger.warning(f"Failed to save quality trend: {e}")
 

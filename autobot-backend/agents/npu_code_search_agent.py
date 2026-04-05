@@ -22,6 +22,7 @@ import aiofiles
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.security.path_validator import validate_path
+from constants.ttl_constants import TTL_24_HOURS
 from code_embedding_generator import get_code_embedding_generator
 from npu_semantic_search import get_npu_search_engine
 from worker_node import WorkerNode
@@ -201,7 +202,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         # Search configuration
         self.index_prefix = "autobot:code:index:"
         self.search_cache_prefix = "autobot:search:cache:"
-        self.cache_ttl = 3600  # 1 hour cache
+        self.cache_ttl = TTL_1_HOUR
 
         # NPU optimization
         self.npu_available = False
@@ -348,7 +349,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             "npu_available": self.npu_available,
         }
         await asyncio.to_thread(
-            self.redis_client.setex, index_key, 86400, json.dumps(metadata)
+            self.redis_client.setex, index_key, TTL_24_HOURS, json.dumps(metadata)
         )
 
     def _build_index_result(
@@ -439,9 +440,9 @@ class NPUCodeSearchAgent(StandardizedAgent):
         elements: Dict[str, List],
     ) -> None:
         """Store file index to Redis (Issue #398: extracted)."""
-        self.redis_client.setex(file_key, 86400, index_data_json)
+        self.redis_client.setex(file_key, TTL_24_HOURS, index_data_json)
         self.redis_client.sadd(language_key, relative_path)
-        self.redis_client.expire(language_key, 86400)
+        self.redis_client.expire(language_key, TTL_24_HOURS)
         for element_type, element_list in elements.items():
             for element in element_list:
                 element_key = (
@@ -453,7 +454,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     "context": element.get("context", ""),
                 }
                 self.redis_client.lpush(element_key, json.dumps(element_data))
-                self.redis_client.expire(element_key, 86400)
+                self.redis_client.expire(element_key, TTL_24_HOURS)
 
     def _extract_element_code(
         self, content: str, line_number: int, element_type: str, max_lines: int = 50

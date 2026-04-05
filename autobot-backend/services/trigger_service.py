@@ -40,11 +40,12 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
 
 # Redis TTL for trigger records: 90 days (triggers are long-lived)
-_TRIGGER_TTL_SECONDS = 90 * 24 * 3600
+_TRIGGER_TTL_SECONDS = TTL_90_DAYS
 
 # Key prefixes — all under the "workflows" Redis database
 _KEY_PREFIX = "workflows:trigger:"

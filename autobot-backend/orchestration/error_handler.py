@@ -31,6 +31,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CHECKPOINT_KEY_PREFIX = "autobot:workflow:checkpoint:"
-CHECKPOINT_TTL = 7 * 24 * 3600  # 7 days in seconds
+CHECKPOINT_TTL = TTL_7_DAYS
 
 
 # ---------------------------------------------------------------------------

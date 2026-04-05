@@ -21,6 +21,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -87,7 +88,7 @@ class ChatWorkflowManager(
         self._lock = asyncio.Lock()
         self.redis_manager = None  # Async Redis manager
         self.redis_client = None  # Main database connection
-        self.conversation_history_ttl = 86400  # 24 hours in seconds
+        self.conversation_history_ttl = TTL_24_HOURS
         self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
 
         # Error boundary manager for enhanced error tracking
@@ -1900,7 +1901,7 @@ before summarizing.
 
         try:
             async with await http_client.post(
-                ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=60.0)
+                ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=TIMEOUT_HTTP_DEFAULT)
             ) as response:
                 logger.info(
                     "[ChatWorkflowManager] Ollama response status: %s", response.status

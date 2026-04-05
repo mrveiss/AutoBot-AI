@@ -31,12 +31,14 @@ if str(_project_root) not in sys.path:
 try:
     from autobot_shared.redis_client import get_redis_client
     from config import UnifiedConfig
+    from constants.ttl_constants import TTL_1_HOUR
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:
     get_redis_client = None
     UnifiedConfig = None
+    TTL_1_HOUR = 3_600
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
 
@@ -854,7 +856,7 @@ class OwnershipAnalyzer:
         if self.redis_client:
             try:
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(self.OWNERSHIP_KEY, 3600, value)
+                await self.redis_client.setex(self.OWNERSHIP_KEY, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

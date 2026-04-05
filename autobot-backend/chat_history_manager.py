@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_24_HOURS
 
 # Import the centralized ConfigManager and Redis client utility
 from config import config as global_config_manager
@@ -226,7 +227,7 @@ class ChatHistoryManager:
                 self.redis_client.set("autobot:chat_history", json.dumps(self.history))
                 # Optionally set expiration time (e.g., 1 day) to clean up
                 # old data
-                self.redis_client.expire("autobot:chat_history", 86400)
+                self.redis_client.expire("autobot:chat_history", TTL_24_HOURS)
             except Exception as e:
                 logging.error(f"Error saving chat history to Redis: {str(e)}")
 

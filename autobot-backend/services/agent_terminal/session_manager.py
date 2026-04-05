@@ -16,6 +16,8 @@ from typing import Dict, List, Optional
 from services.command_approval_manager import AgentRole
 from type_defs.common import Metadata
 
+from constants.ttl_constants import TTL_1_HOUR
+
 from .models import AgentSessionState, AgentTerminalSession
 
 logger = logging.getLogger(__name__)
@@ -409,7 +411,7 @@ class SessionManager:
             session_data = session.to_persist_dict()
 
             json_data = json.dumps(session_data)
-            await self.redis_client.setex(key, 3600, json_data)  # 1 hour TTL
+            await self.redis_client.setex(key, TTL_1_HOUR, json_data)  # 1 hour TTL
             logger.debug(
                 f"Persisted session {session.session_id} to Redis with key {key}"
             )
