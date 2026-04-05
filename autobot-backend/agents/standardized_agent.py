@@ -66,7 +66,7 @@ class StandardizedAgent(BaseAgent):
         self._last_error = None
 
         # Lock for thread-safe counter access
-        self._stats_lock = asyncio.Lock()
+        self._async_stats_lock = asyncio.Lock()  # Named differently from BaseAgent._stats_lock (threading.Lock)
 
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
@@ -165,7 +165,7 @@ class StandardizedAgent(BaseAgent):
         """Standardized request processing (Issue #398: refactored to use helpers)."""
         start_time = time.time()
 
-        async with self._stats_lock:
+        async with self._async_stats_lock:
             self._request_count += 1
             self._last_request_time = start_time
 
@@ -188,7 +188,7 @@ class StandardizedAgent(BaseAgent):
             result = await self._call_handler_safely(handler_method, request)
 
             processing_time = time.time() - start_time
-            async with self._stats_lock:
+            async with self._async_stats_lock:
                 self._total_processing_time += processing_time
 
             self.logger.debug(
@@ -200,7 +200,7 @@ class StandardizedAgent(BaseAgent):
 
         except Exception as e:
             # Update error count (thread-safe)
-            async with self._stats_lock:
+            async with self._async_stats_lock:
                 self._error_count += 1
                 self._last_error = str(e)
 
@@ -319,7 +319,7 @@ class StandardizedAgent(BaseAgent):
         self.logger.info("Final stats: %s", stats)
 
         # Reset counters (thread-safe)
-        async with self._stats_lock:
+        async with self._async_stats_lock:
             self._request_count = 0
             self._total_processing_time = 0.0
             self._error_count = 0

@@ -73,6 +73,41 @@ class _ConfigStub:
     def get_nested(self, key, default=None):
         return default
 
+    def get_redis_config(self):
+        """Env-var fallback so redis_client.get_redis_client() survives re-entry (#3491)."""
+        import os
+
+        return {
+            "enabled": os.getenv("AUTOBOT_REDIS_ENABLED", "true").lower() == "true",
+            "host": os.getenv("AUTOBOT_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+            "port": int(os.getenv("AUTOBOT_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+            "db": int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0")),
+        }
+
+    def get_llm_config(self):
+        return {}
+
+    def reload(self):
+        pass
+
+    def validate_config(self):
+        return {}
+
+    def is_feature_enabled(self, feature):
+        return False
+
+    async def load_config_async(self, config_type="main"):
+        return {}
+
+    async def save_config_async(self, config_type, data):
+        pass
+
+    async def get_config_value_async(self, config_type, key, default=None):
+        return default
+
+    async def set_config_value_async(self, config_type, key, value):
+        pass
+
     def __bool__(self):
         return False
 
