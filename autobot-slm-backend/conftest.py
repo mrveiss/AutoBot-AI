@@ -108,7 +108,7 @@ for _m in [
 # so that code_source_test.py can import code_source.py without the package
 # being installed in the dev environment.  Issue: #3525
 _pm_mod = types.ModuleType("python_multipart")
-_pm_mod.__version__ = "0.0.99"  # type: ignore[attr-defined]
+_pm_mod.__version__ = "9.9.99"  # type: ignore[attr-defined]  # high sentinel — immune to future FastAPI threshold bumps
 sys.modules.setdefault("python_multipart", _pm_mod)
 
 # ── user_management ───────────────────────────────────────────────────────────
