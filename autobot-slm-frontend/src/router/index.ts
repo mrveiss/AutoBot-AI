@@ -426,7 +426,7 @@ const router = createRouter({
           path: 'browser',
           name: 'tools-browser',
           component: () => import('@/views/tools/admin/BrowserTool.vue'),
-          meta: { title: 'Browser', parent: 'tools' }
+          meta: { title: 'Browser', parent: 'tools', admin: true }
         },
         {
           path: 'novnc',
