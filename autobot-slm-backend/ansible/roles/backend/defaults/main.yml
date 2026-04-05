@@ -59,6 +59,10 @@ backend_llm_model: "qwen3.5:9b"  # Default LLM model
 backend_ai_stack_host: "127.0.0.1"
 backend_ai_stack_port: 8080
 
+# ChromaDB connection (co-located: 127.0.0.1; fleet deployment: ai-stack node IP)
+backend_chromadb_host: "127.0.0.1"
+backend_chromadb_port: 8100
+
 # Service Authentication
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
