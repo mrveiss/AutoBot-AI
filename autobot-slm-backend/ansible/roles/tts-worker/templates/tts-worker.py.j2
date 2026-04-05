@@ -149,10 +149,9 @@ def _load_model():
     """Load Pocket TTS model. Returns (success, error_msg)."""
     global _model
     try:
+        _check_cache_writable(MODELS_DIR)
         from pocket_tts import TTSModel
 
-        _check_cache_writable(MODELS_DIR)
-        MODELS_DIR.mkdir(parents=True, exist_ok=True)
         VOICES_DIR.mkdir(parents=True, exist_ok=True)
         _configure_hf_token()
         _model = TTSModel.load_model()
