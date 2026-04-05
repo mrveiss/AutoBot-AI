@@ -351,6 +351,12 @@ def _inject_co_located_ai_stack(
         if _ai_stack_roles & set(roles):
             continue
         hosts[inv_name]["node_roles"] = list(roles) + ["ai-stack"]
+        # Co-located ai-stack shares the backend venv and symlinks owned by
+        # autobot:autobot.  Override the role's default ai_user/ai_group
+        # (autobot-ai) so the systemd service runs with the correct identity
+        # and avoids permission errors on startup (#3501).
+        hosts[inv_name]["ai_user"] = "autobot"
+        hosts[inv_name]["ai_group"] = "autobot"
         logger.info(
             "Auto-injecting ai-stack onto %s (no dedicated AI stack node in fleet; #3461)",
             inv_name,
