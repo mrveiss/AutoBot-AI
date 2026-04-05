@@ -165,8 +165,135 @@ def _validate_find_args(tokens: list[str]) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Security: path restrictions for file-read commands
+# ---------------------------------------------------------------------------
+
+# Executables that read arbitrary file paths — require additional argument
+# validation to prevent exposure of secrets, credentials, and system files.
+_FILE_READ_EXECUTABLES: frozenset[str] = frozenset({"cat", "head", "tail"})
+
+# Path prefixes that cat/head/tail must never be allowed to read.
+# Any argument that resolves to (or starts with) one of these prefixes is
+# rejected.  The list is intentionally broad: omission is the safe default.
+_SENSITIVE_PATH_PREFIXES: tuple[str, ...] = (
+    "/etc/",
+    "/etc",  # block bare "/etc" as a directory reference too
+    "/root/",
+    "/root",
+    "/home/",  # home directories contain .ssh, .env, etc.
+    "/proc/",
+    "/sys/",
+    "/run/secrets",
+    "/var/lib/",  # databases, docker volumes, snapd state, etc.
+    "/var/log/auth",  # auth.log / auth.log.* — keep general /var/log/ readable
+    "/boot/",
+    "/snap/",
+)
+
+# Filename patterns (basename only) that are always blocked regardless of
+# directory, because they commonly hold secrets or credentials.
+_SENSITIVE_FILENAME_SUFFIXES: tuple[str, ...] = (
+    ".env",
+    ".key",
+    ".pem",
+    ".crt",
+    ".cert",
+    ".pfx",
+    ".p12",
+    ".secret",
+    ".passwd",
+    ".password",
+    ".credentials",
+    ".token",
+    ".htpasswd",
+    ".netrc",
+    "id_rsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_dsa",
+    "authorized_keys",
+    "known_hosts",
+)
+
+
+def _check_sensitive_path(executable: str, tokens: list[str]) -> None:
+    """Validate that file-read commands do not target sensitive paths.
+
+    Applies only to executables in *_FILE_READ_EXECUTABLES*.  Each argument
+    that looks like a file path (does not start with '-') is normalised with
+    os.path.normpath and then checked against *_SENSITIVE_PATH_PREFIXES* and
+    *_SENSITIVE_FILENAME_SUFFIXES*.
+
+    Raises HTTPException 400 if any argument references a sensitive path.
+    """
+    if executable not in _FILE_READ_EXECUTABLES:
+        return
+
+    for arg in tokens[1:]:
+        # Skip option flags (e.g. -n, --lines=10)
+        if arg.startswith("-"):
+            continue
+
+        # Require absolute paths — relative paths bypass the prefix denylist
+        # because the working directory on the remote host is unpredictable.
+        if not os.path.isabs(arg):
+            logger.warning(
+                "Command rejected — %r argument %r is not an absolute path",
+                executable,
+                arg,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Command rejected: file-read commands must use absolute "
+                    f"paths, got {arg!r}"
+                ),
+            )
+
+        # Normalise to collapse ../ traversal attempts
+        normalised = os.path.normpath(arg)
+
+        # Check prefix denylist
+        for prefix in _SENSITIVE_PATH_PREFIXES:
+            if normalised == prefix.rstrip("/") or normalised.startswith(
+                prefix if prefix.endswith("/") else prefix + "/"
+            ):
+                logger.warning(
+                    "Command rejected — %r targets sensitive path %r (prefix %r)",
+                    executable,
+                    normalised,
+                    prefix,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Command rejected: {executable!r} is not permitted to "
+                        f"read {arg!r} — path is restricted."
+                    ),
+                )
+
+        # Check filename denylist (basename match)
+        basename = os.path.basename(normalised).lower()
+        for suffix in _SENSITIVE_FILENAME_SUFFIXES:
+            if basename == suffix or basename.endswith(suffix):
+                logger.warning(
+                    "Command rejected — %r targets sensitive filename %r (rule %r)",
+                    executable,
+                    normalised,
+                    suffix,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Command rejected: {executable!r} is not permitted to "
+                        f"read {arg!r} — filename matches a restricted pattern."
+                    ),
+                )
+
+
 def _validate_command(script: str) -> str:
-    """Parse *script* and enforce the executable allowlist.
+    """Parse *script* and enforce the executable allowlist and path restrictions.
 
     For git commands, additionally enforces:
     - An explicit subcommand must be provided (bare ``git`` alone is rejected).
@@ -176,7 +303,8 @@ def _validate_command(script: str) -> str:
 
     Returns the normalised first token for logging.
     Raises HTTPException 400 if the command is empty, the executable is not in
-    ALLOWED_EXECUTABLES, or git-specific subcommand rules are violated.
+    ALLOWED_EXECUTABLES, git-specific subcommand rules are violated, or a
+    file-read command targets a sensitive path.
     """
     try:
         tokens = shlex.split(script)
@@ -212,6 +340,9 @@ def _validate_command(script: str) -> str:
 
     if executable == "find":
         _validate_find_args(tokens)
+
+    # Additional path-level validation for file-read commands (#3475)
+    _check_sensitive_path(executable, tokens)
 
     return executable
 
