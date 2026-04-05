@@ -328,7 +328,7 @@ def _inject_co_located_ai_stack(
     hosts: dict[str, dict],
     db_nodes: list,
     fleet_has_ai_stack: bool,
-) -> None:
+) -> list[str]:
     """Auto-inject ai-stack onto backend nodes when no fleet node has it (#3461).
 
     On single-host co-located deployments, users often assign backend/frontend/
@@ -338,12 +338,16 @@ def _inject_co_located_ai_stack(
 
     In distributed setups where a dedicated AI stack VM already carries ai-stack,
     fleet_has_ai_stack is True and this function is a no-op.
+
+    Returns the list of inventory names onto which ai-stack was injected so the
+    caller can patch infra_vars without a second DB query (#3515).
     """
     if fleet_has_ai_stack:
-        return
+        return []
 
     _ai_stack_roles = {"ai-stack", "autobot-ai-stack"}
     _backend_roles = {"backend", "autobot-backend"}
+    injected: list[str] = []
 
     for node in db_nodes:
         inv_name = node.ansible_target
@@ -361,10 +365,12 @@ def _inject_co_located_ai_stack(
         # and avoids permission errors on startup (#3501).
         hosts[inv_name]["ai_user"] = "autobot"
         hosts[inv_name]["ai_group"] = "autobot"
+        injected.append(inv_name)
         logger.info(
             "Auto-injecting ai-stack onto %s (no dedicated AI stack node in fleet; #3461)",
             inv_name,
         )
+    return injected
 
 
 def _build_inventory_dict(
@@ -410,18 +416,21 @@ async def _fetch_inventory_data(
         list,
         dict[str, str],
         set,
+        list[str],
     ]
 ]:
     """Load all DB data needed to build the Ansible inventory (#2823).
 
     Returns (db_nodes, hosts, node_id_to_hostname, node_id_to_ip,
-             all_node_roles, all_active, all_ip_map, local_ips) or None when no nodes match.
+             all_node_roles, all_active, all_ip_map, local_ips,
+             injected_ai_stack) or None when no nodes match.
     """
     from sqlalchemy import select
 
     from autobot_shared.network_utils import get_local_ips
     from models.database import Node, NodeRole
 
+    injected_ai_stack: list[str] = []
     async with db_service.session() as session:
         query = select(Node)
         if node_ids:
@@ -453,7 +462,7 @@ async def _fetch_inventory_data(
             NodeRole.role_name.in_(["ai-stack", "autobot-ai-stack"]),
         )
         fleet_ai_stack = (await session.execute(fleet_ai_q)).scalars().all()
-        _inject_co_located_ai_stack(
+        injected_ai_stack = _inject_co_located_ai_stack(
             hosts, db_nodes, fleet_has_ai_stack=len(fleet_ai_stack) > 0
         )
 
@@ -476,6 +485,7 @@ async def _fetch_inventory_data(
         all_active,
         all_ip_map,
         local_ips,
+        injected_ai_stack,
     )
 
 
@@ -501,11 +511,19 @@ async def _generate_dynamic_inventory(
         all_active,
         all_ip_map,
         local_ips,
+        injected_ai_stack,
     ) = result
     children, ansible_groups = _build_inventory_children(
         hosts, all_node_roles, node_id_to_hostname
     )
     infra_vars = _build_infra_vars(all_active, all_ip_map, local_ips)
+    # For co-located ai-stack (injected, no dedicated AI stack VM), _build_infra_vars
+    # never sees the injected role because it reads from DB node_roles, not the
+    # in-memory hosts dict.  Explicitly populate ai_stack_host/port so templates
+    # that reference {{ ai_stack_host }} resolve correctly (#3515).
+    if injected_ai_stack and "ai_stack_host" not in infra_vars:
+        infra_vars["ai_stack_host"] = "127.0.0.1"
+        infra_vars["ai_stack_port"] = 8080
     inventory = _build_inventory_dict(hosts, children, infra_vars)
 
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
