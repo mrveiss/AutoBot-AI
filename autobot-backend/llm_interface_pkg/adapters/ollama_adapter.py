@@ -16,6 +16,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
+from constants.api_constants import PATH_OLLAMA_TAGS
 
 from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
@@ -70,7 +71,7 @@ class OllamaAdapter(AdapterBase):
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=5.0)
             async with await http_client.get(
-                f"{ollama_url}/api/tags", timeout=timeout
+                f"{ollama_url}{PATH_OLLAMA_TAGS}", timeout=timeout
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
