@@ -14,6 +14,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from constants.status_enums import TaskStatus
+
 from .error_handler import (
     BackoffStrategy,
     StepCheckpoint,
@@ -70,18 +72,18 @@ class TestStepErrorConfig:
 
 class TestStepCheckpoint:
     def test_round_trip(self) -> None:
-        cp = StepCheckpoint(step_id="s1", status="completed", output={"success": True})
+        cp = StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={"success": True})
         restored = StepCheckpoint.from_dict(cp.to_dict())
         assert restored.step_id == "s1"
-        assert restored.status == "completed"
+        assert restored.status == TaskStatus.COMPLETED.value
         assert restored.output == {"success": True}
 
     def test_timestamp_is_populated(self) -> None:
-        cp = StepCheckpoint(step_id="s1", status="completed", output={})
+        cp = StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={})
         assert cp.timestamp != ""
 
     def test_to_dict_is_json_serialisable(self) -> None:
-        cp = StepCheckpoint(step_id="s1", status="completed", output={"k": "v"})
+        cp = StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={"k": "v"})
         serialised = json.dumps(cp.to_dict())
         assert "s1" in serialised
 
@@ -119,13 +121,13 @@ class TestWorkflowCheckpointManager:
     def test_save_and_load(self) -> None:
         mgr = self._manager_with_fake_redis()
         cp = StepCheckpoint(
-            step_id="step1", status="completed", output={"success": True}
+            step_id="step1", status=TaskStatus.COMPLETED.value, output={"success": True}
         )
         mgr.save("wf-1", cp)
 
         loaded = mgr.load_all("wf-1")
         assert "step1" in loaded
-        assert loaded["step1"].status == "completed"
+        assert loaded["step1"].status == TaskStatus.COMPLETED.value
         assert loaded["step1"].output == {"success": True}
 
     def test_load_empty_when_no_checkpoints(self) -> None:
@@ -136,14 +138,14 @@ class TestWorkflowCheckpointManager:
         mgr = self._manager_with_fake_redis()
         for i in range(3):
             mgr.save(
-                "wf-2", StepCheckpoint(step_id=f"s{i}", status="completed", output={})
+                "wf-2", StepCheckpoint(step_id=f"s{i}", status=TaskStatus.COMPLETED.value, output={})
             )
         loaded = mgr.load_all("wf-2")
         assert set(loaded.keys()) == {"s0", "s1", "s2"}
 
     def test_clear_removes_all(self) -> None:
         mgr = self._manager_with_fake_redis()
-        mgr.save("wf-3", StepCheckpoint(step_id="s1", status="completed", output={}))
+        mgr.save("wf-3", StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={}))
         mgr.clear("wf-3")
         assert mgr.load_all("wf-3") == {}
 
@@ -166,7 +168,7 @@ class TestWorkflowCheckpointManager:
         bad_redis = MagicMock()
         bad_redis.hset.side_effect = ConnectionError("Redis down")
         mgr._redis = bad_redis
-        cp = StepCheckpoint(step_id="s1", status="completed", output={})
+        cp = StepCheckpoint(step_id="s1", status=TaskStatus.COMPLETED.value, output={})
         # Must not raise
         mgr.save("wf-fail", cp)
 
