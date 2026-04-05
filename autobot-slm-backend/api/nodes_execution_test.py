@@ -74,6 +74,7 @@ _FILE_READ_EXECUTABLES = _mod._FILE_READ_EXECUTABLES
 _is_local_ip = _mod._is_local_ip
 _run_command = _mod._run_command
 _run_via_ssh = _mod._run_via_ssh
+_SSH_SYSTEM_KNOWN_HOSTS_PATH = _mod._SSH_SYSTEM_KNOWN_HOSTS_PATH
 _audit_execute_event = _mod._audit_execute_event
 NodeExecuteRequest = _mod.NodeExecuteRequest
 
@@ -606,9 +607,13 @@ class TestRunViaSshKnownHosts:
         assert "StrictHostKeyChecking=no" not in ssh_opts
 
     @pytest.mark.asyncio
-    async def test_uses_accept_new_when_no_known_hosts_file(self, tmp_path):
-        """When known_hosts file is absent, accept-new is used (never 'no')."""
-        missing_path = str(tmp_path / "nonexistent_known_hosts")
+    async def test_falls_back_to_system_known_hosts_when_user_file_absent(
+        self, tmp_path
+    ):
+        """Falls back to system known_hosts when per-user file is absent (#3469)."""
+        missing_user_path = str(tmp_path / "nonexistent_known_hosts")
+        system_known_hosts = tmp_path / "ssh_known_hosts"
+        system_known_hosts.write_text("10.0.0.2 ssh-rsa AAAA...", encoding="utf-8")
 
         captured_cmd: list[str] = []
 
@@ -621,15 +626,40 @@ class TestRunViaSshKnownHosts:
             return proc
 
         with (
-            patch.object(_mod, "_SSH_KNOWN_HOSTS_PATH", missing_path),
+            patch.object(_mod, "_SSH_KNOWN_HOSTS_PATH", missing_user_path),
+            patch.object(_mod, "_SSH_SYSTEM_KNOWN_HOSTS_PATH", str(system_known_hosts)),
             patch.object(_mod, "_SSH_KEY_PATH", "/nonexistent/key"),
             patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
         ):
             await _run_via_ssh("10.0.0.2", "autobot", 22, ["df", "-h"], 10)
 
         ssh_opts = " ".join(captured_cmd)
-        assert "accept-new" in ssh_opts, f"Expected accept-new in: {ssh_opts}"
-        assert "StrictHostKeyChecking=no" not in ssh_opts
+        assert (
+            "StrictHostKeyChecking=yes" in ssh_opts
+        ), f"Expected strict checking: {ssh_opts}"
+        assert (
+            str(system_known_hosts) in ssh_opts
+        ), f"Expected system known_hosts: {ssh_opts}"
+        assert "/dev/null" not in ssh_opts, "Must not use /dev/null as known_hosts"
+        assert "accept-new" not in ssh_opts, "Must not use accept-new when file exists"
+
+    @pytest.mark.asyncio
+    async def test_refuses_connection_when_no_known_hosts_files_exist(self, tmp_path):
+        """Raises HTTP 503 when neither per-user nor system known_hosts file exists (#3469)."""
+        missing_user_path = str(tmp_path / "nonexistent_user_known_hosts")
+        missing_system_path = str(tmp_path / "nonexistent_system_known_hosts")
+
+        with (
+            patch.object(_mod, "_SSH_KNOWN_HOSTS_PATH", missing_user_path),
+            patch.object(_mod, "_SSH_SYSTEM_KNOWN_HOSTS_PATH", missing_system_path),
+            patch.object(_mod, "_SSH_KEY_PATH", "/nonexistent/key"),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await _run_via_ssh("10.0.0.2", "autobot", 22, ["df", "-h"], 10)
+
+        assert exc_info.value.status_code == 503
+        assert "known_hosts" in exc_info.value.detail
+        assert "Ansible" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_tokens_passed_as_individual_args_not_shell_string(self, tmp_path):
