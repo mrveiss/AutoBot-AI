@@ -40,6 +40,12 @@ from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from constants.model_constants import (
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT35_TURBO_16K,
+    OPENAI_GPT4,
+    OPENAI_GPT4_TURBO,
+)
 
 load_dotenv()
 
@@ -356,7 +362,7 @@ class OpenAIProvider(LLMProvider):
         self._total_requests += 1
 
         try:
-            model = request.model_name or self.config.default_model or "gpt-3.5-turbo"
+            model = request.model_name or self.config.default_model or OPENAI_GPT35_TURBO
             params = self._build_openai_params(request, model)
             response = await self.client.chat.completions.create(**params)
             return self._build_openai_success_response(
@@ -387,7 +393,7 @@ class OpenAIProvider(LLMProvider):
 
     def get_available_models(self) -> List[str]:
         """Get available OpenAI models."""
-        return ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
+        return [OPENAI_GPT4, OPENAI_GPT4_TURBO, OPENAI_GPT35_TURBO, OPENAI_GPT35_TURBO_16K]
 
 
 class MockProvider(LLMProvider):
@@ -515,7 +521,7 @@ class UnifiedLLMInterface:
             provider_type=ProviderType.OPENAI,
             enabled=openai_enabled and bool(openai_api_key) and OPENAI_AVAILABLE,
             api_key=openai_api_key,
-            default_model="gpt-3.5-turbo",
+            default_model=OPENAI_GPT35_TURBO,
             priority=20,
         )
 

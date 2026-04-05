@@ -31,6 +31,11 @@ from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.model_constants import (
+    EXPENSIVE_MODEL_MARKER_GPT4,
+    EXPENSIVE_MODEL_MARKER_OPUS,
+    MODEL_COSTS_PER_1M_TOKENS,
+)
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
@@ -42,7 +47,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # O(1) lookup optimization constant (Issue #326)
-EXPENSIVE_MODELS = {"opus", "gpt-4"}
+EXPENSIVE_MODELS = {EXPENSIVE_MODEL_MARKER_OPUS, EXPENSIVE_MODEL_MARKER_GPT4}
 
 
 class PromptCategory(str, Enum):
@@ -86,26 +91,9 @@ SIMPLE_PROMPT_CATEGORIES = {
 }
 
 
-# Model costs per 1M tokens (USD)
-MODEL_COSTS = {
-    # Anthropic
-    "claude-3-opus": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku": {"input": 0.25, "output": 1.25},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
-    # OpenAI
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    # Google
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    # Local (free)
-    "llama3": {"input": 0.0, "output": 0.0},
-    "mistral": {"input": 0.0, "output": 0.0},
-    "codellama": {"input": 0.0, "output": 0.0},
-}
+# Model costs per 1M tokens (USD) — single source of truth in
+# constants/model_constants.MODEL_COSTS_PER_1M_TOKENS (#3528).
+MODEL_COSTS = MODEL_COSTS_PER_1M_TOKENS
 
 # Pattern detection rules for prompt categorization
 PROMPT_PATTERNS = {
@@ -418,7 +406,7 @@ class LLMPatternAnalyzer:
 
         Issue #620: Extracted from analyze_prompt.
         """
-        if "opus" in model.lower() or "gpt-4" in model.lower():
+        if EXPENSIVE_MODEL_MARKER_OPUS in model.lower() or EXPENSIVE_MODEL_MARKER_GPT4 in model.lower():
             if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
                 recommendations.append(
                     "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
@@ -451,7 +439,7 @@ class LLMPatternAnalyzer:
             "category": category.value,
             "estimated_tokens": int(token_estimate),
             "estimated_cost": self._calculate_cost(
-                model or "gpt-4o", int(token_estimate), int(token_estimate * 1.5)
+                model or OPENAI_GPT4O, int(token_estimate), int(token_estimate * 1.5)
             ),
             "issues": issues,
             "recommendations": recommendations,

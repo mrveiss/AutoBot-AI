@@ -22,6 +22,14 @@ import os
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_OPUS4_6,
+    ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_SONNET4_6,
+)
 from llm_interface_pkg.models import LLMRequest, LLMResponse
 from llm_interface_pkg.types import ProviderType
 
@@ -30,12 +38,12 @@ from .base_provider import BaseProvider
 logger = logging.getLogger(__name__)
 
 _ANTHROPIC_MODELS = [
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-sonnet-4-20250514",
-    "claude-haiku-4-5-20251001",
-    "claude-3-5-haiku-20241022",
-    "claude-3-opus-20240229",
+    ANTHROPIC_CLAUDE_OPUS4_6,
+    ANTHROPIC_CLAUDE_SONNET4_6,
+    ANTHROPIC_CLAUDE_SONNET4,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE3_OPUS_DATED,
 ]
 
 
@@ -103,7 +111,7 @@ class AnthropicProvider(BaseProvider):
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting(
-            "default_model", "claude-sonnet-4-6"
+            "default_model", ANTHROPIC_CLAUDE_SONNET4_6
         )
         try:
             client = self._ensure_client()
@@ -148,7 +156,7 @@ class AnthropicProvider(BaseProvider):
         """Stream a chat completion from Anthropic, yielding text chunks."""
         self._total_requests += 1
         model = request.model_name or self._get_setting(
-            "default_model", "claude-sonnet-4-6"
+            "default_model", ANTHROPIC_CLAUDE_SONNET4_6
         )
         try:
             client = self._ensure_client()

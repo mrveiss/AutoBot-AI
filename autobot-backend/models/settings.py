@@ -19,7 +19,7 @@ import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from constants.model_constants import Models
+from constants.model_constants import OPENAI_GPT35_TURBO, Models
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Issue #380: Module-level tuples for validation constants
@@ -52,7 +52,7 @@ class LLMSettings(BaseSettings):
 
     # OpenAI configuration (optional)
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
-    openai_model: str = Field(default="gpt-3.5-turbo", description="OpenAI model")
+    openai_model: str = Field(default=OPENAI_GPT35_TURBO, description="OpenAI model")
 
     # HuggingFace configuration (optional)
     huggingface_api_key: Optional[str] = Field(
