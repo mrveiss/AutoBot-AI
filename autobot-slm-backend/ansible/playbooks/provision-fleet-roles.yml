@@ -349,14 +349,20 @@
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    # include_vars (precedence 18) would override task vars (17) so use
+    # set_fact (precedence 19) to win over the defaults' false value.
+    - name: "SLM | Override slm_colocated_frontend=true for co-located re-render"
+      ansible.builtin.set_fact:
+        slm_colocated_frontend: true
+      when: _is_slm_frontend_colocated | bool
+      tags: ['frontend', 'slm-nginx', 'provision']
+
     - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../roles/slm_manager/templates/autobot-slm.conf.j2"
         dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
         mode: "0644"
         backup: true
-      vars:
-        slm_colocated_frontend: true
       when: _is_slm_frontend_colocated | bool
       register: _slm_nginx_rerendered
       tags: ['frontend', 'slm-nginx', 'provision']
