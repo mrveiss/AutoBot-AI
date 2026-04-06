@@ -13,16 +13,21 @@
 #   ansible-playbook -i inventory/slm-nodes.yml playbooks/deploy-slm-manager.yml
 #
 # Tags:
-#   --tags packages    System packages only
-#   --tags tls         TLS certificate generation only
-#   --tags backend     Backend venv + service only
-#   --tags frontend    Frontend build only
-#   --tags nginx       Nginx config only
-#   --tags service     Start/restart services only
-#   --tags postgresql  Database only
-#   --tags monitoring  Prometheus + Grafana only
-#   --tags seed        Register fleet nodes in SLM database
-#   --tags provision   Auto-provision fleet nodes by role
+#   --tags packages     System packages only
+#   --tags tls          TLS certificate generation only
+#   --tags backend      Backend venv + service only
+#   --tags frontend     Frontend build only
+#   --tags nginx        Nginx config only
+#   --tags service      Start/restart services only
+#   --tags postgresql   Database only
+#   --tags monitoring   Prometheus + Grafana only
+#   --tags seed         Register fleet nodes in SLM database
+#   --tags provision    Auto-provision fleet nodes by role
+#   --tags code-source  Push code_source from controller only
+#
+# When GitHub is unreachable from SLM, pass controller_repo_root to push
+# the local checkout to SLM before provisioning (#3604):
+#   ansible-playbook ... -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
 ---
 - name: Deploy SLM Manager
   hosts: 00-SLM-Manager
@@ -57,6 +62,12 @@
         monitoring_install_prometheus: true
         monitoring_install_grafana: true
         monitoring_install_node_exporter: true
+
+# Push code_source from controller to SLM before provisioning (#3604).
+# No-op when controller_repo_root is not set (e.g. triggered from SLM web UI).
+- name: Sync code_source from controller
+  import_playbook: sync-code-source.yml
+  tags: ['code-source', 'provision']
 
 # After all services are up, register fleet nodes in SLM database
 - name: Seed Fleet Nodes
