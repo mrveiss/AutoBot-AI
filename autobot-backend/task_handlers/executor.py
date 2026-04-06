@@ -13,6 +13,7 @@ Issue #322: Updated to use TaskExecutionContext for cleaner handler interface.
 import logging
 from typing import TYPE_CHECKING, Any, Dict
 
+from autobot_shared.models.task_result import task_error
 from models.task_context import TaskExecutionContext
 
 from .communication_handlers import (
@@ -131,10 +132,7 @@ class TaskExecutor:
             },
         )
 
-        return {
-            "status": "error",
-            "message": error_msg,
-        }
+        return task_error(error_msg)
 
     async def execute(
         self,
@@ -162,10 +160,7 @@ class TaskExecutor:
 
         if not handler:
             logger.warning("Unknown task type: %s", task_type)
-            return {
-                "status": "error",
-                "message": f"Unsupported task type: {task_type}",
-            }
+            return task_error(f"Unsupported task type: {task_type}")
 
         # Issue #322: Create context object to eliminate data clump pattern
         ctx = TaskExecutionContext(
@@ -182,7 +177,7 @@ class TaskExecutor:
         except KeyError as e:
             # Missing required parameter
             logger.error("Task %s failed - missing required parameter: %s", task_id, e)
-            return {"status": "error", "message": "Missing required parameter"}
+            return task_error("Missing required parameter")
         except Exception as e:
             return self._handle_execution_error(e, ctx, task_type)
 

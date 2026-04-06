@@ -10,6 +10,7 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 import logging
 from typing import Any, Dict
 
+from autobot_shared.models.task_result import task_pending_approval, task_success
 from event_manager import event_manager
 from models.task_context import TaskExecutionContext
 
@@ -27,11 +28,10 @@ class RespondConversationallyHandler(TaskHandler):
 
         await event_manager.publish("llm_response", {"response": response_text})
 
-        result = {
-            "status": "success",
-            "message": "Responded conversationally.",
-            "response_text": response_text,
-        }
+        result = task_success(
+            "Responded conversationally.",
+            data={"response_text": response_text},
+        )
 
         ctx.audit_log(
             "respond_conversationally",
@@ -59,10 +59,7 @@ class AskUserForManualHandler(TaskHandler):
             },
         )
 
-        result = {
-            "status": "success",
-            "message": f"Asked user for manual for {program_name}.",
-        }
+        result = task_success(f"Asked user for manual for {program_name}.")
 
         ctx.audit_log(
             "ask_user_for_manual",
@@ -85,10 +82,9 @@ class AskUserCommandApprovalHandler(TaskHandler):
             {"task_id": ctx.task_id, "command": command_to_approve},
         )
 
-        result = {
-            "status": "pending_approval",
-            "message": f"Requested user approval for command: {command_to_approve}",
-        }
+        result = task_pending_approval(
+            f"Requested user approval for command: {command_to_approve}"
+        )
 
         ctx.audit_log(
             "ask_user_command_approval",

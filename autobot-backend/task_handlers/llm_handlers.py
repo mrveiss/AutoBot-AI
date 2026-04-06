@@ -10,6 +10,7 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 import logging
 from typing import Any, Dict
 
+from autobot_shared.models.task_result import task_error, task_success
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
@@ -31,21 +32,17 @@ class LLMChatCompletionHandler(TaskHandler):
         )
 
         if response:
-            result = {
-                "status": "success",
-                "message": "LLM completion successful.",
-                "response": response,
-            }
+            result = task_success(
+                "LLM completion successful.",
+                data={"response": response},
+            )
             ctx.audit_log(
                 "llm_chat_completion",
                 "success",
                 {"model": model_name},
             )
         else:
-            result = {
-                "status": "error",
-                "message": "LLM completion failed.",
-            }
+            result = task_error("LLM completion failed.")
             ctx.audit_log(
                 "llm_chat_completion",
                 "failure",
