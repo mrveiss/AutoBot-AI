@@ -1,6 +1,17 @@
 # AutoBot LLM Model Configuration
 # Models are auto-discovered from Ollama; this file provides overrides.
 #
+# Schema:
+#   display_name   — canonical identifier used internally
+#   api_name       — provider-specific identifiers (provider: api_model_id)
+#   aliases        — alternative names resolved to this entry
+#   api_kwargs:
+#     default      — applied to every provider unless overridden
+#     <provider>   — merged on top of default for that provider only
+#
+# Priority chain:
+#   YAML default → YAML provider-specific → caller-supplied metadata.api_kwargs
+#
 # Anthropic extended thinking (#3258):
 #   Models listed under anthropic_thinking_enabled support the `thinking`
 #   parameter (chain-of-thought reasoning budget) introduced in claude-3-7-sonnet
@@ -25,3 +36,417 @@ anthropic_thinking_enabled:
 # Default thinking budget (tokens) used when thinking is enabled but no
 # budget_tokens is supplied.  Caller-supplied values always take precedence.
 anthropic_default_thinking_budget: 16000
+
+# =============================================================================
+# Per-model parameter registry (#3257)
+# =============================================================================
+models:
+  - display_name: claude-sonnet-4-6
+    api_name:
+      anthropic: claude-sonnet-4-6
+    aliases:
+      - claude-sonnet-4-latest
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: claude-opus-4-6
+    api_name:
+      anthropic: claude-opus-4-6
+    aliases:
+      - claude-opus-4-latest
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: claude-sonnet-4-20250514
+    api_name:
+      anthropic: claude-sonnet-4-20250514
+    aliases:
+      - claude-sonnet-4
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: claude-opus-4-20250514
+    api_name:
+      anthropic: claude-opus-4-20250514
+    aliases:
+      - claude-opus-4
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: claude-3-5-sonnet-20241022
+    api_name:
+      anthropic: claude-3-5-sonnet-20241022
+    aliases:
+      - claude-3-5-sonnet
+      - claude-sonnet
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: claude-3-5-haiku-20241022
+    api_name:
+      anthropic: claude-3-5-haiku-20241022
+    aliases:
+      - claude-3-5-haiku
+      - claude-haiku
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: claude-haiku-4-5-20251001
+    api_name:
+      anthropic: claude-haiku-4-5-20251001
+    aliases:
+      - claude-haiku-4-5
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: claude-3-opus-20240229
+    api_name:
+      anthropic: claude-3-opus-20240229
+    aliases:
+      - claude-3-opus
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-4o
+    api_name:
+      openai: gpt-4o
+    aliases:
+      - gpt4o
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-4o-mini
+    api_name:
+      openai: gpt-4o-mini
+    aliases:
+      - gpt4o-mini
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-4.1
+    api_name:
+      openai: gpt-4.1
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: gpt-4.1-mini
+    api_name:
+      openai: gpt-4.1-mini
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-4.1-nano
+    api_name:
+      openai: gpt-4.1-nano
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 2048
+
+  - display_name: gpt-4-turbo
+    api_name:
+      openai: gpt-4-turbo
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-4
+    api_name:
+      openai: gpt-4
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: gpt-3.5-turbo
+    api_name:
+      openai: gpt-3.5-turbo
+    aliases:
+      - gpt35-turbo
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 4096
+
+  - display_name: o1
+    api_name:
+      openai: o1
+    aliases: []
+    api_kwargs:
+      default:
+        max_tokens: 32768
+
+  - display_name: o1-mini
+    api_name:
+      openai: o1-mini
+    aliases: []
+    api_kwargs:
+      default:
+        max_tokens: 16384
+
+  - display_name: o3
+    api_name:
+      openai: o3
+    aliases: []
+    api_kwargs:
+      default:
+        max_tokens: 32768
+
+  - display_name: o3-mini
+    api_name:
+      openai: o3-mini
+    aliases: []
+    api_kwargs:
+      default:
+        max_tokens: 16384
+
+  - display_name: o4-mini
+    api_name:
+      openai: o4-mini
+    aliases: []
+    api_kwargs:
+      default:
+        max_tokens: 16384
+
+  - display_name: gemini-2.5-pro
+    api_name:
+      google: gemini-2.5-pro
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: gemini-2.5-flash
+    api_name:
+      google: gemini-2.5-flash
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: gemini-2.0-flash
+    api_name:
+      google: gemini-2.0-flash
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: gemini-1.5-pro
+    api_name:
+      google: gemini-1.5-pro
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: gemini-1.5-flash
+    api_name:
+      google: gemini-1.5-flash
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 1
+        max_tokens: 8192
+
+  - display_name: deepseek-v3
+    api_name:
+      openai: deepseek-v3
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: deepseek-r1-api
+    api_name:
+      openai: deepseek-r1-api
+    aliases: []
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 8192
+
+  - display_name: llama3.3
+    api_name:
+      ollama: llama3.3
+    aliases:
+      - llama3.3:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: llama3.2
+    api_name:
+      ollama: llama3.2
+    aliases:
+      - llama3.2:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: llama3.1
+    api_name:
+      ollama: llama3.1
+    aliases:
+      - llama3.1:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: llama3
+    api_name:
+      ollama: llama3
+    aliases:
+      - llama3:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: mistral
+    api_name:
+      ollama: mistral
+    aliases:
+      - mistral:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: mixtral
+    api_name:
+      ollama: mixtral
+    aliases:
+      - mixtral:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: codellama
+    api_name:
+      ollama: codellama
+    aliases:
+      - codellama:latest
+    api_kwargs:
+      default:
+        temperature: 0.2
+        max_tokens: 4096
+
+  - display_name: qwen2.5
+    api_name:
+      ollama: qwen2.5
+    aliases:
+      - qwen2.5:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: qwen3
+    api_name:
+      ollama: qwen3
+    aliases:
+      - qwen3:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: deepseek-coder
+    api_name:
+      ollama: deepseek-coder
+    aliases:
+      - deepseek-coder:latest
+    api_kwargs:
+      default:
+        temperature: 0.2
+        max_tokens: 4096
+
+  - display_name: deepseek-r1
+    api_name:
+      ollama: deepseek-r1
+    aliases:
+      - deepseek-r1:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 8192
+
+  - display_name: phi3
+    api_name:
+      ollama: phi3
+    aliases:
+      - phi3:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 2048
+
+  - display_name: phi4
+    api_name:
+      ollama: phi4
+    aliases:
+      - phi4:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: gemma2
+    api_name:
+      ollama: gemma2
+    aliases:
+      - gemma2:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096
+
+  - display_name: gemma3
+    api_name:
+      ollama: gemma3
+    aliases:
+      - gemma3:latest
+    api_kwargs:
+      default:
+        temperature: 0.7
+        max_tokens: 4096

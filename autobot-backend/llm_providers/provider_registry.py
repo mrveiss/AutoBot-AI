@@ -30,9 +30,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+from llm_interface_pkg.models import LLMRequest
 
 from .base_provider import BaseProvider
+from .model_param_registry import apply_model_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +151,32 @@ class ProviderRegistry:
         return dict(zip(self._providers.keys(), results))
 
     # ------------------------------------------------------------------
+    # Model parameter injection (#3257)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def enrich_request(request: LLMRequest, provider_name: str) -> LLMRequest:
+        """
+        Merge per-model api_kwargs from the YAML registry into *request*.
+
+        YAML defaults are applied first; caller-supplied
+        ``request.metadata["api_kwargs"]`` always wins.  The request object is
+        mutated in-place and also returned for convenience.
+
+        Args:
+            request:       The LLMRequest to enrich.
+            provider_name: The provider that will handle the request.
+
+        Returns:
+            The same (mutated) request.
+        """
+        model = request.model_name or ""
+        caller_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
+        merged = apply_model_defaults(model, provider_name, caller_kwargs)
+        request.metadata["api_kwargs"] = merged
+        return request
+
+    # ------------------------------------------------------------------
     # Provider selection
     # ------------------------------------------------------------------
 
@@ -166,6 +195,7 @@ class ProviderRegistry:
         self,
         provider_name: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        request: Optional[LLMRequest] = None,
     ) -> Optional[BaseProvider]:
         """
         Return the best provider for a request, applying:
@@ -174,6 +204,10 @@ class ProviderRegistry:
         2. Per-conversation override from ``conversation_id``
         3. Fallback chain order
         4. Any remaining registered provider
+
+        When *request* is supplied, per-model api_kwargs from the YAML registry
+        are merged into ``request.metadata["api_kwargs"]`` before returning
+        (caller-supplied values always win).  See ``enrich_request()``.
 
         Returns None only if every registered provider is unreachable.
         """
@@ -195,6 +229,8 @@ class ProviderRegistry:
         for name in candidates:
             provider = await self.get_provider(name)
             if provider is not None:
+                if request is not None:
+                    self.enrich_request(request, name)
                 return provider
 
         logger.error("All providers unavailable or not configured")
