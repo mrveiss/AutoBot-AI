@@ -156,7 +156,7 @@ class AutoBotSemanticChunker:
                 all_embeddings.append(embeddings)
 
             # Yield control to event loop after each batch
-            await asyncio.sleep(0.001)  # Allow other coroutines to run
+            await asyncio.sleep(TimingConstants.YIELD_INTERVAL)  # Allow other coroutines to run
 
             # Log progress for large batches
             if len(sentences) > 20:

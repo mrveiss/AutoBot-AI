@@ -437,7 +437,7 @@ async def migrate_existing_operation(
         async def migrated_operation(context):
             """Placeholder for migrated operation"""
             await context.update_progress("Migration placeholder", 0, 1)
-            await asyncio.sleep(1)  # Simulate work
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Simulate work
             await context.update_progress("Completed", 1, 1)
             return {"status": "migrated", "original_timeout": timeout_seconds}
 

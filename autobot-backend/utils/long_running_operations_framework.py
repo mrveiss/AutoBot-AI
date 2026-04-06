@@ -38,6 +38,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from constants.threshold_constants import TimingConstants
+
 # Re-export all public API from the package
 from utils.long_running_operations import (  # Types and dataclasses; Managers
     LongRunningOperation,
@@ -231,7 +233,7 @@ async def _execute_single_test(
         f"Test {index + 1} of {total_tests}: {test_file.name}",
     )
 
-    await asyncio.sleep(0.5)  # Simulate test execution
+    await asyncio.sleep(TimingConstants.SHORT_DELAY)  # Simulate test execution
     test_passed = random.random() > 0.1  # 90% pass rate
 
     test_result = _create_test_result(test_file, test_passed, 0.5)
@@ -312,7 +314,7 @@ async def _process_indexing_file_with_progress(
 
     Issue #620.
     """
-    await asyncio.sleep(0.1)  # Simulate processing
+    await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate processing
     file_info = await _process_index_file(file_path)
 
     # Update progress
@@ -510,7 +512,7 @@ if __name__ == "__main__":
                     ):
                         break
 
-                await asyncio.sleep(5)
+                await asyncio.sleep(TimingConstants.MEDIUM_DELAY)
 
             print("All operations completed!")  # noqa: print
 

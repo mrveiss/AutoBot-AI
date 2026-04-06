@@ -698,7 +698,7 @@ class WorkflowExecutor:
         # Simulate execution for now.
         logger.info("Executing workflow step (session=%s)", session_id)
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         return {
             "command": "[redacted]",

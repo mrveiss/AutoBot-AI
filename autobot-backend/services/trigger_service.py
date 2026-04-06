@@ -40,6 +40,7 @@ from enum import Enum
 from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
@@ -629,7 +630,7 @@ class TriggerService:
                 return
             except Exception:
                 logger.exception("Cron loop error for trigger %s (continuing)", tdef.id)
-                await asyncio.sleep(60)
+                await asyncio.sleep(TimingConstants.SESSION_CLEANUP_INTERVAL)
 
     async def _pubsub_loop(self, tdef: TriggerDefinition) -> None:
         """Subscribe to a Redis channel and fire on matching messages."""
@@ -683,7 +684,7 @@ class TriggerService:
                 logger.exception(
                     "PubSub loop error for trigger %s (will reconnect in 30s)", tdef.id
                 )
-                await asyncio.sleep(30)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     async def _file_watch_loop(self, tdef: TriggerDefinition) -> None:
         """Poll a Redis key for file-change notifications."""
@@ -804,7 +805,7 @@ class TriggerService:
                     "AgentEvent loop error for trigger %s (will reconnect in 30s)",
                     tdef.id,
                 )
-                await asyncio.sleep(30)
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     # ------------------------------------------------------------------
     # Internal — launch & persistence

@@ -28,6 +28,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -546,7 +548,7 @@ class TodoWriteOptimizer:
             logger.info("Executing optimized TodoWrite with %s todos", len(todos))
 
             # Simulate API call delay
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             return True
 

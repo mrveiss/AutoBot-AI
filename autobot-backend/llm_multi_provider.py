@@ -46,6 +46,7 @@ from constants.model_constants import (
     OPENAI_GPT4,
     OPENAI_GPT4_TURBO,
 )
+from constants.threshold_constants import TimingConstants
 
 load_dotenv()
 
@@ -410,7 +411,7 @@ class MockProvider(LLMProvider):
 
         try:
             # Simulate processing time
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             # Generate mock response based on request type
             if request.llm_type == LLMType.EXTRACTION:

@@ -532,7 +532,7 @@ async def vnc_mouse_drag(
     for x, y in path_points[1:]:  # Skip first point (already there)
         _run_xdotool_cmd(["mousemove", str(x), str(y)])
         # Small delay between movements for smooth curve
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(TimingConstants.POLL_INTERVAL)
 
     # Release mouse button at end position
     return _run_xdotool_cmd(["mouseup", "1"])

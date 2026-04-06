@@ -112,10 +112,15 @@ class KnowledgeSyncConfig:
 class TimingConstants:
     """Common timing values used throughout the codebase."""
 
+    # Sub-millisecond yields (asyncio.sleep)
+    YIELD_INTERVAL = 0.001  # Brief yield to event loop between batches
+
     # Short delays (sub-second)
     POLL_INTERVAL = 0.01  # Short polling loop delay to prevent CPU spinning
+    FAST_POLL_INTERVAL = 0.02  # Fast polling / short scan simulation delay
     STREAMING_CHUNK_DELAY = 0.05  # Delay between streaming chunks for UX
     MICRO_DELAY = 0.1
+    DEBOUNCE_INTERVAL_S = 0.2  # Debounce / short API simulation delay
     SHORT_DELAY = 0.5
     STANDARD_DELAY = 1.0
 
@@ -130,6 +135,7 @@ class TimingConstants:
     VERY_LONG_TIMEOUT = 300
 
     # Long interval values
+    SESSION_CLEANUP_INTERVAL = 60  # Background session cleanup polling interval (1 min)
     HOURLY_INTERVAL = 3600  # 1 hour in seconds
 
     # Error recovery
