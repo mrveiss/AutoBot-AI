@@ -53,6 +53,13 @@
       when: not code_source_stat.stat.exists
       tags: [always]
 
+    - name: "[PRE-FLIGHT] Get code_source commit before sync"
+      ansible.builtin.command:
+        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
+      register: pre_sync_commit
+      changed_when: false
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
       ansible.builtin.git:
         repo: "{{ github_repo }}"
@@ -71,16 +78,59 @@
       when: github_sync is failed
       tags: [always]
 
+    - name: "[PRE-FLIGHT] Show code_source age when sync skipped"
+      ansible.builtin.command:
+        cmd: "git -C {{ git_repo_root }} log -1 --format='Last commit: %h %s (%cr)'"
+      register: code_source_age
+      changed_when: false
+      when: github_sync is failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display code_source age (offline mode)"
+      ansible.builtin.debug:
+        msg: "Offline deployment — {{ code_source_age.stdout }}"
+      when: github_sync is failed
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Get current deploy commit"
-      ansible.builtin.command: >-
-        git -C {{ git_repo_root }} log -1 --format='%h %s'
+      ansible.builtin.command:
+        cmd: git -C {{ git_repo_root }} log -1 --format='%h %s'
       register: deploy_info
       changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Count commits advanced during sync"
+      ansible.builtin.command:
+        cmd: git -C {{ git_repo_root }} rev-list --count {{ pre_sync_commit.stdout.split()[0] }}..HEAD
+      register: sync_commit_count
+      changed_when: false
+      when: github_sync is not failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display sync delta"
+      ansible.builtin.debug:
+        msg:
+          - "=== Pre-flight Code Sync Summary ==="
+          - "Was at: {{ pre_sync_commit.stdout }}"
+          - "Now at: {{ deploy_info.stdout }}"
+          - "Commits advanced: {{ sync_commit_count.stdout | default('0') }}"
+      when: github_sync is not failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] WARN: code_source was significantly behind"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: code_source advanced {{ sync_commit_count.stdout }} commits during sync.
+          Role behavior may have changed significantly. Review recent changes before proceeding.
+      when:
+        - github_sync is not failed
+        - sync_commit_count.stdout | int > 50
       tags: [always]
 
     - name: "[PRE-FLIGHT] Display deployed commit"
       ansible.builtin.debug:
         msg: "Deploying from commit: {{ deploy_info.stdout }}"
+      when: github_sync is not failed
       tags: [always]
 
 # -------------------------------------------------------------------
