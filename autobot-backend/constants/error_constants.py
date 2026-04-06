@@ -3,9 +3,6 @@
 # Author: mrveiss
 """Shared error message string constants for HTTP responses and logging."""
 
-# Generic resource errors (use as: ERR_NOT_FOUND.format(resource='Workflow')}")
-ERR_NOT_FOUND = "{resource} not found"
-
 # Specific resource errors (pre-formatted for common cases)
 ERR_ASSESSMENT_NOT_FOUND = "Assessment not found"
 ERR_SESSION_NOT_FOUND = "Session not found"
@@ -21,6 +18,3 @@ ERR_WORKFLOW_NOT_FOUND = "Workflow not found"
 # Auth errors
 ERR_INVALID_CREDENTIALS = "Invalid username or password"
 ERR_INVALID_TOKEN = "Invalid token"
-
-# Operation errors — use as f-string prefix at call site
-ERR_FAILED_TO = "Failed to {operation}"
