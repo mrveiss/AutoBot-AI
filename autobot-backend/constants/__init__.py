@@ -17,12 +17,10 @@ from .error_constants import (  # Issue #3530: Centralized error message strings
     ERR_INVALID_CREDENTIALS,
     ERR_INVALID_TOKEN,
     ERR_JOB_NOT_FOUND,
-    ERR_NOT_FOUND,
     ERR_PATH_NOT_FOUND,
     ERR_SESSION_NOT_FOUND,
     ERR_TEMPLATE_NOT_FOUND,
     ERR_WORKFLOW_NOT_FOUND,
-    ERR_FAILED_TO,
 )
 from .network_constants import (  # Legacy compatibility exports
     BACKEND_URL,
@@ -140,7 +138,6 @@ __all__ = [
     "CategoryDefaults",
     "ProtocolDefaults",
     # Issue #3530: Error message string constants
-    "ERR_NOT_FOUND",
     "ERR_ASSESSMENT_NOT_FOUND",
     "ERR_SESSION_NOT_FOUND",
     "ERR_FILE_NOT_FOUND",
@@ -153,7 +150,6 @@ __all__ = [
     "ERR_WORKFLOW_NOT_FOUND",
     "ERR_INVALID_CREDENTIALS",
     "ERR_INVALID_TOKEN",
-    "ERR_FAILED_TO",
     # Issue #3531: API path constants
     "PATH_API_HEALTH",
     "PATH_HEALTH",

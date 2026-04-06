@@ -17656,7 +17656,7 @@ class TestBatch99SchedulerFINAL(unittest.TestCase):
         self.assertIn("Invalid JSON in variables parameter", source)
         # Should preserve 404 HTTPException for template not found
         self.assertIn("status_code=404", source)
-        self.assertIn("Template not found", source)
+        self.assertIn("ERR_TEMPLATE_NOT_FOUND", source)
         # Should have 1 inner try-catch for JSON parsing
         try_count = source.count("try:")
         self.assertEqual(try_count, 1, "Should have 1 inner try-catch for JSON parsing")

@@ -17,6 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.ttl_constants import TTL_24_HOURS
 
 from .config import AutoResearchConfig
@@ -339,7 +340,7 @@ async def get_variants(
     key = f"autoresearch:prompt_opt:session:{session_id}"
     raw = await redis.get(key)
     if raw is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
     data = _json.loads(raw)
     return {"variants": data.get("all_variants", [])}
 
