@@ -371,6 +371,8 @@ class AuthenticationMiddleware:
         last_activity = session.get("last_activity")
         if isinstance(last_activity, str):
             last_activity = datetime.datetime.fromisoformat(last_activity)
+            if last_activity.tzinfo is None:
+                last_activity = last_activity.replace(tzinfo=datetime.timezone.utc)
 
         if datetime.datetime.now(tz=timezone.utc) - last_activity > datetime.timedelta(
             minutes=self.session_timeout_minutes

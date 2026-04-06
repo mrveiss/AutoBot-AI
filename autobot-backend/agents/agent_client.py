@@ -119,7 +119,8 @@ class AgentRegistry:
         if not agent:
             return
 
-        last_check = self.last_health_check.get(agent_type, datetime.min)
+        aware_min = datetime.min.replace(tzinfo=timezone.utc)
+        last_check = self.last_health_check.get(agent_type, aware_min)
         if not force and datetime.now(tz=timezone.utc) - last_check < timedelta(minutes=1):
             return  # Skip if checked recently
 
