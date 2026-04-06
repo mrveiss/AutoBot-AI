@@ -362,6 +362,8 @@
         dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
         mode: "0644"
         backup: true
+      vars:
+        slm_colocated_frontend: true
       when: _is_slm_frontend_colocated | default(false) | bool
       register: _slm_nginx_rerendered
       tags: ['frontend', 'slm-nginx', 'provision']
