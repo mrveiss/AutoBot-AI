@@ -24,7 +24,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.redis_client import get_redis_client
@@ -50,36 +50,36 @@ _ENTITY_KEY_PREFIX = "memory:entity:"
 
 # Intent pattern tables
 _TIME_PATTERNS: List[Tuple[str, Any]] = [
-    (r"\btoday\b", lambda: {"start": datetime.now().date()}),
+    (r"\btoday\b", lambda: {"start": datetime.now(tz=timezone.utc).date()}),
     (
         r"\byesterday\b",
-        lambda: {"start": (datetime.now() - timedelta(days=1)).date()},
+        lambda: {"start": (datetime.now(tz=timezone.utc) - timedelta(days=1)).date()},
     ),
     (
         r"\bthis week\b",
         lambda: {
-            "start": (datetime.now() - timedelta(days=datetime.now().weekday())).date()
+            "start": (datetime.now(tz=timezone.utc) - timedelta(days=datetime.now(tz=timezone.utc).weekday())).date()
         },
     ),
     (
         r"\blast (\d+) days?\b",
         lambda m: {
-            "start": (datetime.now() - timedelta(days=int(m.group(1)))).date()
+            "start": (datetime.now(tz=timezone.utc) - timedelta(days=int(m.group(1)))).date()
         },
     ),
     (
         r"\bthis month\b",
-        lambda: {"start": datetime.now().replace(day=1).date()},
+        lambda: {"start": datetime.now(tz=timezone.utc).replace(day=1).date()},
     ),
 ]
 
 _ENTITY_TYPE_PATTERNS: List[Tuple[str, List[str]]] = [
-    (r"\bbugs?\b", ["BUG"]),
-    (r"\bfix(es)?\b", ["BUG"]),
-    (r"\bfeatures?\b", ["FEATURE"]),
-    (r"\bdecisions?\b", ["DECISION"]),
-    (r"\btasks?\b", ["TASK"]),
-    (r"\bconversations?\b", ["CONVERSATION"]),
+    (r"\bbugs?\b", ["bug_fix"]),
+    (r"\bfix(es)?\b", ["bug_fix"]),
+    (r"\bfeatures?\b", ["feature"]),
+    (r"\bdecisions?\b", ["decision"]),
+    (r"\btasks?\b", ["task"]),
+    (r"\bconversations?\b", ["conversation"]),
 ]
 
 _STATUS_PATTERNS: List[Tuple[str, str]] = [
@@ -344,12 +344,18 @@ class MemoryGraphQueryProcessor:
             List of related entity dicts.
         """
         redis = await self._get_redis()
-        rel_key = f"autobot:relations:out:{entity_name}"
+        # Relations are keyed by UUID; resolve name → UUID via FT.SEARCH first
+        # Key prefix matches schema.py RELATIONS_OUT_PREFIX = "memory:relations:out:"
+        source = await self.get_entity_by_name(entity_name)
+        if not source:
+            return []
+        rel_key = f"memory:relations:out:{source['id']}"
         try:
-            raw_json = await redis.get(rel_key)
+            raw_json = await redis.json().get(rel_key)
             if not raw_json:
                 return []
-            relations: List[Dict[str, Any]] = json.loads(raw_json)
+            doc = raw_json if isinstance(raw_json, dict) else {}
+            relations: List[Dict[str, Any]] = doc.get("relations", [])
         except Exception as exc:
             logger.warning(
                 "Failed to read relations for %s: %s", entity_name, exc
@@ -634,11 +640,11 @@ async def _generate_embedding(text: str) -> Optional[List[float]]:
     imported in test environments where the service is mocked.
     """
     try:
+        from autobot_shared.ssot_config import config
         from services.npu_client import generate_embedding_with_fallback
 
-        return await generate_embedding_with_fallback(
-            text, model_name="nomic-embed-text"
-        )
+        model_name = config.get("knowledge.embedding_model", "nomic-embed-text")
+        return await generate_embedding_with_fallback(text, model_name=model_name)
     except Exception as exc:
         logger.warning("Embedding generation failed: %s", exc)
         return None

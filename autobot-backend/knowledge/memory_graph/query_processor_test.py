@@ -258,15 +258,15 @@ class TestIntentExtraction:
 
     def test_bug_keyword_maps_entity_type(self):
         intent = self._extract("show me bug reports")
-        assert "BUG" in intent.entity_types
+        assert "bug_fix" in intent.entity_types
 
     def test_fix_keyword_maps_entity_type(self):
         intent = self._extract("what fixes were deployed?")
-        assert "BUG" in intent.entity_types
+        assert "bug_fix" in intent.entity_types
 
     def test_feature_keyword_maps_entity_type(self):
         intent = self._extract("new features this week")
-        assert "FEATURE" in intent.entity_types
+        assert "feature" in intent.entity_types
 
     def test_completed_keyword_maps_status(self):
         intent = self._extract("tasks we completed")
@@ -620,8 +620,10 @@ class TestEntityRetrieval:
 
     @pytest.mark.asyncio
     async def test_get_related_entities_empty_when_no_key(self):
+        """Returns [] when source entity not found by name."""
         redis_mock = AsyncMock()
-        redis_mock.get = AsyncMock(return_value=None)
+        # get_entity_by_name uses FT.SEARCH — return empty response
+        redis_mock.execute_command = AsyncMock(return_value=[0])
 
         processor = MemoryGraphQueryProcessor(redis_client=redis_mock)
         results = await processor.get_related_entities("NonExistent")
@@ -629,17 +631,22 @@ class TestEntityRetrieval:
 
     @pytest.mark.asyncio
     async def test_get_related_entities_follows_relations(self):
+        source_entity = _make_entity(name="Source Entity")
         related_entity = _make_entity(name="Related Entity")
-        relations = [{"to": "Related Entity", "type": "relates_to"}]
+        relations_doc = {"entity_id": source_entity["id"], "relations": [
+            {"to": "Related Entity", "type": "relates_to"}
+        ]}
 
+        json_mock = AsyncMock()
+        json_mock.get = AsyncMock(return_value=relations_doc)
         redis_mock = AsyncMock()
-        redis_mock.get = AsyncMock(
-            return_value=json.dumps(relations).encode("utf-8")
-        )
-        # get_entity_by_name -> execute_command for FT.SEARCH
-        redis_mock.execute_command = AsyncMock(
-            return_value=_build_raw_ft_response([related_entity])
-        )
+        redis_mock.json = MagicMock(return_value=json_mock)
+
+        # First FT.SEARCH call → source entity; second → related entity
+        redis_mock.execute_command = AsyncMock(side_effect=[
+            _build_raw_ft_response([source_entity]),
+            _build_raw_ft_response([related_entity]),
+        ])
 
         processor = MemoryGraphQueryProcessor(redis_client=redis_mock)
         results = await processor.get_related_entities("Source Entity")

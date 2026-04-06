@@ -75,6 +75,21 @@ class HybridScorer:
     entity embeddings from Redis asynchronously.
     """
 
+    def __init__(self, redis_client=None) -> None:
+        """
+        Args:
+            redis_client: Optional async Redis client for embedding lookups.
+                          When None a client is acquired lazily on first use.
+        """
+        self._redis = redis_client
+
+    async def _get_redis(self):
+        """Lazily obtain the async Redis client (cached on self._redis)."""
+        if self._redis is None:
+            from autobot_shared.redis_client import get_redis_client
+            self._redis = await get_redis_client(async_client=True, database="knowledge")
+        return self._redis
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -102,13 +117,14 @@ class HybridScorer:
         """
         keywords = getattr(intent, "keywords", [])
         results: List[SearchResult] = []
+        redis = await self._get_redis()
 
         for entity in candidates:
             entity_text = _entity_to_text(entity)
             entity_id = entity.get("id", "")
 
             # Semantic score
-            entity_embedding = await _fetch_entity_embedding(entity_id)
+            entity_embedding = await _fetch_entity_embedding(entity_id, redis)
             sem_score = (
                 cosine_similarity(query_embedding, entity_embedding)
                 if query_embedding and entity_embedding
@@ -293,23 +309,24 @@ def _build_explanation(
 
 async def _fetch_entity_embedding(
     entity_id: str,
+    redis_client: Any,
 ) -> Optional[List[float]]:
     """
     Retrieve a pre-computed entity embedding from Redis.
 
-    Returns None if the embedding has not yet been indexed (e.g., the
-    entity was created before the indexer ran) so that the caller can
-    degrade gracefully to keyword-only scoring.
+    Returns None if the embedding has not yet been indexed so that the
+    caller can degrade gracefully to keyword-only scoring.
+
+    Args:
+        entity_id:    Entity UUID (without key prefix).
+        redis_client: Async Redis client — caller supplies to avoid N connections.
     """
     if not entity_id:
         return None
 
     try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = await get_redis_client(async_client=True, database="knowledge")
         key = f"{_ENTITY_EMBED_KEY_PREFIX}{entity_id}"
-        raw = await redis.get(key)
+        raw = await redis_client.get(key)
         if raw:
             return json.loads(raw)
     except Exception as exc:
