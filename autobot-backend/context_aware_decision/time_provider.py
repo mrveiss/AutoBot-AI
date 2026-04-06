@@ -11,7 +11,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 
@@ -31,23 +31,23 @@ class TimeProvider:
     @staticmethod
     def current_datetime() -> datetime:
         """Get current datetime object."""
-        return datetime.now()
+        return datetime.now(tz=timezone.utc)
 
     @staticmethod
     def is_business_hours() -> bool:
         """Check if current time is within business hours (9 AM - 5 PM)."""
-        current_hour = datetime.now().hour
+        current_hour = datetime.now(tz=timezone.utc).hour
         return 9 <= current_hour <= 17
 
     @staticmethod
     def is_weekend() -> bool:
         """Check if current day is weekend."""
-        return datetime.now().weekday() >= 5
+        return datetime.now(tz=timezone.utc).weekday() >= 5
 
     @staticmethod
     def get_temporal_context_data() -> Dict[str, Any]:
         """Get comprehensive temporal context data."""
-        current_time = datetime.now()
+        current_time = datetime.now(tz=timezone.utc)
         return {
             "timestamp": time.time(),
             "datetime": current_time.isoformat(),

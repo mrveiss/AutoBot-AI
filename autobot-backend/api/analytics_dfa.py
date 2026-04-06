@@ -19,7 +19,7 @@ Features:
 import ast
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -1112,7 +1112,7 @@ def _build_analysis_response(
 
     return AnalysisResponse(
         file_path=file_path,
-        analyzed_at=datetime.now().isoformat(),
+        analyzed_at=datetime.now(tz=timezone.utc).isoformat(),
         graphs=graph_responses,
         total_definitions=total_defs,
         total_uses=total_uses,

@@ -13,7 +13,7 @@ Provides endpoints for managing the data folder:
 
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -460,7 +460,7 @@ async def cleanup_category(
 
         cutoff_time = None
         if request.older_than_days > 0:
-            cutoff_time = datetime.now().timestamp() - (
+            cutoff_time = datetime.now(tz=timezone.utc).timestamp() - (
                 request.older_than_days * 24 * 60 * 60
             )
 

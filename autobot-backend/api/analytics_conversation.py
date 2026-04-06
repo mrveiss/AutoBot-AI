@@ -10,7 +10,7 @@ import asyncio
 import logging
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -748,7 +748,7 @@ async def load_chat_sessions(hours: int = 24) -> List[Dict[str, Any]]:
     import json
 
     sessions = []
-    cutoff = datetime.now() - timedelta(hours=hours)
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
     # Try to load from chat history files
     chat_dir = (

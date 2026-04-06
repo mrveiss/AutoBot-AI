@@ -17,7 +17,7 @@ Endpoints:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -255,7 +255,7 @@ async def get_session_audit_trail(
         audit_logger = await get_audit_logger()
 
         # Query last 30 days for session activity
-        end_time = datetime.now()
+        end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         entries = await audit_logger.query(
@@ -299,7 +299,7 @@ async def get_user_audit_trail(
     try:
         audit_logger = await get_audit_logger()
 
-        end_time = datetime.now()
+        end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=days)
 
         entries = await audit_logger.query(
@@ -348,7 +348,7 @@ async def get_failed_operations(
     try:
         audit_logger = await get_audit_logger()
 
-        end_time = datetime.now()
+        end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(hours=hours)
 
         entries = await audit_logger.query(

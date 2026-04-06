@@ -19,7 +19,7 @@ import logging
 import re
 import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 import psutil
@@ -187,7 +187,7 @@ class AnalyticsController:
         self, endpoint: str, response_time: float, status_code: int
     ):
         """Track API call for pattern analysis"""
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(tz=timezone.utc).isoformat()
 
         # Normalize dynamic path segments (UUIDs, numeric IDs, etc.) so that
         # per-resource URLs collapse into a single route-pattern key instead of
@@ -264,7 +264,7 @@ class AnalyticsController:
                     frequency=frequency,
                     avg_response_time=avg_response_time,
                     error_rate=error_rate,
-                    last_accessed=datetime.now().isoformat(),
+                    last_accessed=datetime.now(tz=timezone.utc).isoformat(),
                     pattern_type="API",
                 )
             )
@@ -286,7 +286,7 @@ class AnalyticsController:
         """Perform code analysis using integrated tools"""
         analysis_results = {
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "analysis_type": request.analysis_type,
             "target_path": request.target_path,
         }
@@ -315,7 +315,7 @@ class AnalyticsController:
             # Store results in cache (thread-safe)
             async with _analytics_state_lock:
                 analytics_state["code_analysis_cache"] = analysis_results
-                analytics_state["last_analysis_time"] = datetime.now().isoformat()
+                analytics_state["last_analysis_time"] = datetime.now(tz=timezone.utc).isoformat()
 
         except Exception as e:
             logger.error("Code analysis failed: %s", e)

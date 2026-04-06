@@ -23,7 +23,7 @@ import threading
 import uuid
 from collections import defaultdict
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from time import time
 from typing import Dict, List, Optional
@@ -477,7 +477,7 @@ class SecretsManager:
         if request.metadata is not None:
             secret_data["metadata"] = request.metadata
 
-        secret_data["updated_at"] = datetime.now().isoformat()
+        secret_data["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
@@ -548,13 +548,13 @@ class SecretsManager:
             else:
                 secret_data["chat_id"] = None
 
-            secret_data["updated_at"] = datetime.now().isoformat()
+            secret_data["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
             secret_data["metadata"]["transfer_history"] = secret_data["metadata"].get(
                 "transfer_history", []
             )
             secret_data["metadata"]["transfer_history"].append(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "from_scope": secret_data.get("original_scope", "unknown"),
                     "to_scope": request.target_scope,
                     "from_chat_id": chat_id,
@@ -795,7 +795,7 @@ async def get_secrets_status(
             "total_secrets": len(secrets),
             "storage_backend": "file",
             "encryption_enabled": True,  # Fernet symmetric encryption is used
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Failed to get secrets status: %s", e)
@@ -803,7 +803,7 @@ async def get_secrets_status(
             "status": "error",
             "service": "secrets_manager",
             "error": "Internal server error",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
 
@@ -829,7 +829,7 @@ async def get_secrets_stats(
             "expired_count": 0,
         }
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         for secret_data in secrets.values():
             # Count by scope

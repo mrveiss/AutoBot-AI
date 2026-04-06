@@ -23,7 +23,7 @@ Enables agents to:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -110,7 +110,7 @@ class ProcessThoughtRequest(BaseModel):
             "tags": self.tags or [],
             "axioms_used": self.axioms_used or [],
             "assumptions_challenged": self.assumptions_challenged or [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def get_progress_percentage(self) -> float:

@@ -8,7 +8,7 @@ Codebase indexing endpoints
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -72,7 +72,7 @@ async def _check_existing_task_and_queue(
     entry = {
         "source_id": source_id,
         "root_path": root_path_for_queue,
-        "queued_at": datetime.now().isoformat(),
+        "queued_at": datetime.now(tz=timezone.utc).isoformat(),
         "requested_by": "api",
     }
     _index_queue.append(entry)
@@ -387,7 +387,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
         if task_id in indexing_tasks:
             indexing_tasks[task_id]["status"] = "cancelled"
             indexing_tasks[task_id]["error"] = "Cancelled by user"
-            indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+            indexing_tasks[task_id]["failed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         _current_indexing_task_id = None
         _active_tasks.pop(task_id, None)

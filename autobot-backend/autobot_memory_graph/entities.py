@@ -14,7 +14,7 @@ Part of the modular autobot_memory_graph package (Issue #716).
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
@@ -50,8 +50,8 @@ class EntityOperationsMixin:
         entity_metadata = metadata or {}
         entity_metadata.update(
             {
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
+                "created_at": datetime.now(tz=timezone.utc).isoformat(),
+                "updated_at": datetime.now(tz=timezone.utc).isoformat(),
                 "created_by": "autobot",
                 "tags": tags or [],
                 "priority": entity_metadata.get("priority", "medium"),
@@ -88,8 +88,8 @@ class EntityOperationsMixin:
             "id": entity_id,
             "type": entity_type,
             "name": name,
-            "created_at": int(datetime.now().timestamp() * 1000),
-            "updated_at": int(datetime.now().timestamp() * 1000),
+            "created_at": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+            "updated_at": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
             "observations": observations,
             "metadata": entity_metadata,
         }
@@ -246,7 +246,7 @@ class EntityOperationsMixin:
             ]
         )
         await self.redis_client.json().set(
-            entity_key, "$.updated_at", int(datetime.now().timestamp() * 1000)
+            entity_key, "$.updated_at", int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         )
 
     async def _refresh_entity_embedding(

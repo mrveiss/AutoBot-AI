@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llama_index.core import Document
@@ -590,7 +590,7 @@ class FactsMixin:
             mapping={
                 "content": content,
                 "metadata": json.dumps(metadata),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -677,7 +677,7 @@ class FactsMixin:
         if metadata is None:
             metadata = {}
         metadata["fact_id"] = fact_id
-        metadata["timestamp"] = datetime.now().isoformat()
+        metadata["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
         metadata["embedding_model"] = self.embedding_model_name
         _apply_provenance_defaults(metadata)
 
@@ -989,7 +989,7 @@ class FactsMixin:
                 current_metadata["content_fingerprint"] = compute_fingerprint(content)
             if metadata is not None:
                 current_metadata.update(metadata)
-            current_metadata["updated_at"] = datetime.now().isoformat()
+            current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
             await asyncio.to_thread(
                 self.redis_client.hset,
@@ -1469,7 +1469,7 @@ class FactsMixin:
         merged = list(set(existing_shared + shared_with))
         metadata["shared_with"] = merged
         metadata["shared_by"] = shared_by
-        metadata["shared_at"] = datetime.now().isoformat()
+        metadata["shared_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         await asyncio.to_thread(
             self.redis_client.hset, fact_key, "metadata", json.dumps(metadata)

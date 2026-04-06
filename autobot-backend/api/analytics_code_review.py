@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -503,8 +503,8 @@ async def analyze_diff(
 
     return {
         "status": "success",
-        "id": f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-        "timestamp": datetime.now().isoformat(),
+        "id": f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "files_reviewed": len(files),
         "total_comments": len(all_comments),
         "score": score,
@@ -547,7 +547,7 @@ async def review_file(
     return {
         "status": "success",
         "file_path": file_path,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "total_comments": len(comments),
         "score": score,
         "comments": [c.model_dump() for c in comments],
@@ -646,7 +646,7 @@ async def submit_feedback(
                 "comment_id": comment_id,
                 "is_helpful": is_helpful,
                 "feedback_text": feedback_text,
-                "submitted_at": datetime.now().isoformat(),
+                "submitted_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
             await asyncio.to_thread(

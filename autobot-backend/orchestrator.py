@@ -16,7 +16,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
@@ -429,7 +429,7 @@ class ConsolidatedOrchestrator:
             await self._ensure_working_llm_model()
 
             self.is_running = True
-            self.start_time = datetime.now()
+            self.start_time = datetime.now(tz=timezone.utc)
             logger.info("✅ Consolidated Orchestrator initialization complete")
 
         except Exception as e:
@@ -461,7 +461,7 @@ class ConsolidatedOrchestrator:
             logger.warning("Cleanup warning: %s", e)
 
         # Log final metrics
-        uptime = datetime.now() - self.start_time if self.start_time else 0
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
         logger.info("Orchestrator session %s completed:", self.session_id)
         logger.info("  Uptime: %s", uptime)
         logger.info("  Tasks completed: %s", self.metrics["tasks_completed"])
@@ -1092,7 +1092,7 @@ class ConsolidatedOrchestrator:
 
     async def get_status(self) -> Dict[str, Any]:
         """Get comprehensive orchestrator status and metrics (enhanced version)"""
-        uptime = datetime.now() - self.start_time if self.start_time else 0
+        uptime = datetime.now(tz=timezone.utc) - self.start_time if self.start_time else 0
 
         return {
             "session_id": self.session_id,

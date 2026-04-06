@@ -13,7 +13,7 @@ import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -135,7 +135,7 @@ class BaseAgent(ABC):
         self.agent_type = agent_type
         self.deployment_mode = deployment_mode
         self.capabilities: List[str] = []
-        self.startup_time = datetime.now()
+        self.startup_time = datetime.now(tz=timezone.utc)
 
         # Performance tracking (protected by _stats_lock)
         self.request_count = 0
@@ -175,9 +175,9 @@ class BaseAgent(ABC):
         """
         try:
             # Test basic functionality via ping
-            start_time = datetime.now()
+            start_time = datetime.now(tz=timezone.utc)
             await self._ping()
-            response_time = (datetime.now() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
 
             status = AgentStatus.HEALTHY
             if response_time > 5000:  # 5 second threshold
@@ -195,7 +195,7 @@ class BaseAgent(ABC):
                 agent_type=self.agent_type,
                 status=status,
                 deployment_mode=self.deployment_mode,
-                last_heartbeat=datetime.now(),
+                last_heartbeat=datetime.now(tz=timezone.utc),
                 response_time_ms=response_time,
                 success_rate=success_rate,
                 error_count=error_count,
@@ -213,7 +213,7 @@ class BaseAgent(ABC):
                 agent_type=self.agent_type,
                 status=AgentStatus.UNHEALTHY,
                 deployment_mode=self.deployment_mode,
-                last_heartbeat=datetime.now(),
+                last_heartbeat=datetime.now(tz=timezone.utc),
                 response_time_ms=0.0,
                 success_rate=0.0,
                 error_count=error_count + 1,
@@ -242,7 +242,7 @@ class BaseAgent(ABC):
                 "memory_rss_mb": memory_info.rss / 1024 / 1024,
                 "memory_vms_mb": memory_info.vms / 1024 / 1024,
                 "num_threads": process.num_threads(),
-                "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
+                "uptime_seconds": (datetime.now(tz=timezone.utc) - self.startup_time).total_seconds(),
             }
         except Exception as e:
             logger.warning("Could not get resource usage: %s", e)
@@ -253,7 +253,7 @@ class BaseAgent(ABC):
         Wrapper that adds performance tracking to request processing.
         Used by agent clients for monitoring.
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
 
         # Increment request count (thread-safe)
         with self._stats_lock:
@@ -262,7 +262,7 @@ class BaseAgent(ABC):
         try:
             response = await self.process_request(request)
 
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             # Update counters (thread-safe)
             with self._stats_lock:
@@ -277,7 +277,7 @@ class BaseAgent(ABC):
             return response
 
         except Exception as e:
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             # Increment error count (thread-safe)
             with self._stats_lock:
@@ -441,7 +441,7 @@ class BaseAgent(ABC):
             "success_rate": (success_count / max(request_count, 1)) * 100,
             "avg_execution_time_seconds": avg_execution_time,
             "total_execution_time_seconds": total_execution_time,
-            "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
+            "uptime_seconds": (datetime.now(tz=timezone.utc) - self.startup_time).total_seconds(),
         }
 
 
@@ -504,7 +504,7 @@ def create_agent_request(
         priority=priority,
         timeout=timeout,
         metadata={
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "source": "autobot_orchestrator",
         },
     )

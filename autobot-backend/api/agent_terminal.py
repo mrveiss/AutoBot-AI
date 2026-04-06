@@ -795,7 +795,7 @@ async def agent_terminal_info(
 # ============================================================================
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # In-memory store for pending host selection requests
 # In production, this would use Redis for persistence
@@ -843,7 +843,7 @@ async def request_host_selection(
         "selected_host_id": None,
         "selected_host_name": None,
         "connection_info": None,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "updated_at": None,
     }
 
@@ -949,7 +949,7 @@ async def submit_host_selection(
         "ssh_port": ssh_port,
         "username": username,
     }
-    selection["updated_at"] = datetime.now().isoformat()
+    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
     selection["remember_choice"] = remember_choice
 
     logger.info(
@@ -997,7 +997,7 @@ async def cancel_host_selection(
 
     # Mark as cancelled
     selection["status"] = "cancelled"
-    selection["updated_at"] = datetime.now().isoformat()
+    selection["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     logger.info(f"Host selection cancelled for request {request_id}")
 

@@ -23,7 +23,7 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from circuit_breaker import circuit_breaker_async
@@ -929,7 +929,7 @@ class WorkflowExecutor:
         agent_id = step.get("assigned_agent")
         interaction = AgentInteraction(
             interaction_id=str(uuid.uuid4()),
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             source_agent="orchestrator",
             target_agent=agent_id,
             interaction_type="request",

@@ -145,7 +145,7 @@ class DistributedAgentManager:
             self.distributed_agents[agent_id] = DistributedAgentInfo(
                 agent=agent,
                 health=health,
-                last_health_check=datetime.now(),
+                last_health_check=datetime.now(tz=timezone.utc),
                 active_tasks=set(),
             )
 
@@ -204,7 +204,7 @@ class DistributedAgentManager:
             return
 
         agent_info.health = health
-        agent_info.last_health_check = datetime.now()
+        agent_info.last_health_check = datetime.now(tz=timezone.utc)
 
         if health.status.value != "healthy":
             logger.warning(

@@ -29,7 +29,7 @@ Usage:
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -121,7 +121,7 @@ class FeatureFlags:
             history_key = "feature_flag:access_control:history"
             history_entry = json.dumps(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "mode": mode.value,
                     "changed_by": "system",
                 }

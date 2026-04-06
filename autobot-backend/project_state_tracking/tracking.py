@@ -12,7 +12,7 @@ Part of Issue #381 - God Class Refactoring
 import asyncio
 import functools
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 from constants.ttl_constants import TTL_24_HOURS
@@ -32,7 +32,7 @@ async def track_error_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         error_key = f"{REDIS_METRIC_KEYS['error_count']}:{current_hour.timestamp()}"
 
         # Issue #379: Batch Redis operations using pipeline
@@ -56,7 +56,7 @@ async def track_api_call_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         api_key = f"{REDIS_METRIC_KEYS['api_calls']}:{current_hour.timestamp()}"
         endpoint_key = f"autobot:metrics:endpoints:{endpoint}:calls"
 
@@ -87,7 +87,7 @@ async def track_user_interaction_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         interaction_key = (
             f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
         )

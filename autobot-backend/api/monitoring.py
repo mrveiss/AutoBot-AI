@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -1233,7 +1233,7 @@ async def get_claude_api_status():
             "p95_latency_seconds": p95_latency,
             "failure_rate": failure_rate,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -1267,5 +1267,5 @@ async def get_github_status():
             "total_operations": total_ops,
             "p95_latency_seconds": p95_latency,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

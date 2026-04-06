@@ -9,7 +9,7 @@ Handles browser automation for research tasks with user interaction support
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiofiles
@@ -77,7 +77,7 @@ async def health_check():
             "status": "unavailable",
             "service": "research_browser",
             "detail": "playwright not installed",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     status = "healthy" if research_browser_manager else "not_initialized"
@@ -93,7 +93,7 @@ async def health_check():
         "status": status,
         "service": "research_browser",
         "browser_service_url": browser_service_url,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 

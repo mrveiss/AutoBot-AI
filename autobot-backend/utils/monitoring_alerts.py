@@ -9,7 +9,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -187,7 +187,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
                 "resolved_at": (
                     alert.resolved_at.isoformat()
                     if alert.resolved_at
-                    else datetime.now().isoformat()
+                    else datetime.now(tz=timezone.utc).isoformat()
                 ),
                 "tags": alert.tags,
             }
@@ -254,7 +254,7 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
                     "resolved_at": (
                         alert.resolved_at.isoformat()
                         if alert.resolved_at
-                        else datetime.now().isoformat()
+                        else datetime.now(tz=timezone.utc).isoformat()
                     ),
                     "tags": alert.tags,
                 },
@@ -635,8 +635,8 @@ class MonitoringAlertsManager:
             severity=rule.severity,
             status=AlertStatus.ACTIVE,
             message=f"{rule.description} (Current: {current_value}, Threshold: {rule.threshold})",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(tz=timezone.utc),
+            updated_at=datetime.now(tz=timezone.utc),
             tags=rule.tags.copy(),
         )
 
@@ -679,8 +679,8 @@ class MonitoringAlertsManager:
         if rule_id in self.active_alerts:
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.RESOLVED
-            alert.resolved_at = datetime.now()
-            alert.updated_at = datetime.now()
+            alert.resolved_at = datetime.now(tz=timezone.utc)
+            alert.updated_at = datetime.now(tz=timezone.utc)
 
             # Update in Redis
             if self.redis_client:
@@ -760,7 +760,7 @@ class MonitoringAlertsManager:
                                 # Update existing alert
                                 alert = self.active_alerts[rule_id]
                                 alert.current_value = current_value
-                                alert.updated_at = datetime.now()
+                                alert.updated_at = datetime.now(tz=timezone.utc)
                 else:
                     # Condition not met, resolve alert if active
                     if rule_id in self.active_alerts:
@@ -817,9 +817,9 @@ class MonitoringAlertsManager:
         if rule_id in self.active_alerts:
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.ACKNOWLEDGED
-            alert.acknowledged_at = datetime.now()
+            alert.acknowledged_at = datetime.now(tz=timezone.utc)
             alert.acknowledged_by = acknowledged_by
-            alert.updated_at = datetime.now()
+            alert.updated_at = datetime.now(tz=timezone.utc)
 
             # Update in Redis
             if self.redis_client:

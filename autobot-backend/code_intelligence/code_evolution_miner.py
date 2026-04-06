@@ -18,7 +18,7 @@ Features:
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -225,7 +225,7 @@ class TemporalEmbedding:
             return "insufficient_data"
 
         # Get recent vs old occurrences
-        cutoff_date = datetime.now() - timedelta(days=months * 30)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=months * 30)
         recent = sum(1 for occ in occurrences if occ.timestamp > cutoff_date)
         old = len(occurrences) - recent
 

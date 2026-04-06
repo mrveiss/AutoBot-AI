@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -111,7 +111,7 @@ async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
         "workflow_id": ctx.workflow_id,
         "step_id": ctx.step["step_id"],
         "agent_type": "knowledge_manager",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     await kb.add_document(content, metadata)
@@ -328,7 +328,7 @@ def _prepare_workflow_data(
         "steps": [],
         "current_step": 0,
         "status": "planned",
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "workflow_start_time": time.time(),
         "estimated_duration": workflow_response.get("estimated_duration"),
         "agents_involved": workflow_response.get("agents_involved", []),
@@ -851,7 +851,7 @@ async def _execute_step_with_approval(
 
     async with _workflows_lock:
         step["status"] = "completed"
-        step["completed_at"] = datetime.now().isoformat()
+        step["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     return True
 
@@ -873,7 +873,7 @@ async def _execute_step_iteration(
     async with _workflows_lock:
         workflow["current_step"] = step_index
         step["status"] = "in_progress"
-        step["started_at"] = datetime.now().isoformat()
+        step["started_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     # Publish step start event (Issue #281: uses helper)
     await _publish_step_started(workflow_id, step, step_index, len(steps))
@@ -899,7 +899,7 @@ async def _finalize_workflow_completed(
     """
     async with _workflows_lock:
         workflow["status"] = "completed"
-        workflow["completed_at"] = datetime.now().isoformat()
+        workflow["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         workflow_start_time = workflow.get("workflow_start_time")
         workflow_type = workflow.get("classification", "unknown")
 
@@ -1057,7 +1057,7 @@ async def cancel_workflow(
 
         workflow = active_workflows[workflow_id]
         workflow["status"] = "cancelled"
-        workflow["cancelled_at"] = datetime.now().isoformat()
+        workflow["cancelled_at"] = datetime.now(tz=timezone.utc).isoformat()
         user_message = workflow.get("user_message", "")
 
     # Cancel any pending approvals (thread-safe)

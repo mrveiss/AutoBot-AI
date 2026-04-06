@@ -20,7 +20,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 import aiohttp
@@ -125,7 +125,7 @@ class RedisServiceManager:
 
         # Error tracking for health metrics
         self._error_count: int = 0
-        self._error_count_hour_start: datetime = datetime.now()
+        self._error_count_hour_start: datetime = datetime.now(tz=timezone.utc)
         self._error_lock = asyncio.Lock()
 
         logger.info(
@@ -137,7 +137,7 @@ class RedisServiceManager:
     async def _record_error(self) -> None:
         """Record an error for health metrics tracking (thread-safe)."""
         async with self._error_lock:
-            now = datetime.now()
+            now = datetime.now(tz=timezone.utc)
             # Reset counter if hour has passed
             if (now - self._error_count_hour_start).total_seconds() >= 3600:
                 self._error_count = 0
@@ -147,7 +147,7 @@ class RedisServiceManager:
     async def _get_error_count_last_hour(self) -> int:
         """Get error count for the last hour, resetting if needed (thread-safe)."""
         async with self._error_lock:
-            now = datetime.now()
+            now = datetime.now(tz=timezone.utc)
             if (now - self._error_count_hour_start).total_seconds() >= 3600:
                 self._error_count = 0
                 self._error_count_hour_start = now
@@ -170,7 +170,7 @@ class RedisServiceManager:
 
         try:
             audit_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "event_type": event_type,
                 "user_id": user_id,
                 "data": data,
@@ -254,7 +254,7 @@ class RedisServiceManager:
             operation=operation,
             message=f"Redis Stack service already {target_status}",
             duration_seconds=duration,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             new_status=target_status,
         )
 
@@ -281,7 +281,7 @@ class RedisServiceManager:
                 else f"Failed to {operation} Redis Stack service"
             ),
             duration_seconds=duration,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             new_status=actual_status,
             error=None if success else stderr,
         )
@@ -299,7 +299,7 @@ class RedisServiceManager:
             operation=operation,
             message=f"Failed to {operation} Redis Stack service: {error}",
             duration_seconds=duration,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             new_status="unknown",
             error=error,
         )
@@ -319,7 +319,7 @@ class RedisServiceManager:
         Raises:
             RedisConnectionError: If cannot connect to Redis VM
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         self._audit_log(
             "redis_service_start_attempt", {"user_id": user_id}, user_id=user_id
         )
@@ -328,7 +328,7 @@ class RedisServiceManager:
             # Check if already running (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "running":
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
                 return self._already_in_state_result("start", "running", duration)
 
             # Call SLM API to start service and verify
@@ -336,7 +336,7 @@ class RedisServiceManager:
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             success = new_status.status == "running"
 
             # Build result (Issue #665: uses helper)
@@ -360,7 +360,7 @@ class RedisServiceManager:
             return operation_result
 
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Start service failed: %s", e)
             await self._record_error()
             self._audit_log(
@@ -387,7 +387,7 @@ class RedisServiceManager:
         Raises:
             RedisConnectionError: If cannot connect to Redis VM
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         self._audit_log(
             "redis_service_stop_attempt", {"user_id": user_id}, user_id=user_id
         )
@@ -396,7 +396,7 @@ class RedisServiceManager:
             # Check if already stopped (Issue #665: uses helper)
             current_status = await self.get_service_status()
             if current_status.status == "stopped":
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
                 return self._already_in_state_result("stop", "stopped", duration)
 
             # Call SLM API to stop service and verify
@@ -404,7 +404,7 @@ class RedisServiceManager:
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             success = new_status.status == "stopped"
 
             # Build result (Issue #665: uses helper)
@@ -428,7 +428,7 @@ class RedisServiceManager:
             return operation_result
 
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Stop service failed: %s", e)
             await self._record_error()
             self._audit_log(
@@ -455,7 +455,7 @@ class RedisServiceManager:
         Raises:
             RedisConnectionError: If cannot connect to Redis VM
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         self._audit_log(
             "redis_service_restart_attempt", {"user_id": user_id}, user_id=user_id
         )
@@ -466,7 +466,7 @@ class RedisServiceManager:
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             success = new_status.status == "running"
             operation_result = self._operation_result(
                 "restart",
@@ -487,7 +487,7 @@ class RedisServiceManager:
             return operation_result
 
         except Exception as e:
-            duration = (datetime.now() - start_time).total_seconds()
+            duration = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             logger.error("Restart service failed: %s", e)
             await self._record_error()
             self._audit_log(
@@ -514,25 +514,25 @@ class RedisServiceManager:
             use_cache
             and self._status_cache
             and self._status_cache_time
-            and (datetime.now() - self._status_cache_time).total_seconds()
+            and (datetime.now(tz=timezone.utc) - self._status_cache_time).total_seconds()
             < self._cache_ttl_seconds
         ):
             return self._status_cache
 
         try:
             status_str = await self._slm_get_service_status()
-            service_status = ServiceStatus(status=status_str, last_check=datetime.now())
+            service_status = ServiceStatus(status=status_str, last_check=datetime.now(tz=timezone.utc))
 
             # Update cache
             self._status_cache = service_status
-            self._status_cache_time = datetime.now()
+            self._status_cache_time = datetime.now(tz=timezone.utc)
 
             return service_status
 
         except Exception as e:
             logger.error("Failed to get service status: %s", e)
             await self._record_error()
-            return ServiceStatus(status="unknown", last_check=datetime.now())
+            return ServiceStatus(status="unknown", last_check=datetime.now(tz=timezone.utc))
 
     async def _check_redis_connectivity(self) -> Tuple[bool, float]:
         """
@@ -546,10 +546,10 @@ class RedisServiceManager:
         try:
             from autobot_shared.redis_client import get_redis_client
 
-            ping_start = datetime.now()
+            ping_start = datetime.now(tz=timezone.utc)
             client = await get_redis_client(async_client=True, database="main")
             await client.ping()
-            response_time_ms = (datetime.now() - ping_start).total_seconds() * 1000
+            response_time_ms = (datetime.now(tz=timezone.utc) - ping_start).total_seconds() * 1000
             return True, response_time_ms
         except Exception as e:
             logger.warning("Redis connectivity check failed: %s", e)
@@ -618,7 +618,7 @@ class RedisServiceManager:
                 service_running=service_running,
                 connectivity=connectivity,
                 response_time_ms=response_time_ms,
-                last_successful_command=datetime.now() if connectivity else None,
+                last_successful_command=datetime.now(tz=timezone.utc) if connectivity else None,
                 error_count_last_hour=await self._get_error_count_last_hour(),
                 recommendations=recommendations,
             )

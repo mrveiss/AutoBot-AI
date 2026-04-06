@@ -34,7 +34,7 @@ Operation Types Supported:
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -119,7 +119,7 @@ async def _process_index_file(
     return {
         "path": str(file_path),
         "size": file_stat.st_size,
-        "indexed_at": datetime.now().isoformat(),
+        "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -168,7 +168,7 @@ def _create_test_result(
         "file": str(test_file),
         "status": "PASS" if test_passed else "FAIL",
         "duration": duration,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -390,7 +390,7 @@ def _create_indexing_operation(
         return {
             "total_files_processed": len(results),
             "files": results,
-            "completed_at": datetime.now().isoformat(),
+            "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     return indexing_operation

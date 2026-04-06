@@ -10,7 +10,7 @@ Enums, dataclasses, and Pydantic models for workflow automation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -98,7 +98,7 @@ class PlanApprovalRequest:
     def __post_init__(self):
         """Set default created_at timestamp."""
         if self.created_at is None:
-            self.created_at = datetime.now()
+            self.created_at = datetime.now(tz=timezone.utc)
 
     def to_presentation_dict(self) -> Metadata:
         """Convert to dictionary for frontend presentation."""
@@ -196,7 +196,7 @@ class ActiveWorkflow:
     def __post_init__(self):
         """Set default values for created_at and user_interventions."""
         if self.created_at is None:
-            self.created_at = datetime.now()
+            self.created_at = datetime.now(tz=timezone.utc)
         if self.user_interventions is None:
             self.user_interventions = []
 

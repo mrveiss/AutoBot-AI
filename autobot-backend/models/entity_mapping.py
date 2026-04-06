@@ -8,7 +8,7 @@ Defines data structures for entity resolution and relationship management.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
@@ -101,7 +101,7 @@ class EntityMapping:
             self.aliases.add(alias.strip())
             self.mentions.append(alias.strip())
             self.mention_count += 1
-            self.last_updated = datetime.now()
+            self.last_updated = datetime.now(tz=timezone.utc)
 
             # Adjust overall confidence based on new alias confidence
             self.confidence_score = (self.confidence_score + confidence) / 2
@@ -141,7 +141,7 @@ class EntityMapping:
             creation_timestamp=min(
                 primary.creation_timestamp, secondary.creation_timestamp
             ),
-            last_updated=datetime.now(),
+            last_updated=datetime.now(tz=timezone.utc),
             created_by="entity_resolution_merge",
             mention_count=primary.mention_count + secondary.mention_count,
             fact_count=primary.fact_count + secondary.fact_count,

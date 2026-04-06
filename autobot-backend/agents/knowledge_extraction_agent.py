@@ -14,7 +14,7 @@ import asyncio
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
@@ -544,14 +544,14 @@ Return the results as a JSON array of facts. Example format:
             confidence=fact_data["confidence"],
             source=source,
             extraction_method="llm_guided_extraction",
-            valid_from=datetime.now(),
+            valid_from=datetime.now(tz=timezone.utc),
             entities=fact_data.get("entities", []),
             context=fact_data.get("context", context),
             original_text=content if len(content) < 500 else content[:500] + "...",
             chunk_id=chunk_id,
             metadata={
                 "llm_reasoning": fact_data.get("reasoning", ""),
-                "extraction_timestamp": datetime.now().isoformat(),
+                "extraction_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "content_length": len(content),
             },
         )

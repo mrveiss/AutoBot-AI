@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -160,7 +160,7 @@ class EmbeddingUsageRequest(BaseModel):
             "batch_size": self.batch_size,
             "processing_time": self.processing_time,
             "success": self.success,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "cost": cost,
             "source": self.source or "unknown",
             "metadata": self.metadata or {},
@@ -280,7 +280,7 @@ class EmbeddingPatternAnalyzer:
             redis = await self._get_redis()
 
             # Update daily stats
-            today = datetime.now().strftime("%Y-%m-%d")
+            today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             daily_key = f"{self._stats_key}:daily:{today}"
             model_key = f"{self._model_stats_key}:{request.model}"
 
@@ -340,7 +340,7 @@ class EmbeddingPatternAnalyzer:
 
             # Aggregate daily stats - batch fetch using pipeline to eliminate N+1
             dates = [
-                (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
                 for i in range(days)
             ]
             daily_keys = [f"{self._stats_key}:daily:{date}" for date in dates]
@@ -383,7 +383,7 @@ class EmbeddingPatternAnalyzer:
                     "tokens_per_second": round(tokens_per_second, 2),
                     "period_days": days,
                 },
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -441,7 +441,7 @@ class EmbeddingPatternAnalyzer:
             return {
                 "status": "success",
                 "models": models,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -512,7 +512,7 @@ class EmbeddingPatternAnalyzer:
                 "status": "success",
                 "recommendations": recommendations,
                 "current_stats": current_stats,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -647,7 +647,7 @@ async def embedding_analytics_health(
                 "status": "healthy",
                 "service": "embedding_analytics",
                 "redis_connected": True,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
     except Exception as e:
@@ -658,6 +658,6 @@ async def embedding_analytics_health(
                 "status": "unhealthy",
                 "service": "embedding_analytics",
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )

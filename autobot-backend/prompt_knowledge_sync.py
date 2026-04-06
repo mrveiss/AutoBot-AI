@@ -12,7 +12,7 @@ searchable and accessible during agent operations.
 import hashlib
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from knowledge_base import KnowledgeBase
@@ -169,7 +169,7 @@ class PromptKnowledgeSync:
             "prompt_type": prompt_type,
             "tags": tags,
             "content_hash": content_hash,
-            "last_updated": datetime.now().isoformat(),
+            "last_updated": datetime.now(tz=timezone.utc).isoformat(),
             "auto_imported": True,
         }
 

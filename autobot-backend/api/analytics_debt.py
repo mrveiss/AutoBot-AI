@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -206,7 +206,7 @@ async def calculate_debt_from_analysis(
         "top_files": aggregations["top_files"],
         "roi_ranking": roi_ranking,
         "items": [item.to_dict() for item in debt_items],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -489,7 +489,7 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
     if not debt_redis:
         return
     try:
-        key = f"{DEBT_PREFIX}calculation:{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        key = f"{DEBT_PREFIX}calculation:{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         debt_redis.set(key, json.dumps(debt_result), ex=TTL_30_DAYS)
         debt_redis.set(f"{DEBT_PREFIX}latest", key)
     except Exception as e:

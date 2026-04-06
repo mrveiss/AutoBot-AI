@@ -22,7 +22,7 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -249,7 +249,7 @@ class UsageRecordRequest(BaseModel):
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "cost": cost,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "response_time": self.response_time,
             "success": self.success,
             "session_id": self.session_id,
@@ -467,7 +467,7 @@ class LLMPatternAnalyzer:
             redis = await self._get_redis()
 
             # Store usage record
-            date_key = datetime.now().strftime("%Y-%m-%d")
+            date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             usage_key = f"{self._usage_key}:{date_key}"
             await redis.lpush(usage_key, json.dumps(record))
             await redis.expire(usage_key, TTL_30_DAYS)  # 30 days
@@ -480,13 +480,13 @@ class LLMPatternAnalyzer:
                 data = json.loads(cache_data)
                 data["count"] = data.get("count", 0) + 1
                 data["total_cost"] = data.get("total_cost", 0) + cost
-                data["last_seen"] = datetime.now().isoformat()
+                data["last_seen"] = datetime.now(tz=timezone.utc).isoformat()
             else:
                 data = {
                     "count": 1,
                     "total_cost": cost,
-                    "first_seen": datetime.now().isoformat(),
-                    "last_seen": datetime.now().isoformat(),
+                    "first_seen": datetime.now(tz=timezone.utc).isoformat(),
+                    "last_seen": datetime.now(tz=timezone.utc).isoformat(),
                     "preview": self._get_prompt_preview(request.prompt),
                 }
 
@@ -515,7 +515,7 @@ class LLMPatternAnalyzer:
         """
         try:
             redis = await self._get_redis()
-            date_key = datetime.now().strftime("%Y-%m-%d")
+            date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             stats_key = f"{self._stats_key}:{date_key}"
 
             # Issue #379: Batch all Redis operations using pipeline
@@ -585,7 +585,7 @@ class LLMPatternAnalyzer:
 
             # Build date keys and fetch all at once using pipeline - eliminates N+1 queries
             dates = [
-                (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
                 for i in range(days)
             ]
             stats_keys = [f"{self._stats_key}:{date}" for date in dates]
@@ -801,7 +801,7 @@ class LLMPatternAnalyzer:
             List of record lists from Redis pipeline
         """
         dates = [
-            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
             for i in range(days)
         ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
@@ -932,7 +932,7 @@ class LLMPatternAnalyzer:
 
         # Aggregate from last 7 days - batch fetch all lists using pipeline
         dates = [
-            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
         ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 

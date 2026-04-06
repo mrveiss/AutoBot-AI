@@ -14,7 +14,7 @@ Inspired by oVirt's ovirt-engine-pki-ca-create and ovirt-engine-pki-enroll.
 import logging
 import os
 import subprocess  # nosec B404 - Required for PKI certificate generation
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -429,7 +429,7 @@ class CertificateGenerator:
 
         try:
             expiry_date = datetime.strptime(expires_at, "%b %d %H:%M:%S %Y %Z")
-            days_until_expiry = (expiry_date - datetime.now()).days
+            days_until_expiry = (expiry_date - datetime.now(tz=timezone.utc)).days
             needs_renewal = days_until_expiry <= self.config.renewal_threshold_days
             return days_until_expiry, needs_renewal
         except ValueError:

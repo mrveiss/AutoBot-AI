@@ -115,7 +115,7 @@ import shlex
 import signal
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
@@ -178,7 +178,7 @@ class SSHTerminalWebSocket:
         self.conversation_id = conversation_id
         self.active = False
         self.command_history: list = []
-        self.session_start_time = datetime.now()
+        self.session_start_time = datetime.now(tz=timezone.utc)
 
     async def start(self) -> bool:
         """Start SSH terminal session — returns deprecation message."""
@@ -323,7 +323,7 @@ async def create_terminal_session(
         "enable_logging": request.enable_logging,
         "enable_workflow_control": request.enable_workflow_control,
         "initial_directory": request.initial_directory,
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     # Store in session manager (you would use a proper store in production)
@@ -929,7 +929,7 @@ async def simple_terminal_websocket_compat(websocket: WebSocket, session_id: str
             "security_level": SecurityLevel.STANDARD,
             "enable_logging": False,
             "enable_workflow_control": True,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     # Route to main WebSocket handler
@@ -951,7 +951,7 @@ async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str
             "security_level": SecurityLevel.ELEVATED,
             "enable_logging": True,
             "enable_workflow_control": True,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     # Route to main WebSocket handler

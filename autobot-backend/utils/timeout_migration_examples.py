@@ -20,7 +20,7 @@ Examples include:
 import asyncio
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -127,7 +127,7 @@ async def _process_and_checkpoint_files(
             indexed_files.append(file_info)
 
             # Update progress
-            elapsed = (datetime.now() - context.operation.started_at).total_seconds()
+            elapsed = (datetime.now(tz=timezone.utc) - context.operation.started_at).total_seconds()
             await context.update_progress(
                 f"Indexing {file_path.name}",
                 i + 1,
@@ -171,7 +171,7 @@ def _build_indexing_result(
     return {
         "total_files_processed": len(indexed_files),
         "files": indexed_files,
-        "completed_at": datetime.now().isoformat(),
+        "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         "resumed_from_checkpoint": resumed,
     }
 
@@ -259,7 +259,7 @@ def _build_security_scan_result(
         "total_vulnerabilities": total_vulnerabilities,
         "scan_results": scan_results,
         "scan_types": scan_types,
-        "completed_at": datetime.now().isoformat(),
+        "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         "resumed_from_checkpoint": resumed,
     }
 
@@ -760,14 +760,14 @@ class ExistingOperationMigrator:
                 "size": len(content),
                 "lines": len(content.splitlines()),
                 "extension": file_path.suffix,
-                "indexed_at": datetime.now().isoformat(),
+                "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
                 "content_hash": hash(content) % 1000000,  # Simple hash for example
             }
         except Exception:
             return {
                 "path": str(file_path),
                 "error": "Internal server error",
-                "indexed_at": datetime.now().isoformat(),
+                "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _run_single_test(self, test_file: Path) -> Dict[str, Any]:
@@ -796,7 +796,7 @@ class ExistingOperationMigrator:
                 "output": result.stdout,
                 "errors": result.stderr,
                 "exit_code": result.returncode,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except subprocess.TimeoutExpired:
@@ -805,7 +805,7 @@ class ExistingOperationMigrator:
                 "status": "TIMEOUT",
                 "duration": time.time() - start_time,
                 "error": "Test timed out after 5 minutes",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception:
             return {
@@ -813,7 +813,7 @@ class ExistingOperationMigrator:
                 "status": "ERROR",
                 "duration": time.time() - start_time,
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _check_vulnerability_patterns(
@@ -874,14 +874,14 @@ class ExistingOperationMigrator:
                 "file": str(file_path),
                 "vulnerabilities": vulnerabilities,
                 "scan_types": scan_types,
-                "scanned_at": datetime.now().isoformat(),
+                "scanned_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception:
             return {
                 "file": str(file_path),
                 "error": "Internal server error",
-                "scanned_at": datetime.now().isoformat(),
+                "scanned_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 

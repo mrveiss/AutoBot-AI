@@ -19,7 +19,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1239,7 +1239,7 @@ class CrossLanguagePatternDetector:
         start_time = time.time()
         analysis = CrossLanguageAnalysis(
             analysis_id=f"cla_{uuid.uuid4().hex[:12]}",
-            scan_timestamp=datetime.now(),
+            scan_timestamp=datetime.now(tz=timezone.utc),
         )
 
         logger.info("Starting cross-language pattern analysis on %s", self.project_root)

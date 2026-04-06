@@ -11,7 +11,7 @@ and conversation history loading/saving with deduplication.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -122,7 +122,7 @@ class ConversationHandlerMixin:
         """Create an empty transcript structure (Issue #332 - extracted helper)."""
         return {
             "session_id": session_id,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "messages": [],
         }
 
@@ -211,12 +211,12 @@ class ConversationHandlerMixin:
             # Append new exchange
             transcript["messages"].append(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "user": user_message,
                     "assistant": assistant_message,
                 }
             )
-            transcript["updated_at"] = datetime.now().isoformat()
+            transcript["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
             transcript["message_count"] = len(transcript["messages"])
 
             # Write atomically

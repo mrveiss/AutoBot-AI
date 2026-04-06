@@ -11,7 +11,7 @@ Each agent can have its own LLM model configuration and status monitoring.
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -640,7 +640,7 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
             "agents": agents,
             "total_count": len(agents),
             "global_provider_type": provider_type,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -724,7 +724,7 @@ async def get_all_agents(admin_check: bool = Depends(check_admin_permission)):
                 "healthy": healthy_count,
                 "disconnected": len(backend_agents) - healthy_count,
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -757,7 +757,7 @@ async def list_specialized_agents(
             "agents": agents,
             "total_count": len(agents),
             "categories": categories,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -853,7 +853,7 @@ async def get_agent_config(
             "configurable_settings": ["model", "provider", "enabled", "priority"],
         },
         "health_check": {
-            "last_check": datetime.now().isoformat(),
+            "last_check": datetime.now(tz=timezone.utc).isoformat(),
             "response_time": 0.0,
             "status": "healthy" if enabled else "disabled",
         },
@@ -915,7 +915,7 @@ async def _apply_agent_model_update(
         "model": update.model,
         "provider": update.provider,
         "status": "updated",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -1074,7 +1074,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
         Tuple of (provider_available: bool, response_time: float)
     """
     provider_available = False
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
 
     try:
         from services.provider_health import ProviderHealthManager
@@ -1097,7 +1097,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
         )
         provider_available = False
 
-    response_time = (datetime.now() - start_time).total_seconds()
+    response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
     return provider_available, response_time
 
 
@@ -1140,7 +1140,7 @@ async def check_agent_health(
             "model_configured": bool(model),
             "provider_available": provider_available,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "response_time": response_time,
     }
 
@@ -1200,7 +1200,7 @@ async def get_agents_overview(admin_check: bool = Depends(check_admin_permission
             "good" if healthy_agents >= enabled_agents * 0.8 else "warning"
         ),
         "agents": agent_summary,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     return JSONResponse(status_code=200, content=overview)

@@ -26,7 +26,7 @@ Usage::
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -132,7 +132,7 @@ class BackgroundTaskManager:
         another handles the cleanup call.
         """
         marked = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         cache = RedisCache(redis, default_ttl=self._ttl)
         for key in keys:
             raw_key = key.decode() if isinstance(key, bytes) else key
@@ -171,7 +171,7 @@ class BackgroundTaskManager:
     def _cleanup_stuck(self) -> int:
         """Mark timed-out in-memory tasks as failed."""
         cleaned = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         for tid, task in list(self._tasks.items()):
             if task.get("status") != "running":
                 continue
@@ -240,7 +240,7 @@ class BackgroundTaskManager:
             return
         if task["status"] == "pending":
             task["status"] = "running"
-            task["started_at"] = datetime.now().isoformat()
+            task["started_at"] = datetime.now(tz=timezone.utc).isoformat()
         task["current_step"] = step
         task["progress"] = min(progress, 100.0)
         await self._save_to_redis(task_id)
@@ -258,7 +258,7 @@ class BackgroundTaskManager:
         task["status"] = "completed"
         task["progress"] = 100.0
         task["current_step"] = "Complete"
-        task["completed_at"] = datetime.now().isoformat()
+        task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         task["result"] = result
         await self._save_to_redis(task_id)
         sid = (task.get("params") or {}).get("source_id", "")
@@ -310,7 +310,7 @@ class BackgroundTaskManager:
         task["status"] = "failed"
         task["error"] = error
         task["reason"] = reason
-        task["completed_at"] = datetime.now().isoformat()
+        task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         await self._save_to_redis(task_id)
 
     async def get_status(self, task_id: str) -> Optional[dict]:
@@ -329,13 +329,13 @@ class BackgroundTaskManager:
             if started:
                 try:
                     elapsed = (
-                        datetime.now() - datetime.fromisoformat(started)
+                        datetime.now(tz=timezone.utc) - datetime.fromisoformat(started)
                     ).total_seconds()
                     if elapsed > self._timeout:
                         redis_task["status"] = "failed"
                         redis_task["error"] = "Task timed out (auto-recovered)"
                         redis_task["reason"] = "timeout"
-                        redis_task["completed_at"] = datetime.now().isoformat()
+                        redis_task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
                         # Persist the cleanup to Redis
                         _redis = await self._get_redis()
                         if _redis:

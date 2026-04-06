@@ -13,7 +13,7 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -131,7 +131,7 @@ class BackgroundVectorizer:
                 fact_key,
                 mapping={
                     "vectorization_status": "completed",
-                    "vectorized_at": datetime.now().isoformat(),
+                    "vectorized_at": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
         except Exception as e:
@@ -207,7 +207,7 @@ class BackgroundVectorizer:
 
         try:
             self.is_running = True
-            self.last_run = datetime.now()
+            self.last_run = datetime.now(tz=timezone.utc)
 
             logger.info("Starting background vectorization...")
 
@@ -269,7 +269,7 @@ class BackgroundVectorizer:
 
                 if (
                     self.last_run
-                    and (datetime.now() - self.last_run).seconds < self.check_interval
+                    and (datetime.now(tz=timezone.utc) - self.last_run).seconds < self.check_interval
                 ):
                     continue
 

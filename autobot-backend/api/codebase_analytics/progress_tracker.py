@@ -11,7 +11,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -310,7 +310,7 @@ def _create_initial_task_state(
         },
         "result": None,
         "error": None,
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -385,9 +385,9 @@ def _mark_task_completed(
         "stats": analysis_results["stats"],
         "hardcodes_count": hardcodes_stored,
         "storage_type": storage_type,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
-    indexing_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+    indexing_tasks[task_id]["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
 
 def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> None:
@@ -398,7 +398,7 @@ def _mark_task_failed(task_id: str, error: Exception, indexing_tasks: Dict) -> N
     """
     indexing_tasks[task_id]["status"] = "failed"
     indexing_tasks[task_id]["error"] = str(error)
-    indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+    indexing_tasks[task_id]["failed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
 
 def _create_progress_updater(

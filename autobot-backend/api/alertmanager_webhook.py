@@ -8,7 +8,7 @@ Phase 3: Alert Migration (Issue #346)
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -87,7 +87,7 @@ async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Re
         return {
             "status": "success",
             "processed": len(payload.alerts),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -167,5 +167,5 @@ async def alertmanager_webhook_health():
         "status": "healthy",
         "endpoint": "/api/webhook/alertmanager",
         "websocket_manager": "connected" if ws_manager else "unavailable",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

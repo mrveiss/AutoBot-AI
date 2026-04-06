@@ -28,7 +28,7 @@ import logging
 import re
 import subprocess  # nosec B404 - code review tools require subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -662,8 +662,8 @@ class CodeReviewEngine(_BaseClass):
         summary = self._generate_summary(all_comments)
 
         return ReviewResult(
-            id=f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            timestamp=datetime.now(),
+            id=f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            timestamp=datetime.now(tz=timezone.utc),
             files_reviewed=len([f for f in diff_files if not f.is_deleted]),
             total_comments=len(all_comments),
             score=score,
@@ -719,8 +719,8 @@ class CodeReviewEngine(_BaseClass):
         diff_content = self._get_git_diff(commit_range)
         if not diff_content:
             return ReviewResult(
-                id=f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                timestamp=datetime.now(),
+                id=f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+                timestamp=datetime.now(tz=timezone.utc),
                 files_reviewed=0,
                 total_comments=0,
                 score=100.0,
@@ -740,8 +740,8 @@ class CodeReviewEngine(_BaseClass):
         diff_content = self._get_git_diff("--cached")
         if not diff_content:
             return ReviewResult(
-                id=f"review-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                timestamp=datetime.now(),
+                id=f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+                timestamp=datetime.now(tz=timezone.utc),
                 files_reviewed=0,
                 total_comments=0,
                 score=100.0,

@@ -20,7 +20,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -650,7 +650,7 @@ class GPUVectorIndex:
 
             await asyncio.to_thread(_write_id_map)
 
-            self.last_save_time = datetime.now()
+            self.last_save_time = datetime.now(tz=timezone.utc)
             logger.info("✅ Index saved to %s", save_path)
             return True
 
@@ -748,7 +748,7 @@ class GPUVectorIndex:
             await self.save()
             return
 
-        elapsed = (datetime.now() - self.last_save_time).total_seconds()
+        elapsed = (datetime.now(tz=timezone.utc) - self.last_save_time).total_seconds()
         if elapsed >= self.config.save_interval_seconds:
             await self.save()
 

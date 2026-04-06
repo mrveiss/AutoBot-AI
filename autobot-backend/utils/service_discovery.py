@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
@@ -388,7 +388,7 @@ class ServiceDiscovery:
             return None
         if not last_check:
             return None
-        time_since_check = (datetime.now() - last_check).seconds
+        time_since_check = (datetime.now(tz=timezone.utc) - last_check).seconds
         check_threshold = (
             self.health_check_interval
             * ServiceDiscoveryConfig.CIRCUIT_BREAKER_CHECK_MULTIPLIER
@@ -401,11 +401,11 @@ class ServiceDiscovery:
         """Update service status after health check (under lock)."""
         async with self._lock:
             service.status = status
-            service.last_check = datetime.now()
+            service.last_check = datetime.now(tz=timezone.utc)
             service.response_time = response_time
             if status == ServiceStatus.HEALTHY:
                 service.consecutive_failures = 0
-                service.last_healthy = datetime.now()
+                service.last_healthy = datetime.now(tz=timezone.utc)
                 service.error_message = None
             else:
                 service.consecutive_failures += 1
@@ -416,7 +416,7 @@ class ServiceDiscovery:
         """Update service status after health check error (under lock)."""
         async with self._lock:
             service.status = ServiceStatus.UNHEALTHY
-            service.last_check = datetime.now()
+            service.last_check = datetime.now(tz=timezone.utc)
             service.consecutive_failures += 1
             service.error_message = error
             service.response_time = response_time
@@ -609,7 +609,7 @@ class ServiceDiscovery:
             }
 
         summary = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "total_services": len(services_snapshot),
             "healthy": 0,
             "degraded": 0,

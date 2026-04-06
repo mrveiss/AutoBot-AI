@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -142,7 +142,7 @@ class CodeQualityDashboard:
         """Assemble the final comprehensive report dictionary. Issue #1183."""
         qm = quality_metrics
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "analysis_time_seconds": analysis_time,
             "overall_quality_score": qm.overall_score,
             "quality_metrics": {
@@ -802,7 +802,7 @@ class CodeQualityDashboard:
         if self.redis_client:
             try:
                 trend = QualityTrend(
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(tz=timezone.utc),
                     overall_score=metrics.overall_score,
                     issue_count=issue_count,
                     critical_issues=0,  # Would need to be calculated
