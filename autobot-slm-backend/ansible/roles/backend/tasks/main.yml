@@ -49,6 +49,15 @@
     - backend_ai_stack_host == '127.0.0.1'
   tags: ['backend', 'config']
 
+- name: "Backend | Set backend_chromadb_host=10.255.255.254 on WSL2 hosts (#3541)"
+  ansible.builtin.set_fact:
+    backend_chromadb_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_chromadb_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
