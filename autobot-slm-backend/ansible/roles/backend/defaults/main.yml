@@ -62,8 +62,9 @@ backend_llm_model: "qwen3.5:9b"  # Default LLM model
 backend_ai_stack_host: "127.0.0.1"
 backend_ai_stack_port: 8080
 
-# ChromaDB connection (co-located: 127.0.0.1; fleet deployment: ai-stack node IP)
-backend_chromadb_host: "127.0.0.1"
+# ChromaDB connection (co-located: ai-stack node; fleet deployment: ai-stack node IP)
+# Default follows backend_ai_stack_host so WSL2 auto-detection (#3503) propagates here too.
+backend_chromadb_host: "{{ backend_ai_stack_host }}"
 backend_chromadb_port: 8100
 
 # Service Authentication
