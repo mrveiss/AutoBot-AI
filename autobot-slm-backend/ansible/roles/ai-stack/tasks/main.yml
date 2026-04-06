@@ -191,9 +191,9 @@
     group: "{{ ai_group }}"
     mode: "0644"
   loop:
-    - "{{ playbook_dir }}/../shared/docker/ai-stack/ai_api_server.py"
-    - "{{ playbook_dir }}/../shared/docker/ai-stack/ai_container_main.py"
-    - "{{ playbook_dir }}/../shared/docker/ai-stack/requirements-ai.txt"
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py"
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/ai_container_main.py"
+    - "{{ playbook_dir }}/../../../autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt"
   notify: restart ai-stack
   tags: ['ai', 'deploy']
 
