@@ -28,9 +28,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Lazy singleton for VisionProcessor (loads GPU models on first use).
-# Import is deferred into _get_vision_processor() to break the circular
-# import chain: multimodal_processor_impl → media.manager → media.image.pipeline
-# → multimodal_processor.processors.vision → multimodal_processor_impl
+# Import is deferred into _get_vision_processor() to avoid a circular import
+# at module load time (media.manager imports this module at import time).
 _vision_processor: Optional[Any] = None
 _vision_processor_checked: bool = False
 
