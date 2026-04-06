@@ -106,10 +106,30 @@ class TestBuildApiKwargs:
         assert "preserve_reasoning" not in merged
         assert headers == {}
 
-    def test_betas_forwarded(self):
+    def test_betas_routed_to_extra_headers(self):
         base = {"model": "m"}
-        merged, _ = _build_api_kwargs(base, {"betas": ["output-128k-2025-02-19"]})
-        assert merged["betas"] == ["output-128k-2025-02-19"]
+        merged, headers = _build_api_kwargs(base, {"betas": ["output-128k-2025-02-19"]})
+        assert "betas" not in merged
+        assert headers["anthropic-beta"] == "output-128k-2025-02-19"
+
+    def test_betas_merged_with_existing_extra_headers(self):
+        base = {"model": "m"}
+        api_kwargs = {
+            "betas": ["beta-b"],
+            "extra_headers": {"anthropic-beta": "beta-a"},
+        }
+        merged, headers = _build_api_kwargs(base, api_kwargs)
+        assert "betas" not in merged
+        assert "beta-a" in headers["anthropic-beta"]
+        assert "beta-b" in headers["anthropic-beta"]
+
+    def test_multiple_betas_comma_joined(self):
+        base = {"model": "m"}
+        merged, headers = _build_api_kwargs(
+            base, {"betas": ["beta-a", "beta-b", "beta-c"]}
+        )
+        assert "betas" not in merged
+        assert headers["anthropic-beta"] == "beta-a,beta-b,beta-c"
 
     def test_base_override(self):
         base = {"max_tokens": 4096}
@@ -224,6 +244,50 @@ class TestBuildRequestKwargs:
         )
         _, _, preserve = provider._build_request_kwargs("m", request)
         assert preserve is True
+
+    def test_thinking_enforces_temperature_1(self):
+        provider = self._provider()
+        thinking = {"type": "enabled", "budget_tokens": 8000}
+        request = self._make_request(
+            metadata={
+                "api_kwargs": {
+                    "thinking": thinking,
+                    "max_tokens": 16000,
+                    # Deliberately omit temperature — must be auto-coerced to 1.
+                }
+            }
+        )
+        kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
+        assert kwargs["temperature"] == 1
+
+    def test_thinking_overrides_explicit_temperature(self):
+        provider = self._provider()
+        thinking = {"type": "enabled", "budget_tokens": 8000}
+        request = self._make_request(
+            metadata={
+                "api_kwargs": {
+                    "thinking": thinking,
+                    "max_tokens": 16000,
+                    "temperature": 0,  # Invalid with thinking — must be coerced to 1.
+                }
+            }
+        )
+        kwargs, _, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
+        assert kwargs["temperature"] == 1
+
+    def test_betas_routed_to_extra_headers_via_build_request_kwargs(self):
+        provider = self._provider()
+        request = self._make_request(
+            metadata={
+                "api_kwargs": {
+                    "betas": ["output-128k-2025-02-19"],
+                    "max_tokens": 64000,
+                }
+            }
+        )
+        kwargs, headers, _ = provider._build_request_kwargs("claude-sonnet-4-6", request)
+        assert "betas" not in kwargs
+        assert headers.get("anthropic-beta") == "output-128k-2025-02-19"
 
     def test_system_message_extracted(self):
         provider = self._provider()
