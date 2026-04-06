@@ -29,6 +29,7 @@ from config import cfg
 
 # Import existing AutoBot components
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.embedding_cache import get_embedding_cache
 from knowledge_base import KnowledgeBase
 from utils.chromadb_client import get_chromadb_client
@@ -156,7 +157,7 @@ class NPUSemanticSearch:
         self.embedding_cache = get_embedding_cache()
         self.search_results_cache = {}  # Cache for complete search results
         self.cache_max_size = 100
-        self.cache_ttl_seconds = 300  # 5 minutes
+        self.cache_ttl_seconds = TTL_5_MINUTES
 
         # Performance optimization settings
         self.batch_size_npu = 32  # Optimal NPU batch size

@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from constants.ttl_constants import TTL_5_MINUTES
 from llm_self_awareness import get_llm_self_awareness
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
         ]
         self.context_cache = None
         self.cache_timestamp = None
-        self.cache_ttl = 300  # 5 minutes
+        self.cache_ttl = TTL_5_MINUTES
 
     def _should_inject_context(self, request: Request) -> bool:
         """Check if request should have awareness context injected (Issue #337)."""

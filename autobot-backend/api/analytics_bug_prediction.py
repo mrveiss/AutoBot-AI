@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"
 
 # Issue #1341: Cache configuration for bug prediction
 BUG_PREDICTION_CACHE_PREFIX = "codebase:bug_prediction:cache"
-BUG_PREDICTION_CACHE_TTL = 300  # 5 minutes cache
+BUG_PREDICTION_CACHE_TTL = TTL_5_MINUTES
 
 # Issue #1418: Background task manager for batched analysis
 _bg_manager = BackgroundTaskManager(

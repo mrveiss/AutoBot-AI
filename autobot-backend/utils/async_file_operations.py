@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional, Union
 
 import aiofiles
 
+from constants.ttl_constants import TTL_5_MINUTES
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +40,7 @@ class AsyncFileOperations:
     def __init__(self):
         """Initialize async file operations with cache and TTL settings."""
         self.file_cache: Dict[str, Dict] = {}
-        self.cache_ttl = 300  # 5 minutes
+        self.cache_ttl = TTL_5_MINUTES
 
     async def read_text_file(
         self, file_path: Union[str, Path], encoding: str = "utf-8"

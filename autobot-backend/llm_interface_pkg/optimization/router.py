@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Set
 
+from constants.ttl_constants import TTL_5_MINUTES
 from ..types import ProviderType
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,7 @@ class OptimizationConfig:
     # Response caching
     cache_enabled: bool = True
     cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
+    cache_l2_ttl: int = TTL_5_MINUTES
 
 
 class OptimizationRouter:

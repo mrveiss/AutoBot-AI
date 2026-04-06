@@ -9,7 +9,8 @@ calls and async task timeouts.
 """
 
 # Redis TTL values
-TTL_1_HOUR = 3_600
+TTL_5_MINUTES = 300       # 5 minutes
+TTL_1_HOUR = 3_600        # 1 hour
 TTL_24_HOURS = 86_400
 TTL_7_DAYS = 86_400 * 7
 TTL_30_DAYS = 86_400 * 30

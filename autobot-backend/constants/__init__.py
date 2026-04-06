@@ -68,6 +68,7 @@ from .ttl_constants import (  # Issue #3529: Redis TTL and timeout constants
     TIMEOUT_HTTP_LONG,
     TIMEOUT_TASK_ANALYSIS,
     TTL_1_HOUR,
+    TTL_5_MINUTES,
     TTL_24_HOURS,
     TTL_365_DAYS,
     TTL_30_DAYS,
@@ -159,6 +160,7 @@ __all__ = [
     "PATH_OLLAMA_GENERATE",
     "PATH_OLLAMA_TAGS",
     # Issue #3529: TTL and timeout constants
+    "TTL_5_MINUTES",
     "TTL_1_HOUR",
     "TTL_24_HOURS",
     "TTL_7_DAYS",
