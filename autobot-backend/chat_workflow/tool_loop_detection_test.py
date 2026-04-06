@@ -20,11 +20,12 @@ module level before graph.py is loaded.  The test therefore runs with only
 Python stdlib and pytest installed.
 """
 
+import asyncio
 import importlib.util
 import sys
 import types
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -93,6 +94,7 @@ _spec.loader.exec_module(_graph_module)  # type: ignore[union-attr]
 _fingerprint_tool_call = _graph_module._fingerprint_tool_call
 _detect_tool_call_loop = _graph_module._detect_tool_call_loop
 route_after_execution = _graph_module.route_after_execution
+prepare_llm = _graph_module.prepare_llm
 _inject_mid_conversation_warning = _graph_module._inject_mid_conversation_warning
 _LOOP_DETECTION_WINDOW = _graph_module._LOOP_DETECTION_WINDOW
 _LOOP_ABORT_THRESHOLD = _graph_module._LOOP_ABORT_THRESHOLD
@@ -215,13 +217,21 @@ class TestDetectToolCallLoop:
         # Empty list produces "" key — loop should not fire on empty entries
         assert not is_loop
 
-    def test_updated_history_grows(self):
-        """History list grows by one entry per call."""
+    def test_updated_history_capped_at_window(self):
+        """History list is capped at window entries — no unbounded Redis growth (#3583)."""
         fp = self._make_fp("execute_command", "ls")
         history: list = []
-        for i in range(4):
+        for _ in range(_LOOP_DETECTION_WINDOW * 3):
             _, history = _detect_tool_call_loop([fp], history)
-        assert len(history) == 4
+        assert len(history) == _LOOP_DETECTION_WINDOW
+
+    def test_updated_history_never_exceeds_window(self):
+        """Varying calls also keep history capped at window size (#3583)."""
+        history: list = []
+        for i in range(_LOOP_DETECTION_WINDOW * 5):
+            fp = self._make_fp("execute_command", f"cmd-{i % 4}")
+            _, history = _detect_tool_call_loop([fp], history)
+        assert len(history) <= _LOOP_DETECTION_WINDOW
 
     def test_custom_window(self):
         """Custom window parameter is respected."""
@@ -297,3 +307,75 @@ class TestLoopWarningInjection:
         """Injection returns a plain str — never a LangChain message object."""
         result = _inject_mid_conversation_warning(_LOOP_WARNING_MSG, "base")
         assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# Tests: prepare_llm resets loop state per turn (Bug 1 — Issue #3583)
+# ---------------------------------------------------------------------------
+
+
+class TestPrepareLlmResetsLoopState:
+    """Verify prepare_llm resets tool loop fields at the start of each turn.
+
+    LangGraph persists ChatState in Redis across turns; without explicit reset
+    in prepare_llm, accumulated loop counts from prior turns cause false aborts.
+    """
+
+    def _make_config(self):
+        """Build a minimal RunnableConfig with a mock manager."""
+        session_stub = MagicMock()
+        manager = MagicMock()
+        manager.get_or_create_session = AsyncMock(return_value=session_stub)
+        manager._prepare_llm_workflow_params = AsyncMock(return_value=MagicMock())
+        ctx = MagicMock()
+        ctx.ollama_endpoint = "http://localhost:11434"
+        ctx.selected_model = "llama3"
+        ctx.system_prompt = "You are an assistant."
+        ctx.initial_prompt = "Hello"
+        ctx.used_knowledge = []
+        ctx.rag_citations = []
+        ctx.execution_history = []
+        manager._create_llm_iteration_context = MagicMock(return_value=ctx)
+        return {"configurable": {"manager": manager}}
+
+    def _make_state(self, **overrides) -> dict:
+        base = {
+            "error": None,
+            "session_id": "sess-1",
+            "terminal_session_id": "term-1",
+            "user_message": "Do something",
+            "context": {},
+            "tool_loop_count": _LOOP_ABORT_THRESHOLD,
+            "tool_call_fingerprints": ["fp:aabbcc112233"] * _LOOP_DETECTION_WINDOW,
+            "tool_loop_warning": "You are repeating tool calls.",
+        }
+        base.update(overrides)
+        return base
+
+    def test_loop_count_reset_to_zero(self):
+        """prepare_llm must return tool_loop_count=0 regardless of prior state."""
+        state = self._make_state()
+        config = self._make_config()
+        result = asyncio.get_event_loop().run_until_complete(prepare_llm(state, config))
+        assert result.get("tool_loop_count") == 0
+
+    def test_fingerprints_reset_to_empty(self):
+        """prepare_llm must return tool_call_fingerprints=[] regardless of prior state."""
+        state = self._make_state()
+        config = self._make_config()
+        result = asyncio.get_event_loop().run_until_complete(prepare_llm(state, config))
+        assert result.get("tool_call_fingerprints") == []
+
+    def test_loop_warning_reset_to_empty(self):
+        """prepare_llm must return tool_loop_warning='' regardless of prior state."""
+        state = self._make_state()
+        config = self._make_config()
+        result = asyncio.get_event_loop().run_until_complete(prepare_llm(state, config))
+        assert result.get("tool_loop_warning") == ""
+
+    def test_error_state_skips_reset(self):
+        """prepare_llm returns {} when error is set — no KeyError on reset fields."""
+        state = self._make_state(error="something failed")
+        config = self._make_config()
+        result = asyncio.get_event_loop().run_until_complete(prepare_llm(state, config))
+        assert result == {}

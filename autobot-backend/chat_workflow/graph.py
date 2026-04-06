@@ -184,7 +184,7 @@ def _detect_tool_call_loop(
         iteration's fingerprint appended.
     """
     current_key = ",".join(new_fingerprints)
-    updated = list(history) + [current_key]
+    updated = (list(history) + [current_key])[-window:]
 
     if len(updated) < window:
         return False, updated
@@ -308,6 +308,12 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
+        # Reset per-turn loop detection state (#3583). LangGraph persists
+        # ChatState in Redis across turns; without this reset, loop counts
+        # accumulate across different user turns and trigger false aborts.
+        "tool_loop_count": 0,
+        "tool_call_fingerprints": [],
+        "tool_loop_warning": "",
     }
 
 
