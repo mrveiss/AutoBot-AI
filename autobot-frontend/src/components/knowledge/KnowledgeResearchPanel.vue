@@ -19,8 +19,10 @@ import ApiClient from '@/utils/ApiClient'
 import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
+import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('KnowledgeResearchPanel')
+const userStore = useUserStore()
 
 const { t } = useI18n()
 
@@ -242,6 +244,31 @@ function handleKeydown(event: KeyboardEvent): void {
 
 // ── Source card actions ────────────────────────────────────────────────────
 
+/**
+ * Emit a user-scoped annotation signal for the given source card.
+ *
+ * Issue #3240: accept/reject decisions are stored as RAG feedback events
+ * keyed by the authenticated user's ID so the retrieval learner can
+ * personalise future search results for each user independently.
+ */
+async function _emitAnnotationFeedback(
+  card: SourceCard,
+  decision: 'accepted' | 'rejected',
+): Promise<void> {
+  const userId = userStore.currentUser?.id ?? null
+  try {
+    await ApiClient.post('/api/knowledge_base/rag-feedback', {
+      source_url: card.url,
+      title: card.title,
+      query: query.value,
+      decision,
+      user_id: userId,
+    })
+  } catch (e) {
+    logger.warn('RAG feedback emit failed (non-critical):', e)
+  }
+}
+
 async function acceptSource(card: SourceCard): Promise<void> {
   card.decision = 'accepted'
   try {
@@ -252,10 +279,12 @@ async function acceptSource(card: SourceCard): Promise<void> {
   } catch (e) {
     logger.warn('Accept source API call failed (non-critical):', e)
   }
+  await _emitAnnotationFeedback(card, 'accepted')
 }
 
-function rejectSource(card: SourceCard): void {
+async function rejectSource(card: SourceCard): Promise<void> {
   card.decision = 'rejected'
+  await _emitAnnotationFeedback(card, 'rejected')
 }
 
 // ── Interactive browser control (#1416) ──────────────────────────────────
