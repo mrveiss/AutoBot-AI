@@ -7,7 +7,7 @@ Provides defensive security scanning and analysis capabilities
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
@@ -241,7 +241,7 @@ class SecurityScannerAgent(StandardizedAgent):
                     "scan_type": "port_scan",
                     "target": target,
                     "open_ports": open_ports,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                     "raw_output": result["output"],
                 }
             else:
@@ -271,7 +271,7 @@ class SecurityScannerAgent(StandardizedAgent):
                     "scan_type": "service_detection",
                     "target": target,
                     "services": services,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -306,7 +306,7 @@ class SecurityScannerAgent(StandardizedAgent):
                     "scan_type": "vulnerability_scan",
                     "target": target,
                     "vulnerabilities": vulnerabilities,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -338,7 +338,7 @@ class SecurityScannerAgent(StandardizedAgent):
                     "target": target,
                     "port": port,
                     "ssl_info": ssl_info,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -378,7 +378,7 @@ class SecurityScannerAgent(StandardizedAgent):
                 "status": "success",
                 "scan_type": "dns_enumeration",
                 "results": results,
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -438,7 +438,7 @@ class SecurityScannerAgent(StandardizedAgent):
                 "status": "success",
                 "scan_type": "web_scan",
                 "results": results,
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:

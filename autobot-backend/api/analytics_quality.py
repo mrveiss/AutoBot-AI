@@ -11,7 +11,7 @@ pattern distribution, and quality trends.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
 
@@ -595,7 +595,7 @@ def _build_quality_trends(metrics: dict[str, float], days: int = 30) -> list[dic
 
     return [
         {
-            "date": (datetime.now() - timedelta(days=i)).isoformat(),
+            "date": (datetime.now(tz=timezone.utc) - timedelta(days=i)).isoformat(),
             "score": weighted_score,
         }
         for i in range(days, -1, -1)
@@ -679,7 +679,7 @@ async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
         },
         "trends": _build_quality_trends(metrics),
         "source": "calculated",
-        "calculated_at": datetime.now().isoformat(),
+        "calculated_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -819,7 +819,7 @@ def _build_quality_export_report(
         Report dictionary with all quality data
     """
     return {
-        "generated_at": datetime.now().isoformat(),
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
         "format": format_type,
         "health_score": {
             "overall": health.overall,
@@ -953,7 +953,7 @@ async def get_health_score(
         "trend": health.trend,
         "breakdown": health.breakdown,
         "recommendations": health.recommendations,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -1204,7 +1204,7 @@ async def get_quality_trends(
     if data is None:
         return _no_data_response()
 
-    cutoff = datetime.now() - timedelta(days=int(period[:-1]))
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=int(period[:-1]))
     filtered_trends = _filter_trends_by_period(data.get("trends", []), cutoff)
     scores = [t.get("score", 0) for t in filtered_trends]
 
@@ -1248,7 +1248,7 @@ async def get_quality_snapshot(
 
     return {
         "status": "success",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "health_score": {
             "overall": health.overall,
             "grade": health.grade.value,
@@ -1456,6 +1456,6 @@ async def broadcast_quality_update(update_type: str, data: dict):
         {
             "type": update_type,
             "data": data,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     )

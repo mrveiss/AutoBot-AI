@@ -9,7 +9,7 @@ Audit logging for terminal command activity.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from api.terminal_models import SecurityLevel
@@ -39,7 +39,7 @@ class TerminalAuditLogger:
             "session_id": self.session_id,
             "user_role": self.user_role,
             "security_level": self.security_level.value,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "data": data,
         }
 
@@ -54,7 +54,7 @@ class TerminalAuditLogger:
             "message_received",
             {
                 "type": message_type,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "session_id": self.session_id,
             },
         )
@@ -71,7 +71,7 @@ class TerminalAuditLogger:
                 "command": command,
                 "risk_level": risk_level,
                 "user_role": self.user_role,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -81,7 +81,7 @@ class TerminalAuditLogger:
             "command_output",
             {
                 "output_length": output_length,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -92,7 +92,7 @@ class TerminalAuditLogger:
             {
                 "action": action,
                 "workflow_id": workflow_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -103,7 +103,7 @@ class TerminalAuditLogger:
             {
                 "rows": rows,
                 "cols": cols,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -113,7 +113,7 @@ class TerminalAuditLogger:
             "signal_sent",
             {
                 "signal": signal_name,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "success": success,
             },
         )

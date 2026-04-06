@@ -11,7 +11,7 @@ Includes:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -267,7 +267,7 @@ def _build_report_header(
     path_info: str, total_count: int, counts: Dict[str, int]
 ) -> List[str]:
     """Build the report header with category counts table (Issue #398: extracted)."""
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return [
         "# Code Analysis Report",
         "",
@@ -1432,7 +1432,7 @@ def _build_empty_report_header() -> List[str]:
 
     Issue #620: Extracted from _generate_empty_report_with_analyses.
     """
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     return [
         "# Code Analysis Report",
         "",

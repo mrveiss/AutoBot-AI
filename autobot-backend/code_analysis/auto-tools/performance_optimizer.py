@@ -10,7 +10,7 @@ import json
 import os
 import re
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -26,7 +26,7 @@ class ConsoleLogCleaner:
             else self.project_root / ".console-cleanup-backups"
         )
         self.report = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "files_processed": 0,
             "files_modified": 0,
             "console_logs_removed": 0,
@@ -98,7 +98,7 @@ class ConsoleLogCleaner:
 
     def create_backup(self, file_path: Path) -> Path:
         """Create backup of file before modification."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         relative_path = file_path.relative_to(self.project_root)
         backup_path = self.backup_dir / timestamp / relative_path
 

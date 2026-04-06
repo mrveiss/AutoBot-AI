@@ -21,7 +21,7 @@ import asyncio
 import logging
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -742,7 +742,7 @@ class CodebaseIndexingService:
             "chunk_index": index,
             "total_chunks": total,
             "chunk_type": chunk.get("type", "general"),
-            "indexed_at": datetime.now().isoformat(),
+            "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             "indexer_version": "1.0.0",
         }
         for key, value in chunk.items():
@@ -913,7 +913,7 @@ class CodebaseIndexingService:
         logger.info("Starting codebase indexing for: %s", self.root_path)
 
         self.progress = IndexingProgress()
-        self.progress.start_time = datetime.now()
+        self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
             knowledge_base = await get_knowledge_base()
@@ -939,14 +939,14 @@ class CodebaseIndexingService:
                     category_files, batch_size, knowledge_base
                 )
 
-            self.progress.end_time = datetime.now()
+            self.progress.end_time = datetime.now(tz=timezone.utc)
             self._log_indexing_completion()
 
             return self.progress
 
         except Exception as e:
             logger.error("Codebase indexing failed: %s", e)
-            self.progress.end_time = datetime.now()
+            self.progress.end_time = datetime.now(tz=timezone.utc)
             self.progress.errors.append(f"Indexing failed: {str(e)}")
             return self.progress
 
@@ -987,7 +987,7 @@ class CodebaseIndexingService:
         Issue #620.
         """
         logger.error("Category reindexing failed for %s: %s", category, error)
-        self.progress.end_time = datetime.now()
+        self.progress.end_time = datetime.now(tz=timezone.utc)
         self.progress.errors.append(f"Category reindexing failed: {str(error)}")
         return self.progress
 
@@ -997,7 +997,7 @@ class CodebaseIndexingService:
         """Reindex files in a specific category."""
         logger.info("Starting category reindexing for: %s", category)
         self.progress = IndexingProgress()
-        self.progress.start_time = datetime.now()
+        self.progress.start_time = datetime.now(tz=timezone.utc)
 
         try:
             knowledge_base = await get_knowledge_base()
@@ -1017,7 +1017,7 @@ class CodebaseIndexingService:
                 category, category_files, batch_size, knowledge_base
             )
 
-            self.progress.end_time = datetime.now()
+            self.progress.end_time = datetime.now(tz=timezone.utc)
             logger.info(
                 "Category %s reindexing completed: %s successful",
                 category,

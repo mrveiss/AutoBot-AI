@@ -11,7 +11,7 @@ Contains LLMCodeGenerator class for LLM-powered code refactoring.
 import asyncio
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .diff import DiffGenerator
@@ -104,7 +104,7 @@ class LLMCodeGenerator:
         async with self._lock:
             self._request_counter += 1
             counter = self._request_counter
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"req_{timestamp}_{counter:04d}"
 
     def _get_cache_key(self, request: RefactoringRequest) -> str:

@@ -9,7 +9,7 @@ Automatically injects system awareness context into LLM requests
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import Request
@@ -99,7 +99,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
         )
         request_data[field] = enhanced_message
         request_data["_awareness_injected"] = True
-        request_data["_awareness_timestamp"] = datetime.now().isoformat()
+        request_data["_awareness_timestamp"] = datetime.now(tz=timezone.utc).isoformat()
         return json.dumps(request_data).encode()
 
     async def _try_inject_awareness(self, request: Request) -> None:
@@ -166,7 +166,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
             if (
                 self.context_cache
                 and self.cache_timestamp
-                and (datetime.now() - self.cache_timestamp).seconds < self.cache_ttl
+                and (datetime.now(tz=timezone.utc) - self.cache_timestamp).seconds < self.cache_ttl
             ):
                 return self.context_cache
 
@@ -175,7 +175,7 @@ class LLMAwarenessMiddleware(BaseHTTPMiddleware):
                 self.context_cache = await self.awareness.get_system_context(
                     include_detailed=False
                 )
-                self.cache_timestamp = datetime.now()
+                self.cache_timestamp = datetime.now(tz=timezone.utc)
                 return self.context_cache
 
         except Exception as e:

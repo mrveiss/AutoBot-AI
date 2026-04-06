@@ -5,7 +5,7 @@ import os
 import shutil
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -47,7 +47,7 @@ class ChatAPI:
             {
                 "sender": "bot",
                 "text": "Hello! How can I assist you today?",
-                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "timestamp": datetime.now(tz=timezone.utc).strftime("%H:%M:%S"),
                 "type": "response",
             }
         ]
@@ -110,7 +110,7 @@ class ChatAPI:
                         "sender": msg.get("sender", "unknown"),
                         "text": msg.get("text", ""),
                         "timestamp": msg.get(
-                            "timestamp", datetime.now().strftime("%H:%M:%S")
+                            "timestamp", datetime.now(tz=timezone.utc).strftime("%H:%M:%S")
                         ),
                         "type": msg.get("type", "message"),
                     }
@@ -145,7 +145,7 @@ class ChatAPI:
                 {
                     "sender": "bot",
                     "text": "Hello! How can I assist you today?",
-                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "timestamp": datetime.now(tz=timezone.utc).strftime("%H:%M:%S"),
                     "type": "response",
                 }
             ]

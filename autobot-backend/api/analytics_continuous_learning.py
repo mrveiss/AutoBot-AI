@@ -21,7 +21,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -267,7 +267,7 @@ class LearningPipeline:
         Returns:
             Insight object with generated ID and timestamps
         """
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         # Build hash input: prefix + optional pattern_id + timestamp
         hash_input = f"{id_prefix}_{pattern_id or ''}_{now.isoformat()}"
         insight_id = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
@@ -383,7 +383,7 @@ class LearningPipeline:
         if total_feedback >= THRESHOLDS["feedback_for_retrain"]:
             if (
                 self.last_retrain is None
-                or (datetime.now() - self.last_retrain).seconds > 3600
+                or (datetime.now(tz=timezone.utc) - self.last_retrain).seconds > 3600
             ):
                 return True
 
@@ -413,7 +413,7 @@ class LearningPipeline:
     ) -> Dict[str, Any]:
         """Retrain pattern detection models."""
         start_time = time.time()
-        self.last_retrain = datetime.now()
+        self.last_retrain = datetime.now(tz=timezone.utc)
 
         patterns_updated = 0
         improvements = []
@@ -447,7 +447,7 @@ class LearningPipeline:
 
         # Record accuracy history
         self.accuracy_history.append(
-            (datetime.now(), self._calculate_recent_accuracy())
+            (datetime.now(tz=timezone.utc), self._calculate_recent_accuracy())
         )
         if len(self.accuracy_history) > 100:
             self.accuracy_history = self.accuracy_history[-100:]
@@ -563,7 +563,7 @@ class LearningPipeline:
         Issue #398: Extracted insight generators into separate methods.
         """
         new_insights = []
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         # Insight 1: Active pattern trends
         recent_patterns = [
@@ -595,7 +595,7 @@ class LearningPipeline:
 
     def get_metrics(self) -> LearningMetrics:
         """Get current learning metrics."""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         hour_ago = now - timedelta(hours=1)
         day_ago = now - timedelta(days=1)
 
@@ -668,7 +668,7 @@ class FileMonitor:
 
         self.state = MonitoringState.STARTING
         self.watched_paths = paths
-        self.started_at = datetime.now()
+        self.started_at = datetime.now(tz=timezone.utc)
         self._stop_event.clear()
 
         # Initial scan
@@ -809,10 +809,10 @@ class FileMonitor:
         for change_type, file_path in changes:
             event = LearningEvent(
                 event_id=hashlib.sha256(
-                    f"{change_type}_{file_path}_{datetime.now().isoformat()}".encode()
+                    f"{change_type}_{file_path}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
                 ).hexdigest()[:16],
                 event_type=LearningEventType.FILE_CHANGE,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 source="file_monitor",
                 data={"change_type": change_type, "path": file_path},
             )
@@ -822,7 +822,7 @@ class FileMonitor:
         """Get monitoring status."""
         uptime = 0
         if self.started_at and self.state == MonitoringState.RUNNING:
-            uptime = int((datetime.now() - self.started_at).total_seconds())
+            uptime = int((datetime.now(tz=timezone.utc) - self.started_at).total_seconds())
 
         last_event = None
         # Get approximate last event time
@@ -973,10 +973,10 @@ class ContinuousLearningEngine:
         """Submit feedback for a pattern detection."""
         event = LearningEvent(
             event_id=hashlib.sha256(
-                f"feedback_{pattern_id}_{datetime.now().isoformat()}".encode()
+                f"feedback_{pattern_id}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
             ).hexdigest()[:16],
             event_type=LearningEventType.FEEDBACK_RECEIVED,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             source="api",
             data={
                 "pattern_id": pattern_id,
@@ -1004,7 +1004,7 @@ class ContinuousLearningEngine:
         self, active_only: bool = True, limit: int = 20
     ) -> List[Insight]:
         """Get generated insights."""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         insights = self.pipeline.insights
 
         if active_only:

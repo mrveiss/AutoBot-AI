@@ -108,10 +108,10 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         start_time = datetime.fromisoformat(started_at)
-        elapsed = (datetime.now() - start_time).total_seconds()
+        elapsed = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
         return elapsed > _STALE_TASK_TIMEOUT_SECONDS
     except (ValueError, TypeError):
         return False

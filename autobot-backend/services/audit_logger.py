@@ -35,7 +35,7 @@ import os
 import socket
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -105,8 +105,8 @@ class AuditEntry:
     """
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    date: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
+    timestamp: float = field(default_factory=lambda: datetime.now(tz=timezone.utc).timestamp())
+    date: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"))
 
     # OWASP Required Fields
     operation: str = ""
@@ -346,7 +346,7 @@ class AuditLogger:
         Issue #665: uses _create_sanitized_entry and _add_to_batch_and_schedule.
         Returns True if logged, False if fallback used.
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         entry = None
 
         try:
@@ -367,7 +367,7 @@ class AuditLogger:
             await self._add_to_batch_and_schedule(entry)
 
             # Track performance
-            log_duration_ms = (datetime.now() - start_time).total_seconds() * 1000
+            log_duration_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
             if log_duration_ms > 5.0:
                 logger.warning(
                     f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms"
@@ -489,11 +489,11 @@ class AuditLogger:
         try:
             fallback_file = (
                 self.fallback_log_dir
-                / f"audit_{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+                / f"audit_{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}.jsonl"
             )
 
             log_data = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fallback_reason": error or "Redis unavailable",
                 "entry": asdict(entry) if entry else None,
             }
@@ -582,7 +582,7 @@ class AuditLogger:
 
             # Default time range: last 24 hours
             if not end_time:
-                end_time = datetime.now()
+                end_time = datetime.now(tz=timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(days=1)
 
@@ -884,9 +884,9 @@ class AuditLogger:
 
             if audit_db:
                 # Count entries in last 24 hours
-                yesterday = datetime.now() - timedelta(days=1)
+                yesterday = datetime.now(tz=timezone.utc) - timedelta(days=1)
                 date_str = yesterday.strftime("%Y-%m-%d")
-                today_str = datetime.now().strftime("%Y-%m-%d")
+                today_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
                 yesterday_count = (
                     await audit_db._redis.zcard(f"audit:log:{date_str}")
@@ -919,7 +919,7 @@ class AuditLogger:
             days_to_keep: Override default retention period
         """
         retention = days_to_keep or self.retention_days
-        cutoff_date = datetime.now() - timedelta(days=retention)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=retention)
 
         try:
             audit_db = await self._get_audit_db()

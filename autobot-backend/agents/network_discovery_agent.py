@@ -9,7 +9,7 @@ Provides network mapping and asset discovery capabilities
 import ipaddress
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List
 
 from constants.network_constants import NetworkConstants
@@ -195,7 +195,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                     "network": network,
                     "hosts_found": len(hosts),
                     "hosts": hosts,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -245,7 +245,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                 "methods_used": methods,
                 "hosts_found": len(discovered_hosts),
                 "hosts": list(discovered_hosts.values()),
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -277,7 +277,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                     "network": network,
                     "hosts_found": len(hosts),
                     "hosts": hosts,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -314,7 +314,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                     "target": target,
                     "hops": hops,
                     "total_hops": len(hops),
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -370,7 +370,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                 "network_map": network_map,
                 "total_hosts": len(hosts),
                 "segments": len(network_map["segments"]),
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -457,7 +457,7 @@ class NetworkDiscoveryAgent(StandardizedAgent):
                 "total_assets": len(assets),
                 "assets": assets,
                 "categories": categories,
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:

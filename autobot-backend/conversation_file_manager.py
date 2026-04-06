@@ -22,7 +22,7 @@ import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -76,7 +76,7 @@ class FileInfo:
             "file_size": self.file_size,
             "file_hash": self.file_hash,
             "mime_type": self.mime_type,
-            "uploaded_at": datetime.now().isoformat(),
+            "uploaded_at": datetime.now(tz=timezone.utc).isoformat(),
             "deduplicated": self.deduplicated,
         }
 

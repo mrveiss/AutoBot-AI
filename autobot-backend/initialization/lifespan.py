@@ -823,13 +823,13 @@ async def _init_metrics_collection():
     logger.info("✅ [ 91%] Metrics Collection: Starting system metrics collection...")
     try:
         # Import here to avoid circular dependency
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from api.analytics import analytics_controller
 
         # Initialize session tracking
         analytics_state = {}
-        analytics_state["session_start"] = datetime.now().isoformat()
+        analytics_state["session_start"] = datetime.now(tz=timezone.utc).isoformat()
 
         # Start metrics collection safely (backend is now ready to serve requests)
         collector = analytics_controller.metrics_collector

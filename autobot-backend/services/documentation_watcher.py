@@ -18,7 +18,7 @@ Features:
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
 
@@ -229,7 +229,7 @@ class DocumentationWatcherService:
             else:
                 await self._handle_update(file_path)
 
-            self._stats["last_change"] = datetime.now().isoformat()
+            self._stats["last_change"] = datetime.now(tz=timezone.utc).isoformat()
             self._stats["files_indexed"] += 1
 
             # Notify callbacks
@@ -361,7 +361,7 @@ class DocumentationWatcherService:
             "type": "documentation_change",
             "file_path": str(file_path.relative_to(PROJECT_ROOT)),
             "change_type": change_type,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         for callback in self._event_callbacks:

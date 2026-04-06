@@ -7,6 +7,7 @@ Provides JWT-based authentication, session management, and role-based access con
 """
 
 import datetime
+from datetime import timezone
 import json
 import logging
 import os
@@ -134,11 +135,11 @@ class AuthenticationMiddleware:
         attempt_data = self.failed_attempts[username]
         locked_until = attempt_data.get("locked_until")
 
-        if locked_until and datetime.datetime.now() < locked_until:
+        if locked_until and datetime.datetime.now(tz=timezone.utc) < locked_until:
             return True
 
         # Clear expired lockout
-        if locked_until and datetime.datetime.now() >= locked_until:
+        if locked_until and datetime.datetime.now(tz=timezone.utc) >= locked_until:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
 
         return False
@@ -149,11 +150,11 @@ class AuthenticationMiddleware:
             self.failed_attempts[username] = {"count": 0, "locked_until": None}
 
         self.failed_attempts[username]["count"] += 1
-        self.failed_attempts[username]["last_attempt"] = datetime.datetime.now()
+        self.failed_attempts[username]["last_attempt"] = datetime.datetime.now(tz=timezone.utc)
         self.failed_attempts[username]["ip"] = ip_address
 
         if self.failed_attempts[username]["count"] >= self.max_failed_attempts:
-            lockout_until = datetime.datetime.now() + datetime.timedelta(
+            lockout_until = datetime.datetime.now(tz=timezone.utc) + datetime.timedelta(
                 minutes=self.lockout_duration_minutes
             )
             self.failed_attempts[username]["locked_until"] = lockout_until
@@ -225,7 +226,7 @@ class AuthenticationMiddleware:
         Build and return successful authentication response.
         """
         self.clear_failed_attempts(username)
-        user_config["last_login"] = datetime.datetime.now().isoformat()
+        user_config["last_login"] = datetime.datetime.now(tz=timezone.utc).isoformat()
 
         self.security_layer.audit_log(
             action="login_successful",
@@ -315,8 +316,8 @@ class AuthenticationMiddleware:
 
         session_data = {
             "user_data": user_data,
-            "created_at": datetime.datetime.now().isoformat(),
-            "last_activity": datetime.datetime.now().isoformat(),
+            "created_at": datetime.datetime.now(tz=timezone.utc).isoformat(),
+            "last_activity": datetime.datetime.now(tz=timezone.utc).isoformat(),
             "ip_address": request.client.host if request.client else "unknown",
             "user_agent": request.headers.get("User-Agent", "unknown"),
         }
@@ -350,7 +351,7 @@ class AuthenticationMiddleware:
                 if session_data:
                     session = json.loads(session_data)
                     # Update last activity and extend TTL
-                    session["last_activity"] = datetime.datetime.now().isoformat()
+                    session["last_activity"] = datetime.datetime.now(tz=timezone.utc).isoformat()
                     self.redis_client.setex(
                         session_key,
                         self.session_timeout_minutes * 60,
@@ -370,15 +371,17 @@ class AuthenticationMiddleware:
         last_activity = session.get("last_activity")
         if isinstance(last_activity, str):
             last_activity = datetime.datetime.fromisoformat(last_activity)
+            if last_activity.tzinfo is None:
+                last_activity = last_activity.replace(tzinfo=datetime.timezone.utc)
 
-        if datetime.datetime.now() - last_activity > datetime.timedelta(
+        if datetime.datetime.now(tz=timezone.utc) - last_activity > datetime.timedelta(
             minutes=self.session_timeout_minutes
         ):
             del self.active_sessions[session_id]
             return None
 
         # Update last activity
-        session["last_activity"] = datetime.datetime.now().isoformat()
+        session["last_activity"] = datetime.datetime.now(tz=timezone.utc).isoformat()
         return session
 
     def invalidate_session(self, session_id: str):
@@ -553,7 +556,7 @@ class AuthenticationMiddleware:
                 "auth_method": user_data.get("auth_method", "unknown"),
                 "user_agent": request.headers.get("User-Agent", "unknown"),
                 "ip": ip_address,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
                 "request_path": (
                     str(request.url.path) if hasattr(request, "url") else "unknown"
                 ),

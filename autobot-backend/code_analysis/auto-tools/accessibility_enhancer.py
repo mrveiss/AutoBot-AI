@@ -14,7 +14,7 @@ import json
 import os
 import re
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -190,7 +190,7 @@ class AccessibilityFixAgent:
         self.root_path = Path(root_path)
         self.backup_dir = self.root_path.parent / ".accessibility-fix-backups"
         self.report_data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "fixes_applied": [],
             "files_modified": [],
             "accessibility_score_before": 0,
@@ -207,7 +207,7 @@ class AccessibilityFixAgent:
 
     def create_backup(self, file_path: Path) -> Path:
         """Create a backup of the original file"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"{file_path.name}.{timestamp}.backup"
         shutil.copy2(file_path, backup_path)
         return backup_path

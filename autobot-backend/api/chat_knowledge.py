@@ -39,7 +39,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -182,7 +182,7 @@ class ChatKnowledgeManager:
                 context.keywords = list(set(context.keywords))  # Remove duplicates
             if user_id:
                 context.user_id = user_id
-            context.updated_at = datetime.now()
+            context.updated_at = datetime.now(tz=timezone.utc)
         else:
             context = ChatKnowledgeContext(
                 chat_id=chat_id,
@@ -260,7 +260,7 @@ class ChatKnowledgeManager:
             "id": knowledge_id,
             "content": content,
             "metadata": metadata or {},
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "status": "temporary",
         }
 
@@ -391,10 +391,10 @@ class ChatKnowledgeManager:
             "message_count": len(messages),
             "keywords": context.keywords if context else [],
             "file_associations": self.file_associations.get(chat_id, []),
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "metadata": {
                 "original_chat_id": chat_id,
-                "compilation_date": datetime.now().isoformat(),
+                "compilation_date": datetime.now(tz=timezone.utc).isoformat(),
                 "message_stats": {
                     "total": len(messages),
                     "user": len([m for m in messages if m.get("role") == "user"]),
@@ -854,7 +854,7 @@ async def health_check():
             "status": "healthy",
             "service": "chat_knowledge",
             "manager_initialized": chat_knowledge_manager is not None,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Chat knowledge health check failed: %s", e)
@@ -1032,7 +1032,7 @@ async def preserve_session_facts(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        preserve_time = datetime.now().isoformat()
+        preserve_time = datetime.now(tz=timezone.utc).isoformat()
         semaphore = asyncio.Semaphore(20)
 
         results = await asyncio.gather(

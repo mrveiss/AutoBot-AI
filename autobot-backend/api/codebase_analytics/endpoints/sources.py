@@ -13,7 +13,7 @@ import logging
 import re
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -161,7 +161,7 @@ async def _do_sync(source: CodeSource) -> None:
             source.error_message = _sanitize_git_error(err)[:500]
         else:
             source.status = SourceStatus.READY
-            source.last_synced = datetime.now().isoformat()
+            source.last_synced = datetime.now(tz=timezone.utc).isoformat()
             source.error_message = None
             await _trigger_indexing(source)
 
@@ -225,7 +225,7 @@ async def _trigger_indexing(source: CodeSource) -> None:
                 entry = {
                     "source_id": source.id,
                     "root_path": source.clone_path,
-                    "queued_at": datetime.now().isoformat(),
+                    "queued_at": datetime.now(tz=timezone.utc).isoformat(),
                     "requested_by": "sync",
                 }
                 _index_queue.append(entry)
@@ -383,7 +383,7 @@ async def sync_code_source(source_id: str):
                 detail=f"Local path not found: {source.clone_path}",
             )
         source.status = SourceStatus.READY
-        source.last_synced = datetime.now().isoformat()
+        source.last_synced = datetime.now(tz=timezone.utc).isoformat()
         await save_source(source)
         await _trigger_indexing(source)
         resp = SourceSyncResponse(

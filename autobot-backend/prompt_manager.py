@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -449,7 +449,7 @@ class PromptManager:
                 json.dumps(
                     {
                         "file_states": current_state,
-                        "last_updated": datetime.now().isoformat(),
+                        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
                         "file_count": len(current_state),
                     }
                 ),
@@ -567,8 +567,8 @@ def _build_dynamic_context(
         return prompt_manager.get(
             dynamic_template_key,
             session_id=session_id or "N/A",
-            current_date=datetime.now().strftime("%Y-%m-%d"),
-            current_time=datetime.now().strftime("%H:%M:%S"),
+            current_date=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
+            current_time=datetime.now(tz=timezone.utc).strftime("%H:%M:%S"),
             user_name=user_name,
             user_role=user_role,
             available_tools=available_tools or [],
@@ -581,7 +581,7 @@ def _build_dynamic_context(
         )
         return (
             f"\n\n## Session Context\nSession ID: {session_id or 'N/A'}\nDate:"
-            f"{datetime.now().strftime('%Y-%m-%d')}"
+            f"{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
         )
 
 

@@ -10,7 +10,7 @@ import gc
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -134,7 +134,7 @@ class SourceAttributionManager:
             type=source_type,
             reliability=reliability,
             content=content[:500],  # Limit content length
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             metadata=metadata or {},
         )
 

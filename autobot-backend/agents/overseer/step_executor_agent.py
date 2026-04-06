@@ -21,7 +21,7 @@ Execution: Uses PTY integration for commands to appear in user's terminal.
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional, Tuple, Union
 
 from security.command_patterns import check_dangerous_patterns, is_safe_command
@@ -351,7 +351,7 @@ class StepExecutorAgent:
         """
         start_time = time.time()
         task.status = StepStatus.RUNNING
-        task.started_at = datetime.now()
+        task.started_at = datetime.now(tz=timezone.utc)
 
         logger.info(
             "[StepExecutor] Starting step %d/%d: %s",
@@ -458,7 +458,7 @@ class StepExecutorAgent:
             Complete StepResult with all data
         """
         task.status = StepStatus.COMPLETED
-        task.completed_at = datetime.now()
+        task.completed_at = datetime.now(tz=timezone.utc)
 
         return StepResult(
             task_id=task.task_id,

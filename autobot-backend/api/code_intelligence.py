@@ -17,7 +17,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -606,7 +606,7 @@ def _build_redis_analysis_response(
     """
     return {
         "status": "success",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "path": path,
         "optimizations": [r.to_dict() for r in results],
         "summary": summary,
@@ -638,7 +638,7 @@ async def _generate_report_response(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "format": "markdown",
                 "report": report,
@@ -651,7 +651,7 @@ async def _generate_report_response(
         status_code=200,
         content={
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "path": path,
             "format": "json",
             "report": json_module.loads(report),
@@ -736,7 +736,7 @@ async def analyze_codebase(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "report": report.to_dict(),
             },
         )
@@ -789,7 +789,7 @@ def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
     return JSONResponse(
         status_code=200,
         content={
-            "id": f"inline-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "id": f"inline-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
             "code": code[:500],
             "language": language,
             "filename": request.filename or "inline",
@@ -805,7 +805,7 @@ def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
             "quality_score": quality_score,
             "issues": issues,
             "suggestions": [],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         },
     )
 
@@ -881,7 +881,7 @@ async def quick_scan_file(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "file_path": request.file_path,
                 "patterns": [p.to_dict() for p in results["patterns"]],
                 "statistics": {
@@ -933,7 +933,7 @@ async def get_codebase_health_score(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "health_score": round(score, 1),
                 "grade": grade,
@@ -1085,7 +1085,7 @@ async def scan_redis_file(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "file_path": request.file_path,
                 "optimizations": [r.to_dict() for r in results],
                 "total_findings": len(results),
@@ -1204,7 +1204,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
 
     return {
         "status": "success",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "path": path,
         "health_score": round(score, 1),
         "grade": grade,
@@ -1287,7 +1287,7 @@ async def security_analyze(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": request.path,
                 "summary": summary,
                 "findings": [r.to_dict() for r in results],
@@ -1340,7 +1340,7 @@ async def security_scan_file(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "file": request.file_path,
                 "findings": [r.to_dict() for r in results],
                 "total_findings": len(results),
@@ -1388,7 +1388,7 @@ async def list_vulnerability_types(
         status_code=200,
         content={
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "vulnerability_types": vuln_types,
             "total_types": len(vuln_types),
             "by_owasp_category": by_owasp,
@@ -1433,7 +1433,7 @@ async def get_security_score(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "security_score": score,
                 "grade": grade,
@@ -1553,7 +1553,7 @@ async def performance_analyze(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": request.path,
                 "summary": summary,
                 "findings": [r.to_dict() for r in results],
@@ -1606,7 +1606,7 @@ async def performance_scan_file(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "file": request.file_path,
                 "findings": [r.to_dict() for r in results],
                 "total_findings": len(results),
@@ -1654,7 +1654,7 @@ async def list_performance_issue_types(
         status_code=200,
         content={
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "issue_types": issue_types,
             "total_types": len(issue_types),
             "by_category": by_category,
@@ -1709,7 +1709,7 @@ async def get_performance_score(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "performance_score": score,
                 "grade": grade,
@@ -1810,7 +1810,7 @@ async def analyze_code_evolution(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "report": report,
             },
         )
@@ -1867,7 +1867,7 @@ async def get_pattern_evolution(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "pattern_metrics": metrics,
             },
@@ -1922,7 +1922,7 @@ async def detect_refactorings(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "refactorings": refactorings,
                 "total": len(refactorings),
@@ -1973,7 +1973,7 @@ async def get_evolution_timeline(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "timeline": timeline_data["timeline"],
             },
@@ -2049,7 +2049,7 @@ async def get_full_evolution_report(
             status_code=200,
             content={
                 "status": "success",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "path": path,
                 "evolution": evolution_report,
                 "pattern_metrics": pattern_metrics,
@@ -2089,7 +2089,7 @@ async def _run_security_analysis(task_id: str, path: str) -> None:
 
         result = {
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "path": path,
             "security_score": score,
             "grade": _calculate_grade_from_score(score),

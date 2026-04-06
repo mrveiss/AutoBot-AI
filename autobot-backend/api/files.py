@@ -14,7 +14,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 import logging
 import mimetypes
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -730,7 +730,7 @@ async def upload_file(
         success=True,
         message=f"File '{file.filename}' uploaded successfully",
         file_info=file_info,
-        upload_id=f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        upload_id=f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}",
     )
 
 

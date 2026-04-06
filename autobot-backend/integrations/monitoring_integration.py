@@ -9,7 +9,7 @@ enabling AutoBot to query metrics, monitors, and application health data.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import aiohttp
@@ -187,9 +187,9 @@ class DatadogIntegration(BaseIntegration):
     async def _get_metrics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query metrics from Datadog."""
         query = params.get("query", "")
-        to_time = params.get("to_time", int(datetime.now().timestamp()))
+        to_time = params.get("to_time", int(datetime.now(tz=timezone.utc).timestamp()))
         from_time = params.get(
-            "from_time", int((datetime.now() - timedelta(hours=1)).timestamp())
+            "from_time", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
         )
 
         async with aiohttp.ClientSession() as session:
@@ -219,9 +219,9 @@ class DatadogIntegration(BaseIntegration):
 
     async def _get_events(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get recent events from Datadog."""
-        end = params.get("end", int(datetime.now().timestamp()))
+        end = params.get("end", int(datetime.now(tz=timezone.utc).timestamp()))
         start = params.get(
-            "start", int((datetime.now() - timedelta(hours=1)).timestamp())
+            "start", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
         )
 
         async with aiohttp.ClientSession() as session:

@@ -9,7 +9,7 @@ import asyncio
 import gc
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -56,7 +56,7 @@ class UnifiedMemoryManager:
         ...     task_name="Process Document",
         ...     status=TaskStatus.PENDING,
         ...     priority=TaskPriority.HIGH,
-        ...     created_at=datetime.now()
+        ...     created_at=datetime.now(tz=timezone.utc)
         ... )
         >>> await manager.log_task(record)
 
@@ -327,7 +327,7 @@ class UnifiedMemoryManager:
             category=category,
             content=content,
             metadata=metadata or {},
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             reference_path=reference_path,
             embedding=embedding,
         )

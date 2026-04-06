@@ -10,7 +10,7 @@ input validation, domain security, and content filtering.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, Optional
 
 from ..agents.web_researcher import ResearchType
@@ -168,7 +168,7 @@ class SecureWebResearch:
                 "content_filtered": False,
                 "risk_level": "unknown",
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "from_cache": False,
         }
 
@@ -342,7 +342,7 @@ class SecureWebResearch:
                 "content_filtered": False,
                 "risk_level": "high",
             },
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     async def conduct_secure_research(
@@ -478,7 +478,7 @@ class SecureWebResearch:
         test_results = {
             "overall_status": "passed",
             "components": {},
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         try:
@@ -521,7 +521,7 @@ class SecureWebResearch:
                 "overall_status": "error",
                 "error": "Security component test failed",
                 "components": test_results.get("components", {}),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 

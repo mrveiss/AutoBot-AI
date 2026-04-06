@@ -13,7 +13,7 @@ Provides detailed logging of terminal commands with:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, List, Optional
 
@@ -79,7 +79,7 @@ class TerminalLogger:
         # Only create if it doesn't exist
         # Issue #358 - avoid blocking
         if not await asyncio.to_thread(chat_file.exists):
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_time = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             chat_data = {
                 "chatId": session_id,
@@ -111,7 +111,7 @@ class TerminalLogger:
         user_id: Optional[str],
     ) -> Dict[str, Any]:
         """Create a structured log entry dictionary. Issue #620."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         log_entry = {
             "timestamp": timestamp,
             "run_type": run_type.upper(),

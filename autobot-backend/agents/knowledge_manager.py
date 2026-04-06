@@ -30,7 +30,7 @@ Date: 2025-11-11
 import asyncio
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
@@ -907,7 +907,7 @@ class UnifiedKnowledgeManager:
             "initialized": self._initialized,
             "temporal_enabled": self.enable_temporal,
             "machine_aware_enabled": self.enable_machine_aware,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         # System knowledge categories
@@ -1057,7 +1057,7 @@ class UnifiedKnowledgeManager:
         """
         await self._ensure_initialized()
 
-        backup_info = {"timestamp": datetime.now().isoformat(), "components": {}}
+        backup_info = {"timestamp": datetime.now(tz=timezone.utc).isoformat(), "components": {}}
 
         await self._backup_system_knowledge(backup_info)
         await self._backup_temporal_metadata(backup_info)

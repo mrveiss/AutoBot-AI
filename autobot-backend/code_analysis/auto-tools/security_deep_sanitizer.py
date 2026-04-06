@@ -97,7 +97,7 @@ import os
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -193,7 +193,7 @@ class EnhancedSecurityFixAgent:
         self.vulnerabilities_found = []
         self.backup_dir = None
         self.report = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "agent_version": "2.0.0",
             "scan_summary": {},
             "vulnerabilities": [],
@@ -246,7 +246,7 @@ class EnhancedSecurityFixAgent:
     def create_backup(self, file_path: str) -> str:
         """Create a backup of the original file."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             backup_name = f"{Path(file_path).name}.backup_{timestamp}"
 
             if not self.backup_dir:
@@ -871,7 +871,7 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
     def save_report(self, report_content: str, output_dir: str) -> str:
         """Save the comprehensive security report."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             report_filename = f"enhanced_security_report_{timestamp}.md"
             report_path = os.path.join(output_dir, report_filename)
 

@@ -23,7 +23,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -563,7 +563,7 @@ class CodeGenerationEngine:
     def _generate_version_id(self, code: str) -> str:
         """Generate unique version ID from code content"""
         content_hash = hashlib.sha256(code.encode()).hexdigest()[:12]
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"v_{timestamp}_{content_hash}"
 
     def _generate_diff(self, original: str, modified: str) -> str:
@@ -789,7 +789,7 @@ class CodeGenerationEngine:
         version = CodeVersion(
             version_id=version_id,
             code=code,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             description=description,
         )
 
@@ -866,7 +866,7 @@ class CodeGenerationEngine:
         try:
             redis = await self._get_redis()
 
-            stats_key = f"{self._stats_key}:{datetime.now().strftime('%Y-%m-%d')}"
+            stats_key = f"{self._stats_key}:{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}"
 
             # Increment counters
             await redis.hincrby(stats_key, f"{operation}:total", 1)
@@ -887,7 +887,7 @@ class CodeGenerationEngine:
         try:
             redis = await self._get_redis()
 
-            today = datetime.now().strftime("%Y-%m-%d")
+            today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             stats_key = f"{self._stats_key}:{today}"
 
             stats_data = await redis.hgetall(stats_key)
@@ -916,7 +916,7 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Failed to get stats: %s", e)
             return {
-                "date": datetime.now().strftime("%Y-%m-%d"),
+                "date": datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
                 "error": "Internal server error",
             }
 

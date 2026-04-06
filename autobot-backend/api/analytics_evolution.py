@@ -16,7 +16,7 @@ Features:
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -285,12 +285,12 @@ def _parse_date_range(start_date: Optional[str], end_date: Optional[str]) -> tup
     start_ts = (
         datetime.fromisoformat(start_date).timestamp()
         if start_date
-        else (datetime.now() - timedelta(days=30)).timestamp()
+        else (datetime.now(tz=timezone.utc) - timedelta(days=30)).timestamp()
     )
     end_ts = (
         datetime.fromisoformat(end_date).timestamp()
         if end_date
-        else datetime.now().timestamp()
+        else datetime.now(tz=timezone.utc).timestamp()
     )
     return start_ts, end_ts
 
@@ -547,7 +547,7 @@ def _build_trends_success_response(
         "trends": trends,
         "period_days": days,
         "snapshot_count": snapshot_count,
-        "analysis_timestamp": datetime.now().isoformat(),
+        "analysis_timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -580,8 +580,8 @@ async def get_quality_trends(
         )
 
     try:
-        start_ts = (datetime.now() - timedelta(days=days)).timestamp()
-        end_ts = datetime.now().timestamp()
+        start_ts = (datetime.now(tz=timezone.utc) - timedelta(days=days)).timestamp()
+        end_ts = datetime.now(tz=timezone.utc).timestamp()
         snapshots = await asyncio.to_thread(
             _fetch_trend_snapshots_sync, redis_client, start_ts, end_ts
         )
@@ -698,7 +698,7 @@ def _parse_export_date_range(
     end_ts = (
         datetime.fromisoformat(end_date).timestamp()
         if end_date
-        else datetime.now().timestamp()
+        else datetime.now(tz=timezone.utc).timestamp()
     )
     return start_ts, end_ts
 
@@ -751,7 +751,7 @@ def _generate_csv_response(timeline_data: list) -> StreamingResponse:
         iter([csv_content]),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=evolution_data_{datetime.now().strftime('%Y%m%d')}.csv"
+            "Content-Disposition": f"attachment; filename=evolution_data_{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.csv"
         },
     )
 
@@ -764,7 +764,7 @@ def _generate_json_export_response(timeline_data: list) -> JSONResponse:
             "export_format": "json",
             "data": timeline_data,
             "record_count": len(timeline_data),
-            "exported_at": datetime.now().isoformat(),
+            "exported_at": datetime.now(tz=timezone.utc).isoformat(),
         }
     )
 
@@ -996,9 +996,9 @@ def _generate_demo_timeline(
     start = (
         datetime.fromisoformat(start_date)
         if start_date
-        else datetime.now() - timedelta(days=30)
+        else datetime.now(tz=timezone.utc) - timedelta(days=30)
     )
-    end = datetime.fromisoformat(end_date) if end_date else datetime.now()
+    end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
     step = _get_granularity_step(granularity)
 
     timeline = []
@@ -1021,7 +1021,7 @@ def _generate_demo_patterns() -> Dict[str, List[Dict[str, Any]]]:
         "hardcoded_value": [],
     }
 
-    start = datetime.now() - timedelta(days=30)
+    start = datetime.now(tz=timezone.utc) - timedelta(days=30)
 
     for i in range(30):
         current = start + timedelta(days=i)
@@ -1140,7 +1140,7 @@ async def _store_pattern_snapshots(analysis_result: Dict) -> int:
     snapshots_stored = 0
 
     try:
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(tz=timezone.utc).isoformat()
 
         # Store snapshots for each pattern type
         pattern_timeline = analysis_result.get("pattern_timeline", {})

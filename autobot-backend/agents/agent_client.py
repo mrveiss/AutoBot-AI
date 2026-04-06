@@ -9,7 +9,7 @@ Routes requests to local agents or remote containers based on configuration
 import asyncio
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -119,14 +119,15 @@ class AgentRegistry:
         if not agent:
             return
 
-        last_check = self.last_health_check.get(agent_type, datetime.min)
-        if not force and datetime.now() - last_check < timedelta(minutes=1):
+        aware_min = datetime.min.replace(tzinfo=timezone.utc)
+        last_check = self.last_health_check.get(agent_type, aware_min)
+        if not force and datetime.now(tz=timezone.utc) - last_check < timedelta(minutes=1):
             return  # Skip if checked recently
 
         try:
             health = await agent.health_check()
             self.agent_health[agent_type] = health
-            self.last_health_check[agent_type] = datetime.now()
+            self.last_health_check[agent_type] = datetime.now(tz=timezone.utc)
         except Exception as e:
             logger.error("Health check failed for %s: %s", agent_type, e)
 

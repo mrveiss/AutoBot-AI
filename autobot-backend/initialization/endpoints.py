@@ -9,7 +9,7 @@ Registers root-level endpoints that frontend expects directly under /api
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import FastAPI, Request
@@ -120,7 +120,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         ai_agents_ready = services.get("ai_stack_agents") == "ready"
         return {
             "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "service": "autobot-backend",
             "services": services,
             "ai_enhanced": ai_stack_ready,
@@ -141,7 +141,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         return {
             "version": "0.0.1",
             "build": "dev",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     # Issue #961: A2A canonical discovery endpoint (spec §3.1)

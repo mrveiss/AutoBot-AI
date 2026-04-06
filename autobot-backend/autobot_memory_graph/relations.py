@@ -14,7 +14,7 @@ Part of the modular autobot_memory_graph package (Issue #716).
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import (
@@ -58,7 +58,7 @@ class RelationOperationsMixin:
         Returns:
             Tuple of (outgoing_relation, reverse_relation)
         """
-        timestamp = int(datetime.now().timestamp() * 1000)
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
 
         relation = {
             "to": to_id,
@@ -142,7 +142,7 @@ class RelationOperationsMixin:
         metadata: Optional[Dict[str, Any]],
     ) -> tuple:
         """Build relation objects for create_relation_by_id. Issue #620."""
-        timestamp = int(datetime.now().timestamp() * 1000)
+        timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         relation = {
             "to": to_entity_id,
             "type": relation_type,

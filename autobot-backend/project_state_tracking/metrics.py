@@ -10,7 +10,7 @@ Part of Issue #381 - God Class Refactoring
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
 from .models import StateSnapshot
@@ -44,7 +44,7 @@ async def get_error_rate(redis_client: Any, fallback_count: int = 0) -> float:
             return 0.0
 
         # Get error count from current hour
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         error_key = f"{REDIS_METRIC_KEYS['error_count']}:{current_hour.timestamp()}"
         error_count = await get_redis_metric(redis_client, error_key, 0)
@@ -74,7 +74,7 @@ async def get_user_interactions_count(
             return fallback_count
 
         total_interactions = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         for i in range(24):  # Last 24 hours
             hour = now - timedelta(hours=i)
@@ -97,7 +97,7 @@ async def get_api_calls_count(redis_client: Any, fallback_count: int = 0) -> int
             return fallback_count
 
         total_calls = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         for i in range(24):  # Last 24 hours
             hour = now - timedelta(hours=i)
@@ -121,7 +121,7 @@ def calculate_progression_velocity(
         return 0.0
 
     # Look at last 7 days of data
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    seven_days_ago = datetime.now(tz=timezone.utc) - timedelta(days=7)
     recent_snapshots = [s for s in state_history if s.timestamp >= seven_days_ago]
 
     if len(recent_snapshots) < 2:
@@ -155,21 +155,21 @@ async def get_metrics_summary(
             "error_tracking": {
                 "current_error_rate": await get_error_rate(redis_client),
                 "total_errors_tracked": error_count,
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },
             "api_tracking": {
                 "total_api_calls_24h": await get_api_calls_count(
                     redis_client, api_call_count
                 ),
                 "current_session_calls": api_call_count,
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },
             "user_interactions": {
                 "total_interactions_24h": await get_user_interactions_count(
                     redis_client, user_interaction_count
                 ),
                 "current_session_interactions": user_interaction_count,
-                "last_update": datetime.now().isoformat(),
+                "last_update": datetime.now(tz=timezone.utc).isoformat(),
             },
             "system_health": {
                 "redis_connected": redis_client is not None,

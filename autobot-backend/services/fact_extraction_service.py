@@ -10,7 +10,7 @@ Integrates with the knowledge base to store and retrieve temporal facts.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
@@ -400,7 +400,7 @@ class FactExtractionService:
             # Add service metadata
             fact_data.update(
                 {
-                    "storage_timestamp": datetime.now().isoformat(),
+                    "storage_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "service_metadata": metadata or {},
                 }
             )
@@ -508,7 +508,7 @@ class FactExtractionService:
             facts_summary = {
                 "type": "atomic_facts_collection",
                 "total_facts": len(facts),
-                "extraction_timestamp": datetime.now().isoformat(),
+                "extraction_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "facts": [],
             }
 
@@ -560,7 +560,7 @@ class FactExtractionService:
                 return
 
             history_entry = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "source": source,
                 "facts_extracted": len(extraction_result.facts),
                 "facts_stored": storage_results["stored_count"],

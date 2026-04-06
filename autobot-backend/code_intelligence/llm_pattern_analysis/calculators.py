@@ -11,7 +11,7 @@ Contains classes for tracking token usage and calculating costs:
 Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from code_intelligence.llm_pattern_analysis.data_models import (
@@ -85,7 +85,7 @@ class TokenTracker:
         self.model_usage[model].estimated_cost_usd += cost
 
         # Update hourly tracking
-        hour_key = datetime.now().strftime("%Y-%m-%d-%H")
+        hour_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d-%H")
         self.hourly_usage[hour_key] = self.hourly_usage.get(hour_key, 0) + total_tokens
 
         return usage

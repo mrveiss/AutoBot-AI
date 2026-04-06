@@ -9,7 +9,7 @@ Contains enums and dataclasses for long-running operations.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -155,12 +155,12 @@ class LongRunningOperation:
 
     def start_execution(self) -> None:
         """Mark operation as started."""
-        self.started_at = datetime.now()
+        self.started_at = datetime.now(tz=timezone.utc)
         self.status = OperationStatus.RUNNING
 
     def mark_completed(self, result: Any = None) -> None:
         """Mark operation as completed."""
-        self.completed_at = datetime.now()
+        self.completed_at = datetime.now(tz=timezone.utc)
         self.status = OperationStatus.COMPLETED
         self.result = result
 

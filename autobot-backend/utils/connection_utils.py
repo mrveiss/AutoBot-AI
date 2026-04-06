@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiohttp
 
@@ -76,7 +76,7 @@ class ConnectionTester:
                 "backend": "connected",
                 "ollama": ollama_status,
                 "redis_status": redis_status,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fast_check": True,
             }
 
@@ -95,7 +95,7 @@ class ConnectionTester:
                 "ollama": "unknown",
                 "redis_status": "unknown",
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fast_check": True,
             }
 
@@ -430,7 +430,7 @@ class ConnectionTester:
                 "redis_search_module_loaded": redis_result.get(
                     "redis_search_module_loaded", False
                 ),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "details": {
                     "ollama": ollama_status,
                     "redis": redis_result,
@@ -446,7 +446,7 @@ class ConnectionTester:
                 "redis_status": "unknown",
                 "redis_search_module_loaded": False,
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 

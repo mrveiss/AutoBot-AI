@@ -10,7 +10,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents import get_kb_librarian
@@ -88,8 +88,8 @@ class Conversation:
         self.conversation_id = conversation_id or str(uuid.uuid4())
         self.messages: List[ConversationMessage] = []
         self.state = ConversationState(conversation_id=self.conversation_id)
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.created_at = datetime.now(tz=timezone.utc)
+        self.updated_at = datetime.now(tz=timezone.utc)
 
         # Initialize agents
         self._initialize_classification_agent()
@@ -187,7 +187,7 @@ class Conversation:
             self.state.sources_used = [
                 s.to_dict() for s in source_manager.current_response_sources
             ]
-            self.updated_at = datetime.now()
+            self.updated_at = datetime.now(tz=timezone.utc)
 
             return self._build_process_result(
                 response, sources_block, kb_results, assistant_msg, research_results
@@ -202,7 +202,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="user",
             content=user_message,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="chat",
         )
         self.messages.append(user_msg)
@@ -216,7 +216,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="assistant",
             content=response,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="chat",
             sources=sources,
         )
@@ -230,7 +230,7 @@ class Conversation:
                 message_id=str(uuid.uuid4()),
                 role="system",
                 content=sources_block,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 message_type="source",
             )
             self.messages.append(source_msg)
@@ -270,7 +270,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content=f"Error processing request: {str(error)}",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="debug",
             metadata={"error": True},
         )
@@ -297,7 +297,7 @@ class Conversation:
                 role="system",
                 content=f"Classified as: {self.state.classification.complexity.value} "
                 f"(confidence: {self.state.classification.confidence:.2f})",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 message_type="thought",
                 metadata={
                     "classification": asdict(self.state.classification),
@@ -343,7 +343,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content=f"Found {len(results)} relevant knowledge base entries",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="utility",
             metadata={"kb_results": len(results)},
         )
@@ -356,7 +356,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content=error_detail,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type=msg_type,
             metadata={error_type: True},
         )
@@ -372,7 +372,7 @@ class Conversation:
                 message_id=str(uuid.uuid4()),
                 role="system",
                 content=f"Searching Knowledge Base for: '{query}'",
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 message_type="planning",
             )
             self.messages.append(planning_msg)
@@ -493,7 +493,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content="Generating response with KB context and LLM",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="planning",
         )
         self.messages.append(planning_msg)
@@ -504,7 +504,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content=f"Response generated using {llm_response.tier_used.value} LLM tier",
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type="utility",
             metadata={
                 "tier_used": llm_response.tier_used.value,
@@ -667,7 +667,7 @@ class Conversation:
             message_id=str(uuid.uuid4()),
             role="system",
             content=content,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             message_type=message_type,
             metadata=metadata,
         )

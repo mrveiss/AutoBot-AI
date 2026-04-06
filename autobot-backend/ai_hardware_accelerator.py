@@ -13,7 +13,7 @@ import asyncio
 import io
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
@@ -218,7 +218,7 @@ class AIHardwareAccelerator:
         self.device_status = {
             HardwareDevice.NPU: {"available": False, "last_check": None},
             HardwareDevice.GPU: {"available": False, "last_check": None},
-            HardwareDevice.CPU: {"available": True, "last_check": datetime.now()},
+            HardwareDevice.CPU: {"available": True, "last_check": datetime.now(tz=timezone.utc)},
         }
 
         # Multi-modal models
@@ -267,7 +267,7 @@ class AIHardwareAccelerator:
 
         # CPU is always available
         self.device_status[HardwareDevice.CPU]["available"] = True
-        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now()
+        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(tz=timezone.utc)
 
     async def _check_npu_availability(self):
         """Check NPU Worker availability."""
@@ -284,7 +284,7 @@ class AIHardwareAccelerator:
                     self.device_status[HardwareDevice.NPU]["available"] = npu_available
                     self.device_status[HardwareDevice.NPU][
                         "last_check"
-                    ] = datetime.now()
+                    ] = datetime.now(tz=timezone.utc)
 
                     if npu_available:
                         logger.info("NPU Worker available and ready")
@@ -304,7 +304,7 @@ class AIHardwareAccelerator:
         """Check GPU availability (Issue #315 - refactored to reduce nesting)."""
         torch = _get_torch()
 
-        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
+        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now(tz=timezone.utc)
 
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
             self.device_status[HardwareDevice.GPU]["available"] = False
@@ -320,7 +320,7 @@ class AIHardwareAccelerator:
                     temperature_c=gpu_metrics["temperature_c"],
                     power_usage_w=gpu_metrics["power_usage_w"],
                     available_memory_mb=gpu_metrics["available_memory_mb"],
-                    last_updated=datetime.now(),
+                    last_updated=datetime.now(tz=timezone.utc),
                 )
                 logger.info("GPU available: %s", torch.cuda.get_device_name(0))
             else:
@@ -354,7 +354,7 @@ class AIHardwareAccelerator:
             power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W
             + (utilization / 100.0 * power_delta),  # 2-10W range
             available_memory_mb=HardwareAcceleratorConfig.NPU_MEMORY_MB,
-            last_updated=datetime.now(),
+            last_updated=datetime.now(tz=timezone.utc),
         )
 
     async def _hardware_monitoring_loop(self):

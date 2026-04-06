@@ -19,7 +19,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -575,7 +575,7 @@ class OwnershipAnalyzer:
                 author_data[do.primary_owner]["areas"].add(do.directory_path)
 
         # Calculate scores
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         recency_cutoff = now - timedelta(days=days_for_recency)
 
         max_lines = max((d["lines"] for d in author_data.values()), default=1)
@@ -636,7 +636,7 @@ class OwnershipAnalyzer:
     ) -> List[KnowledgeGap]:
         """Detect knowledge gaps in the codebase"""
         gaps = []
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         recency_cutoff = now - timedelta(days=days_for_recency)
 
         # Check file-level gaps

@@ -14,7 +14,7 @@ import logging
 import sqlite3
 import threading
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from queue import Queue
 from typing import Any, Dict
@@ -165,14 +165,14 @@ class SQLiteConnectionPool:
         Yields:
             sqlite3.Connection: Database connection
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         conn = None
 
         try:
             conn = self._acquire_connection()
 
             # Record wait time (thread-safe)
-            wait_time = (datetime.now() - start_time).total_seconds()
+            wait_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             with self._lock:
                 self._stats["total_wait_time"] += wait_time
 

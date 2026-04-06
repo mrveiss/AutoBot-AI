@@ -11,7 +11,7 @@ Handles checkpoint save/load/resume functionality.
 import json
 import logging
 import pickle  # nosec B403 - pickle used for internal checkpoint serialization only
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import aiofiles
@@ -134,7 +134,7 @@ class OperationCheckpointManager:
         checkpoint = OperationCheckpoint(
             checkpoint_id=checkpoint_id,
             operation_id=operation_id,
-            checkpoint_time=datetime.now(),
+            checkpoint_time=datetime.now(tz=timezone.utc),
             progress_percent=progress_percent,
             state_data=state_data,
             metadata=metadata or {},

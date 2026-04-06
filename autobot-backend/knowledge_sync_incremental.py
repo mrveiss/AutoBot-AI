@@ -23,7 +23,7 @@ import os
 import sys
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -754,7 +754,7 @@ class IncrementalKnowledgeSync:
         """Save sync summary for performance tracking."""
         try:
             summary = {
-                "sync_time": datetime.now().isoformat(),
+                "sync_time": datetime.now(tz=timezone.utc).isoformat(),
                 "metrics": asdict(metrics),
                 "sync_type": "incremental",
                 "performance_improvement": "10-50x faster than full sync",

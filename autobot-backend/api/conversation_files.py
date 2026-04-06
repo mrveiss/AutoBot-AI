@@ -11,7 +11,7 @@ session ownership validation, authentication, and authorization.
 import asyncio
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -508,7 +508,7 @@ async def upload_conversation_file(
         )
 
         upload_id = (
-            f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
+            f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}"
         )
 
         return FileUploadResponse(

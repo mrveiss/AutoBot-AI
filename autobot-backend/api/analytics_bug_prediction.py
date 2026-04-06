@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -585,7 +585,7 @@ async def _store_prediction_history(
             logger.debug("Redis not available for prediction history storage")
             return False
 
-        timestamp = datetime.now()
+        timestamp = datetime.now(tz=timezone.utc)
         timestamp_ms = int(timestamp.timestamp() * 1000)
 
         # Calculate average risk score and build snapshot
@@ -623,7 +623,7 @@ async def _get_prediction_history(days: int) -> List[Dict[str, Any]]:
             return []
 
         # Calculate time range
-        end_time = datetime.now()
+        end_time = datetime.now(tz=timezone.utc)
         start_time = end_time - timedelta(days=days)
         start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
@@ -903,7 +903,7 @@ async def _run_bug_analysis(
 
     return {
         "status": "success",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "total_files": len(files_to_analyze),
         "analyzed_files": len(analyzed_files),
         "high_risk_count": high_risk,
@@ -960,7 +960,7 @@ def _build_analysis_result(
         risk_dist[level.value] += 1
     return {
         "status": "success",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "total_files": total,
         "analyzed_files": len(analyzed_files),
         "high_risk_count": high_risk,
@@ -1450,7 +1450,7 @@ async def get_prediction_summary(
 
         return {
             "status": "success",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "total_files_analyzed": len(analyzed_files),
             "high_risk_files": high_risk_count,
             "risk_distribution": risk_dist,
@@ -1539,7 +1539,7 @@ async def record_bug(
                 "file_path": file_path,
                 "description": description,
                 "severity": severity,
-                "recorded_at": datetime.now().isoformat(),
+                "recorded_at": datetime.now(tz=timezone.utc).isoformat(),
             }
             # Issue #361 - avoid blocking
             await asyncio.to_thread(

@@ -13,7 +13,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Set
 
@@ -929,7 +929,7 @@ def _create_search_result(file_name: str, line_num: int, line_content: str) -> d
         "file": file_name,
         "line": line_num,
         "content": line_content,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 

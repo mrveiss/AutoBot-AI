@@ -22,7 +22,7 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -973,7 +973,7 @@ class DuplicateCodeDetector(_BaseClass):
             total_duplicate_lines=total_lines,
             duplicates=duplicates,
             files_analyzed=len(files),
-            scan_timestamp=datetime.now().isoformat(),
+            scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
         )
 
         logger.info(
@@ -1176,7 +1176,7 @@ class DuplicateCodeDetector(_BaseClass):
             total_duplicate_lines=total_lines,
             duplicates=duplicates,
             files_analyzed=files_count,
-            scan_timestamp=datetime.now().isoformat(),
+            scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
         )
 
     async def run_analysis_async(self) -> DuplicateAnalysis:

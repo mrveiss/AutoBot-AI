@@ -19,7 +19,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -687,7 +687,7 @@ class DocIndexerService:
             "subsection": chunk.get("subsection") or "",
             "title": chunk["title"],
             "tags": ",".join(str(t) for t in file_tags),
-            "indexed_at": datetime.now().isoformat(),
+            "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
         }

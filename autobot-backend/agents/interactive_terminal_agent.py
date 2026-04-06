@@ -15,7 +15,7 @@ import select
 import struct
 import termios
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from constants.threshold_constants import TimingConstants
@@ -249,7 +249,7 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "output": output,
                 "type": "output",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -261,7 +261,7 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "output": f"❌ Error: {error}",
                 "type": "error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 

@@ -10,7 +10,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
@@ -106,7 +106,7 @@ class TaskExecutionTracker:
         self.active_tasks[task_id] = {
             "task_name": task_name,
             "agent_type": agent_type,
-            "started_at": datetime.now(),
+            "started_at": datetime.now(tz=timezone.utc),
             "inputs": inputs,
         }
 
