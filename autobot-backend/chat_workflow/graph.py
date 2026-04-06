@@ -22,9 +22,11 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
+import hashlib
+import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -33,6 +35,24 @@ from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Tool-call loop detection constants (#3254)
+# ---------------------------------------------------------------------------
+
+# Number of identical-fingerprint iterations required to declare a loop.
+_LOOP_DETECTION_WINDOW: int = 3
+
+# Maximum consecutive loop events before the graph halts tool execution.
+_LOOP_ABORT_THRESHOLD: int = 2
+
+# Warning injected into the prompt on first loop detection.
+_LOOP_WARNING_MSG: str = (
+    "You appear to be calling the same tool with identical or near-identical "
+    "arguments repeatedly without making progress. Break the loop: either use "
+    "the 'respond' tool to explain what you have found so far, or try a "
+    "meaningfully different approach."
+)
 
 # Redis connection for checkpointer
 _REDIS_URI = None  # Set lazily from SSOT config
@@ -90,8 +110,88 @@ class ChatState(TypedDict, total=False):
     reflection_history: List[Dict[str, Any]]
     rlm_refinement_hint: str
 
+    # Tool-call loop detection (#3254)
+    # Each entry is a frozenset fingerprint of (tool_name, args_hash) for one iteration.
+    tool_call_fingerprints: List[str]
+    tool_loop_count: int
+    tool_loop_warning: str
+
     # Error tracking
     error: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# Tool-call loop detection helpers (#3254)
+# ---------------------------------------------------------------------------
+
+
+def _fingerprint_tool_call(tool_call: Dict[str, Any]) -> str:
+    """Return a stable string fingerprint for one tool call.
+
+    The fingerprint is built from the tool name plus a SHA-1 digest of the
+    canonically sorted JSON-serialised params dict.  Using a digest (rather
+    than the raw params string) keeps fingerprints constant-length and avoids
+    false negatives caused by key-ordering differences.
+
+    Issue #3254: content-aware detection — two calls are considered identical
+    when *both* the tool name and the arguments are the same.
+
+    Args:
+        tool_call: A parsed tool-call dict with at least a "name" key and an
+                   optional "params" key (dict or scalar).
+
+    Returns:
+        A short string of the form ``"<name>:<hex_digest>"``.
+    """
+    name = tool_call.get("name", "")
+    params = tool_call.get("params", {})
+    try:
+        canonical = json.dumps(params, sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError):
+        canonical = str(params)
+    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[
+        :12
+    ]
+    return f"{name}:{digest}"
+
+
+def _detect_tool_call_loop(
+    new_fingerprints: List[str],
+    history: List[str],
+    window: int = _LOOP_DETECTION_WINDOW,
+) -> Tuple[bool, List[str]]:
+    """Detect whether the current iteration is a repetition of recent ones.
+
+    A loop is declared when the last ``window - 1`` entries in ``history``
+    are all identical to the current set of fingerprints.  This requires at
+    least ``window`` consecutive identical iterations before triggering.
+
+    Issue #3254: content-aware (not just count-based) — two iterations are
+    considered identical only when they produce *the same tool calls in the
+    same order*.
+
+    Args:
+        new_fingerprints: Fingerprint strings for the current iteration's
+                          tool calls (one entry per tool call).
+        history:          Accumulated per-iteration fingerprint strings from
+                          previous iterations (each entry is one iteration's
+                          comma-joined fingerprints).
+        window:           How many identical consecutive iterations trigger
+                          the loop alarm (default: ``_LOOP_DETECTION_WINDOW``).
+
+    Returns:
+        ``(is_loop, updated_history)`` where ``updated_history`` has the new
+        iteration's fingerprint appended.
+    """
+    current_key = ",".join(new_fingerprints)
+    updated = list(history) + [current_key]
+
+    if len(updated) < window:
+        return False, updated
+
+    recent = updated[-(window):]
+    is_loop = len(set(recent)) == 1 and recent[0] != ""
+    return is_loop, updated
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +229,10 @@ async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
             "reflection_count": 0,
             "reflection_history": [],
             "rlm_refinement_hint": "",
+            # Tool-call loop detection (#3254)
+            "tool_call_fingerprints": [],
+            "tool_loop_count": 0,
+            "tool_loop_warning": "",
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -239,7 +343,7 @@ def _inject_mid_conversation_warning(hint: str, initial_prompt: str) -> str:
 
 
 def _build_llm_iteration_context(state: ChatState):
-    """Helper for generate_response. Ref: #1088, #1373, #3260.
+    """Helper for generate_response. Ref: #1088, #1373, #3254, #3260.
 
     Reconstructs an LLMIterationContext from the current graph state so that
     generate_response can delegate to the manager's continuation loop method.
@@ -247,6 +351,9 @@ def _build_llm_iteration_context(state: ChatState):
     When an RLM refinement hint is present (set by reflect_on_response), it
     is appended to the initial prompt so the LLM focuses on the identified
     deficiency in the next pass.
+
+    When a tool-call loop warning is present (#3254), it is similarly appended
+    so the LLM is instructed to break out of the repetitive pattern.
 
     Note (Issue #3260): Corrective/warning content is always merged into
     ``initial_prompt`` via ``_inject_mid_conversation_warning``, never via a
@@ -262,6 +369,12 @@ def _build_llm_iteration_context(state: ChatState):
     hint = state.get("rlm_refinement_hint", "")
     if hint:
         initial_prompt = _inject_mid_conversation_warning(hint, initial_prompt)
+
+    # Inject tool-call loop warning when a repetition loop is detected (#3254).
+    # Same constraint applies: prompt-string injection only, never SystemMessage.
+    loop_warning = state.get("tool_loop_warning", "")
+    if loop_warning:
+        initial_prompt = _inject_mid_conversation_warning(loop_warning, initial_prompt)
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
@@ -353,6 +466,8 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         "all_llm_responses": all_responses,
         "tool_calls": parsed_tool_calls,
         "workflow_messages": messages,
+        # Reset loop warning so it is only active for one cycle (#3254).
+        "tool_loop_warning": "",
     }
 
 
@@ -479,6 +594,25 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             "workflow_messages": messages,
         }
 
+    # Issue #3254: Fingerprint the tool calls about to run and detect loops
+    # *before* execution.  This is the correct place because execute_tools
+    # receives the parsed tool call list from generate_response via state.
+    fingerprint_history = list(state.get("tool_call_fingerprints", []))
+    tool_loop_count = state.get("tool_loop_count", 0)
+    tool_loop_warning = ""
+
+    new_fps = [_fingerprint_tool_call(tc) for tc in tool_calls]
+    is_loop, fingerprint_history = _detect_tool_call_loop(new_fps, fingerprint_history)
+    if is_loop:
+        tool_loop_count += 1
+        tool_loop_warning = _LOOP_WARNING_MSG
+        logger.warning(
+            "Tool-call loop detected (loop_count=%d, session=%s): %s",
+            tool_loop_count,
+            state.get("session_id", "unknown"),
+            new_fps,
+        )
+
     # Execute via existing manager method
     exec_history = list(state.get("execution_history", []))
     break_loop = False
@@ -505,11 +639,30 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             if isinstance(item, dict) and item.get("type") == "execution_summary":
                 exec_history.append(item)
 
+    # Issue #3254: Emit a user-visible message when the loop abort threshold is
+    # reached so the user understands why the assistant stopped making progress.
+    if tool_loop_count >= _LOOP_ABORT_THRESHOLD:
+        abort_msg = {
+            "type": "response",
+            "content": (
+                "I noticed I was repeating the same action without making progress "
+                "and stopped the loop. Please let me know if you would like me to "
+                "try a different approach."
+            ),
+        }
+        messages.append(abort_msg)
+        if stream_cb:
+            stream_cb(abort_msg)
+
     return {
         "should_continue": not break_loop,
         "execution_history": exec_history,
         "workflow_messages": messages,
         "tool_calls": [],  # Clear after execution
+        # Tool-call loop state (#3254)
+        "tool_call_fingerprints": fingerprint_history,
+        "tool_loop_count": tool_loop_count,
+        "tool_loop_warning": tool_loop_warning,
     }
 
 
@@ -694,9 +847,24 @@ def route_after_reflection(state: ChatState) -> str:
 
 
 def route_after_execution(state: ChatState) -> str:
-    """Route after tool execution — may loop back for continuation."""
+    """Route after tool execution — may loop back for continuation.
+
+    Issue #3254: Aborts to persist_conversation when the tool-call loop
+    detector has fired ``_LOOP_ABORT_THRESHOLD`` or more consecutive times,
+    preventing infinite repetition even when ``should_continue`` is True.
+    """
     if state.get("error"):
         return "persist_conversation"
+
+    # Issue #3254: Abort on persistent tool-call loop.
+    if state.get("tool_loop_count", 0) >= _LOOP_ABORT_THRESHOLD:
+        logger.warning(
+            "Aborting tool-call loop after %d detections (session=%s)",
+            state.get("tool_loop_count", 0),
+            state.get("session_id", "unknown"),
+        )
+        return "persist_conversation"
+
     if state.get("should_continue") and state.get("iteration_count", 0) < 5:
         return "generate_response"
     return "persist_conversation"
@@ -710,8 +878,8 @@ def route_after_execution(state: ChatState) -> str:
 def build_chat_graph() -> StateGraph:
     """Build the chat workflow StateGraph.
 
-    Graph topology (#1718 — agentic search node added between prepare_llm and
-    generate_response; #1373 — RLM reflection loop):
+    Graph topology (#1718 — agentic search node; #1373 — RLM reflection loop;
+    #3254 — content-aware tool-call loop detection):
         START -> initialize_session -> detect_intent
             -> [END if special intent]
             -> prepare_llm -> perform_knowledge_search -> generate_response
@@ -721,8 +889,9 @@ def build_chat_graph() -> StateGraph:
             reflect_on_response
                 -> [generate_response if REFINE and budget remains]
                 -> [persist_conversation if ACCEPT or budget exhausted]
-            execute_tools -> [generate_response if should_continue]
-                          -> [persist_conversation if done]
+            execute_tools
+                -> [generate_response if should_continue AND loop_count < threshold]
+                -> [persist_conversation if done or loop aborted (#3254)]
             persist_conversation -> END
     """
     builder = StateGraph(ChatState)
