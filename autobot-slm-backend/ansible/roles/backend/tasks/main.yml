@@ -171,6 +171,9 @@
       - "--exclude=*.egg-info"
       - "--exclude=.git"
       - "--exclude=venv"
+  notify:
+    - restart backend
+    - restart celery
   tags: ['backend', 'deploy']
 
 - name: Sync backend config directory from code_source
@@ -180,6 +183,7 @@
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
+  notify: restart backend
   tags: ['backend', 'deploy']
 
 - name: Sync autobot_shared to backend install dir
@@ -191,6 +195,9 @@
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
       - "--exclude=.git"
+  notify:
+    - restart backend
+    - restart celery
   tags: ['backend', 'deploy']
 
 - name: Create backend symlink for imports
