@@ -182,7 +182,7 @@ class WorkflowExecutor:
         if successful_steps == total_steps:
             execution_context["status"] = TaskStatus.COMPLETED.value
         elif successful_steps > 0:
-            execution_context["status"] = "partially_completed"
+            execution_context["status"] = TaskStatus.PARTIALLY_COMPLETED.value
         else:
             execution_context["status"] = TaskStatus.FAILED.value
 
