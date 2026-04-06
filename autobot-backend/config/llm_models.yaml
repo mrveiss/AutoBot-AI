@@ -1,3 +1,27 @@
 # AutoBot LLM Model Configuration
 # Models are auto-discovered from Ollama; this file provides overrides.
-{}
+#
+# Anthropic extended thinking (#3258):
+#   Models listed under anthropic_thinking_enabled support the `thinking`
+#   parameter (chain-of-thought reasoning budget) introduced in claude-3-7-sonnet
+#   and later releases.  To activate thinking, pass api_kwargs in the request:
+#
+#       request.metadata["api_kwargs"] = {
+#           "thinking": {"type": "enabled", "budget_tokens": 63000},
+#           "max_tokens": 64000,
+#           "temperature": 1,
+#           "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
+#       }
+#
+#   Set preserve_reasoning: true in api_kwargs to keep <think>…</think> blocks
+#   in the returned content (default: stripped before returning).
+
+anthropic_thinking_enabled:
+  - claude-sonnet-4-6         # latest stable claude-sonnet-4 pointer
+  - claude-opus-4-6           # latest stable claude-opus-4 pointer
+  - claude-sonnet-4-20250514  # claude-sonnet-4 (first thinking-capable release)
+  - claude-opus-4-20250514    # claude-opus-4
+
+# Default thinking budget (tokens) used when thinking is enabled but no
+# budget_tokens is supplied.  Caller-supplied values always take precedence.
+anthropic_default_thinking_budget: 16000
