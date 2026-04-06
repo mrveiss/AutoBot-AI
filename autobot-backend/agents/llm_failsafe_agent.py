@@ -846,4 +846,4 @@ def get_llm_system_status() -> Dict[str, Any]:
 
 async def perform_llm_health_check() -> Dict[LLMTier, bool]:
     """Perform health check on all LLM tiers"""
-    return await get_llm_failsafe().health_check()
+    return await get_llm_failsafe().check_tier_health()

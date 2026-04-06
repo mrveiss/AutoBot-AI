@@ -157,7 +157,10 @@ class KnowledgeExtractionAgent(StandardizedAgent):
 
     async def _handle_filter_facts(self, request) -> Dict[str, Any]:
         """Handle filter_facts action via StandardizedAgent routing."""
-        facts = request.payload["facts"]
+        facts = [
+            AtomicFact.from_dict(f) if isinstance(f, dict) else f
+            for f in request.payload["facts"]
+        ]
         fact_types = request.payload.get("fact_types")
         temporal_types = request.payload.get("temporal_types")
         min_confidence = request.payload.get("min_confidence")
