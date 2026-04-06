@@ -357,15 +357,15 @@
           }}
       tags: ['frontend', 'slm-nginx', 'provision']
 
+    # Load role defaults so template variables are defined, then immediately
+    # override slm_colocated_frontend via set_fact (precedence 19 > include_vars 18).
     - name: "SLM | Load slm_manager defaults for nginx re-render"
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../roles/slm_manager/defaults/main.yml"
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    # include_vars (precedence 18) would override task vars (17) so use
-    # set_fact (precedence 19) to win over the defaults' false value.
-    - name: "SLM | Override slm_colocated_frontend=true for co-located re-render"
+    - name: "SLM | Set slm_colocated_frontend=true (set_fact wins over include_vars)"
       ansible.builtin.set_fact:
         slm_colocated_frontend: true
       when: _is_slm_frontend_colocated | bool

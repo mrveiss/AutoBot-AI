@@ -302,7 +302,11 @@
 
 - name: "SLM | Set co-located frontend flag (#3013)"
   ansible.builtin.set_fact:
-    slm_colocated_frontend: "{{ _colocated_frontend_check.stat.exists | default(false) }}"
+    slm_colocated_frontend: >-
+      {{
+        (slm_colocated_frontend | default(false) | bool) or
+        (_colocated_frontend_check.stat.exists | default(false) | bool)
+      }}
   tags: ['slm', 'frontend', 'nginx']
 
 # ==========================================================
