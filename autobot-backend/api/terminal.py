@@ -116,6 +116,7 @@ import signal
 import time
 import uuid
 from datetime import datetime
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -149,8 +150,136 @@ router = APIRouter(
 )
 
 
-# Import SSH terminal handlers for infrastructure host connections (Issue #715)
-from api.ssh_terminal_handlers import SSHTerminalWebSocket, ssh_terminal_manager
+# SSH terminal stub classes — previously in api/ssh_terminal_handlers.py.
+# Issue #729: SSH operations to infrastructure hosts are now handled by slm-server.
+# Issue #3383: Inlined here to eliminate the competing module.
+
+
+class SSHTerminalWebSocket:
+    """
+    Stub SSH terminal handler — redirects to SLM for infrastructure connections.
+
+    Issue #729: SSH connections to infrastructure hosts are now managed by slm-server.
+    This class provides a backward-compatible interface that returns a deprecation message.
+    """
+
+    def __init__(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        host_id: str,
+        conversation_id: Optional[str] = None,
+        redis_client=None,
+    ):
+        """Initialize SSH terminal handler stub."""
+        self.websocket = websocket
+        self.session_id = session_id
+        self.host_id = host_id
+        self.conversation_id = conversation_id
+        self.active = False
+        self.command_history: list = []
+        self.session_start_time = datetime.now()
+
+    async def start(self) -> bool:
+        """Start SSH terminal session — returns deprecation message."""
+        self.active = False
+        await self._send_error(
+            "SSH terminal connections to infrastructure hosts have been moved to SLM.\n"
+            "Please use slm-admin \u2192 Tools \u2192 Terminal to connect to infrastructure hosts,\n"
+            "or call the SLM API directly at: /api/terminal/ssh/{host_id}\n\n"
+            "This is part of the layer separation (#729) — infrastructure operations\n"
+            "are now managed exclusively by slm-server."
+        )
+        return False
+
+    async def cleanup(self) -> None:
+        """Clean up resources."""
+        self.active = False
+        logger.info("SSH terminal stub session cleaned up: %s", self.session_id)
+
+    async def send_message(self, message: dict) -> None:
+        """Send message to WebSocket client."""
+        try:
+            await self.websocket.send_text(json.dumps(message))
+        except Exception as e:
+            logger.error("Error sending message: %s", e)
+
+    async def _send_error(self, content: str) -> None:
+        """Send error message to client."""
+        await self.send_message(
+            {
+                "type": "error",
+                "content": content,
+                "timestamp": time.time(),
+                "redirect": {
+                    "type": "slm",
+                    "message": "Use SLM for infrastructure SSH connections",
+                    "url": "/api/terminal/ssh/{host_id}",
+                },
+            }
+        )
+
+    async def send_to_terminal(self, text: str) -> None:
+        """Send text input — not supported, redirects to SLM."""
+        await self._send_error(
+            "SSH terminal not available. Use SLM for infrastructure connections."
+        )
+
+    async def send_output(self, content: str) -> None:
+        """Send terminal output — stub."""
+
+    async def handle_message(self, message: dict) -> None:
+        """Handle incoming WebSocket message — returns deprecation notice."""
+        await self._send_error("SSH terminal moved to SLM server (#729)")
+
+
+class _SSHTerminalManager:
+    """Manager for SSH terminal sessions — stub implementation."""
+
+    def __init__(self) -> None:
+        """Initialize SSH terminal manager."""
+        self.active_sessions: Dict[str, SSHTerminalWebSocket] = {}
+        self._lock = asyncio.Lock()
+
+    async def add_session(self, session_id: str, terminal: SSHTerminalWebSocket) -> None:
+        """Add an SSH terminal session."""
+        async with self._lock:
+            self.active_sessions[session_id] = terminal
+
+    async def remove_session(self, session_id: str) -> None:
+        """Remove an SSH terminal session."""
+        async with self._lock:
+            self.active_sessions.pop(session_id, None)
+
+    async def get_session(self, session_id: str) -> Optional[SSHTerminalWebSocket]:
+        """Get an SSH terminal session."""
+        async with self._lock:
+            return self.active_sessions.get(session_id)
+
+    async def close_session(self, session_id: str) -> None:
+        """Close and clean up an SSH terminal session."""
+        terminal: Optional[SSHTerminalWebSocket] = None
+        async with self._lock:
+            terminal = self.active_sessions.get(session_id)
+        if terminal:
+            await terminal.cleanup()
+            await self.remove_session(session_id)
+
+    def list_sessions(self) -> Dict[str, Dict[str, Any]]:
+        """List all active SSH terminal sessions."""
+        return {
+            sid: {
+                "host_id": t.host_id,
+                "conversation_id": t.conversation_id,
+                "start_time": t.session_start_time.isoformat(),
+                "active": t.active,
+            }
+            for sid, t in self.active_sessions.items()
+        }
+
+
+ssh_terminal_manager = _SSHTerminalManager()
+
 
 # Import handler classes (extracted from this file - Issue #210)
 from api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
