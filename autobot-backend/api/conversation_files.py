@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -383,9 +384,7 @@ async def validate_session_ownership(
         raise
     except Exception as e:
         logger.error("Session ownership validation error: %s", e)
-        raise HTTPException(
-            status_code=500, detail="Failed to validate session ownership"
-        )
+        raise_internal_error("Failed to validate session ownership")
 
 
 def is_safe_file(filename: str) -> bool:
@@ -451,12 +450,10 @@ async def _validate_and_read_upload_file(
     """
     # Validate filename
     if not file.filename:
-        raise HTTPException(status_code=400, detail="No filename provided")
+        raise_invalid_input("filename", "required")
 
     if not is_safe_file(file.filename):
-        raise HTTPException(
-            status_code=400, detail=f"File type not allowed: {file.filename}"
-        )
+        raise_invalid_input("filename", f"file type not allowed: {file.filename}")
 
     # Read file content
     content = await file.read()
@@ -525,7 +522,7 @@ async def upload_conversation_file(
         raise
     except Exception as e:
         logger.error("Error uploading conversation file: %s", e)
-        raise HTTPException(status_code=500, detail="Error uploading file")
+        raise_internal_error("Error uploading file")
 
 
 def _build_file_list_response(
@@ -594,7 +591,7 @@ async def list_conversation_files(
         raise
     except Exception as e:
         logger.error("Error listing conversation files: %s", e)
-        raise HTTPException(status_code=500, detail="Error listing files")
+        raise_internal_error("Error listing files")
 
 
 async def _get_validated_file_info(
@@ -618,12 +615,12 @@ async def _get_validated_file_info(
     """
     file_info_dict = await file_manager.get_file_info(session_id, file_id)
     if not file_info_dict:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise_not_found("File")
 
     file_path = Path(file_info_dict["file_path"])
     # Issue #358: Use asyncio.to_thread for blocking file I/O
     if not await asyncio.to_thread(file_path.exists):
-        raise HTTPException(status_code=404, detail="File not found on disk")
+        raise_not_found("File", "not found on disk")
 
     return file_info_dict, file_path
 
@@ -693,7 +690,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise
     except Exception as e:
         logger.error("Error downloading conversation file: %s", e)
-        raise HTTPException(status_code=500, detail="Error downloading file")
+        raise_internal_error("Error downloading file")
 
 
 async def _generate_file_preview(
@@ -788,7 +785,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         # Get file info
         file_info_dict = await file_manager.get_file_info(session_id, file_id)
         if not file_info_dict:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_not_found("File")
 
         file_info = ConversationFileInfo(**file_info_dict)
 
@@ -808,7 +805,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         raise
     except Exception as e:
         logger.error("Error previewing conversation file: %s", e)
-        raise HTTPException(status_code=500, detail="Error previewing file")
+        raise_internal_error("Error previewing file")
 
 
 def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
@@ -859,7 +856,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
 
         deleted = await file_manager.delete_file(session_id, file_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_not_found("File", file_id)
 
         _audit_file_operation(
             request,
@@ -875,7 +872,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         raise
     except Exception as e:
         logger.error("Error deleting conversation file: %s", e)
-        raise HTTPException(status_code=500, detail="Error deleting file")
+        raise_internal_error("Error deleting file")
 
 
 @with_error_handling(
@@ -929,7 +926,7 @@ async def transfer_conversation_files(
         raise
     except Exception as e:
         logger.error("Error transferring conversation files: %s", e)
-        raise HTTPException(status_code=500, detail="Error transferring files")
+        raise_internal_error("Error transferring files")
 
 
 # ============================================================
@@ -952,9 +949,7 @@ async def create_conversation_file(
         file_manager = _get_required_file_manager(request)
 
         if not is_safe_file(body.filename):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid filename: {body.filename}"
-            )
+            raise_invalid_input("filename", f"invalid filename: {body.filename}")
 
         result = await file_manager.create_file(
             session_id=session_id,
@@ -979,7 +974,7 @@ async def create_conversation_file(
         raise
     except Exception as e:
         logger.error("Error creating file: %s", e)
-        raise HTTPException(status_code=500, detail="Error creating file")
+        raise_internal_error("Error creating file")
 
 
 @with_error_handling(
@@ -997,9 +992,7 @@ async def rename_conversation_file(
         file_manager = _get_required_file_manager(request)
 
         if not is_safe_file(body.new_filename):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid filename: {body.new_filename}"
-            )
+            raise_invalid_input("new_filename", f"invalid filename: {body.new_filename}")
 
         result = await file_manager.rename_file(
             session_id=session_id, file_id=file_id, new_filename=body.new_filename
@@ -1018,10 +1011,10 @@ async def rename_conversation_file(
     except HTTPException:
         raise
     except RuntimeError:
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise_not_found("File")
     except Exception as e:
         logger.error("Error renaming file: %s", e)
-        raise HTTPException(status_code=500, detail="Error renaming file")
+        raise_internal_error("Error renaming file")
 
 
 @with_error_handling(
@@ -1045,11 +1038,12 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
     except HTTPException:
         raise
     except RuntimeError as e:
-        status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail="Internal server error")
+        if "not found" in str(e).lower():
+            raise_not_found("File")
+        raise_invalid_input("request", "Internal server error")
     except Exception as e:
         logger.error("Error getting file content: %s", e)
-        raise HTTPException(status_code=500, detail="Error reading file")
+        raise_internal_error("Error reading file")
 
 
 @with_error_handling(
@@ -1083,11 +1077,12 @@ async def update_file_content(
     except HTTPException:
         raise
     except RuntimeError as e:
-        status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail="Internal server error")
+        if "not found" in str(e).lower():
+            raise_not_found("File")
+        raise_invalid_input("request", "Internal server error")
     except Exception as e:
         logger.error("Error updating file content: %s", e)
-        raise HTTPException(status_code=500, detail="Error updating file")
+        raise_internal_error("Error updating file")
 
 
 @with_error_handling(
@@ -1105,9 +1100,7 @@ async def copy_conversation_file(
         file_manager = _get_required_file_manager(request)
 
         if body.new_filename and not is_safe_file(body.new_filename):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid filename: {body.new_filename}"
-            )
+            raise_invalid_input("new_filename", f"invalid filename: {body.new_filename}")
 
         result = await file_manager.copy_file(
             session_id=session_id, file_id=file_id, new_filename=body.new_filename
@@ -1126,10 +1119,10 @@ async def copy_conversation_file(
     except HTTPException:
         raise
     except RuntimeError:
-        raise HTTPException(status_code=404, detail="Internal server error")
+        raise_not_found("File")
     except Exception as e:
         logger.error("Error copying file: %s", e)
-        raise HTTPException(status_code=500, detail="Error copying file")
+        raise_internal_error("Error copying file")
 
 
 @with_error_handling(
@@ -1154,7 +1147,7 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
         raise
     except Exception as e:
         logger.error("Error searching files: %s", e)
-        raise HTTPException(status_code=500, detail="Error searching files")
+        raise_internal_error("Error searching files")
 
 
 @with_error_handling(
@@ -1172,9 +1165,7 @@ async def agent_generate_file(
         file_manager = _get_required_file_manager(request)
 
         if not is_safe_file(body.filename):
-            raise HTTPException(
-                status_code=400, detail=f"Invalid filename: {body.filename}"
-            )
+            raise_invalid_input("filename", f"invalid filename: {body.filename}")
 
         agent_metadata = {"agent_name": body.agent_name or "unknown"}
         if body.metadata:
@@ -1209,7 +1200,7 @@ async def agent_generate_file(
         raise
     except Exception as e:
         logger.error("Error generating file: %s", e)
-        raise HTTPException(status_code=500, detail="Error generating file")
+        raise_internal_error("Error generating file")
 
 
 # ============================================================
@@ -1310,7 +1301,7 @@ async def _dispatch_mcp_tool(
     if tool_name == "session_read_file":
         file_id = args.get("file_id")
         if not file_id:
-            raise HTTPException(status_code=400, detail="file_id is required")
+            raise_invalid_input("file_id", "required")
         return await file_manager.get_file_content(
             session_id=session_id, file_id=file_id
         )
@@ -1319,9 +1310,9 @@ async def _dispatch_mcp_tool(
         filename = args.get("filename")
         content = args.get("content", "")
         if not filename:
-            raise HTTPException(status_code=400, detail="filename is required")
+            raise_invalid_input("filename", "required")
         if not is_safe_file(filename):
-            raise HTTPException(status_code=400, detail=f"Invalid filename: {filename}")
+            raise_invalid_input("filename", f"invalid filename: {filename}")
         return await file_manager.create_file(
             session_id=session_id,
             filename=filename,
@@ -1339,13 +1330,13 @@ async def _dispatch_mcp_tool(
     if tool_name == "session_delete_file":
         file_id = args.get("file_id")
         if not file_id:
-            raise HTTPException(status_code=400, detail="file_id is required")
+            raise_invalid_input("file_id", "required")
         deleted = await file_manager.delete_file(session_id, file_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise_not_found("File", file_id)
         return {"deleted": True, "file_id": file_id}
 
-    raise HTTPException(status_code=400, detail=f"Unknown tool: {tool_name}")
+    raise_invalid_input("tool_name", f"unknown tool: {tool_name}")
 
 
 @with_error_handling(
@@ -1379,8 +1370,9 @@ async def session_mcp_call_tool(
     except HTTPException:
         raise
     except RuntimeError as e:
-        status = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status, detail="Internal server error")
+        if "not found" in str(e).lower():
+            raise_not_found("Resource")
+        raise_invalid_input("request", "Internal server error")
     except Exception as e:
         logger.error("Error in MCP tool call: %s", e)
-        raise HTTPException(status_code=500, detail="Error executing tool")
+        raise_internal_error("Error executing tool")
