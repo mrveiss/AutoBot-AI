@@ -45,7 +45,7 @@ _ENTITY_TYPE_PATTERNS: Dict[str, List[str]] = {
     r"browser|web|url": ["BROWSER_ACTIVITY"],
     r"desktop|vnc|novnc": ["DESKTOP_ACTIVITY"],
     r"user[s]?|account[s]?": ["USER"],
-    r"secret[s]?|credential[s]?|key[s]?": ["SECRET"],
+    r"secret[s]?|credential[s]?|key[s]?": ["SECRET", "SECRET_USAGE"],
 }
 
 _TIME_PATTERNS: Dict[str, Any] = {
@@ -390,7 +390,7 @@ class MemoryGraphQueryProcessor:
         try:
             import aiohttp  # local import to avoid hard dependency at module level
 
-            ollama_host = ssot_config.get("ollama.host", "http://localhost:11434")
+            ollama_host = getattr(ssot_config, "ollama_host", "http://localhost:11434")
             url = f"{ollama_host}/api/embeddings"
             payload = {"model": self._embedding_model, "prompt": text}
 
@@ -426,27 +426,32 @@ class MemoryGraphQueryProcessor:
                 "0",
                 str(limit),
             )
-            return self._parse_ft_results(raw)
+            keys = self._parse_ft_results(raw)
+            return await self._fetch_entities_by_keys(keys)
         except Exception as exc:
             logger.warning("Redis FT.SEARCH failed (%s); using scan fallback", exc)
             return await self._scan_fallback(limit)
 
     @staticmethod
-    def _parse_ft_results(raw: Any) -> List[Dict[str, Any]]:
-        """Parse raw FT.SEARCH output into a list of entity key strings."""
-        entities: List[Dict[str, Any]] = []
-        if not raw or len(raw) <= 1:
-            return entities
+    def _parse_ft_results(raw: Any) -> List[str]:
+        """Parse raw FT.SEARCH output into entity key strings.
 
-        # FT.SEARCH returns: [total, key1, [field, val, ...], key2, ...]
+        FT.SEARCH returns: [total, key1, [field, val, ...], key2, ...]
+        """
+        keys: List[str] = []
+        if not raw or len(raw) <= 1:
+            return keys
+
         i = 1
         while i < len(raw):
-            # key at position i, skip it (we use the full entity from JSON)
+            key = raw[i]
+            if isinstance(key, bytes):
+                key = key.decode("utf-8")
+            keys.append(key)
             i += 1
-            # field-value pairs at i (skip them too)
             if i < len(raw) and isinstance(raw[i], list):
                 i += 1
-        return entities  # We'll fetch full entities in _fetch_entities_by_keys
+        return keys
 
     async def _scan_fallback(self, limit: int) -> List[Dict[str, Any]]:
         """Fallback: scan memory:entity:* keys when FT.SEARCH unavailable."""

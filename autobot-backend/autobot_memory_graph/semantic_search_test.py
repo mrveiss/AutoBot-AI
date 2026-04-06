@@ -307,7 +307,7 @@ class TestProcessQuery:
     def test_process_query_empty_string_returns_empty(self) -> None:
         redis_mock = MagicMock()
         proc = MemoryGraphQueryProcessor(redis_client=redis_mock)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             proc.process_query("")
         )
         assert result == []
@@ -318,7 +318,7 @@ class TestProcessQuery:
             self._make_entity("New Feature", "FEATURE"),
         ]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             proc.process_query("redis bug")
         )
         assert isinstance(results, list)
@@ -328,7 +328,7 @@ class TestProcessQuery:
     def test_process_query_limit_respected(self) -> None:
         entities = [self._make_entity(f"Entity {i}", "TASK") for i in range(20)]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             proc.process_query("task", limit=3)
         )
         assert len(results) <= 3
@@ -336,7 +336,7 @@ class TestProcessQuery:
     def test_search_result_has_required_fields(self) -> None:
         entities = [self._make_entity("Test Bug", "BUG")]
         proc = self._make_processor_with_candidates(entities)
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             proc.process_query("test bug")
         )
         if results:
@@ -372,7 +372,7 @@ class TestEnsureIndexes:
         # First call to FT.INFO raises (index doesn't exist) → triggers FT.CREATE
         redis_mock.execute_command = AsyncMock(side_effect=Exception("not found"))
 
-        asyncio.get_event_loop().run_until_complete(ensure_indexes(redis_mock))
+        asyncio.run(ensure_indexes(redis_mock))
 
         # Should have been called for both FT.INFO and FT.CREATE per index
         assert redis_mock.execute_command.call_count >= 2
@@ -382,7 +382,7 @@ class TestEnsureIndexes:
         # FT.INFO succeeds → index exists → FT.CREATE should NOT be called
         redis_mock.execute_command = AsyncMock(return_value=["some", "info"])
 
-        asyncio.get_event_loop().run_until_complete(ensure_indexes(redis_mock))
+        asyncio.run(ensure_indexes(redis_mock))
 
         calls = [str(c) for c in redis_mock.execute_command.call_args_list]
         assert not any("FT.CREATE" in c for c in calls)
