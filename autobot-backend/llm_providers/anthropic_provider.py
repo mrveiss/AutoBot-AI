@@ -80,7 +80,9 @@ def _build_api_kwargs(
     Handles the three extended-thinking keys that need special treatment:
 
     - ``thinking``      — forwarded directly to the SDK call.
-    - ``betas``         — forwarded directly to the SDK call.
+    - ``betas``         — converted to ``extra_headers["anthropic-beta"]`` as a
+                          comma-joined string; the SDK does not accept a ``betas``
+                          kwarg on ``messages.create()``.
     - ``extra_headers`` — collected separately for the SDK ``extra_headers``
                           keyword argument (not part of the messages payload).
     - ``preserve_reasoning`` — consumed here; not forwarded to the SDK.
@@ -92,7 +94,7 @@ def _build_api_kwargs(
         (merged_kwargs, extra_headers)
     """
     extra_headers: Dict[str, Any] = {}
-    preserved_keys = {"preserve_reasoning", "extra_headers"}
+    preserved_keys = {"preserve_reasoning", "extra_headers", "betas"}
 
     for key, value in api_kwargs.items():
         if key in preserved_keys:
@@ -101,6 +103,15 @@ def _build_api_kwargs(
 
     # Collect extra headers to pass separately.
     extra_headers = dict(api_kwargs.get("extra_headers") or {})
+
+    # ``betas`` must be sent via the ``anthropic-beta`` request header, not as
+    # a kwarg to messages.create().  Merge with any caller-supplied header value.
+    betas: List[str] = api_kwargs.get("betas") or []
+    if betas:
+        existing = extra_headers.get("anthropic-beta", "")
+        merged_betas = [b for b in existing.split(",") if b] + list(betas)
+        extra_headers["anthropic-beta"] = ",".join(merged_betas)
+
     return base, extra_headers
 
 
@@ -219,6 +230,11 @@ class AnthropicProvider(BaseProvider):
         api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
         preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
         kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
+
+        # The Anthropic API requires temperature=1 when extended thinking is
+        # enabled.  Enforce this regardless of what the caller supplied.
+        if "thinking" in api_kwargs:
+            kwargs["temperature"] = 1
 
         return kwargs, extra_headers, preserve_reasoning
 
