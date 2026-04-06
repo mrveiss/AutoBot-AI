@@ -27,6 +27,9 @@ from config import config_manager
 from llm_interface import LLMType, get_llm_interface
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = get_llm_logger("knowledge_extraction")
 
 # Issue #380: Module-level tuple for fact text field validation
@@ -36,7 +39,7 @@ _FACT_TEXT_FIELDS = ("subject", "predicate", "object")
 _NUMERIC_TYPES = (int, float)
 
 
-class KnowledgeExtractionAgent:
+class KnowledgeExtractionAgent(StandardizedAgent):
     """
     Advanced agent for extracting atomic facts from textual content.
 
@@ -51,11 +54,13 @@ class KnowledgeExtractionAgent:
 
     def __init__(self, llm_interface=None):
         """
-        Initialize the knowledge extraction agent with explicit LLM configuration.
+        Initialize the knowledge extraction agent (#3387: migrated to StandardizedAgent).
 
         Args:
             llm_interface: LLM interface for fact extraction (optional)
         """
+        super().__init__("knowledge_extraction", DeploymentMode.LOCAL)
+
         # Use explicit SSOT config - raises AgentConfigurationError if not set
         self.llm_provider = get_agent_provider_explicit(self.AGENT_ID)
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
@@ -75,12 +80,99 @@ class KnowledgeExtractionAgent:
         )
         self.temporal_keywords = self._load_temporal_keywords()
 
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "extract_facts": ActionHandler(
+                    handler_method="_handle_extract_facts",
+                    required_params=["content", "source"],
+                    description="Extract atomic facts from text content",
+                ),
+                "extract_chunks": ActionHandler(
+                    handler_method="_handle_extract_chunks",
+                    required_params=["chunks", "source"],
+                    description="Extract facts from multiple text chunks in parallel",
+                ),
+                "filter_facts": ActionHandler(
+                    handler_method="_handle_filter_facts",
+                    required_params=["facts"],
+                    description="Filter facts by type, temporal type, or confidence",
+                ),
+            }
+        )
+
         logger.info(
             "Knowledge Extraction Agent initialized with provider=%s, endpoint=%s, model=%s",
             self.llm_provider,
             self.llm_endpoint,
             self.model_name,
         )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return [
+            "extract_facts",
+            "extract_chunks",
+            "filter_facts",
+            "knowledge_extraction",
+            "atomic_facts",
+        ]
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a knowledge extraction agent. "
+            "Extract discrete, verifiable atomic facts from text with temporal awareness."
+        )
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_extract_facts(self, request) -> Dict[str, Any]:
+        """Handle extract_facts action via StandardizedAgent routing."""
+        content = request.payload["content"]
+        source = request.payload["source"]
+        context = request.payload.get("context")
+        chunk_id = request.payload.get("chunk_id")
+        result = await self.extract_facts_from_text(
+            content, source, context=context, chunk_id=chunk_id
+        )
+        return {
+            "facts_count": len(result.facts),
+            "processing_time": result.processing_time,
+            "metadata": result.extraction_metadata,
+            "facts": [f.__dict__ for f in result.facts],
+        }
+
+    async def _handle_extract_chunks(self, request) -> Dict[str, Any]:
+        """Handle extract_chunks action via StandardizedAgent routing."""
+        chunks = request.payload["chunks"]
+        source = request.payload["source"]
+        result = await self.extract_facts_from_chunks(chunks, source)
+        return {
+            "facts_count": len(result.facts),
+            "processing_time": result.processing_time,
+            "metadata": result.extraction_metadata,
+            "facts": [f.__dict__ for f in result.facts],
+        }
+
+    async def _handle_filter_facts(self, request) -> Dict[str, Any]:
+        """Handle filter_facts action via StandardizedAgent routing."""
+        facts = [
+            AtomicFact.from_dict(f) if isinstance(f, dict) else f
+            for f in request.payload["facts"]
+        ]
+        fact_types = request.payload.get("fact_types")
+        temporal_types = request.payload.get("temporal_types")
+        min_confidence = request.payload.get("min_confidence")
+        active_only = request.payload.get("active_only", True)
+        filtered = self.filter_facts(
+            facts,
+            fact_types=fact_types,
+            temporal_types=temporal_types,
+            min_confidence=min_confidence,
+            active_only=active_only,
+        )
+        return {"filtered_count": len(filtered), "facts": filtered}
 
     def _get_dynamic_indicators(self) -> List[str]:
         """Get keywords indicating dynamic/changing information."""
