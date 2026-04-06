@@ -11,6 +11,13 @@ from autobot_shared.models.service_message import (
     deserialize_message,
     serialize_message,
 )
+from autobot_shared.models.task_result import (
+    TaskResult,
+    task_error,
+    task_pending,
+    task_pending_approval,
+    task_success,
+)
 
 __all__ = [
     "ServiceMessage",
@@ -19,4 +26,9 @@ __all__ = [
     "serialize_message",
     "deserialize_message",
     "create_reply",
+    "TaskResult",
+    "task_success",
+    "task_error",
+    "task_pending",
+    "task_pending_approval",
 ]
