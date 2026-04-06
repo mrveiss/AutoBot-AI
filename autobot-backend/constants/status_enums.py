@@ -38,6 +38,8 @@ class TaskStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+    PAUSED = "paused"
     RETRYING = "retrying"
     BLOCKED = "blocked"
     WAITING = "waiting"
