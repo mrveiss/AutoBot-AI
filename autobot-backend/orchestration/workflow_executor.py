@@ -27,6 +27,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from circuit_breaker import circuit_breaker_async
+from constants.status_enums import TaskStatus
 from constants.threshold_constants import (
     CircuitBreakerDefaults,
     RetryConfig,
@@ -175,15 +176,15 @@ class WorkflowExecutor:
         self, steps: List[Dict[str, Any]], execution_context: Dict[str, Any]
     ) -> None:
         """Determine overall workflow status from step results (Issue #398: extracted)."""
-        successful_steps = sum(1 for step in steps if step.get("status") == "completed")
+        successful_steps = sum(1 for step in steps if step.get("status") == TaskStatus.COMPLETED.value)
         total_steps = len(steps)
 
         if successful_steps == total_steps:
-            execution_context["status"] = "completed"
+            execution_context["status"] = TaskStatus.COMPLETED.value
         elif successful_steps > 0:
             execution_context["status"] = "partially_completed"
         else:
-            execution_context["status"] = "failed"
+            execution_context["status"] = TaskStatus.FAILED.value
 
         execution_context["success_rate"] = (
             successful_steps / total_steps if total_steps > 0 else 0
@@ -224,8 +225,8 @@ class WorkflowExecutor:
 
         status = execution_context.get("status", "")
         event_map = {
-            "completed": NotificationEvent.WORKFLOW_COMPLETED,
-            "failed": NotificationEvent.WORKFLOW_FAILED,
+            TaskStatus.COMPLETED.value: NotificationEvent.WORKFLOW_COMPLETED,
+            TaskStatus.FAILED.value: NotificationEvent.WORKFLOW_FAILED,
         }
         event = event_map.get(status)
         if event is None:
@@ -347,7 +348,7 @@ class WorkflowExecutor:
             )
             elapsed = time.time() - step_start_time
 
-            step["status"] = "completed" if step_result.get("success") else "failed"
+            step["status"] = TaskStatus.COMPLETED.value if step_result.get("success") else TaskStatus.FAILED.value
             step["execution_time"] = elapsed
             step["result"] = step_result
             execution_context["step_results"][step_id] = step_result
@@ -413,7 +414,7 @@ class WorkflowExecutor:
                 "Sub-workflow step %s: no workflow_fetcher configured — cannot execute",
                 step_id,
             )
-            step["status"] = "failed"
+            step["status"] = TaskStatus.FAILED.value
             step["result"] = {
                 "success": False,
                 "step_id": step_id,
@@ -437,14 +438,14 @@ class WorkflowExecutor:
         except Exception as exc:
             elapsed = time.time() - step_start_time
             logger.error("Sub-workflow step %s failed: %s", step_id, exc)
-            step["status"] = "failed"
+            step["status"] = TaskStatus.FAILED.value
             step["execution_time"] = elapsed
             step["result"] = {"success": False, "step_id": step_id, "error": str(exc)}
             execution_context["step_results"][step_id] = step["result"]
             return
 
         elapsed = time.time() - step_start_time
-        step["status"] = "completed" if step_result.get("success") else "failed"
+        step["status"] = TaskStatus.COMPLETED.value if step_result.get("success") else TaskStatus.FAILED.value
         step["execution_time"] = elapsed
         step["result"] = step_result
         execution_context["step_results"][step_id] = step_result
@@ -454,7 +455,7 @@ class WorkflowExecutor:
             child_ctx = step_result.get("sub_workflow_result", {})
             stdout = ""
             execution_context["step_outputs"][step_id] = StepOutput(
-                status="completed" if step_result.get("success") else "failed",
+                status=TaskStatus.COMPLETED.value if step_result.get("success") else TaskStatus.FAILED.value,
                 stdout=stdout,
                 parsed_json=child_ctx if isinstance(child_ctx, dict) else None,
                 metadata={"output_key": sub_step.output_key, "execution_time": elapsed},
@@ -502,7 +503,7 @@ class WorkflowExecutor:
                     continue
 
                 if action == StepErrorAction.SKIP:
-                    step["status"] = "skipped"
+                    step["status"] = TaskStatus.SKIPPED.value
                     logger.info("Step %s skipped due to error_config", step.get("id"))
                     return {"success": True, "skipped": True, "step_id": step.get("id")}
 
@@ -512,7 +513,7 @@ class WorkflowExecutor:
                     )
 
                 if action == StepErrorAction.PAUSE:
-                    execution_context["status"] = "paused"
+                    execution_context["status"] = TaskStatus.PAUSED.value
                     execution_context["paused_at_step"] = step.get("id")
                     return {
                         "success": False,
@@ -584,7 +585,7 @@ class WorkflowExecutor:
             return
         checkpoint = StepCheckpoint(
             step_id=step_id,
-            status="completed",
+            status=TaskStatus.COMPLETED.value,
             output=step_result,
         )
         self._checkpoint_manager.save(workflow_id, checkpoint)
@@ -697,7 +698,7 @@ class WorkflowExecutor:
 
             for group in groups:
                 # Issue #2154: skip groups where all steps are already checkpointed.
-                pending = [s for s in group if s.get("status") != "completed"]
+                pending = [s for s in group if s.get("status") != TaskStatus.COMPLETED.value]
                 if not pending:
                     logger.debug(
                         "Workflow %s: skipping fully-checkpointed group %s",
@@ -708,7 +709,7 @@ class WorkflowExecutor:
                 await self._execute_step_group(pending, execution_context, context)
 
                 # Issue #2154: stop if a step triggered a PAUSE.
-                if execution_context.get("status") == "paused":
+                if execution_context.get("status") == TaskStatus.PAUSED.value:
                     logger.info(
                         "Workflow %s paused at step %s",
                         workflow_id,
@@ -721,7 +722,7 @@ class WorkflowExecutor:
             # Issue #2154: clear checkpoints on full success.
             # Issue #3019: also clear shared memory — no longer needed once the
             # workflow reaches a terminal state.
-            if execution_context.get("status") == "completed":
+            if execution_context.get("status") == TaskStatus.COMPLETED.value:
                 self._checkpoint_manager.clear(workflow_id)
                 shared_memory.clear()
 
@@ -732,7 +733,7 @@ class WorkflowExecutor:
 
         except Exception as e:
             logger.error("Workflow %s execution failed: %s", workflow_id, e)
-            execution_context["status"] = "failed"
+            execution_context["status"] = TaskStatus.FAILED.value
             execution_context["error"] = str(e)
             # Issue #3101: fire failure notification.
             await self._send_workflow_notification(workflow_id, execution_context)
@@ -769,7 +770,7 @@ class WorkflowExecutor:
             cp = checkpoints.get(step_id)
             if cp is None:
                 continue
-            step["status"] = "completed"
+            step["status"] = TaskStatus.COMPLETED.value
             execution_context["step_results"][step_id] = cp.output
             execution_context["step_outputs"][step_id] = StepOutput.from_step_result(
                 cp.output
@@ -832,7 +833,7 @@ class WorkflowExecutor:
         }
 
         await self._execute_step_with_agent(step, local_ctx, {})
-        return step.get("result", {"success": step.get("status") == "completed"})
+        return step.get("result", {"success": step.get("status") == TaskStatus.COMPLETED.value})
 
     @staticmethod
     def _dag_ctx_to_execution_context(dag_ctx: DAGExecutionContext) -> Dict[str, Any]:
