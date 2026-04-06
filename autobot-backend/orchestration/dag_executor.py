@@ -385,7 +385,7 @@ class DAGExecutor:
             ctx.error = str(exc)
             return ctx
 
-        ctx.status = TaskStatus.COMPLETED.value if ctx.error is None else "partially_completed"
+        ctx.status = TaskStatus.COMPLETED.value if ctx.error is None else TaskStatus.PARTIALLY_COMPLETED.value
         logger.info(
             "Workflow %s DAG execution finished: status=%s", workflow_id, ctx.status
         )
