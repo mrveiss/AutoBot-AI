@@ -21,6 +21,7 @@ from .error_constants import (  # Issue #3530: Centralized error message strings
     ERR_SESSION_NOT_FOUND,
     ERR_TEMPLATE_NOT_FOUND,
     ERR_WORKFLOW_NOT_FOUND,
+    ERR_EXPERIMENT_NOT_FOUND,
 )
 from .network_constants import (  # Legacy compatibility exports
     BACKEND_URL,
@@ -148,6 +149,7 @@ __all__ = [
     "ERR_JOB_NOT_FOUND",
     "ERR_TEMPLATE_NOT_FOUND",
     "ERR_WORKFLOW_NOT_FOUND",
+    "ERR_EXPERIMENT_NOT_FOUND",
     "ERR_INVALID_CREDENTIALS",
     "ERR_INVALID_TOKEN",
     # Issue #3531: API path constants
