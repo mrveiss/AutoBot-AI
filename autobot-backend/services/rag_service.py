@@ -20,7 +20,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 from knowledge.search_components.query_classifier import get_query_classifier
-from knowledge.search_components.retrieval_learner import get_retrieval_learner
+from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
 from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
@@ -33,6 +33,8 @@ from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cach
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_service")
+
+_STREAM_TTL_SECONDS = TTL_30_DAYS
 
 
 class RAGService:
@@ -445,10 +447,7 @@ class RAGService:
             complexity:    QueryComplexity.value string (Issue #2024).
             user_id:       Authenticated user identifier; defaults to global scope.
         """
-        _STREAM_TTL_SECONDS = TTL_30_DAYS
-        from knowledge.search_components.retrieval_learner import _GLOBAL_USER
-
-        uid = user_id or _GLOBAL_USER
+        uid = user_id or GLOBAL_USER
         date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
         stream_key = f"rag:feedback:{uid}:{date_key}"
         entry = {

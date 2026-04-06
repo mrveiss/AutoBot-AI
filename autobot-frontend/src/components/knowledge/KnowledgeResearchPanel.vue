@@ -260,6 +260,7 @@ async function _emitAnnotationFeedback(
     await ApiClient.post('/api/knowledge_base/rag-feedback', {
       source_url: card.url,
       title: card.title,
+      query: query.value,
       decision,
       user_id: userId,
     })

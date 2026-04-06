@@ -16,16 +16,16 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_30_DAYS
-from knowledge.search_components.retrieval_learner import _GLOBAL_USER
+from knowledge.search_components.retrieval_learner import GLOBAL_USER
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ class RagFeedbackRequest(BaseModel):
 
     source_url: str
     title: str = ""
-    decision: str  # "accepted" or "rejected"
+    query: str
+    decision: Literal["accepted", "rejected"]
     user_id: Optional[str] = None
 
 
@@ -52,7 +53,6 @@ class RagFeedbackRequest(BaseModel):
 )
 async def record_rag_feedback(
     body: RagFeedbackRequest,
-    req: Request = None,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     """Record a user's explicit accept/reject annotation for a retrieved source.
@@ -69,7 +69,7 @@ async def record_rag_feedback(
         current_user.get("user_id")
         or current_user.get("id")
         or body.user_id
-        or _GLOBAL_USER
+        or GLOBAL_USER
     )
     date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
     stream_key = f"rag:feedback:{uid}:{date_key}"
@@ -78,7 +78,7 @@ async def record_rag_feedback(
     # decision="accepted" → full positive trajectory; "rejected" → empty ranked list.
     is_accepted = body.decision == "accepted"
     entry = {
-        "query_text": body.source_url,
+        "query_text": body.query,
         "retrieved_chunk_ids": json.dumps([body.source_url], ensure_ascii=False),
         "final_ranked_ids": json.dumps(
             [body.source_url] if is_accepted else [], ensure_ascii=False

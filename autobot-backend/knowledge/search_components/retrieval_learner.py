@@ -50,7 +50,7 @@ _CURSOR_HASH_KEY = "rag:rl:cursors"
 # Hash prefix for distilled patterns (Issue #3240: namespaced by user_id).
 _PATTERN_KEY_PREFIX = "rag:retrieval_patterns:"
 # Sentinel used when no authenticated user is available (global/system scope).
-_GLOBAL_USER = "__global__"
+GLOBAL_USER = "__global__"
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +211,7 @@ class RetrievalLearner:
         if date_key is None:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
-        uid = user_id or _GLOBAL_USER
+        uid = user_id or GLOBAL_USER
         stream_key = f"rag:feedback:{uid}:{date_key}"
         await self._load_cursors()
 
@@ -266,7 +266,7 @@ class RetrievalLearner:
     # ------------------------------------------------------------------
 
     async def _process_feedback_event(
-        self, fields: Dict, user_id: str = _GLOBAL_USER
+        self, fields: Dict, user_id: str = GLOBAL_USER
     ) -> None:
         """Score a single feedback event and distil a pattern if successful.
 
@@ -328,7 +328,7 @@ class RetrievalLearner:
         query_type: str,
         categories: List[str],
         strategy_hints: Dict[str, str],
-        user_id: str = _GLOBAL_USER,
+        user_id: str = GLOBAL_USER,
     ) -> None:
         """Upsert a retrieval pattern in Redis.
 
@@ -405,7 +405,7 @@ class RetrievalLearner:
         """
         _ = query  # reserved for future embedding-based lookup
         cats = sorted(categories) if categories else []
-        uid = user_id or _GLOBAL_USER
+        uid = user_id or GLOBAL_USER
 
         exact_hash = _compute_pattern_hash(complexity, cats)
         complexity_hash = _compute_pattern_hash(complexity, [])
@@ -415,10 +415,10 @@ class RetrievalLearner:
             f"{_PATTERN_KEY_PREFIX}{uid}:{exact_hash}",
             f"{_PATTERN_KEY_PREFIX}{uid}:{complexity_hash}",
         ]
-        if uid != _GLOBAL_USER:
+        if uid != GLOBAL_USER:
             # Append global fallback candidates (Issue #3240).
-            candidates.append(f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{exact_hash}")
-            candidates.append(f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{complexity_hash}")
+            candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash}")
+            candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_hash}")
 
         try:
             redis = await self._get_redis()
@@ -461,7 +461,7 @@ class RetrievalLearner:
             success:      True if the retrieval led to a satisfactory response.
             user_id:      User scope; use None for global/system scope.
         """
-        uid = user_id or _GLOBAL_USER
+        uid = user_id or GLOBAL_USER
         redis_key = f"{_PATTERN_KEY_PREFIX}{uid}:{pattern_hash}"
         try:
             redis = await self._get_redis()

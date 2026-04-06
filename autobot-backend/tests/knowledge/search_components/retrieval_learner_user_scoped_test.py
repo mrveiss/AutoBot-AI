@@ -22,7 +22,7 @@ import pytest
 from knowledge.search_components.retrieval_learner import (
     RetrievalLearner,
     RetrievalPattern,
-    _GLOBAL_USER,
+    GLOBAL_USER,
     _PATTERN_KEY_PREFIX,
     _compute_pattern_hash,
     get_retrieval_learner,
@@ -107,7 +107,7 @@ class TestFeedbackStreamKeyNamespacing:
         await learner.consume_feedback_stream(date_key="2026-01-01", user_id=None)
 
         called_key = redis.xrange.call_args[0][0]
-        assert called_key == f"rag:feedback:{_GLOBAL_USER}:2026-01-01"
+        assert called_key == f"rag:feedback:{GLOBAL_USER}:2026-01-01"
 
     @pytest.mark.asyncio
     async def test_different_users_read_different_streams(self):
@@ -165,7 +165,7 @@ class TestPatternKeyNamespacing:
         )
 
         ph = _compute_pattern_hash("simple", [])
-        expected_key = f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{ph}"
+        expected_key = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{ph}"
         redis.hset.assert_called_once_with(expected_key, mapping=redis.hset.call_args[1]["mapping"])
 
 
@@ -203,7 +203,7 @@ class TestGetMatchingPatternUserScoped:
         """Falls back to __global__ pattern when user has no qualifying patterns."""
         redis = _make_redis_mock()
         ph = _compute_pattern_hash("simple", [])
-        global_key = f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{ph}"
+        global_key = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{ph}"
         global_pattern = _make_pattern(ph, success_rate=0.75, usage_count=4)
 
         async def fake_hgetall(key):
@@ -227,7 +227,7 @@ class TestGetMatchingPatternUserScoped:
         redis = _make_redis_mock()
         ph = _compute_pattern_hash("simple", [])
         user_key = f"{_PATTERN_KEY_PREFIX}{_USER_A}:{ph}"
-        global_key = f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{ph}"
+        global_key = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{ph}"
 
         user_pattern = _make_pattern(ph, success_rate=0.65, usage_count=3)
         global_pattern = _make_pattern(ph, success_rate=0.99, usage_count=100)
@@ -276,7 +276,7 @@ class TestGetMatchingPatternUserScoped:
         assert redis.hgetall.call_count == 2
         for call in redis.hgetall.call_args_list:
             key = call[0][0]
-            assert f":{_GLOBAL_USER}:" in key
+            assert f":{GLOBAL_USER}:" in key
 
     @pytest.mark.asyncio
     async def test_user_lookup_skips_low_confidence_patterns(self):
@@ -284,7 +284,7 @@ class TestGetMatchingPatternUserScoped:
         redis = _make_redis_mock()
         ph = _compute_pattern_hash("moderate", [])
         user_key = f"{_PATTERN_KEY_PREFIX}{_USER_A}:{ph}"
-        global_key = f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{ph}"
+        global_key = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{ph}"
 
         # User pattern has insufficient usage; global meets threshold.
         low_usage_pattern = _make_pattern(ph, success_rate=0.99, usage_count=2)
@@ -335,7 +335,7 @@ class TestRecordPatternOutcomeUserScoped:
         """record_pattern_outcome uses __global__ scope when user_id is None."""
         redis = _make_redis_mock()
         ph = "deadbeef1234"
-        global_key = f"{_PATTERN_KEY_PREFIX}{_GLOBAL_USER}:{ph}"
+        global_key = f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{ph}"
         pattern = _make_pattern(ph)
         redis.hgetall = AsyncMock(return_value=pattern.to_redis_mapping())
 
