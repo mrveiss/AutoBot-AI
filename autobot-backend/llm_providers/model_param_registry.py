@@ -47,6 +47,12 @@ _FALLBACK_KWARGS: Dict[str, Any] = {
     "max_tokens": 2048,
 }
 
+# OpenAI reasoning models reject the ``temperature`` parameter with HTTP 400.
+# These canonical display_names must never receive the temperature fallback.
+_NO_TEMPERATURE_MODELS: frozenset[str] = frozenset(
+    {"o1", "o1-mini", "o3", "o3-mini", "o4-mini"}
+)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -149,6 +155,9 @@ def get_model_kwargs(
     merged.update(api_kwargs.get("default") or {})
     if provider:
         merged.update(api_kwargs.get(provider) or {})
+    # Reasoning models reject the temperature parameter — strip it after merge.
+    if canonical in _NO_TEMPERATURE_MODELS:
+        merged.pop("temperature", None)
     return merged
 
 

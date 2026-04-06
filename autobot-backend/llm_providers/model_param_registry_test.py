@@ -159,10 +159,9 @@ class TestGetModelKwargs:
         assert kwargs["temperature"] == 1
 
     def test_reasoning_model_has_no_temperature(self):
-        """o1/o3 models intentionally omit temperature from YAML."""
+        """o1/o3 models must not receive temperature — the OpenAI API rejects it."""
         kwargs = get_model_kwargs("o1")
-        assert "temperature" not in kwargs or kwargs.get("temperature") is not None
-        # max_tokens must be set to the large value
+        assert "temperature" not in kwargs
         assert kwargs["max_tokens"] == 32768
 
 
