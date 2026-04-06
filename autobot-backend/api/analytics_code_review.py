@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -32,22 +33,6 @@ _VALID_GIT_REF_RE = re.compile(
 )
 
 router = APIRouter(tags=["code-review", "analytics"])  # Prefix set in router_registry
-
-
-async def _resolve_source_or_404(source_id: Optional[str]) -> None:
-    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
-
-    Uses a lazy import of resolve_source_root to avoid loading the full
-    codebase_analytics package at module import time.
-    """
-    if source_id is None:
-        return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
-
-    source_root = await resolve_source_root(source_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
-
 
 # Performance optimization: O(1) lookup for reviewable file extensions (Issue #326)
 REVIEWABLE_EXTENSIONS = {".py", ".vue", ".ts", ".js"}

@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 # LLM Interface for real code generation
 try:
@@ -46,21 +47,6 @@ except ImportError:
 # Issue #552: Prefix set in router_registry to match frontend calls at /api/code-generation/*
 router = APIRouter(tags=["code-generation", "analytics"])
 logger = logging.getLogger(__name__)
-
-
-async def _resolve_source_or_404(source_id: Optional[str]) -> None:
-    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
-
-    Uses a lazy import of resolve_source_root to avoid loading the full
-    codebase_analytics package at module import time.
-    """
-    if source_id is None:
-        return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
-
-    source_root = await resolve_source_root(source_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 # Issue #380: Pre-compiled regex patterns for code analysis and extraction
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")  # Extract function name
