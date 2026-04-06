@@ -13,12 +13,27 @@ API key is read (in priority order) from:
   2. Environment variable ``ANTHROPIC_API_KEY``
 
 API keys are never logged.
+
+Extended thinking (#3258):
+  Pass a ``thinking`` dict in ``request.metadata["api_kwargs"]`` to enable
+  chain-of-thought reasoning on supported models (claude-3-7-sonnet and later):
+
+      api_kwargs = {
+          "thinking": {"type": "enabled", "budget_tokens": 63000},
+          "max_tokens": 64000,
+          "temperature": 1,
+          "extra_headers": {"anthropic-beta": "output-128k-2025-02-19"},
+      }
+
+  Thinking blocks are stripped from the returned ``content`` unless
+  ``preserve_reasoning=True`` is present in ``api_kwargs``.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -46,6 +61,74 @@ _ANTHROPIC_MODELS = [
     ANTHROPIC_CLAUDE3_OPUS_DATED,
 ]
 
+# Regex that matches <think>…</think> blocks (case-insensitive, dotall).
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_think_blocks(text: str) -> str:
+    """Remove ``<think>…</think>`` wrapper blocks from *text*."""
+    return _THINK_BLOCK_RE.sub("", text).strip()
+
+
+def _build_api_kwargs(
+    base: Dict[str, Any],
+    api_kwargs: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Merge caller-supplied *api_kwargs* into *base* request parameters.
+
+    Handles the three extended-thinking keys that need special treatment:
+
+    - ``thinking``      — forwarded directly to the SDK call.
+    - ``betas``         — forwarded directly to the SDK call.
+    - ``extra_headers`` — collected separately for the SDK ``extra_headers``
+                          keyword argument (not part of the messages payload).
+    - ``preserve_reasoning`` — consumed here; not forwarded to the SDK.
+
+    All remaining keys in *api_kwargs* (e.g. ``max_tokens``, ``temperature``)
+    are merged into *base*, overriding any previously set value.
+
+    Returns:
+        (merged_kwargs, extra_headers)
+    """
+    extra_headers: Dict[str, Any] = {}
+    preserved_keys = {"preserve_reasoning", "extra_headers"}
+
+    for key, value in api_kwargs.items():
+        if key in preserved_keys:
+            continue
+        base[key] = value
+
+    # Collect extra headers to pass separately.
+    extra_headers = dict(api_kwargs.get("extra_headers") or {})
+    return base, extra_headers
+
+
+def _extract_text_content(response_content: list, preserve_reasoning: bool) -> str:
+    """
+    Extract the text from an Anthropic response content block list.
+
+    When *preserve_reasoning* is False (default) ``<think>…</think>`` wrapper
+    blocks written by the model are stripped before returning.
+
+    The Anthropic SDK represents extended-thinking responses as a list that may
+    contain ``ThinkingBlock`` objects (``type == "thinking"``) followed by
+    ``TextBlock`` objects (``type == "text"``).  We join only the text blocks
+    so that raw thinking bytes are never silently included in the response.
+    """
+    parts: List[str] = []
+    for block in response_content:
+        block_type = getattr(block, "type", None)
+        if block_type == "thinking":
+            # Thinking blocks are intentionally excluded from visible output.
+            continue
+        text = getattr(block, "text", None)
+        if text:
+            parts.append(text)
+
+    joined = "\n".join(parts)
+    return joined if preserve_reasoning else _strip_think_blocks(joined)
+
 
 class AnthropicProvider(BaseProvider):
     """
@@ -53,6 +136,10 @@ class AnthropicProvider(BaseProvider):
 
     Supports chat completion and streaming for all Claude model families.
     Requires the ``anthropic`` package (``pip install anthropic``).
+
+    Extended thinking (#3258):
+      Set ``request.metadata["api_kwargs"]["thinking"]`` to enable chain-of-
+      thought reasoning.  See module docstring for a full example.
     """
 
     provider_name = ProviderType.ANTHROPIC.value
@@ -106,8 +193,41 @@ class AnthropicProvider(BaseProvider):
                 )
         return system_content, chat_messages
 
+    def _build_request_kwargs(
+        self, model: str, request: LLMRequest
+    ) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
+        """
+        Build the kwargs dict and extra_headers for an Anthropic SDK call.
+
+        Applies any caller-supplied ``api_kwargs`` from
+        ``request.metadata["api_kwargs"]``, including extended thinking
+        parameters and beta headers.
+
+        Returns:
+            (kwargs, extra_headers, preserve_reasoning)
+        """
+        system_content, chat_messages = self._split_messages(request.messages)
+        kwargs: Dict[str, Any] = {
+            "model": model,
+            "max_tokens": request.max_tokens or 4096,
+            "messages": chat_messages,
+            "temperature": request.temperature,
+        }
+        if system_content:
+            kwargs["system"] = system_content
+
+        api_kwargs: Dict[str, Any] = request.metadata.get("api_kwargs") or {}
+        preserve_reasoning: bool = bool(api_kwargs.get("preserve_reasoning", False))
+        kwargs, extra_headers = _build_api_kwargs(kwargs, api_kwargs)
+
+        return kwargs, extra_headers, preserve_reasoning
+
     async def chat_completion(self, request: LLMRequest) -> LLMResponse:
-        """Execute a non-streaming chat completion via Anthropic."""
+        """Execute a non-streaming chat completion via Anthropic.
+
+        Supports extended thinking when ``request.metadata["api_kwargs"]``
+        contains a ``thinking`` key.
+        """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting(
@@ -115,17 +235,16 @@ class AnthropicProvider(BaseProvider):
         )
         try:
             client = self._ensure_client()
-            system_content, chat_messages = self._split_messages(request.messages)
-            kwargs: Dict[str, Any] = {
-                "model": model,
-                "max_tokens": request.max_tokens or 4096,
-                "messages": chat_messages,
-                "temperature": request.temperature,
-            }
-            if system_content:
-                kwargs["system"] = system_content
-            response = await client.messages.create(**kwargs)
-            content = response.content[0].text if response.content else ""
+            kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(
+                model, request
+            )
+
+            call_kwargs: Dict[str, Any] = dict(kwargs)
+            if extra_headers:
+                call_kwargs["extra_headers"] = extra_headers
+
+            response = await client.messages.create(**call_kwargs)
+            content = _extract_text_content(response.content, preserve_reasoning)
             return LLMResponse(
                 content=content,
                 model=response.model,
@@ -153,23 +272,26 @@ class AnthropicProvider(BaseProvider):
             )
 
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
-        """Stream a chat completion from Anthropic, yielding text chunks."""
+        """Stream a chat completion from Anthropic, yielding text chunks.
+
+        Supports extended thinking when ``request.metadata["api_kwargs"]``
+        contains a ``thinking`` key.  Thinking blocks are not yielded.
+        """
         self._total_requests += 1
         model = request.model_name or self._get_setting(
             "default_model", ANTHROPIC_CLAUDE_SONNET4_6
         )
         try:
             client = self._ensure_client()
-            system_content, chat_messages = self._split_messages(request.messages)
-            kwargs: Dict[str, Any] = {
-                "model": model,
-                "max_tokens": request.max_tokens or 4096,
-                "messages": chat_messages,
-                "temperature": request.temperature,
-            }
-            if system_content:
-                kwargs["system"] = system_content
-            async with client.messages.stream(**kwargs) as stream:
+            kwargs, extra_headers, _preserve = self._build_request_kwargs(
+                model, request
+            )
+
+            call_kwargs: Dict[str, Any] = dict(kwargs)
+            if extra_headers:
+                call_kwargs["extra_headers"] = extra_headers
+
+            async with client.messages.stream(**call_kwargs) as stream:
                 async for text in stream.text_stream:
                     yield text
         except Exception as exc:
