@@ -21,17 +21,21 @@ from constants.path_constants import PATH
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 
-class KBLibrarianAgent:
+class KBLibrarianAgent(StandardizedAgent):
     """A librarian agent that searches knowledge base for relevant information."""
 
     # Agent identifier for SSOT config lookup
     AGENT_ID = "kb_librarian"
 
     def __init__(self):
-        """Initialize KB librarian agent with explicit LLM configuration."""
+        """Initialize KB librarian agent (#3387: migrated to StandardizedAgent)."""
+        super().__init__("kb_librarian", DeploymentMode.LOCAL)
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
 
@@ -44,6 +48,32 @@ class KBLibrarianAgent:
             "agents.kb_librarian.auto_learning_enabled", True
         )
 
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "search": ActionHandler(
+                    handler_method="_handle_search",
+                    required_params=["query"],
+                    description="Search the knowledge base",
+                ),
+                "answer": ActionHandler(
+                    handler_method="_handle_answer",
+                    required_params=["question"],
+                    description="Answer a question using knowledge base context",
+                ),
+                "add_knowledge": ActionHandler(
+                    handler_method="_handle_add_knowledge",
+                    required_params=["content", "title"],
+                    description="Add new knowledge to the base",
+                ),
+                "get_stats": ActionHandler(
+                    handler_method="_handle_get_stats",
+                    required_params=[],
+                    description="Get knowledge base statistics",
+                ),
+            }
+        )
+
         logger.info(
             "KB Librarian Agent initialized with provider=%s, endpoint=%s, model=%s",
             self.llm_provider,
@@ -53,6 +83,44 @@ class KBLibrarianAgent:
 
         if self.auto_learning_enabled:
             logger.info("AUTO-LEARNING: Knowledge Base auto-learning is enabled")
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return ["search", "answer", "add_knowledge", "get_stats", "knowledge_base"]
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a knowledge base librarian. "
+            "Find and retrieve relevant information from the knowledge base."
+        )
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_search(self, request) -> Dict[str, Any]:
+        """Handle search action via StandardizedAgent routing."""
+        query = request.payload["query"]
+        limit = request.payload.get("limit", 5)
+        results = await self.search_knowledge(query, limit=limit)
+        return {"results": results, "count": len(results)}
+
+    async def _handle_answer(self, request) -> Dict[str, Any]:
+        """Handle answer action via StandardizedAgent routing."""
+        question = request.payload["question"]
+        context_limit = request.payload.get("context_limit", 3)
+        return await self.answer_question(question, context_limit=context_limit)
+
+    async def _handle_add_knowledge(self, request) -> Dict[str, Any]:
+        """Handle add_knowledge action via StandardizedAgent routing."""
+        content = request.payload["content"]
+        title = request.payload["title"]
+        source = request.payload.get("source")
+        await self.add_new_knowledge(content, title, source=source)
+        return {"status": "success", "title": title}
+
+    async def _handle_get_stats(self, request) -> Dict[str, Any]:
+        """Handle get_stats action via StandardizedAgent routing."""
+        return await self.get_knowledge_stats()
 
     async def search_knowledge(
         self, query: str, limit: int = 5

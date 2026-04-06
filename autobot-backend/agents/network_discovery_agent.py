@@ -8,12 +8,16 @@ Provides network mapping and asset discovery capabilities
 
 import ipaddress
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, List
 
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
+
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
@@ -29,21 +33,97 @@ _SUPPORTED_DISCOVERY_TASKS = (
 )
 
 
-class NetworkDiscoveryAgent:
+class NetworkDiscoveryAgent(StandardizedAgent):
     """Agent for network discovery and asset mapping"""
 
     def __init__(self):
-        """Initialize network discovery agent (Issue #380: use module-level constant)."""
+        """Initialize network discovery agent (#3387: migrated to StandardizedAgent)."""
+        super().__init__("network_discovery", DeploymentMode.LOCAL)
         self.name = "network_discovery"
         self.description = "Discovers network assets and creates network maps"
         self.supported_tasks = _SUPPORTED_DISCOVERY_TASKS
 
-        # Get default network from configuration or environment
-        import os
-
         self.default_network = os.getenv(
             "AUTOBOT_DEFAULT_SCAN_NETWORK", NetworkConstants.DEFAULT_SCAN_NETWORK
         )
+
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "network_scan": ActionHandler(
+                    handler_method="_handle_network_scan",
+                    required_params=[],
+                    description="Scan network for active hosts",
+                ),
+                "host_discovery": ActionHandler(
+                    handler_method="_handle_host_discovery",
+                    required_params=[],
+                    description="Discover hosts using multiple methods",
+                ),
+                "arp_scan": ActionHandler(
+                    handler_method="_handle_arp_scan",
+                    required_params=[],
+                    description="Perform ARP scan on local network",
+                ),
+                "traceroute": ActionHandler(
+                    handler_method="_handle_traceroute",
+                    required_params=["target"],
+                    description="Perform traceroute to target",
+                ),
+                "network_map": ActionHandler(
+                    handler_method="_handle_network_map",
+                    required_params=[],
+                    description="Create a network map",
+                ),
+                "asset_inventory": ActionHandler(
+                    handler_method="_handle_asset_inventory",
+                    required_params=[],
+                    description="Create asset inventory",
+                ),
+            }
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return list(_SUPPORTED_DISCOVERY_TASKS)
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return "You are a network discovery agent. Scan and map network assets."
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_network_scan(self, request) -> Dict[str, Any]:
+        """Handle network_scan action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        context.setdefault("task_type", "network_scan")
+        return await self._network_scan(context)
+
+    async def _handle_host_discovery(self, request) -> Dict[str, Any]:
+        """Handle host_discovery action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        context.setdefault("task_type", "host_discovery")
+        return await self._host_discovery(context)
+
+    async def _handle_arp_scan(self, request) -> Dict[str, Any]:
+        """Handle arp_scan action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        return await self._arp_scan(context)
+
+    async def _handle_traceroute(self, request) -> Dict[str, Any]:
+        """Handle traceroute action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        return await self._traceroute(context)
+
+    async def _handle_network_map(self, request) -> Dict[str, Any]:
+        """Handle network_map action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        return await self._create_network_map(context)
+
+    async def _handle_asset_inventory(self, request) -> Dict[str, Any]:
+        """Handle asset_inventory action via StandardizedAgent routing."""
+        context = dict(request.payload)
+        return await self._asset_inventory(context)
 
     def _get_task_handlers(self) -> Dict[str, Any]:
         """Get task type to handler mapping (Issue #334 - extracted helper)."""
@@ -57,7 +137,7 @@ class NetworkDiscoveryAgent:
         }
 
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a network discovery task"""
+        """Execute a network discovery task (backward-compatible entry point)."""
         try:
             task_type = context.get("task_type", "network_scan")
             handlers = self._get_task_handlers()
