@@ -43,6 +43,13 @@ from .entities import EntityOperationsMixin
 from .queries import QueryOperationsMixin
 from .relations import RelationOperationsMixin
 from .secrets import SecretManagementMixin
+from .semantic_search import (  # noqa: F401
+    HybridScorer,
+    MemoryGraphQueryProcessor,
+    QueryIntent,
+    SearchResult,
+    ensure_indexes,
+)
 from .user_session import UserSessionMixin
 
 
@@ -124,4 +131,10 @@ __all__ = [
     "QueryOperationsMixin",
     "UserSessionMixin",
     "SecretManagementMixin",
+    # Semantic search (#3612)
+    "MemoryGraphQueryProcessor",
+    "HybridScorer",
+    "SearchResult",
+    "QueryIntent",
+    "ensure_indexes",
 ]
