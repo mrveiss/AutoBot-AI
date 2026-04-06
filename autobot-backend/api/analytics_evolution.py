@@ -27,26 +27,12 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.security.path_validator import validate_path
+from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
     tags=["code-evolution", "analytics"]
 )  # Prefix set in router_registry
-
-async def _resolve_source_or_404(source_id: Optional[str]) -> None:
-    """Raise HTTP 404 if source_id is provided but not found (Issue #3436).
-
-    Uses a lazy import of resolve_source_root to avoid loading the full
-    codebase_analytics package at module import time.
-    """
-    if source_id is None:
-        return
-    from api.codebase_analytics.endpoints.shared import resolve_source_root
-    from fastapi import HTTPException
-
-    source_root = await resolve_source_root(source_id)
-    if source_root is None:
-        raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
