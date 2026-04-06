@@ -17,7 +17,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
-from constants.error_constants import ERR_SESSION_NOT_FOUND
+from constants.error_constants import ERR_EXPERIMENT_NOT_FOUND, ERR_SESSION_NOT_FOUND
 from constants.ttl_constants import TTL_24_HOURS
 
 from .config import AutoResearchConfig
@@ -147,7 +147,7 @@ async def get_experiment(
     store = _get_store(request)
     experiment = await store.get_experiment(experiment_id)
     if experiment is None:
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise HTTPException(status_code=404, detail=ERR_EXPERIMENT_NOT_FOUND)
     return experiment.to_dict()
 
 

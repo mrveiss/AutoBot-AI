@@ -14,6 +14,7 @@ ERR_CONNECTOR_NOT_FOUND = "Connector not found"
 ERR_JOB_NOT_FOUND = "Job not found"
 ERR_TEMPLATE_NOT_FOUND = "Template not found"
 ERR_WORKFLOW_NOT_FOUND = "Workflow not found"
+ERR_EXPERIMENT_NOT_FOUND = "Experiment not found"
 
 # Auth errors
 ERR_INVALID_CREDENTIALS = "Invalid username or password"
