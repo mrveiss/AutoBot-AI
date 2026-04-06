@@ -21,6 +21,69 @@
 ---
 
 # -------------------------------------------------------------------
+# Play 0: Pre-flight — sync code_source from GitHub (#3561)
+#
+# Pulls the latest committed code before any role runs so that
+# Ansible role files, templates, and defaults are always current.
+# Uses ignore_errors: yes so offline / air-gapped SLMs still work
+# (they deploy from whatever code_source is already on disk and get
+# a visible warning).  Mirrors the pattern in update-all-nodes.yml.
+# -------------------------------------------------------------------
+- name: "Play 0 - Pre-flight: Sync code_source from GitHub"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
+    git_repo_root: "/opt/autobot/code_source"
+    deploy_ref: "Dev_new_gui"
+
+  tasks:
+    - name: "[PRE-FLIGHT] Verify code_source exists"
+      ansible.builtin.stat:
+        path: "{{ git_repo_root }}/.git"
+      register: code_source_stat
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Abort if code_source missing"
+      ansible.builtin.fail:
+        msg: >-
+          Code source not found at {{ git_repo_root }}.
+          Initialize with: git clone {{ github_repo }} {{ git_repo_root }}
+      when: not code_source_stat.stat.exists
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
+      ansible.builtin.git:
+        repo: "{{ github_repo }}"
+        dest: "{{ git_repo_root }}"
+        version: "{{ deploy_ref }}"
+        update: yes
+      ignore_errors: yes
+      register: github_sync
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: GitHub sync failed (no internet access?).
+          Deploying from existing code_source at {{ git_repo_root }}.
+      when: github_sync is failed
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Get current deploy commit"
+      ansible.builtin.command: >-
+        git -C {{ git_repo_root }} log -1 --format='%h %s'
+      register: deploy_info
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display deployed commit"
+      ansible.builtin.debug:
+        msg: "Deploying from commit: {{ deploy_info.stdout }}"
+      tags: [always]
+
+# -------------------------------------------------------------------
 # Phase 0: Shared Dependencies (nginx, python312, nodejs)
 # Resolved from ROLE_DEPENDENCIES map via node_dependencies host var.
 # -------------------------------------------------------------------
