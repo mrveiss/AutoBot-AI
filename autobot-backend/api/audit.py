@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
 from services.audit_logger import AuditResult, get_audit_logger
 from utils.catalog_http_exceptions import (
     raise_auth_error,
@@ -148,8 +149,7 @@ async def query_audit_logs(
     session_id: Optional[str] = Query(None, description="Session filter"),
     vm_name: Optional[str] = Query(None, description="VM filter"),
     result: Optional[AuditResult] = Query(None, description="Result filter"),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Query audit logs with filters. Issue #665: Refactored with helper.
@@ -170,13 +170,13 @@ async def query_audit_logs(
             session_id=session_id,
             vm_name=vm_name,
             result=result,
-            limit=limit + 1,
-            offset=offset,
+            limit=pagination.limit + 1,
+            offset=pagination.offset,
         )
 
-        has_more = len(entries) > limit
+        has_more = len(entries) > pagination.limit
         if has_more:
-            entries = entries[:limit]
+            entries = entries[: pagination.limit]
 
         return AuditQueryResponse(
             success=True,
@@ -191,8 +191,8 @@ async def query_audit_logs(
                 session_id,
                 vm_name,
                 result,
-                limit,
-                offset,
+                pagination.limit,
+                pagination.offset,
             ),
         )
     except HTTPException:

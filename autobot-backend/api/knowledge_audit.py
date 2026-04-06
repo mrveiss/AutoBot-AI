@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from autobot_shared.models.pagination import PaginationParams
 from knowledge.audit_log import AuditEventType, KnowledgeAuditLog
 from knowledge_factory import get_or_create_knowledge_base
 
@@ -72,16 +73,14 @@ async def _get_audit_log(kb) -> KnowledgeAuditLog:
 async def get_user_activity_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(),
 ):
     """Get audit log for current user's activity.
 
     Issue #679: User can view their own activity history.
 
     Args:
-        limit: Maximum events to return
-        offset: Pagination offset
+        pagination: Limit and offset for result pagination
 
     Returns:
         List of audit events
@@ -95,7 +94,7 @@ async def get_user_activity_log(
 
         user_id = current_user.get("user_id") or current_user.get("username", "")
         events = await audit_log.get_user_activity(
-            user_id=user_id, limit=limit, offset=offset
+            user_id=user_id, limit=pagination.limit, offset=pagination.offset
         )
 
         return {"events": events, "count": len(events), "user_id": user_id}
@@ -165,8 +164,7 @@ async def get_fact_access_log(
 async def get_organization_audit_log(
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    limit: int = Query(default=1000, ge=1, le=10000),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(),
 ):
     """Get audit log for the organization.
 
@@ -174,8 +172,7 @@ async def get_organization_audit_log(
     Issue #934: Enforce org admin role.
 
     Args:
-        limit: Maximum events to return
-        offset: Pagination offset
+        pagination: Limit and offset for result pagination
 
     Returns:
         List of organization audit events
@@ -201,7 +198,7 @@ async def get_organization_audit_log(
         audit_log = await _get_audit_log(kb)
 
         events = await audit_log.get_organization_audit_log(
-            organization_id=org_id, limit=limit, offset=offset
+            organization_id=org_id, limit=pagination.limit, offset=pagination.offset
         )
 
         return {

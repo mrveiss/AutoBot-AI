@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -219,8 +220,7 @@ async def create_batch_job(
 async def list_batch_jobs(
     status: Optional[BatchJobStatus] = Query(None, description="Filter by status"),
     job_type: Optional[BatchJobType] = Query(None, description="Filter by type"),
-    limit: int = Query(50, ge=1, le=500, description="Max results"),
-    offset: int = Query(0, ge=0, description="Results offset"),
+    pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -231,8 +231,7 @@ async def list_batch_jobs(
     Args:
         status: Filter by job status
         job_type: Filter by job type
-        limit: Maximum number of results
-        offset: Results offset for pagination
+        pagination: Limit and offset for result pagination
 
     Returns:
         BatchJobList: List of jobs with counts
@@ -266,7 +265,7 @@ async def list_batch_jobs(
 
     jobs.sort(key=lambda j: j.created_at, reverse=True)
     total_count = len(jobs)
-    jobs = jobs[offset : offset + limit]
+    jobs = jobs[pagination.offset : pagination.offset + pagination.limit]
 
     return BatchJobList(jobs=jobs, total_count=total_count, status_counts=status_counts)
 
