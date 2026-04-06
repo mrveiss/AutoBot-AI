@@ -16,7 +16,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.ssot_config import config
-from constants.ttl_constants import TTL_1_HOUR  # noqa: F401 — used as default arg value
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
 

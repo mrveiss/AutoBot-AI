@@ -24,7 +24,7 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.ttl_constants import TTL_5_MINUTES  # noqa: F401 — used as default arg/field value
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 

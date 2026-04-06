@@ -73,7 +73,7 @@ class OptimizationConfig:
     # Response caching
     cache_enabled: bool = True
     cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
+    cache_l2_ttl: int = TTL_5_MINUTES
 
 
 class OptimizationRouter:
