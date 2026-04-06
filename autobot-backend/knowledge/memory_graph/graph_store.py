@@ -57,11 +57,11 @@ def _in_key(entity_id: str) -> str:
 
 
 async def _init_relation_doc(redis_client: Any, key: str, owner_id: str) -> None:
-    """Create an empty relation document at *key* if it does not exist."""
-    if not await redis_client.exists(key):
-        await redis_client.json().set(
-            key, "$", {"entity_id": owner_id, "relations": []}
-        )
+    """Create an empty relation document at *key* if it does not exist (atomic NX)."""
+    import json as _json
+    await redis_client.execute_command(
+        "JSON.SET", key, "$", _json.dumps({"entity_id": owner_id, "relations": []}), "NX"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +100,6 @@ async def create_entity(
     entity_id = str(uuid.uuid4())
     now = _now_ms()
     base_metadata: Dict[str, Any] = {
-        "user_id": "autobot",
         "priority": "medium",
         "status": "active",
         "tags": [],
@@ -308,7 +307,7 @@ async def traverse_relations(
         )
 
         for nid, entity in zip(next_ids, entities):
-            if isinstance(entity, Exception) or entity is None:
+            if isinstance(entity, BaseException) or entity is None:
                 continue
             visited.add(nid)
             result.append(entity)

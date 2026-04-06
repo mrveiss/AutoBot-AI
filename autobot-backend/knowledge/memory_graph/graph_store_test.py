@@ -83,9 +83,16 @@ def _make_redis(store: dict | None = None):
     client.pipeline = MagicMock(return_value=pipe)
 
     async def _execute_command(*args):
+        import json as _json
         cmd = args[0].upper() if args else ""
         if cmd == "FT.INFO":
             raise Exception("Index not found")
+        if cmd == "JSON.SET" and len(args) >= 4:
+            key, _path, value_str = args[1], args[2], args[3]
+            nx = len(args) > 4 and str(args[4]).upper() == "NX"
+            if nx and key in store:
+                return None  # NX: skip if already exists
+            store[key] = _json.loads(value_str)
         return None
 
     client.execute_command = AsyncMock(side_effect=_execute_command)
