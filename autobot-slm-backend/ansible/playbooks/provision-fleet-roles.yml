@@ -308,6 +308,10 @@
 # checking for the user frontend package.json, but it runs before
 # the frontend role syncs the code. This phase re-renders the
 # SLM nginx config after the frontend role has completed.
+#
+# Detection is purely filesystem-based so it works regardless of
+# whether provisioning was triggered via the setup wizard (full
+# fleet inventory) or per-node API (temp inventory with no groups).
 # -------------------------------------------------------------------
 - name: "Provision Phase 4c: SLM Nginx Co-location Update"
   hosts: all
@@ -315,56 +319,45 @@
   gather_facts: false
 
   tasks:
-    # Detect co-location on the SLM manager host (#3426):
-    # 1. Wizard sets slm_colocated_frontend=True on 00-SLM-Manager when any
-    #    local node carries the 'frontend' role.
-    # 2. Standalone runs (slm-nodes.yml) fall back to the package.json stat.
-    # Only runs on slm_server/slm group hosts; skipped on all others.
-    - name: "SLM | Determine if this is the SLM manager host"
-      ansible.builtin.set_fact:
-        _is_slm_manager: >-
-          {{
-            inventory_hostname in groups.get('slm_server', []) or
-            inventory_hostname in groups.get('slm', []) or
-            'slm-backend' in (node_roles | default([])) or
-            'slm_manager' in (node_roles | default([]))
-          }}
+    # Use filesystem state rather than inventory group membership so
+    # this works with any inventory shape (wizard, per-node, static).
+    - name: "SLM | Stat SLM nginx config to detect SLM manager host"
+      ansible.builtin.stat:
+        path: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
+      register: _slm_nginx_config_stat
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    - name: "SLM | Stat user frontend package.json for fallback co-location detection"
+    - name: "SLM | Stat user frontend package.json for co-location detection"
       ansible.builtin.stat:
         path: "{{ frontend_dist_dir | default('/opt/autobot/autobot-frontend/dist') | dirname }}/package.json"
       register: _post_frontend_colocated_check
-      when: _is_slm_manager | bool
+      when: _slm_nginx_config_stat.stat.exists
       tags: ['frontend', 'slm-nginx', 'provision']
 
-    - name: "SLM | Resolve co-location flag (wizard var or package.json fallback)"
+    - name: "SLM | Resolve co-location flag"
       ansible.builtin.set_fact:
         _is_slm_frontend_colocated: >-
           {{
-            _is_slm_manager | bool and (
-              slm_colocated_frontend | default(false) | bool or
-              _post_frontend_colocated_check.stat.exists | default(false) | bool
-            )
+            _slm_nginx_config_stat.stat.exists and
+            _post_frontend_colocated_check.stat.exists | default(false) | bool
           }}
-      when: _is_slm_manager | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Load slm_manager defaults for nginx re-render"
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../roles/slm_manager/defaults/main.yml"
-      when: _is_slm_frontend_colocated | default(false) | bool
+      when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
 
     - name: "SLM | Re-render SLM nginx config for co-located mode (#3012)"
       ansible.builtin.template:
-        src: "{{ role_path | default(playbook_dir + '/../roles/slm_manager') }}/templates/autobot-slm.conf.j2"
+        src: "{{ playbook_dir }}/../roles/slm_manager/templates/autobot-slm.conf.j2"
         dest: "/etc/nginx/sites-available/{{ slm_nginx_config | default('autobot-slm') }}"
         mode: "0644"
         backup: true
       vars:
         slm_colocated_frontend: true
-      when: _is_slm_frontend_colocated | default(false) | bool
+      when: _is_slm_frontend_colocated | bool
       register: _slm_nginx_rerendered
       tags: ['frontend', 'slm-nginx', 'provision']
 
@@ -379,7 +372,7 @@
       become_user: "{{ slm_user | default('autobot') }}"
       environment:
         VITE_API_URL: "/slm"
-      when: _is_slm_frontend_colocated | default(false) | bool
+      when: _is_slm_frontend_colocated | bool
       changed_when: true
       tags: ['frontend', 'slm-nginx', 'provision']
 
