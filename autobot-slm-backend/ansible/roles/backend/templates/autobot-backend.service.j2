@@ -3,7 +3,8 @@
 # Author: mrveiss
 [Unit]
 Description=AutoBot Backend API
-After=network.target redis.service
+After=network-online.target redis-stack-server.service
+Wants=network-online.target redis-stack-server.service
 
 [Service]
 Type=simple

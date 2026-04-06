@@ -3,8 +3,8 @@
 # Author: mrveiss
 [Unit]
 Description=AutoBot Celery Worker
-After=network.target redis.service autobot-backend.service
-Wants=redis.service
+After=network-online.target redis-stack-server.service autobot-backend.service
+Wants=network-online.target redis-stack-server.service
 
 [Service]
 Type=simple
