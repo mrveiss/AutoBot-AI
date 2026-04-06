@@ -1033,10 +1033,10 @@ async def _wire_scheduler_executor() -> None:
     """
     logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
     try:
-        from enhanced_orchestrator import get_orchestrator
+        from orchestrator import get_orchestrator_sync
         from workflow_scheduler import ScheduledWorkflow, workflow_scheduler
 
-        orchestrator = get_orchestrator()
+        orchestrator = get_orchestrator_sync()
 
         async def _orchestration_executor(workflow: ScheduledWorkflow):
             """Adapter: ScheduledWorkflow → EnhancedOrchestrator.execute_enhanced_workflow.
