@@ -26,6 +26,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from constants.ttl_constants import TTL_5_MINUTES
+
 logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for tool classification (Issue #326)
@@ -158,7 +160,7 @@ class ToolPatternAnalyzer:
         # Analysis results cache
         self.last_analysis_time: Optional[datetime] = None
         self.cached_analysis: Optional[Dict[str, Any]] = None
-        self.cache_ttl = 300  # 5 minutes
+        self.cache_ttl = TTL_5_MINUTES
 
         logger.info("Tool pattern analyzer initialized")
 

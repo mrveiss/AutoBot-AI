@@ -16,6 +16,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.ssot_config import config
+from constants.ttl_constants import TTL_1_HOUR  # noqa: F401 — used as default arg value
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class EmbeddingCache:
     Reads default maxsize from SSOT config.cache.l1.embedding
     """
 
-    def __init__(self, maxsize: int = None, ttl_seconds: int = 3600):
+    def __init__(self, maxsize: int = None, ttl_seconds: int = TTL_1_HOUR):
         """
         Initialize embedding cache.
 

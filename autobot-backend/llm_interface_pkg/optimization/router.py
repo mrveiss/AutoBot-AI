@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional, Set
 
+from constants.ttl_constants import TTL_5_MINUTES
 from ..types import ProviderType
 
 logger = logging.getLogger(__name__)

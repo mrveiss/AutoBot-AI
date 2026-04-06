@@ -42,6 +42,7 @@ from code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from constants.ttl_constants import TTL_5_MINUTES
 from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
@@ -1133,7 +1134,7 @@ async def get_redis_optimization_types(
 
 # Issue #1034: TTL cache for Redis health score (path -> (timestamp, response))
 _redis_health_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
-_REDIS_HEALTH_CACHE_TTL = 300  # 5 minutes
+_REDIS_HEALTH_CACHE_TTL = TTL_5_MINUTES
 _REDIS_HEALTH_TIMEOUT = 30.0  # seconds
 
 

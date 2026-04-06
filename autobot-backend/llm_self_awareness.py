@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from constants.ttl_constants import TTL_5_MINUTES
 from enhanced_project_state_tracker import get_state_tracker
 from phase_progression_manager import get_progression_manager
 from project_state_manager import get_project_state_manager
@@ -48,7 +49,7 @@ class LLMSelfAwareness:
         # Cache for system context
         self._context_cache = None
         self._cache_timestamp = None
-        self._cache_ttl = 300  # 5 minutes
+        self._cache_ttl = TTL_5_MINUTES
 
         logger.info("LLM Self-Awareness module initialized")
 

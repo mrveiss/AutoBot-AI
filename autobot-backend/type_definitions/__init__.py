@@ -40,6 +40,8 @@ from typing import (
 
 from typing_extensions import NotRequired, TypedDict
 
+from constants.ttl_constants import TTL_5_MINUTES
+
 # Common type aliases
 StrDict = Dict[str, Any]
 StrList = List[str]
@@ -261,7 +263,7 @@ AgentType = Literal["chat", "research", "development", "analysis", "automation"]
 TaskStatus = Literal["pending", "running", "completed", "failed", "cancelled"]
 
 # Final constants for configuration
-DEFAULT_CACHE_TTL: Final[int] = 300  # 5 minutes
+DEFAULT_CACHE_TTL: Final[int] = TTL_5_MINUTES
 MAX_RETRY_ATTEMPTS: Final[int] = 3
 DEFAULT_TIMEOUT: Final[int] = 30  # seconds
 MAX_CONTENT_LENGTH: Final[int] = 10 * 1024 * 1024  # 10MB

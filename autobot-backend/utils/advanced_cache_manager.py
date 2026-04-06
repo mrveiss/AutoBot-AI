@@ -18,6 +18,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -965,7 +966,7 @@ class SimpleCacheManager:
     Provides simple TTL-based caching API using AdvancedCacheManager backend.
     """
 
-    def __init__(self, default_ttl: int = 300):
+    def __init__(self, default_ttl: int = TTL_5_MINUTES):
         """Initialize simple cache manager with default TTL in seconds."""
         self.default_ttl = default_ttl
         self._cache = advanced_cache
@@ -1170,7 +1171,7 @@ cache_manager = SimpleCacheManager()
 
 
 # Standalone cache_response decorator (backward compatibility)
-def cache_response(cache_key: str = None, ttl: int = 300):
+def cache_response(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     Standalone decorator for caching API endpoint responses.
     Backward compatibility for: from backend.utils.cache_manager import cache_response
@@ -1183,7 +1184,7 @@ def cache_response(cache_key: str = None, ttl: int = 300):
 
 
 # Simple cache decorator for non-HTTP functions (backward compatibility)
-def cache_function(cache_key: str = None, ttl: int = 300):
+def cache_function(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     Simple cache decorator for non-FastAPI functions.
     Backward compatibility for original cache_manager.cache_function()

@@ -37,6 +37,7 @@ from functools import lru_cache
 from typing import Dict, Optional
 
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
+from constants.ttl_constants import TTL_5_MINUTES
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
@@ -388,7 +389,7 @@ class ModelConfig:
     # Performance settings
     DEFAULT_CONNECTION_POOL_SIZE: int = 20
     DEFAULT_MAX_CONCURRENT_REQUESTS: int = 8
-    DEFAULT_CACHE_TTL: int = 300  # 5 minutes
+    DEFAULT_CACHE_TTL: int = TTL_5_MINUTES
     DEFAULT_MAX_CHUNKS: int = 1000  # Streaming response chunks
 
     # RAG search settings (Issue #611)

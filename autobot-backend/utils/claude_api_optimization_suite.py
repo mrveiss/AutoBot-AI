@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
@@ -83,7 +84,7 @@ class OptimizationConfig:
 
     # Graceful degradation settings
     enable_caching: bool = True
-    cache_ttl: int = 300  # 5 minutes
+    cache_ttl: int = TTL_5_MINUTES
 
 
 @dataclass

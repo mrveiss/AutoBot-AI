@@ -34,6 +34,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from constants.ttl_constants import TTL_5_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ ENV_VAR_MAP = {
 class AgentConfigCache:
     """In-memory cache for agent configurations with TTL."""
 
-    def __init__(self, ttl_seconds: int = 300):
+    def __init__(self, ttl_seconds: int = TTL_5_MINUTES):
         """
         Initialize cache with specified TTL.
 
@@ -253,7 +254,7 @@ class SLMClient:
         self,
         slm_url: str = DEFAULT_SLM_URL,
         auth_token: Optional[str] = None,
-        cache_ttl: int = 300,
+        cache_ttl: int = TTL_5_MINUTES,
     ):
         """
         Initialize SLM client.
@@ -612,7 +613,7 @@ def get_slm_client() -> Optional[SLMClient]:
 async def init_slm_client(
     slm_url: str = DEFAULT_SLM_URL,
     auth_token: Optional[str] = None,
-    cache_ttl: int = 300,
+    cache_ttl: int = TTL_5_MINUTES,
 ) -> SLMClient:
     """
     Initialize global SLM client.

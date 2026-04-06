@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
 from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Issue #711: Cache configuration for call graph
 CALL_GRAPH_CACHE_PREFIX = "codebase:call_graph:cache"
-CALL_GRAPH_CACHE_TTL = 300  # 5 minutes cache
+CALL_GRAPH_CACHE_TTL = TTL_5_MINUTES
 
 
 def _get_cache_key(project_root: str) -> str:
