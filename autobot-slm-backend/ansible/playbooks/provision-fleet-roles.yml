@@ -60,6 +60,20 @@
       changed_when: false
       tags: [always]
 
+    # Root-owned files in code_source (e.g. from earlier sudo cp) block
+    # git reset --hard.  Fix ownership before the pull so force: yes works.
+    - name: "[PRE-FLIGHT] Fix code_source ownership so git reset can overwrite"
+      ansible.builtin.file:
+        path: "{{ git_repo_root }}"
+        state: directory
+        owner: "{{ ansible_user_id | default('autobot') }}"
+        group: "{{ ansible_user_id | default('autobot') }}"
+        recurse: true
+      become: true
+      failed_when: false
+      changed_when: false
+      tags: [always]
+
     - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
       ansible.builtin.git:
         repo: "{{ github_repo }}"
