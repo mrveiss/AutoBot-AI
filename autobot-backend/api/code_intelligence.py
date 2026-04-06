@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -423,17 +424,11 @@ async def _validate_analysis_path(path: str) -> None:
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+        raise_invalid_input("path", f"does not exist: {path}")
 
     is_dir = await asyncio.to_thread(os.path.isdir, path)
     if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {path}",
-        )
+        raise_invalid_input("path", f"not a directory: {path}")
 
 
 def _filter_results_by_severity(results: list, min_severity: Optional[str]) -> list:
@@ -482,10 +477,7 @@ async def _validate_path_exists(path: str) -> None:
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+        raise_invalid_input("path", f"does not exist: {path}")
 
 
 async def _validate_path_is_directory(path: str) -> None:
@@ -503,10 +495,7 @@ async def _validate_path_is_directory(path: str) -> None:
     """
     is_dir = await asyncio.to_thread(os.path.isdir, path)
     if not is_dir:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path is not a directory: {path}",
-        )
+        raise_invalid_input("path", f"not a directory: {path}")
 
 
 def _filter_antipatterns_by_severity(
@@ -731,10 +720,7 @@ async def analyze_codebase(
 
     # Directory-based analysis (original behavior)
     if not request.path:
-        raise HTTPException(
-            status_code=422,
-            detail="Either 'path' or 'code' must be provided",
-        )
+        raise_invalid_input("path", "either 'path' or 'code' must be provided")
     await _validate_path_exists(request.path)
     await _validate_path_is_directory(request.path)
 
@@ -757,10 +743,7 @@ async def analyze_codebase(
 
     except Exception as e:
         logger.error("Analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Analysis failed",
-        )
+        raise_internal_error("Analysis failed")
 
 
 def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
@@ -885,16 +868,10 @@ async def quick_scan_file(
     """
     file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
     if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
+        raise_invalid_input("file_path", f"does not exist: {request.file_path}")
 
     if not request.file_path.endswith(".py"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only Python (.py) files are supported",
-        )
+        raise_invalid_input("file_path", "only Python (.py) files are supported")
 
     try:
         detector = AntiPatternDetector()
@@ -917,10 +894,7 @@ async def quick_scan_file(
 
     except Exception as e:
         logger.error("File scan failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Scan failed",
-        )
+        raise_internal_error("Scan failed")
 
 
 @with_error_handling(
@@ -943,10 +917,7 @@ async def get_codebase_health_score(
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+        raise_invalid_input("path", f"does not exist: {path}")
 
     try:
         detector = AntiPatternDetector()
@@ -974,10 +945,7 @@ async def get_codebase_health_score(
 
     except Exception as e:
         logger.error("Health score calculation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Health check failed",
-        )
+        raise_internal_error("Health check failed")
 
 
 @with_error_handling(
@@ -1081,10 +1049,7 @@ async def analyze_redis_usage_endpoint(
 
     except Exception as e:
         logger.error("Redis analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Redis analysis failed",
-        )
+        raise_internal_error("Redis analysis failed")
 
 
 @with_error_handling(
@@ -1107,16 +1072,10 @@ async def scan_redis_file(
     """
     file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
     if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
+        raise_invalid_input("file_path", f"does not exist: {request.file_path}")
 
     if not request.file_path.endswith(".py"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only Python (.py) files are supported",
-        )
+        raise_invalid_input("file_path", "only Python (.py) files are supported")
 
     try:
         optimizer = RedisOptimizer()
@@ -1139,10 +1098,7 @@ async def scan_redis_file(
 
     except Exception as e:
         logger.error("Redis file scan failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Scan failed",
-        )
+        raise_internal_error("Scan failed")
 
 
 @with_error_handling(
@@ -1202,10 +1158,7 @@ async def get_redis_usage_health_score(
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+        raise_invalid_input("path", f"does not exist: {path}")
 
     # Issue #1034: Return cached result if still valid
     cached = _redis_health_cache.get(path)
@@ -1237,10 +1190,7 @@ async def get_redis_usage_health_score(
         raise
     except Exception as e:
         logger.error("Redis health score calculation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Health check failed",
-        )
+        raise_internal_error("Health check failed")
 
 
 async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
@@ -1347,10 +1297,7 @@ async def security_analyze(
 
     except Exception as e:
         logger.error("Security analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Security analysis failed",
-        )
+        raise_internal_error("Security analysis failed")
 
 
 @with_error_handling(
@@ -1372,16 +1319,10 @@ async def security_scan_file(
     """
     file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
     if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
+        raise_invalid_input("file_path", f"does not exist: {request.file_path}")
 
     if not request.file_path.endswith(".py"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only Python files (.py) are supported",
-        )
+        raise_invalid_input("file_path", "only Python files (.py) are supported")
 
     try:
         analyzer = SecurityAnalyzer()
@@ -1413,10 +1354,7 @@ async def security_scan_file(
 
     except Exception as e:
         logger.error("Security file scan failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="File scan failed",
-        )
+        raise_internal_error("File scan failed")
 
 
 @with_error_handling(
@@ -1479,10 +1417,7 @@ async def get_security_score(
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Path does not exist: {path}",
-        )
+        raise_invalid_input("path", f"does not exist: {path}")
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
@@ -1515,10 +1450,7 @@ async def get_security_score(
 
     except Exception as e:
         logger.error("Security score calculation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Security score calculation failed",
-        )
+        raise_internal_error("Security score calculation failed")
 
 
 @with_error_handling(
@@ -1551,10 +1483,7 @@ async def get_security_report(
 
     except Exception as e:
         logger.error("Security report generation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Report generation failed",
-        )
+        raise_internal_error("Report generation failed")
 
 
 # ============================================================================
@@ -1634,10 +1563,7 @@ async def performance_analyze(
 
     except Exception as e:
         logger.error("Performance analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Performance analysis failed",
-        )
+        raise_internal_error("Performance analysis failed")
 
 
 @with_error_handling(
@@ -1659,16 +1585,10 @@ async def performance_scan_file(
     """
     file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
     if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
+        raise_invalid_input("file_path", f"does not exist: {request.file_path}")
 
     if not request.file_path.endswith(".py"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only Python files (.py) are supported",
-        )
+        raise_invalid_input("file_path", "only Python files (.py) are supported")
 
     try:
         analyzer = PerformanceAnalyzer()
@@ -1700,10 +1620,7 @@ async def performance_scan_file(
 
     except Exception as e:
         logger.error("Performance file scan failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="File scan failed",
-        )
+        raise_internal_error("File scan failed")
 
 
 @with_error_handling(
@@ -1808,10 +1725,7 @@ async def get_performance_score(
 
     except Exception as e:
         logger.error("Performance score calculation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Performance score calculation failed",
-        )
+        raise_internal_error("Performance score calculation failed")
 
 
 @with_error_handling(
@@ -1844,10 +1758,7 @@ async def get_performance_report(
 
     except Exception as e:
         logger.error("Performance report generation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Report generation failed",
-        )
+        raise_internal_error("Report generation failed")
 
 
 # Issue #243: Code Evolution Mining Endpoints
@@ -1905,13 +1816,10 @@ async def analyze_code_evolution(
         )
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format")
+        raise_invalid_input("date", "invalid date format")
     except Exception as e:
         logger.error("Evolution analysis failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Evolution analysis failed",
-        )
+        raise_internal_error("Evolution analysis failed")
 
 
 @with_error_handling(
@@ -1967,10 +1875,7 @@ async def get_pattern_evolution(
 
     except Exception as e:
         logger.error("Pattern evolution retrieval failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Pattern evolution failed",
-        )
+        raise_internal_error("Pattern evolution failed")
 
 
 @with_error_handling(
@@ -2026,10 +1931,7 @@ async def detect_refactorings(
 
     except Exception as e:
         logger.error("Refactoring detection failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Refactoring detection failed",
-        )
+        raise_internal_error("Refactoring detection failed")
 
 
 @with_error_handling(
@@ -2079,10 +1981,7 @@ async def get_evolution_timeline(
 
     except Exception as e:
         logger.error("Timeline generation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Timeline generation failed",
-        )
+        raise_internal_error("Timeline generation failed")
 
 
 async def _run_evolution_analysis(miner, start, end) -> tuple:
@@ -2160,13 +2059,10 @@ async def get_full_evolution_report(
         )
 
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format")
+        raise_invalid_input("date", "invalid date format")
     except Exception as e:
         logger.error("Evolution report generation failed: %s", e)
-        raise HTTPException(
-            status_code=500,
-            detail="Evolution report failed",
-        )
+        raise_internal_error("Evolution report failed")
 
 
 # ------------------------------------------------------------------
@@ -2261,7 +2157,7 @@ async def get_security_score_status(task_id: str):
     """Get security score analysis task status (#1304)."""
     task = await _sec_manager.get_status(task_id)
     if task is None:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        raise_not_found("Task", task_id)
     return task
 
 

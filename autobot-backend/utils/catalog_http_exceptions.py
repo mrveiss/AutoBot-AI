@@ -11,7 +11,7 @@ Makes migration from hardcoded errors to catalog-based errors straightforward
 import logging
 from typing import Optional
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 from utils.error_catalog import get_error
 
@@ -241,6 +241,91 @@ def raise_llm_error(error_code: str, context: Optional[str] = None) -> None:
 def raise_db_error(error_code: str = "DB_0003", context: Optional[str] = None) -> None:
     """Raise database error"""
     raise_catalog_error_simple(error_code, context)
+
+
+# Direct raise helpers for common HTTP error patterns
+
+
+def raise_not_found(resource_type: str, resource_id: str | None = None) -> None:
+    """
+    Raise 404 HTTPException for a missing resource.
+
+    Args:
+        resource_type: Human-readable resource name (e.g. "Worker", "File")
+        resource_id: Optional identifier appended to the detail message
+
+    Raises:
+        HTTPException: 404 with detail "<resource_type> not found[: <resource_id>]"
+
+    Example:
+        raise_not_found("Worker", worker_id)
+        raise_not_found("File")
+    """
+    detail = f"{resource_type} not found"
+    if resource_id is not None:
+        detail += f": {resource_id}"
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+
+
+def raise_rate_limit(retry_after: int | None = None) -> None:
+    """
+    Raise 429 HTTPException for rate limit violations.
+
+    Args:
+        retry_after: Optional seconds until the client may retry (sets Retry-After header)
+
+    Raises:
+        HTTPException: 429 with detail "Rate limit exceeded"
+
+    Example:
+        raise_rate_limit()
+        raise_rate_limit(retry_after=60)
+    """
+    headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
+    raise HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail="Rate limit exceeded",
+        headers=headers,
+    )
+
+
+def raise_invalid_input(field: str, reason: str = "invalid value") -> None:
+    """
+    Raise 400 HTTPException for invalid request input.
+
+    Args:
+        field: The field or parameter that is invalid
+        reason: Human-readable reason (default "invalid value")
+
+    Raises:
+        HTTPException: 400 with detail "<field>: <reason>"
+
+    Example:
+        raise_invalid_input("log_level", "must be one of: DEBUG, INFO, WARNING, ERROR")
+        raise_invalid_input("filename", "unsafe characters")
+    """
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"{field}: {reason}",
+    )
+
+
+def raise_internal_error(context: str = "") -> None:
+    """
+    Raise 500 HTTPException for unexpected internal errors.
+
+    Args:
+        context: Optional short description of what failed
+
+    Raises:
+        HTTPException: 500 with detail "Internal server error[: <context>]"
+
+    Example:
+        raise_internal_error("Failed to retrieve workers")
+        raise_internal_error()
+    """
+    detail = f"Internal server error: {context}" if context else "Internal server error"
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
 # Migration helpers for backward compatibility

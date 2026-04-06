@@ -27,6 +27,7 @@ import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 from api.knowledge_models import (
     AssignFactToCategoryRequest,
@@ -55,10 +56,10 @@ def _raise_kb_error(error_message: str, default_code: int = 500) -> None:
     """Raise appropriate HTTPException based on error message (#624)."""
     error_lower = error_message.lower()
     if "not found" in error_lower:
-        raise HTTPException(status_code=404, detail=error_message)
+        raise_not_found("Knowledge base resource")
     if "already exists" in error_lower or "has children" in error_lower:
         raise HTTPException(status_code=409, detail=error_message)
-    raise HTTPException(status_code=default_code, detail=error_message)
+    raise_internal_error(error_message)
 
 
 # ===== CATEGORY CRUD OPERATIONS (Issue #411) =====
@@ -93,10 +94,7 @@ async def create_category(
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     logger.info("Creating category '%s' (parent: %s)", request.name, request.parent_id)
 
@@ -162,18 +160,12 @@ async def get_category_tree(
     if root_id:
         root_id = root_id.strip()
         if not _CATEGORY_ID_RE.match(root_id):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid root_id format: only alphanumeric, hyphens, underscores",
-            )
+            raise_invalid_input("root_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_category_tree(
         root_id=root_id,
@@ -216,18 +208,12 @@ async def get_category(
     # Validate category_id format
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_category(category_id=category_id)
 
@@ -265,10 +251,7 @@ async def get_category_by_path(
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_category_by_path(path=path)
 
@@ -313,18 +296,12 @@ async def update_category(
     # Validate category_id format
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     logger.info("Updating category '%s'", category_id)
 
@@ -386,10 +363,7 @@ async def delete_category(
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     logger.info("Deleting category '%s' (recursive=%s)", category_id, recursive)
 
@@ -415,17 +389,11 @@ def _validate_delete_category_params(
     """Helper for delete_category. Ref: #1088."""
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
     if reassign_to:
         reassign_to = reassign_to.strip()
         if not _CATEGORY_ID_RE.match(reassign_to):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid reassign_to format: only alphanumeric, hyphens, underscores",
-            )
+            raise_invalid_input("reassign_to", "only alphanumeric, hyphens, underscores allowed")
     return category_id, reassign_to
 
 
@@ -469,18 +437,12 @@ async def get_category_children(
     # Validate category_id format
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_children(category_id=category_id)
 
@@ -521,18 +483,12 @@ async def get_category_ancestors(
     # Validate category_id format
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_ancestors(category_id=category_id)
 
@@ -584,18 +540,12 @@ async def get_facts_in_category(
     # Validate category_id format
     category_id = category_id.strip()
     if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("category_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.get_facts_in_category(
         category_id=category_id,
@@ -650,18 +600,12 @@ async def assign_fact_to_category(
     # Validate fact_id format
     fact_id = fact_id.strip()
     if not _CATEGORY_ID_RE.match(fact_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid fact_id format: only alphanumeric, hyphens, underscores",
-        )
+        raise_invalid_input("fact_id", "only alphanumeric, hyphens, underscores allowed")
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     logger.info("Assigning fact '%s' to category '%s'", fact_id, request.category_id)
 
@@ -709,10 +653,7 @@ async def search_categories_by_path(
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Knowledge base not initialized - please check logs for errors",
-        )
+        raise_internal_error("Knowledge base not initialized - please check logs for errors")
 
     result = await kb.search_categories_by_path(
         path_pattern=request.path_pattern,
@@ -728,4 +669,4 @@ async def search_categories_by_path(
         }
     else:
         error_message = result.get("message", "Unknown error")
-        raise HTTPException(status_code=500, detail=error_message)
+        raise_internal_error(error_message)
