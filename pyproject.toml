@@ -1,5 +1,9 @@
+[tool.black]
+line-length = 120
+target-version = ["py311", "py312"]
+
 [tool.isort]
 profile = "black"
-line_length = 88
+line_length = 100
 src_paths = ["autobot-backend", "autobot_shared", "autobot-slm-backend"]
 known_first_party = ["autobot_shared"]
