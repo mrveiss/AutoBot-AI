@@ -310,7 +310,7 @@ class ClaudeAPIBatchManager:
         # This is where you would integrate with your actual Claude API client
         # For now, simulating the API call
 
-        await asyncio.sleep(0.2)  # Simulate API delay
+        await asyncio.sleep(TimingConstants.DEBOUNCE_INTERVAL_S)  # Simulate API delay
 
         # Mock response - replace with actual Claude API integration
         response = f"Mock response to: {content[:50]}..."

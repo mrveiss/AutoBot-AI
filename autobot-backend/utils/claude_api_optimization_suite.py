@@ -564,7 +564,7 @@ class ClaudeAPIOptimizationSuite:
         """Execute the optimized request (simulation for this implementation)"""
         # In a real implementation, this would make the actual Claude API call
         # For now, we simulate a successful response
-        await asyncio.sleep(0.1)  # Simulate API response time
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate API response time
 
         return {
             "status": "success",

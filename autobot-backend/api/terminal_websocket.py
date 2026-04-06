@@ -13,6 +13,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from agents.system_command_agent import SystemCommandAgent
+from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from services.terminal_completion_service import TerminalCompletionService
 from services.terminal_history_service import TerminalHistoryService
@@ -399,7 +400,7 @@ class TerminalWebSocketHandler:
         # Keep the subscription alive
         try:
             while chat_id in self.active_connections:
-                await asyncio.sleep(1)
+                await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         finally:
             # Unsubscribe all handlers
             for event_type, handler in handlers.items():

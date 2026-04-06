@@ -564,7 +564,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Starting code analysis", 0, 1)
 
             # Simulate analysis
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             return {"analysis": "placeholder"}
 
@@ -579,7 +579,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Starting KB population", 0, 1)
 
             # Simulate population
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             return {"populated": "placeholder"}
 

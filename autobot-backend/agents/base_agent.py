@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Import communication protocol
+from constants.threshold_constants import TimingConstants
 from protocols.agent_communication import (
     AgentIdentity,
     MessageHeader,
@@ -223,7 +224,7 @@ class BaseAgent(ABC):
 
     async def _ping(self) -> bool:
         """Basic connectivity test - can be overridden by subclasses"""
-        await asyncio.sleep(0.001)  # Simulate minimal processing
+        await asyncio.sleep(TimingConstants.YIELD_INTERVAL)  # Simulate minimal processing
         return True
 
     async def _get_resource_usage(self) -> Dict[str, Any]:

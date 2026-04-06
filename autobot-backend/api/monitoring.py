@@ -48,6 +48,7 @@ from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from constants.network_constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
 from utils.performance_monitor import (
     add_alert_callback,
@@ -1137,7 +1138,7 @@ async def test_performance_monitoring(
 ):
     """Test endpoint to demonstrate performance monitoring. Issue #744: Requires admin authentication."""
     # Simulate some work
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     # Collect current metrics
     metrics = await collect_metrics()

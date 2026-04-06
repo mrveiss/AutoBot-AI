@@ -13,6 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
@@ -796,7 +797,7 @@ class MonitoringAlertsManager:
 
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(30)  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     def stop_monitoring(self):
         """Stop the monitoring loop"""

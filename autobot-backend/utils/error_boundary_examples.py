@@ -21,6 +21,8 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
+from constants.threshold_constants import TimingConstants  # noqa: E402
+
 from autobot_shared.error_boundaries import ErrorContext  # noqa: E402
 from autobot_shared.error_boundaries import (
     RecoveryStrategy,
@@ -97,7 +99,7 @@ async def llm_request(prompt: str, model: str = "default") -> str:
             raise ConnectionError("LLM service unavailable")
 
         # Simulate processing delay
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         return f"Generated response for: {prompt[:50]}..."
 

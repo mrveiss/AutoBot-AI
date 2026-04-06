@@ -854,7 +854,7 @@ class AIHardwareAccelerator:
     async def _process_on_cpu(self, task: ProcessingTask) -> Dict[str, Any]:
         """Process task on CPU (fallback)."""
         # Basic CPU processing fallback
-        await asyncio.sleep(0.1)  # Simulate processing
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate processing
 
         return {
             "result": f"CPU processed task {task.task_type}",

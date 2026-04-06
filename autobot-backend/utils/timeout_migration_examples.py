@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -750,7 +751,7 @@ class ExistingOperationMigrator:
 
     async def _process_file_for_indexing(self, file_path: Path) -> Dict[str, Any]:
         """Process a single file for indexing (placeholder implementation)"""
-        await asyncio.sleep(0.01)  # Simulate processing time
+        await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # Simulate processing time
 
         try:
             content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -856,7 +857,7 @@ class ExistingOperationMigrator:
         self, file_path: Path, scan_types: List[str]
     ) -> Dict[str, Any]:
         """Scan a single file for security issues (placeholder implementation)"""
-        await asyncio.sleep(0.02)  # Simulate scan time
+        await asyncio.sleep(TimingConstants.FAST_POLL_INTERVAL)  # Simulate scan time
 
         vulnerabilities: List[Dict[str, Any]] = []
 
@@ -924,7 +925,7 @@ async def _wait_for_operation_completion(operation_id: str) -> Any:
             if operation.error_info:
                 raise Exception(operation.error_info)
             return {"status": operation.status.value}
-        await asyncio.sleep(1)
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
 
 def _create_progress_wrapper(context: OperationExecutionContext):
