@@ -19086,7 +19086,10 @@ class TestBatch109MonitoringCOMPLETE(unittest.TestCase):
 
 
 class TestBatch110TerminalCOMPLETE(unittest.TestCase):
-    """Test batch 110 migration: terminal.py completion (4 endpoints - 3 WebSocket + 1 info - FINAL TO 100%)"""
+    """Test batch 110 migration: terminal.py completion (2 endpoints - 1 WebSocket + 1 info - FINAL TO 100%).
+
+    Issue #3383: /ws/simple and /ws/secure compat aliases removed — use /ws/{session_id}.
+    """
 
     def test_batch_110_terminal_info_simple_pattern(self):
         """Verify terminal_info uses Simple Pattern"""
@@ -19120,48 +19123,34 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except", source)
 
-    def test_batch_110_simple_compat_websocket_mixed_pattern(self):
-        """Verify simple_terminal_websocket_compat uses Mixed Pattern"""
+    def test_batch_110_compat_aliases_removed(self):
+        """Verify compat aliases are gone — #3383 consolidation complete"""
         from api import terminal
 
-        source = inspect.getsource(terminal.simple_terminal_websocket_compat)
-        # Should have @with_error_handling decorator
-        self.assertIn("@with_error_handling", source)
-        # Should have operation parameter
-        self.assertIn('operation="simple_terminal_websocket_compat"', source)
+        self.assertFalse(
+            hasattr(terminal, "simple_terminal_websocket_compat"),
+            "simple_terminal_websocket_compat should be removed (#3383)",
+        )
+        self.assertFalse(
+            hasattr(terminal, "secure_terminal_websocket_compat"),
+            "secure_terminal_websocket_compat should be removed (#3383)",
+        )
 
-    def test_batch_110_secure_compat_websocket_mixed_pattern(self):
-        """Verify secure_terminal_websocket_compat uses Mixed Pattern"""
+    def test_batch_110_websocket_endpoint_has_decorator(self):
+        """Verify canonical WebSocket endpoint has @with_error_handling decorator"""
         from api import terminal
 
-        source = inspect.getsource(terminal.secure_terminal_websocket_compat)
-        # Should have @with_error_handling decorator
-        self.assertIn("@with_error_handling", source)
-        # Should have operation parameter
-        self.assertIn('operation="secure_terminal_websocket_compat"', source)
-
-    def test_batch_110_all_websocket_endpoints_have_decorator(self):
-        """Verify all 3 WebSocket endpoints have @with_error_handling decorator"""
-        from api import terminal
-
-        websocket_funcs = [
-            terminal.consolidated_terminal_websocket,
-            terminal.simple_terminal_websocket_compat,
-            terminal.secure_terminal_websocket_compat,
-        ]
-
-        for func in websocket_funcs:
-            source = inspect.getsource(func)
-            self.assertIn(
-                "@with_error_handling",
-                source,
-                f"{func.__name__} should have @with_error_handling decorator",
-            )
-            self.assertIn(
-                "@router.websocket",
-                source,
-                f"{func.__name__} should have @router.websocket decorator",
-            )
+        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "consolidated_terminal_websocket should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "@router.websocket",
+            source,
+            "consolidated_terminal_websocket should have @router.websocket decorator",
+        )
 
     def test_batch_110_terminal_100_percent_milestone(self):
         """Verify terminal.py has reached 100% migration (21st file to 100%)"""
@@ -19191,8 +19180,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             if "@with_error_handling" in inspect.getsource(func)
         )
 
-        # terminal.py has 17 total endpoints (including 3 WebSocket endpoints)
-        total_endpoints = 17
+        # terminal.py has 15 total endpoints after #3383 compat alias removal
+        total_endpoints = 15
 
         # Should have migrated all endpoints
         self.assertEqual(
@@ -19217,21 +19206,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("websocket.accept", source_ws)
         self.assertIn("session_manager", source_ws)
 
-    def test_batch_110_websocket_endpoints_preserve_security_levels(self):
-        """Verify WebSocket endpoints preserve security level management"""
+    def test_batch_110_websocket_endpoint_preserves_security_levels(self):
+        """Verify canonical WebSocket endpoint preserves security level management"""
         from api import terminal
 
-        # Check consolidated endpoint
-        source1 = inspect.getsource(terminal.consolidated_terminal_websocket)
-        self.assertIn("SecurityLevel", source1)
-        self.assertIn("security_level", source1)
-
-        # Check compatibility endpoints
-        source2 = inspect.getsource(terminal.simple_terminal_websocket_compat)
-        self.assertIn("session_manager.session_configs", source2)
-
-        source3 = inspect.getsource(terminal.secure_terminal_websocket_compat)
-        self.assertIn("session_manager.session_configs", source3)
+        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn("SecurityLevel", source)
+        self.assertIn("security_level", source)
 
     # ==============================================
     # BATCH 111: auth.py - COMPLETE (100%)
