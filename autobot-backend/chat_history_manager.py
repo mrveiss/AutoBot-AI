@@ -469,7 +469,7 @@ class ChatHistoryManager:
             chats_directory = self._get_chats_directory()
             chat_file = f"{chats_directory}/chat_{session_id}.json"
 
-            if not os.path.exists(chat_file):
+            if not await aiofiles.os.path.exists(chat_file):
                 logging.warning(f"Chat session {session_id} not found for deletion")
                 return False
 
