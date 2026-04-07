@@ -13,6 +13,8 @@ import requests
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
 
+from tests.test_helpers import get_test_backend_url
+
 from enhanced_memory_manager import TaskPriority
 
 from desktop_streaming_manager import VNCServerManager, desktop_streaming
@@ -26,7 +28,7 @@ def test_api_connectivity():
     try:
         # Test health endpoint
         response = requests.get(
-            "http://localhost:8001/api/control/system/health", timeout=5
+            get_test_backend_url() + "/api/control/system/health", timeout=5
         )
         if response.status_code == 200:
             health_data = response.json()
@@ -39,7 +41,7 @@ def test_api_connectivity():
             return False
     except requests.exceptions.ConnectionError:
         print(
-            "❌ Cannot connect to backend API at http://localhost:8001"
+            f"❌ Cannot connect to backend API at {get_test_backend_url()}"
         )  # noqa: print
         return False
     except Exception as e:
@@ -163,7 +165,7 @@ def test_api_endpoints():
     print("\n🔗 Testing API Endpoints...")  # noqa: print
     print("=" * 50)  # noqa: print
 
-    base_url = "http://localhost:8001/api/control"
+    base_url = get_test_backend_url() + "/api/control"
 
     # Test 1: System health
     print("\n1. Testing System Health Endpoint...")  # noqa: print
