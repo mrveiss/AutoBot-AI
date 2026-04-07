@@ -121,8 +121,8 @@ class UnifiedMemoryManager:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        # Session-scoped short-term memory (Redis, lazy singleton)
-        self._working_memory: Optional[WorkingMemoryService] = None
+        # Session-scoped short-term memory (Redis-backed, eagerly created)
+        self._working_memory: WorkingMemoryService = WorkingMemoryService()
 
         logger.info("Unified Memory Manager created at %s", self.db_path)
 
@@ -556,9 +556,7 @@ class UnifiedMemoryManager:
 
     @property
     def working_memory(self) -> WorkingMemoryService:
-        """Return the singleton WorkingMemoryService instance."""
-        if self._working_memory is None:
-            self._working_memory = WorkingMemoryService()
+        """Return the WorkingMemoryService instance."""
         return self._working_memory
 
     # ========================================================================
