@@ -97,6 +97,7 @@ class TestFileWriteAtomicity:
         from chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
+        await manager.initialize()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_file = os.path.join(tmpdir, "test.json")
@@ -119,6 +120,7 @@ class TestFileWriteAtomicity:
         from chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
+        await manager.initialize()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             # Use invalid path to trigger failure
@@ -137,6 +139,7 @@ class TestFileWriteAtomicity:
         from chat_history import ChatHistoryManager
 
         manager = ChatHistoryManager()
+        await manager.initialize()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_file = os.path.join(tmpdir, "concurrent.json")
@@ -356,6 +359,7 @@ class TestPerformance:
 
         # Create manager BEFORE timing (exclude initialization overhead)
         manager = ChatHistoryManager()
+        await manager.initialize()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             target_file = os.path.join(tmpdir, "perf.json")
