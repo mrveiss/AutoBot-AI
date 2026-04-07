@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from constants.model_constants import ModelConfig, ModelConstants
 from constants.network_constants import NetworkConstants
@@ -61,10 +61,15 @@ class LLMSettings(BaseSettings):
         default=ModelConfig.DEFAULT_MAX_CHUNKS, env="LLM_MAX_CHUNKS"
     )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "allow"
+    # Issue #3843: migrate to pydantic-settings v2 SettingsConfigDict.
+    # env_ignore_empty=True prevents SettingsError when an env var is present
+    # but empty (e.g. OLLAMA_PORT="" in a CI / clean-worktree environment).
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="allow",
+        env_ignore_empty=True,
+    )
 
 
 @dataclass
