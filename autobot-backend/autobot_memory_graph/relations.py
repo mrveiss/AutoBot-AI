@@ -60,16 +60,21 @@ class RelationOperationsMixin:
         """
         timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
 
+        valid_from = datetime.now(tz=timezone.utc).isoformat()
         relation = {
             "to": to_id,
             "type": relation_type,
             "created_at": timestamp,
+            "valid_from": valid_from,
+            "valid_to": None,
             "metadata": {"strength": strength, **(metadata or {})},
         }
         reverse_rel = {
             "from": from_id,
             "type": relation_type,
             "created_at": timestamp,
+            "valid_from": valid_from,
+            "valid_to": None,
         }
 
         return relation, reverse_rel
@@ -143,16 +148,21 @@ class RelationOperationsMixin:
     ) -> tuple:
         """Build relation objects for create_relation_by_id. Issue #620."""
         timestamp = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        valid_from = datetime.now(tz=timezone.utc).isoformat()
         relation = {
             "to": to_entity_id,
             "type": relation_type,
             "created_at": timestamp,
+            "valid_from": valid_from,
+            "valid_to": None,
             "metadata": metadata or {},
         }
         reverse_rel = {
             "from": from_entity_id,
             "type": relation_type,
             "created_at": timestamp,
+            "valid_from": valid_from,
+            "valid_to": None,
         }
         return relation, reverse_rel
 
@@ -523,6 +533,75 @@ class RelationOperationsMixin:
             await self.redis_client.json().set(
                 in_key, "$.relations", filtered_relations
             )
+
+    async def _set_valid_to_on_relations(
+        self: AutoBotMemoryGraphCore,
+        key: str,
+        id_field: str,
+        match_id: str,
+        relation_type: str,
+        valid_to: str,
+    ) -> bool:
+        """Set valid_to on matching relations in a Redis JSON list. Issue #3790."""
+        data = await self.redis_client.json().get(key)
+        if not data or "relations" not in data:
+            return False
+
+        updated = False
+        for rel in data["relations"]:
+            if rel.get(id_field) == match_id and rel.get("type") == relation_type:
+                rel["valid_to"] = valid_to
+                updated = True
+
+        if updated:
+            await self.redis_client.json().set(key, "$.relations", data["relations"])
+        return updated
+
+    async def invalidate_relation(
+        self: AutoBotMemoryGraphCore,
+        from_id: str,
+        relation_type: str,
+        to_id: str,
+        ended_at: Optional[str] = None,
+    ) -> bool:
+        """Mark a specific relation as no longer valid by setting valid_to.
+
+        Does NOT delete — history is preserved.
+        Returns True if at least one matching relation was updated.
+
+        Args:
+            from_id: Source entity ID
+            relation_type: Type of the relation
+            to_id: Target entity ID
+            ended_at: ISO-8601 timestamp for valid_to (default: now)
+        """
+        self.ensure_initialized()
+
+        try:
+            valid_to = ended_at or datetime.now(tz=timezone.utc).isoformat()
+            out_key = f"memory:relations:out:{from_id}"
+            in_key = f"memory:relations:in:{to_id}"
+
+            out_updated, in_updated = await asyncio.gather(
+                self._set_valid_to_on_relations(out_key, "to", to_id, relation_type, valid_to),
+                self._set_valid_to_on_relations(
+                    in_key, "from", from_id, relation_type, valid_to
+                ),
+            )
+            updated = out_updated or in_updated
+            if updated:
+                logger.info(
+                    "Invalidated relation %s -[%s]-> %s at %s",
+                    from_id[:8],
+                    relation_type,
+                    to_id[:8],
+                    valid_to,
+                )
+            return updated
+
+        except Exception as e:
+            logger.error("Failed to invalidate relation: %s", e)
+            return False
 
     async def delete_relation(
         self: AutoBotMemoryGraphCore,

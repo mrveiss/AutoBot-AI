@@ -57,6 +57,8 @@ class EntityOperationsMixin:
                 "priority": entity_metadata.get("priority", "medium"),
                 "status": entity_metadata.get("status", "active"),
                 "version": 1,
+                "valid_from": datetime.now(tz=timezone.utc).isoformat(),
+                "valid_to": None,
             }
         )
         return entity_metadata
@@ -303,6 +305,43 @@ class EntityOperationsMixin:
         except Exception as e:
             logger.error("Failed to add observations: %s", e)
             raise RuntimeError("Add observations failed") from e
+
+    async def invalidate_entity(
+        self: AutoBotMemoryGraphCore,
+        entity_id: str,
+        ended_at: Optional[str] = None,
+    ) -> bool:
+        """Mark entity as no longer valid by setting valid_to.
+
+        Does NOT delete the entity — history is preserved.
+        Returns True if found and updated, False if not found.
+
+        Args:
+            entity_id: UUID of the entity to invalidate
+            ended_at: ISO-8601 timestamp for valid_to (default: now)
+        """
+        self.ensure_initialized()
+
+        try:
+            entity_key = f"memory:entity:{entity_id}"
+            entity = await self.redis_client.json().get(entity_key)
+            if not entity:
+                return False
+
+            valid_to = ended_at or datetime.now(tz=timezone.utc).isoformat()
+            await self.redis_client.json().set(entity_key, "$.metadata.valid_to", valid_to)
+            await self.redis_client.json().set(
+                entity_key,
+                "$.updated_at",
+                int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+            )
+            self.search_cache.clear()
+            logger.info("Invalidated entity %s at %s", entity_id[:8] + "...", valid_to)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to invalidate entity %s: %s", entity_id, e)
+            return False
 
     async def delete_entity(
         self: AutoBotMemoryGraphCore,
