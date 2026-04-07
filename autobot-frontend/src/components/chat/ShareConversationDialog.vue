@@ -116,6 +116,7 @@ import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -181,7 +182,7 @@ const loadFacts = async () => {
   factsLoading.value = true
   try {
     const data = await ApiClient.get(
-      `/api/chat/sessions/${props.sessionId}/share/preview`
+      `${getApiBase()}/chat/sessions/${props.sessionId}/share/preview`
     )
     facts.value = data?.data?.facts || []
     selectedFactIds.value = new Set(facts.value.map(f => f.id))
@@ -228,7 +229,7 @@ const handleShare = async () => {
       body.knowledge_facts = Array.from(selectedFactIds.value)
     }
     const result = await ApiClient.post(
-      `/api/chat/sessions/${props.sessionId}/share`,
+      `${getApiBase()}/chat/sessions/${props.sessionId}/share`,
       body
     )
     emit('shared', result?.data || {})

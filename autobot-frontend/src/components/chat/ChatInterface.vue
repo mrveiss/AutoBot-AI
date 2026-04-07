@@ -163,6 +163,7 @@ import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
 // MIGRATED: Using AppConfig.js for better configuration management
 import appConfig from '@/config/AppConfig.js'
+import { getApiBase } from '@/config/ssot-config'
 // FIXED: Import NetworkConstants for IP fallback values
 import { NetworkConstants } from '@/constants/network'
 import { createLogger } from '@/utils/debugUtils'
@@ -615,7 +616,7 @@ const onCommandCommented = async (commentData: any) => {
     // This allows the agent to receive the user's alternative approach suggestion
     if (pendingCommand.value.terminalSessionId) {
       const approvalUrl = await appConfig.getApiUrl(
-        `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
+        `${getApiBase()}/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
       )
 
       const response = await fetchWithAuth(approvalUrl, {

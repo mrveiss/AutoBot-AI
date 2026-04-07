@@ -174,6 +174,7 @@ import DocumentationResultCard from './DocumentationResultCard.vue'
 import DocumentationSuggestionChip from './DocumentationSuggestionChip.vue'
 import DocumentationCategoryFilter from './DocumentationCategoryFilter.vue'
 import { useApi } from '@/composables/useApi'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -294,7 +295,7 @@ const executeSearch = async () => {
   currentPage.value = 1
 
   try {
-    const response = await apiClient.post('/api/knowledge_base/search', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, {
       query: searchQuery.value || '*',
       top_k: 20,
       filters: selectedCategories.value.length > 0
@@ -356,7 +357,7 @@ const loadMore = async () => {
   currentPage.value++
 
   try {
-    const response = await apiClient.post('/api/knowledge_base/docs/browse', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge_base/docs/browse`, {
       search_query: searchQuery.value,
       category: selectedCategories.value[0] || null,
       page: currentPage.value,
@@ -435,7 +436,7 @@ const openRecentDoc = (doc: RecentDoc) => {
 const loadCategories = async () => {
   isLoadingCategories.value = true
   try {
-    const response = await apiClient.get('/api/knowledge_base/docs/categories')
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/docs/categories`)
     const data = await parseApiResponse(response)
     if (data?.categories) {
       categories.value = data.categories
