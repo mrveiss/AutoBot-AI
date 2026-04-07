@@ -98,9 +98,37 @@ from autobot_shared.ssot_config import SYSTEM_MODEL as _SSOT_SYSTEM
 
 
 class ConfigManager:
-    """Centralized configuration manager"""
+    """
+    TOMBSTONED — Issue #3829.
 
-    # Issue #620: Extracted from get_ollama_runtime_config for clarity
+    This class is dead code: the ``config/`` package shadows this module file,
+    so ``from config import ConfigManager`` always resolves to
+    ``config.manager.ConfigManager`` via ``config/__init__.py.__getattr__``.
+
+    This file (``config.py``) is never imported at runtime.  It is kept on disk
+    to preserve git history and to produce a loud error if it ever *is* reached
+    accidentally (e.g. after a directory restructure).
+
+    Migrate all callers to:
+        from config.manager import get_config_manager   # yaml-based runtime config
+        from autobot_shared.ssot_config import config   # infrastructure / env config
+    """
+
+    def __init__(self, *args, **kwargs):
+        raise AttributeError(
+            "config.py:ConfigManager is tombstoned (Issue #3829). "
+            "Use `from config.manager import get_config_manager` for runtime config, "
+            "or `from autobot_shared.ssot_config import config` for infrastructure config."
+        )
+
+    def __getattr__(self, name):
+        raise AttributeError(
+            f"config.py:ConfigManager is tombstoned (Issue #3829) — "
+            f"attribute '{name}' accessed on dead class. "
+            "Use `from autobot_shared.ssot_config import config` instead."
+        )
+
+    # Keep class-level constants for any static inspection tools
     OLLAMA_TASK_OPTIMIZATIONS = {
         "chat": {"temperature": 0.8, "num_predict": 256, "top_p": 0.9},
         "system_commands": {"temperature": 0.3, "num_predict": 128, "top_p": 0.7},
@@ -863,39 +891,51 @@ class ConfigManager:
         )
 
 
-# Global configuration instance
-config = ConfigManager()
+# TOMBSTONED — this file is shadowed by the config/ package.
+# The lines below are kept only to satisfy static analysers that scan this file.
+# At runtime, nothing below is ever executed.
 
-# Alias for backward compatibility and consistent naming
-global_config_manager = config
-
+# config = ConfigManager()        # would raise AttributeError — class is tombstoned
+# global_config_manager = config  # dead alias
 
 # Convenience functions for backward compatibility
 def get_config() -> Dict[str, Any]:
-    """Get the complete configuration dictionary"""
-    return config.to_dict()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError(
+        "config.py:get_config() is tombstoned (Issue #3829). "
+        "Use `from autobot_shared.ssot_config import config` instead."
+    )
 
 
 def get_llm_config() -> Dict[str, Any]:
-    """Get LLM configuration"""
-    return config.get_llm_config()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError(
+        "config.py:get_llm_config() is tombstoned (Issue #3829). "
+        "Use `from autobot_shared.ssot_config import config` → config.llm.*."
+    )
 
 
 def get_redis_config() -> Dict[str, Any]:
-    """Get Redis configuration"""
-    return config.get_redis_config()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError(
+        "config.py:get_redis_config() is tombstoned (Issue #3829). "
+        "Use `from autobot_shared.ssot_config import config` → config.vm.redis, config.port.redis."
+    )
 
 
 def get_backend_config() -> Dict[str, Any]:
-    """Get backend configuration"""
-    return config.get_backend_config()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError(
+        "config.py:get_backend_config() is tombstoned (Issue #3829). "
+        "Use `from autobot_shared.ssot_config import config` → config.vm.main, config.port.backend."
+    )
 
 
 def reload_config() -> None:
-    """Reload configuration from files"""
-    config.reload()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError("config.py:reload_config() is tombstoned (Issue #3829).")
 
 
 def validate_config() -> Dict[str, Any]:
-    """Validate configuration and return status"""
-    return config.validate_config()
+    """DEAD — shadowed by config/__init__.py. Never called at runtime."""
+    raise RuntimeError("config.py:validate_config() is tombstoned (Issue #3829).")

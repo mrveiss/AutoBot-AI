@@ -21,7 +21,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
@@ -48,6 +48,9 @@ from utils.agent_selection import reserve_agent as _reserve_agent
 from utils.agent_selection import update_agent_performance as _update_performance
 
 logger = get_logger("orchestrator")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 # Import KnowledgeBase for enhanced features
 try:
@@ -200,9 +203,8 @@ class ConsolidatedOrchestrator:
 
     def _init_core_components(self, config_mgr) -> None:
         """Initialize core orchestrator components. Issue #620."""
-        from config import config_manager as global_config_manager
-
-        self.config_manager = config_mgr or global_config_manager
+        # Use module-level singleton; avoid re-importing through the lazy alias
+        self.config_manager = config_mgr or _get_config_manager()
         self.config = OrchestratorConfig(self.config_manager)
 
         self.llm_interface = LLMInterface()
