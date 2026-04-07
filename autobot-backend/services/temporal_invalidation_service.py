@@ -16,11 +16,14 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.fact_extraction_service import FactExtractionService
 
 logger = get_llm_logger("temporal_invalidation")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 
 class InvalidationReason(Enum):

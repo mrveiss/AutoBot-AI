@@ -78,9 +78,10 @@ class OpenAIProvider(BaseProvider):
         key = self._get_setting("api_key") or os.getenv("OPENAI_API_KEY")
         if not key:
             try:
-                from config import ConfigManager
+                from autobot_shared.ssot_config import config as _ssot_config
 
-                key = ConfigManager().get_api_key("openai")
+                # ssot_config reads OPENAI_API_KEY from .env (Issue #3829)
+                key = _ssot_config.llm.openai_api_key
             except Exception:
                 pass
         self._api_key = key

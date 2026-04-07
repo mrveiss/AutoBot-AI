@@ -38,14 +38,15 @@ class OpenAIProvider:
         Initialize OpenAI provider.
 
         Args:
-            api_key: OpenAI API key (falls back to unified config #536)
+            api_key: OpenAI API key (falls back to ssot_config #536)
         """
         if api_key:
             self.api_key = api_key
         else:
-            from config import ConfigManager
+            from autobot_shared.ssot_config import config as _ssot_config
 
-            self.api_key = ConfigManager().get_api_key("openai")
+            # ssot_config reads OPENAI_API_KEY from .env (Issue #3829)
+            self.api_key = _ssot_config.llm.openai_api_key
 
     def _record_success_span_attributes(
         self, span, response, processing_time: float

@@ -18,7 +18,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact
 from models.entity_mapping import (
     EntityMapping,
@@ -28,6 +28,9 @@ from models.entity_mapping import (
 )
 
 logger = get_llm_logger("entity_resolver")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 # Entity classification patterns (Issue #315 - module-level constant)
 _ENTITY_PATTERNS = {

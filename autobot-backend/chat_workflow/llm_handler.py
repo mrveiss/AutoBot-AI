@@ -133,13 +133,9 @@ class LLMHandlerMixin:
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
-        """Get Ollama endpoint from ConfigManager as fallback."""
-        from config import ConfigManager
-
-        config = ConfigManager()
-        ollama_host = config.get_host("ollama")
-        ollama_port = config.get_port("ollama")
-        return f"http://{ollama_host}:{ollama_port}/api/generate"
+        """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
+        # _ssot_config is already imported at module level
+        return f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}"
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.

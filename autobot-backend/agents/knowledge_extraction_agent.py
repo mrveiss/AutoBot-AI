@@ -23,7 +23,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from llm_interface import LLMType, get_llm_interface
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 
@@ -31,6 +31,9 @@ from .base_agent import DeploymentMode
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_llm_logger("knowledge_extraction")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 # Issue #380: Module-level tuple for fact text field validation
 _FACT_TEXT_FIELDS = ("subject", "predicate", "object")

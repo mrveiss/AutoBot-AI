@@ -15,11 +15,14 @@ from typing import Any, Dict, List, Optional
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_shared.logging_manager import get_llm_logger
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 from utils.entity_resolver import entity_resolver
 
 logger = get_llm_logger("fact_extraction_service")
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 
 class FactExtractionService:
