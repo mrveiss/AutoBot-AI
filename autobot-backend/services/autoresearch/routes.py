@@ -25,6 +25,7 @@ from .knowledge_synthesizer import KnowledgeSynthesizer
 from .models import Experiment, ExperimentState, HyperParams
 from .prompt_optimizer import PromptOptimizer, PromptOptTarget
 from .runner import ExperimentRunner
+from .scorers import HUMAN_REVIEW_NOTIFY_KEY
 from .store import ExperimentStore
 
 logger = logging.getLogger(__name__)
@@ -369,7 +370,7 @@ async def submit_variant_score(
 
     redis = get_redis_client(async_client=True, database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
-    notify_key = f"autoresearch:prompt_review:notify:{session_id}:{variant_id}"
+    notify_key = HUMAN_REVIEW_NOTIFY_KEY.format(session_id=session_id, variant_id=variant_id)
     await redis.set(
         key,
         _json.dumps({"score": body.score, "comment": body.comment}),

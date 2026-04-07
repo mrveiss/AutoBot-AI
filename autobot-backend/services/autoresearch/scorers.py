@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 # Validation pattern for Redis key components — alphanumeric, hyphens, underscores
 _KEY_COMPONENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
+# Shared Redis key format strings for human-review scoring.
+# routes.py imports HUMAN_REVIEW_NOTIFY_KEY so both sides of the BLPOP
+# protocol always reference the same key pattern.
+HUMAN_REVIEW_NOTIFY_KEY = "autoresearch:prompt_review:notify:{session_id}:{variant_id}"
+
 
 @dataclass
 class ScorerResult:
@@ -266,7 +271,7 @@ class HumanReviewScorer(PromptScorer):
 
     _REVIEW_KEY = "autoresearch:prompt_review:{session_id}:{variant_id}"
     _PENDING_KEY = "autoresearch:prompt_review:pending:{session_id}:{variant_id}"
-    _NOTIFY_KEY = "autoresearch:prompt_review:notify:{session_id}:{variant_id}"
+    _NOTIFY_KEY = HUMAN_REVIEW_NOTIFY_KEY
     _TTL_SECONDS = TTL_24_HOURS
 
     def __init__(
