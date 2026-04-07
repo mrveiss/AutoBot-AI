@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import re
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Union
@@ -255,14 +254,19 @@ class LLMJudgeScorer(PromptScorer):
 
 
 class HumanReviewScorer(PromptScorer):
-    """Queue a prompt variant for human review and poll for a score.
+    """Queue a prompt variant for human review and wait for a score via BLPOP.
 
     Stores the variant in Redis; the API endpoint allows humans to
-    submit a 0-10 score. Polls until scored or timeout.
+    submit a 0-10 score and pushes a notification to the notify key.
+    Uses BLPOP instead of polling to avoid wasting async slots.
+
+    The writer (routes.py submit_variant_score) must LPUSH to the
+    _NOTIFY_KEY after SET-ting the _REVIEW_KEY result.
     """
 
     _REVIEW_KEY = "autoresearch:prompt_review:{session_id}:{variant_id}"
     _PENDING_KEY = "autoresearch:prompt_review:pending:{session_id}:{variant_id}"
+    _NOTIFY_KEY = "autoresearch:prompt_review:notify:{session_id}:{variant_id}"
     _TTL_SECONDS = TTL_24_HOURS
 
     def __init__(
@@ -270,6 +274,8 @@ class HumanReviewScorer(PromptScorer):
         poll_interval: float = 5.0,
         timeout: float = 300.0,
     ) -> None:
+        # poll_interval is kept for interface compatibility but no longer used
+        # internally — BLPOP blocks efficiently without periodic wakeups.
         self._poll_interval = poll_interval
         self._timeout = timeout
         self._redis = None
@@ -327,36 +333,59 @@ class HumanReviewScorer(PromptScorer):
             ex=self._TTL_SECONDS,
         )
 
-        # Poll for score
         review_key = self._REVIEW_KEY.format(
             session_id=session_id, variant_id=variant_id
         )
-        deadline = time.monotonic() + self._timeout
+        notify_key = self._NOTIFY_KEY.format(
+            session_id=session_id, variant_id=variant_id
+        )
 
-        while time.monotonic() < deadline:
-            raw = await redis.get(review_key)
-            if raw is not None:
-                data = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
-                rating = max(0, min(10, int(data.get("score", 0))))
+        # Check if the result was already written before we start waiting —
+        # avoids a race where the human submits between SET and BLPOP.
+        raw = await redis.get(review_key)
+        if raw is None:
+            # Block until the writer pushes to notify_key or the timeout fires.
+            # BLPOP returns (key, value) on success or None on timeout.
+            blpop_result = await redis.blpop(notify_key, timeout=int(self._timeout))
+            if blpop_result is None:
+                logger.info(
+                    "HumanReviewScorer: timed out for session=%s variant=%s",
+                    session_id,
+                    variant_id,
+                )
                 return ScorerResult(
-                    score=rating / 10.0,
-                    raw_score=rating,
-                    metadata={
-                        "comment": data.get("comment", ""),
-                        "status": "reviewed",
-                    },
+                    score=0.0,
+                    raw_score=None,
+                    metadata={"status": "timeout"},
                     scorer_name=self.name,
                 )
-            await asyncio.sleep(self._poll_interval)
+            # Notification received — clean up the notify key (BLPOP already
+            # consumed the item) and read the actual result.
+            raw = await redis.get(review_key)
 
-        logger.info(
-            "HumanReviewScorer: timed out for session=%s variant=%s",
-            session_id,
-            variant_id,
-        )
+        if raw is None:
+            # Notify key fired but result key is missing — treat as timeout.
+            logger.warning(
+                "HumanReviewScorer: notify fired but review key absent "
+                "for session=%s variant=%s",
+                session_id,
+                variant_id,
+            )
+            return ScorerResult(
+                score=0.0,
+                raw_score=None,
+                metadata={"status": "timeout"},
+                scorer_name=self.name,
+            )
+
+        data = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+        rating = max(0, min(10, int(data.get("score", 0))))
         return ScorerResult(
-            score=0.0,
-            raw_score=None,
-            metadata={"status": "timeout"},
+            score=rating / 10.0,
+            raw_score=rating,
+            metadata={
+                "comment": data.get("comment", ""),
+                "status": "reviewed",
+            },
             scorer_name=self.name,
         )

@@ -189,11 +189,17 @@ class TestHumanReviewScorer:
 
     @pytest.mark.asyncio
     async def test_score_approved_with_rating(self, scorer, mock_redis):
-        # Simulate human submitting a score
+        # First redis.get (pre-BLPOP check) returns None — not yet written.
+        # blpop returns the notification tuple.
+        # Second redis.get (after BLPOP) returns the actual score payload.
         mock_redis.get.side_effect = [
-            None,  # first poll: no score yet
-            json.dumps({"score": 9, "comment": "excellent"}).encode(),  # second poll
+            None,  # pre-BLPOP check: result not yet available
+            json.dumps({"score": 9, "comment": "excellent"}).encode(),  # post-BLPOP read
         ]
+        mock_redis.blpop.return_value = (
+            b"autoresearch:prompt_review:notify:s1:v1",
+            b"ready",
+        )
         result = await scorer.score(
             "test output",
             {"session_id": "s1", "variant_id": "v1"},
@@ -201,11 +207,45 @@ class TestHumanReviewScorer:
         assert result.score == 0.9
         assert result.raw_score == 9
         assert result.scorer_name == "human_review"
+        # BLPOP must have been called with the notify key and the timeout
+        mock_redis.blpop.assert_called_once()
+        call_args = mock_redis.blpop.call_args
+        assert "notify:s1:v1" in call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_score_result_already_present_skips_blpop(self, scorer, mock_redis):
+        # Result was written before score() was called — BLPOP must be skipped.
+        mock_redis.get.return_value = json.dumps(
+            {"score": 7, "comment": "good"}
+        ).encode()
+        result = await scorer.score(
+            "test output",
+            {"session_id": "s1", "variant_id": "v1"},
+        )
+        assert result.score == 0.7
+        assert result.raw_score == 7
+        mock_redis.blpop.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_score_timeout_returns_none(self, scorer, mock_redis):
         mock_redis.get.return_value = None  # never receives a score
+        mock_redis.blpop.return_value = None  # BLPOP timed out
 
+        result = await scorer.score(
+            "test output",
+            {"session_id": "s1", "variant_id": "v1"},
+        )
+        assert result.score == 0.0
+        assert result.metadata.get("status") == "timeout"
+
+    @pytest.mark.asyncio
+    async def test_score_notify_fired_but_result_missing(self, scorer, mock_redis):
+        # Both pre- and post-BLPOP GETs return None — treat as timeout.
+        mock_redis.get.return_value = None
+        mock_redis.blpop.return_value = (
+            b"autoresearch:prompt_review:notify:s1:v1",
+            b"ready",
+        )
         result = await scorer.score(
             "test output",
             {"session_id": "s1", "variant_id": "v1"},

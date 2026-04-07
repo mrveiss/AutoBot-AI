@@ -369,11 +369,18 @@ async def submit_variant_score(
 
     redis = get_redis_client(async_client=True, database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
+    notify_key = f"autoresearch:prompt_review:notify:{session_id}:{variant_id}"
     await redis.set(
         key,
         _json.dumps({"score": body.score, "comment": body.comment}),
         ex=TTL_24_HOURS,
     )
+    # Push a notification so HumanReviewScorer.score() unblocks immediately
+    # instead of busy-polling.  The notify key is short-lived — the scorer
+    # consumes it via BLPOP, and we set a 24-hour TTL as a safety net in case
+    # the scorer is not currently waiting.
+    await redis.lpush(notify_key, "ready")
+    await redis.expire(notify_key, TTL_24_HOURS)
     return {"status": "scored", "variant_id": variant_id, "score": body.score}
 
 
