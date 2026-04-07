@@ -798,7 +798,8 @@ function closeExportMenu(): void {
 
 function connectWebSocket(): void {
   // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-  const wsUrl = `ws://${window.location.host}/api/quality/ws`;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/api/quality/ws`;
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
