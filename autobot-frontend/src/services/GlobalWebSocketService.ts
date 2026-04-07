@@ -14,6 +14,7 @@ import { ref, reactive, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { useUserStore } from '@/stores/useUserStore'
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -212,13 +213,22 @@ class GlobalWebSocketService {
       // Health check failed but continue with WebSocket attempt
     })
 
-    const wsUrl = this.state.url
+    // Issue #2818: Append JWT token as query param so backend can authenticate
+    // before accepting the WebSocket handshake.
+    let wsUrl = this.state.url
+    const userStore = useUserStore()
+    const token = userStore.authState.token
+    if (token) {
+      const separator = wsUrl.includes('?') ? '&' : '?'
+      wsUrl = `${wsUrl}${separator}token=${encodeURIComponent(token)}`
+    }
+
     logger.debug(
       'Connecting WebSocket',
-      { attempt: this.reconnectAttempts + 1, url: wsUrl }
+      { attempt: this.reconnectAttempts + 1, url: this.state.url }
     )
     this.trackEvent('connection_attempt', {
-      url: wsUrl,
+      url: this.state.url,
       attempt: this.reconnectAttempts + 1
     })
 
