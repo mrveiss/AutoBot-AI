@@ -871,6 +871,7 @@ async def send_message(
 
     return JSONResponse(
         status_code=200,
+        media_type="application/json; charset=utf-8",
         content={
             "success": True,
             "data": response_data,
@@ -903,6 +904,7 @@ async def stream_message(
     if not message.content or not message.content.strip():
         return JSONResponse(
             status_code=400,
+            media_type="application/json; charset=utf-8",
             content={
                 "error": "Message content cannot be empty",
                 "request_id": request_id,
@@ -964,9 +966,17 @@ async def chat_health_check(
     # Only chat_history_manager is critical for health
     if chat_history_status != "healthy":
         health_status["status"] = "unavailable"
-        return JSONResponse(status_code=503, content=health_status)
+        return JSONResponse(
+            status_code=503,
+            media_type="application/json; charset=utf-8",
+            content=health_status,
+        )
 
-    return JSONResponse(status_code=200, content=health_status)
+    return JSONResponse(
+        status_code=200,
+        media_type="application/json; charset=utf-8",
+        content=health_status,
+    )
 
 
 @with_error_handling(
@@ -1387,6 +1397,7 @@ async def save_chat_by_id(
 
     return JSONResponse(
         status_code=200,
+        media_type="application/json; charset=utf-8",
         content={
             "success": True,
             "data": result,
@@ -1432,6 +1443,7 @@ async def delete_chat_by_id(
 
     return JSONResponse(
         status_code=200,
+        media_type="application/json; charset=utf-8",
         content={
             "success": True,
             "data": {"session_id": chat_id, "deleted": result},
@@ -1954,6 +1966,7 @@ async def enhanced_chat(
 
         return JSONResponse(
             status_code=200,
+            media_type="application/json; charset=utf-8",
             content=create_success_response(
                 response_data,
                 "Enhanced chat message processed successfully",
@@ -2043,13 +2056,16 @@ async def enhanced_chat_health_check(
             health_status["status"] = "degraded"
 
         return JSONResponse(
-            status_code=200 if overall_healthy else 503, content=health_status
+            status_code=200 if overall_healthy else 503,
+            media_type="application/json; charset=utf-8",
+            content=health_status,
         )
 
     except Exception as e:
         logger.error("Enhanced chat health check failed: %s", e)
         return JSONResponse(
             status_code=503,
+            media_type="application/json; charset=utf-8",
             content={
                 "status": "unhealthy",
                 "error": "Internal server error",
@@ -2175,7 +2191,7 @@ async def translate_text(
         },
     )
     result = await agent.handle_translate(req)
-    return JSONResponse(content=result)
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
 
 
 @with_error_handling(
@@ -2200,4 +2216,4 @@ async def detect_language(
         payload={"text": body.text},
     )
     result = await agent.handle_detect_language(req)
-    return JSONResponse(content=result)
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")

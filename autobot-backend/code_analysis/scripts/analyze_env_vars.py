@@ -92,7 +92,7 @@ async def analyze_environment_variables():
         [r for r in recommendations if r["priority"] == "medium"],
     )
     report_path = Path("env_analysis_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, default=str)
     print(f"📋 Detailed report saved to: {report_path}")  # noqa: print
     await generate_config_updates(recommendations)
