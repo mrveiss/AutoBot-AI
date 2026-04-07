@@ -391,6 +391,42 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             knowledge_context, citations = await self._retrieve_knowledge_context(
                 message, session
             )
+            # Issue #3770: compress KB results when context exceeds model budget
+            if knowledge_context and citations:
+                from context_window_manager import ContextWindowManager
+                from services.memory.compression import ContextCompressionService
+
+                cwm = ContextWindowManager()
+                cwm.set_model(selected_model)
+                kc_tokens = cwm.estimate_tokens(knowledge_context)
+                max_kb_tokens = cwm.get_max_history_tokens()
+                if await cwm.async_should_compress(
+                    content_tokens=kc_tokens, model_name=selected_model
+                ):
+                    svc = ContextCompressionService(
+                        model_thresholds={
+                            name: spec.get("compression_threshold", 8192)
+                            for name, spec in cwm.config.get("models", {}).items()
+                            if isinstance(spec, dict)
+                        }
+                    )
+                    citations = await svc.compress_kb_results(
+                        citations, max_tokens=max_kb_tokens
+                    )
+                    # Rebuild knowledge context from trimmed citations
+                    if citations:
+                        lines = ["KNOWLEDGE CONTEXT:"]
+                        for i, c in enumerate(citations, 1):
+                            score = c.get("score", 0.0)
+                            content = c.get("content", "").strip()
+                            lines.append(f"{i}. [score: {score:.2f}] {content}")
+                        knowledge_context = "\n".join(lines)
+                        logger.info(
+                            "[#3770] KB compressed to %d citations (%d tokens)",
+                            len(citations), cwm.estimate_tokens(knowledge_context),
+                        )
+                    else:
+                        knowledge_context = ""
         else:
             session.metadata["used_knowledge"] = False
 
