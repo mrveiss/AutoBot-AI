@@ -1,8 +1,11 @@
+import asyncio
 import json
 import logging
 import os
 import time
 from typing import Any, Dict, List, Optional
+
+import aiofiles
 
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_24_HOURS
@@ -99,7 +102,13 @@ class ChatHistoryManager:
         self._initialize_redis_client()
 
         self._ensure_data_directory_exists()
-        self._load_history()
+        # _load_history is async; schedule it if an event loop is running,
+        # otherwise run synchronously via a new loop.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._load_history())
+        except RuntimeError:
+            asyncio.run(self._load_history())
 
     def _ensure_data_directory_exists(self):
         """Ensures the directory for the history file exists."""
@@ -155,7 +164,7 @@ class ChatHistoryManager:
             os.getenv("AUTOBOT_CHATS_DIRECTORY", "data/chats"),
         )
 
-    def _load_history(self):
+    async def _load_history(self):
         """
         Loads chat history from the JSON file or Redis if enabled.
 
@@ -186,8 +195,9 @@ class ChatHistoryManager:
         # Default to file storage
         if os.path.exists(self.history_file):
             try:
-                with open(self.history_file, "r", encoding="utf-8") as f:
-                    self.history = json.load(f)
+                async with aiofiles.open(self.history_file, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                self.history = json.loads(content)
             except json.JSONDecodeError as e:
                 self.history = []
                 logging.warning(
@@ -207,7 +217,7 @@ class ChatHistoryManager:
                 "Starting with empty history."
             )
 
-    def _save_history(self):
+    async def _save_history(self):
         """
         Saves current chat history to the JSON file and optionally to Redis
         if enabled.
@@ -216,8 +226,8 @@ class ChatHistoryManager:
         """
         # Save to file for persistence
         try:
-            with open(self.history_file, "w", encoding="utf-8") as f:
-                json.dump(self.history, f, indent=2)
+            async with aiofiles.open(self.history_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(self.history, indent=2))
         except Exception as e:
             logging.error(f"Error saving chat history to {self.history_file}: {str(e)}")
 
@@ -231,7 +241,7 @@ class ChatHistoryManager:
             except Exception as e:
                 logging.error(f"Error saving chat history to Redis: {str(e)}")
 
-    def add_message(
+    async def add_message(
         self,
         sender: str,
         text: str,
@@ -255,22 +265,22 @@ class ChatHistoryManager:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         self.history.append(message)
-        self._save_history()
+        await self._save_history()
         logging.debug(f"Added message from {sender} with type {message_type}")
 
     def get_all_messages(self) -> List[Dict[str, Any]]:
         """Returns the entire chat history."""
         return self.history
 
-    def clear_history(self):
+    async def clear_history(self):
         """
         Clears the entire chat history and saves the empty history to file.
         """
         self.history = []
-        self._save_history()
+        await self._save_history()
         logging.info("Chat history cleared.")
 
-    def list_sessions(self) -> List[Dict[str, Any]]:
+    async def list_sessions(self) -> List[Dict[str, Any]]:
         """Lists available chat sessions with their metadata."""
         try:
             sessions = []
@@ -288,8 +298,8 @@ class ChatHistoryManager:
                     chat_path = os.path.join(chats_directory, filename)
 
                     try:
-                        with open(chat_path, "r", encoding="utf-8") as f:
-                            file_content = f.read()
+                        async with aiofiles.open(chat_path, "r", encoding="utf-8") as f:
+                            file_content = await f.read()
                         chat_data = self._decrypt_data(file_content)
 
                         # Get chat metadata
@@ -319,7 +329,7 @@ class ChatHistoryManager:
             logging.error(f"Error listing chat sessions: {str(e)}")
             return []
 
-    def load_session(self, session_id: str) -> List[Dict[str, Any]]:
+    async def load_session(self, session_id: str) -> List[Dict[str, Any]]:
         """
         Load a specific chat session.
 
@@ -343,15 +353,15 @@ class ChatHistoryManager:
             return []
 
         # PermissionError propagates to caller — access denied is a real problem.
-        with open(chat_file, "r", encoding="utf-8") as f:
-            file_content = f.read()
+        async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+            file_content = await f.read()
 
         # ValueError from _decrypt_data propagates to caller — corrupted data
         # should not be silently swallowed.
         chat_data = self._decrypt_data(file_content)
         return chat_data.get("messages", [])
 
-    def _load_existing_chat_data(
+    async def _load_existing_chat_data(
         self, chat_file: str, session_id: str
     ) -> Dict[str, Any]:
         """
@@ -368,8 +378,8 @@ class ChatHistoryManager:
             return {}
 
         try:
-            with open(chat_file, "r", encoding="utf-8") as f:
-                file_content = f.read()
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                file_content = await f.read()
             return self._decrypt_data(file_content)
         except Exception as e:
             logging.warning(
@@ -408,7 +418,7 @@ class ChatHistoryManager:
         )
         return existing_data
 
-    def save_session(
+    async def save_session(
         self,
         session_id: str,
         messages: Optional[List[Dict[str, Any]]] = None,
@@ -431,21 +441,21 @@ class ChatHistoryManager:
             chat_file = f"{chats_directory}/chat_{session_id}.json"
             session_messages = self.history if messages is None else messages
 
-            existing_data = self._load_existing_chat_data(chat_file, session_id)
+            existing_data = await self._load_existing_chat_data(chat_file, session_id)
             chat_data = self._build_chat_data(
                 session_id, name, session_messages, existing_data
             )
 
             encrypted_data = self._encrypt_data(chat_data)
-            with open(chat_file, "w", encoding="utf-8") as f:
-                f.write(encrypted_data)
+            async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+                await f.write(encrypted_data)
 
             logging.info(f"Chat session '{session_id}' saved successfully")
 
         except Exception as e:
             logging.error(f"Error saving chat session {session_id}: {str(e)}")
 
-    def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str) -> bool:
         """
         Deletes a chat session.
 
@@ -471,7 +481,7 @@ class ChatHistoryManager:
             logging.error(f"Error deleting chat session {session_id}: {str(e)}")
             return False
 
-    def update_session_name(self, session_id: str, name: str) -> bool:
+    async def update_session_name(self, session_id: str, name: str) -> bool:
         """
         Updates the name of a chat session.
 
@@ -491,16 +501,17 @@ class ChatHistoryManager:
                 return False
 
             # Load existing chat data
-            with open(chat_file, "r", encoding="utf-8") as f:
-                chat_data = json.load(f)
+            async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+            chat_data = json.loads(content)
 
             # Update name and last modified time
             chat_data["name"] = name
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # Save updated data
-            with open(chat_file, "w", encoding="utf-8") as f:
-                json.dump(chat_data, f, indent=2)
+            async with aiofiles.open(chat_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(chat_data, indent=2))
 
             logging.info(f"Chat session '{session_id}' name updated to '{name}'")
             return True
