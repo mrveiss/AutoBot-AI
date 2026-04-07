@@ -13,8 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from .agent_diary import AgentDiaryService
 from .cache import LRUCacheManager
 from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
+from .essential_story import EssentialStoryGenerator
 from .models import MemoryEntry, TaskExecutionRecord
 from .monitor import MemoryMonitor
 from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
@@ -123,6 +125,10 @@ class UnifiedMemoryManager:
 
         # Session-scoped short-term memory (Redis-backed, eagerly created)
         self._working_memory: WorkingMemoryService = WorkingMemoryService()
+
+        # Lazily-instantiated subsystems
+        self._essential_story: Optional[EssentialStoryGenerator] = None
+        self._agent_diary: Optional[AgentDiaryService] = None
 
         logger.info("Unified Memory Manager created at %s", self.db_path)
 
@@ -558,6 +564,20 @@ class UnifiedMemoryManager:
     def working_memory(self) -> WorkingMemoryService:
         """Return the WorkingMemoryService instance."""
         return self._working_memory
+
+    @property
+    def essential_story(self) -> EssentialStoryGenerator:
+        """Return the EssentialStoryGenerator instance (lazy-init)."""
+        if self._essential_story is None:
+            self._essential_story = EssentialStoryGenerator()
+        return self._essential_story
+
+    @property
+    def agent_diary(self) -> AgentDiaryService:
+        """Return the AgentDiaryService instance (lazy-init)."""
+        if self._agent_diary is None:
+            self._agent_diary = AgentDiaryService()
+        return self._agent_diary
 
     # ========================================================================
     # STATISTICS & MONITORING

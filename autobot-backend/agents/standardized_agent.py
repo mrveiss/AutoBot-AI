@@ -19,20 +19,10 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
-
-try:
-    from memory.working_memory import WorkingMemoryService
-    _working_memory_available = True
-except ImportError:
-    logging.getLogger(__name__).warning(
-        "WorkingMemoryService not available (issue #3768 not merged); "
-        "memory lifecycle hooks will use no-op stubs"
-    )
-    WorkingMemoryService = None  # type: ignore[assignment,misc]
-    _working_memory_available = False
 
 
 @dataclass
@@ -63,6 +53,9 @@ class StandardizedAgent(BaseAgent):
         """Initialize standardized agent with action handlers and metrics."""
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
+
+        # Unified memory facade — subsystems accessed via properties
+        self.memory_manager: UnifiedMemoryManager = UnifiedMemoryManager()
 
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
@@ -179,7 +172,7 @@ class StandardizedAgent(BaseAgent):
         """Load working memory into context before request handling.
 
         Override in subclasses to enrich the context with session state
-        or prior conversation history from WorkingMemoryService.
+        or prior conversation history from ``self.memory_manager.working_memory``.
 
         Args:
             context: Mutable context dict forwarded from the request.
@@ -193,7 +186,7 @@ class StandardizedAgent(BaseAgent):
         """Persist key outputs to working memory after request handling.
 
         Override in subclasses to write agent outputs back to
-        WorkingMemoryService so downstream agents can share state.
+        ``self.memory_manager.working_memory`` so downstream agents can share state.
 
         Args:
             context: Context dict as returned by _before_process.

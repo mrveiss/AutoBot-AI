@@ -12,8 +12,6 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-from memory.agent_diary import AgentDiaryService
-
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -24,13 +22,6 @@ from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
-
-try:
-    from memory.working_memory import WorkingMemoryService as _WMS
-    _working_memory_available = True
-except ImportError:
-    _WMS = None
-    _working_memory_available = False
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +44,6 @@ class SentimentAnalysisAgent(StandardizedAgent):
             "opinion_mining",
             "tone_detection",
         ]
-        self._wm = _WMS() if _working_memory_available else None
         self._register_action_handlers()
         logger.info(
             "Sentiment Analysis Agent initialized: provider=%s, model=%s",
@@ -138,7 +128,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
                 f"SESSION:{session_id}|ACTION:sentiment_analysis"
                 f"|OUTCOME:{result['status']}|TOPIC:sentiment"
             )
-            await AgentDiaryService().write(
+            await self.memory_manager.agent_diary.write(
                 self.AGENT_ID, session_id, diary_entry, topic="sentiment"
             )
             return result
@@ -153,30 +143,28 @@ class SentimentAnalysisAgent(StandardizedAgent):
             }
 
     async def _before_process(self, context: dict) -> dict:
-        """Inject cached session sentiment history into context (example override).
-
-        When WorkingMemoryService becomes available (issue #3768) this can load
-        prior session data.  Until then it is a documented no-op that shows the
-        expected override pattern.
-        """
-        if _working_memory_available and self._wm is not None:
-            session_id = context.get("session_id")
-            if session_id:
-                history = await self._wm.get(session_id, "sentiment_history")
-                if history:
-                    context["sentiment_history"] = history
+        """Inject cached session sentiment history into context."""
+        session_id = context.get("session_id")
+        if session_id:
+            history = await self.memory_manager.working_memory.get(
+                session_id, "sentiment_history"
+            )
+            if history:
+                context["sentiment_history"] = history
         return context
 
     async def _after_process(self, context: dict, result: Any) -> None:
-        """Persist the most recent sentiment label to working memory (example override)."""
-        if not (_working_memory_available and result):
+        """Persist the most recent sentiment label to working memory."""
+        if not result:
             return
         session_id = context.get("session_id")
         if not session_id:
             return
         sentiment = result.get("response", "") if isinstance(result, dict) else ""
-        if sentiment and self._wm is not None:
-            await self._wm.store(session_id, "sentiment_history", sentiment)
+        if sentiment:
+            await self.memory_manager.working_memory.store(
+                session_id, "sentiment_history", sentiment
+            )
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for sentiment analysis tasks."""
