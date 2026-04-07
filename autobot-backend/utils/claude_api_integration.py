@@ -534,6 +534,7 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         if self.manager:
             await self.manager.stop()
             self.manager = None
+        self._initialized = False
 
     async def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics (thread-safe)"""
@@ -547,13 +548,18 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         cls._instance = None
 
 
+# Lock that serialises singleton creation in get_autobot_claude_adapter().
+_claude_adapter_lock = asyncio.Lock()
+
+
 async def get_autobot_claude_adapter(
     adapter_config: Optional[ClaudeAPIConfig] = None,
 ) -> "AutoBotClaudeAPIAdapter":
     """Get and lazily initialize the global AutoBotClaudeAPIAdapter singleton."""
-    if AutoBotClaudeAPIAdapter._instance is None:
-        AutoBotClaudeAPIAdapter._instance = AutoBotClaudeAPIAdapter()
-        AutoBotClaudeAPIAdapter._instance._adapter_config = adapter_config
+    async with _claude_adapter_lock:
+        if AutoBotClaudeAPIAdapter._instance is None:
+            AutoBotClaudeAPIAdapter._instance = AutoBotClaudeAPIAdapter()
+            AutoBotClaudeAPIAdapter._instance._adapter_config = adapter_config
     await AutoBotClaudeAPIAdapter._instance.initialize()
     return AutoBotClaudeAPIAdapter._instance
 
