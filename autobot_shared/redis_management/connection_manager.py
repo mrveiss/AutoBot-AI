@@ -67,18 +67,11 @@ _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _STANDARD_DELAY = 1.0
 
-# Lazy import of retry_mechanism from autobot-backend (Issue #3830).
-# The module is co-located at runtime (autobot_shared is embedded inside
-# autobot-backend) but may be absent in standalone contexts such as SLM backend.
-try:
-    from retry_mechanism import (
-        RetryConfig as _RetryConfig,
-        RetryMechanism as _RetryMechanism,
-        RetryStrategy as _RetryStrategy,
-    )
-    _HAS_RETRY_MECHANISM = True
-except ImportError:
-    _HAS_RETRY_MECHANISM = False
+from retry_mechanism import (
+    RetryConfig as _RetryConfig,
+    RetryMechanism as _RetryMechanism,
+    RetryStrategy as _RetryStrategy,
+)
 
 
 def _get_config_manager():
@@ -489,52 +482,30 @@ class RedisConnectionManager:
 
         Issue #665: Refactored to use _build_async_pool_params helper.
         Issue #3830: Retry loop delegated to RetryMechanism (exponential backoff,
-        5 attempts, base 2 s, cap 30 s).  Falls back to inline loop when
-        retry_mechanism is unavailable (standalone autobot_shared contexts).
+        5 attempts, base 2 s, cap 30 s).
 
         Features:
         - Exponential backoff retry via retry_mechanism
         - Up to 5 attempts
         - TCP keepalive configuration
         """
-        if _HAS_RETRY_MECHANISM:
-            retry_cfg = _RetryConfig(
-                max_attempts=5,
-                base_delay=2.0,
-                max_delay=30.0,
-                backoff_multiplier=2.0,
-                jitter=False,
-                strategy=_RetryStrategy.EXPONENTIAL_BACKOFF,
-                retryable_exceptions=(ConnectionError, asyncio.TimeoutError),
-                non_retryable_exceptions=(KeyboardInterrupt, SystemExit),
-            )
-            mechanism = _RetryMechanism(retry_cfg)
-            return await mechanism.execute_async(
-                self._try_create_async_pool,
-                database_name,
-                config,
-                operation_name=f"create_async_pool[{database_name}]",
-            )
-
-        # Fallback: inline loop used when retry_mechanism is not importable.
-        logger.warning(f"Creating async pool for '{database_name}' with MANUAL RETRY")
-        max_attempts, base_wait, max_wait = 5, 2, 30
-        for attempt in range(max_attempts):
-            try:
-                return await self._try_create_async_pool(database_name, config)
-            except (ConnectionError, asyncio.TimeoutError) as e:
-                if attempt < max_attempts - 1:
-                    wait_time = min(base_wait * (2**attempt), max_wait)
-                    logger.warning(
-                        f"Redis connection attempt {attempt + 1}/{max_attempts} failed "
-                        f"for '{database_name}', retrying in {wait_time}s: {e}"
-                    )
-                    await asyncio.sleep(wait_time)
-                else:
-                    logger.error(
-                        f"All {max_attempts} connection attempts failed for '{database_name}'"
-                    )
-                    raise
+        retry_cfg = _RetryConfig(
+            max_attempts=5,
+            base_delay=2.0,
+            max_delay=30.0,
+            backoff_multiplier=2.0,
+            jitter=False,
+            strategy=_RetryStrategy.EXPONENTIAL_BACKOFF,
+            retryable_exceptions=(ConnectionError, asyncio.TimeoutError),
+            non_retryable_exceptions=(KeyboardInterrupt, SystemExit),
+        )
+        mechanism = _RetryMechanism(retry_cfg)
+        return await mechanism.execute_async(
+            self._try_create_async_pool,
+            database_name,
+            config,
+            operation_name=f"create_async_pool[{database_name}]",
+        )
 
     def _apply_tls_params(
         self, pool_params: Dict[str, Any], config: RedisConfig, database_name: str

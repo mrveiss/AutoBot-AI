@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 class RetryStrategy(Enum):
     """Retry strategy types"""
 
-    EXPONENTIAL_BACKOFF = "exponential_backof"
-    LINEAR_BACKOFF = "linear_backof"
+    EXPONENTIAL_BACKOFF = "exponential_backoff"
+    LINEAR_BACKOFF = "linear_backoff"
     FIXED_DELAY = "fixed_delay"
-    JITTERED_BACKOFF = "jittered_backof"
+    JITTERED_BACKOFF = "jittered_backoff"
 
 
 # Alias with simpler names used by callers (Issue #3830).
@@ -40,8 +40,8 @@ class BackoffStrategy(Enum):
     canonical RetryStrategy values so callers can use either name.
     """
 
-    LINEAR = "linear_backof"
-    EXPONENTIAL = "exponential_backof"
+    LINEAR = "linear"
+    EXPONENTIAL = "exponential"
 
     def to_retry_strategy(self) -> RetryStrategy:
         """Convert to the canonical RetryStrategy enum value."""
