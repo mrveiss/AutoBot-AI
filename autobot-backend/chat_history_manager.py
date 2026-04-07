@@ -37,7 +37,7 @@ class ChatHistoryManager:
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
         self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", "localhost")
+            "host", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
         )
         self.redis_port = redis_port or redis_config.get("port", 6379)
 
