@@ -93,7 +93,7 @@ async def _init_cache_coordinator() -> None:
     try:
         from cache import register_all_caches
 
-        cache_count = register_all_caches()
+        cache_count = await register_all_caches()
         logger.info(
             "✅ [ 55%] Cache: %d caches registered for coordinated management",
             cache_count,
