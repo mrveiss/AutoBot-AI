@@ -2,13 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import asyncio
+import copy
 import datetime
 import json
 import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import aiofiles
 
@@ -932,4 +933,108 @@ async def sync_config(
         status="ok",
         changed=changed,
         unchanged_keys=unchanged_keys,
+    )
+
+
+# ==================== Hardware Priority Endpoint (Issue #3288) ====================
+
+_VALID_HARDWARE_TYPES = frozenset({"npu", "gpu", "cpu"})
+
+
+class HardwarePriorityRequest(BaseModel):
+    """Request body for PATCH /api/settings/hardware-priority.
+
+    priority_order must be a permutation of ["npu", "gpu", "cpu"] — all three
+    values required, no duplicates.
+    """
+
+    priority_order: List[str]
+
+    def model_post_init(self, __context) -> None:  # noqa: ANN001
+        given = set(self.priority_order)
+        if given != _VALID_HARDWARE_TYPES or len(self.priority_order) != 3:
+            raise ValueError(
+                f"priority_order must be a permutation of {sorted(_VALID_HARDWARE_TYPES)}, "
+                f"got {self.priority_order}"
+            )
+
+
+class HardwarePriorityResponse(BaseModel):
+    """Response body for PATCH /api/settings/hardware-priority."""
+
+    status: str
+    priority_order: List[str]
+    changed: dict
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_hardware_priority",
+    error_code_prefix="SETTINGS",
+)
+@router.patch("/hardware-priority", response_model=HardwarePriorityResponse)
+async def update_hardware_priority(
+    request: HardwarePriorityRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(check_admin_permission),
+):
+    """Set hardware processing priority order for NPU/GPU/CPU (Issue #3288).
+
+    Persists the ordering to ``hardware.acceleration.priority_order`` in
+    ``config.yaml`` and immediately applies it to the in-process
+    ``HardwareAccelerationManager`` singleton so new agent dispatches respect
+    the updated priority without a restart.
+
+    Requires admin permission.
+    """
+    from hardware_acceleration import get_hardware_acceleration_manager
+
+    before_config: dict = ConfigService.get_full_config()
+
+    # Build the minimal patch — only the key we own
+    patch: dict = {
+        "hardware": {
+            "acceleration": {
+                "priority_order": request.priority_order,
+            }
+        }
+    }
+
+    # Deep-merge into a copy to produce the full updated config
+    from config.loader import deep_merge
+
+    merged_config = deep_merge(copy.deepcopy(before_config), patch)
+    ConfigService.save_full_config(merged_config)
+    ConfigService.clear_cache()
+
+    # Apply in-memory so the running process respects the new ordering
+    hw_manager = get_hardware_acceleration_manager()
+    hw_manager.update_priorities(request.priority_order)
+
+    # Read back the actually-applied order (filtered to available devices)
+    applied_order = [
+        t.value for t in hw_manager.current_config["priority_order"]
+    ]
+
+    changed = _compute_flat_diff(before_config, merged_config)
+
+    await ConfigRevisionService(session).create_revision(
+        entity_type="system",
+        entity_id="hardware_priority",
+        before_config=before_config,
+        after_config=merged_config,
+        source="api",
+        created_by="admin",
+    )
+
+    logger.info(
+        "Hardware priority updated: %s (changed keys: %d)",
+        request.priority_order,
+        len(changed),
+    )
+
+    return HardwarePriorityResponse(
+        status="ok",
+        priority_order=applied_order,
+        changed=changed,
     )
