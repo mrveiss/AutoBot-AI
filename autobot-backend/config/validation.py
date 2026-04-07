@@ -7,6 +7,8 @@ Configuration validation for unified config manager.
 
 Issue #3398: enhanced validation — startup warnings, conflict detection,
              invalid-value fast-fail, and startup summary log.
+Issue #3880: fix ``if not value`` false-positive on 0/False/""; gate
+             ``memory.redis.host`` on ``memory.redis.enabled``.
 """
 
 import logging
@@ -22,11 +24,22 @@ logger = logging.getLogger(__name__)
 _PORT_MIN = 1
 _PORT_MAX = 65535
 
-# Config keys that must resolve to a non-empty value before serving requests.
-# Each entry is a dot-notation path checked via get_nested().
+# Config keys that must resolve to a non-None value before serving requests.
+# Each entry is a dot-notation path checked via _get_nested_value().
+# NOTE: memory.redis.host is intentionally absent here — it is conditionally
+# required only when memory.redis.enabled is True (see _CONDITIONAL_REQUIRED_CONFIG_KEYS).
 _REQUIRED_CONFIG_KEYS: List[str] = [
-    "memory.redis.host",
     "backend.server_host",
+]
+
+# Config keys required only when the corresponding feature is enabled.
+# Tuple of (required_key, guard_path, guard_enabled_value).
+# guard_path is a list of dict keys to traverse to reach the boolean flag.
+# When the flag key is absent from the config, guard_enabled_value is used as
+# the default so that configs that pre-date the flag keep their existing
+# behaviour (backward-compatible: Redis is required unless explicitly disabled).
+_CONDITIONAL_REQUIRED_CONFIG_KEYS: List[tuple] = [
+    ("memory.redis.host", ["memory", "redis", "enabled"], True),
 ]
 
 
@@ -105,13 +118,30 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
     result = ConfigValidationResult()
 
     # --- 1. Required keys ---
+    # Use ``is None`` not ``not value`` so that falsy-but-valid values such as
+    # 0, False, or "" do not raise a spurious missing-key error (Issue #3880).
     for dotted_key in _REQUIRED_CONFIG_KEYS:
         path = dotted_key.split(".")
         value = _get_nested_value(raw_config, path)
-        if not value:
+        if value is None:
             result.add_error(
-                f"Required config key '{dotted_key}' is missing or empty"
+                f"Required config key '{dotted_key}' is missing"
             )
+
+    # --- 1b. Conditionally required keys ---
+    for required_key, guard_path, guard_enabled_value in _CONDITIONAL_REQUIRED_CONFIG_KEYS:
+        guard_value = _get_nested_value(raw_config, guard_path)
+        # Default to the guard_enabled_value when the flag is absent so that
+        # configs without an explicit enabled flag keep their existing behaviour.
+        feature_enabled = guard_value if guard_value is not None else guard_enabled_value
+        if feature_enabled == guard_enabled_value:
+            path = required_key.split(".")
+            value = _get_nested_value(raw_config, path)
+            if value is None:
+                result.add_error(
+                    f"Required config key '{required_key}' is missing "
+                    f"(required when {'.'.join(guard_path)} is {guard_enabled_value!r})"
+                )
 
     # --- 2. Port range validation ---
     for path, label in _PORT_CONFIG_PATHS:
