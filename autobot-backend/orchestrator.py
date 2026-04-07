@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.logging_manager import get_logger
 from config import config_manager
-from constants.threshold_constants import LLMDefaults, TimingConstants
+from constants.threshold_constants import LLMDefaults, TimingConstants, WorkflowThresholds
 from conversation import ConversationManager
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
@@ -237,7 +237,7 @@ class ConsolidatedOrchestrator:
         self.knowledge_base = KnowledgeBase() if KNOWLEDGE_BASE_AVAILABLE else None
 
         self.auto_doc_enabled = True
-        self.doc_generation_threshold = 0.8
+        self.doc_generation_threshold = WorkflowThresholds.DOC_GENERATION_THRESHOLD
         self.knowledge_extraction_enabled = KNOWLEDGE_BASE_AVAILABLE
 
         self.workflow_metrics = {
@@ -970,8 +970,6 @@ class ConsolidatedOrchestrator:
 
         Issue #3393: Merged from enhanced_orchestrator.py into ConsolidatedOrchestrator.
         """
-        from constants.threshold_constants import AgentThresholds
-
         workflow_id = str(uuid.uuid4())
         start_time = time.time()
         context = context or {}
