@@ -12,6 +12,8 @@ import time
 # Test the workflow automation system
 from unittest.mock import AsyncMock
 
+from tests.test_helpers import get_test_backend_url
+
 # Import system components
 try:
     from api.terminal_handlers import ConsolidatedTerminalWebSocket
@@ -32,7 +34,7 @@ logger = logging.getLogger(__name__)
 class SessionTakeoverTestSuite:
     """Comprehensive test suite for session takeover functionality"""
 
-    def __init__(self, base_url: str = "http://localhost:8001"):
+    def __init__(self, base_url: str = get_test_backend_url()):
         self.base_url = base_url
         self.test_session_id = f"test_session_{int(time.time())}"
         self.workflow_manager = None
