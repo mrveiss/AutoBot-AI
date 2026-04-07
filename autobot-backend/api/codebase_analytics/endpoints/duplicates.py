@@ -39,7 +39,8 @@ router = APIRouter()
 _manager = BackgroundTaskManager(redis_prefix="dup_task:")
 
 # Cache for duplicate analysis (in-memory, refreshed on demand)
-_duplicate_cache: Optional[dict] = None
+# Keyed by source_id (or "" for unscoped) to prevent cross-project leakage (#3685)
+_duplicate_cache: dict[str, dict] = {}
 
 
 def _get_project_root() -> str:
@@ -242,23 +243,25 @@ def _build_detection_error_response(error_msg: str) -> dict:
     }
 
 
-def _process_and_cache_analysis(analysis, project_root: str) -> dict:
+def _process_and_cache_analysis(
+    analysis, project_root: str, source_id: Optional[str] = None
+) -> dict:
     """
     Convert analysis to result dict and log completion.
 
     Issue #620: Extracted from get_duplicate_code to reduce function length.
+    Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
 
     Args:
         analysis: Analysis result object
         project_root: Project root path
+        source_id: Optional source ID for per-project cache scoping
 
     Returns:
         Result dict suitable for JSONResponse
     """
-    global _duplicate_cache
-
     result = _convert_analysis_to_result(analysis, project_root)
-    _duplicate_cache = result
+    _duplicate_cache[source_id or ""] = result
 
     logger.info(
         "Duplicate analysis complete: %d duplicates (%d high, %d medium, %d low)",
@@ -298,24 +301,29 @@ async def _run_duplicate_analysis(
     return analysis
 
 
-def _check_duplicate_cache(refresh: bool) -> Optional[JSONResponse]:
+def _check_duplicate_cache(
+    refresh: bool, source_id: Optional[str] = None
+) -> Optional[JSONResponse]:
     """
     Check if cached results are available and return them.
 
     Issue #620: Extracted from get_duplicate_code to reduce function length.
+    Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
 
     Args:
         refresh: Whether to force fresh analysis
+        source_id: Optional source ID for per-project cache scoping
 
     Returns:
         JSONResponse with cached data, or None if cache miss/refresh requested
     """
-    if _duplicate_cache and not refresh:
+    cached = _duplicate_cache.get(source_id or "")
+    if cached and not refresh:
         logger.info(
             "Returning cached duplicate analysis (%d duplicates)",
-            _duplicate_cache.get("total_count", 0),
+            cached.get("total_count", 0),
         )
-        return JSONResponse(_duplicate_cache)
+        return JSONResponse(cached)
     return None
 
 
@@ -378,12 +386,23 @@ async def get_duplicate_code(
     Returns:
         JSON with duplicates, statistics, and analysis metadata
     """
-    # Check cache first - Issue #620: Use helper
-    cached = _check_duplicate_cache(refresh)
+    # Check cache first - Issue #620, #3685: Scoped by source_id
+    cached = _check_duplicate_cache(refresh, source_id=source_id)
     if cached:
         return cached
 
+    # Issue #3685: Resolve clone_path from source registry so live analysis
+    # runs against the correct project, not always the AutoBot repo.
     project_root = _get_project_root()
+    if source_id:
+        try:
+            from api.codebase_analytics.source_storage import get_source
+
+            source = await get_source(source_id)
+            if source and source.clone_path:
+                project_root = source.clone_path
+        except Exception:
+            logger.debug("Could not resolve clone_path for %s, using default", source_id)
 
     try:
         # Run analysis (semantic or standard) - Issue #620: Use helper
@@ -395,8 +414,8 @@ async def get_duplicate_code(
         if analysis is None:
             return JSONResponse(_build_timeout_response())
 
-        # Convert, cache, and return results - Issue #620: Use helper
-        result = _process_and_cache_analysis(analysis, project_root)
+        # Convert, cache, and return results - Issue #620, #3685: Scoped by source_id
+        result = _process_and_cache_analysis(analysis, project_root, source_id=source_id)
         return JSONResponse(result)
 
     except Exception as e:
@@ -499,20 +518,36 @@ async def detect_config_duplicates_endpoint(
     use_semantic: bool = Query(
         False, description="Enable LLM-based semantic analysis (Issue #554)"
     ),
+    source_id: Optional[str] = Query(
+        None, description="#3685: source_id for per-project scoping"
+    ),
 ):
     """
     Detect configuration value duplicates across codebase (Issue #341).
 
     Issue #554: Enhanced with optional semantic analysis.
     Issue #620: Refactored to use helper functions.
+    Issue #3685: source_id scopes analysis to the correct project clone.
 
     Args:
         use_semantic: Enable semantic duplicate detection via LLM embeddings
+        source_id: Optional source ID to scope analysis to the correct project
 
     Returns:
         JSONResponse with duplicate detection results
     """
     project_root = Path(__file__).resolve().parents[4]
+    if source_id:
+        try:
+            from api.codebase_analytics.source_storage import get_source
+
+            source = await get_source(source_id)
+            if source and source.clone_path:
+                project_root = Path(source.clone_path)
+        except Exception:
+            logger.debug(
+                "Could not resolve clone_path for %s, using default", source_id
+            )
 
     # Issue #620: Use helpers for detection
     result = None
