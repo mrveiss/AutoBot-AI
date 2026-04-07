@@ -17,10 +17,9 @@ from typing import Any, Dict, List, Tuple
 import aiohttp
 from fastapi import APIRouter
 
-from config import ConfigManager
+from autobot_shared.ssot_config import config as _ssot
 
 logger = logging.getLogger(__name__)
-config = ConfigManager()
 
 router = APIRouter(tags=["Service Monitor"])
 
@@ -72,9 +71,9 @@ async def get_service_statuses() -> Dict[str, Any]:
     Used by the frontend system-status widget (Issue #925).
     No authentication required — checked before and after login.
     """
-    npu_url = config.get_service_url("npu_worker", "health")
-    browser_url = config.get_service_url("browser", "health")
-    ollama_url = f"{config.get_ollama_url()}/api/version"
+    npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
+    browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
+    ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
 
     (
         (redis_status, redis_msg),
@@ -109,8 +108,8 @@ async def get_vm_statuses() -> Dict[str, Any]:
     Used by the frontend system-status widget (Issue #925).
     No authentication required.
     """
-    npu_url = config.get_service_url("npu_worker", "health")
-    browser_url = config.get_service_url("browser", "health")
+    npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
+    browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
 
     (
         (redis_status, redis_msg),

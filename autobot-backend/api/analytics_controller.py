@@ -28,7 +28,7 @@ import redis
 # Import models from dedicated module (Issue #185)
 from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from config import ConfigManager
+from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -38,9 +38,6 @@ from utils.system_metrics import get_metrics_collector
 from .monitoring_hardware import hardware_monitor
 
 logger = logging.getLogger(__name__)
-
-# Create singleton config instance
-config = ConfigManager()
 
 # Lock for thread-safe analytics state access
 _analytics_state_lock = asyncio.Lock()
@@ -71,11 +68,23 @@ _DYNAMIC_SEGMENT_PATTERNS = [
 
 
 # Simple service address function using configuration
+_SERVICE_HOST_MAP = {
+    "backend": lambda: _ssot.vm.main,
+    "frontend": lambda: _ssot.vm.frontend,
+    "redis": lambda: _ssot.vm.redis,
+    "ollama": lambda: _ssot.vm.ollama,
+    "npu_worker": lambda: _ssot.vm.npu,
+    "ai_stack": lambda: _ssot.vm.aistack,
+    "browser": lambda: _ssot.vm.browser,
+    "browser_service": lambda: _ssot.vm.browser,
+}
+
+
 def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
     """Get standardized service address from config helper"""
     try:
-        host = config.get_host(service_name)
-    except Exception:
+        host = _SERVICE_HOST_MAP[service_name]()
+    except (KeyError, Exception):
         host = "localhost"
     return f"{protocol}://{host}:{port}"
 
