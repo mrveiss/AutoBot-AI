@@ -12,7 +12,7 @@
  * Author: mrveiss
  */
 
-import { getConfig, getServiceUrl as ssotGetServiceUrl } from './ssot-config';
+import { getConfig, getServiceUrl as ssotGetServiceUrl, getApiBase } from './ssot-config';
 import { buildDefaultServiceUrl, buildDefaultVncUrl } from './defaults.js';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -400,7 +400,7 @@ export default class ServiceDiscovery {
 
       // Handle proxy mode for backend service
       if (serviceName === 'backend' && !url) {
-        const testUrl = '/api/health';
+        const testUrl = `${getApiBase()}/health`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -426,7 +426,7 @@ export default class ServiceDiscovery {
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       // Use different endpoints based on service type
-      let testEndpoint = '/api/system/health';
+      let testEndpoint = `${getApiBase()}/system/health`;
       if (serviceName.startsWith('vnc_')) {
         testEndpoint = '/vnc.html';
       } else if (serviceName === 'redis') {
