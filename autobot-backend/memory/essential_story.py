@@ -91,7 +91,9 @@ class EssentialStoryGenerator:
             except (TypeError, ValueError):
                 return 0.0
 
-        sorted_facts = sorted(all_facts, key=_quality, reverse=True)
+        # Cap at 50 highest-quality facts — sufficient for any token budget (max 800 tokens)
+        # and avoids a full KB scan on large collections.
+        sorted_facts = sorted(all_facts, key=_quality, reverse=True)[:50]
 
         selected: List[Dict[str, Any]] = []
         used_tokens = 0

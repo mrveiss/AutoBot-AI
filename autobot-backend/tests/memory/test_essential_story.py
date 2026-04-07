@@ -202,6 +202,21 @@ class TestFetchTopFacts:
         assert len(result) <= 3
 
     @pytest.mark.asyncio
+    async def test_caps_at_50_facts_before_token_loop(self):
+        """Even with a huge token budget, at most 50 facts are ever processed."""
+        facts = _make_facts(200, quality_step=0.005)
+        mock_kb = AsyncMock()
+        mock_kb.get_all_facts = AsyncMock(return_value=facts)
+        sys.modules["knowledge._composed"].get_knowledge_base = AsyncMock(
+            return_value=mock_kb
+        )
+
+        gen = EssentialStoryGenerator()
+        result = await gen._fetch_top_facts(max_tokens=100_000)
+
+        assert len(result) <= 50
+
+    @pytest.mark.asyncio
     async def test_empty_kb_returns_empty_list(self):
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=[])
