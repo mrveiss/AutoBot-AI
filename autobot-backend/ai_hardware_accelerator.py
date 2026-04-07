@@ -134,7 +134,7 @@ class HardwareDevice(Enum):
     CPU = "cpu"  # CPU fallback
 
 
-class TaskComplexity(Enum):
+class ProcessingLoad(Enum):
     """Task complexity levels for hardware routing."""
 
     LIGHTWEIGHT = "lightweight"  # < 1s, small models
@@ -161,7 +161,7 @@ class ProcessingTask:
     task_id: str
     task_type: str
     input_data: Dict[str, Any]
-    complexity: TaskComplexity
+    complexity: ProcessingLoad
     priority: int = 1
     timeout_seconds: int = int(_ssot_config.timeout.default_request)
     preferred_device: Optional[HardwareDevice] = None
@@ -369,15 +369,15 @@ class AIHardwareAccelerator:
 
     def _classify_by_threshold(
         self, value: int, light_threshold: int, mod_threshold: int
-    ) -> TaskComplexity:
+    ) -> ProcessingLoad:
         """Classify by value thresholds (Issue #315 - extracted helper)."""
         if value < light_threshold:
-            return TaskComplexity.LIGHTWEIGHT
+            return ProcessingLoad.LIGHTWEIGHT
         if value < mod_threshold:
-            return TaskComplexity.MODERATE
-        return TaskComplexity.HEAVY
+            return ProcessingLoad.MODERATE
+        return ProcessingLoad.HEAVY
 
-    def _classify_task_complexity(self, task: ProcessingTask) -> TaskComplexity:
+    def _classify_task_complexity(self, task: ProcessingTask) -> ProcessingLoad:
         """Classify task complexity for optimal device routing (Issue #315 - refactored)."""
         task_type = task.task_type
         input_data = task.input_data
@@ -408,7 +408,7 @@ class AIHardwareAccelerator:
                 model_config.MODEL_SIZE_MODERATE_THRESHOLD_MB,
             )
 
-        return TaskComplexity.MODERATE  # Conservative default
+        return ProcessingLoad.MODERATE  # Conservative default
 
     def _is_device_under_threshold(
         self, device: HardwareDevice, threshold: float
@@ -489,9 +489,9 @@ class AIHardwareAccelerator:
             return task.preferred_device
 
         # Intelligent routing based on complexity and availability
-        if complexity == TaskComplexity.LIGHTWEIGHT:
+        if complexity == ProcessingLoad.LIGHTWEIGHT:
             return self._route_lightweight_task()
-        elif complexity == TaskComplexity.MODERATE:
+        elif complexity == ProcessingLoad.MODERATE:
             return self._route_moderate_task()
         else:  # HEAVY tasks
             return self._route_heavy_task()
@@ -999,9 +999,9 @@ async def accelerated_embedding_generation(
             "text": content if modality == "text" else None,  # Backward compatibility
         },
         complexity=(
-            TaskComplexity.LIGHTWEIGHT
+            ProcessingLoad.LIGHTWEIGHT
             if modality == "text"
-            else TaskComplexity.MODERATE
+            else ProcessingLoad.MODERATE
         ),
         preferred_device=preferred_device,
     )
@@ -1050,11 +1050,11 @@ async def accelerated_semantic_search(
 
     # Determine complexity based on document count
     if len(documents) < 100:
-        complexity = TaskComplexity.LIGHTWEIGHT
+        complexity = ProcessingLoad.LIGHTWEIGHT
     elif len(documents) < 1000:
-        complexity = TaskComplexity.MODERATE
+        complexity = ProcessingLoad.MODERATE
     else:
-        complexity = TaskComplexity.HEAVY
+        complexity = ProcessingLoad.HEAVY
 
     task = ProcessingTask(
         task_id=f"search_{int(time.time()*1000)}",
