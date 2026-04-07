@@ -42,6 +42,9 @@
     backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
     backend_redis_port: 6379
 
+    # Browser Worker connection
+    backend_browser_host: "{{ hostvars[groups['browser'][0]]['ansible_host'] | default('') if 'browser' in groups and groups['browser'] | length > 0 else '' }}"
+
     # Deployment settings
     backend_deploy_from_git: false  # Use existing code
 

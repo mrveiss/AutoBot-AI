@@ -59,6 +59,10 @@ backend_llm_provider: "ollama"  # Default LLM provider for all agents
 backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
 backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
+# Browser Worker connection (Playwright VM — leave empty for single-host deploys)
+backend_browser_host: ""    # Set to browser VM IP in fleet deployments; empty = disabled
+backend_browser_port: 3000
+
 # AI Stack connection (co-located: use 127.0.0.1; WSL2: may need 10.255.255.254)
 backend_ai_stack_host: "127.0.0.1"
 backend_ai_stack_port: 8080
