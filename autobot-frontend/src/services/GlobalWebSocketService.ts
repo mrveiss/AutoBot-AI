@@ -13,6 +13,7 @@
 import { ref, reactive, type Ref } from 'vue'
 import { DEFAULT_CONFIG } from '@/config/defaults.js'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -137,14 +138,14 @@ class GlobalWebSocketService {
         window.location.hostname === 'localhost'
 
       if (isViteDevServer) {
-        const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+        const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
         logger.debug('Development WebSocket URL (via Vite proxy):', wsUrl)
         return wsUrl
       }
 
       // Issue #916: Use window.location.host so WebSocket goes through nginx proxy at .21
       // Nginx proxies /api/ws to backend with proxy_ssl_verify off (handles self-signed cert)
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+      const wsUrl = `${wsProtocol}//${window.location.host}${getApiBase()}/ws`
       logger.debug('Production WebSocket URL (via nginx proxy):', wsUrl)
       return wsUrl
     } catch (error: unknown) {
@@ -240,7 +241,7 @@ class GlobalWebSocketService {
     const timeoutId = setTimeout(() => controller.abort(), 2000)
 
     try {
-      const response = await fetch('/api/health', {
+      const response = await fetch(`${getApiBase()}/health`, {
         signal: controller.signal,
         cache: 'no-store'
       })
