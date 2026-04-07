@@ -634,10 +634,9 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            from pathlib import Path
-
             import aiofiles
 
+            from autobot_shared.security.path_validator import validate_relative_path
             from utils.encoding_utils import strip_ansi_codes
 
             # Strip ANSI escape codes before writing to transcript
@@ -646,9 +645,15 @@ class ConsolidatedTerminalWebSocket:
                 return
 
             transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-            transcript_path = Path("data/chats") / transcript_file
+            chats_base = PATH.DATA_DIR / "chats"
+            transcript_path = validate_relative_path(transcript_file, chats_base)
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_text)
+        except ValueError:
+            logger.error(
+                "Blocked path traversal attempt in transcript write for session %s",
+                self.conversation_id,
+            )
         except OSError as e:
             logger.error("Failed to write input to transcript (I/O error): %s", e)
         except Exception as e:
@@ -1175,10 +1180,9 @@ class ConsolidatedTerminalWebSocket:
         if not (self.terminal_logger and self.conversation_id and content):
             return
 
-        from pathlib import Path
-
         import aiofiles
 
+        from autobot_shared.security.path_validator import validate_relative_path
         from utils.encoding_utils import strip_ansi_codes
 
         try:
@@ -1187,11 +1191,16 @@ class ConsolidatedTerminalWebSocket:
             if not clean_content:
                 return
 
-            transcript_path = (
-                Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
-            )
+            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
+            chats_base = PATH.DATA_DIR / "chats"
+            transcript_path = validate_relative_path(transcript_file, chats_base)
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_content)
+        except ValueError:
+            logger.error(
+                "Blocked path traversal attempt in transcript log for session %s",
+                self.conversation_id,
+            )
         except OSError as e:
             logger.error("Failed to write terminal transcript (I/O error): %s", e)
         except Exception as e:
