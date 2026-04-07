@@ -209,6 +209,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const logger = createLogger('ThreatIntelligenceSettings')
@@ -238,8 +239,8 @@ async function refreshStatus() {
   loading.value = true
   try {
     const [statusResponse, statsResponse] = await Promise.all([
-      apiClient.get('/api/security/threat-intel/status'),
-      apiClient.get('/api/security/domain-security/stats')
+      apiClient.get(`${getApiBase()}/security/threat-intel/status`),
+      apiClient.get(`${getApiBase()}/security/domain-security/stats`)
     ])
 
     const statusData = (statusResponse as { data?: Record<string, unknown> }).data
