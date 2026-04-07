@@ -512,7 +512,10 @@ async function saveSettings(): Promise<void> {
       timeout_seconds: store.settings.timeout_seconds,
       auto_research_threshold: store.settings.auto_research_threshold,
       rate_limit_requests: store.settings.rate_limit_requests,
-      rate_limit_window: store.settings.rate_limit_window
+      rate_limit_window: store.settings.rate_limit_window,
+      store_results_in_kb: store.settings.store_results_in_kb,
+      anonymize_requests: store.settings.anonymize_requests,
+      filter_adult_content: store.settings.filter_adult_content
     })
     saveSuccess.value = true
     logger.info('Web research settings saved')
