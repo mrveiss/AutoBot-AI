@@ -1600,6 +1600,28 @@
       "label3d": "3D",
       "label2d": "2D",
       "noEntities3D": "هیچ موجودیتی برای نمایش وجود ندارد"
+    },
+    "vectorization": {
+      "actionVectorize": "Vectorize",
+      "actionRetry": "Retry",
+      "actionInProgress": "Processing...",
+      "actionAlreadyDone": "Vectorized",
+      "tooltipVectorize": "Vectorize this document",
+      "tooltipRetry": "Retry vectorization",
+      "tooltipInProgress": "Vectorization in progress",
+      "tooltipAlreadyDone": "Already vectorized"
+    },
+    "batchSelection": {
+      "selected": "{count} selected",
+      "eligible": "{count} eligible",
+      "vectorizeSelected": "Vectorize {count}",
+      "vectorizing": "Vectorizing...",
+      "noneEligible": "None eligible",
+      "vectorizeSelectedTooltip": "Vectorize {count} selected documents",
+      "vectorizingTooltip": "Vectorization in progress",
+      "noneEligibleTooltip": "All selected documents are already vectorized or pending",
+      "clearSelection": "Clear",
+      "clearSelectionTitle": "Clear selection"
     }
   }
 }
