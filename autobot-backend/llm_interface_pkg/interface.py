@@ -1407,12 +1407,30 @@ class LLMInterface:
         request_id = llm_params.pop("request_id", str(uuid.uuid4()))
         start_time = time.time()
 
+        # Issue #3860: resolve model_name from provider config so usage
+        # analytics records a non-empty value instead of "".
+        _, model_name = self._determine_provider_and_model("vllm")
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        # Issue #3858: check L1/L2 cache before hitting vLLM, mirroring the
+        # pattern used in _execute_chat_request.  Skip cache for streaming.
+        cache_key: str | None = None
+        if not llm_params.get("stream", False):
+            cached, cache_key = await self._check_cache(
+                messages, model_name, "vllm", request_id, start_time, **llm_params
+            )
+            if cached:
+                self._calculate_cache_hit_rate(cached)
+                return cached
+
         request = LLMRequest(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
+            messages=messages,
             provider="vllm",
+            model_name=model_name,
             request_id=request_id,
             **llm_params,
         )
@@ -1421,9 +1439,9 @@ class LLMInterface:
         response = await self._finalize_response(
             response,
             request.messages,
-            request.model_name or "",
+            model_name,
             "vllm",
-            None,
+            cache_key,
             request_id,
             start_time,
             session_id,
