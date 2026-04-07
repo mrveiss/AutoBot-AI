@@ -1659,7 +1659,8 @@
       "failedToUpdate": "Aktualisierung fehlgeschlagen",
       "markedFalsePositive": "Als falsch-positiv markiert",
       "failedToLoadReview": "Review konnte nicht geladen werden",
-      "reviewLoaded": "Review aus Verlauf geladen."
+      "reviewLoaded": "Review aus Verlauf geladen.",
+      "reviewNotAvailable": "Bewertungsdetails nicht verfügbar — Analyse erneut ausführen, um Ergebnisse zu sehen."
     },
     "performanceAnalysis": {
       "title": "Leistungsanalyse",

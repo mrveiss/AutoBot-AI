@@ -630,7 +630,10 @@ async function loadHistory() {
 }
 
 async function loadReview(reviewId: string) {
-  if (!reviewId) return
+  if (!reviewId) {
+    showToast(t('analytics.codeReview.reviewNotAvailable'), 'warning')
+    return
+  }
   loading.value = true
   try {
     const params = withSourceIdParams()
