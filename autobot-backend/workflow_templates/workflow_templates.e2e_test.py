@@ -10,7 +10,7 @@ sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
 from tests.test_helpers import get_test_backend_url
 
-from type_definitions import TaskComplexity
+from autobot_types import TaskComplexity
 from workflow_templates import TemplateCategory, workflow_template_manager
 
 
