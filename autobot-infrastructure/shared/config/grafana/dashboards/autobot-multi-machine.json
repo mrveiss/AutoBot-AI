@@ -1310,7 +1310,7 @@
         "y": 25
       },
       "id": 600,
-      "title": "Browser VM (172.16.168.25) - Web Automation",
+      "title": "Browser VM ($browser_vm_ip) - Web Automation",
       "type": "row"
     },
     {
@@ -1355,7 +1355,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"172.16.168.25:.*\"}[5m])) * 100)",
+          "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$browser_vm_ip:.*\"}[5m])) * 100)",
           "refId": "A"
         }
       ],
@@ -1403,7 +1403,7 @@
       },
       "targets": [
         {
-          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=~\"172.16.168.25:.*\"} / node_memory_MemTotal_bytes{instance=~\"172.16.168.25:.*\"})) * 100",
+          "expr": "(1 - (node_memory_MemAvailable_bytes{instance=~\"$browser_vm_ip:.*\"} / node_memory_MemTotal_bytes{instance=~\"$browser_vm_ip:.*\"})) * 100",
           "refId": "A"
         }
       ],
@@ -1450,7 +1450,7 @@
       },
       "targets": [
         {
-          "expr": "node_load1{instance=~\"172.16.168.25:.*\"}",
+          "expr": "node_load1{instance=~\"$browser_vm_ip:.*\"}",
           "refId": "A"
         }
       ],
@@ -1498,7 +1498,7 @@
       },
       "targets": [
         {
-          "expr": "(1 - (node_filesystem_avail_bytes{instance=~\"172.16.168.25:.*\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=~\"172.16.168.25:.*\",mountpoint=\"/\"})) * 100",
+          "expr": "(1 - (node_filesystem_avail_bytes{instance=~\"$browser_vm_ip:.*\",mountpoint=\"/\"} / node_filesystem_size_bytes{instance=~\"$browser_vm_ip:.*\",mountpoint=\"/\"})) * 100",
           "refId": "A"
         }
       ],
@@ -1548,7 +1548,7 @@
       },
       "targets": [
         {
-          "expr": "up{instance=~\"172.16.168.25:.*\"}",
+          "expr": "up{instance=~\"$browser_vm_ip:.*\"}",
           "legendFormat": "Node Exporter",
           "refId": "A"
         }
@@ -1561,7 +1561,28 @@
   "schemaVersion": 38,
   "tags": ["autobot", "multi-machine", "infrastructure"],
   "templating": {
-    "list": []
+    "list": [
+    {
+      "current": {
+        "selected": false,
+        "text": "172.16.168.25",
+        "value": "172.16.168.25"
+      },
+      "hide": 0,
+      "label": "Browser VM IP",
+      "name": "browser_vm_ip",
+      "options": [
+        {
+          "selected": true,
+          "text": "172.16.168.25",
+          "value": "172.16.168.25"
+        }
+      ],
+      "query": "172.16.168.25",
+      "skipUrlSync": false,
+      "type": "custom"
+    }
+    ]
   },
   "time": {
     "from": "now-5m",
