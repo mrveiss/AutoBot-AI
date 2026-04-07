@@ -222,6 +222,23 @@
       ansible.builtin.pause:
         seconds: 5
 
+    # Post-restart smoke test (#3687): only runs when autobot-backend was
+    # among the deployed roles to avoid false failures on frontend-only updates.
+    - name: "Backend | Wait for backend to accept connections (#3687)"
+      ansible.builtin.wait_for:
+        host: "{{ hostvars[node_id]['ansible_host'] | default('127.0.0.1') }}"
+        port: 8001
+        timeout: 60
+      when: "'autobot-backend' in (hostvars['localhost']['resolved_role_names'] | default([]))"
+
+    - name: "Backend | Verify /api/health returns 200 (#3687)"
+      ansible.builtin.uri:
+        url: "http://{{ hostvars[node_id]['ansible_host'] | default('127.0.0.1') }}:8001/api/health"
+        status_code: 200
+      retries: 3
+      delay: 5
+      when: "'autobot-backend' in (hostvars['localhost']['resolved_role_names'] | default([]))"
+
     - name: "Mark node as UP_TO_DATE in SLM DB"
       ansible.builtin.uri:
         url: "{{ slm_admin_url }}/api/code-sync/nodes/{{ node_id }}/mark-synced"

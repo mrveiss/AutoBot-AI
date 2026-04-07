@@ -557,3 +557,25 @@
     direction: in
   when: _backend_ufw_check.rc == 0
   tags: ['backend', 'ufw']
+
+# ==========================================================
+# Post-deploy smoke test (#3687)
+# systemd reports active (running) even when all uvicorn
+# workers crash-loop because the master process stays alive.
+# Probing the TCP port and /api/health catches that case and
+# fails the play before the deploy is marked complete.
+# ==========================================================
+- name: "Backend | Wait for backend to accept connections (#3687)"
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ backend_health_check_port }}"
+    timeout: "{{ backend_health_check_timeout }}"
+  tags: ['backend', 'smoke-test']
+
+- name: "Backend | Verify /api/health returns 200 (#3687)"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ backend_health_check_port }}/api/health"
+    status_code: 200
+  retries: 3
+  delay: 5
+  tags: ['backend', 'smoke-test']
