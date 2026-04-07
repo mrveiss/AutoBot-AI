@@ -19,6 +19,7 @@ from .models import MemoryEntry, TaskExecutionRecord
 from .monitor import MemoryMonitor
 from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 from .storage import GeneralStorage, TaskStorage
+from .working_memory import WorkingMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,9 @@ class UnifiedMemoryManager:
         # Database initialization flag and lock (thread-safe lazy initialization)
         self._initialized = False
         self._init_lock = asyncio.Lock()
+
+        # Session-scoped short-term memory (Redis-backed, eagerly created)
+        self._working_memory: WorkingMemoryService = WorkingMemoryService()
 
         logger.info("Unified Memory Manager created at %s", self.db_path)
 
@@ -545,6 +549,15 @@ class UnifiedMemoryManager:
             return self._store_cached(data)
         else:
             raise ValueError(f"Unknown storage strategy: {strategy}")
+
+    # ========================================================================
+    # SESSION-SCOPED WORKING MEMORY (Redis, TTL-backed)
+    # ========================================================================
+
+    @property
+    def working_memory(self) -> WorkingMemoryService:
+        """Return the WorkingMemoryService instance."""
+        return self._working_memory
 
     # ========================================================================
     # STATISTICS & MONITORING
