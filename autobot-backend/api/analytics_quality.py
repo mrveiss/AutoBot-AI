@@ -13,6 +13,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
@@ -20,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
-from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
+from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -167,12 +168,27 @@ def calculate_health_score(metrics: dict[str, float]) -> HealthScore:
     )
 
 
-async def get_quality_data_from_storage() -> dict[str, Any]:
+async def get_quality_data_from_storage(
+    source_root: Optional["Path"] = None,
+) -> dict[str, Any]:
     """Retrieve quality data from Redis or ChromaDB.
 
     Issue #541: Now calculates real quality metrics from actual analysis data
     instead of returning static demo values.
+    Issue #3441: Accepts optional source_root to scope results to a project
+    directory.  When provided, all problem file paths are checked to confirm
+    they reside under source_root before contributing to metrics.  The Redis
+    cache key is namespaced by the resolved path so per-project results are
+    stored independently.
+
+    Args:
+        source_root: Absolute path to the project clone directory, or None
+                     for global (unscoped) results.
     """
+    # Derive a stable cache key suffix from the resolved path (if scoped)
+    cache_suffix = f":{source_root}" if source_root else ""
+    cache_key = f"code_quality:latest{cache_suffix}"
+
     # First try Redis cache for pre-calculated metrics
     try:
         from autobot_shared.redis_client import get_redis_client
@@ -180,7 +196,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
         redis = get_redis_client(async_client=False, database="analytics")
         if redis:
             # Issue #361 - avoid blocking
-            data = await asyncio.to_thread(redis.get, "code_quality:latest")
+            data = await asyncio.to_thread(redis.get, cache_key)
             if data:
                 cached = json.loads(data)
                 # Only use cache if it has real data (not demo)
@@ -190,7 +206,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
         logger.warning("Failed to get quality data from Redis: %s", e)
 
     # Calculate real metrics from ChromaDB (Issue #541, #543)
-    real_data = await calculate_real_quality_metrics()
+    real_data = await calculate_real_quality_metrics(source_root=source_root)
     if real_data:
         # Cache the calculated data
         try:
@@ -201,7 +217,7 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
                 real_data["source"] = "calculated"
                 await asyncio.to_thread(
                     redis.setex,
-                    "code_quality:latest",
+                    cache_key,
                     300,  # 5 minute cache
                     json.dumps(real_data),
                 )
@@ -218,9 +234,18 @@ async def get_quality_data_from_storage() -> dict[str, Any]:
 # ============================================================================
 
 
-async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
-    """
-    Fetch problems and stats from ChromaDB.
+async def _get_problems_from_chromadb(
+    source_root: Optional["Path"] = None,
+) -> tuple[list[dict], dict[str, Any]]:
+    """Fetch problems and stats from ChromaDB.
+
+    Issue #3441: When source_root is provided, only problems whose file_path
+    resolves to a path under source_root are included.  This scopes quality
+    metrics to the selected project's files only.
+
+    Args:
+        source_root: Absolute path used to filter problem file paths.  Pass
+                     None to return all problems regardless of location.
 
     Returns:
         Tuple of (problems list, codebase stats dict)
@@ -242,11 +267,19 @@ async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
         )
         if results and results.get("metadatas"):
             for metadata in results["metadatas"]:
+                file_path = metadata.get("file_path", "")
+                # Issue #3441: filter to source_root when provided
+                if source_root is not None and file_path:
+                    candidate = (source_root / file_path).resolve()
+                    try:
+                        candidate.relative_to(source_root.resolve())
+                    except ValueError:
+                        continue
                 problems.append(
                     {
                         "type": metadata.get("problem_type", "unknown"),
                         "severity": metadata.get("severity", "low"),
-                        "file_path": metadata.get("file_path", ""),
+                        "file_path": file_path,
                         "description": metadata.get("description", ""),
                     }
                 )
@@ -259,7 +292,11 @@ async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
         if stats_results and stats_results.get("metadatas"):
             stats = stats_results["metadatas"][0]
 
-        logger.debug("Fetched %d problems from ChromaDB", len(problems))
+        logger.debug(
+            "Fetched %d problems from ChromaDB (source_root=%s)",
+            len(problems),
+            source_root,
+        )
     except Exception as e:
         logger.warning("Failed to fetch problems from ChromaDB: %s", e)
 
@@ -643,18 +680,25 @@ def _calculate_all_quality_scores(
     return metrics
 
 
-async def calculate_real_quality_metrics() -> Optional[dict[str, Any]]:
-    """
-    Calculate real quality metrics from ChromaDB analysis data.
+async def calculate_real_quality_metrics(
+    source_root: Optional["Path"] = None,
+) -> Optional[dict[str, Any]]:
+    """Calculate real quality metrics from ChromaDB analysis data.
 
     Issue #541: This replaces static demo values with actual calculated metrics.
     Issue #620: Refactored to use helper functions.
+    Issue #3441: Accepts optional source_root to scope metrics to a project
+    directory.  When provided, only problems under source_root contribute to
+    the returned scores.
+
+    Args:
+        source_root: Absolute path used to filter problems.  None means global.
 
     Returns:
         Dict with calculated quality metrics, or None if no data available
     """
-    # Fetch data from ChromaDB
-    problems, stats = await _get_problems_from_chromadb()
+    # Fetch data from ChromaDB (scoped to source_root when provided)
+    problems, stats = await _get_problems_from_chromadb(source_root=source_root)
 
     # Issue #543: If no data, return None - endpoints will return no_data status
     if not problems and not stats:
@@ -931,10 +975,11 @@ async def get_health_score(
     Returns overall health score, grade, and recommendations.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -969,10 +1014,11 @@ async def get_quality_metrics(
     Returns detailed metrics with grades and trends.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1028,10 +1074,11 @@ async def get_pattern_distribution(
     Returns pattern types with counts, percentages, and severity.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1079,10 +1126,11 @@ async def get_complexity_metrics(
     Returns cyclomatic and cognitive complexity metrics.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1196,10 +1244,11 @@ async def get_quality_trends(
     Returns historical data for trend analysis.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     if data is None:
         return _no_data_response()
@@ -1228,10 +1277,11 @@ async def get_quality_snapshot(
     Returns all metrics, patterns, and statistics in one response.
     Issue #543: Returns no_data status when no analysis data available.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    data = await get_quality_data_from_storage()
+    source_root = await _resolve_source_root_or_404(source_id)
+    data = await get_quality_data_from_storage(source_root=source_root)
 
     # Issue #543: Handle no data case
     if data is None:
@@ -1300,10 +1350,11 @@ async def drill_down_category(
     Issue #543: Now queries real ChromaDB data instead of demo data.
     Issue #665: Refactored using helper functions for clarity.
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, results are scoped to that
+    project's clone directory so only files under source_root contribute.
     """
-    await _resolve_source_or_404(source_id)
-    problems, stats = await _get_problems_from_chromadb()
+    source_root = await _resolve_source_root_or_404(source_id)
+    problems, stats = await _get_problems_from_chromadb(source_root=source_root)
 
     if not problems:
         return _no_data_response("No analysis data for category drill-down.")

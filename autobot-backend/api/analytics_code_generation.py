@@ -882,13 +882,27 @@ class CodeGenerationEngine:
         except Exception as e:
             logger.error("Failed to track stats: %s", e)
 
-    async def get_stats(self) -> Dict[str, Any]:
-        """Get code generation statistics"""
+    async def get_stats(self, source_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get code generation statistics.
+
+        Issue #3441: When source_id is supplied, the Redis stats key is
+        namespaced as ``autobot:code_generation:stats:{source_id}:{date}``
+        so per-project generation activity is tracked independently from the
+        global counter.
+
+        Args:
+            source_id: Project source identifier used to scope the stats key,
+                       or None for global statistics.
+        """
         try:
             redis = await self._get_redis()
 
             today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-            stats_key = f"{self._stats_key}:{today}"
+            # Issue #3441: scope key to source when provided
+            key_prefix = (
+                f"{self._stats_key}:{source_id}" if source_id else self._stats_key
+            )
+            stats_key = f"{key_prefix}:{today}"
 
             stats_data = await redis.hgetall(stats_key)
 
@@ -1089,14 +1103,17 @@ async def get_stats(
     """
     Get code generation statistics.
 
-    Returns usage statistics for generation and refactoring.
+    Returns usage statistics for generation and refactoring scoped to the
+    selected project when source_id is supplied.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is supplied, statistics are read from and
+    written to a per-project Redis key so each project's generation activity
+    is tracked independently.
     """
     await _resolve_source_or_404(source_id)
     engine = get_code_generation_engine()
-    return await engine.get_stats()
+    return await engine.get_stats(source_id=source_id)
 
 
 @router.get("/refactoring-types")

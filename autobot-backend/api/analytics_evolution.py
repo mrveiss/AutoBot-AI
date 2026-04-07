@@ -38,11 +38,31 @@ router = APIRouter(
 # Performance optimization: O(1) lookup for aggregation granularities (Issue #326)
 AGGREGATION_GRANULARITIES = {"weekly", "monthly"}
 
-# Redis key prefixes for evolution data
+# Redis key prefixes for evolution data (global, unscoped)
 EVOLUTION_PREFIX = "evolution:"
 SNAPSHOT_PREFIX = f"{EVOLUTION_PREFIX}snapshot:"
 METRICS_PREFIX = f"{EVOLUTION_PREFIX}metrics:"
 PATTERNS_PREFIX = f"{EVOLUTION_PREFIX}patterns:"
+
+
+def _build_evolution_prefixes(source_id: Optional[str]) -> tuple[str, str, str]:
+    """Return (evolution_prefix, snapshot_prefix, patterns_prefix) scoped to source_id.
+
+    Issue #3441: When source_id is provided, all Redis keys are namespaced as
+    ``evolution:{source_id}:*`` so snapshots and patterns are stored and
+    retrieved per-project rather than globally.
+
+    Args:
+        source_id: Project source identifier, or None for global data.
+
+    Returns:
+        Three-tuple of (evolution_prefix, snapshot_prefix, patterns_prefix).
+    """
+    if source_id:
+        ev = f"evolution:{source_id}:"
+    else:
+        ev = EVOLUTION_PREFIX
+    return ev, f"{ev}snapshot:", f"{ev}patterns:"
 
 
 def _decode_redis_value(value) -> str:
@@ -96,32 +116,55 @@ def _get_pattern_snapshots(redis_client, pattern_keys: list) -> list:
 
 def _extract_pattern_types(all_keys: list) -> set:
     """Extract unique pattern types from Redis keys (Issue #315)."""
+    return _extract_pattern_types_from_prefix(all_keys, PATTERNS_PREFIX)
+
+
+def _extract_pattern_types_from_prefix(all_keys: list, patterns_prefix: str) -> set:
+    """Extract unique pattern types from Redis keys using an arbitrary prefix.
+
+    Issue #3441: Generalised form of _extract_pattern_types that accepts the
+    prefix string so callers can work with per-project namespaces.
+
+    Args:
+        all_keys: Raw Redis key list (bytes or str).
+        patterns_prefix: The prefix to strip before splitting on ``:``.
+
+    Returns:
+        Set of pattern type strings found after stripping the prefix.
+    """
     pattern_types = set()
     for key in all_keys:
         key = _decode_redis_value(key)
-        parts = key.replace(PATTERNS_PREFIX, "").split(":")
+        parts = key.replace(patterns_prefix, "").split(":")
         if len(parts) >= 1 and parts[0] != "timeline":
             pattern_types.add(parts[0])
     return pattern_types
 
 
-def _fetch_timeline_snapshots(redis_client, start_ts: float, end_ts: float) -> list:
-    """
-    Fetch timeline snapshots from Redis within a date range.
+def _fetch_timeline_snapshots(
+    redis_client,
+    start_ts: float,
+    end_ts: float,
+    evolution_prefix: str = EVOLUTION_PREFIX,
+) -> list:
+    """Fetch timeline snapshots from Redis within a date range.
 
     Issue #281: Extracted from get_evolution_timeline to reduce nesting.
     Issue #480: Uses pipeline batching to avoid N+1 query pattern.
+    Issue #3441: Accepts evolution_prefix so callers can scope to a project
+    namespace (``evolution:{source_id}:``).
 
     Args:
         redis_client: Redis client instance
         start_ts: Start timestamp
         end_ts: End timestamp
+        evolution_prefix: Redis key prefix for the target namespace.
 
     Returns:
         List of parsed snapshot dictionaries
     """
     snapshot_keys = redis_client.zrangebyscore(
-        f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts
+        f"{evolution_prefix}timeline", start_ts, end_ts
     )
 
     if not snapshot_keys:
@@ -344,9 +387,12 @@ async def get_evolution_timeline(
     """Get code evolution timeline (Issue #398: refactored).
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is provided, timeline snapshots are read from
+    the ``evolution:{source_id}:`` key namespace so only that project's
+    history is returned.
     """
     await _resolve_source_or_404(source_id)
+    evolution_prefix, _snap, _pat = _build_evolution_prefixes(source_id)
     redis_client = get_evolution_redis()
     requested_metrics = metrics.split(",")
 
@@ -363,7 +409,7 @@ async def get_evolution_timeline(
     try:
         start_ts, end_ts = _parse_date_range(start_date, end_date)
         timeline_data = await asyncio.to_thread(
-            _fetch_timeline_snapshots, redis_client, start_ts, end_ts
+            _fetch_timeline_snapshots, redis_client, start_ts, end_ts, evolution_prefix
         )
 
         if granularity in AGGREGATION_GRANULARITIES and len(timeline_data) > 1:
@@ -410,9 +456,12 @@ async def get_pattern_evolution(
     Tracks adoption/removal of patterns like god_class, long_method, etc.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is provided, pattern snapshots are read from
+    the ``evolution:{source_id}:patterns:`` namespace so only that project's
+    pattern history is returned.
     """
     await _resolve_source_or_404(source_id)
+    _ev_prefix, _snap_prefix, patterns_prefix = _build_evolution_prefixes(source_id)
     redis_client = get_evolution_redis()
 
     if not redis_client:
@@ -430,16 +479,18 @@ async def get_pattern_evolution(
             result = {}
             if pattern_type:
                 pattern_keys = (
-                    redis_client.keys(f"{PATTERNS_PREFIX}{pattern_type}:*") or []
+                    redis_client.keys(f"{patterns_prefix}{pattern_type}:*") or []
                 )
                 result[pattern_type] = _get_pattern_snapshots(
                     redis_client, pattern_keys
                 )
             else:
-                all_keys = redis_client.keys(f"{PATTERNS_PREFIX}*")
-                pattern_types_list = _extract_pattern_types(all_keys)
+                all_keys = redis_client.keys(f"{patterns_prefix}*")
+                pattern_types_list = _extract_pattern_types_from_prefix(
+                    all_keys, patterns_prefix
+                )
                 for ptype in pattern_types_list:
-                    ptype_keys = redis_client.keys(f"{PATTERNS_PREFIX}{ptype}:2*")
+                    ptype_keys = redis_client.keys(f"{patterns_prefix}{ptype}:2*")
                     result[ptype] = _get_pattern_snapshots(redis_client, ptype_keys)
             return result
 
@@ -466,10 +517,17 @@ async def get_pattern_evolution(
 
 
 def _fetch_trend_snapshots_sync(
-    redis_client, start_ts: float, end_ts: float
+    redis_client,
+    start_ts: float,
+    end_ts: float,
+    evolution_prefix: str = EVOLUTION_PREFIX,
 ) -> List[Dict]:
-    """Fetch snapshots from Redis within timestamp range (Issue #398, #480: pipeline batching)."""
-    keys = redis_client.zrangebyscore(f"{EVOLUTION_PREFIX}timeline", start_ts, end_ts)
+    """Fetch snapshots from Redis within timestamp range (Issue #398, #480: pipeline batching).
+
+    Issue #3441: Accepts evolution_prefix so callers can scope queries to a
+    project namespace (``evolution:{source_id}:``).
+    """
+    keys = redis_client.zrangebyscore(f"{evolution_prefix}timeline", start_ts, end_ts)
 
     if not keys:
         return []
@@ -565,9 +623,12 @@ async def get_quality_trends(
     """Get quality trend analysis (Issue #398: refactored).
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: When source_id is provided, snapshots are read from the
+    ``evolution:{source_id}:`` namespace so trends reflect only that
+    project's history.
     """
     await _resolve_source_or_404(source_id)
+    evolution_prefix, _snap, _pat = _build_evolution_prefixes(source_id)
     redis_client = get_evolution_redis()
 
     if not redis_client:
@@ -583,7 +644,11 @@ async def get_quality_trends(
         start_ts = (datetime.now(tz=timezone.utc) - timedelta(days=days)).timestamp()
         end_ts = datetime.now(tz=timezone.utc).timestamp()
         snapshots = await asyncio.to_thread(
-            _fetch_trend_snapshots_sync, redis_client, start_ts, end_ts
+            _fetch_trend_snapshots_sync,
+            redis_client,
+            start_ts,
+            end_ts,
+            evolution_prefix,
         )
 
         if len(snapshots) < 2:
