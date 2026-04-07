@@ -27,6 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from utils.async_initializable import AsyncInitializable
+
 # FAISS import with graceful fallback
 try:
     import faiss
@@ -766,7 +768,7 @@ class GPUVectorIndex:
         }
 
 
-class HybridVectorSearch:
+class HybridVectorSearch(AsyncInitializable):
     """
     Hybrid vector search combining FAISS-GPU and ChromaDB.
 
@@ -779,6 +781,8 @@ class HybridVectorSearch:
     - Fast similarity computation
     - Batch search optimization
     - Large-scale vector operations
+
+    Issue #3390: Migrated to AsyncInitializable lazy-init pattern.
     """
 
     def __init__(
@@ -786,23 +790,21 @@ class HybridVectorSearch:
         chromadb_client: Optional[Any] = None,
         config: Optional[VectorSearchConfig] = None,
     ):
-        """Initialize hybrid search."""
+        """Initialize hybrid search; FAISS/GPU init is deferred to _initialize_impl."""
+        super().__init__(component_name="hybrid_vector_search")
         self.chromadb = chromadb_client
         self.config = config or VectorSearchConfig()
         self.gpu_index = GPUVectorIndex(self.config)
-        self._initialized = False
 
-    async def initialize(self) -> bool:
-        """Initialize both backends."""
-        # Initialize FAISS GPU index
+    async def _initialize_impl(self) -> bool:
+        """Initialize FAISS GPU/CPU index backend."""
         faiss_ok = await self.gpu_index.initialize()
 
         if faiss_ok:
-            logger.info("✅ Hybrid Vector Search initialized with FAISS-GPU")
+            logger.info("Hybrid Vector Search initialized with FAISS-GPU")
         else:
-            logger.info("✅ Hybrid Vector Search initialized (ChromaDB fallback)")
+            logger.info("Hybrid Vector Search initialized (ChromaDB fallback)")
 
-        self._initialized = True
         return True
 
     async def add_documents(
@@ -1132,6 +1134,9 @@ async def get_hybrid_vector_search(
     """
     Get or create the singleton hybrid vector search instance.
 
+    Issue #3390: Outer lock guards singleton creation; inner AsyncInitializable
+    lock handles idempotent initialization (double-checked locking).
+
     Args:
         chromadb_client: Optional ChromaDB client (uses existing if not provided)
         config: Optional configuration
@@ -1147,8 +1152,8 @@ async def get_hybrid_vector_search(
                 _hybrid_search = HybridVectorSearch(
                     chromadb_client=chromadb_client, config=config
                 )
-                await _hybrid_search.initialize()
 
+    await _hybrid_search.initialize()
     return _hybrid_search
 
 
