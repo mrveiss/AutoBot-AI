@@ -21,8 +21,10 @@ from user_management.schemas.user import (
     UserListResponse,
     UserResponse,
     UserUpdate,
+    PasswordChange,
 )
 from user_management.services import TenantContext, UserService
+from user_management.services.user_service import InvalidCredentialsError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/autobot-users", tags=["autobot-users"])
@@ -133,6 +135,32 @@ async def update_autobot_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
         ) from e
+
+
+@router.post("/{user_id}/change-password", status_code=status.HTTP_200_OK)
+async def change_autobot_user_password(
+    user_id: uuid.UUID,
+    payload: PasswordChange,
+    current_user: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_autobot_db),
+) -> dict:
+    """Reset an AutoBot user's password (admin action — no current password required)."""
+    logger.info("Admin password reset for AutoBot user: %s", user_id)
+    context = TenantContext(is_platform_admin=True)
+    user_service = UserService(db, context)
+
+    try:
+        await user_service.change_password(
+            user_id=user_id,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+            require_current=False,
+        )
+        return {"message": "Password updated successfully"}
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from e
+    except InvalidCredentialsError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

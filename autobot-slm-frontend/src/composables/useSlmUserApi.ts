@@ -131,6 +131,10 @@ export function useSlmUserApi() {
     await client.delete(`/slm-users/${userId}`)
   }
 
+  async function changeSlmUserPassword(userId: string, newPassword: string): Promise<void> {
+    await client.post(`/slm-users/${userId}/change-password`, { new_password: newPassword })
+  }
+
   // ===========================================================================
   // AutoBot Application Users (remote AutoBot database)
   // ===========================================================================
@@ -149,6 +153,10 @@ export function useSlmUserApi() {
 
   async function deleteAutobotUser(userId: string): Promise<void> {
     await client.delete(`/autobot-users/${userId}`)
+  }
+
+  async function changeAutobotUserPassword(userId: string, newPassword: string): Promise<void> {
+    await client.post(`/autobot-users/${userId}/change-password`, { new_password: newPassword })
   }
 
   // ===========================================================================
@@ -191,10 +199,12 @@ export function useSlmUserApi() {
     getSlmUsers,
     createSlmUser,
     deleteSlmUser,
+    changeSlmUserPassword,
     // AutoBot Users
     getAutobotUsers,
     createAutobotUser,
     deleteAutobotUser,
+    changeAutobotUserPassword,
     // Teams
     getTeams,
     createTeam,
