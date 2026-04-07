@@ -119,6 +119,7 @@ class ResourceFactory:
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),
             )
+            await chm.initialize()
 
             # Cache in app state if available
             if request is not None:

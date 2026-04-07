@@ -138,6 +138,7 @@ async def _init_chat_history_manager(app: FastAPI) -> None:
     logger.info("✅ [ 30%] Chat History: Initializing chat history manager...")
     try:
         chat_history_manager = ChatHistoryManager()
+        await chat_history_manager.initialize()
         app.state.chat_history_manager = chat_history_manager
         await update_app_state("chat_history_manager", chat_history_manager)
         logger.info("✅ [ 30%] Chat History: Manager initialized successfully")
