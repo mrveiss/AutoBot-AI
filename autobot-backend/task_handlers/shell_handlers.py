@@ -160,10 +160,11 @@ class ExecuteShellCommandHandler(TaskHandler):
                 "shell_used": use_shell,
             },
         )
-        result = task_error("Command failed.", error=error)
-        result["output"] = output
-        result["returncode"] = returncode
-        return result
+        return task_error(
+            "Command failed.",
+            error=error,
+            extra={"output": output, "returncode": returncode},
+        )
 
     def _build_result_and_log(
         self,

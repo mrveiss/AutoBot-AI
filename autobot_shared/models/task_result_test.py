@@ -179,3 +179,98 @@ def test_returned_dict_is_mutable():
     # Second call is independent
     d2 = task_error("Command failed.", error="stderr")
     assert "output" not in d2
+
+
+# ---------------------------------------------------------------------------
+# extra field — issue #3564
+# ---------------------------------------------------------------------------
+
+
+def test_to_dict_merges_extra_keys():
+    """extra keys must appear as top-level entries in the serialised dict."""
+    result = TaskResult(
+        status="error",
+        message="fail",
+        error="stderr",
+        extra={"output": "stdout text", "returncode": 1},
+    )
+    d = result.to_dict()
+    assert d["output"] == "stdout text"
+    assert d["returncode"] == 1
+
+
+def test_to_dict_extra_key_does_not_appear():
+    """The 'extra' key itself must never be present in the output dict."""
+    result = TaskResult(status="success", message="ok", extra={"foo": "bar"})
+    d = result.to_dict()
+    assert "extra" not in d
+
+
+def test_to_dict_none_fixed_field_still_omitted_with_extra():
+    """None-omission for fixed fields must still apply when extra is provided."""
+    result = TaskResult(
+        status="error",
+        message="fail",
+        extra={"returncode": 2},
+    )
+    d = result.to_dict()
+    assert "error" not in d
+    assert "data" not in d
+    assert d["returncode"] == 2
+
+
+def test_to_dict_empty_extra_has_no_effect():
+    result = TaskResult(status="success", message="ok", extra={})
+    d = result.to_dict()
+    assert set(d.keys()) == {"status", "message"}
+
+
+def test_task_error_with_extra():
+    """task_error builder must pass extra through to the serialised dict."""
+    d = task_error(
+        "Command failed.",
+        error="stderr",
+        extra={"output": "stdout", "returncode": 1},
+    )
+    assert d["status"] == "error"
+    assert d["error"] == "stderr"
+    assert d["output"] == "stdout"
+    assert d["returncode"] == 1
+    assert "extra" not in d
+
+
+def test_task_success_with_extra():
+    d = task_success("ok", data={"count": 1}, extra={"elapsed_ms": 42})
+    assert d["status"] == "success"
+    assert d["data"] == {"count": 1}
+    assert d["elapsed_ms"] == 42
+    assert "extra" not in d
+
+
+def test_task_pending_with_extra():
+    d = task_pending("waiting", extra={"queue_position": 3})
+    assert d["status"] == "pending"
+    assert d["queue_position"] == 3
+    assert "extra" not in d
+
+
+def test_task_pending_approval_with_extra():
+    d = task_pending_approval(extra={"approval_id": "abc"})
+    assert d["status"] == "pending_approval"
+    assert d["approval_id"] == "abc"
+    assert "extra" not in d
+
+
+def test_extra_none_is_treated_as_empty():
+    """Passing extra=None must produce the same result as omitting extra."""
+    d1 = task_error("fail", extra=None)
+    d2 = task_error("fail")
+    assert d1 == d2
+
+
+def test_extra_keys_independent_across_calls():
+    """extra dicts from separate calls must not share state."""
+    d1 = task_error("fail", extra={"output": "a"})
+    d2 = task_error("fail", extra={"output": "b"})
+    assert d1["output"] == "a"
+    assert d2["output"] == "b"
