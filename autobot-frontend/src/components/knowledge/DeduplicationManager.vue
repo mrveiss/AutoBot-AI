@@ -188,6 +188,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -259,7 +260,7 @@ const scanForIssues = async () => {
   try {
     // Scan for duplicates (dry run)
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const dupResponse = await apiClient.post('/api/knowledge-maintenance/deduplicate?dry_run=true')
+    const dupResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=true`)
     const dupData = await parseApiResponse(dupResponse)
 
     if (dupData.status === 'success') {
@@ -270,7 +271,7 @@ const scanForIssues = async () => {
 
     // Scan for orphans
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const orphanResponse = await apiClient.get('/api/knowledge-maintenance/orphans')
+    const orphanResponse = await apiClient.get(`${getApiBase()}/knowledge-maintenance/orphans`)
     const orphanData = await parseApiResponse(orphanResponse)
 
     if (orphanData.status === 'success') {
@@ -299,7 +300,7 @@ const cleanupDuplicates = async () => {
 
   try {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await apiClient.post('/api/knowledge-maintenance/deduplicate?dry_run=false')
+    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/deduplicate?dry_run=false`)
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
@@ -328,7 +329,7 @@ const cleanupOrphans = async () => {
 
   try {
     // Issue #552: Fixed path - backend uses /api/knowledge-maintenance/*
-    const response = await apiClient.delete('/api/knowledge-maintenance/orphans?dry_run=false')
+    const response = await apiClient.delete(`${getApiBase()}/knowledge-maintenance/orphans?dry_run=false`)
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {

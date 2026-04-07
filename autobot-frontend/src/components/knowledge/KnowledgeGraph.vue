@@ -370,6 +370,7 @@ import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
@@ -868,11 +869,11 @@ async function refreshGraph(): Promise<void> {
 
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
-    const unifiedResponse = await apiClient.get('/api/knowledge_base/unified/graph?max_facts=100&include_categories=true')
+    const unifiedResponse = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=100&include_categories=true`)
     const unifiedData = await parseApiResponse(unifiedResponse)
 
     // Also fetch memory entities for backward compatibility
-    const memoryResponse = await apiClient.get('/api/memory/entities/all')
+    const memoryResponse = await apiClient.get(`${getApiBase()}/memory/entities/all`)
     const memoryData = await parseApiResponse(memoryResponse)
 
     // Merge entities from both sources
@@ -933,7 +934,7 @@ async function fetchMemoryRelations(memoryEntities: Entity[]): Promise<void> {
 
   const relationResults = await Promise.allSettled(
     memoryEntities.map(async (entity) => {
-      const response = await apiClient.get(`/api/memory/entities/${entity.id}/relations`)
+      const response = await apiClient.get(`${getApiBase()}/memory/entities/${entity.id}/relations`)
       const parsedResponse = await parseApiResponse(response)
       return { entity, parsedResponse }
     })
@@ -990,7 +991,7 @@ async function createEntity(): Promise<void> {
       .map(o => o.trim())
       .filter(o => o.length > 0)
 
-    const response = await apiClient.post('/api/memory/entities', {
+    const response = await apiClient.post(`${getApiBase()}/memory/entities`, {
       name: newEntity.value.name,
       entity_type: newEntity.value.type,
       observations

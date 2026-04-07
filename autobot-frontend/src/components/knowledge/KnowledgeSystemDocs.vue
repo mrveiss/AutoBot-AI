@@ -19,6 +19,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -105,7 +106,7 @@ async function loadDocCategories(): Promise<void> {
   error.value = null
 
   try {
-    const response = await apiClient.get('/api/knowledge_base/system-docs/categories')
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/system-docs/categories`)
     const data = await parseApiResponse(response)
 
     if (data?.categories) {
@@ -129,7 +130,7 @@ async function loadCategoryDocs(category: DocCategory): Promise<void> {
 
   try {
     const response = await apiClient.get(
-      `/api/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
+      `${getApiBase()}/knowledge_base/system-docs/category/${encodeURIComponent(category.path)}`
     )
     const data = await parseApiResponse(response)
 
@@ -155,7 +156,7 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
 
   try {
     const response = await apiClient.get(
-      `/api/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
+      `${getApiBase()}/knowledge_base/system-docs/${encodeURIComponent(doc.id)}`
     )
     const data = await parseApiResponse(response)
 
