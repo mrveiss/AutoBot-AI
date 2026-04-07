@@ -511,6 +511,19 @@
   no_log: true
   tags: ['slm', 'service']
 
+# ==========================================================
+# Admin CLI (#3691)
+# ==========================================================
+- name: "SLM | Install autobot-admin CLI"
+  ansible.builtin.copy:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
+    dest: /usr/local/bin/autobot-admin
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  tags: ['slm', 'admin-cli']
+
 - name: "SLM | Display deployment summary"
   ansible.builtin.debug:
     msg:
