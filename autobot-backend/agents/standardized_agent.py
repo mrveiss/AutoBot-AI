@@ -361,6 +361,10 @@ class StandardizedAgent(BaseAgent):
         )
 
     @abstractmethod
+    def _get_system_prompt(self) -> str:
+        """Return the system prompt for this agent - must be implemented by subclasses."""
+
+    @abstractmethod
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities - must be implemented by subclasses"""
 
@@ -454,6 +458,10 @@ class ExampleMigratedAgent(StandardizedAgent):
                 ),
             }
         )
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return "You are a helpful assistant."
 
     def get_capabilities(self) -> List[str]:
         """Return list of supported agent capabilities."""

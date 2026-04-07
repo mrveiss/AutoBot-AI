@@ -108,6 +108,14 @@ class ClassificationAgent(StandardizedAgent):
             "context_analysis": result.context_analysis,
         }
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are an intelligent workflow classification assistant. "
+            "Analyze user requests to determine intent, complexity, and the appropriate "
+            "agents or workflow steps required to fulfill them."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()
