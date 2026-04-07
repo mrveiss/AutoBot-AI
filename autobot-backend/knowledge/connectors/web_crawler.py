@@ -160,7 +160,9 @@ class WebCrawlerConnector(AbstractConnector):
 
             return get_service_url("playwright-vnc")
         except Exception:
-            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:3000"
+            from constants.network_constants import NetworkConstants
+
+            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '')}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
     def _find_url_for_source_id(self, source_id: str) -> Optional[str]:
         """Return the URL that corresponds to *source_id* from seed list."""
