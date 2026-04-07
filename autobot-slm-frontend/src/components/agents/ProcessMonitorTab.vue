@@ -11,6 +11,7 @@
 
 import { computed, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { getBackendUrl } from '@/config/ssot-config'
 
 interface ProcessRun {
   id: string
@@ -62,7 +63,7 @@ async function fetchProcesses() {
   selectedProcess.value = null
   fullLog.value = null
   try {
-    let url = `/autobot-api/agents/${agentId.value}/processes?limit=50`
+    let url = `${getBackendUrl()}/agents/${agentId.value}/processes?limit=50`
     if (statusFilter.value) url += `&status=${statusFilter.value}`
     const res = await fetch(url, { headers: headers.value })
     if (!res.ok) throw new Error(`Failed to load processes: ${res.status}`)
@@ -79,7 +80,7 @@ async function fetchProcesses() {
 async function fetchFullLog(processId: string) {
   fullLogLoading.value = true
   try {
-    const res = await fetch(`/autobot-api/processes/${processId}/logs`, {
+    const res = await fetch(`${getBackendUrl()}/processes/${processId}/logs`, {
       headers: headers.value,
     })
     fullLog.value = res.ok ? await res.text() : 'Failed to load log'
@@ -104,7 +105,7 @@ function streamLogs(processId: string) {
   isStreaming.value = true
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   const ws = new WebSocket(
-    `${proto}//${location.host}/autobot-api/processes/${processId}/stream`,
+    `${proto}//${location.host}${getBackendUrl()}/processes/${processId}/stream`,
   )
   streamSocket.value = ws
   ws.onmessage = (event) => {
@@ -129,7 +130,7 @@ function streamLogs(processId: string) {
 
 async function signalProcess(processId: string, sig: string) {
   try {
-    const res = await fetch(`/autobot-api/processes/${processId}/signal`, {
+    const res = await fetch(`${getBackendUrl()}/processes/${processId}/signal`, {
       method: 'POST',
       headers: headers.value,
       body: JSON.stringify({ signal: sig }),
@@ -156,7 +157,7 @@ async function spawnProcess() {
         : [],
       timeout_seconds: spawnForm.value.timeout_seconds,
     }
-    const res = await fetch('/autobot-api/processes/spawn', {
+    const res = await fetch(`${getBackendUrl()}/processes/spawn`, {
       method: 'POST',
       headers: headers.value,
       body: JSON.stringify(payload),
