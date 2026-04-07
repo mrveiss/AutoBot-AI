@@ -1770,13 +1770,14 @@ before summarizing.
         self,
         original_message: str,
         execution_history: List[Dict[str, Any]],
-        system_prompt: str,
         consecutive_invalid_tool_calls: int = 0,
     ) -> str:
         """Build continuation prompt with execution results for multi-step tasks.
 
         Issue #651: Enhanced prompt structure for better multi-step task handling.
         Issue #2310: Passes consecutive_invalid_tool_calls to inject tools reminder.
+        Issue #3784: system_prompt removed — sent via Ollama system field to avoid
+        double-injection on continuation iterations.
         """
         history_parts = [
             self._format_execution_step(i, result)
@@ -1788,10 +1789,7 @@ before summarizing.
             original_message, steps_completed, consecutive_invalid_tool_calls
         )
 
-        return f"""{system_prompt}
-
----
-## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
+        return f"""## MULTI-STEP TASK CONTINUATION (Step {steps_completed + 1})
 
 **Commands Already Executed ({steps_completed} step(s) completed so far):**
 {history_text}
@@ -2495,7 +2493,6 @@ before summarizing.
         current_prompt = self._build_continuation_prompt(
             ctx.message,
             execution_history,
-            ctx.system_prompt,
             ctx.consecutive_invalid_tool_calls,
         )
         logger.info(
