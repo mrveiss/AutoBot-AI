@@ -666,7 +666,7 @@ function savePatternPrefs(): void {
 async function applyPatternPrefs(): Promise<void> {
   // Issue #638: Load preferences from backend first, fallback to localStorage
   try {
-    const response = await api.get<ApiDataResponse>(`${getApiBase()}/analytics/code-review/patterns/preferences`);
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/patterns/preferences`);
     const prefs = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns;
 
     if (prefs) {
@@ -702,7 +702,7 @@ async function togglePattern(pattern: Pattern): Promise<void> {
   const newState = !pattern.enabled;
 
   try {
-    await api.post(`${getApiBase()}/analytics/code-review/patterns/toggle`, {
+    await api.post(`${getApiBase()}/code-review/patterns/toggle`, {
       pattern_id: pattern.id,
       enabled: newState
     });
