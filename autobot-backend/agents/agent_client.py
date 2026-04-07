@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from constants.threshold_constants import exponential_backoff_delay
 from utils.service_registry import get_service_url
 
 from .base_agent import (
@@ -330,14 +331,14 @@ class AgentClient:
 
                 # Wait before retry
                 if attempt < self.config.retry_attempts - 1:
-                    await asyncio.sleep(2**attempt)  # Exponential backoff
+                    await asyncio.sleep(exponential_backoff_delay(attempt))
 
                 last_error = response.error
 
             except Exception as e:
                 last_error = str(e)
                 if attempt < self.config.retry_attempts - 1:
-                    await asyncio.sleep(2**attempt)
+                    await asyncio.sleep(exponential_backoff_delay(attempt))
 
         # All retries failed
         return AgentResponse(
