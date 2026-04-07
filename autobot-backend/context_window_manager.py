@@ -44,6 +44,15 @@ class ContextWindowManager:
             with open(path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
+            # If models is a list it's the LLM provider registry (PR #3257 schema),
+            # not the context-window config dict this class expects.
+            if not isinstance(config.get("models"), dict):
+                logger.warning(
+                    "Config %s uses list-format model registry; using context-window defaults",
+                    config_path,
+                )
+                return self._get_default_config()
+
             logger.info("✅ Loaded config for %s models", len(config["models"]))
             return config
         except Exception as e:
