@@ -17,6 +17,8 @@ from typing import Dict, List
 
 import aiofiles
 
+from autobot_shared.ssot_config import config
+
 from .models import WorkflowSession
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ class ConversationHandlerMixin:
         key = self._get_conversation_key(session_id)
         try:
             history_json = await asyncio.wait_for(
-                self.redis_client.get(key), timeout=2.0
+                self.redis_client.get(key), timeout=config.timeout.redis_op
             )
             if history_json:
                 logger.debug(
@@ -50,7 +52,8 @@ class ConversationHandlerMixin:
                 return json.loads(history_json)
         except asyncio.TimeoutError:
             logger.warning(
-                "Redis get timeout after 2s for session %s, falling back to file",
+                "Redis get timeout after %.1fs for session %s, falling back to file",
+                config.timeout.redis_op,
                 session_id,
             )
         return None

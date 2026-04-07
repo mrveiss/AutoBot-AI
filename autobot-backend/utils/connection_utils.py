@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import aiohttp
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
 from config import config as global_config_manager
 from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
@@ -63,7 +64,7 @@ class ConnectionTester:
             try:
                 ollama_endpoint = get_ollama_url()
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
-                timeout = aiohttp.ClientTimeout(total=3)
+                timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.health_check)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(ollama_check_url) as response:
                         if response.status == 200:
@@ -169,7 +170,7 @@ class ConnectionTester:
             "prompt": "Test connection - respond with 'OK'",
             "stream": False,
         }
-        gen_timeout = aiohttp.ClientTimeout(total=30)
+        gen_timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.llm)
         async with aiohttp.ClientSession(timeout=gen_timeout) as session:
             async with session.post(endpoint, json=test_payload) as resp:
                 if resp.status == 200:
@@ -208,7 +209,7 @@ class ConnectionTester:
             )
 
             check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(check_url) as response:
@@ -328,7 +329,7 @@ class ConnectionTester:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
         ollama_host = provider_config.get("host", get_ollama_url())
         tags_url = f"{ollama_host}/api/tags"
-        timeout = aiohttp.ClientTimeout(total=5)
+        timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.connect)
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(tags_url) as response:
@@ -523,7 +524,7 @@ class ModelManager:
             ollama_host = ollama_config.get("host", get_ollama_url())
             ollama_url = f"{ollama_host}/api/tags"
 
-            timeout = aiohttp.ClientTimeout(total=10)
+            timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(ollama_url) as response:
                     if response.status != 200:

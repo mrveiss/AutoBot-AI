@@ -16,9 +16,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
-_TEST_TIMEOUT = 15.0
+# Issue #3803: named constant from SSOT — override via AUTOBOT_TIMEOUT_SKILL_TEST
+_TEST_TIMEOUT: float = config.timeout.skill_test
 
 
 @dataclass

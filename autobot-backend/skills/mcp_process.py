@@ -18,10 +18,13 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
-STARTUP_TIMEOUT = 10.0
-CALL_TIMEOUT = 30.0
+# Issue #3803: named constants from SSOT — override via AUTOBOT_TIMEOUT_MCP_STARTUP / _MCP_CALL
+STARTUP_TIMEOUT: float = config.timeout.mcp_startup
+CALL_TIMEOUT: float = config.timeout.mcp_call
 
 
 @dataclass
@@ -160,7 +163,7 @@ class MCPProcessManager:
             return
         try:
             entry.proc.terminate()
-            await asyncio.wait_for(entry.proc.wait(), timeout=5.0)
+            await asyncio.wait_for(entry.proc.wait(), timeout=config.timeout.subprocess_short)
         except asyncio.TimeoutError:
             try:
                 entry.proc.kill()

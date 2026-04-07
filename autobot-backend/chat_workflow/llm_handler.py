@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConstants
 from dependencies import get_config
@@ -646,7 +647,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_key = f"chat:session:{session_id}"
         try:
             session_data_json = await asyncio.wait_for(
-                self.redis_client.get(session_key), timeout=2.0
+                self.redis_client.get(session_key), timeout=_ssot_config.timeout.redis_op
             )
             if not session_data_json:
                 return None

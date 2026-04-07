@@ -437,10 +437,13 @@ class LLMConfig(BaseSettings):
 
 class TimeoutConfig(BaseSettings):
     """
-    Timeout configuration (in milliseconds for HTTP, seconds for LLM).
+    Timeout configuration — all values in seconds unless noted.
 
-    Note: Frontend uses milliseconds, backend uses seconds for LLM.
-    The config stores values as they appear in .env for consistency.
+    Fields are env-overridable via AUTOBOT_TIMEOUT_* variables.  The
+    existing AUTOBOT_API_TIMEOUT / AUTOBOT_LLM_TIMEOUT / … aliases are
+    preserved for backward compatibility.
+
+    Issue: #3803 — replace 20+ magic timeout numbers with named constants.
     """
 
     model_config = SettingsConfigDict(
@@ -449,34 +452,104 @@ class TimeoutConfig(BaseSettings):
         extra="ignore",
     )
 
-    # API timeouts (milliseconds)
+    # ------------------------------------------------------------------ #
+    # HTTP / REST clients (seconds)                                        #
+    # ------------------------------------------------------------------ #
+
+    # Generic HTTP API call (used by most aiohttp/httpx sessions)
+    http: float = Field(default=10.0, alias="AUTOBOT_TIMEOUT_HTTP")
+
+    # Health / liveness probes — must be short to avoid blocking startup
+    health_check: float = Field(default=3.0, alias="AUTOBOT_HEALTH_CHECK_TIMEOUT")
+
+    # Connectivity probes (quick: just confirm a socket can be reached)
+    connect: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_CONNECT")
+
+    # ------------------------------------------------------------------ #
+    # LLM / AI inference (seconds)                                         #
+    # ------------------------------------------------------------------ #
+
+    # Synchronous / short LLM call (classification, routing, embedding)
+    llm: float = Field(default=30.0, alias="AUTOBOT_LLM_TIMEOUT")
+
+    # Long-running LLM call or agent loop step (research, code analysis)
+    llm_long: float = Field(default=120.0, alias="AUTOBOT_TIMEOUT_LLM_LONG")
+
+    # ------------------------------------------------------------------ #
+    # Redis operations (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # Individual Redis command (get/set/pipeline)
+    redis_op: float = Field(default=2.0, alias="AUTOBOT_TIMEOUT_REDIS_OP")
+
+    # ------------------------------------------------------------------ #
+    # Subprocess / shell commands (seconds)                                #
+    # ------------------------------------------------------------------ #
+
+    # Quick subprocess (health query, lspci, xrandr, …)
+    subprocess_short: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT")
+
+    # Standard subprocess (git operations, rsync small payload)
+    subprocess: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS")
+
+    # Long-running subprocess (Ansible playbook, large rsync, deploy)
+    subprocess_long: float = Field(default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG")
+
+    # Very long subprocess (full deployment pipeline, TLS provisioning)
+    subprocess_deploy: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY")
+
+    # ------------------------------------------------------------------ #
+    # MCP / skill processes (seconds)                                      #
+    # ------------------------------------------------------------------ #
+
+    # Time allowed for an MCP server subprocess to start up
+    mcp_startup: float = Field(default=10.0, alias="AUTOBOT_TIMEOUT_MCP_STARTUP")
+
+    # Time allowed for a single MCP tool call round-trip
+    mcp_call: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_MCP_CALL")
+
+    # ------------------------------------------------------------------ #
+    # WebSocket (seconds)                                                  #
+    # ------------------------------------------------------------------ #
+
+    websocket: float = Field(default=30.0, alias="AUTOBOT_WEBSOCKET_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Background tasks (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # Default cap for a background task before it is considered hung
+    background_task: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK")
+
+    # ------------------------------------------------------------------ #
+    # Skill / code validation (seconds)                                    #
+    # ------------------------------------------------------------------ #
+
+    # Sandbox execution timeout for skill package tests
+    skill_test: float = Field(default=15.0, alias="AUTOBOT_TIMEOUT_SKILL_TEST")
+
+    # ------------------------------------------------------------------ #
+    # Legacy / frontend aliases (milliseconds)                             #
+    # ------------------------------------------------------------------ #
+
+    # Kept for backward compat — frontend reads this as ms
     api: int = Field(default=10000, alias="AUTOBOT_API_TIMEOUT")
     api_retry_attempts: int = Field(default=3, alias="AUTOBOT_API_RETRY_ATTEMPTS")
     api_retry_delay: int = Field(default=1000, alias="AUTOBOT_API_RETRY_DELAY")
 
-    # LLM timeout (seconds)
-    llm: int = Field(default=30, alias="AUTOBOT_LLM_TIMEOUT")
-
-    # Health check timeout (seconds)
-    health_check: int = Field(default=3, alias="AUTOBOT_HEALTH_CHECK_TIMEOUT")
-
-    # WebSocket timeout (seconds)
-    websocket: int = Field(default=30, alias="AUTOBOT_WEBSOCKET_TIMEOUT")
+    # ------------------------------------------------------------------ #
+    # Convenience properties                                               #
+    # ------------------------------------------------------------------ #
 
     @property
     def api_seconds(self) -> float:
-        """Get API timeout in seconds."""
+        """Get legacy api timeout in seconds (milliseconds / 1000)."""
         return self.api / 1000.0
-
-    @property
-    def http(self) -> int:
-        """Alias for api timeout (milliseconds)."""
-        return self.api
 
     @property
     def http_seconds(self) -> float:
-        """Get HTTP timeout in seconds."""
-        return self.api / 1000.0
+        """Alias — returns http field directly (already in seconds)."""
+        return self.http
 
 
 class RedisConfig(BaseSettings):

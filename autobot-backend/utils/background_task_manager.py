@@ -32,13 +32,14 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
 from autobot_shared.redis_management.cache_wrapper import RedisCache
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
-# Defaults
+# Defaults — Issue #3803: named constant from SSOT (AUTOBOT_TIMEOUT_BACKGROUND_TASK)
 _DEFAULT_TTL = TTL_24_HOURS
-_DEFAULT_TIMEOUT = 600  # 10 minutes
+_DEFAULT_TIMEOUT: float = config.timeout.background_task
 _DEFAULT_MAX_CONCURRENT = 1
 
 
