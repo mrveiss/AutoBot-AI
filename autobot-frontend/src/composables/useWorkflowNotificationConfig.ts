@@ -9,7 +9,7 @@
  */
 
 import { ref } from 'vue';
-import { getBackendUrl, getApiBase } from '@/config/ssot-config';
+import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
@@ -77,7 +77,7 @@ async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
-  const url = `${getBackendUrl()}${endpoint}`;
+  const url = endpoint;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
