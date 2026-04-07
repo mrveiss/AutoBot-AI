@@ -1,13 +1,14 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import datetime
 import json
 import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import aiofiles
 
@@ -725,7 +726,50 @@ async def get_update_status(
         raise_server_error("UPDATES_0004", "Error checking update status")
 
 
-# ==================== Config Sync Endpoint (Issue #3398) ====================
+# ==================== Config Sync Endpoint (Issue #3398, #3881) ====================
+
+# Allowlist of permitted top-level keys for /api/settings/sync.
+# Any key not present here is rejected with HTTP 400 to prevent arbitrary
+# key injection into the config store (Issue #3881).
+_SYNC_ALLOWED_TOP_LEVEL_KEYS: frozenset = frozenset(
+    {
+        "backend",
+        "celery",
+        "chat",
+        "data",
+        "deployment",
+        "hardware",
+        "logging",
+        "memory",
+        "multimodal",
+        "network",
+        "npu",
+        "optimization",
+        "redis",
+        "security",
+        "system",
+        "task_transport",
+        "ui",
+    }
+)
+
+# Maximum nesting depth accepted in the incoming settings payload (Issue #3881).
+_SYNC_MAX_DEPTH: int = 5
+
+# Maximum raw byte size of the incoming settings payload (Issue #3881).
+_SYNC_MAX_PAYLOAD_BYTES: int = 256 * 1024  # 256 KiB
+
+
+def _exceeds_depth(obj: Any, current_depth: int = 0) -> bool:
+    """Return True when *obj* exceeds ``_SYNC_MAX_DEPTH`` nesting levels.
+
+    Only recurses into dict values; non-dict values always return False.
+    """
+    if current_depth > _SYNC_MAX_DEPTH:
+        return True
+    if isinstance(obj, dict):
+        return any(_exceeds_depth(v, current_depth + 1) for v in obj.values())
+    return False
 
 
 class ConfigSyncRequest(BaseModel):
@@ -778,10 +822,13 @@ async def _atomic_write_json(target: Path, data: dict) -> None:
     try:
         async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
             await fh.write(json.dumps(data, indent=2, ensure_ascii=False))
-        os.replace(tmp_path, str(target))
+        # Issue #3882: os.replace is a blocking syscall — offload to thread pool
+        # so we do not stall the event loop under high concurrency.
+        await asyncio.to_thread(os.replace, tmp_path, str(target))
     except Exception:
         try:
-            os.unlink(tmp_path)
+            # Issue #3882: os.unlink is also blocking — offload to thread pool.
+            await asyncio.to_thread(os.unlink, tmp_path)
         except OSError:
             pass
         raise
@@ -818,6 +865,40 @@ async def sync_config(
 
     if not request.settings:
         return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
+
+    # Issue #3881: Enforce max payload size before any further processing.
+    try:
+        raw_size = len(json.dumps(request.settings).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="settings payload is not JSON-serialisable",
+        ) from exc
+    if raw_size > _SYNC_MAX_PAYLOAD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"settings payload is too large ({raw_size} bytes); "
+                f"limit is {_SYNC_MAX_PAYLOAD_BYTES} bytes"
+            ),
+        )
+
+    # Issue #3881: Reject unknown top-level keys to block arbitrary key injection.
+    unknown_keys = set(request.settings) - _SYNC_ALLOWED_TOP_LEVEL_KEYS
+    if unknown_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown top-level config key(s): {sorted(unknown_keys)}",
+        )
+
+    # Issue #3881: Reject payloads that exceed the maximum permitted nesting depth.
+    if _exceeds_depth(request.settings):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"settings payload exceeds maximum nesting depth of {_SYNC_MAX_DEPTH}"
+            ),
+        )
 
     before_config: dict = ConfigService.get_full_config()
     merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
