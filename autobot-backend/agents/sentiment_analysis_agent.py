@@ -12,6 +12,8 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
+from memory.agent_diary import AgentDiaryService
+
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
@@ -113,7 +115,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
                 top_p=LLMDefaults.DEFAULT_TOP_P,
             )
             response_text = self._extract_content(response)
-            return {
+            result = {
                 "status": "success",
                 "response": response_text,
                 "response_text": response_text,
@@ -123,6 +125,15 @@ class SentimentAnalysisAgent(StandardizedAgent):
                     response.get("usage", {}) if isinstance(response, dict) else {}
                 ),
             }
+            session_id = (context or {}).get("session_id", "unknown")
+            diary_entry = (
+                f"SESSION:{session_id}|ACTION:sentiment_analysis"
+                f"|OUTCOME:{result['status']}|TOPIC:sentiment"
+            )
+            await AgentDiaryService().write(
+                self.AGENT_ID, session_id, diary_entry, topic="sentiment"
+            )
+            return result
         except Exception as e:
             logger.error("Sentiment Analysis Agent error: %s", e)
             return {
