@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Optional, Set
 from autobot_shared.logging_manager import get_logger
 from config import config_manager
 from constants.threshold_constants import LLMDefaults, TimingConstants
-from conversation import ConversationManager
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
 
@@ -208,7 +207,6 @@ class ConsolidatedOrchestrator:
 
         self.llm_interface = LLMInterface()
         self.memory_manager = LongTermMemoryManager()
-        self.conversation_manager = ConversationManager()
         self.agent_manager = AgentManager()
 
     def _init_task_state(self) -> None:
