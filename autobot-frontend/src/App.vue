@@ -369,7 +369,9 @@
         class="h-full"
       >
         <!-- Use router-view for all content to enable proper sub-routing -->
-        <router-view class="h-full" />
+        <ErrorBoundary>
+          <router-view class="h-full" />
+        </ErrorBoundary>
       </UnifiedLoadingView>
     </main>
   </div>
@@ -401,6 +403,7 @@ import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import ProfileModal from '@/components/profile/ProfileModal.vue';
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue';
 
 const logger = createLogger('App');
 
@@ -414,6 +417,7 @@ export default {
     HostSelectionDialog,
     UnifiedLoadingView,
     ProfileModal,
+    ErrorBoundary,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
   },
 
