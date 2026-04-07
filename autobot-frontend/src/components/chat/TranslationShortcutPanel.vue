@@ -94,6 +94,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -157,7 +158,7 @@ const translateText = async () => {
   translationError.value = ''
 
   try {
-    const result = await apiClient.post('/api/translate', {
+    const result = await apiClient.post(`${getApiBase()}/translate`, {
       text: textToTranslate.value.trim(),
       target_language: targetLanguage.value,
     })
@@ -187,7 +188,7 @@ const detectLanguage = async () => {
   translationError.value = ''
 
   try {
-    const result = await apiClient.post('/api/detect-language', {
+    const result = await apiClient.post(`${getApiBase()}/detect-language`, {
       text: textToTranslate.value.trim(),
     })
 

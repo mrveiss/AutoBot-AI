@@ -309,6 +309,7 @@ import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
@@ -845,7 +846,7 @@ const uploadFile = async (upload: any, file: File): Promise<void> => {
 
       // Send request
       const sessionId = store.currentSessionId || 'default'
-      xhr.open('POST', `/api/conversation-files/conversation/${sessionId}/upload`)
+      xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
       xhr.send(formData)
     })
   } catch (error) {
