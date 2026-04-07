@@ -276,7 +276,6 @@
             v-for="review in reviewHistory"
             :key="review.id"
             class="history-item"
-            @click="loadReview(review.id)"
           >
             <div class="history-info">
               <span class="history-path">{{ review.path }}</span>
@@ -625,19 +624,6 @@ async function loadHistory() {
   } catch (error) {
     logger.warn('Failed to load review history:', error)
     reviewHistory.value = []
-  }
-}
-
-async function loadReview(reviewId: string) {
-  try {
-    // Issue #701: Added type assertion for response
-    const response = await api.get<ApiDataResponse>(`${getApiBase()}/code-review/review/${reviewId}`)
-    issues.value = (response as ApiDataResponse).issues || (response as ApiDataResponse).data?.issues || []
-    selectedPath.value = (response as ApiDataResponse).path || (response as ApiDataResponse).data?.path || ''
-    hasAnalyzed.value = true
-  } catch (error) {
-    logger.error('Failed to load review:', error)
-    showToast(t('analytics.codeReview.failedToLoadReview'), 'error')
   }
 }
 
