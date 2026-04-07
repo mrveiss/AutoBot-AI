@@ -8,6 +8,8 @@ import sys
 
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
+from tests.test_helpers import get_test_backend_url
+
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 
@@ -192,7 +194,7 @@ async def test_metrics_api_integration():
             for endpoint in endpoints_to_test:
                 try:
                     async with session.get(
-                        f"http://localhost:8001{endpoint}"
+                        get_test_backend_url() + endpoint
                     ) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print

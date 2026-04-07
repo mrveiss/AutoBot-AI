@@ -9,6 +9,8 @@ import time
 
 import aiohttp
 
+from tests.test_helpers import get_test_backend_url
+
 
 async def test_workflow_api():
     """Test the workflow API endpoints."""
@@ -30,7 +32,7 @@ async def test_workflow_api():
             }
 
             async with session.post(
-                "http://localhost:8001/api/workflow/execute", json=execution_request
+                get_test_backend_url() + "/api/workflow/execute", json=execution_request
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -47,7 +49,7 @@ async def test_workflow_api():
                         print("-" * 40)  # noqa: print
 
                         async with session.get(
-                            f"http://localhost:8001/api/workflow/workflow/{workflow_id}/status"
+                            get_test_backend_url() + f"/api/workflow/workflow/{workflow_id}/status"
                         ) as status_response:
                             if status_response.status == 200:
                                 status = await status_response.json()
@@ -76,7 +78,7 @@ async def test_workflow_api():
         except aiohttp.ClientError as e:
             print(f"❌ Connection error: {e}")  # noqa: print
             print(  # noqa: print
-                "   Make sure AutoBot backend is running on http://localhost:8001"
+                f"   Make sure AutoBot backend is running on {get_test_backend_url()}"
             )  # noqa: print
 
 
