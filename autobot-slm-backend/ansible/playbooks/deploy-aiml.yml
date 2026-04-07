@@ -6,6 +6,14 @@
 # Deploys ChromaDB vector database and AI Stack API (agent router)
 ---
 
+# -------------------------------------------------------------------
+# Pre-flight: Sync code_source from GitHub before roles run (#3604)
+# -------------------------------------------------------------------
+- name: "Pre-flight: Sync code_source"
+  import_playbook: pre-flight-code-sync.yml
+  tags: ['pre-flight']
+
+
 - name: "Deploy AI/ML Infrastructure (ChromaDB + AI Stack API)"
   hosts: aiml
   become: true

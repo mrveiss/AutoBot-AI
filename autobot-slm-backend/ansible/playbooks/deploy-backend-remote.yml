@@ -1,4 +1,12 @@
 ---
+
+# -------------------------------------------------------------------
+# Pre-flight: Sync code_source from GitHub before roles run (#3604)
+# -------------------------------------------------------------------
+- name: "Pre-flight: Sync code_source"
+  import_playbook: pre-flight-code-sync.yml
+  tags: ['pre-flight']
+
 # Deploy Backend Services to Main Machine (Remote from SLM)
 # Issue #856: Python 3.12 deployment with pyenv
 #
