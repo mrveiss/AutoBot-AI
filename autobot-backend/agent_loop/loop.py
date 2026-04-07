@@ -42,6 +42,10 @@ from tools.parallel import ParallelToolExecutor
 
 logger = logging.getLogger(__name__)
 
+# Sentinel key injected into tool_results when the repetition-halt guard fires.
+# Presence of this key in tool_results lets _execute_iteration_phases detect
+# a halt without inspecting the error string.  Issue #3877.
+_HALT_SENTINEL = "__repetition_halt__"
 
 # =============================================================================
 # Agent Loop
@@ -293,6 +297,21 @@ class AgentLoop:
         # Phase 3: Execute Tools
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
         tool_results = await self._execute_tools(tools_to_execute)
+
+        # Issue #3877 / #3859: detect repetition-halt via sentinel key.
+        # When halted: do not add any rejected tools to tools_executed and
+        # stop iterating immediately so the LLM receives the error but the
+        # loop does not re-propose the same tools indefinitely.
+        if tool_results.pop(_HALT_SENTINEL, False):
+            # Issue #3862: keep should_continue=False so the loop exits, but
+            # surface the halt errors as tool_results so the LLM can adapt.
+            # Issue #3859: tools_executed stays empty — no tool actually ran.
+            result.tools_executed = []
+            result.tool_results = tool_results
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
+
         result.tools_executed = [
             t.get("tool_name", "unknown") for t in tools_to_execute
         ]
@@ -423,15 +442,23 @@ class AgentLoop:
         # Issue #3255: Halt before execution if identical call repeated too often
         repeated_tool = self._check_tool_call_repetition(tools)
         if repeated_tool is not None:
-            return {
-                repeated_tool: {
-                    "error": (
-                        f"Halted: repetitive tool call detected for '{repeated_tool}' "
-                        f"(exceeded max_identical_tool_calls="
-                        f"{self.config.max_identical_tool_calls})"
-                    )
-                }
+            halt_msg = (
+                f"Halted: repetitive tool call detected for '{repeated_tool}' "
+                f"(exceeded max_identical_tool_calls="
+                f"{self.config.max_identical_tool_calls})"
+            )
+            # Issue #3877: include ALL tools in halt results so _should_iterate
+            # sees every tool from the batch as having an error result.
+            # Issue #3859: do NOT record any of these in tools_executed — the
+            # sentinel key lets _execute_iteration_phases skip add_tool() calls
+            # and set should_continue=False without calling _should_iterate.
+            halt_results: dict[str, Any] = {
+                _HALT_SENTINEL: True,
             }
+            for tool in tools:
+                t_name = tool.get("tool_name", "unknown")
+                halt_results[t_name] = {"error": halt_msg}
+            return halt_results
 
         # Check if we need to think before certain tools
         await self._think_before_tools(tools)
@@ -630,13 +657,20 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         two calls with identical intent produce the same hash regardless of
         dict-insertion order.
 
-        Issue #3255.
+        Issue #3255, #3868, #3874.
         """
         tool_name = tool.get("tool_name", "")
         args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+        # Issue #3874: preserve non-dict arg identity; {} would alias all
+        # non-dict calls to the same bucket
         if not isinstance(args, dict):
-            args = {}
-        canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True)
+            args = {"_raw": str(args)}
+        try:
+            # Issue #3868: default=str handles datetime, bytes, custom objects
+            canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
+        except Exception:
+            # Absolute fallback — should never be reached with default=str
+            canonical = repr({"n": tool_name, "a": args})
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _check_tool_call_repetition(
