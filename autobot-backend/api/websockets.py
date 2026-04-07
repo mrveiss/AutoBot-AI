@@ -17,6 +17,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from auth_middleware import authenticate_websocket
 from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 logger = logging.getLogger(__name__)
@@ -400,6 +401,12 @@ _npu_events_lock = threading.Lock()
 @router.websocket("/ws-test")
 async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("Test WebSocket connected successfully")
@@ -503,7 +510,14 @@ async def websocket_endpoint(websocket: WebSocket):
     WebSocket endpoint for real-time event stream between backend and frontend.
 
     Issue #665: Refactored to use extracted helper methods.
+    Issue #2818: Authenticate before accepting connection.
     """
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("WebSocket connected from client: %s", websocket.client)
@@ -555,7 +569,15 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     - Worker added/updated/removed events
     - Worker metrics updates
     - Initial worker list on connection
+
+    Issue #2818: Authenticate before accepting connection.
     """
+    # Issue #2818: Authenticate before accepting connection
+    user = await authenticate_websocket(websocket)
+    if user is None:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
     try:
         await websocket.accept()
         logger.info("NPU Worker WebSocket connected from client: %s", websocket.client)

@@ -708,3 +708,54 @@ def check_admin_permission(request: Request) -> bool:
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True
+
+
+async def authenticate_websocket(websocket) -> Optional[dict]:
+    """Authenticate a WebSocket connection.
+
+    Checks for JWT token in query params. Falls back to synthetic admin
+    in single-user mode (mirrors get_user_from_request single-user bypass).
+    Returns None if unauthenticated.
+
+    Issue #2818: Add auth before websocket.accept() to reject unauthenticated
+    connections at the protocol handshake level.
+
+    Args:
+        websocket: FastAPI WebSocket instance.
+
+    Returns:
+        User dict or None if authentication fails.
+    """
+    # Check query param token
+    token = websocket.query_params.get("token")
+    if token:
+        try:
+            auth = AuthenticationMiddleware()
+            token_data = auth.verify_jwt_token(token)
+            if token_data:
+                return {
+                    "username": token_data["username"],
+                    "role": token_data["role"],
+                    "email": token_data.get("email", ""),
+                    "auth_method": "jwt_websocket",
+                }
+        except Exception:
+            logger.warning("WebSocket JWT authentication failed")
+            return None
+
+    # Single-user mode bypass — same logic as get_user_from_request
+    try:
+        from user_management.config import DeploymentMode, get_deployment_config
+
+        deployment_config = get_deployment_config()
+        if deployment_config.mode == DeploymentMode.SINGLE_USER:
+            return {
+                "username": "admin",
+                "role": "admin",
+                "email": "admin@autobot.local",
+                "source": "single_user_mode",
+            }
+    except Exception:
+        logger.debug("Suppressed exception in single-user mode check", exc_info=True)
+
+    return None

@@ -327,6 +327,34 @@ async def _init_skills(app: FastAPI) -> None:
         )
 
 
+async def _init_builtin_extensions(app: FastAPI) -> None:
+    """Register built-in extensions (permission enforcement, etc.).
+
+    Issue #3009: Wires PermissionEnforcementExtension into the extension
+    manager so all tool executions are subject to role-based permission checks.
+    Non-critical: a failure logs a warning but does not block startup.
+    """
+    try:
+        from extensions.builtin.permission_enforcement import (
+            PermissionEnforcementExtension,
+        )
+        from extensions.manager import ExtensionManager
+
+        manager = getattr(app.state, "extension_manager", None)
+        if manager is None:
+            manager = ExtensionManager()
+            app.state.extension_manager = manager
+
+        manager.register(PermissionEnforcementExtension())
+        logger.info(
+            "Built-in extensions registered (permission_enforcement)"
+        )
+    except Exception as ext_error:
+        logger.warning(
+            "Built-in extension registration failed (non-critical): %s", ext_error
+        )
+
+
 async def initialize_critical_services(app: FastAPI):
     """
     Phase 1: Initialize critical services (BLOCKING).
@@ -386,9 +414,11 @@ async def initialize_critical_services(app: FastAPI):
 
         # --- Tier 3: non-critical services (parallel) ---
         # Issue #743: Register caches with CacheCoordinator for memory optimization
+        # Issue #3009: Register built-in extensions (permission enforcement)
         await asyncio.gather(
             _init_cache_coordinator(),
             _init_skills(app),
+            _init_builtin_extensions(app),
         )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")

@@ -92,6 +92,7 @@ class WorkflowExecutor:
         release_agent_callback: Callable[[str], None],
         update_performance_callback: Callable[[str, bool, float], None],
         workflow_fetcher: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
+        memory: Optional[WorkflowMemory] = None,
     ):
         """
         Initialize the workflow executor.
@@ -106,12 +107,18 @@ class WorkflowExecutor:
                                          used to load child workflows for sub-workflow
                                          composition (Issue #2143).  When None, sub-workflow
                                          steps raise ``ValueError`` at execution time.
+            memory:                      Optional shared WorkflowMemory for multi-agent
+                                         collaboration state (Issue #3009).  When provided,
+                                         parallel step agents can read and write a common
+                                         KV store scoped to this workflow execution.
         """
         self.agent_registry = agent_registry
         self.agent_interactions = agent_interactions
         self._reserve_agent = reserve_agent_callback
         self._release_agent = release_agent_callback
         self._update_performance = update_performance_callback
+        # Issue #3009: shared KV memory for multi-agent collaboration
+        self.memory = memory
         # Issue #2141: variable resolver for ${steps…} piping between steps
         self._variable_resolver = VariableResolver()
         # Issue #2154: checkpoint manager and error handler
