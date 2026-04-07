@@ -424,6 +424,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { useRoute } from 'vue-router';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
+import { getApiBase } from '@/config/ssot-config';
 import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('CodeQualityDashboard');
@@ -648,7 +649,7 @@ async function loadHealthScore(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/health-score'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/health-score`));
     if (response.ok) {
       healthScore.value = await response.json();
     } else {
@@ -664,7 +665,7 @@ async function loadMetrics(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/metrics'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/metrics`));
     if (response.ok) {
       metrics.value = await response.json();
     } else {
@@ -681,7 +682,7 @@ async function loadPatterns(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/patterns'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/patterns`));
     if (response.ok) {
       patterns.value = await response.json();
     } else {
@@ -698,7 +699,7 @@ async function loadComplexity(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/complexity?top_n=5'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/complexity?top_n=5`));
     if (response.ok) {
       complexity.value = await response.json();
     } else {
@@ -714,7 +715,7 @@ async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`/api/quality/trends?period=${selectedPeriod.value}`));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/trends?period=${selectedPeriod.value}`));
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
@@ -732,7 +733,7 @@ async function loadSnapshot(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId('/api/quality/snapshot'));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/snapshot`));
     if (response.ok) {
       const data = await response.json();
       codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
@@ -750,7 +751,7 @@ async function drillDown(category: string): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
     // Issue #3436: scope to project when sourceId is present
-    const response = await fetchWithAuth(withSourceId(`/api/quality/drill-down/${category}`));
+    const response = await fetchWithAuth(withSourceId(`${getApiBase()}/quality/drill-down/${category}`));
     if (response.ok) {
       drillDownData.value = await response.json();
     } else {
@@ -767,7 +768,7 @@ async function exportReport(format: string): Promise<void> {
   exportMenuOpen.value = false;
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetchWithAuth(`/api/quality/export?format=${format}`);
+    const response = await fetchWithAuth(`${getApiBase()}/quality/export?format=${format}`);
     if (response.ok) {
       const data = await response.json();
       if (format === 'json') {
