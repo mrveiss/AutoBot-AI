@@ -71,7 +71,7 @@ class ChatHistoryBase:
             use_redis if use_redis is not None else redis_config.get("enabled", False)
         )
         self.redis_host = redis_host or redis_config.get(
-            "host", os.getenv("REDIS_HOST", unified_config.get_host("redis"))
+            "host", os.getenv("AUTOBOT_REDIS_HOST", unified_config.get_host("redis"))
         )
         self.redis_port = redis_port or redis_config.get(
             "port",
