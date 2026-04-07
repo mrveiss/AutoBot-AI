@@ -141,6 +141,23 @@ function syncLanguageToBackend(code: string): void {
 }
 
 /**
+ * Fetch language preference from backend personality profile and apply it.
+ * Called after login to enable cross-device language sync.
+ */
+async function loadLanguageFromBackend(): Promise<void> {
+  try {
+    const res = await apiClient.get(`${getApiBase()}/personality/active`)
+    const code: string | undefined = res.data?.language_code
+    if (code && code !== language.value) {
+      await setLanguage(code)
+      logger.debug(`Language loaded from backend: ${code}`)
+    }
+  } catch (error) {
+    logger.warn('Could not load language from backend', error)
+  }
+}
+
+/**
  * Main composable function
  */
 export function usePreferences() {
@@ -237,6 +254,7 @@ export function usePreferences() {
     setLayoutDensity,
     setVoiceDisplayMode,
     setLanguage,
+    loadLanguageFromBackend,
     resetPreferences
   }
 }

@@ -440,8 +440,19 @@ export default {
 
     // Initialize user preferences system (Issue #753)
     import('@/composables/usePreferences').then(({ usePreferences }) => {
-      usePreferences();
+      const prefs = usePreferences();
       logger.debug('User preferences system initialized');
+
+      // Cross-device language sync: load stored language from backend after login (#1675)
+      watch(
+        () => userStore.isAuthenticated,
+        async (authenticated) => {
+          if (authenticated) {
+            await prefs.loadLanguageFromBackend();
+          }
+        },
+        { immediate: true }
+      );
     });
 
     // FIXED: Use useSystemStatus composable instead of duplicate logic
