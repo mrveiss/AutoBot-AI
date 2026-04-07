@@ -169,9 +169,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     redisHealthError.value = ''
     try {
       const backendUrl = await appConfig.getServiceUrl('backend')
-      const url = withSourceId(
-        withSourceId(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`),
-      )
+      const url = withSourceId(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`)
       const response = await fetchWithAuth(
         url,
         {
