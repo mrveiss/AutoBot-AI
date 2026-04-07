@@ -1658,7 +1658,8 @@
       "issueResolved": "Problema resuelto",
       "failedToUpdate": "Actualización fallida",
       "markedFalsePositive": "Marcado como falso positivo",
-      "failedToLoadReview": "No se pudo cargar la revisión"
+      "failedToLoadReview": "No se pudo cargar la revisión",
+      "reviewLoaded": "Revisión cargada desde el historial."
     },
     "performanceAnalysis": {
       "title": "Análisis de rendimiento",

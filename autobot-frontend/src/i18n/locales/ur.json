@@ -1182,7 +1182,8 @@
       "issueResolved": "Issue marked as resolved",
       "failedToUpdate": "Failed to update issue status",
       "markedFalsePositive": "Marked as false positive",
-      "failedToLoadReview": "Failed to load review details"
+      "failedToLoadReview": "Failed to load review details",
+      "reviewLoaded": "Review loaded from history."
     },
     "performanceAnalysis": {
       "title": "Performance Analysis",

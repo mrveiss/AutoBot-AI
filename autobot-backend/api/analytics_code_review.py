@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_7_DAYS
 from api.analytics_shared import (
     resolve_source_or_404 as _resolve_source_or_404,  # noqa: F401 – used by history/metrics/summary
     resolve_source_root_or_404 as _resolve_source_root_or_404,
@@ -516,16 +518,102 @@ async def analyze_diff(
     score = calculate_review_score(all_comments)
     summary = generate_summary(all_comments)
 
+    review_id = str(uuid.uuid4())
+    analyzed_at = datetime.now(tz=timezone.utc).isoformat()
+    result_payload = {
+        "id": review_id,
+        "path": commit_range or "HEAD~1..HEAD",
+        "issues": [c.model_dump() for c in all_comments],
+        "analyzed_at": analyzed_at,
+        "files_reviewed": len(files),
+        "score": score,
+        "summary": summary,
+    }
+
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if redis:
+            effective_source = source_id or "default"
+            redis_key = f"code_review:result:{effective_source}:{review_id}"
+            await asyncio.to_thread(
+                redis.set, redis_key, json.dumps(result_payload), "ex", TTL_7_DAYS
+            )
+            history_entry = {
+                "id": review_id,
+                "path": result_payload["path"],
+                "analyzed_at": analyzed_at,
+                "total_comments": len(all_comments),
+                "score": score,
+                "source_id": effective_source,
+            }
+            await asyncio.to_thread(
+                redis.lpush,
+                f"code_review:history:{effective_source}",
+                json.dumps(history_entry),
+            )
+            await asyncio.to_thread(
+                redis.ltrim, f"code_review:history:{effective_source}", 0, 99
+            )
+            await asyncio.to_thread(
+                redis.expire, f"code_review:history:{effective_source}", TTL_7_DAYS
+            )
+            logger.info("Stored code review result %s for source %s", review_id, effective_source)
+    except Exception as exc:
+        logger.warning("Failed to persist code review result: %s", exc)
+
     return {
         "status": "success",
-        "id": f"review-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "id": review_id,
+        "timestamp": analyzed_at,
         "files_reviewed": len(files),
         "total_comments": len(all_comments),
         "score": score,
         "comments": [c.model_dump() for c in all_comments],
         "summary": summary,
     }
+
+
+@router.get("/review/{review_id}")
+async def get_review_by_id(
+    review_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+    source_id: Optional[str] = Query(None, description="Project source ID (optional, speeds up lookup)"),
+) -> dict[str, Any]:
+    """
+    Retrieve a persisted code review result by its UUID.
+
+    Issue #3716: Enables history drill-down by fetching the stored result.
+
+    Returns the full review payload or 404 if not found/expired.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            raise HTTPException(status_code=503, detail="Analytics database unavailable")
+
+        if source_id:
+            raw = await asyncio.to_thread(
+                redis.get, f"code_review:result:{source_id}:{review_id}"
+            )
+        else:
+            # Scan across all sources for this review_id
+            pattern = f"code_review:result:*:{review_id}"
+            keys = await asyncio.to_thread(redis.keys, pattern)
+            raw = await asyncio.to_thread(redis.get, keys[0]) if keys else None
+
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"Review {review_id} not found or expired")
+
+        return json.loads(raw)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Failed to retrieve review %s: %s", review_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to retrieve review result")
 
 
 @router.post("/review-file")
@@ -611,10 +699,48 @@ async def get_review_history(
     Returns past reviews for trend analysis.
     """
     await _resolve_source_or_404(source_id)
-    # Issue #543: Return no-data response instead of demo data
-    return _no_data_response(
-        "No review history available. Reviews will be stored here once you run code reviews."
-    )
+
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            return _no_data_response("Analytics database unavailable.")
+
+        effective_source = source_id or "default"
+        raw_entries = await asyncio.to_thread(
+            redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1
+        )
+
+        reviews = []
+        for raw in raw_entries:
+            entry = json.loads(raw)
+            if since:
+                try:
+                    entry_dt = datetime.fromisoformat(entry.get("analyzed_at", ""))
+                    since_dt = datetime.fromisoformat(since)
+                    # Normalise both to UTC-aware for comparison
+                    if entry_dt.tzinfo is None:
+                        entry_dt = entry_dt.replace(tzinfo=timezone.utc)
+                    if since_dt.tzinfo is None:
+                        since_dt = since_dt.replace(tzinfo=timezone.utc)
+                    if entry_dt < since_dt:
+                        continue
+                except ValueError:
+                    pass
+            reviews.append(entry)
+
+        if not reviews:
+            return _no_data_response(
+                "No review history available. Reviews will be stored here once you run code reviews."
+            )
+
+        return {"status": "success", "reviews": reviews, "total": len(reviews)}
+    except Exception as exc:
+        logger.warning("Failed to load review history: %s", exc)
+        return _no_data_response(
+            "No review history available. Reviews will be stored here once you run code reviews."
+        )
 
 
 @router.get("/metrics")
