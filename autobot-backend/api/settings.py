@@ -1005,10 +1005,16 @@ async def update_hardware_priority(
 
     merged_config = deep_merge(copy.deepcopy(before_config), patch)
     ConfigService.save_full_config(merged_config)
+    ConfigService.clear_cache()
 
     # Apply in-memory so the running process respects the new ordering
     hw_manager = get_hardware_acceleration_manager()
     hw_manager.update_priorities(request.priority_order)
+
+    # Read back the actually-applied order (filtered to available devices)
+    applied_order = [
+        t.value for t in hw_manager.current_config["priority_order"]
+    ]
 
     changed = _compute_flat_diff(before_config, merged_config)
 
@@ -1029,6 +1035,6 @@ async def update_hardware_priority(
 
     return HardwarePriorityResponse(
         status="ok",
-        priority_order=request.priority_order,
+        priority_order=applied_order,
         changed=changed,
     )

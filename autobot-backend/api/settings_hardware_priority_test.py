@@ -73,37 +73,6 @@ _FAKE_CONFIG = {
 }
 
 
-def _patch_deps(monkeypatch):
-    """Return a context manager that stubs out all external dependencies."""
-    mock_hw = MagicMock()
-    mock_hw.update_priorities = MagicMock()
-
-    mock_revision_instance = MagicMock()
-    mock_revision_instance.create_revision = AsyncMock()
-    mock_revision_class = MagicMock(return_value=mock_revision_instance)
-
-    patches = [
-        patch("api.settings.check_admin_permission", return_value=None),
-        patch("api.settings.get_db_session", return_value=AsyncMock()),
-        patch(
-            "api.settings.ConfigService.get_full_config",
-            return_value=dict(_FAKE_CONFIG),
-        ),
-        patch("api.settings.ConfigService.save_full_config", return_value={"status": "ok"}),
-        patch("api.settings.ConfigService.clear_cache"),
-        patch("api.settings.ConfigRevisionService", mock_revision_class),
-        patch(
-            "api.settings.update_hardware_priority.__globals__",
-            {},
-        ),
-        patch(
-            "hardware_acceleration.get_hardware_acceleration_manager",
-            return_value=mock_hw,
-        ),
-    ]
-    return patches, mock_hw
-
-
 class TestHardwarePriorityEndpoint:
     def test_patch_returns_200_with_valid_payload(self):
         app = _make_app()
