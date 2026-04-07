@@ -67,6 +67,19 @@ _DEFAULT_RETRIES = 3
 _BACKOFF_BASE = 2.0
 _STANDARD_DELAY = 1.0
 
+# Lazy import of retry_mechanism from autobot-backend (Issue #3830).
+# The module is co-located at runtime (autobot_shared is embedded inside
+# autobot-backend) but may be absent in standalone contexts such as SLM backend.
+try:
+    from retry_mechanism import (
+        RetryConfig as _RetryConfig,
+        RetryMechanism as _RetryMechanism,
+        RetryStrategy as _RetryStrategy,
+    )
+    _HAS_RETRY_MECHANISM = True
+except ImportError:
+    _HAS_RETRY_MECHANISM = False
+
 
 def _get_config_manager():
     """Lazy-load the backend config manager.
@@ -444,6 +457,30 @@ class RedisConnectionManager:
 
         return pool_params
 
+    async def _try_create_async_pool(
+        self, database_name: str, config: RedisConfig
+    ) -> async_redis.ConnectionPool:
+        """Single attempt to build and verify one async connection pool.
+
+        Extracted from _create_async_pool_with_retry so retry logic can be
+        managed by RetryMechanism rather than an inline loop (Issue #3830).
+        """
+        pool_params = self._build_async_pool_params(config, database_name)
+        pool = async_redis.ConnectionPool(**pool_params)
+
+        client = async_redis.Redis(connection_pool=pool)
+        ready = await self._wait_for_redis_ready(client, database_name)
+        await client.aclose()
+
+        if not ready:
+            await pool.disconnect()
+            raise ConnectionError(
+                f"Redis database '{database_name}' not ready after waiting"
+            )
+
+        logger.info(f"Created async pool for '{database_name}' with retry protection")
+        return pool
+
     async def _create_async_pool_with_retry(
         self, database_name: str, config: RedisConfig
     ) -> async_redis.ConnectionPool:
@@ -451,37 +488,40 @@ class RedisConnectionManager:
         Create async pool with retry logic.
 
         Issue #665: Refactored to use _build_async_pool_params helper.
+        Issue #3830: Retry loop delegated to RetryMechanism (exponential backoff,
+        5 attempts, base 2 s, cap 30 s).  Falls back to inline loop when
+        retry_mechanism is unavailable (standalone autobot_shared contexts).
 
         Features:
-        - Manual retry with exponential backoff
+        - Exponential backoff retry via retry_mechanism
         - Up to 5 attempts
         - TCP keepalive configuration
         """
+        if _HAS_RETRY_MECHANISM:
+            retry_cfg = _RetryConfig(
+                max_attempts=5,
+                base_delay=2.0,
+                max_delay=30.0,
+                backoff_multiplier=2.0,
+                jitter=False,
+                strategy=_RetryStrategy.EXPONENTIAL_BACKOFF,
+                retryable_exceptions=(ConnectionError, asyncio.TimeoutError),
+                non_retryable_exceptions=(KeyboardInterrupt, SystemExit),
+            )
+            mechanism = _RetryMechanism(retry_cfg)
+            return await mechanism.execute_async(
+                self._try_create_async_pool,
+                database_name,
+                config,
+                operation_name=f"create_async_pool[{database_name}]",
+            )
+
+        # Fallback: inline loop used when retry_mechanism is not importable.
         logger.warning(f"Creating async pool for '{database_name}' with MANUAL RETRY")
         max_attempts, base_wait, max_wait = 5, 2, 30
-
         for attempt in range(max_attempts):
             try:
-                # Issue #665: Use helper to build params
-                pool_params = self._build_async_pool_params(config, database_name)
-                pool = async_redis.ConnectionPool(**pool_params)
-
-                # Test connection and wait for Redis to be ready
-                client = async_redis.Redis(connection_pool=pool)
-                ready = await self._wait_for_redis_ready(client, database_name)
-                await client.aclose()
-
-                if not ready:
-                    await pool.disconnect()
-                    raise ConnectionError(
-                        f"Redis database '{database_name}' not ready after waiting"
-                    )
-
-                logger.info(
-                    f"Created async pool for '{database_name}' with retry protection"
-                )
-                return pool
-
+                return await self._try_create_async_pool(database_name, config)
             except (ConnectionError, asyncio.TimeoutError) as e:
                 if attempt < max_attempts - 1:
                     wait_time = min(base_wait * (2**attempt), max_wait)

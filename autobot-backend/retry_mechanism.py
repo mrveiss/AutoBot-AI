@@ -32,6 +32,26 @@ class RetryStrategy(Enum):
     JITTERED_BACKOFF = "jittered_backof"
 
 
+# Alias with simpler names used by callers (Issue #3830).
+class BackoffStrategy(Enum):
+    """Simplified backoff strategy names — alias for RetryStrategy.
+
+    Maps the LINEAR / EXPONENTIAL vocabulary used in orchestration code to the
+    canonical RetryStrategy values so callers can use either name.
+    """
+
+    LINEAR = "linear_backof"
+    EXPONENTIAL = "exponential_backof"
+
+    def to_retry_strategy(self) -> RetryStrategy:
+        """Convert to the canonical RetryStrategy enum value."""
+        mapping = {
+            BackoffStrategy.LINEAR: RetryStrategy.LINEAR_BACKOFF,
+            BackoffStrategy.EXPONENTIAL: RetryStrategy.EXPONENTIAL_BACKOFF,
+        }
+        return mapping[self]
+
+
 @dataclass
 class RetryConfig:
     """Configuration for retry mechanism (Issue #376 - use named constants)"""
@@ -431,6 +451,45 @@ def retry_sync(
             )
 
         return wrapper
+
+    return decorator
+
+
+# Alias matching the target API documented in Issue #3830.
+#   @with_retry(RetryConfig(max_attempts=3, strategy=BackoffStrategy.EXPONENTIAL))
+def with_retry(config: "RetryConfig"):
+    """Decorator factory accepting a RetryConfig instance (Issue #3830).
+
+    Usage::
+
+        @with_retry(RetryConfig(max_attempts=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+        async def my_op(): ...
+
+    Both sync and async callables are supported.
+    """
+
+    def decorator(func):
+        """Wrap *func* so it is executed under *config*'s retry policy."""
+
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            """Async wrapper that executes function with retry mechanism."""
+            mechanism = RetryMechanism(config)
+            return await mechanism.execute_async(
+                func, *args, operation_name=func.__name__, **kwargs
+            )
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            """Sync wrapper that executes function with retry mechanism."""
+            mechanism = RetryMechanism(config)
+            return mechanism.execute_sync(
+                func, *args, operation_name=func.__name__, **kwargs
+            )
+
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        return sync_wrapper
 
     return decorator
 
