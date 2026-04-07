@@ -111,7 +111,7 @@ class IterationResult:
     """Result of a single agent loop iteration."""
 
     iteration_number: int
-    phase_completed: LoopPhase
+    phase_completed: LoopPhase = LoopPhase.ANALYZE_EVENTS  # overwritten by _execute_iteration_phases
     tools_executed: list[str] = field(default_factory=list)
     tool_results: dict[str, Any] = field(default_factory=dict)
     events_analyzed: int = 0
