@@ -21,7 +21,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
 from api.analytics_shared import (
@@ -578,7 +578,7 @@ async def analyze_diff(
 @router.get("/review/{review_id}")
 async def get_review_by_id(
     review_id: str,
-    admin_check: bool = Depends(check_admin_permission),
+    _user: dict = Depends(get_current_user),
     source_id: Optional[str] = Query(None, description="Project source ID (optional, speeds up lookup)"),
 ) -> dict[str, Any]:
     """
