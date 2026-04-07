@@ -253,6 +253,10 @@ class LLMJudgeScorer(PromptScorer):
         return 0
 
 
+# Module-level constant so routes.py can import it directly.
+_NOTIFY_KEY = "autoresearch:prompt_review:notify:{session_id}:{variant_id}"
+
+
 class HumanReviewScorer(PromptScorer):
     """Queue a prompt variant for human review and wait for a score via BLPOP.
 
@@ -266,7 +270,7 @@ class HumanReviewScorer(PromptScorer):
 
     _REVIEW_KEY = "autoresearch:prompt_review:{session_id}:{variant_id}"
     _PENDING_KEY = "autoresearch:prompt_review:pending:{session_id}:{variant_id}"
-    _NOTIFY_KEY = "autoresearch:prompt_review:notify:{session_id}:{variant_id}"
+    _NOTIFY_KEY = _NOTIFY_KEY  # module-level constant; importable by routes.py
     _TTL_SECONDS = TTL_24_HOURS
 
     def __init__(
