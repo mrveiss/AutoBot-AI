@@ -794,7 +794,7 @@ async def get_cache_coordinator_stats(
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         return coordinator.get_unified_stats()
     except Exception as e:
         logger.error("Error getting cache coordinator stats: %s", str(e))
@@ -820,7 +820,7 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         evicted = await coordinator._coordinated_evict()
 
         return {
@@ -853,7 +853,7 @@ async def clear_cache(
     try:
         from cache import get_cache_coordinator
 
-        coordinator = get_cache_coordinator()
+        coordinator = await get_cache_coordinator()
         if cache_name in coordinator._caches:
             coordinator._caches[cache_name].clear()
             return {
