@@ -82,7 +82,7 @@ def estimate_model_memory_gb(
     return weight_gb + kv_cache_gb + 0.5
 
 
-class TaskComplexity(Enum):
+class ModelCapabilityTier(Enum):
     """Task complexity levels for model selection."""
 
     SIMPLE = "simple"  # Basic responses, factual questions
@@ -155,8 +155,8 @@ class TaskRequest:
     user_preference: Optional[str] = None
 
     def analyze_complexity(
-        self, complexity_keywords: Dict[TaskComplexity, List[str]]
-    ) -> TaskComplexity:
+        self, complexity_keywords: Dict[ModelCapabilityTier, List[str]]
+    ) -> ModelCapabilityTier:
         """Tell what complexity this task has (Tell Don't Ask)."""
         query_lower = self.query.lower()
         task_type = self.task_type.lower()
@@ -164,12 +164,12 @@ class TaskRequest:
         # Check for specialized task types - Issue #380: Use module-level frozensets
         if task_type in CODE_TASK_TYPES:
             if any(word in query_lower for word in CODE_COMPLEXITY_KEYWORDS):
-                return TaskComplexity.SPECIALIZED
+                return ModelCapabilityTier.SPECIALIZED
             else:
-                return TaskComplexity.COMPLEX
+                return ModelCapabilityTier.COMPLEX
 
         # Analyze query content
-        complexity_scores = {complexity: 0 for complexity in TaskComplexity}
+        complexity_scores = {complexity: 0 for complexity in ModelCapabilityTier}
 
         for complexity, keywords in complexity_keywords.items():
             for keyword in keywords:
@@ -179,15 +179,15 @@ class TaskRequest:
         # Consider query length as a factor
         query_length = len(self.query.split())
         if query_length > 50:
-            complexity_scores[TaskComplexity.COMPLEX] += 1
+            complexity_scores[ModelCapabilityTier.COMPLEX] += 1
 
         # Consider context length
         if self.context_length > 1000:
-            complexity_scores[TaskComplexity.COMPLEX] += 1
+            complexity_scores[ModelCapabilityTier.COMPLEX] += 1
 
         # Return highest scoring complexity
         if max(complexity_scores.values()) == 0:
-            return TaskComplexity.MODERATE  # Default
+            return ModelCapabilityTier.MODERATE  # Default
 
         return max(complexity_scores.keys(), key=lambda k: complexity_scores[k])
 
@@ -287,19 +287,19 @@ class ModelInfo:
 
         return score
 
-    def meets_complexity_requirement(self, complexity: TaskComplexity) -> bool:
+    def meets_complexity_requirement(self, complexity: ModelCapabilityTier) -> bool:
         """Check if this model meets the complexity requirements."""
-        if complexity == TaskComplexity.SIMPLE:
+        if complexity == ModelCapabilityTier.SIMPLE:
             # Simple tasks can use any model
             return True
-        elif complexity == TaskComplexity.MODERATE:
+        elif complexity == ModelCapabilityTier.MODERATE:
             # Moderate tasks need at least standard models
             return self.performance_level in [
                 ModelPerformanceLevel.STANDARD,
                 ModelPerformanceLevel.ADVANCED,
                 ModelPerformanceLevel.SPECIALIZED,
             ]
-        elif complexity == TaskComplexity.COMPLEX:
+        elif complexity == ModelCapabilityTier.COMPLEX:
             # Complex tasks need advanced models
             return self.performance_level in [
                 ModelPerformanceLevel.ADVANCED,

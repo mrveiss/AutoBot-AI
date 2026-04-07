@@ -8,7 +8,7 @@ Issue #381: This file has been refactored into the model_optimization/ package.
 This thin facade maintains backward compatibility while delegating to focused modules.
 
 See: src/utils/model_optimization/
-- types.py: TaskComplexity, ModelPerformanceLevel, SystemResources, TaskRequest, ModelInfo
+- types.py: ModelCapabilityTier, ModelPerformanceLevel, SystemResources, TaskRequest, ModelInfo
 - system_resources.py: SystemResourceAnalyzer for system resource analysis
 - performance_tracking.py: ModelPerformanceTracker for Redis persistence
 - model_selection.py: ModelSelector and ModelClassifier for model selection
@@ -39,7 +39,7 @@ from utils.model_optimization import (
     ModelSelector,
     SystemResourceAnalyzer,
     SystemResources,
-    TaskComplexity,
+    ModelCapabilityTier,
     TaskRequest,
 )
 
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     # Types and enums
-    "TaskComplexity",
+    "ModelCapabilityTier",
     "ModelPerformanceLevel",
     "SystemResources",
     "TaskRequest",
@@ -109,14 +109,14 @@ class ModelOptimizer:
         self._model_selector = ModelSelector(self._min_samples)
         self._performance_tracker: Optional[ModelPerformanceTracker] = None
 
-    def _build_default_complexity_keywords(self) -> Dict[TaskComplexity, List[str]]:
+    def _build_default_complexity_keywords(self) -> Dict[ModelCapabilityTier, List[str]]:
         """Build default task complexity keyword mappings. Issue #620.
 
         Returns:
-            Dictionary mapping TaskComplexity levels to keyword lists
+            Dictionary mapping ModelCapabilityTier levels to keyword lists
         """
         return {
-            TaskComplexity.SIMPLE: [
+            ModelCapabilityTier.SIMPLE: [
                 "what",
                 "when",
                 "where",
@@ -127,7 +127,7 @@ class ModelOptimizer:
                 "true/false",
                 "list",
             ],
-            TaskComplexity.MODERATE: [
+            ModelCapabilityTier.MODERATE: [
                 "analyze",
                 "compare",
                 "explain",
@@ -137,7 +137,7 @@ class ModelOptimizer:
                 "why",
                 "discuss",
             ],
-            TaskComplexity.COMPLEX: [
+            ModelCapabilityTier.COMPLEX: [
                 "design",
                 "create",
                 "develop",
@@ -148,7 +148,7 @@ class ModelOptimizer:
                 "write program",
                 "complex analysis",
             ],
-            TaskComplexity.SPECIALIZED: [
+            ModelCapabilityTier.SPECIALIZED: [
                 "research paper",
                 "scientific",
                 "mathematical proof",
@@ -265,7 +265,7 @@ class ModelOptimizer:
                 self._models_cache,
             )
 
-    def analyze_task_complexity(self, task_request: TaskRequest) -> TaskComplexity:
+    def analyze_task_complexity(self, task_request: TaskRequest) -> ModelCapabilityTier:
         """Analyze task complexity based on query content and type."""
         return task_request.analyze_complexity(self.complexity_keywords)
 
@@ -275,7 +275,7 @@ class ModelOptimizer:
         return resources.to_dict()
 
     def _filter_suitable_models(
-        self, complexity: TaskComplexity
+        self, complexity: ModelCapabilityTier
     ) -> Optional[List[ModelInfo]]:
         """Filter models by complexity and return suitable candidates. Issue #620.
 
@@ -324,7 +324,7 @@ class ModelOptimizer:
     def _select_and_log_model(
         self,
         ranked_models: List[ModelInfo],
-        complexity: TaskComplexity,
+        complexity: ModelCapabilityTier,
     ) -> Optional[str]:
         """Select best model from ranked list and log selection. Issue #620.
 
@@ -383,7 +383,7 @@ class ModelOptimizer:
 
     # Backward compatibility methods
     def _filter_models_by_complexity(
-        self, complexity: TaskComplexity, models: List[ModelInfo]
+        self, complexity: ModelCapabilityTier, models: List[ModelInfo]
     ) -> List[ModelInfo]:
         """Filter models based on task complexity requirements."""
         return self._model_selector.filter_by_complexity(models, complexity)
