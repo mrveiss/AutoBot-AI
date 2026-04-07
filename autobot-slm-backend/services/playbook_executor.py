@@ -19,6 +19,54 @@ from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
 
+# Secret key -> Ansible variable name mapping (#3519).
+# Must stay in sync with setup_wizard._SECRET_TO_ANSIBLE_VAR.
+_SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
+    "hf_token": "tts_hf_token",
+    "autobot_internal_api_key": "autobot_internal_api_key",
+}
+
+
+async def fetch_deploy_secrets() -> dict[str, str]:
+    """Read stored SLM secrets and return them as Ansible extra_vars (#3519).
+
+    Mirrors the logic in setup_wizard._fetch_provision_secrets() so that
+    standalone role re-deploys (Infrastructure, Nodes, Settings pages) receive
+    the same secrets that the full wizard provisioning flow injects.
+
+    Returns an empty dict and logs a warning if the DB is unavailable — the
+    deploy is allowed to proceed rather than being blocked by a secret-fetch
+    failure.
+    """
+    from sqlalchemy import select
+
+    from models.database import SystemSecret
+    from services.database import db_service
+    from services.encryption import decrypt_data
+
+    extra: dict[str, str] = {}
+    try:
+        async with db_service.session() as session:
+            result = await session.execute(
+                select(SystemSecret).where(
+                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
+                )
+            )
+            for secret in result.scalars().all():
+                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
+                if not ansible_var:
+                    continue
+                value = decrypt_data(secret.encrypted_value)
+                if value:
+                    extra[ansible_var] = value
+    except Exception:
+        logger.warning(
+            "fetch_deploy_secrets: could not load SLM secrets — "
+            "deploy will proceed without them (#3519)",
+            exc_info=True,
+        )
+    return extra
+
 
 class PlaybookExecutor:
     """Execute Ansible playbooks programmatically."""
@@ -452,11 +500,16 @@ class PlaybookExecutor:
         if not effective_inventory.exists():
             raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
 
+        # Merge stored SLM secrets into extra_vars so standalone re-deploys
+        # receive the same secrets as the full wizard provisioning flow (#3519).
+        deploy_secrets = await fetch_deploy_secrets()
+        merged_extra_vars: Dict[str, str] = {**deploy_secrets, **(extra_vars or {})}
+
         cmd = self._build_ansible_command(
             playbook_path,
             limit,
             tags,
-            extra_vars,
+            merged_extra_vars or None,
             check_mode,
             inventory_path=effective_inventory,
         )
