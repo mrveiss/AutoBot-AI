@@ -530,6 +530,14 @@ class TimeoutConfig(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
+    # A2A task manager (seconds)                                           #
+    # ------------------------------------------------------------------ #
+
+    # How long a terminal A2A task remains queryable before eviction from
+    # the in-memory store (Issue #3823).
+    a2a_task_ttl: float = Field(default=60.0, alias="AUTOBOT_A2A_TASK_TTL_SECONDS")
+
+    # ------------------------------------------------------------------ #
     # Skill / code validation (seconds)                                    #
     # ------------------------------------------------------------------ #
 

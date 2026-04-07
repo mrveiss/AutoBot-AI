@@ -80,10 +80,23 @@ class ContextCompressionService:
             for name, spec in models.items():
                 if not isinstance(spec, dict):
                     continue
-                self._model_thresholds[name] = spec.get(
+                threshold = spec.get(
                     "compression_threshold", _DEFAULT_COMPRESSION_THRESHOLD
                 )
+                context_window = spec.get("context_window_tokens")
+                if context_window is not None and threshold > context_window:
+                    raise ValueError(
+                        f"[#3811] context_windows.yaml: model '{name}' has "
+                        f"compression_threshold={threshold} > "
+                        f"context_window_tokens={context_window}. "
+                        "compression_threshold must not exceed context_window_tokens."
+                    )
+                self._model_thresholds[name] = threshold
             logger.debug("[#3770] Loaded thresholds for %d models", len(self._model_thresholds))
+        except ValueError:
+            # Configuration error — re-raise immediately so startup fails fast
+            # rather than silently running with an invalid threshold.
+            raise
         except Exception as exc:
             logger.warning("[#3770] Could not load thresholds, using default: %s", exc)
 

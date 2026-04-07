@@ -238,3 +238,71 @@ class TestLoadThresholds:
 
         svc = ContextCompressionService(config_path=yaml_path)
         assert svc._get_threshold("gpt-4o") > _DEFAULT_COMPRESSION_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
+# Issue #3811: compression_threshold <= context_window_tokens validation
+# ---------------------------------------------------------------------------
+
+
+class TestCompressionThresholdValidation:
+    """Ensure invalid configs (threshold > context_window) fail fast at load time."""
+
+    def _write_yaml(self, tmp_path, models_block: str) -> "Path":
+        from pathlib import Path
+
+        content = f"models:\n{models_block}\ntoken_estimation:\n  chars_per_token: 4\n  safety_margin: 0.9\n"
+        p = tmp_path / "context_windows.yaml"
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_threshold_exceeds_context_window_raises(self, tmp_path) -> None:
+        """Loading a YAML where compression_threshold > context_window_tokens must raise ValueError."""
+        yaml_path = self._write_yaml(
+            tmp_path,
+            "  tiny-model:\n    context_window_tokens: 4096\n    max_output_tokens: 2048\n    compression_threshold: 8192\n",
+        )
+        with pytest.raises(ValueError, match="compression_threshold"):
+            ContextCompressionService(config_path=yaml_path)
+
+    def test_threshold_equal_context_window_is_valid(self, tmp_path) -> None:
+        """compression_threshold == context_window_tokens must not raise."""
+        yaml_path = self._write_yaml(
+            tmp_path,
+            "  small-model:\n    context_window_tokens: 4096\n    max_output_tokens: 2048\n    compression_threshold: 4096\n",
+        )
+        svc = ContextCompressionService(config_path=yaml_path)
+        assert svc._get_threshold("small-model") == 4096
+
+    def test_threshold_below_context_window_is_valid(self, tmp_path) -> None:
+        """compression_threshold < context_window_tokens must not raise."""
+        yaml_path = self._write_yaml(
+            tmp_path,
+            "  big-model:\n    context_window_tokens: 128000\n    max_output_tokens: 4096\n    compression_threshold: 32768\n",
+        )
+        svc = ContextCompressionService(config_path=yaml_path)
+        assert svc._get_threshold("big-model") == 32768
+
+    def test_real_yaml_passes_validation(self) -> None:
+        """The committed context_windows.yaml must pass the validator for all models."""
+        from pathlib import Path
+
+        yaml_path = (
+            Path(__file__).parent.parent.parent / "config" / "context_windows.yaml"
+        )
+        if not yaml_path.exists():
+            pytest.skip("context_windows.yaml not found")
+
+        # Must not raise
+        svc = ContextCompressionService(config_path=yaml_path)
+        assert len(svc._model_thresholds) > 0
+
+    def test_missing_context_window_tokens_skips_validation(self, tmp_path) -> None:
+        """A model entry without context_window_tokens must not raise (threshold defaults apply)."""
+        yaml_path = self._write_yaml(
+            tmp_path,
+            "  legacy-model:\n    max_output_tokens: 2048\n    compression_threshold: 99999\n",
+        )
+        # No context_window_tokens key — validation is skipped, no error raised
+        svc = ContextCompressionService(config_path=yaml_path)
+        assert svc._get_threshold("legacy-model") == 99999
