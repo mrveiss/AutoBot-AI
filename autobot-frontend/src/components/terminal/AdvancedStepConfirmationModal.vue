@@ -11,7 +11,7 @@
  * TerminalWindow.vue during automated workflow execution.
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useI18n } from 'vue-i18n'
@@ -72,6 +72,10 @@ const editError = ref('')
 /** The saved override command (null means use original) */
 const overriddenCommand = ref<string | null>(null)
 
+// Bug 1 fix: reset all edit state whenever the displayed step changes so that
+// an override or open editor from step N never leaks into step N+1.
+watch(() => props.currentStep, resetEdit)
+
 // =============================================================================
 // Computed
 // =============================================================================
@@ -130,6 +134,9 @@ function handleTakeControl(): void {
 function handleExecuteAll(): void {
   logger.info('User chose to execute all remaining steps')
   emit('execute-all')
+  // Bug 2 fix: clear edit state after emitting so the "Edited" badge does not
+  // remain visible while the override is no longer in effect.
+  resetEdit()
 }
 
 function handleClose(): void {
