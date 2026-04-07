@@ -35,24 +35,25 @@ class TimeProvider:
 
     @staticmethod
     def is_business_hours() -> bool:
-        """Check if current time is within business hours (9 AM - 5 PM)."""
-        current_hour = datetime.now(tz=timezone.utc).hour
+        """Check if current time is within business hours (9 AM - 5 PM, local server time)."""
+        current_hour = datetime.now().hour
         return 9 <= current_hour <= 17
 
     @staticmethod
     def is_weekend() -> bool:
-        """Check if current day is weekend."""
-        return datetime.now(tz=timezone.utc).weekday() >= 5
+        """Check if current day is weekend (local server time)."""
+        return datetime.now().weekday() >= 5
 
     @staticmethod
     def get_temporal_context_data() -> Dict[str, Any]:
         """Get comprehensive temporal context data."""
-        current_time = datetime.now(tz=timezone.utc)
+        current_time_utc = datetime.now(tz=timezone.utc)
+        current_time_local = datetime.now()
         return {
             "timestamp": time.time(),
-            "datetime": current_time.isoformat(),
-            "hour": current_time.hour,
-            "day_of_week": current_time.weekday(),
-            "is_business_hours": 9 <= current_time.hour <= 17,
-            "is_weekend": current_time.weekday() >= 5,
+            "datetime": current_time_utc.isoformat(),
+            "hour": current_time_local.hour,
+            "day_of_week": current_time_local.weekday(),
+            "is_business_hours": 9 <= current_time_local.hour <= 17,
+            "is_weekend": current_time_local.weekday() >= 5,
         }
