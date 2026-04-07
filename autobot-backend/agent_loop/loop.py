@@ -298,6 +298,18 @@ class AgentLoop:
         # Phase 3: Execute Tools
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
         tool_results = await self._execute_tools(tools_to_execute)
+
+        # Issue #3859 / #3862: when the repetition-halt guard fires, the tools
+        # never actually executed.  Skip adding them to tools_executed (they
+        # didn't run) and return the error as tool_results so the LLM can see
+        # what happened and adapt rather than terminating silently.
+        if self._halted_on_repetition:
+            result.tool_results = tool_results
+            result.tools_executed = []
+            result.should_continue = False
+            result.phase_completed = LoopPhase.ITERATE
+            return result
+
         result.tools_executed = [
             t.get("tool_name", "unknown") for t in tools_to_execute
         ]
