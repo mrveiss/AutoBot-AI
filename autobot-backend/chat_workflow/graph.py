@@ -436,17 +436,31 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
 
     Delegates to the manager's continuation loop logic for one iteration.
     Streams WorkflowMessage chunks to frontend via stream_callback.
+
+    Issue #3232: emits agent.step.start / agent.step.complete CoT events.
     """
     if state.get("error"):
         return {}
 
     import aiohttp
 
+    from chat_workflow.cot_events import emit_step_complete, emit_step_start
+
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
     messages = list(state.get("workflow_messages", []))
     iteration = state.get("iteration_count", 0) + 1
     ctx = _build_llm_iteration_context(state)
+    session_id = state.get("session_id")
+
+    # Issue #3232: emit step-level CoT event so frontend can track LLM reasoning.
+    step_name = f"llm_iteration_{iteration}"
+    _cot_start = emit_step_start(
+        step_name,
+        session_id=session_id,
+        agent_type="chat_workflow",
+        step_id=step_name,
+    )
 
     try:
         messages, llm_response, should_continue = await _run_llm_iteration(
@@ -458,12 +472,32 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
         messages.append(error_msg)
         if stream_cb:
             stream_cb(error_msg)
+        emit_step_complete(
+            step_name, _cot_start, output_summary=f"LLM error: {exc}", session_id=session_id
+        )
         return {"error": str(exc), "workflow_messages": messages}
 
     all_responses = list(state.get("all_llm_responses", []))
     if llm_response:
         all_responses.append(llm_response)
     parsed_tool_calls = list(ctx.execution_history) if ctx.execution_history else []
+
+    # Issue #3232: emit plan event when the response contains a planning block.
+    if parsed_tool_calls:
+        from chat_workflow.cot_events import emit_plan
+
+        emit_plan(parsed_tool_calls, session_id=session_id)
+
+    emit_step_complete(
+        step_name,
+        _cot_start,
+        output_summary=(
+            f"{len(parsed_tool_calls)} tool call(s) queued"
+            if parsed_tool_calls
+            else "LLM response complete"
+        ),
+        session_id=session_id,
+    )
 
     return {
         "llm_response": llm_response or "",
@@ -572,19 +606,32 @@ async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
 
 
 async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
-    """Execute approved tool calls."""
+    """Execute approved tool calls.
+
+    Issue #3232: emits agent.step.start/complete around the tool execution
+    block so the frontend reasoning trace shows the execution phase.
+    """
     if state.get("error"):
         return {}
+
+    from chat_workflow.cot_events import emit_step_complete, emit_step_start
 
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
     messages = list(state.get("workflow_messages", []))
+    session_id = state.get("session_id")
 
     decision = state.get("approval_decision")
     tool_calls = state.get("tool_calls", [])
 
     if not tool_calls:
         return {"workflow_messages": messages}
+
+    _cot_exec_start = emit_step_start(
+        "execute_tools",
+        session_id=session_id,
+        agent_type="chat_workflow",
+    )
 
     # If approval was needed and denied, skip execution
     if decision and not decision.get("approved", False):
@@ -595,6 +642,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         messages.append(deny_msg)
         if stream_cb:
             stream_cb(deny_msg)
+        emit_step_complete(
+            "execute_tools",
+            _cot_exec_start,
+            output_summary="approval denied — tools skipped",
+            session_id=session_id,
+        )
         return {
             "should_continue": False,
             "workflow_messages": messages,
@@ -659,6 +712,16 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         messages.append(abort_msg)
         if stream_cb:
             stream_cb(abort_msg)
+
+    # Issue #3232: emit step complete for the execute_tools block.
+    emit_step_complete(
+        "execute_tools",
+        _cot_exec_start,
+        output_summary=(
+            f"tools executed; loop_aborted={tool_loop_count >= _LOOP_ABORT_THRESHOLD}"
+        ),
+        session_id=session_id,
+    )
 
     return {
         "should_continue": not break_loop,

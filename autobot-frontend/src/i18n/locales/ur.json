@@ -1623,5 +1623,11 @@
       "clearSelection": "Clear",
       "clearSelectionTitle": "Clear selection"
     }
+  },
+  "reasoningTrace": {
+    "title": "Reasoning trace",
+    "toggleLabel": "Toggle reasoning trace panel",
+    "success": "Success",
+    "error": "Error"
   }
 }

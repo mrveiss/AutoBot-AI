@@ -126,6 +126,14 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES: frozenset = frozenset(
         MessageTypes.COMMAND_APPROVAL_REQUEST,
         # Terminal interpretation - explicitly persisted by llm_handler.py
         MessageTypes.TERMINAL_INTERPRETATION,
+        # Issue #3232: Chain-of-thought reasoning trace events — ephemeral, not
+        # persisted to chat history since they are live-stream-only signals.
+        "agent.step.start",
+        "agent.step.complete",
+        "agent.tool.call",
+        "agent.tool.result",
+        "agent.llm.chunk",
+        "agent.plan",
     ]
 )
 

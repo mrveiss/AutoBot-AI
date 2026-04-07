@@ -6110,5 +6110,11 @@
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
+  },
+  "reasoningTrace": {
+    "title": "Rastro de raciocinio",
+    "toggleLabel": "Alternar painel de rastro de raciocinio",
+    "success": "Sucesso",
+    "error": "Erro"
   }
 }

@@ -6110,5 +6110,11 @@
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
+  },
+  "reasoningTrace": {
+    "title": "Slad rozumowania",
+    "toggleLabel": "Przelacz panel sladu rozumowania",
+    "success": "Sukces",
+    "error": "Blad"
   }
 }

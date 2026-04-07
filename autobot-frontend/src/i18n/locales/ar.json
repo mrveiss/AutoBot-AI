@@ -6099,5 +6099,11 @@
     "desktop": "Desktop",
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
+  },
+  "reasoningTrace": {
+    "title": "Reasoning trace",
+    "toggleLabel": "Toggle reasoning trace panel",
+    "success": "Success",
+    "error": "Error"
   }
 }

@@ -6285,5 +6285,11 @@
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
     "profileSettings": "Profile Settings"
+  },
+  "reasoningTrace": {
+    "title": "Reasoning trace",
+    "toggleLabel": "Toggle reasoning trace panel",
+    "success": "Success",
+    "error": "Error"
   }
 }
