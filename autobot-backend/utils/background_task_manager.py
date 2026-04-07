@@ -37,7 +37,7 @@ from constants.ttl_constants import TTL_24_HOURS
 
 logger = logging.getLogger(__name__)
 
-# Defaults — Issue #3803: named constant from SSOT (AUTOBOT_TIMEOUT_BACKGROUND_TASK)
+# Defaults
 _DEFAULT_TTL = TTL_24_HOURS
 _DEFAULT_TIMEOUT: float = config.timeout.background_task
 _DEFAULT_MAX_CONCURRENT = 1

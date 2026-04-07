@@ -22,7 +22,6 @@ from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
-# Issue #3803: named constants from SSOT — override via AUTOBOT_TIMEOUT_MCP_STARTUP / _MCP_CALL
 STARTUP_TIMEOUT: float = config.timeout.mcp_startup
 CALL_TIMEOUT: float = config.timeout.mcp_call
 

@@ -20,7 +20,6 @@ from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
-# Issue #3803: named constant from SSOT — override via AUTOBOT_TIMEOUT_SKILL_TEST
 _TEST_TIMEOUT: float = config.timeout.skill_test
 
 
