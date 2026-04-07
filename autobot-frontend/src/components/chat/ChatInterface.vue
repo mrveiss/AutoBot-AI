@@ -818,11 +818,6 @@ onMounted(async () => {
   // Load NoVNC URL after initialization
   await loadNovncUrl()
 
-  // Enable auto-save if not disabled
-  if (store.settings.autoSave) {
-    controller.enableAutoSave()
-  }
-
   // Start connection monitoring
   checkConnection()
   startHeartbeat()
