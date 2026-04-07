@@ -9,6 +9,7 @@ Replaces binary pass/fail with typed, weighted criteria that produce
 partial/full/failed evaluation outcomes.
 """
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -116,10 +117,11 @@ class SuccessCriteriaEvaluator:
         if not criteria_list:
             return EvaluationResult(overall="full", score=1.0, results=[])
 
-        per_result = [
-            await self._evaluate_one(criterion, workflow_result)
-            for criterion in criteria_list
-        ]
+        per_result = list(
+            await asyncio.gather(
+                *[self._evaluate_one(c, workflow_result) for c in criteria_list]
+            )
+        )
         return self._aggregate(per_result)
 
     # ------------------------------------------------------------------
@@ -199,13 +201,12 @@ class SuccessCriteriaEvaluator:
         fn: Optional[Callable] = params.get("fn")
         if fn is None:
             return False, "No callable 'fn' supplied in custom criterion parameters"
-        import asyncio
-
         if asyncio.iscoroutinefunction(fn):
             passed = bool(await fn(result))
         else:
             passed = bool(fn(result))
         return passed, "Custom function returned " + str(passed)
+
 
     @staticmethod
     def _aggregate(per_result: List[CriteriaResult]) -> EvaluationResult:
