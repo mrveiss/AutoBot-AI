@@ -120,7 +120,7 @@ repos:
         types: [python, ts, vue]
         pass_filenames: false
         stages: [pre-commit]
-        description: "Blocks commits with hardcoded IPs, ports, magic numbers, and role strings"
+        description: "Blocks commits with hardcoded IPs, ports, magic numbers, role strings, AutoBot file paths, and model name literals (#3397)"
 
   # Function length enforcement (Issue #620)
   - repo: local
