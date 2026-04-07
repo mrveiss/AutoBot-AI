@@ -14,7 +14,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { getSlmApiBase, getBackendUrl } from '@/config/ssot-config'
 import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
 import {
   useSlmUserApi,
@@ -341,7 +341,7 @@ async function checkRbacStatus(): Promise<void> {
   if (!isAdmin.value) return
 
   try {
-    const response = await fetch('/autobot-api/settings/rbac/status', {
+    const response = await fetch(`${getBackendUrl()}/settings/rbac/status`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
 
@@ -360,7 +360,7 @@ async function initializeRbac(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch('/autobot-api/settings/rbac/initialize', {
+    const response = await fetch(`${getBackendUrl()}/settings/rbac/initialize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
