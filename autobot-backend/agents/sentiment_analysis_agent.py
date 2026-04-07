@@ -24,7 +24,7 @@ from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 try:
-    from autobot_backend.memory.working_memory import WorkingMemoryService as _WMS
+    from memory.working_memory import WorkingMemoryService as _WMS
     _working_memory_available = True
 except ImportError:
     _WMS = None
