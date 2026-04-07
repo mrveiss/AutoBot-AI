@@ -27,6 +27,7 @@ def _get_ssot_ollama_url() -> str:
     except Exception:
         return os.getenv(
             "AUTOBOT_OLLAMA_ENDPOINT",
+            # codeql-suppress py/insecure-protocol: internal loopback-only Ollama endpoint
             os.getenv("AUTOBOT_OLLAMA_HOST", "http://127.0.0.1:11434"),
         )
 
@@ -783,6 +784,7 @@ class ConfigManager:
         defaults = {
             "server_host": os.getenv("AUTOBOT_BACKEND_HOST", "0.0.0.0"),  # nosec B104
             "server_port": int(os.getenv("AUTOBOT_BACKEND_PORT", "8001")),
+            # codeql-suppress py/insecure-protocol: internal service-to-service endpoint on private network
             "api_endpoint": os.getenv(
                 "AUTOBOT_BACKEND_API_ENDPOINT", "http://localhost:8001"
             ),

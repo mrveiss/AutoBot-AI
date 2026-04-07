@@ -53,7 +53,9 @@ class SessionService:
         await redis_client.sadd(key, token_hash)
         await redis_client.expire(key, ttl)
 
-        logger.info("Added token to blacklist for user %s", user_id)
+        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs user_id only, no token value
+            "Added token to blacklist for user %s", user_id
+        )
 
     async def is_token_blacklisted(self, user_id: uuid.UUID, token: str) -> bool:
         """

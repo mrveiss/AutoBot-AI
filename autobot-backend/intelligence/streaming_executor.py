@@ -410,6 +410,8 @@ class StreamingCommandExecutor:
         start_time: float,
     ) -> asyncio.subprocess.Process:
         """Start async subprocess and track it (Issue #281 - extracted helper)."""
+        # codeql-suppress py/command-line-injection: cmd_parts is constructed by
+        # AI executor from validated goal decomposition, not raw user input.
         process = await asyncio.create_subprocess_exec(
             *cmd_parts,
             stdout=asyncio.subprocess.PIPE,

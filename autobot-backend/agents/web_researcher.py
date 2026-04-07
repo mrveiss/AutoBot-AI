@@ -164,7 +164,9 @@ class CaptchaSolver:
     ) -> Optional[str]:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
-            logger.warning("No CAPTCHA API key configured")
+            logger.warning(  # codeql-suppress py/clear-text-logging-sensitive-data: logs absence of key, no key value
+                "No CAPTCHA API key configured"
+            )
             return None
         try:
             if self.service == "2captcha":
