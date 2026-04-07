@@ -642,6 +642,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         messages.append(deny_msg)
         if stream_cb:
             stream_cb(deny_msg)
+        emit_step_complete(
+            "execute_tools",
+            _cot_exec_start,
+            output_summary="approval denied — tools skipped",
+            session_id=session_id,
+        )
         return {
             "should_continue": False,
             "workflow_messages": messages,

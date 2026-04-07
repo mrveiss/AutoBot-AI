@@ -20,7 +20,7 @@
  *   // entries is a reactive array of TraceEntry[]
  */
 
-import { ref, computed, onUnmounted, getCurrentInstance, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, isRef, onUnmounted, getCurrentInstance, type Ref, type ComputedRef, type MaybeRef } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
 
@@ -96,7 +96,16 @@ const COT_EVENT_TYPES = [
 // Composable
 // ---------------------------------------------------------------------------
 
-export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceReturn {
+export function useReasoningTrace(
+  sessionId?: MaybeRef<string | null | undefined>,
+): UseReasoningTraceReturn {
+  // Normalise to a computed ref so that reactive values (e.g. computed(() =>
+  // store.currentSessionId)) are read at handler call-time, not frozen at
+  // setup time. Plain string / null / undefined values still work unchanged.
+  const _sessionId = isRef(sessionId)
+    ? sessionId
+    : computed(() => sessionId as string | null | undefined)
+
   const entries = ref<TraceEntry[]>([])
   const activeSteps = ref(0)
   const unsubscribers: Array<() => void> = []
@@ -121,7 +130,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
 
   function handleStepStart(payload: RawPayload): void {
     // Filter to the relevant session when one is specified.
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     activeSteps.value++
@@ -135,7 +144,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
   }
 
   function handleStepComplete(payload: RawPayload): void {
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     activeSteps.value = Math.max(0, activeSteps.value - 1)
@@ -150,7 +159,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
   }
 
   function handleToolCall(payload: RawPayload): void {
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     push({
@@ -162,7 +171,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
   }
 
   function handleToolResult(payload: RawPayload): void {
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     push({
@@ -177,7 +186,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
   }
 
   function handleLlmChunk(payload: RawPayload): void {
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     // For chunk events we update the last llm_chunk entry in-place to avoid
@@ -197,7 +206,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
   }
 
   function handlePlan(payload: RawPayload): void {
-    if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
+    if (_sessionId.value && payload['session_id'] && payload['session_id'] !== _sessionId.value) {
       return
     }
     const steps = Array.isArray(payload['steps'])

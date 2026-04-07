@@ -110,10 +110,9 @@ def _try_publish(event_type: str, payload: dict) -> None:
     try:
         from event_manager import event_manager
 
-        coro = event_manager.publish(event_type, payload)
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(coro)
+            task = loop.create_task(event_manager.publish(event_type, payload))
             task.add_done_callback(
                 lambda t: logger.debug("cot_events: publish error: %s", t.exception())
                 if not t.cancelled() and t.exception()
