@@ -1507,3 +1507,13 @@ async def get_npu_search_engine() -> NPUSemanticSearch:
                 _npu_search_engine = NPUSemanticSearch()
                 await _npu_search_engine.initialize()
     return _npu_search_engine
+
+
+# ---------------------------------------------------------------------------
+# Issue #3828: VectorSearchEngine adapter
+#
+# VectorSearchEngine._NPUBackend calls get_npu_search_engine() directly and
+# converts its SearchResult objects to the canonical form.  No changes to
+# NPUSemanticSearch internals are required; the bridge lives entirely in
+# knowledge/vector_search_engine.py.
+# ---------------------------------------------------------------------------

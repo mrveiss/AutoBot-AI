@@ -1164,3 +1164,12 @@ __all__ = [
     "FAISS_AVAILABLE",
     "FAISS_GPU_AVAILABLE",
 ]
+
+# ---------------------------------------------------------------------------
+# Issue #3828: VectorSearchEngine adapter
+#
+# VectorSearchEngine._GPUBackend calls get_hybrid_vector_search() directly and
+# converts HybridVectorSearch.SearchResult objects to the canonical form.
+# No changes to HybridVectorSearch internals are required; the bridge lives
+# entirely in knowledge/vector_search_engine.py.
+# ---------------------------------------------------------------------------
