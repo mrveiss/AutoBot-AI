@@ -21,7 +21,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
-from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT
+from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
