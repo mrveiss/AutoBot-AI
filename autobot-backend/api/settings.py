@@ -764,6 +764,35 @@ def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
     return diff
 
 
+async def _atomic_write_json(target: Path, data: dict) -> None:
+    """Write *data* as JSON to *target* atomically via a temp-file rename.
+
+    Creates parent directories as needed.  Cleans up the temp file if the
+    write or rename fails so no partial file is left on disk.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=str(target.parent), suffix=".tmp", prefix=target.stem + "_"
+    )
+    os.close(tmp_fd)  # aiofiles will reopen by path
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
+            await fh.write(json.dumps(data, indent=2, ensure_ascii=False))
+        os.replace(tmp_path, str(target))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _count_unchanged_keys(incoming: dict, changed: dict) -> int:
+    """Return how many leaf keys in *incoming* were not present in *changed*."""
+    all_incoming_leaf_count = len(_compute_flat_diff({}, incoming))
+    return max(0, all_incoming_leaf_count - len(changed))
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sync_config",
@@ -791,37 +820,16 @@ async def sync_config(
         return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
 
     before_config: dict = ConfigService.get_full_config()
-
-    # Merge the incoming payload onto the current config.
     merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
 
-    # Persist atomically: write to tmp then rename (non-blocking write).
     settings_file = PATH.PROJECT_ROOT / "config" / "settings.json"
-    settings_file.parent.mkdir(parents=True, exist_ok=True)
-
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=str(settings_file.parent), suffix=".tmp", prefix="settings_"
-    )
-    os.close(tmp_fd)  # aiofiles will reopen by path
-    try:
-        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
-            await fh.write(json.dumps(merged_config, indent=2, ensure_ascii=False))
-        os.replace(tmp_path, str(settings_file))
-    except Exception:
-        # Clean up tmp file if write or rename failed.
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    await _atomic_write_json(settings_file, merged_config)
 
     # Invalidate the ConfigService cache so the next read picks up the new file.
     ConfigService.clear_cache()
 
     changed = _compute_flat_diff(before_config, merged_config)
-    # Count leaf keys in the incoming payload that were not modified.
-    all_incoming_leaf_count = len(_compute_flat_diff({}, request.settings))
-    unchanged_keys = max(0, all_incoming_leaf_count - len(changed))
+    unchanged_keys = _count_unchanged_keys(request.settings, changed)
 
     # Audit trail (same pattern as existing save_settings endpoint).
     await ConfigRevisionService(session).create_revision(
