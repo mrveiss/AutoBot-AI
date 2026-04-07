@@ -40,8 +40,6 @@ from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
-
-_DEFAULT_LLM_REQUEST_TIMEOUT: int = int(_ssot_config.timeout.llm_request)
 from constants.model_constants import (
     OPENAI_GPT35_TURBO,
     OPENAI_GPT35_TURBO_16K,
@@ -51,6 +49,8 @@ from constants.model_constants import (
 from constants.threshold_constants import TimingConstants
 
 load_dotenv()
+
+_DEFAULT_LLM_REQUEST_TIMEOUT: int = int(_ssot_config.timeout.llm_request)
 
 # SSOT config for Ollama defaults - Issue #694
 try:
