@@ -252,12 +252,35 @@ class BaseAgent(ABC):
         """
         Wrapper that adds performance tracking to request processing.
         Used by agent clients for monitoring.
+
+        Persists each invocation to AgentAnalytics (Redis db=ANALYTICS) so
+        usage data is queryable via GET /api/agents/usage.
         """
         start_time = datetime.now(tz=timezone.utc)
+        task_id = str(uuid.uuid4())
 
         # Increment request count (thread-safe)
         with self._stats_lock:
             self.request_count += 1
+
+        # Record invocation start in Redis analytics
+        try:
+            from services.agent_analytics import TaskStatus, get_agent_analytics
+
+            analytics = get_agent_analytics()
+            await analytics.track_task_start(
+                agent_id=self.agent_type,
+                agent_type=self.agent_type,
+                task_id=task_id,
+                task_name=request.action or "process_request",
+                metadata={
+                    "request_id": request.request_id,
+                    "priority": request.priority,
+                },
+            )
+        except Exception as analytics_err:
+            logger.debug("Analytics track_task_start failed: %s", analytics_err)
+            analytics = None
 
         try:
             response = await self.process_request(request)
@@ -274,6 +297,28 @@ class BaseAgent(ABC):
 
             response.execution_time = execution_time
 
+            # Record completion in Redis analytics
+            if analytics is not None:
+                try:
+                    outcome = (
+                        TaskStatus.COMPLETED
+                        if response.status == "success"
+                        else TaskStatus.FAILED
+                    )
+                    tokens = (
+                        response.metadata.get("token_usage")
+                        if response.metadata
+                        else None
+                    )
+                    await analytics.track_task_complete(
+                        task_id=task_id,
+                        status=outcome,
+                        tokens_used=tokens,
+                        error_message=response.error,
+                    )
+                except Exception as analytics_err:
+                    logger.debug("Analytics track_task_complete failed: %s", analytics_err)
+
             return response
 
         except Exception as e:
@@ -282,6 +327,19 @@ class BaseAgent(ABC):
             # Increment error count (thread-safe)
             with self._stats_lock:
                 self.error_count += 1
+
+            # Record failure in Redis analytics
+            if analytics is not None:
+                try:
+                    from services.agent_analytics import TaskStatus
+
+                    await analytics.track_task_complete(
+                        task_id=task_id,
+                        status=TaskStatus.FAILED,
+                        error_message=str(e),
+                    )
+                except Exception as analytics_err:
+                    logger.debug("Analytics failure record failed: %s", analytics_err)
 
             logger.error("Agent %s error: %s", self.agent_type, e)
             return AgentResponse(

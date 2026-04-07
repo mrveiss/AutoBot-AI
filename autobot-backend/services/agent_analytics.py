@@ -16,10 +16,12 @@ Related Issues: #59 (Advanced Analytics & Business Intelligence)
 
 import json
 import logging
+import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from constants.ttl_constants import TTL_1_HOUR, TTL_30_DAYS
@@ -666,3 +668,44 @@ def get_agent_analytics() -> AgentAnalytics:
             if _agent_analytics is None:
                 _agent_analytics = AgentAnalytics()
     return _agent_analytics
+
+
+@asynccontextmanager
+async def track_agent_usage(
+    agent_name: str,
+    task_type: str,
+    token_usage: Optional[int] = None,
+) -> AsyncGenerator[None, None]:
+    """Async context manager for tracking a single agent invocation.
+
+    Usage::
+
+        async with track_agent_usage("chat", "conversation"):
+            result = await agent.do_work()
+
+    Persists start/end time, outcome (success/fail), and optional token usage
+    to Redis db=ANALYTICS via AgentAnalytics.
+    """
+    analytics = get_agent_analytics()
+    task_id = str(uuid.uuid4())
+    outcome = TaskStatus.FAILED
+
+    await analytics.track_task_start(
+        agent_id=agent_name,
+        agent_type=agent_name,
+        task_id=task_id,
+        task_name=task_type,
+    )
+
+    try:
+        yield
+        outcome = TaskStatus.COMPLETED
+    except Exception:
+        outcome = TaskStatus.FAILED
+        raise
+    finally:
+        await analytics.track_task_complete(
+            task_id=task_id,
+            status=outcome,
+            tokens_used=token_usage,
+        )

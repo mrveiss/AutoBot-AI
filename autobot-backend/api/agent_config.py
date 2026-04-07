@@ -14,7 +14,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -623,16 +623,34 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
             "tasks": config["tasks"],
             "mcp_tools": config.get("mcp_tools", []),
             "config_source": config_source,
-            # Usage tracking requires Redis-based agent metrics service
-            # See: backend/services/agent_metrics_service.py (to be implemented)
-            "last_used": "N/A",
+            "last_used": None,
             "performance": {
                 "avg_response_time": 0.0,
-                "success_rate": 1.0,
+                "success_rate": 0.0,
                 "total_requests": 0,
             },
         }
         agents.append(agent_info)
+
+    # Enrich with live analytics (best-effort; missing data stays at defaults)
+    try:
+        from services.agent_analytics import get_agent_analytics
+
+        analytics = get_agent_analytics()
+        metrics_by_id = {
+            m.agent_id: m for m in await analytics.get_all_agents_metrics()
+        }
+        for info in agents:
+            m = metrics_by_id.get(info["id"])
+            if m:
+                info["last_used"] = m.last_activity
+                info["performance"] = {
+                    "avg_response_time": round(m.avg_duration_ms / 1000, 3),
+                    "success_rate": round(m.success_rate / 100, 4),
+                    "total_requests": m.total_tasks,
+                }
+    except Exception as _analytics_err:
+        logger.debug("Analytics enrichment failed: %s", _analytics_err)
 
     return JSONResponse(
         status_code=200,
@@ -790,6 +808,128 @@ async def get_specialized_agent(
         )
 
     return JSONResponse(status_code=200, content=agent)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agents_usage",
+    error_code_prefix="AGENT_CONFIG",
+)
+@router.get("/agents/usage")
+async def get_agents_usage(
+    agent_id: Optional[str] = Query(
+        None, description="Filter to a specific agent (all agents if omitted)"
+    ),
+    days: int = Query(
+        default=7, ge=1, le=90, description="Lookback window in days for trend data"
+    ),
+    outcome: Optional[str] = Query(
+        None, description="Filter by outcome: completed, failed, timeout, cancelled"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Agent usage summary: invocation counts, success rates, and average latency.
+
+    Returns per-agent aggregated metrics and daily trend data queryable by
+    agent name, time range, and outcome.  Data is persisted by the
+    AgentAnalytics service (Redis db=ANALYTICS) and populated automatically
+    whenever an agent is invoked via BaseAgent.execute_with_tracking or the
+    track_agent_usage() context manager.
+
+    Issue #3289: Requires admin authentication.
+    """
+    from services.agent_analytics import TaskStatus, get_agent_analytics
+
+    analytics = get_agent_analytics()
+
+    if agent_id:
+        metrics = await analytics.get_agent_metrics(agent_id)
+        metrics_list = [metrics] if metrics else []
+        history = await analytics.get_agent_history(agent_id, limit=500)
+    else:
+        metrics_list = await analytics.get_all_agents_metrics()
+        history = await analytics.get_recent_tasks(limit=2000)
+
+    # Filter history by outcome when requested
+    if outcome:
+        try:
+            outcome_value = TaskStatus(outcome).value
+        except ValueError:
+            outcome_value = outcome
+        history = [t for t in history if t.get("status") == outcome_value]
+
+    # Build per-agent aggregated summary
+    agents_summary = [m.to_dict() for m in metrics_list]
+
+    # Daily trend buckets for the requested window
+    from datetime import timedelta
+
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    window_tasks = []
+    for task in history:
+        try:
+            started = datetime.fromisoformat(task["started_at"])
+            # Normalise naive timestamps that predate the UTC migration
+            if started.tzinfo is None:
+                from datetime import timezone as _tz
+
+                started = started.replace(tzinfo=_tz.utc)
+            if started >= cutoff:
+                window_tasks.append(task)
+        except (KeyError, ValueError):
+            continue
+
+    daily: dict = {}
+    for task in window_tasks:
+        day = task["started_at"][:10]
+        bucket = daily.setdefault(
+            day, {"total": 0, "completed": 0, "failed": 0, "total_duration_ms": 0.0}
+        )
+        bucket["total"] += 1
+        if task.get("status") == TaskStatus.COMPLETED.value:
+            bucket["completed"] += 1
+        elif task.get("status") == TaskStatus.FAILED.value:
+            bucket["failed"] += 1
+        if task.get("duration_ms"):
+            bucket["total_duration_ms"] += task["duration_ms"]
+
+    # Add derived rates to each day bucket
+    for stats in daily.values():
+        if stats["total"] > 0:
+            stats["success_rate"] = round(
+                (stats["completed"] / stats["total"]) * 100, 2
+            )
+            stats["calls_per_day"] = stats["total"]
+            stats["avg_latency_ms"] = round(
+                stats["total_duration_ms"] / stats["total"], 2
+            )
+        else:
+            stats["success_rate"] = 0.0
+            stats["calls_per_day"] = 0
+            stats["avg_latency_ms"] = 0.0
+
+    total_calls = sum(b["total"] for b in daily.values())
+    total_completed = sum(b["completed"] for b in daily.values())
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "agents": agents_summary,
+            "daily_trends": daily,
+            "summary": {
+                "agent_id": agent_id,
+                "period_days": days,
+                "outcome_filter": outcome,
+                "total_calls": total_calls,
+                "total_agents": len(agents_summary),
+                "overall_success_rate": round(
+                    (total_completed / total_calls * 100) if total_calls else 0.0, 2
+                ),
+            },
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        },
+    )
 
 
 @with_error_handling(
