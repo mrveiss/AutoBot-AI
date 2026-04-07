@@ -19,6 +19,7 @@ import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
+import { useWebSocket } from '@/composables/useWebSocket';
 
 const logger = createLogger('useWorkflowBuilder');
 
@@ -606,9 +607,27 @@ export function useWorkflowBuilder() {
   const workflowNodes = ref<WorkflowNode[]>([]);
   const selectedNodeId = ref<string | null>(null);
 
-  // WebSocket connection
-  let wsConnection: WebSocket | null = null;
-  const wsConnected = ref(false);
+  // WebSocket connection — managed via useWebSocket composable
+  const wsUrl = ref('');
+  const {
+    isConnected: wsConnected,
+    connect: wsConnect,
+    disconnect: wsDisconnect,
+  } = useWebSocket(wsUrl, {
+    autoConnect: false,
+    autoReconnect: false,
+    parseJSON: false,
+    onMessage: (data: string) => {
+      try {
+        handleWebSocketMessage(JSON.parse(data));
+      } catch (e) {
+        logger.error('Failed to parse WebSocket message:', e);
+      }
+    },
+    onOpen: () => logger.info('WebSocket connected'),
+    onClose: () => logger.info('WebSocket disconnected'),
+    onError: (event) => logger.error('WebSocket error:', event),
+  });
 
   // ==================================================================================
   // COMPUTED
@@ -1093,35 +1112,9 @@ export function useWorkflowBuilder() {
 
   /** Connect to workflow WebSocket */
   function connectWebSocket(sessionId: string): void {
-    if (wsConnection) {
-      wsConnection.close();
-    }
-
-    const wsUrl = `${getBackendWsUrl()}/api/workflow-automation/workflow_ws/${sessionId}`;
-    wsConnection = new WebSocket(wsUrl);
-
-    wsConnection.onopen = () => {
-      wsConnected.value = true;
-      logger.info('WebSocket connected');
-    };
-
-    wsConnection.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-      } catch (e) {
-        logger.error('Failed to parse WebSocket message:', e);
-      }
-    };
-
-    wsConnection.onerror = (event) => {
-      logger.error('WebSocket error:', event);
-    };
-
-    wsConnection.onclose = () => {
-      wsConnected.value = false;
-      logger.info('WebSocket disconnected');
-    };
+    wsDisconnect();
+    wsUrl.value = `${getBackendWsUrl()}/api/workflow-automation/workflow_ws/${sessionId}`;
+    wsConnect();
   }
 
   /** Handle WebSocket messages */
@@ -1150,20 +1143,13 @@ export function useWorkflowBuilder() {
 
   /** Disconnect WebSocket */
   function disconnectWebSocket(): void {
-    if (wsConnection) {
-      wsConnection.close();
-      wsConnection = null;
-    }
-    wsConnected.value = false;
+    wsDisconnect();
   }
 
   // ==================================================================================
   // LIFECYCLE
   // ==================================================================================
-
-  onUnmounted(() => {
-    disconnectWebSocket();
-  });
+  // useWebSocket calls disconnect() in onUnmounted automatically
 
   // ==================================================================================
   // RETURN
