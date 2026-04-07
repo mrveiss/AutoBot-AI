@@ -693,6 +693,14 @@ class CacheL2Config(BaseSettings):
         alias="AUTOBOT_CACHE_SEMANTIC_THRESHOLD",
         description="Cosine similarity threshold for semantic cache hits (0.5-1.0)",
     )
+    kb_dedup_threshold: float = Field(
+        default=0.92,
+        alias="AUTOBOT_KB_DEDUP_THRESHOLD",
+        description=(
+            "Cosine similarity threshold for KB fact deduplication (0.5-1.0). "
+            "Facts whose nearest ChromaDB neighbour exceeds this score are skipped."
+        ),
+    )
 
 
 class CacheConfig(BaseSettings):
