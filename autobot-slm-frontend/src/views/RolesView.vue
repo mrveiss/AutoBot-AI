@@ -14,6 +14,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('RolesView')
 const authStore = useAuthStore()
@@ -110,7 +111,7 @@ const healthClass = computed(() => {
 // API helper
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
   try {
-    const response = await fetch(`${authStore.getApiUrl()}${path}`, {
+    const response = await fetch(`${getSlmApiBase()}${path}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...authStore.getAuthHeaders(), ...options?.headers },
     })
@@ -130,20 +131,20 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | nul
 async function fetchRoles(): Promise<void> {
   isLoading.value = true
   errorMessage.value = null
-  const result = await apiFetch<RoleDefinition[]>('/api/roles')
+  const result = await apiFetch<RoleDefinition[]>('/roles')
   if (result) roles.value = result
   isLoading.value = false
 }
 
 async function fetchFleetHealth(): Promise<void> {
   isLoadingHealth.value = true
-  const result = await apiFetch<FleetHealth>('/api/roles/fleet-health')
+  const result = await apiFetch<FleetHealth>('/roles/fleet-health')
   if (result) fleetHealth.value = result
   isLoadingHealth.value = false
 }
 
 async function fetchNodes(): Promise<void> {
-  const result = await apiFetch<NodeSummary[]>('/api/nodes')
+  const result = await apiFetch<NodeSummary[]>('/nodes')
   if (result) nodes.value = result
 }
 
@@ -205,7 +206,7 @@ async function saveRole(): Promise<void> {
 
   if (editingRole.value) {
     const result = await apiFetch<RoleDefinition>(
-      `/api/roles/${editingRole.value}`,
+      `/roles/${editingRole.value}`,
       { method: 'PUT', body: JSON.stringify(payload) }
     )
     if (result) {
@@ -216,7 +217,7 @@ async function saveRole(): Promise<void> {
     }
   } else {
     const result = await apiFetch<RoleDefinition>(
-      '/api/roles',
+      '/roles',
       { method: 'POST', body: JSON.stringify(payload) }
     )
     if (result) {
@@ -231,7 +232,7 @@ async function saveRole(): Promise<void> {
 async function deleteRole(roleName: string): Promise<void> {
   if (!confirm(`Delete role "${roleName}"? This cannot be undone.`)) return
   const result = await apiFetch<{ message: string }>(
-    `/api/roles/${roleName}`,
+    `/roles/${roleName}`,
     { method: 'DELETE' }
   )
   if (result) {
@@ -256,7 +257,7 @@ async function executeMigrate(): Promise<void> {
   errorMessage.value = null
 
   const result = await apiFetch<{ success: boolean; output: string; playbook: string }>(
-    `/api/roles/${migratingRole.value.name}/migrate`,
+    `/roles/${migratingRole.value.name}/migrate`,
     { method: 'POST', body: JSON.stringify({ target_node_id: targetNodeId.value }) }
   )
 

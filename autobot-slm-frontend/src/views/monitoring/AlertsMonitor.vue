@@ -12,6 +12,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const {
   alerts,
@@ -129,7 +130,7 @@ async function clearAlerts() {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (authStore.token) headers.Authorization = `Bearer ${authStore.token}`
-    await fetch('/api/monitoring/alerts', { method: 'DELETE', headers })
+    await fetch(`${getSlmApiBase()}/monitoring/alerts`, { method: 'DELETE', headers })
     await refresh()
   } finally {
     isClearing.value = false
