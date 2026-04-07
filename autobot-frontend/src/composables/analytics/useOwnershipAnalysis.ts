@@ -21,6 +21,7 @@ import type {
   KnowledgeGap,
   OwnershipMetrics,
 } from './codeIntelTypes'
+import { getApiBase } from '@/config/ssot-config'
 
 export function useOwnershipAnalysis(
   deps: UseCodeIntelAnalysisDeps,
@@ -33,7 +34,7 @@ export function useOwnershipAnalysis(
     error: ownershipError,
     load: _loadOwnership,
   } = useAnalyticsFetch<OwnershipAnalysisResult>(
-    '/api/analytics/codebase/ownership/analysis',
+    `${getApiBase()}/analytics/codebase/ownership/analysis`,
     (r) => {
       if (r.status === 'success') {
         return {

@@ -10,6 +10,7 @@
 import { ref, onMounted } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useDevSpeedup')
 
@@ -92,7 +93,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/quick-search', { query, type })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/quick-search`, { query, type })
       searchResults.value = data.results || []
       logger.debug('Search results:', searchResults.value.length)
     } catch (err) {
@@ -108,7 +109,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/snippet-generate', { description, language })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/snippet-generate`, { description, language })
       const snippet = data.snippet
       snippets.value.unshift(snippet)
       logger.debug('Generated snippet:', snippet)
@@ -128,7 +129,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     error.value = null
     try {
       const params = category ? `?category=${category}` : ''
-      const data = await ApiClient.get(`/api/dev-speedup/templates${params}`)
+      const data = await ApiClient.get(`${getApiBase()}/dev-speedup/templates${params}`)
       templates.value = data.templates || []
       logger.debug('Fetched templates:', templates.value.length)
     } catch (err) {
@@ -144,7 +145,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/refactor-suggest', { code, language })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/refactor-suggest`, { code, language })
       refactorSuggestions.value = data.suggestions || []
       logger.debug('Refactor suggestions:', refactorSuggestions.value.length)
     } catch (err) {
@@ -160,7 +161,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/boilerplate', { type, ...options })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/boilerplate`, { type, ...options })
       logger.debug('Generated boilerplate')
       return data.code
     } catch (err) {
@@ -177,7 +178,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/test-generate', { code, language, framework })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/test-generate`, { code, language, framework })
       generatedTests.value = data.tests || []
       logger.debug('Generated tests:', generatedTests.value.length)
     } catch (err) {
@@ -193,7 +194,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/optimize', { code, language })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/optimize`, { code, language })
       logger.debug('Code optimized')
       return data.optimized_code
     } catch (err) {
@@ -210,7 +211,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/format', { code, language })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/format`, { code, language })
       logger.debug('Code formatted')
       return data.formatted_code
     } catch (err) {
@@ -227,7 +228,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/dev-speedup/lint-fix', { code, language })
+      const data = await ApiClient.post(`${getApiBase()}/dev-speedup/lint-fix`, { code, language })
       logger.debug('Linting fixed')
       return data.fixed_code
     } catch (err) {
@@ -242,7 +243,7 @@ export function useDevSpeedup(options: UseDevSpeedupOptions = {}) {
 
   async function fetchHistory(): Promise<void> {
     try {
-      const data = await ApiClient.get('/api/dev-speedup/history')
+      const data = await ApiClient.get(`${getApiBase()}/dev-speedup/history`)
       actionHistory.value = data.actions || []
       logger.debug('Fetched action history:', actionHistory.value.length)
     } catch (err) {

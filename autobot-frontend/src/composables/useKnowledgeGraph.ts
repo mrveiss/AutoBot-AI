@@ -13,6 +13,7 @@
 import { ref, reactive } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useKnowledgeGraph')
 
@@ -139,7 +140,7 @@ const stats = reactive({
   summaryCount: 0,
 })
 
-const API_BASE = '/api/knowledge-graph'
+const API_BASE = `${getApiBase()}/knowledge-graph`
 
 // ============================================================================
 // Composable

@@ -13,7 +13,7 @@
  */
 
 import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
-import { getBackendUrl, getBackendWsUrl } from '@/config/ssot-config';
+import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
@@ -299,7 +299,7 @@ class WorkflowBuilderApiClient {
     context?: Record<string, unknown>,
     maxParallelTasks?: number
   ): Promise<ApiResponse<WorkflowExecutionResult>> {
-    return this.request('/api/orchestrator/workflow/execute', {
+    return this.request(`${getApiBase()}/orchestrator/workflow/execute`, {
       method: 'POST',
       body: JSON.stringify({
         goal,
@@ -315,7 +315,7 @@ class WorkflowBuilderApiClient {
     goal: string,
     context?: Record<string, unknown>
   ): Promise<ApiResponse<{ status: string; plan: WorkflowPlan; task_count: number }>> {
-    return this.request('/api/orchestrator/workflow/plan', {
+    return this.request(`${getApiBase()}/orchestrator/workflow/plan`, {
       method: 'POST',
       body: JSON.stringify({ goal, context }),
     });
@@ -325,14 +325,14 @@ class WorkflowBuilderApiClient {
   async getActiveOrchestrationWorkflows(): Promise<
     ApiResponse<{ status: string; active_count: number; workflows: ActiveWorkflow[] }>
   > {
-    return this.request('/api/orchestrator/workflow/active');
+    return this.request(`${getApiBase()}/orchestrator/workflow/active`);
   }
 
   /** Get agent performance metrics */
   async getAgentPerformance(): Promise<
     ApiResponse<{ status: string; performance_data: Record<string, AgentPerformance> }>
   > {
-    return this.request('/api/orchestrator/agents/performance');
+    return this.request(`${getApiBase()}/orchestrator/agents/performance`);
   }
 
   /** Get agent recommendations */
@@ -348,7 +348,7 @@ class WorkflowBuilderApiClient {
       agent_count: number;
     }>
   > {
-    return this.request('/api/orchestrator/agents/recommend', {
+    return this.request(`${getApiBase()}/orchestrator/agents/recommend`, {
       method: 'POST',
       body: JSON.stringify({
         task_type: taskType,
@@ -361,7 +361,7 @@ class WorkflowBuilderApiClient {
   async getExecutionStrategies(): Promise<
     ApiResponse<{ strategies: Record<string, StrategyInfo>; default: string }>
   > {
-    return this.request('/api/orchestrator/strategies');
+    return this.request(`${getApiBase()}/orchestrator/strategies`);
   }
 
   /** Get agent capabilities */
@@ -372,12 +372,12 @@ class WorkflowBuilderApiClient {
       total_agents: number;
     }>
   > {
-    return this.request('/api/orchestrator/capabilities');
+    return this.request(`${getApiBase()}/orchestrator/capabilities`);
   }
 
   /** Get orchestration system status */
   async getOrchestrationStatus(): Promise<ApiResponse<OrchestrationStatus>> {
-    return this.request('/api/orchestrator/status');
+    return this.request(`${getApiBase()}/orchestrator/status`);
   }
 
   /** Get example workflows */
@@ -387,7 +387,7 @@ class WorkflowBuilderApiClient {
       usage_tips: string[];
     }>
   > {
-    return this.request('/api/orchestrator/examples');
+    return this.request(`${getApiBase()}/orchestrator/examples`);
   }
 
   // ==================================================================================
@@ -402,7 +402,7 @@ class WorkflowBuilderApiClient {
     sessionId: string,
     automationMode: AutomationMode = 'semi_automatic'
   ): Promise<ApiResponse<{ success: boolean; workflow_id: string; message: string }>> {
-    return this.request('/api/workflow-automation/create_workflow', {
+    return this.request(`${getApiBase()}/workflow-automation/create_workflow`, {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -425,7 +425,7 @@ class WorkflowBuilderApiClient {
   async startWorkflow(
     workflowId: string
   ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-    return this.request(`/api/workflow-automation/start_workflow/${workflowId}`, {
+    return this.request(`${getApiBase()}/workflow-automation/start_workflow/${workflowId}`, {
       method: 'POST',
     });
   }
@@ -437,7 +437,7 @@ class WorkflowBuilderApiClient {
     stepId?: string,
     userInput?: string
   ): Promise<ApiResponse<{ success: boolean; message: string }>> {
-    return this.request('/api/workflow-automation/control_workflow', {
+    return this.request(`${getApiBase()}/workflow-automation/control_workflow`, {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -452,21 +452,21 @@ class WorkflowBuilderApiClient {
   async getWorkflowStatus(
     workflowId: string
   ): Promise<ApiResponse<{ success: boolean; workflow: ActiveWorkflow }>> {
-    return this.request(`/api/workflow-automation/workflow_status/${workflowId}`);
+    return this.request(`${getApiBase()}/workflow-automation/workflow_status/${workflowId}`);
   }
 
   /** Get all active workflows */
   async getActiveWorkflows(): Promise<
     ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
   > {
-    return this.request('/api/workflow-automation/active_workflows');
+    return this.request(`${getApiBase()}/workflow-automation/active_workflows`);
   }
 
   /** Get completed workflow history (#1367) */
   async getCompletedWorkflows(): Promise<
     ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
   > {
-    return this.request('/api/workflow-automation/completed_workflows');
+    return this.request(`${getApiBase()}/workflow-automation/completed_workflows`);
   }
 
   /** Create workflow from natural language */
@@ -485,7 +485,7 @@ class WorkflowBuilderApiClient {
       plan?: PlanApprovalRequest;
     }>
   > {
-    return this.request('/api/workflow-automation/create_from_chat', {
+    return this.request(`${getApiBase()}/workflow-automation/create_from_chat`, {
       method: 'POST',
       body: JSON.stringify({
         user_request: userRequest,
@@ -510,7 +510,7 @@ class WorkflowBuilderApiClient {
       plan: PlanApprovalRequest;
     }>
   > {
-    return this.request(`/api/workflow-automation/present_plan/${workflowId}`, {
+    return this.request(`${getApiBase()}/workflow-automation/present_plan/${workflowId}`, {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -536,7 +536,7 @@ class WorkflowBuilderApiClient {
       message: string;
     }>
   > {
-    return this.request('/api/workflow-automation/approve_plan', {
+    return this.request(`${getApiBase()}/workflow-automation/approve_plan`, {
       method: 'POST',
       body: JSON.stringify({
         workflow_id: workflowId,
@@ -559,7 +559,7 @@ class WorkflowBuilderApiClient {
       approval: PlanApprovalRequest | null;
     }>
   > {
-    return this.request(`/api/workflow-automation/pending_approval/${workflowId}`);
+    return this.request(`${getApiBase()}/workflow-automation/pending_approval/${workflowId}`);
   }
 }
 

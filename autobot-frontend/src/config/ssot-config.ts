@@ -606,6 +606,15 @@ export function getBackendUrl(): string {
 }
 
 /**
+ * Get API base path.
+ * Returns the configured API base path, defaulting to '/api'.
+ * Override with VITE_API_BASE_PATH environment variable for custom deployments.
+ */
+export function getApiBase(): string {
+  return import.meta.env.VITE_API_BASE_PATH || '/api'
+}
+
+/**
  * Get WebSocket URL (backward compatibility).
  */
 export function getWebsocketUrl(): string {

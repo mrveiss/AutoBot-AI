@@ -24,6 +24,7 @@ import type {
   PerformanceFindingDetail,
   RedisOptimization,
 } from './codeIntelTypes'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useCodeIntelScores')
 
@@ -38,7 +39,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     error: securityScoreError,
     load: _loadSecurityScoreTask,
   } = useTaskLoader<SecurityScoreResult>(
-    '/api/code-intelligence/security/score',
+    `${getApiBase()}/code-intelligence/security/score`,
     (r) => {
       if (r.status === 'success') {
         return {
@@ -68,7 +69,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     error: performanceScoreError,
     load: _loadPerformanceScore,
   } = useAnalyticsFetch<PerformanceScoreResult>(
-    '/api/code-intelligence/performance/score',
+    `${getApiBase()}/code-intelligence/performance/score`,
     (r) => {
       if (r.status === 'success') {
         return {
@@ -101,7 +102,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     loading: loadingSecurityFindings,
     load: _loadSecurityFindings,
   } = useAnalyticsFetch<SecurityFindingDetail[]>(
-    '/api/code-intelligence/security/analyze',
+    `${getApiBase()}/code-intelligence/security/analyze`,
     (r) =>
       r.status === 'success' && r.findings
         ? (r.findings as unknown as SecurityFindingDetail[])
@@ -115,7 +116,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     loading: loadingPerformanceFindings,
     load: _loadPerformanceFindings,
   } = useAnalyticsFetch<PerformanceFindingDetail[]>(
-    '/api/code-intelligence/performance/analyze',
+    `${getApiBase()}/code-intelligence/performance/analyze`,
     (r) =>
       r.status === 'success' && r.findings
         ? (r.findings as unknown as PerformanceFindingDetail[])
@@ -129,7 +130,7 @@ export function useCodeIntelScores(deps: UseCodeIntelAnalysisDeps) {
     loading: loadingRedisOptimizations,
     load: _loadRedisOptimizations,
   } = useAnalyticsFetch<RedisOptimization[]>(
-    '/api/code-intelligence/redis/analyze',
+    `${getApiBase()}/code-intelligence/redis/analyze`,
     (r) =>
       r.status === 'success' && r.findings
         ? (r.findings as unknown as RedisOptimization[])

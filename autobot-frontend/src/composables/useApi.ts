@@ -9,6 +9,7 @@ import { inject } from 'vue'
 import type { ApiClientType } from '../plugins/api'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for useApi
 const logger = createLogger('useApi')
@@ -200,7 +201,7 @@ export function useChatApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have resetChat(), use direct HTTP call
         async () => {
-          const response = await api.post('/api/chat/reset')
+          const response = await api.post(`${getApiBase()}/chat/reset`)
           return await response.json()
         },
         { errorMessage: 'Failed to reset chat' }
@@ -258,7 +259,7 @@ export function useSettingsApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have getBackendSettings(), use direct HTTP call
         async () => {
-          const response = await api.get('/api/settings/backend')
+          const response = await api.get(`${getApiBase()}/settings/backend`)
           return await response.json()
         },
         {
@@ -275,7 +276,7 @@ export function useSettingsApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have saveBackendSettings(), use direct HTTP call
         async () => {
-          const response = await api.post('/api/settings/backend', settings)
+          const response = await api.post(`${getApiBase()}/settings/backend`, settings)
           return await response.json()
         },
         { errorMessage: 'Failed to update backend settings' }
@@ -298,7 +299,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have searchKnowledge(), use direct HTTP call
         async () => {
-          const response = await api.get(`/api/knowledge/search?query=${encodeURIComponent(query)}&limit=${limit}`)
+          const response = await api.get(`${getApiBase()}/knowledge/search?query=${encodeURIComponent(query)}&limit=${limit}`)
           return await response.json()
         },
         {
@@ -315,7 +316,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #549 Fix: Use correct path /api/knowledge_base/facts
         async () => {
-          const response = await api.post('/api/knowledge_base/facts', { content: text, title, source })
+          const response = await api.post(`${getApiBase()}/knowledge_base/facts`, { content: text, title, source })
           return await response.json()
         },
         { errorMessage: 'Failed to add text to knowledge base' }
@@ -329,7 +330,7 @@ export function useKnowledgeApi() {
       return withErrorHandling(
         // Issue #549 Fix: Use correct path /api/knowledge_base/url
         async () => {
-          const response = await api.post('/api/knowledge_base/url', { url, method })
+          const response = await api.post(`${getApiBase()}/knowledge_base/url`, { url, method })
           return await response.json()
         },
         { errorMessage: 'Failed to add URL to knowledge base' }
@@ -345,7 +346,7 @@ export function useKnowledgeApi() {
         async () => {
           const formData = new FormData()
           formData.append('file', file)
-          const response = await api.post('/api/knowledge_base/upload', formData)
+          const response = await api.post(`${getApiBase()}/knowledge_base/upload`, formData)
           return await response.json()
         },
         { errorMessage: 'Failed to add file to knowledge base' }
@@ -420,7 +421,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have listFiles(), use direct HTTP call
         async () => {
-          const response = await api.get(`/api/files/list?path=${encodeURIComponent(path)}`)
+          const response = await api.get(`${getApiBase()}/files/list?path=${encodeURIComponent(path)}`)
           return await response.json()
         },
         {
@@ -447,7 +448,7 @@ export function useFileApi() {
           formData.append('file', file)
           formData.append('path', path)
           formData.append('overwrite', String(overwrite))
-          const response = await api.post('/api/files/upload', formData)
+          const response = await api.post(`${getApiBase()}/files/upload`, formData)
           return await response.json()
         },
         { errorMessage: 'Failed to upload file' }
@@ -461,7 +462,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have viewFile(), use direct HTTP call
         async () => {
-          const response = await api.get(`/api/files/view?path=${encodeURIComponent(path)}`)
+          const response = await api.get(`${getApiBase()}/files/view?path=${encodeURIComponent(path)}`)
           return await response.json()
         },
         { errorMessage: 'Failed to view file' }
@@ -475,7 +476,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have deleteFile(), use direct HTTP call
         async () => {
-          const response = await api.delete(`/api/files?path=${encodeURIComponent(path)}`)
+          const response = await api.delete(`${getApiBase()}/files?path=${encodeURIComponent(path)}`)
           return await response.json()
         },
         { errorMessage: 'Failed to delete file' }
@@ -489,7 +490,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #552: Fixed path - backend uses path param /download/{path}, not query param
         async () => {
-          const response = await api.get(`/api/files/download/${encodeURIComponent(path)}`)
+          const response = await api.get(`${getApiBase()}/files/download/${encodeURIComponent(path)}`)
           return await response.blob()
         },
         { errorMessage: 'Failed to download file' }
@@ -506,7 +507,7 @@ export function useFileApi() {
           const formData = new FormData()
           formData.append('path', path)
           formData.append('name', name)
-          const response = await api.post('/api/files/create_directory', formData)
+          const response = await api.post(`${getApiBase()}/files/create_directory`, formData)
           return await response.json()
         },
         { errorMessage: 'Failed to create directory' }
@@ -520,7 +521,7 @@ export function useFileApi() {
       return withErrorHandling(
         // Issue #156 Fix: ApiClient doesn't have getFileStats(), use direct HTTP call
         async () => {
-          const response = await api.get('/api/files/stats')
+          const response = await api.get(`${getApiBase()}/files/stats`)
           return await response.json()
         },
         {

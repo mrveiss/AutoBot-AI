@@ -19,6 +19,7 @@ import type {
   BugPredictionResult,
   TopRiskFactor,
 } from './codeIntelTypes'
+import { getApiBase } from '@/config/ssot-config'
 
 export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
   const { t } = deps
@@ -26,7 +27,7 @@ export function useBugPrediction(deps: UseCodeIntelAnalysisDeps) {
   // --- Background task ---
 
   const bugPredictionTask = useBackgroundTask(
-    '/api/analytics/bug-prediction',
+    `${getApiBase()}/analytics/bug-prediction`,
   )
 
   const bugPredictionAnalysis = computed<BugPredictionResult | null>(
