@@ -442,8 +442,6 @@ class TimeoutConfig(BaseSettings):
     Fields are env-overridable via AUTOBOT_TIMEOUT_* variables.  The
     existing AUTOBOT_API_TIMEOUT / AUTOBOT_LLM_TIMEOUT / … aliases are
     preserved for backward compatibility.
-
-    Issue: #3803 — replace 20+ magic timeout numbers with named constants.
     """
 
     model_config = SettingsConfigDict(
