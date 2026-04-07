@@ -54,11 +54,9 @@ class StandardizedAgent(BaseAgent):
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
 
-        # Unified memory facade — subsystems accessed via properties:
-        #   self.memory_manager.working_memory  (WorkingMemoryService)
-        #   self.memory_manager.essential_story (EssentialStoryGenerator)
-        #   self.memory_manager.agent_diary     (AgentDiaryService)
-        self.memory_manager: UnifiedMemoryManager = UnifiedMemoryManager()
+        # Lazy memory facade — created on first access so agents that never
+        # use memory don't pay the UnifiedMemoryManager construction cost.
+        self._memory_manager: Optional[UnifiedMemoryManager] = None
 
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
@@ -75,6 +73,15 @@ class StandardizedAgent(BaseAgent):
         # Lock for thread-safe counter access
         # Named differently from BaseAgent._stats_lock (threading.Lock)
         self._async_stats_lock = asyncio.Lock()
+
+    @property
+    def memory_manager(self) -> UnifiedMemoryManager:
+        """Unified memory facade (lazy-init). Subsystems via properties:
+        working_memory, essential_story, agent_diary.
+        """
+        if self._memory_manager is None:
+            self._memory_manager = UnifiedMemoryManager()
+        return self._memory_manager
 
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
