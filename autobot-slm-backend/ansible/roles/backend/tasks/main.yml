@@ -256,6 +256,29 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
+# Issue #3873: permission_rules.yaml is read from /opt/autobot/config/ at
+# runtime (three levels up from services/permission_matcher.py).  The clean
+# task that previously wiped /opt/autobot/config has been removed; this task
+# ensures the directory and file are always present after each deploy.
+- name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+  ansible.builtin.file:
+    path: "{{ backend_install_dir | dirname }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
+
+- name: "Backend | Deploy permission_rules.yaml to infrastructure config path (#3873)"
+  ansible.builtin.copy:
+    src: permission_rules.yaml
+    dest: "{{ backend_install_dir | dirname }}/config/permission_rules.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  notify: restart backend
+  tags: ['backend', 'config']
+
 - name: Check if backend code already synced
   ansible.builtin.stat:
     path: "{{ backend_code_dir }}/main.py"
