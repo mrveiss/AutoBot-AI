@@ -107,7 +107,12 @@ class AgentDiaryService:
         """
         try:
             kb = await _get_kb()
-            all_facts = await kb.get_all_facts()
+            # Issue #3808: pass limit to avoid a full O(n) KB scan.
+            # We fetch a generous window (500) so that filtering by category+source
+            # still yields enough entries even on large KBs.  The result is then
+            # sorted and capped to last_n.
+            _FETCH_LIMIT = 500
+            all_facts = await kb.get_all_facts(limit=_FETCH_LIMIT)
             entries = [
                 f for f in all_facts
                 if (f.get("metadata") or {}).get("category") == self.CATEGORY

@@ -1136,6 +1136,21 @@ class FeatureConfig(BaseSettings):
     training_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_TRAINING")
     osint_enabled: bool = Field(default=True, alias="AUTOBOT_FEATURE_OSINT")
 
+    # Subsystem feature flags — issue #3009 (plan short-name fields)
+    # These complement the *_enabled fields above with concise names.
+    # Heavy optional subsystems (computer_vision, training) default to False.
+    npu: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU_2")
+    voice: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE_2")
+    browser_automation: bool = Field(
+        default=True, alias="AUTOBOT_FEATURE_BROWSER_AUTOMATION"
+    )
+    computer_vision: bool = Field(
+        default=False, alias="AUTOBOT_FEATURE_COMPUTER_VISION_CV"
+    )
+    training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
+    graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
+    mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
+
 
 class AutoBotConfig(BaseSettings):
     """

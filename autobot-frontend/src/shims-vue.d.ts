@@ -15,3 +15,8 @@ declare module 'vue' {
 }
 
 export {};
+
+// Compile-time feature flag defines injected by Vite (#3009)
+declare const __FEATURE_VOICE__: boolean
+declare const __FEATURE_VNC__: boolean
+declare const __FEATURE_BROWSER__: boolean
