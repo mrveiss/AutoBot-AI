@@ -151,6 +151,15 @@ class TestRead:
         kb.get_all_facts.assert_awaited_once()
         kb.search.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_read_passes_limit_to_get_all_facts(self):
+        """Issue #3808: get_all_facts must be called with limit=500 to avoid O(n) scan."""
+        kb = _make_kb_mock(all_facts_result=[])
+        with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
+            diary = AgentDiaryService()
+            await diary.read("agent_a")
+        kb.get_all_facts.assert_awaited_once_with(limit=500)
+
 
 # ---------------------------------------------------------------------------
 # search()

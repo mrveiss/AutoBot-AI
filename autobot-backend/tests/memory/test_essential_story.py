@@ -202,8 +202,8 @@ class TestFetchTopFacts:
         assert len(result) <= 3
 
     @pytest.mark.asyncio
-    async def test_caps_at_50_facts_before_token_loop(self):
-        """Even with a huge token budget, at most 50 facts are ever processed."""
+    async def test_passes_limit_to_get_all_facts(self):
+        """Issue #3808: get_all_facts must be called with limit=200, not unbounded."""
         facts = _make_facts(200, quality_step=0.005)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
@@ -212,9 +212,9 @@ class TestFetchTopFacts:
         )
 
         gen = EssentialStoryGenerator()
-        result = await gen._fetch_top_facts(max_tokens=100_000)
+        await gen._fetch_top_facts(max_tokens=100_000)
 
-        assert len(result) <= 50
+        mock_kb.get_all_facts.assert_awaited_once_with(limit=200)
 
     @pytest.mark.asyncio
     async def test_empty_kb_returns_empty_list(self):

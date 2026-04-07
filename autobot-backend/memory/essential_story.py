@@ -82,7 +82,10 @@ class EssentialStoryGenerator:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        all_facts = await kb.get_all_facts()
+        # Issue #3808: limit the Redis scan to 200 facts so we never do a full
+        # O(n) scan.  200 provides enough headroom to find the top-quality facts
+        # for any model's token budget (max 800 tokens) after sorting.
+        all_facts = await kb.get_all_facts(limit=200)
 
         def _quality(fact: Dict[str, Any]) -> float:
             meta = fact.get("metadata") or {}
@@ -91,9 +94,7 @@ class EssentialStoryGenerator:
             except (TypeError, ValueError):
                 return 0.0
 
-        # Cap at 50 highest-quality facts — sufficient for any token budget (max 800 tokens)
-        # and avoids a full KB scan on large collections.
-        sorted_facts = sorted(all_facts, key=_quality, reverse=True)[:50]
+        sorted_facts = sorted(all_facts, key=_quality, reverse=True)
 
         selected: List[Dict[str, Any]] = []
         used_tokens = 0
