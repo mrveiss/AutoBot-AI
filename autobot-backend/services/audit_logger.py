@@ -46,6 +46,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ class AuditEntry:
         return self
 
 
-class AuditLogger:
+class AuditLogger(AsyncInitializable):
     """
     Async audit logging service with Redis DB 10 backend
 
@@ -212,6 +213,7 @@ class AuditLogger:
             batch_timeout_seconds: Max time to wait before flushing batch
             fallback_log_dir: Directory for file-based fallback logs
         """
+        super().__init__(component_name="audit_logger")
         self.retention_days = retention_days
         self.batch_size = batch_size
         self.batch_timeout_seconds = batch_timeout_seconds
@@ -227,18 +229,24 @@ class AuditLogger:
         self._batch_lock = asyncio.Lock()
         self._batch_task: Optional[asyncio.Task] = None
 
-        # Fallback logging
+        # Fallback logging — directory creation deferred to _initialize_impl
         self.fallback_log_dir = Path(fallback_log_dir)
-        self.fallback_log_dir.mkdir(parents=True, exist_ok=True)
 
         # Statistics
         self._total_logged = 0
         self._total_failed = 0
         self._redis_failures = 0
 
+    async def _initialize_impl(self) -> bool:
+        """Create fallback log directory (deferred from __init__ to avoid blocking I/O)."""
+        await asyncio.to_thread(self.fallback_log_dir.mkdir, parents=True, exist_ok=True)
         logger.info(
-            f"AuditLogger initialized: VM={self.vm_name} ({self.vm_source}), Retention={retention_days}d"
+            "AuditLogger initialized: VM=%s (%s), Retention=%dd",
+            self.vm_name,
+            self.vm_source,
+            self.retention_days,
         )
+        return True
 
     def _get_vm_name(self) -> str:
         """Determine VM name from IP address"""
@@ -991,11 +999,12 @@ async def get_audit_logger() -> AuditLogger:
     """Get or create global audit logger instance"""
     global _audit_logger
 
-    async with _logger_lock:
-        if _audit_logger is None:
-            _audit_logger = AuditLogger()
-            logger.info("Global audit logger initialized")
-        return _audit_logger
+    if _audit_logger is None:
+        async with _logger_lock:
+            if _audit_logger is None:
+                _audit_logger = AuditLogger()
+                await _audit_logger.initialize()
+    return _audit_logger
 
 
 async def close_audit_logger():
