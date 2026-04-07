@@ -22,7 +22,10 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
-from api.analytics_shared import resolve_source_or_404 as _resolve_source_or_404
+from api.analytics_shared import (
+    resolve_source_or_404 as _resolve_source_or_404,  # noqa: F401 – used by history/metrics/summary
+    resolve_source_root_or_404 as _resolve_source_root_or_404,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -463,11 +466,13 @@ async def analyze_diff(
     Analyze git diff and generate review comments.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope analysis to a project.
+    Issue #3441: When source_id is supplied, only files under that project's
+    clone directory (source_root) are analysed.  Files outside source_root
+    are skipped so results are scoped to the selected project.
 
     Returns review findings with severity and suggestions.
     """
-    await _resolve_source_or_404(source_id)
+    source_root = await _resolve_source_root_or_404(source_id)
     diff_content = await get_git_diff(commit_range)
 
     if not diff_content:
@@ -485,6 +490,16 @@ async def analyze_diff(
         # Get full file content for analysis
         try:
             file_path = Path(file_info["path"])
+            # Issue #3441: restrict to source_root when provided
+            if source_root is not None:
+                resolved = file_path.resolve()
+                try:
+                    resolved.relative_to(source_root.resolve())
+                except ValueError:
+                    logger.debug(
+                        "Skipping file outside source_root: %s", file_info["path"]
+                    )
+                    continue
             # Issue #358 - avoid blocking
             if (
                 await asyncio.to_thread(file_path.exists)
@@ -591,7 +606,7 @@ async def get_review_history(
     Get review history.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns past reviews for trend analysis.
     """
@@ -612,7 +627,7 @@ async def get_review_metrics(
     Get review metrics over time.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns aggregated statistics for trend analysis.
     """
@@ -678,7 +693,7 @@ async def get_review_summary(
     Get overall review system summary.
 
     Issue #744: Requires admin authentication.
-    Issue #3436: Accepts optional source_id to scope results to a project.
+    Issue #3441: Accepts optional source_id; validated against known sources.
 
     Returns dashboard-level metrics.
     """
