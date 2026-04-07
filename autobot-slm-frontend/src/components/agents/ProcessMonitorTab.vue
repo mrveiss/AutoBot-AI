@@ -99,14 +99,22 @@ function stopStream() {
   isStreaming.value = false
 }
 
+function buildWsUrl(path: string): string {
+  const base = getBackendUrl()
+  if (!base) {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${window.location.host}${path}`
+  }
+  const proto = base.startsWith('https') ? 'wss:' : 'ws:'
+  const wsBase = base.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  return `${proto}//${wsBase}${path}`
+}
+
 function streamLogs(processId: string) {
   stopStream()
   fullLog.value = ''
   isStreaming.value = true
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const ws = new WebSocket(
-    `${proto}//${location.host}${getBackendUrl()}/processes/${processId}/stream`,
-  )
+  const ws = new WebSocket(buildWsUrl(`/processes/${processId}/stream`))
   streamSocket.value = ws
   ws.onmessage = (event) => {
     try {
