@@ -102,6 +102,9 @@
             <!-- Dark Mode Toggle -->
             <DarkModeToggle />
 
+            <!-- Language Switcher -->
+            <LanguageSwitcher />
+
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
@@ -174,7 +177,10 @@
               </div>
             </a>
 
-                        <!-- Profile Settings (Issue #950) -->
+                        <!-- Language Switcher -->
+            <LanguageSwitcher :mobile="true" />
+
+            <!-- Profile Settings (Issue #950) -->
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true; closeMobileNav()"
@@ -381,7 +387,7 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
@@ -419,6 +425,7 @@ export default {
     ProfileModal,
     ErrorBoundary,
     DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
+    LanguageSwitcher: defineAsyncComponent(() => import('@/components/layout/LanguageSwitcher.vue')),
   },
 
   setup() {
