@@ -12,6 +12,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('InfrastructureView')
 import InfrastructureWizard from '@/components/InfrastructureWizard.vue'
@@ -51,7 +52,7 @@ onMounted(() => {
 async function loadPlaybooks(): Promise<void> {
   isLoading.value = true
   try {
-    const response = await fetch('/api/infrastructure/playbooks', {
+    const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
       headers: {
         Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },
