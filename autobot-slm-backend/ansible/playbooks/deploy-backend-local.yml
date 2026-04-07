@@ -31,7 +31,7 @@
     celery_max_tasks_per_child: 1000
 
     # Redis connection
-    backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') }}"
+    backend_redis_host: "{{ hostvars[groups['database'][0]]['ansible_host'] | default('127.0.0.1') if 'database' in groups and groups['database'] | length > 0 else '127.0.0.1' }}"
     backend_redis_port: 6379
 
     # Deployment settings
