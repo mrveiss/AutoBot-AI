@@ -5,11 +5,13 @@
 Redis Graph Loader - Load entities, relationships, and events to Redis.
 
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
+Issue #3230: Also writes into PropertyGraph for queryable typed-edge traversal.
 """
 
 import logging
 from typing import List
 
+from autobot_memory_graph.property_graph import PropertyGraph
 from autobot_shared.redis_client import get_redis_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.entity import Entity
@@ -22,7 +24,12 @@ logger = logging.getLogger(__name__)
 
 @TaskRegistry.register_loader("redis_graph")
 class RedisGraphLoader(BaseLoader):
-    """Load graph data (entities, relationships, events) to Redis."""
+    """Load graph data (entities, relationships, events) to Redis.
+
+    Writes to two stores in parallel:
+    1. Legacy Redis JSON adjacency list (backward compat for existing callers).
+    2. PropertyGraph (typed edges, multi-hop traversal, property filters).
+    """
 
     def __init__(self, database: str = "knowledge") -> None:
         """
@@ -33,6 +40,7 @@ class RedisGraphLoader(BaseLoader):
         """
         self.database = database
         self.redis_client = None
+        self._property_graph: PropertyGraph = PropertyGraph(database=database)
 
     async def load(self, context: PipelineContext) -> None:
         """
@@ -41,9 +49,11 @@ class RedisGraphLoader(BaseLoader):
         Args:
             context: Pipeline context with entities, relationships, events
         """
-        self.redis_client = await get_redis_client(
+        self.redis_client = get_redis_client(
             async_client=True, database=self.database
         )
+        # Wire PropertyGraph to the same Redis connection (no extra pool entry)
+        self._property_graph._redis = self.redis_client
 
         entities: List[Entity] = context.entities
         relationships: List[Relationship] = context.relationships
@@ -66,9 +76,10 @@ class RedisGraphLoader(BaseLoader):
         )
 
     async def _load_entities(self, entities: List[Entity]) -> None:
-        """Load entities to Redis JSON."""
+        """Load entities to Redis JSON and PropertyGraph."""
         try:
             for entity in entities:
+                # Legacy adjacency-list store
                 key = f"entity:{entity.id}"
                 entity_data = entity.model_dump(mode="json")
                 await self.redis_client.json().set(key, "$", entity_data)
@@ -76,14 +87,23 @@ class RedisGraphLoader(BaseLoader):
                 name_key = f"entity:name:{entity.canonical_name}"
                 await self.redis_client.set(name_key, str(entity.id))
 
+                # PropertyGraph node (#3230)
+                node_props = {
+                    "type": entity.entity_type if hasattr(entity, "entity_type") else "",
+                    "name": entity.canonical_name,
+                    "source": "ecl_pipeline",
+                }
+                await self._property_graph.add_node(str(entity.id), node_props)
+
             logger.info("Loaded %s entities to Redis", len(entities))
         except Exception as e:
             logger.error("Failed to load entities to Redis: %s", e)
 
     async def _load_relationships(self, relationships: List[Relationship]) -> None:
-        """Load relationships to Redis."""
+        """Load relationships to Redis legacy store and PropertyGraph."""
         try:
             for rel in relationships:
+                # Legacy adjacency-list store
                 key = f"relationship:{rel.id}"
                 rel_data = rel.model_dump(mode="json")
                 await self.redis_client.json().set(key, "$", rel_data)
@@ -97,12 +117,32 @@ class RedisGraphLoader(BaseLoader):
                 if rel.bidirectional:
                     await self._add_bidirectional_index(rel)
 
+                # PropertyGraph edge (#3230)
+                edge_props = {
+                    "description": rel.description,
+                    "confidence": str(rel.confidence),
+                    "bidirectional": str(rel.bidirectional),
+                }
+                await self._property_graph.add_edge(
+                    str(rel.source_entity_id),
+                    str(rel.target_entity_id),
+                    rel.relationship_type.upper(),
+                    edge_props,
+                )
+                if rel.bidirectional:
+                    await self._property_graph.add_edge(
+                        str(rel.target_entity_id),
+                        str(rel.source_entity_id),
+                        rel.relationship_type.upper(),
+                        edge_props,
+                    )
+
             logger.info("Loaded %s relationships to Redis", len(relationships))
         except Exception as e:
             logger.error("Failed to load relationships to Redis: %s", e)
 
     async def _add_bidirectional_index(self, rel: Relationship) -> None:
-        """Add reverse index for bidirectional relationship."""
+        """Add reverse index for bidirectional relationship (legacy store)."""
         reverse_key = f"relationship:reverse:{rel.id}"
         reverse_data = {
             "source_entity_id": str(rel.target_entity_id),
