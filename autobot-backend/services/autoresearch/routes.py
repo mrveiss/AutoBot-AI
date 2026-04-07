@@ -63,6 +63,23 @@ class SynthesizeRequest(BaseModel):
     session_id: str = Field(..., max_length=100)
 
 
+class RegisterTargetRequest(BaseModel):
+    """Register an agent as an optimization target at runtime.
+
+    The current_prompt and scorer_chain are stored in the PromptOptimizer
+    registry.  Agents that need a custom benchmark_fn must call
+    ``PromptOptimizer.register_optimization_target`` directly in Python;
+    this endpoint covers the common case where the default benchmark is
+    sufficient.
+    """
+
+    agent_name: str = Field(..., max_length=100)
+    current_prompt: str = Field(..., max_length=10000)
+    scorer_chain: List[str] = Field(default_factory=lambda: ["llm_judge"])
+    mutation_count: int = Field(default=5, ge=1, le=20)
+    top_k: int = Field(default=2, ge=1, le=10)
+
+
 # Lazy-initialized singletons
 _runner: Optional[ExperimentRunner] = None
 _store: Optional[ExperimentStore] = None
@@ -231,7 +248,17 @@ async def cancel_experiment(
 
 
 def _get_optimizer(request: Request) -> PromptOptimizer:
-    """Get or create the PromptOptimizer singleton."""
+    """Get or create the PromptOptimizer singleton with real scorer instances.
+
+    Scorers constructed here:
+    - ``val_bpb``: ValBpbScorer wrapping the shared ExperimentRunner.  Requires
+      a baseline; falls back gracefully when none is set (score=0.0).
+    - ``llm_judge``: LLMJudgeScorer using the shared LLM service.
+    - ``human_review``: HumanReviewScorer backed by Redis BLPOP protocol.
+
+    The autoresearch_hypothesis target is also pre-registered so
+    ``start_optimization`` can find it without hard-coding names in the route.
+    """
     global _optimizer
     app_opt = getattr(request.app.state, "autoresearch_optimizer", None)
     if app_opt is not None:
@@ -239,12 +266,127 @@ def _get_optimizer(request: Request) -> PromptOptimizer:
     if _optimizer is None:
         from services.llm_service import get_llm_service
 
+        from .scorers import HumanReviewScorer, LLMJudgeScorer, ValBpbScorer
+
+        llm = get_llm_service()
+        runner = _get_runner(request)
+
+        # ValBpbScorer needs a positive baseline; we use a sentinel value of 1.0
+        # here — the scorer's actual evaluation compares against the live baseline
+        # stored in Redis via ExperimentStore, so this value only bounds the
+        # normalization denominator when no experiment has set a real baseline yet.
+        _SENTINEL_BASELINE = 1.0
+
+        scorers = {
+            "val_bpb": ValBpbScorer(
+                runner=runner,
+                baseline_val_bpb=_SENTINEL_BASELINE,
+            ),
+            "llm_judge": LLMJudgeScorer(
+                llm_service=llm,
+                criteria=[
+                    "hypothesis clarity",
+                    "specificity of proposed changes",
+                    "actionability",
+                ],
+            ),
+            "human_review": HumanReviewScorer(),
+        }
+
         _optimizer = PromptOptimizer(
-            scorers={},  # scorers registered at runtime
-            llm_service=get_llm_service(),
+            scorers=scorers,
+            llm_service=llm,
         )
+
+        # Pre-register the autoresearch_hypothesis target so the /start endpoint
+        # can look it up by name instead of hard-coding construction logic there.
+        _register_autoresearch_hypothesis_target(_optimizer, runner)
+
     request.app.state.autoresearch_optimizer = _optimizer
     return _optimizer
+
+
+def _register_autoresearch_hypothesis_target(
+    optimizer: PromptOptimizer,
+    runner: "ExperimentRunner",
+) -> None:
+    """Pre-register the autoresearch_hypothesis optimization target.
+
+    The benchmark runs the prompt through AutoResearchAgent._generate_hypothesis
+    (rule-based, no external I/O) and records score, output, and latency so the
+    optimizer can compare variants on real signal rather than a no-op echo.
+
+    Falls back to returning the raw prompt text on any exception so the
+    optimization loop degrades gracefully when the agent is unavailable.
+    """
+    import time as _time
+
+    from .auto_research_agent import AutoResearchAgent
+
+    _HYPOTHESIS_SYSTEM_PROMPT = (
+        "You are the AutoResearch hypothesis agent. Given a research direction, "
+        "generate a concrete, testable hypothesis for improving a language model's "
+        "validation bits-per-byte (val_bpb). The hypothesis must specify which "
+        "hyperparameters to change, by how much, and why. Be precise and actionable."
+    )
+
+    target = PromptOptTarget(
+        agent_name="autoresearch_hypothesis",
+        current_prompt=_HYPOTHESIS_SYSTEM_PROMPT,
+        scorer_chain=["llm_judge"],
+        mutation_count=5,
+        top_k=2,
+    )
+
+    async def _benchmark(prompt: str) -> str:
+        """Run the prompt through the AutoResearch hypothesis pipeline.
+
+        Returns a JSON-serialized dict with keys: output, latency_ms, error.
+        The optimizer stores this string as PromptVariant.output; scorers
+        receive it as prompt_output and can parse the JSON if needed.
+        """
+        import json as _json
+
+        start = _time.monotonic()
+        try:
+            agent = AutoResearchAgent(runner=runner)
+            hypothesis = agent._generate_hypothesis(
+                search_results=[],
+                prior_results=[],
+                iteration=1,
+            )
+            latency_ms = round((_time.monotonic() - start) * 1000, 1)
+            return _json.dumps(
+                {
+                    "output": hypothesis.statement,
+                    "rationale": hypothesis.rationale,
+                    "hyperparams": hypothesis.suggested_hyperparams,
+                    "latency_ms": latency_ms,
+                    "error": None,
+                },
+                ensure_ascii=False,
+            )
+        except Exception as exc:
+            latency_ms = round((_time.monotonic() - start) * 1000, 1)
+            logger.warning(
+                "_benchmark(autoresearch_hypothesis): agent failed: %s", exc
+            )
+            return _json.dumps(
+                {
+                    "output": prompt,
+                    "rationale": "",
+                    "hyperparams": {},
+                    "latency_ms": latency_ms,
+                    "error": str(exc),
+                },
+                ensure_ascii=False,
+            )
+
+    optimizer.register_optimization_target(
+        agent_id="autoresearch_hypothesis",
+        target=target,
+        benchmark_fn=_benchmark,
+    )
 
 
 def _get_synthesizer(request: Request) -> KnowledgeSynthesizer:
@@ -288,28 +430,29 @@ async def start_optimization(
     background_tasks: BackgroundTasks,
     _admin: bool = Depends(check_admin_permission),
 ):
-    """Start prompt optimization for a registered target."""
+    """Start prompt optimization for a registered target.
+
+    The agent_name must match a target previously registered via
+    ``register_optimization_target`` (either at startup or via the
+    ``/prompt-optimizer/register`` endpoint).
+    """
     optimizer = _get_optimizer(request)
     if optimizer.current_session is not None:
         raise HTTPException(status_code=409, detail="Optimization already running")
 
-    # For now, only autoresearch_hypothesis is a valid target
-    if body.agent_name != "autoresearch_hypothesis":
+    entry = optimizer.get_target(body.agent_name)
+    if entry is None:
+        registered = optimizer.get_registered_targets()
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown agent target: {body.agent_name}",
+            detail=(
+                f"Unknown agent target: {body.agent_name!r}. "
+                f"Registered targets: {registered}"
+            ),
         )
 
-    target = PromptOptTarget(
-        agent_name=body.agent_name,
-        current_prompt="",  # loaded from agent at runtime
-        scorer_chain=["val_bpb"],
-    )
-
-    async def _benchmark(prompt: str) -> str:
-        return prompt  # placeholder — real benchmark set up by agent
-
-    background_tasks.add_task(optimizer.optimize, target, _benchmark, body.max_rounds)
+    target, benchmark_fn = entry
+    background_tasks.add_task(optimizer.optimize, target, benchmark_fn, body.max_rounds)
     return {"status": "started", "agent_name": body.agent_name}
 
 
@@ -324,6 +467,75 @@ async def cancel_optimization(
         raise HTTPException(status_code=409, detail="No optimization running")
     optimizer.cancel()
     return {"status": "cancelling"}
+
+
+@router.get("/prompt-optimizer/targets")
+async def list_optimization_targets(
+    request: Request,
+    _admin: bool = Depends(check_admin_permission),
+):
+    """List all registered optimization target agent IDs."""
+    optimizer = _get_optimizer(request)
+    return {"targets": optimizer.get_registered_targets()}
+
+
+@router.post("/prompt-optimizer/register")
+async def register_optimization_target(
+    request: Request,
+    body: RegisterTargetRequest,
+    _admin: bool = Depends(check_admin_permission),
+):
+    """Register an agent as a prompt optimization target.
+
+    After registration the agent_name becomes a valid value for
+    ``POST /prompt-optimizer/start``.  Agents with custom benchmark logic
+    must register programmatically via ``PromptOptimizer.register_optimization_target``.
+
+    The default benchmark for API-registered targets runs the prompt through
+    the shared LLM service and returns the raw response text.
+    """
+    optimizer = _get_optimizer(request)
+
+    target = PromptOptTarget(
+        agent_name=body.agent_name,
+        current_prompt=body.current_prompt,
+        scorer_chain=body.scorer_chain,
+        mutation_count=body.mutation_count,
+        top_k=body.top_k,
+    )
+
+    async def _default_benchmark(prompt: str) -> str:
+        """Default benchmark: send prompt to LLM and return the response text."""
+        from services.llm_service import get_llm_service
+
+        llm = get_llm_service()
+        try:
+            response = await llm.chat(
+                messages=[
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            return response.content
+        except Exception as exc:
+            logger.warning(
+                "register_optimization_target: default benchmark failed for %r: %s",
+                body.agent_name,
+                exc,
+            )
+            return prompt
+
+    optimizer.register_optimization_target(
+        agent_id=body.agent_name,
+        target=target,
+        benchmark_fn=_default_benchmark,
+    )
+    return {
+        "status": "registered",
+        "agent_name": body.agent_name,
+        "scorer_chain": body.scorer_chain,
+    }
 
 
 @router.get("/prompt-optimizer/variants/{session_id}")

@@ -145,6 +145,11 @@ class PromptOptimizer:
     """Generic prompt optimizer with pluggable scorers.
 
     Drives a mutation -> benchmark -> score -> keep/discard loop.
+
+    Agents other than autoresearch_hypothesis can opt in by calling
+    ``register_optimization_target``.  The registry maps agent_id to a
+    (PromptOptTarget, BenchmarkFn) pair so ``start_optimization`` can look
+    them up without hard-coding names in the route layer.
     """
 
     _MUTATION_SYSTEM_PROMPT = (
@@ -168,6 +173,32 @@ class PromptOptimizer:
         self._cancel_event = asyncio.Event()
         self._current_session: Optional[OptimizationSession] = None
         self._redis = None
+        # Registry: agent_id -> (PromptOptTarget, BenchmarkFn)
+        self._targets: Dict[str, tuple] = {}
+
+    def register_optimization_target(
+        self,
+        agent_id: str,
+        target: PromptOptTarget,
+        benchmark_fn: BenchmarkFn,
+    ) -> None:
+        """Register an agent so it can be addressed by start_optimization.
+
+        Args:
+            agent_id: Unique identifier used in StartOptimizationRequest.agent_name.
+            target: Pre-configured PromptOptTarget for this agent.
+            benchmark_fn: Async function that runs the prompt and returns output text.
+        """
+        self._targets[agent_id] = (target, benchmark_fn)
+        logger.info("PromptOptimizer: registered optimization target %r", agent_id)
+
+    def get_registered_targets(self) -> list:
+        """Return a list of all registered agent_id strings."""
+        return list(self._targets.keys())
+
+    def get_target(self, agent_id: str) -> Optional[tuple]:
+        """Return (PromptOptTarget, BenchmarkFn) for agent_id, or None."""
+        return self._targets.get(agent_id)
 
     async def optimize(
         self,
