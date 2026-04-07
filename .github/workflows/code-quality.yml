@@ -106,6 +106,15 @@ jobs:
           exit 1
         }
 
+
+    - name: Check developer docs reference existing files (#3425)
+      run: |
+        python3 pipeline-scripts/check-doc-references.py || {
+          echo "One or more developer docs reference files that no longer exist."
+          echo "Update the doc to point to the current file path."
+          exit 1
+        }
+
     - name: Code quality summary
       if: always()
       run: |

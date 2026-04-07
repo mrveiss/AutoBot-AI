@@ -134,7 +134,7 @@ logger.error("Error occurred: %s", error, exc_info=True)
 
 ### Configuration
 
-Logging is configured in `backend/core/logging_config.py` with:
+Logging is configured in `autobot_shared/logging_manager.py` with:
 - Console handler for development
 - File handler for production
 - JSON formatting for structured logs
