@@ -16,7 +16,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
-import { getBackendWsUrl } from '@/config/ssot-config'
+import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import { useUserStore } from '@/stores/useUserStore'
@@ -58,7 +58,7 @@ const sources = ref<SourceCard[]>([])
 
 async function checkBrowserStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get('/api/playwright/worker-status') as Record<string, unknown>
+    const data = await ApiClient.get(`${getApiBase()}/playwright/worker-status`) as Record<string, unknown>
     browserConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -70,7 +70,7 @@ async function fetchScreenshot(): Promise<void> {
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const data = await ApiClient.post('/api/playwright/worker-screenshot', {}) as Record<string, unknown>
+    const data = await ApiClient.post(`${getApiBase()}/playwright/worker-screenshot`, {}) as Record<string, unknown>
     if (data.screenshot) {
       screenshot.value = data.screenshot as string
       browserConnected.value = true
@@ -257,7 +257,7 @@ async function _emitAnnotationFeedback(
 ): Promise<void> {
   const userId = userStore.currentUser?.id ?? null
   try {
-    await ApiClient.post('/api/knowledge_base/rag-feedback', {
+    await ApiClient.post(`${getApiBase()}/knowledge_base/rag-feedback`, {
       source_url: card.url,
       title: card.title,
       query: query.value,
@@ -272,7 +272,7 @@ async function _emitAnnotationFeedback(
 async function acceptSource(card: SourceCard): Promise<void> {
   card.decision = 'accepted'
   try {
-    await ApiClient.post('/api/knowledge/verification/approve', {
+    await ApiClient.post(`${getApiBase()}/knowledge/verification/approve`, {
       source_url: card.url,
       title: card.title,
     })
@@ -293,7 +293,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const result = await ApiClient.post('/api/playwright/interact', {
+    const result = await ApiClient.post(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
     }) as Record<string, unknown>
