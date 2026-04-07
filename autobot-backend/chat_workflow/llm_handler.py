@@ -381,6 +381,17 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt(language=language)
+        # Issue #3787: Prepend always-loaded compact memory summary.
+        try:
+            from memory.essential_story import EssentialStoryGenerator
+
+            story = await EssentialStoryGenerator().generate(
+                model_name=selected_model
+            )
+            if story:
+                system_prompt = story + "\n\n" + system_prompt
+        except Exception as _ess_exc:
+            logger.warning("EssentialStory injection failed: %s", _ess_exc)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 
