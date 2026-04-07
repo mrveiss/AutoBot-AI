@@ -3709,6 +3709,18 @@
       "statusDisconnected": "Disconnected",
       "statusError": "Error",
       "statusUnknown": "Unknown"
+    },
+    "modal": {
+      "executeAll": "Execute All Remaining",
+      "editCommand": "Edit",
+      "editCommandAriaLabel": "Edit this step command",
+      "editCommandLabel": "Edit command",
+      "editCommandPlaceholder": "Enter the command to execute...",
+      "editCommandEmpty": "Command cannot be empty.",
+      "editSave": "Save",
+      "editCancel": "Cancel",
+      "editReset": "Reset to original",
+      "editedBadge": "Edited"
     }
   },
   "llm": {

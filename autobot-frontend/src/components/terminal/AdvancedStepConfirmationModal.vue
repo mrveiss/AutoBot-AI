@@ -11,7 +11,7 @@
  * TerminalWindow.vue during automated workflow execution.
  */
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { useI18n } from 'vue-i18n'
@@ -60,6 +60,19 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 // =============================================================================
+// Edit State
+// =============================================================================
+
+/** Whether the inline editor is open */
+const isEditing = ref(false)
+/** Scratch buffer for the command being edited */
+const editedCommand = ref('')
+/** Validation error message, empty when valid */
+const editError = ref('')
+/** The saved override command (null means use original) */
+const overriddenCommand = ref<string | null>(null)
+
+// =============================================================================
 // Computed
 // =============================================================================
 
@@ -85,14 +98,23 @@ const progressPercent = computed(() => {
   return Math.round((currentStepNumber.value / totalSteps.value) * 100)
 })
 
+/** The command that will actually be executed — edited override or original */
+const effectiveCommand = computed(() => {
+  return overriddenCommand.value ?? props.currentStep?.command ?? ''
+})
+
+/** True when the displayed command differs from the original */
+const isModified = computed(() => overriddenCommand.value !== null)
+
 // =============================================================================
 // Methods
 // =============================================================================
 
 function handleExecute(): void {
   if (!props.currentStep) return
-  logger.info('User confirmed step execution')
-  emit('execute-step', props.currentStep)
+  const step: WorkflowStep = { ...props.currentStep, command: effectiveCommand.value }
+  logger.info('User confirmed step execution', { modified: isModified.value })
+  emit('execute-step', step)
 }
 
 function handleSkip(): void {
@@ -112,6 +134,40 @@ function handleExecuteAll(): void {
 
 function handleClose(): void {
   emit('close')
+}
+
+function openEditDialog(): void {
+  editedCommand.value = effectiveCommand.value
+  editError.value = ''
+  isEditing.value = true
+  logger.info('User opened step editor')
+}
+
+function cancelEdit(): void {
+  isEditing.value = false
+  editedCommand.value = ''
+  editError.value = ''
+  logger.info('User cancelled step edit')
+}
+
+function saveEdit(): void {
+  const trimmed = editedCommand.value.trim()
+  if (!trimmed) {
+    editError.value = t('terminal.modal.editCommandEmpty')
+    return
+  }
+  overriddenCommand.value = trimmed
+  isEditing.value = false
+  editError.value = ''
+  logger.info('User saved edited command')
+}
+
+function resetEdit(): void {
+  overriddenCommand.value = null
+  isEditing.value = false
+  editedCommand.value = ''
+  editError.value = ''
+  logger.info('User reset command to original')
 }
 </script>
 
@@ -162,8 +218,56 @@ function handleClose(): void {
         <div class="command-label">
           <i class="fas fa-terminal" aria-hidden="true"></i>
           {{ t('terminal.window.commandToExecute') }}
+          <span v-if="isModified" class="modified-badge">
+            <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+            {{ t('terminal.modal.editedBadge') }}
+          </span>
+          <button
+            v-if="!isEditing"
+            class="edit-trigger"
+            :aria-label="t('terminal.modal.editCommandAriaLabel')"
+            @click="openEditDialog"
+          >
+            <i class="fas fa-pencil-alt" aria-hidden="true"></i>
+            {{ t('terminal.modal.editCommand') }}
+          </button>
         </div>
-        <code class="command-text">{{ currentStep.command }}</code>
+        <code class="command-text">{{ effectiveCommand }}</code>
+
+        <!-- Inline Editor Panel -->
+        <div v-if="isEditing" class="edit-panel">
+          <label class="edit-label" for="step-edit-textarea">
+            {{ t('terminal.modal.editCommandLabel') }}
+          </label>
+          <textarea
+            id="step-edit-textarea"
+            v-model="editedCommand"
+            class="edit-textarea"
+            rows="3"
+            :placeholder="t('terminal.modal.editCommandPlaceholder')"
+            :aria-describedby="editError ? 'step-edit-error' : undefined"
+            @keydown.ctrl.enter.prevent="saveEdit"
+            @keydown.escape.prevent="cancelEdit"
+          ></textarea>
+          <p v-if="editError" id="step-edit-error" class="edit-error" role="alert">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            {{ editError }}
+          </p>
+          <div class="edit-actions">
+            <button class="edit-action-btn edit-action-cancel" @click="cancelEdit">
+              <i class="fas fa-times" aria-hidden="true"></i>
+              {{ t('terminal.modal.editCancel') }}
+            </button>
+            <button v-if="isModified" class="edit-action-btn edit-action-reset" @click="resetEdit">
+              <i class="fas fa-undo" aria-hidden="true"></i>
+              {{ t('terminal.modal.editReset') }}
+            </button>
+            <button class="edit-action-btn edit-action-save" @click="saveEdit">
+              <i class="fas fa-check" aria-hidden="true"></i>
+              {{ t('terminal.modal.editSave') }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Action Guide -->
@@ -324,6 +428,139 @@ function handleClose(): void {
   color: var(--color-success, #10b981);
   word-break: break-all;
   white-space: pre-wrap;
+}
+
+/* Modified badge */
+.modified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-warning, #f59e0b);
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: var(--font-medium, 500);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Edit trigger button (inside command-label bar) */
+.edit-trigger {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 0.25rem);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: var(--font-medium, 500);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.edit-trigger:hover {
+  color: var(--text-primary);
+  border-color: var(--color-info, #3b82f6);
+}
+
+/* Inline Edit Panel */
+.edit-panel {
+  border-top: 1px solid var(--border-default);
+  padding: var(--spacing-3, 0.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2, 0.5rem);
+  background: var(--bg-secondary);
+}
+
+.edit-label {
+  font-size: 0.75rem;
+  font-weight: var(--font-medium, 500);
+  color: var(--text-secondary);
+}
+
+.edit-textarea {
+  width: 100%;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  background: var(--bg-terminal, #1a1b26);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm, 0.25rem);
+  padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+  resize: vertical;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.edit-textarea:focus {
+  outline: none;
+  border-color: var(--color-info, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.edit-error {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1, 0.25rem);
+  font-size: 0.8125rem;
+  color: var(--color-danger, #ef4444);
+  margin: 0;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-2, 0.5rem);
+}
+
+.edit-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: var(--radius-sm, 0.25rem);
+  font-size: 0.8125rem;
+  font-weight: var(--font-medium, 500);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, color 0.15s;
+}
+
+.edit-action-cancel {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.edit-action-cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.edit-action-reset {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--color-warning, #f59e0b);
+}
+
+.edit-action-reset:hover {
+  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+}
+
+.edit-action-save {
+  background: var(--color-info, #3b82f6);
+  color: #fff;
+}
+
+.edit-action-save:hover {
+  background: var(--color-info-dark, #2563eb);
 }
 
 /* Action Guide */
