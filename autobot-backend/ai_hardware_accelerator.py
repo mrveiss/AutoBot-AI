@@ -23,6 +23,7 @@ import numpy as np
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 from config import cfg
 
 # Import centralized components
@@ -162,7 +163,7 @@ class ProcessingTask:
     input_data: Dict[str, Any]
     complexity: TaskComplexity
     priority: int = 1
-    timeout_seconds: int = 30
+    timeout_seconds: int = int(_ssot_config.timeout.default_request)
     preferred_device: Optional[HardwareDevice] = None
 
 

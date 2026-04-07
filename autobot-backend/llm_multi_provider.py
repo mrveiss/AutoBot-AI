@@ -39,7 +39,7 @@ config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
 from constants.model_constants import (
     OPENAI_GPT35_TURBO,
     OPENAI_GPT35_TURBO_16K,
@@ -104,7 +104,7 @@ class LLMRequest:
     stop: Optional[List[str]] = None
     stream: bool = False
     structured_output: bool = False
-    timeout: int = 60
+    timeout: int = int(_ssot_config.timeout.llm_request)
     retry_count: int = 3
     fallback_enabled: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -138,7 +138,7 @@ class ProviderConfig:
     default_model: str = ""
     available_models: List[str] = field(default_factory=list)
     max_concurrent_requests: int = 10
-    timeout: int = 60
+    timeout: int = int(_ssot_config.timeout.llm_request)
     retry_count: int = 3
     circuit_breaker_enabled: bool = True
     priority: int = 100  # Lower numbers = higher priority

@@ -23,6 +23,7 @@ import docker
 from docker.errors import DockerException, ImageNotFound
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
@@ -784,7 +785,7 @@ secure_sandbox = None  # Will be initialized on first access via get_secure_sand
 async def execute_in_sandbox(
     command: Union[str, List[str]],
     security_level: str = "high",
-    timeout: int = 300,
+    timeout: int = int(_ssot_config.timeout.sandbox),
     **kwargs,
 ) -> SandboxResult:
     """
