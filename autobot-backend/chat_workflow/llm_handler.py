@@ -323,19 +323,20 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         conversation_context: str,
         message: str,
     ) -> str:
-        """Build full prompt with optional knowledge context."""
+        """Build full prompt with optional knowledge context.
+
+        system_prompt is sent via the Ollama ``system`` field — not embedded here
+        to avoid double-injection and context-window waste.
+        """
         if knowledge_context:
             return (
-                system_prompt
-                + "\n\n"
-                + knowledge_context
+                knowledge_context
                 + "\n"
                 + conversation_context
                 + f"\n**Current user message:** {message}\n\nAssistant:"
             )
         return (
-            system_prompt
-            + conversation_context
+            conversation_context
             + f"\n**Current user message:** {message}\n\nAssistant:"
         )
 
@@ -435,7 +436,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
     def _get_interpretation_llm_options(self) -> Dict[str, Any]:
         """Get LLM options for command interpretation."""
-        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048}
+        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": ModelConstants.DEFAULT_NUM_CTX}
 
     async def _interpret_non_streaming(
         self,

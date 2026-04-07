@@ -22,6 +22,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
+from constants.model_constants import ModelConstants
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -1799,15 +1800,22 @@ before summarizing.
 {instructions}"""
 
     def _get_llm_request_payload(
-        self, selected_model: str, current_prompt: str
+        self, selected_model: str, current_prompt: str, system_prompt: str = ""
     ) -> dict:
         """Build LLM request payload."""
-        return {
+        payload = {
             "model": selected_model,
             "prompt": current_prompt,
             "stream": True,
-            "options": {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048},
+            "options": {
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "num_ctx": ModelConstants.CHAT_NUM_CTX,
+            },
         }
+        if system_prompt:
+            payload["system"] = system_prompt
+        return payload
 
     def _log_and_parse_tool_calls(
         self, llm_response: str, iteration: int
@@ -1892,11 +1900,12 @@ before summarizing.
         used_knowledge: bool,
         rag_citations: List[Dict[str, Any]],
         iteration: int,
+        system_prompt: str = "",
     ):
         """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620."""
         import aiohttp
 
-        payload = self._get_llm_request_payload(selected_model, current_prompt)
+        payload = self._get_llm_request_payload(selected_model, current_prompt, system_prompt)
         llm_response = ""
 
         try:
@@ -2115,6 +2124,7 @@ before summarizing.
             ctx.used_knowledge,
             ctx.rag_citations,
             iteration,
+            system_prompt=ctx.system_prompt or "",
         ):
             if isinstance(item, tuple):
                 llm_response, tool_calls = item

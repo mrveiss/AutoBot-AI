@@ -371,6 +371,7 @@ class ModelConfig:
     DEFAULT_REPEAT_PENALTY: float = 1.1
     DEFAULT_MAX_TOKENS: int = 2048
     DEFAULT_NUM_CTX: int = 4096  # Ollama context window
+    CHAT_NUM_CTX: int = 8192  # Chat workflow: larger window for system prompt (~3k tokens)
 
     # Timeouts (in seconds)
     # Issue #763: Was ConfigRegistry.get("timeout.llm", "30").
