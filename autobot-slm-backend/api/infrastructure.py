@@ -627,8 +627,8 @@ async def _run_playbook(
         inventory_path = str(inventory_path_obj)
 
         # Inject stored SLM secrets so standalone re-deploys receive the same
-        # secrets as the full wizard provisioning flow (#3519).
-        from services.playbook_executor import fetch_deploy_secrets
+        # secrets as the full wizard provisioning flow (#3519, #3778).
+        from services.ansible_secrets import fetch_deploy_secrets
 
         deploy_secrets = await fetch_deploy_secrets()
         # Caller-supplied variables take precedence over stored secrets.

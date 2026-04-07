@@ -15,51 +15,10 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from services.ansible_secrets import _SECRET_TO_ANSIBLE_VAR
+from services.ansible_secrets import fetch_deploy_secrets
 from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
-
-
-async def fetch_deploy_secrets() -> dict[str, str]:
-    """Read stored SLM secrets and return them as Ansible extra_vars (#3519).
-
-    Mirrors the logic in setup_wizard._fetch_provision_secrets() so that
-    standalone role re-deploys (Infrastructure, Nodes, Settings pages) receive
-    the same secrets that the full wizard provisioning flow injects.
-
-    Returns an empty dict and logs a warning if the DB is unavailable — the
-    deploy is allowed to proceed rather than being blocked by a secret-fetch
-    failure.
-    """
-    from sqlalchemy import select
-
-    from models.database import SystemSecret
-    from services.database import db_service
-    from services.encryption import decrypt_data
-
-    extra: dict[str, str] = {}
-    try:
-        async with db_service.session() as session:
-            result = await session.execute(
-                select(SystemSecret).where(
-                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
-                )
-            )
-            for secret in result.scalars().all():
-                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
-                if not ansible_var:
-                    continue
-                value = decrypt_data(secret.encrypted_value)
-                if value:
-                    extra[ansible_var] = value
-    except Exception:
-        logger.warning(
-            "fetch_deploy_secrets: could not load SLM secrets — "
-            "deploy will proceed without them (#3519)",
-            exc_info=True,
-        )
-    return extra
 
 
 class PlaybookExecutor:
