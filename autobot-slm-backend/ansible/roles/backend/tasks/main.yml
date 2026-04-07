@@ -317,6 +317,9 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
 
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
@@ -357,6 +360,9 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
 
 # ==========================================================
 # PostgreSQL for User Management (Issue #2953)
@@ -564,7 +570,13 @@
 # workers crash-loop because the master process stays alive.
 # Probing the TCP port and /api/health catches that case and
 # fails the play before the deploy is marked complete.
+# Issue #3856: flush handlers here so any pending restart fires
+# before the health check, not after.
 # ==========================================================
+- name: "Backend | Flush handlers before smoke test (#3856)"
+  ansible.builtin.meta: flush_handlers
+  tags: ['backend', 'smoke-test']
+
 - name: "Backend | Wait for backend to accept connections (#3687)"
   ansible.builtin.wait_for:
     host: 127.0.0.1
