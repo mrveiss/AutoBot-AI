@@ -102,13 +102,20 @@ class ChatHistoryManager:
         self._initialize_redis_client()
 
         self._ensure_data_directory_exists()
-        # _load_history is async; schedule it if an event loop is running,
-        # otherwise run synchronously via a new loop.
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._load_history())
-        except RuntimeError:
-            asyncio.run(self._load_history())
+
+    async def initialize(self) -> None:
+        """
+        Async initializer — must be awaited after construction before accessing
+        self.history.
+
+        Issue #3797: Replaces the former loop.create_task(_load_history()) fire-and-
+        forget pattern in __init__, which left self.history empty until the event
+        loop serviced the scheduled coroutine. Callers must now do:
+
+            manager = ChatHistoryManager(...)
+            await manager.initialize()
+        """
+        await self._load_history()
 
     def _ensure_data_directory_exists(self):
         """Ensures the directory for the history file exists."""
@@ -523,29 +530,35 @@ class ChatHistoryManager:
 
 # Example Usage (for testing)
 if __name__ == "__main__":
-    # Use a temporary file for testing
-    test_file = "data/test_chat_history.json"
-    if os.path.exists(test_file):
-        os.remove(test_file)
 
-    manager = ChatHistoryManager(test_file)
-    print("Initial history:", manager.get_all_messages())  # noqa: print
+    async def _run_example() -> None:
+        # Use a temporary file for testing
+        test_file = "data/test_chat_history.json"
+        if os.path.exists(test_file):
+            os.remove(test_file)
 
-    manager.add_message("user", "Hello there!")
-    manager.add_message("bot", "Hi! How can I help?")
-    manager.add_message(
-        "thought", '{"tool_name": "greet"}', "thought", {"tool_name": "greet"}
-    )
-    print("History after adding messages:", manager.get_all_messages())  # noqa: print
+        manager = ChatHistoryManager(test_file)
+        await manager.initialize()  # Issue #3797: must await before accessing history
+        print("Initial history:", manager.get_all_messages())  # noqa: print
 
-    # Simulate new instance loading
-    new_manager = ChatHistoryManager(test_file)
-    print(  # noqa: print
-        "History loaded by new manager:", new_manager.get_all_messages()
-    )  # noqa: print
+        await manager.add_message("user", "Hello there!")
+        await manager.add_message("bot", "Hi! How can I help?")
+        await manager.add_message(
+            "thought", '{"tool_name": "greet"}', "thought", {"tool_name": "greet"}
+        )
+        print("History after adding messages:", manager.get_all_messages())  # noqa: print
 
-    new_manager.clear_history()
-    print("History after clearing:", new_manager.get_all_messages())  # noqa: print
+        # Simulate new instance loading
+        new_manager = ChatHistoryManager(test_file)
+        await new_manager.initialize()  # Issue #3797: must await before accessing history
+        print(  # noqa: print
+            "History loaded by new manager:", new_manager.get_all_messages()
+        )  # noqa: print
 
-    if os.path.exists(test_file):
-        os.remove(test_file)
+        await new_manager.clear_history()
+        print("History after clearing:", new_manager.get_all_messages())  # noqa: print
+
+        if os.path.exists(test_file):
+            os.remove(test_file)
+
+    asyncio.run(_run_example())
