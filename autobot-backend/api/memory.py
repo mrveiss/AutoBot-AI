@@ -28,7 +28,7 @@ Performance:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
@@ -133,6 +133,27 @@ class RelationCreateRequest(BaseModel):
         if v not in valid_types:
             raise ValueError(f"relation_type must be one of: {valid_types}")
         return v
+
+
+class InvalidateEntityRequest(BaseModel):
+    """Request model for invalidating an entity (setting valid_to). Issue #3810."""
+
+    ended_at: Optional[str] = Field(
+        default=None,
+        description="ISO-8601 timestamp for valid_to. Defaults to now.",
+    )
+
+
+class InvalidateRelationRequest(BaseModel):
+    """Request model for invalidating a relation (setting valid_to). Issue #3810."""
+
+    from_id: str = Field(..., description="Source entity UUID")
+    relation_type: str = Field(..., description="Type of the relation")
+    to_id: str = Field(..., description="Target entity UUID")
+    ended_at: Optional[str] = Field(
+        default=None,
+        description="ISO-8601 timestamp for valid_to. Defaults to now.",
+    )
 
 
 class EntityResponse(BaseModel):
@@ -1555,3 +1576,212 @@ async def memory_health_check(
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )
+
+
+# ====================================================================
+# Temporal Invalidation Endpoints (Issue #3810)
+# ====================================================================
+
+
+def _build_invalidate_entity_response(
+    request_id: str,
+    entity_id: str,
+    valid_to: str,
+) -> JSONResponse:
+    """Build success response for entity invalidation.
+
+    Args:
+        request_id: Request tracking ID
+        entity_id: Invalidated entity UUID
+        valid_to: ISO-8601 timestamp that was set as valid_to
+
+    Returns:
+        JSONResponse with invalidation confirmation
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "entity_id": entity_id,
+                "valid_to": valid_to,
+                "invalidated": True,
+            },
+            "message": "Entity invalidated successfully",
+            "request_id": request_id,
+        },
+    )
+
+
+def _build_invalidate_relation_response(
+    request_id: str,
+    from_id: str,
+    relation_type: str,
+    to_id: str,
+    valid_to: str,
+) -> JSONResponse:
+    """Build success response for relation invalidation.
+
+    Args:
+        request_id: Request tracking ID
+        from_id: Source entity UUID
+        relation_type: Type of the relation
+        to_id: Target entity UUID
+        valid_to: ISO-8601 timestamp that was set as valid_to
+
+    Returns:
+        JSONResponse with invalidation confirmation
+    """
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "from_id": from_id,
+                "relation_type": relation_type,
+                "to_id": to_id,
+                "valid_to": valid_to,
+                "invalidated": True,
+            },
+            "message": "Relation invalidated successfully",
+            "request_id": request_id,
+        },
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="invalidate_entity",
+    error_code_prefix="MEMORY",
+)
+@router.patch("/entities/{entity_id}/invalidate")
+async def invalidate_entity(
+    entity_id: str = Path(..., description="UUID of the entity to invalidate"),
+    body: InvalidateEntityRequest = Body(default_factory=InvalidateEntityRequest),
+    admin_check: bool = Depends(check_admin_permission),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
+) -> JSONResponse:
+    """Mark an entity as no longer valid by setting valid_to.
+
+    The entity is NOT deleted — history is preserved for temporal queries.
+    Issue #3810.
+
+    Args:
+        entity_id: UUID of the entity to invalidate
+        body: Optional ended_at timestamp (ISO-8601); defaults to now
+        admin_check: Admin permission verification
+        memory_graph: Memory graph instance
+
+    Returns:
+        Invalidation confirmation with the valid_to timestamp applied
+
+    Raises:
+        HTTPException 404: Entity not found
+        HTTPException 500: Internal error
+    """
+    request_id = generate_request_id()
+
+    ended_at = body.ended_at if body else None
+    effective_ended_at = ended_at or datetime.now(timezone.utc).isoformat()
+
+    try:
+        logger.info(
+            "[%s] Invalidating entity %s at %s",
+            request_id,
+            entity_id,
+            effective_ended_at,
+        )
+
+        updated = await memory_graph.invalidate_entity(
+            entity_id=entity_id,
+            ended_at=effective_ended_at,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Entity not found: {entity_id}",
+            )
+
+        logger.info("[%s] Entity %s invalidated successfully", request_id, entity_id)
+        return _build_invalidate_entity_response(request_id, entity_id, effective_ended_at)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[%s] Error invalidating entity %s: %s", request_id, entity_id, e)
+        raise HTTPException(status_code=500, detail="Failed to invalidate entity")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="invalidate_relation",
+    error_code_prefix="MEMORY",
+)
+@router.patch("/relations/invalidate")
+async def invalidate_relation(
+    body: InvalidateRelationRequest = Body(...),
+    admin_check: bool = Depends(check_admin_permission),
+    memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
+) -> JSONResponse:
+    """Mark a specific relation as no longer valid by setting valid_to.
+
+    The relation is NOT deleted — history is preserved for temporal queries.
+    Issue #3810.
+
+    Args:
+        body: from_id, relation_type, to_id, and optional ended_at (ISO-8601)
+        admin_check: Admin permission verification
+        memory_graph: Memory graph instance
+
+    Returns:
+        Invalidation confirmation with the valid_to timestamp applied
+
+    Raises:
+        HTTPException 404: No matching relation found
+        HTTPException 500: Internal error
+    """
+    request_id = generate_request_id()
+
+    effective_ended_at = body.ended_at or datetime.now(timezone.utc).isoformat()
+
+    try:
+        logger.info(
+            "[%s] Invalidating relation %s -[%s]-> %s at %s",
+            request_id,
+            body.from_id,
+            body.relation_type,
+            body.to_id,
+            effective_ended_at,
+        )
+
+        updated = await memory_graph.invalidate_relation(
+            from_id=body.from_id,
+            relation_type=body.relation_type,
+            to_id=body.to_id,
+            ended_at=effective_ended_at,
+        )
+
+        if not updated:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"Relation not found: {body.from_id} "
+                    f"-[{body.relation_type}]-> {body.to_id}"
+                ),
+            )
+
+        logger.info("[%s] Relation invalidated successfully", request_id)
+        return _build_invalidate_relation_response(
+            request_id,
+            body.from_id,
+            body.relation_type,
+            body.to_id,
+            effective_ended_at,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("[%s] Error invalidating relation: %s", request_id, e)
+        raise HTTPException(status_code=500, detail="Failed to invalidate relation")
