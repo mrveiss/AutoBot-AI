@@ -76,6 +76,13 @@ class ChatAgent(StandardizedAgent):
         result = await self.process_chat_message(message, context, chat_history)
         return result
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a helpful conversational assistant. "
+            "Respond naturally and concisely to user messages, greetings, and simple questions."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()

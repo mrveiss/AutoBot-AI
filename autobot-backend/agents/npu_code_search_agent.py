@@ -298,6 +298,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """Handle capabilities request"""
         return {"capabilities": self.capabilities}
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are an NPU-accelerated code search assistant. "
+            "Search codebases semantically across multiple programming languages "
+            "and return precise, context-aware results."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports"""
         return self.capabilities
