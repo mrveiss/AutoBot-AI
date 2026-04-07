@@ -145,6 +145,9 @@ class ChatHistoryBase:
             "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
         )
 
+    async def initialize(self) -> None:
+        """No-op: history is loaded synchronously in __init__ for the modern implementation."""
+
     def _init_encryption(self):
         """Initialize encryption service if enabled."""
         if self.encryption_enabled:
