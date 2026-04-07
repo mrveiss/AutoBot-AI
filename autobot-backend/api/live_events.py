@@ -136,7 +136,9 @@ async def live_events_endpoint(websocket: WebSocket):
         user_payload = _verify_token(token)
         if user_payload is None:
             await websocket.close(code=4001, reason="Unauthorized")
-            logger.info("Live events WebSocket rejected: invalid token")
+            logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs rejection status, no token value
+                "Live events WebSocket rejected: invalid token"
+            )
             return
     await websocket.accept()
     logger.info(

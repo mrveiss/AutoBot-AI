@@ -71,8 +71,12 @@ def detect_secret_usage(
 
     # Pattern-based detection for unknown secrets
     if _detect_secrets_in_command(text):
-        # Log detection but don't create phantom secrets
-        logger.info(f"Potential secret usage detected in activity: {text[:50]}...")
+        # Log detection metadata only — never log the actual text which may
+        # contain credential fragments.
+        logger.info(
+            "Potential secret usage detected in activity (text length=%d)",
+            len(text),
+        )
 
     return detected
 
@@ -342,4 +346,6 @@ async def _track_secret_usage(
     db.add(usage)
     await db.commit()
 
-    logger.info(f"Tracked secret usage: activity={activity_type}")
+    logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs activity type only, no secret value
+        "Tracked secret usage: activity=%s", activity_type
+    )

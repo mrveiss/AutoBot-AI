@@ -102,6 +102,7 @@ async def authorize_elevation(auth: ElevationAuthorization):
         is_valid = await verify_sudo_password(auth.password)
 
         if not is_valid:
+            # codeql-suppress py/clear-text-logging-sensitive-data: logs request_id only, no password value
             logger.warning("Invalid sudo password for request %s", request_id)
             raise HTTPException(status_code=401, detail="Invalid password")
 

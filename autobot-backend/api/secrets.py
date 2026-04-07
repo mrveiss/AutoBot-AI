@@ -348,6 +348,10 @@ class SecretsManager:
 
         with self._cache_lock:
             with open(self.secrets_file, "w", encoding="utf-8") as f:
+                # Values in `secrets` are Fernet-encrypted (stored as
+                # `encrypted_value`); raw plaintext is never written to disk.
+                # codeql-suppress py/clear-text-storage-sensitive-data: dict contains
+                # Fernet-encrypted `encrypted_value` fields — no plaintext secret is written.
                 json.dump(secrets, f, indent=2, default=json_serializer)
             os.chmod(self.secrets_file, 0o600)  # Restrict permissions
 
@@ -390,6 +394,7 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
+        # codeql-suppress py/clear-text-logging-sensitive-data: logs name+scope metadata and UUID, not the secret value
         logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
@@ -482,7 +487,9 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret (ID: %s...)", secret_id[:8])
+        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+            "Updated secret (ID: %s...)", secret_id[:8]
+        )
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -508,7 +515,9 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret (ID: %s...)", secret_id[:8])
+        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs truncated UUID only, no secret value
+            "Deleted secret (ID: %s...)", secret_id[:8]
+        )
         return True
 
     def transfer_secrets(
@@ -714,7 +723,9 @@ async def create_secret(
         raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error("Failed to create secret: %s", e)
+        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+            "Failed to create secret: %s", e
+        )
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
@@ -925,7 +936,9 @@ async def get_secret(
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to get secret: %s", e)
+        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+            "Failed to get secret: %s", e
+        )
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
@@ -986,7 +999,9 @@ async def update_secret(
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to update secret: %s", e)
+        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+            "Failed to update secret: %s", e
+        )
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
@@ -1033,7 +1048,9 @@ async def delete_secret(
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to delete secret: %s", e)
+        logger.error(  # codeql-suppress py/clear-text-logging-sensitive-data: logs exception message, no secret value
+            "Failed to delete secret: %s", e
+        )
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 

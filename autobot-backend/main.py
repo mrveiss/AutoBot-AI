@@ -82,7 +82,9 @@ if __name__ == "__main__":
         port = int(os.getenv("AUTOBOT_BACKEND_TLS_PORT", "8443"))
         logger.info("🔒 TLS enabled - using HTTPS on port %s", port)
         logger.info("🔒 TLS cert: %s", ssl_certfile)
-        logger.info("🔒 TLS key: %s", ssl_keyfile)
+        logger.info(  # codeql-suppress py/clear-text-logging-sensitive-data: logs file path only, not key material
+            "🔒 TLS key: %s", ssl_keyfile
+        )
 
     # Log configuration
     logger.info("📡 Host: %s", host)

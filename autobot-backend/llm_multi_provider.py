@@ -58,6 +58,7 @@ try:
 except Exception:
     import os
 
+    # codeql-suppress py/insecure-protocol: internal loopback-only Ollama endpoint
     _OLLAMA_DEFAULT_URL = os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
 
 logger = get_llm_logger("unified_llm")
