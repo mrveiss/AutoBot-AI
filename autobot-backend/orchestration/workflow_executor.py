@@ -369,10 +369,16 @@ class WorkflowExecutor:
                 )
 
             # Issue #2154: Checkpoint after successful completion.
+            # Issue #3825: Checkpoint failure must never surface as a step failure.
             if step_result.get("success"):
-                self._save_checkpoint(
-                    execution_context.get("workflow_id", ""), step_id, step_result
-                )
+                try:
+                    self._save_checkpoint(
+                        execution_context.get("workflow_id", ""), step_id, step_result
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Checkpoint save failed for step %s (non-fatal): %s", step_id, exc
+                    )
 
             if agent_id:
                 execution_context["agents_involved"].add(agent_id)
@@ -467,10 +473,16 @@ class WorkflowExecutor:
             )
 
         # Issue #2154: checkpoint after successful completion.
+        # Issue #3825: Checkpoint failure must never surface as a step failure.
         if step_result.get("success"):
-            self._save_checkpoint(
-                execution_context.get("workflow_id", ""), step_id, step_result
-            )
+            try:
+                self._save_checkpoint(
+                    execution_context.get("workflow_id", ""), step_id, step_result
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Checkpoint save failed for step %s (non-fatal): %s", step_id, exc
+                )
 
     async def _execute_step_with_retry(
         self,
