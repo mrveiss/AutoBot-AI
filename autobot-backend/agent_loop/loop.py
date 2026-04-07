@@ -17,6 +17,8 @@ and Think Tool into a cohesive execution system.
 """
 
 import asyncio
+import hashlib
+import json
 import logging
 import time
 import uuid
@@ -418,6 +420,19 @@ class AgentLoop:
         if not tools:
             return {}
 
+        # Issue #3255: Halt before execution if identical call repeated too often
+        repeated_tool = self._check_tool_call_repetition(tools)
+        if repeated_tool is not None:
+            return {
+                repeated_tool: {
+                    "error": (
+                        f"Halted: repetitive tool call detected for '{repeated_tool}' "
+                        f"(exceeded max_identical_tool_calls="
+                        f"{self.config.max_identical_tool_calls})"
+                    )
+                }
+            }
+
         # Check if we need to think before certain tools
         await self._think_before_tools(tools)
 
@@ -602,6 +617,56 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
     # =========================================================================
     # Helper Methods
     # =========================================================================
+
+    # =========================================================================
+    # Repetitive Tool-Call Detection (#3255)
+    # =========================================================================
+
+    @staticmethod
+    def _compute_tool_call_hash(tool: dict[str, Any]) -> str:
+        """Return a stable content hash for a tool call.
+
+        The hash is derived from the tool name and its sorted arguments so that
+        two calls with identical intent produce the same hash regardless of
+        dict-insertion order.
+
+        Issue #3255.
+        """
+        tool_name = tool.get("tool_name", "")
+        args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+        if not isinstance(args, dict):
+            args = {}
+        canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _check_tool_call_repetition(
+        self, tools: list[dict[str, Any]]
+    ) -> Optional[str]:
+        """Check whether any pending tool call has been issued too many times.
+
+        Returns the offending tool name if repetition is detected, else None.
+        Records each call regardless so the counter accumulates across iterations.
+
+        Issue #3255.
+        """
+        if not self._current_context:
+            return None
+
+        threshold = self.config.max_identical_tool_calls
+        for tool in tools:
+            call_hash = self._compute_tool_call_hash(tool)
+            count = self._current_context.record_tool_call_hash(call_hash)
+            tool_name = tool.get("tool_name", "unknown")
+            if count > threshold:
+                logger.warning(
+                    "AgentLoop: Detected repetitive tool call: %s called %d times "
+                    "with identical args (threshold=%d)",
+                    tool_name,
+                    count,
+                    threshold,
+                )
+                return tool_name
+        return None
 
     def _should_continue(self) -> bool:
         """Check if the loop should continue."""
