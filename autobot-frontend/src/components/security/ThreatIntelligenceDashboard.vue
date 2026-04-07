@@ -210,6 +210,7 @@ import { ref, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -255,8 +256,8 @@ async function refreshStatus() {
   loading.value = true
   try {
     const [statusResponse, statsResponse] = await Promise.all([
-      apiClient.get('/api/security/threat-intel/status'),
-      apiClient.get('/api/security/domain-security/stats')
+      apiClient.get(`${getApiBase()}/security/threat-intel/status`),
+      apiClient.get(`${getApiBase()}/security/domain-security/stats`)
     ])
 
     const statusData = (statusResponse as { data?: Record<string, unknown> }).data
@@ -290,7 +291,7 @@ async function checkUrl() {
   checkResult.value = null
 
   try {
-    const response = await apiClient.post('/api/security/threat-intel/check-url', {
+    const response = await apiClient.post(`${getApiBase()}/security/threat-intel/check-url`, {
       url: urlToCheck.value
     })
 

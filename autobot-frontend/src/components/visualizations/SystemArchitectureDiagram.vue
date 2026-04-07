@@ -513,7 +513,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
-import { getConfig } from '@/config/ssot-config'
+import { getConfig, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
 
@@ -704,7 +704,7 @@ async function refreshArchitecture() {
 
   try {
     // Issue #552: Fixed path - backend uses /api/monitoring/services/health
-    const healthResponse = await apiClient.get('/api/monitoring/services/health')
+    const healthResponse = await apiClient.get(`${getApiBase()}/monitoring/services/health`)
     const healthData = await parseApiResponse(healthResponse)
 
     // Generate architecture based on known infrastructure
