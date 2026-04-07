@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from constants.model_constants import ModelConfig, ModelConstants
 from constants.network_constants import NetworkConstants
@@ -23,48 +23,76 @@ from .types import LLMType, ProviderType
 class LLMSettings(BaseSettings):
     """LLM configuration using pydantic-settings for async config management"""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="allow",
+        populate_by_name=True,
+    )
+
     # Ollama settings
     ollama_host: str = Field(
-        default=NetworkConstants.MAIN_MACHINE_IP, env="OLLAMA_HOST"
+        default=NetworkConstants.MAIN_MACHINE_IP,
+        validation_alias="OLLAMA_HOST",
     )
-    ollama_port: int = Field(default=NetworkConstants.OLLAMA_PORT, env="OLLAMA_PORT")
+    ollama_port: int = Field(
+        default=NetworkConstants.OLLAMA_PORT,
+        validation_alias="OLLAMA_PORT",
+    )
 
     # Model settings - Uses centralized model constants
     default_model: str = Field(
-        default=ModelConstants.DEFAULT_OLLAMA_MODEL, env="DEFAULT_LLM_MODEL"
+        default=ModelConstants.DEFAULT_OLLAMA_MODEL,
+        validation_alias="DEFAULT_LLM_MODEL",
     )
     temperature: float = Field(
-        default=ModelConfig.DEFAULT_TEMPERATURE, env="LLM_TEMPERATURE"
+        default=ModelConfig.DEFAULT_TEMPERATURE,
+        validation_alias="LLM_TEMPERATURE",
     )
-    top_k: int = Field(default=ModelConfig.DEFAULT_TOP_K, env="LLM_TOP_K")
-    top_p: float = Field(default=ModelConfig.DEFAULT_TOP_P, env="LLM_TOP_P")
+    top_k: int = Field(
+        default=ModelConfig.DEFAULT_TOP_K,
+        validation_alias="LLM_TOP_K",
+    )
+    top_p: float = Field(
+        default=ModelConfig.DEFAULT_TOP_P,
+        validation_alias="LLM_TOP_P",
+    )
     repeat_penalty: float = Field(
-        default=ModelConfig.DEFAULT_REPEAT_PENALTY, env="LLM_REPEAT_PENALTY"
+        default=ModelConfig.DEFAULT_REPEAT_PENALTY,
+        validation_alias="LLM_REPEAT_PENALTY",
     )
-    num_ctx: int = Field(default=ModelConfig.DEFAULT_NUM_CTX, env="LLM_CONTEXT_SIZE")
+    num_ctx: int = Field(
+        default=ModelConfig.DEFAULT_NUM_CTX,
+        validation_alias="LLM_CONTEXT_SIZE",
+    )
 
     # Performance settings - optimized for high-end hardware
-    max_retries: int = Field(default=ModelConfig.MAX_RETRIES, env="LLM_MAX_RETRIES")
+    max_retries: int = Field(
+        default=ModelConfig.MAX_RETRIES,
+        validation_alias="LLM_MAX_RETRIES",
+    )
     connection_pool_size: int = Field(
-        default=ModelConfig.DEFAULT_CONNECTION_POOL_SIZE, env="LLM_POOL_SIZE"
+        default=ModelConfig.DEFAULT_CONNECTION_POOL_SIZE,
+        validation_alias="LLM_POOL_SIZE",
     )
     max_concurrent_requests: int = Field(
-        default=ModelConfig.DEFAULT_MAX_CONCURRENT_REQUESTS, env="LLM_MAX_CONCURRENT"
+        default=ModelConfig.DEFAULT_MAX_CONCURRENT_REQUESTS,
+        validation_alias="LLM_MAX_CONCURRENT",
     )
     connection_timeout: float = Field(
-        default=ModelConfig.DEFAULT_TIMEOUT, env="LLM_CONNECTION_TIMEOUT"
+        default=ModelConfig.DEFAULT_TIMEOUT,
+        validation_alias="LLM_CONNECTION_TIMEOUT",
     )
-    cache_ttl: int = Field(default=ModelConfig.DEFAULT_CACHE_TTL, env="LLM_CACHE_TTL")
+    cache_ttl: int = Field(
+        default=ModelConfig.DEFAULT_CACHE_TTL,
+        validation_alias="LLM_CACHE_TTL",
+    )
 
     # Streaming settings - using completion signal detection
     max_chunks: int = Field(
-        default=ModelConfig.DEFAULT_MAX_CHUNKS, env="LLM_MAX_CHUNKS"
+        default=ModelConfig.DEFAULT_MAX_CHUNKS,
+        validation_alias="LLM_MAX_CHUNKS",
     )
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "allow"
 
 
 @dataclass
