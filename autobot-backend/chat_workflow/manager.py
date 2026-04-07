@@ -22,7 +22,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
-from constants.model_constants import ModelConstants
+from constants.model_constants import ModelConfig, ModelConstants
 from slash_command_handler import get_slash_command_handler
 
 from .conversation import ConversationHandlerMixin
@@ -1808,7 +1808,7 @@ before summarizing.
             "options": {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "num_ctx": ModelConstants.CHAT_NUM_CTX,
+                "num_ctx": ModelConfig.CHAT_NUM_CTX,
             },
         }
         if system_prompt:
