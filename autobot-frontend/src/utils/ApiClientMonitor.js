@@ -3,6 +3,7 @@
  */
 
 import rumAgent from './RumAgent.js'
+import { getApiBase } from '@/config/ssot-config'
 
 export function createMonitoredApiClient(originalApiClient) {
   return new Proxy(originalApiClient, {
@@ -80,13 +81,14 @@ function getUrlFromArgs(method, args) {
 
   // Method-specific patterns
   // Issue #552: Fixed paths to match backend endpoints
+  const base = getApiBase()
   const methodUrlMap = {
-    getChatList: '/api/chat/sessions',
-    createNewChat: '/api/chat/sessions',
-    sendMessage: '/api/chat/message',
-    getSystemHealth: '/api/system/health',
-    getSettings: '/api/settings/',
-    executeWorkflow: '/api/workflow/execute'
+    getChatList: `${base}/chat/sessions`,
+    createNewChat: `${base}/chat/sessions`,
+    sendMessage: `${base}/chat/message`,
+    getSystemHealth: `${base}/system/health`,
+    getSettings: `${base}/settings/`,
+    executeWorkflow: `${base}/workflow/execute`
   }
 
   return methodUrlMap[method] || `/${method}`
