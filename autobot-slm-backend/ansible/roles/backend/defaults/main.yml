@@ -77,3 +77,9 @@ service_auth_circuit_breaker_percentage: 100
 service_auth_timestamp_window: 300
 service_auth_rate_limit_window: 300
 service_auth_rate_limit_max_failures: 10
+
+# Post-deploy smoke test (#3687): wait_for probes uvicorn directly on the
+# internal HTTP port; uri verifies /api/health returns 200.  Both values are
+# configurable so staging environments can shorten the timeout.
+backend_health_check_port: 8001
+backend_health_check_timeout: 60
