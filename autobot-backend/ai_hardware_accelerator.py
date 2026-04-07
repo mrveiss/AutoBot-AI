@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import io
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -23,6 +23,7 @@ import numpy as np
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from config import cfg
 
 # Import centralized components
@@ -162,7 +163,9 @@ class ProcessingTask:
     input_data: Dict[str, Any]
     complexity: TaskComplexity
     priority: int = 1
-    timeout_seconds: int = 30
+    timeout_seconds: int = field(
+        default_factory=lambda: int(config.timeout.default_request)
+    )
     preferred_device: Optional[HardwareDevice] = None
 
 

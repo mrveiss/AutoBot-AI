@@ -24,6 +24,8 @@ except ImportError:
     HTTPX_AVAILABLE = False
     httpx = None
 
+from autobot_shared.ssot_config import config as _ssot_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,9 +37,15 @@ class PoolConfig:
     max_keepalive_connections: int = 20
     keepalive_expiry: float = 5.0  # seconds
     connect_timeout: float = 10.0
-    read_timeout: float = 60.0
-    write_timeout: float = 30.0
-    pool_timeout: float = 30.0
+    read_timeout: float = field(
+        default_factory=lambda: _ssot_config.timeout.connection_pool_read
+    )
+    write_timeout: float = field(
+        default_factory=lambda: _ssot_config.timeout.connection_pool_write
+    )
+    pool_timeout: float = field(
+        default_factory=lambda: _ssot_config.timeout.connection_pool
+    )
     http2: bool = True
     retries: int = 0  # httpx handles retries internally
 

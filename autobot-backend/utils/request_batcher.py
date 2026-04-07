@@ -15,9 +15,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_REQUEST_TIMEOUT: float = config.timeout.default_request
 
 
 class BatchingStrategy(Enum):
@@ -49,7 +52,7 @@ class BatchableRequest:
     priority: RequestPriority = RequestPriority.NORMAL
     context_type: str = "general"
     timestamp: float = field(default_factory=time.time)
-    timeout: float = 30.0
+    timeout: float = field(default_factory=lambda: _DEFAULT_REQUEST_TIMEOUT)
     callback: Optional[Callable] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -746,7 +749,7 @@ async def batch_request(
     content: str,
     priority: RequestPriority = RequestPriority.NORMAL,
     context_type: str = "general",
-    timeout: float = 30.0,
+    timeout: float = config.timeout.default_request,
 ) -> Optional[str]:
     """Submit a request for batching and wait for result"""
     request = BatchableRequest(

@@ -441,6 +441,16 @@ class TimeoutConfig(BaseSettings):
 
     Note: Frontend uses milliseconds, backend uses seconds for LLM.
     The config stores values as they appear in .env for consistency.
+
+    Backend timeout constants — all override-able via environment variables:
+      AUTOBOT_REQUEST_TIMEOUT    — general HTTP service-to-service timeout (s)
+      AUTOBOT_LLM_REQUEST_TIMEOUT — LLM inference request timeout (s)
+      AUTOBOT_SANDBOX_TIMEOUT    — sandbox/subprocess execution timeout (s)
+      AUTOBOT_POOL_READ_TIMEOUT  — connection pool read timeout (s)
+      AUTOBOT_POOL_WRITE_TIMEOUT — connection pool write timeout (s)
+      AUTOBOT_POOL_TIMEOUT       — connection pool acquisition timeout (s)
+
+    Issue: #3803
     """
 
     model_config = SettingsConfigDict(
@@ -462,6 +472,24 @@ class TimeoutConfig(BaseSettings):
 
     # WebSocket timeout (seconds)
     websocket: int = Field(default=30, alias="AUTOBOT_WEBSOCKET_TIMEOUT")
+
+    # General service-to-service HTTP request timeout (seconds) — #3803
+    default_request: float = Field(default=30.0, alias="AUTOBOT_REQUEST_TIMEOUT")
+
+    # LLM inference request timeout (seconds) — #3803
+    llm_request: float = Field(default=60.0, alias="AUTOBOT_LLM_REQUEST_TIMEOUT")
+
+    # Sandbox / subprocess execution timeout (seconds) — #3803
+    sandbox: float = Field(default=300.0, alias="AUTOBOT_SANDBOX_TIMEOUT")
+
+    # HTTP connection pool timeouts (seconds) — #3803
+    connection_pool_read: float = Field(
+        default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT"
+    )
+    connection_pool_write: float = Field(
+        default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT"
+    )
+    connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
 
     @property
     def api_seconds(self) -> float:

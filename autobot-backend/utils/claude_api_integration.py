@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.ssot_config import config
 from constants.threshold_constants import RetryConfig, TimingConstants
 
 from .conversation_rate_limiter import ConversationRateLimiter
@@ -212,7 +213,7 @@ class ClaudeAPIBatchManager:
         content: str,
         priority: RequestPriority = RequestPriority.NORMAL,
         context_type: str = "general",
-        timeout: float = 30.0,
+        timeout: float = config.timeout.default_request,
         metadata: Dict[str, Any] = None,
     ) -> str:
         """Submit a request for processing with batching optimization (thread-safe).

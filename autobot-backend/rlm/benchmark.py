@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from autobot_shared.ssot_config import ROUTING_MODEL
+from autobot_shared.ssot_config import ROUTING_MODEL, config
 from rlm.evaluator import ResponseQualityEvaluator
 from rlm.types import RLMConfig
 
@@ -138,7 +138,7 @@ async def _generate(
     model: str = ROUTING_MODEL,
     temperature: float = 0.5,
     max_tokens: int = 1024,
-    timeout_s: float = 30.0,
+    timeout_s: float = config.timeout.default_request,
 ) -> str:
     """Call Ollama generate and return the raw text."""
     from autobot_shared.ssot_config import get_config
