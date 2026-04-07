@@ -94,9 +94,10 @@ class AgentDiaryService:
     async def read(self, agent_name: str, last_n: int = 10) -> List[Dict[str, Any]]:
         """Return the last *last_n* diary entries for *agent_name*, newest first.
 
-        Uses a metadata-filtered listing (``get_all_facts``) rather than
-        semantic search so that all entries are deterministically retrieved
-        regardless of their semantic similarity to a query string.
+        Uses ChromaDB metadata filters when the vector store is available
+        (Issue #3808 tracks adding a dedicated index for O(1) retrieval).
+        Falls back to a capped ``get_all_facts`` scan when vector store is
+        unavailable.
 
         Args:
             agent_name: Agent whose entries to retrieve.
@@ -107,12 +108,26 @@ class AgentDiaryService:
         """
         try:
             kb = await _get_kb()
-            all_facts = await kb.get_all_facts()
-            entries = [
-                f for f in all_facts
-                if (f.get("metadata") or {}).get("category") == self.CATEGORY
-                and (f.get("metadata") or {}).get("source") == agent_name
-            ]
+            filters = {"source": agent_name, "category": self.CATEGORY}
+            # Try metadata-filtered vector search first (ChromaDB path — efficient).
+            # Use agent_name as a neutral query signal; filters do the real narrowing.
+            if getattr(kb, "vector_store", None):
+                results = await kb.search(
+                    query=agent_name,
+                    top_k=last_n * 5,
+                    filters=filters,
+                )
+                entries = [r for r in results
+                           if (r.get("metadata") or {}).get("category") == self.CATEGORY]
+            else:
+                # Fallback: capped Redis scan (vector store unavailable).
+                _SCAN_CAP = 1000
+                all_facts = await kb.get_all_facts(limit=_SCAN_CAP)
+                entries = [
+                    f for f in all_facts
+                    if (f.get("metadata") or {}).get("category") == self.CATEGORY
+                    and (f.get("metadata") or {}).get("source") == agent_name
+                ]
             entries.sort(
                 key=lambda r: r.get("metadata", {}).get("diary_timestamp", ""),
                 reverse=True,
