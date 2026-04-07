@@ -12,7 +12,7 @@ import asyncio
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Dict, List, Optional
 
 import aiofiles
 
@@ -264,21 +264,10 @@ class MCPManualService:
             Manual page information or None
         """
         try:
-            # Check cache first
-            cache_key = f"man_{command}"
-            if self._check_cache(cache_key):
-                return self.command_cache[cache_key]["data"]
-
-            # Use real MCP server integration for manual pages
-            manual_data = await self._real_manual_lookup(command)
-
-            if manual_data:
-                # Cache the result
-                self._cache_result(cache_key, manual_data)
-                return manual_data
-
-            return None
-
+            # Issue #3826: cache check/fetch/store via shared helper.
+            return await self._cached_fetch(
+                f"man_{command}", self._real_manual_lookup(command)
+            )
         except Exception as e:
             logger.error("Manual lookup failed for command '%s': %s", command, e)
             return None
@@ -294,21 +283,10 @@ class MCPManualService:
             Help information or None
         """
         try:
-            # Check cache first
-            cache_key = f"help_{command}"
-            if self._check_cache(cache_key):
-                return self.command_cache[cache_key]["data"]
-
-            # Use real MCP server integration for command help
-            help_data = await self._real_help_lookup(command)
-
-            if help_data:
-                # Cache the result
-                self._cache_result(cache_key, help_data)
-                return help_data
-
-            return None
-
+            # Issue #3826: cache check/fetch/store via shared helper.
+            return await self._cached_fetch(
+                f"help_{command}", self._real_help_lookup(command)
+            )
         except Exception as e:
             logger.error("Help lookup failed for command '%s': %s", command, e)
             return None
@@ -324,10 +302,10 @@ class MCPManualService:
             Documentation results or None
         """
         try:
-            # Use real MCP server integration for documentation search
-            doc_data = await self._real_documentation_search(query)
-            return doc_data
-
+            # Issue #3826: cache check/fetch/store via shared helper.
+            return await self._cached_fetch(
+                f"doc_{query}", self._real_documentation_search(query)
+            )
         except Exception as e:
             logger.error("Documentation search failed for '%s': %s", query, e)
             return None
@@ -1126,6 +1104,33 @@ class MCPManualService:
             "relevance": 0.5,
         }
         return self._build_fallback_response(query, generic_doc)
+
+    async def _cached_fetch(
+        self,
+        cache_key: str,
+        fetch_coro: Awaitable[Optional[Dict[str, Any]]],
+    ) -> Optional[Dict[str, Any]]:
+        """Return a cached value when fresh, otherwise await *fetch_coro*, store, and return.
+
+        Issue #3826: shared cache check/fetch/store helper — eliminates the
+        duplicate check→fetch→cache pattern in _lookup_command_manual,
+        _lookup_command_help, and _search_documentation.
+
+        Args:
+            cache_key:  Key used for both lookup and storage.
+            fetch_coro: Awaitable that performs the underlying fetch.
+                        Only awaited on a cache miss.
+
+        Returns:
+            The cached or freshly fetched result, or None if the fetch
+            returns None.
+        """
+        if self._check_cache(cache_key):
+            return self.command_cache[cache_key]["data"]
+        result = await fetch_coro
+        if result is not None:
+            self._cache_result(cache_key, result)
+        return result
 
     def _check_cache(self, cache_key: str) -> bool:
         """Check if cached result is still valid"""
