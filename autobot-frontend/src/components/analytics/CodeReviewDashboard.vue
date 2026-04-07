@@ -276,6 +276,8 @@
             v-for="review in reviewHistory"
             :key="review.id"
             class="history-item"
+            @click="loadReview(review.id)"
+            style="cursor: pointer;"
           >
             <div class="history-info">
               <span class="history-path">{{ review.path }}</span>
@@ -624,6 +626,27 @@ async function loadHistory() {
   } catch (error) {
     logger.warn('Failed to load review history:', error)
     reviewHistory.value = []
+  }
+}
+
+async function loadReview(reviewId: string) {
+  if (!reviewId) return
+  loading.value = true
+  try {
+    const params = withSourceIdParams()
+    const response = await api.get<ApiDataResponse>(
+      `${getApiBase()}/code-review/review/${reviewId}`,
+      { params }
+    )
+    const data = response as ApiDataResponse
+    issues.value = data.issues || data.data?.issues || []
+    hasAnalyzed.value = true
+    showToast(t('analytics.codeReview.reviewLoaded'), 'info')
+  } catch (error: unknown) {
+    logger.error('Failed to load review:', error)
+    showToast(t('analytics.codeReview.analysisFailed'), 'error')
+  } finally {
+    loading.value = false
   }
 }
 
