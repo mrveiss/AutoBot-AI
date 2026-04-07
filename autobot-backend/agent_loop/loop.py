@@ -88,6 +88,14 @@ SENSITIVE_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+# =============================================================================
+# Repetition-Halt Guard (Issue #3859, #3862, #3877)
+# =============================================================================
+
+# Sentinel key injected into tool_results when the repetition-halt guard fires.
+# Presence of this key in tool_results lets _execute_iteration_phases detect
+# a halt without inspecting the error string.  Issue #3877.
+_HALT_SENTINEL = "__repetition_halt__"
 
 # =============================================================================
 # Agent Loop
@@ -345,13 +353,16 @@ class AgentLoop:
         self._current_phase = LoopPhase.WAIT_FOR_EXECUTION
         tool_results = await self._execute_tools(tools_to_execute)
 
-        # Issue #3859 / #3862: when the repetition-halt guard fires, the tools
-        # never actually executed.  Skip adding them to tools_executed (they
-        # didn't run) and return the error as tool_results so the LLM can see
-        # what happened and adapt rather than terminating silently.
-        if self._halted_on_repetition:
-            result.tool_results = tool_results
+        # Issue #3877 / #3859: detect repetition-halt via sentinel key.
+        # When halted: do not add any rejected tools to tools_executed and
+        # stop iterating immediately so the LLM receives the error but the
+        # loop does not re-propose the same tools indefinitely.
+        if tool_results.pop(_HALT_SENTINEL, False):
+            # Issue #3862: keep should_continue=False so the loop exits, but
+            # surface the halt errors as tool_results so the LLM can adapt.
+            # Issue #3859: tools_executed stays empty — no tool actually ran.
             result.tools_executed = []
+            result.tool_results = tool_results
             result.should_continue = False
             result.phase_completed = LoopPhase.ITERATE
             return result
@@ -489,16 +500,23 @@ class AgentLoop:
         # _should_iterate() correctly classifies the error result.
         repeated_tool = self._check_tool_call_repetition(tools)
         if repeated_tool is not None:
-            self._halted_on_repetition = True
-            return {
-                repeated_tool: {
-                    "error": (
-                        f"Halted: repetitive tool call detected for '{repeated_tool}' "
-                        f"(exceeded max_identical_tool_calls="
-                        f"{self.config.max_identical_tool_calls})"
-                    )
-                }
+            halt_msg = (
+                f"Halted: repetitive tool call detected for '{repeated_tool}' "
+                f"(exceeded max_identical_tool_calls="
+                f"{self.config.max_identical_tool_calls})"
+            )
+            # Issue #3877: include ALL tools in halt results so _should_iterate
+            # sees every tool from the batch as having an error result.
+            # Issue #3859: do NOT record any of these in tools_executed — the
+            # sentinel key lets _execute_iteration_phases skip add_tool() calls
+            # and set should_continue=False without calling _should_iterate.
+            halt_results: dict[str, Any] = {
+                _HALT_SENTINEL: True,
             }
+            for tool in tools:
+                t_name = tool.get("tool_name", "unknown")
+                halt_results[t_name] = {"error": halt_msg}
+            return halt_results
 
         # Issue #4092: Gate sensitive operations behind user approval.
         denied_results = await self._check_approvals(tools)
@@ -702,35 +720,20 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         two calls with identical intent produce the same hash regardless of
         dict-insertion order.
 
-        Issue #3255 / #3868 / #3874:
-        - Non-dict args are serialized as a tagged wrapper so distinct values
-          (e.g. a string "foo" vs None) yield distinct hashes rather than all
-          collapsing to the same empty-dict hash.
-        - json.dumps is wrapped in try/except TypeError so non-JSON-serializable
-          objects (e.g. custom class instances) fall back to a repr()-based
-          canonical form without raising.
+        Issue #3255, #3868, #3874.
         """
         tool_name = tool.get("tool_name", "")
         args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
-
-        # Issue #3874: preserve distinctness for non-dict args instead of coercing
-        # every non-dict value to the same empty dict {}.
+        # Issue #3874: preserve non-dict arg identity; {} would alias all
+        # non-dict calls to the same bucket
         if not isinstance(args, dict):
-            args_payload: Any = {
-                "__type__": type(args).__name__,
-                "__repr__": repr(args)[:200],
-            }
-        else:
-            args_payload = args
-
-        # Issue #3868: json.dumps raises TypeError for non-serializable objects
-        # (e.g. dataclass, custom types).  Fall back to repr() so the hash is
-        # still deterministic and meaningful.
+            args = {"_raw": str(args)}
         try:
-            canonical = json.dumps({"n": tool_name, "a": args_payload}, sort_keys=True)
-        except TypeError:
-            canonical = repr({"n": tool_name, "a": args_payload})
-
+            # Issue #3868: default=str handles datetime, bytes, custom objects
+            canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True, default=str)
+        except Exception:
+            # Absolute fallback — should never be reached with default=str
+            canonical = repr({"n": tool_name, "a": args})
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _check_tool_call_repetition(
