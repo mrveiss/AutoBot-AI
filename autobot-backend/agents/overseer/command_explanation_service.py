@@ -59,11 +59,10 @@ class CommandExplanationService:
             return endpoint
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
-            from config import ConfigManager
+            from autobot_shared.ssot_config import config as _ssot
 
-            config = ConfigManager()
             return (
-                f"http://{config.get_host('ollama')}:{config.get_port('ollama')}"
+                f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}"
                 + PATH_OLLAMA_GENERATE
             )
 
