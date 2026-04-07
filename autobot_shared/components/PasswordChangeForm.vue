@@ -85,6 +85,8 @@ const props = defineProps<{
   requireCurrentPassword?: boolean
   /** Full API path for the change-password POST. Defaults to /api/users/{userId}/change-password. */
   apiEndpoint?: string
+  /** Bearer token to include in the Authorization header. Falls back to localStorage 'authToken'. */
+  authToken?: string
 }>()
 
 const emit = defineEmits<{
@@ -175,8 +177,7 @@ async function handleSubmit() {
   error.value = null
 
   try {
-    // Get auth token from localStorage or auth store
-    const token = localStorage.getItem('authToken') || ''
+    const token = props.authToken || localStorage.getItem('authToken') || ''
 
     const endpoint = props.apiEndpoint ?? `/api/users/${props.userId}/change-password`
     const response = await fetch(endpoint, {

@@ -1066,6 +1066,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           :user-id="passwordChangeUserId"
           :require-current-password="!isAdminReset"
           :api-endpoint="passwordChangeApiEndpoint"
+          :auth-token="authStore.token ?? undefined"
           @success="handlePasswordChangeSuccess"
           @error="handlePasswordChangeError"
         />
