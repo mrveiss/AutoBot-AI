@@ -2,9 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import datetime
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
+
+import aiofiles
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
@@ -778,11 +783,9 @@ async def sync_config(
     caller can display a confirmation to the user.
     """
     import copy
-    import json
-    import os
-    import tempfile
 
     from config.loader import deep_merge
+    from constants.path_constants import PATH
 
     if not request.settings:
         return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
@@ -792,21 +795,20 @@ async def sync_config(
     # Merge the incoming payload onto the current config.
     merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
 
-    # Persist atomically: write to tmp then rename.
-    from constants.path_constants import PATH
-
+    # Persist atomically: write to tmp then rename (non-blocking write).
     settings_file = PATH.PROJECT_ROOT / "config" / "settings.json"
     settings_file.parent.mkdir(parents=True, exist_ok=True)
 
     tmp_fd, tmp_path = tempfile.mkstemp(
         dir=str(settings_file.parent), suffix=".tmp", prefix="settings_"
     )
+    os.close(tmp_fd)  # aiofiles will reopen by path
     try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-            json.dump(merged_config, fh, indent=2, ensure_ascii=False)
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
+            await fh.write(json.dumps(merged_config, indent=2, ensure_ascii=False))
         os.replace(tmp_path, str(settings_file))
     except Exception:
-        # Clean up tmp file if rename failed.
+        # Clean up tmp file if write or rename failed.
         try:
             os.unlink(tmp_path)
         except OSError:
