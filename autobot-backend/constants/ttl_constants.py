@@ -18,6 +18,8 @@ TTL_90_DAYS = 86_400 * 90
 
 TTL_365_DAYS = 86_400 * 365
 
+TTL_WORKING_MEMORY_DEFAULT = 3_600  # 1 hour — session-scoped working memory
+
 # HTTP / async task timeouts (float for aiohttp.ClientTimeout compatibility)
 TIMEOUT_HTTP_DEFAULT: float = 60.0
 TIMEOUT_HTTP_LONG: float = 120.0
