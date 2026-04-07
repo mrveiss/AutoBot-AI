@@ -632,7 +632,7 @@ async def _run_playbook(
 
         deploy_secrets = await fetch_deploy_secrets()
         # Caller-supplied variables take precedence over stored secrets.
-        merged_variables = {**deploy_secrets, **variables}
+        merged_variables = {**deploy_secrets, **(variables or {})}
 
         cmd = _build_playbook_command(
             playbook_path, inventory_path, playbook, limit_hosts, merged_variables
