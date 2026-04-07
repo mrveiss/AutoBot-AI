@@ -348,6 +348,85 @@ check_hardcoded_categories() {
     done < "$file"
 }
 
+# Check for hardcoded database DSN strings (#3397)
+# Catches sqlite:///, postgresql://, mysql:// used as bare string literals.
+check_hardcoded_db_dsns() {
+    local file="$1"
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip comments
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
+            continue
+        fi
+
+        # Skip if using env var or SSOT config
+        if echo "$line" | grep -qE '(getenv|os\.environ|AUTOBOT_|config\.|SettingsConfigDict|env_prefix)'; then
+            continue
+        fi
+
+        # Skip variable assignments in ssot_config / settings files
+        if echo "$line" | grep -qE '(default=|Field\()'; then
+            continue
+        fi
+
+        # Detect embedded DSN literals
+        if echo "$line" | grep -qE '"(sqlite:///|postgresql://[^{]|mysql://[^{]|mongodb://[^{])'; then
+            local dsn
+            dsn=$(echo "$line" | grep -oE '"(sqlite:///|postgresql://|mysql://|mongodb://)[^"]*"' | head -1)
+            echo -e "${RED}VIOLATION${NC} $file:$line_num"
+            echo "  Hardcoded database DSN: $dsn"
+            echo -e "  ${CYAN}Fix: Use config.database.* from ssot_config or AUTOBOT_DB_URL env var${NC}"
+            echo "  Line: ${line:0:80}"
+            echo ""
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
+# Check for hardcoded timeout magic numbers in timeout context (#3397)
+# Catches assignments like timeout=30, timeout_seconds=60 that bypass TimeoutConfig.
+check_hardcoded_timeouts() {
+    local file="$1"
+    local line_num=0
+
+    # Common timeout values that should come from TimeoutConfig
+    local timeout_values="30|60|120|300|3600"
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip comments
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
+            continue
+        fi
+
+        # Skip if using SSOT config
+        if echo "$line" | grep -qE '(TimeoutConfig|config\.timeout|AUTOBOT_TIMEOUT|ssot_config)'; then
+            continue
+        fi
+
+        # Skip constant definitions in constants/config files
+        if echo "$line" | grep -qE '^[[:space:]]*(TIMEOUT|DEFAULT_TIMEOUT|[A-Z_]+_TIMEOUT)\s*='; then
+            continue
+        fi
+
+        # Detect timeout=N or timeout_seconds=N patterns
+        if echo "$line" | grep -qE "(timeout|timeout_seconds|connect_timeout|read_timeout)[^a-z_]*[=:][^=]*\b(${timeout_values})\b"; then
+            local val
+            val=$(echo "$line" | grep -oE "\b(${timeout_values})\b" | head -1)
+            echo -e "${RED}VIOLATION${NC} $file:$line_num"
+            echo "  Hardcoded timeout value: $val"
+            echo -e "  ${CYAN}Fix: Use config.timeout.* from ssot_config (TimeoutConfig)${NC}"
+            echo "  Line: ${line:0:80}"
+            echo ""
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
 # Main execution
 main() {
     echo -e "${BOLD}Pre-commit: Hardcoded Value Detection (Strict)${NC}"
@@ -377,6 +456,8 @@ main() {
             check_hardcoded_categories "$file"
             check_hardcoded_paths "$file"
             check_hardcoded_model_names "$file"
+            check_hardcoded_db_dsns "$file"
+            check_hardcoded_timeouts "$file"
         fi
     done
 
