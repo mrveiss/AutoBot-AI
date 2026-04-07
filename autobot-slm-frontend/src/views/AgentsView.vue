@@ -174,7 +174,7 @@ async function saveAgent() {
       llm_temperature: editForm.value.llm_temperature,
       is_active: editForm.value.is_active,
     }
-    const response = await fetch(`/api/agents/${selectedAgent.value.agent_id}`, {
+    const response = await fetch(`${getSlmApiBase()}/agents/${selectedAgent.value.agent_id}`, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${authStore.token}`,
