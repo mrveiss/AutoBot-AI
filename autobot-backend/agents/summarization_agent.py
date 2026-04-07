@@ -1,4 +1,5 @@
 # AutoBot - AI-Powered Automation Platform
+import uuid
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -98,7 +99,7 @@ class SummarizationAgent(StandardizedAgent):
         """Process a summarization query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Summarization Agent processing: %s...", request_text[:50])
-            session_id = (context or {}).get("session_id", "unknown")
+            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
             response = await self.llm_interface.chat_completion_optimized(
                 agent_type=self.AGENT_ID,
                 user_message=request_text,

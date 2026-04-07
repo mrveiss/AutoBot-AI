@@ -90,7 +90,8 @@ class OllamaAdapter(AdapterBase):
                             message=f"HTTP {resp.status} from Ollama",
                         )
                     )
-        except Exception:
+        except Exception as exc:  # Issue #3866: log so server-side errors are visible
+            logger.warning("OllamaAdapter.test_environment() failed: %s", exc)
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
