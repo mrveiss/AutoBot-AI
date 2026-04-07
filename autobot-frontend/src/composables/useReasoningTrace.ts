@@ -138,7 +138,7 @@ export function useReasoningTrace(sessionId?: string | null): UseReasoningTraceR
     if (sessionId && payload['session_id'] && payload['session_id'] !== sessionId) {
       return
     }
-    if (activeSteps.value > 0) activeSteps.value--
+    activeSteps.value = Math.max(0, activeSteps.value - 1)
     push({
       id: nextId(),
       kind: 'step_complete',

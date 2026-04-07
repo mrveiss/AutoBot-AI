@@ -130,7 +130,11 @@ class MCPDispatcher:
         return any(pattern in tool_name for pattern in self._ADMIN_ONLY_TOOLS)
 
     async def dispatch(
-        self, tool_name: str, arguments: dict, role: str = "user"
+        self,
+        tool_name: str,
+        arguments: dict,
+        role: str = "user",
+        session_id: Optional[str] = None,
     ) -> dict:
         """Dispatch a tool call to its registered MCP bridge.
 
@@ -176,7 +180,7 @@ class MCPDispatcher:
         endpoint = tool.get("endpoint", "")
 
         # Issue #3232: emit CoT events around bridge call.
-        _cot_start = emit_tool_call(tool_name, arguments)
+        _cot_start = emit_tool_call(tool_name, arguments, session_id=session_id)
         result = await self._call_bridge(tool_name, bridge, endpoint, arguments)
         emit_tool_result(
             tool_name,
@@ -184,6 +188,7 @@ class MCPDispatcher:
             _cot_start,
             success=result.get("success", False),
             bridge=bridge,
+            session_id=session_id,
         )
         return result
 
