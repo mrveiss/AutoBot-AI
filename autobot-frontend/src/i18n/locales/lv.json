@@ -3036,6 +3036,28 @@
       "aboutPopulateCommands": "Atklāj pieejamās sistēmas komandas un izveido zināšanu ierakstus ar lietošanas informāciju, karodziņiem un piemēriem.",
       "aboutIndexDocs": "Indeksē dokumentācijas failus no konfigurētajām direktorijām (piem., /usr/share/doc) zināšanu bāzē.",
       "aboutWhenToUse": "Jaunās sistēmās vispirms palaidiet <strong>Inicializēt</strong>. Pēc jaunas programmatūras instalēšanas izmantojiet <strong>Atjaunināt man lapas</strong> un <strong>Aizpildīt komandas</strong>. <strong>Pārindeksēt</strong>, ja meklēšanas veiktspēja pasliktinās."
+    },
+    "vectorization": {
+      "actionVectorize": "Vektorizēt",
+      "actionRetry": "Mēģināt vēlreiz",
+      "actionInProgress": "Apstrādā...",
+      "actionAlreadyDone": "Vektorizēts",
+      "tooltipVectorize": "Vektorizēt šo dokumentu",
+      "tooltipRetry": "Atkārtot vektorizāciju",
+      "tooltipInProgress": "Vektorizācija notiek",
+      "tooltipAlreadyDone": "Jau vektorizēts"
+    },
+    "batchSelection": {
+      "selected": "Izvēlēti {count}",
+      "eligible": "Derīgi {count}",
+      "vectorizeSelected": "Vektorizēt {count}",
+      "vectorizing": "Vektorizē...",
+      "noneEligible": "Nav derīgu",
+      "vectorizeSelectedTooltip": "Vektorizēt {count} izvēlētos dokumentus",
+      "vectorizingTooltip": "Vektorizācija notiek",
+      "noneEligibleTooltip": "Visi izvēlētie dokumenti jau ir vektorizēti vai gaida",
+      "clearSelection": "Notīrīt",
+      "clearSelectionTitle": "Notīrīt izvēli"
     }
   },
   "workflow": {

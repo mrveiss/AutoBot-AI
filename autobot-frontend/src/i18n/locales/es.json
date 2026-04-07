@@ -3036,6 +3036,28 @@
       "aboutPopulateCommands": "Discovers available system commands and creates knowledge entries with usage information, flags, and examples.",
       "aboutIndexDocs": "Indexes documentation files from configured directories (e.g., /usr/share/doc) into the knowledge base.",
       "aboutWhenToUse": "Run <strong>Initialize</strong> first on new systems. Use <strong>Refresh Man Pages</strong> and <strong>Populate Commands</strong> after installing new software. <strong>Reindex</strong> if search performance degrades."
+    },
+    "vectorization": {
+      "actionVectorize": "Vectorizar",
+      "actionRetry": "Reintentar",
+      "actionInProgress": "Procesando...",
+      "actionAlreadyDone": "Vectorizado",
+      "tooltipVectorize": "Vectorizar este documento",
+      "tooltipRetry": "Reintentar vectorización",
+      "tooltipInProgress": "Vectorización en curso",
+      "tooltipAlreadyDone": "Ya vectorizado"
+    },
+    "batchSelection": {
+      "selected": "{count} seleccionado(s)",
+      "eligible": "{count} elegible(s)",
+      "vectorizeSelected": "Vectorizar {count}",
+      "vectorizing": "Vectorizando...",
+      "noneEligible": "Ninguno elegible",
+      "vectorizeSelectedTooltip": "Vectorizar {count} documentos seleccionados",
+      "vectorizingTooltip": "Vectorización en curso",
+      "noneEligibleTooltip": "Todos los documentos seleccionados ya están vectorizados o pendientes",
+      "clearSelection": "Limpiar",
+      "clearSelectionTitle": "Limpiar selección"
     }
   },
   "workflow": {

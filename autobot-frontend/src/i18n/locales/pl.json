@@ -3036,6 +3036,28 @@
       "aboutPopulateCommands": "Odkrywa dostępne polecenia systemowe i tworzy wpisy wiedzy z informacjami o użyciu, flagach i przykładach.",
       "aboutIndexDocs": "Indeksuje pliki dokumentacji ze skonfigurowanych katalogów (np. /usr/share/doc) do bazy wiedzy.",
       "aboutWhenToUse": "Uruchom <strong>Inicjalizację</strong> najpierw na nowych systemach. Użyj <strong>Odśwież strony man</strong> i <strong>Wypełnij polecenia</strong> po zainstalowaniu nowego oprogramowania. <strong>Reindeksuj</strong>, jeśli wydajność wyszukiwania spada."
+    },
+    "vectorization": {
+      "actionVectorize": "Wektoryzuj",
+      "actionRetry": "Spróbuj ponownie",
+      "actionInProgress": "Przetwarzanie...",
+      "actionAlreadyDone": "Zwektoryzowano",
+      "tooltipVectorize": "Wektoryzuj ten dokument",
+      "tooltipRetry": "Ponów wektoryzację",
+      "tooltipInProgress": "Wektoryzacja w toku",
+      "tooltipAlreadyDone": "Już zwektoryzowano"
+    },
+    "batchSelection": {
+      "selected": "Wybrano {count}",
+      "eligible": "Kwalifikuje się {count}",
+      "vectorizeSelected": "Wektoryzuj {count}",
+      "vectorizing": "Wektoryzowanie...",
+      "noneEligible": "Brak kwalifikujących się",
+      "vectorizeSelectedTooltip": "Wektoryzuj {count} wybranych dokumentów",
+      "vectorizingTooltip": "Wektoryzacja w toku",
+      "noneEligibleTooltip": "Wszystkie wybrane dokumenty są już zwektoryzowane lub oczekują",
+      "clearSelection": "Wyczyść",
+      "clearSelectionTitle": "Wyczyść zaznaczenie"
     }
   },
   "workflow": {
