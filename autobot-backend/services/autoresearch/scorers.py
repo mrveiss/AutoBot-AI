@@ -289,7 +289,7 @@ class HumanReviewScorer(PromptScorer):
         if self._redis is None:
             from autobot_shared.redis_client import get_redis_client
 
-            self._redis = get_redis_client(async_client=True, database="main")
+            self._redis = await get_redis_client(async_client=True, database="main")
         return self._redis
 
     @property

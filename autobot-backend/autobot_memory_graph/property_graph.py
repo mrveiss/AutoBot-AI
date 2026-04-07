@@ -135,7 +135,7 @@ class PropertyGraph:
     async def initialize(self) -> None:
         """Acquire async Redis connection."""
         if self._redis is None:
-            self._redis = get_redis_client(async_client=True, database=self._database)
+            self._redis = await get_redis_client(async_client=True, database=self._database)
         logger.info("PropertyGraph initialized (db=%s)", self._database)
 
     # ------------------------------------------------------------------

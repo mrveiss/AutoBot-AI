@@ -297,7 +297,7 @@ class DocumentationWatcherService:
                 store_staleness_scores,
             )
 
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             graph = RedisGraphAdapter(redis)
             staleness_result = await propagate_staleness(graph, doc_id)
             stored = await store_staleness_scores(redis, staleness_result.scores)
