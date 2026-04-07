@@ -4,7 +4,7 @@
  * instead of installing Playwright locally on Kali Linux (which is incompatible)
  *
  * Environment variables:
- *   AUTOBOT_BROWSER_HOST  - Browser VM hostname (default: 127.0.0.1)
+ *   AUTOBOT_BROWSER_SERVICE_HOST  - Browser VM hostname (default: 127.0.0.1)
  *   AUTOBOT_BROWSER_PORT  - Browser VM port (default: 3000)
  *   AUTOBOT_FRONTEND_URL  - Frontend base URL (default: http://127.0.0.1:5173)
  */
@@ -14,7 +14,7 @@ const https = require('https');
 const querystring = require('querystring');
 
 // Configuration from environment variables with safe localhost defaults
-const BROWSER_VM_HOST = process.env.AUTOBOT_BROWSER_HOST || '127.0.0.1';
+const BROWSER_VM_HOST = process.env.AUTOBOT_BROWSER_SERVICE_HOST || '127.0.0.1';
 const BROWSER_VM_PORT = parseInt(process.env.AUTOBOT_BROWSER_PORT || '3000', 10);
 const FRONTEND_URL = process.env.AUTOBOT_FRONTEND_URL || 'http://127.0.0.1:5173';
 
