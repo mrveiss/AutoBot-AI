@@ -1,0 +1,406 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Context window budgets per model.
+#
+# Schema (dict-keyed, consumed by ContextWindowManager):
+#   models:
+#     <model-name>:
+#       context_window_tokens   — total context the model accepts
+#       max_output_tokens       — ceiling on generated tokens
+#       message_budget:
+#         system_prompt         — reserved tokens for the system prompt
+#         recent_messages       — number of recent turns to include
+#         max_history_tokens    — ceiling on conversation history tokens
+#
+# The special "default" key must also carry a "name" field that resolves
+# to one of the named entries below.
+#
+# token_estimation:
+#   chars_per_token             — character-to-token ratio used for estimates
+#   safety_margin               — fraction of context_window_tokens kept free
+
+models:
+  default:
+    name: qwen3.5:9b
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  # ---------------------------------------------------------------------------
+  # Ollama (local)
+  # ---------------------------------------------------------------------------
+  qwen3.5:9b:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  qwen3:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  qwen2.5:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  llama3.3:
+    context_window_tokens: 128000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 40
+      max_history_tokens: 8000
+
+  llama3.2:
+    context_window_tokens: 128000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 40
+      max_history_tokens: 8000
+
+  llama3.1:
+    context_window_tokens: 128000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 40
+      max_history_tokens: 8000
+
+  llama3:
+    context_window_tokens: 8192
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  mistral:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  mixtral:
+    context_window_tokens: 32768
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  codellama:
+    context_window_tokens: 16384
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  deepseek-coder:
+    context_window_tokens: 16384
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  deepseek-r1:
+    context_window_tokens: 64000
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 500
+      recent_messages: 30
+      max_history_tokens: 6000
+
+  phi3:
+    context_window_tokens: 4096
+    max_output_tokens: 2048
+    message_budget:
+      system_prompt: 300
+      recent_messages: 10
+      max_history_tokens: 1500
+
+  phi4:
+    context_window_tokens: 16384
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  gemma2:
+    context_window_tokens: 8192
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  gemma3:
+    context_window_tokens: 128000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 40
+      max_history_tokens: 8000
+
+  # ---------------------------------------------------------------------------
+  # Anthropic
+  # ---------------------------------------------------------------------------
+  claude-sonnet-4-6:
+    context_window_tokens: 200000
+    max_output_tokens: 32000
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-opus-4-6:
+    context_window_tokens: 200000
+    max_output_tokens: 32000
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-sonnet-4-20250514:
+    context_window_tokens: 200000
+    max_output_tokens: 32000
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-opus-4-20250514:
+    context_window_tokens: 200000
+    max_output_tokens: 32000
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-3-5-sonnet-20241022:
+    context_window_tokens: 200000
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-3-5-haiku-20241022:
+    context_window_tokens: 200000
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-haiku-4-5-20251001:
+    context_window_tokens: 200000
+    max_output_tokens: 16000
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  claude-3-opus-20240229:
+    context_window_tokens: 200000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  # ---------------------------------------------------------------------------
+  # OpenAI
+  # ---------------------------------------------------------------------------
+  gpt-4o:
+    context_window_tokens: 128000
+    max_output_tokens: 16384
+    message_budget:
+      system_prompt: 800
+      recent_messages: 50
+      max_history_tokens: 12000
+
+  gpt-4o-mini:
+    context_window_tokens: 128000
+    max_output_tokens: 16384
+    message_budget:
+      system_prompt: 800
+      recent_messages: 50
+      max_history_tokens: 12000
+
+  gpt-4.1:
+    context_window_tokens: 1047576
+    max_output_tokens: 32768
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gpt-4.1-mini:
+    context_window_tokens: 1047576
+    max_output_tokens: 32768
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gpt-4.1-nano:
+    context_window_tokens: 1047576
+    max_output_tokens: 32768
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gpt-4-turbo:
+    context_window_tokens: 128000
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 800
+      recent_messages: 50
+      max_history_tokens: 12000
+
+  gpt-4:
+    context_window_tokens: 8192
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  gpt-3.5-turbo:
+    context_window_tokens: 16385
+    max_output_tokens: 4096
+    message_budget:
+      system_prompt: 500
+      recent_messages: 20
+      max_history_tokens: 3000
+
+  o1:
+    context_window_tokens: 200000
+    max_output_tokens: 32768
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  o1-mini:
+    context_window_tokens: 128000
+    max_output_tokens: 16384
+    message_budget:
+      system_prompt: 800
+      recent_messages: 50
+      max_history_tokens: 12000
+
+  o3:
+    context_window_tokens: 200000
+    max_output_tokens: 32768
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  o3-mini:
+    context_window_tokens: 200000
+    max_output_tokens: 16384
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  o4-mini:
+    context_window_tokens: 200000
+    max_output_tokens: 16384
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 80
+      max_history_tokens: 20000
+
+  # ---------------------------------------------------------------------------
+  # Google
+  # ---------------------------------------------------------------------------
+  gemini-2.5-pro:
+    context_window_tokens: 1048576
+    max_output_tokens: 65536
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gemini-2.5-flash:
+    context_window_tokens: 1048576
+    max_output_tokens: 65536
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gemini-2.0-flash:
+    context_window_tokens: 1048576
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gemini-1.5-pro:
+    context_window_tokens: 2097152
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  gemini-1.5-flash:
+    context_window_tokens: 1048576
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 1000
+      recent_messages: 100
+      max_history_tokens: 40000
+
+  # ---------------------------------------------------------------------------
+  # DeepSeek (API)
+  # ---------------------------------------------------------------------------
+  deepseek-v3:
+    context_window_tokens: 65536
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 500
+      recent_messages: 30
+      max_history_tokens: 6000
+
+  deepseek-r1-api:
+    context_window_tokens: 65536
+    max_output_tokens: 8192
+    message_budget:
+      system_prompt: 500
+      recent_messages: 30
+      max_history_tokens: 6000
+
+# ---------------------------------------------------------------------------
+# Token estimation heuristics
+# ---------------------------------------------------------------------------
+token_estimation:
+  chars_per_token: 4
+  safety_margin: 0.9
