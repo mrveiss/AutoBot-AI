@@ -11,6 +11,11 @@ import sys
 import time
 
 import requests
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from tests.test_helpers import get_test_backend_url
 
 
 async def test_security_endpoints():
@@ -36,7 +41,7 @@ async def test_security_endpoints():
 
         for attempt in range(max_attempts):
             try:
-                response = requests.get("http://localhost:8001/api/hello", timeout=2)
+                response = requests.get(get_test_backend_url() + "/api/hello", timeout=2)
                 if response.status_code == 200:
                     server_ready = True
                     print(
@@ -55,7 +60,7 @@ async def test_security_endpoints():
         print("\n🔍 Testing security status endpoint...")  # noqa: print
         try:
             response = requests.get(
-                "http://localhost:8001/api/security/status", timeout=5
+                get_test_backend_url() + "/api/security/status", timeout=5
             )
             print(f"   Status code: {response.status_code}")  # noqa: print
 
@@ -87,7 +92,7 @@ async def test_security_endpoints():
         print("\n📋 Testing command history endpoint...")  # noqa: print
         try:
             response = requests.get(
-                "http://localhost:8001/api/security/command-history", timeout=5
+                get_test_backend_url() + "/api/security/command-history", timeout=5
             )
             print(f"   Status code: {response.status_code}")  # noqa: print
 
@@ -114,7 +119,7 @@ async def test_security_endpoints():
         print("\n⏳ Testing pending approvals endpoint...")  # noqa: print
         try:
             response = requests.get(
-                "http://localhost:8001/api/security/pending-approvals", timeout=5
+                get_test_backend_url() + "/api/security/pending-approvals", timeout=5
             )
             print(f"   Status code: {response.status_code}")  # noqa: print
 
@@ -135,7 +140,7 @@ async def test_security_endpoints():
         print("\n📜 Testing audit log endpoint...")  # noqa: print
         try:
             response = requests.get(
-                "http://localhost:8001/api/security/audit-log", timeout=5
+                get_test_backend_url() + "/api/security/audit-log", timeout=5
             )
             print(f"   Status code: {response.status_code}")  # noqa: print
 
@@ -158,7 +163,7 @@ async def test_security_endpoints():
             # Just check if the endpoint is available (can't easily test WebSocket here)
             pass
 
-            ws_url = "ws://localhost:8001/api/terminal/ws/secure/test_session"
+            ws_url = get_test_backend_url().replace("http://", "ws://") + "/api/terminal/ws/secure/test_session"
             print(f"   WebSocket URL: {ws_url}")  # noqa: print
             print(  # noqa: print
                 "   ℹ️  WebSocket functionality requires separate testing"
