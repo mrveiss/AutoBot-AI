@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.websocket import ws_manager
+from services.ansible_secrets import _SECRET_TO_ANSIBLE_VAR
 from services.auth import get_current_user
 from services.database import db_service
 from services.encryption import decrypt_data
@@ -185,17 +186,6 @@ def _build_infra_vars(
             infra_vars[host_var] = resolved
             infra_vars[host_var.replace("_host", "_port")] = port
     return infra_vars
-
-
-# -- Secret key -> Ansible variable name mapping (#3079) --------------------
-
-_SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
-    "hf_token": "tts_hf_token",
-    # Internal API key shared between SLM backend and main backend (#1779, #3512).
-    # Store as "autobot_internal_api_key" in the SLM secrets UI; it is injected
-    # as an Ansible extra_var and rendered into slm-secrets.env and backend.env.
-    "autobot_internal_api_key": "autobot_internal_api_key",
-}
 
 
 async def _fetch_provision_secrets() -> dict[str, str]:

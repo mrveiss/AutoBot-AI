@@ -15,16 +15,10 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from services.ansible_secrets import _SECRET_TO_ANSIBLE_VAR
 from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
-
-# Secret key -> Ansible variable name mapping (#3519).
-# Must stay in sync with setup_wizard._SECRET_TO_ANSIBLE_VAR.
-_SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
-    "hf_token": "tts_hf_token",
-    "autobot_internal_api_key": "autobot_internal_api_key",
-}
 
 
 async def fetch_deploy_secrets() -> dict[str, str]:
