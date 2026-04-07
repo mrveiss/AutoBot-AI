@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ContextWindowManager:
     """Manages context window budgeting for LLM models."""
 
-    def __init__(self, config_path: str = "config/llm_models.yaml"):
+    def __init__(self, config_path: str = "config/context_windows.yaml"):
         """Initialize context window manager with model configuration.
 
         Args:
