@@ -2,13 +2,16 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-OpenAI Adapter - Wraps existing OpenAIProvider for the adapter registry.
+OpenAI Adapter - Adapter wrapping llm_providers.OpenAIProvider (#1403).
 
-Issue #1403: Delegates to OpenAIProvider for execution, adds
-test_environment and list_models via the OpenAI API.
+Delegates execution to ``llm_providers.OpenAIProvider`` which owns the
+canonical OpenAI implementation (OTel tracing, circuit breaker, streaming).
+This adapter's sole responsibility is the ``test_environment()`` diagnostic
+method used by ``api/adapters.py``.
 """
 
 import logging
+import os
 import time
 from typing import List, Optional
 
@@ -25,19 +28,24 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIAdapter(AdapterBase):
-    """Adapter wrapping the existing OpenAIProvider (#1403)."""
+    """Adapter wrapping the canonical OpenAIProvider (#1403)."""
 
     def __init__(self, config: Optional[AdapterConfig] = None):
         super().__init__("openai_api", config)
         self._provider = None
 
-    def _ensure_provider(self):
-        """Lazily initialize the OpenAIProvider."""
-        if self._provider is None:
-            from ..providers.openai_provider import OpenAIProvider
+    def _get_api_key(self) -> Optional[str]:
+        """Resolve OpenAI API key from config or environment."""
+        return self.config.settings.get("api_key") or os.getenv("OPENAI_API_KEY")
 
-            api_key = self.config.settings.get("api_key")
-            self._provider = OpenAIProvider(api_key=api_key)
+    def _ensure_provider(self):
+        """Lazily construct the canonical OpenAIProvider."""
+        if self._provider is None:
+            from llm_providers.openai_provider import OpenAIProvider
+
+            api_key = self._get_api_key()
+            settings = {"api_key": api_key} if api_key else {}
+            self._provider = OpenAIProvider(settings=settings)
         return self._provider
 
     async def execute(self, request: LLMRequest) -> LLMResponse:
@@ -51,8 +59,8 @@ class OpenAIAdapter(AdapterBase):
         start = time.time()
         models: List[str] = []
 
-        provider = self._ensure_provider()
-        if not provider.api_key:
+        api_key = self._get_api_key()
+        if not api_key:
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
@@ -74,18 +82,15 @@ class OpenAIAdapter(AdapterBase):
         )
 
         try:
-            import openai
-
-            client = openai.AsyncOpenAI(api_key=provider.api_key)
-            model_list = await client.models.list()
-            models = [m.id for m in model_list.data[:50]]
+            provider = self._ensure_provider()
+            models = await provider.list_models()
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.INFO,
                     message=f"Found {len(models)} models",
                 )
             )
-        except Exception as e:
+        except Exception:
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
@@ -100,14 +105,14 @@ class OpenAIAdapter(AdapterBase):
             healthy=healthy,
             adapter_type="openai_api",
             diagnostics=diagnostics,
-            models_available=models,
+            models_available=models[:50],
             response_time=elapsed,
         )
 
     async def list_models(self) -> List[str]:
         """Discover available OpenAI models."""
-        result = await self.test_environment()
-        return result.models_available
+        provider = self._ensure_provider()
+        return await provider.list_models()
 
 
 __all__ = ["OpenAIAdapter"]
