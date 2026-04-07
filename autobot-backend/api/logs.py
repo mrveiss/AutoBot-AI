@@ -482,8 +482,8 @@ async def get_recent_logs(
 
         most_recent = await _get_most_recent_log_file(log_dir)
         if most_recent:
-            log_path = os.path.join(log_dir, most_recent)
-            recent_entries = await _read_recent_log_lines(log_path, limit)
+            log_path = _validate_log_path(most_recent)
+            recent_entries = await _read_recent_log_lines(str(log_path), limit)
 
         return {
             "entries": recent_entries,
