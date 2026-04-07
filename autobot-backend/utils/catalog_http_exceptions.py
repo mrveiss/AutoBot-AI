@@ -207,13 +207,6 @@ def raise_validation_error(
     raise_catalog_error_simple(error_code, context)
 
 
-def raise_not_found_error(
-    error_code: str = "API_0002", context: Optional[str] = None
-) -> None:
-    """Raise not found error"""
-    raise_catalog_error_simple(error_code, context)
-
-
 def raise_server_error(
     error_code: str = "API_0003", context: Optional[str] = None
 ) -> None:

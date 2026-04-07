@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from type_defs.common import Metadata
 from utils.catalog_http_exceptions import (
-    raise_not_found_error,
+    raise_catalog_error_simple,
     raise_server_error,
     raise_service_unavailable,
     raise_validation_error,
@@ -318,7 +318,7 @@ async def get_dashboard_file():
 
     except FileNotFoundError as e:
         logger.error("Dashboard file not found: %s", e)
-        raise_not_found_error("API_0002", "Dashboard file not found")
+        raise_catalog_error_simple("API_0002", "Dashboard file not found")
     except (OSError, IOError) as e:
         logger.error("Error serving dashboard file due to file system error: %s", e)
         raise_server_error("API_0003", "File system error")
