@@ -9,6 +9,7 @@ import type {
   ConnectorStatus
 } from '@/types/knowledgeBase'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useKnowledgeStore')
 
@@ -310,7 +311,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function refreshStats() {
     try {
       isLoading.value = true
-      const response = await ApiClient.get('/api/knowledge_base/stats')
+      const response = await ApiClient.get(`${getApiBase()}/knowledge_base/stats`)
       stats.value = await response.json()
     } catch (error) {
       logger.error('Failed to refresh stats:', error)
@@ -423,7 +424,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   // API-based category update (Issue #747)
   async function updateCategory(id: string, data: Partial<Category>) {
     try {
-      const response = await ApiClient.put(`/api/knowledge_base/categories/${id}`, data)
+      const response = await ApiClient.put(`${getApiBase()}/knowledge_base/categories/${id}`, data)
       const result = await response.json()
       if (result.status === 'success') {
         logger.info('Category updated successfully: %s', id)
@@ -440,7 +441,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   // API-based category delete (Issue #747)
   async function deleteCategory(id: string) {
     try {
-      const response = await ApiClient.delete(`/api/knowledge_base/categories/${id}`)
+      const response = await ApiClient.delete(`${getApiBase()}/knowledge_base/categories/${id}`)
       const result = await response.json()
       if (result.status === 'success') {
         logger.info('Category deleted successfully: %s', id)
@@ -476,7 +477,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     try {
       systemDocsLoading.value = true
       const response = await ApiClient.get(
-        '/api/knowledge_base/entries?collection=autobot-documentation'
+        `${getApiBase()}/knowledge_base/entries?collection=autobot-documentation`
       )
       const result = await response.json()
       systemDocs.value = result.entries || result.documents || []
@@ -497,7 +498,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function loadPrompts() {
     try {
       promptsLoading.value = true
-      const response = await ApiClient.get('/api/prompts')
+      const response = await ApiClient.get(`${getApiBase()}/prompts`)
       const result = await response.json()
       prompts.value = result.prompts || []
       logger.info('Loaded %d prompts', prompts.value.length)
@@ -511,7 +512,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   async function updatePrompt(id: string, content: string) {
     try {
-      const response = await ApiClient.put(`/api/prompts/${id}`, { content })
+      const response = await ApiClient.put(`${getApiBase()}/prompts/${id}`, { content })
       const result = await response.json()
       // Update the prompt in local state
       const promptIndex = prompts.value.findIndex(p => p.id === id)
@@ -532,7 +533,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   async function revertPrompt(id: string) {
     try {
-      const response = await ApiClient.post(`/api/prompts/${id}/revert`, {})
+      const response = await ApiClient.post(`${getApiBase()}/prompts/${id}/revert`, {})
       const result = await response.json()
       // Update the prompt in local state
       const promptIndex = prompts.value.findIndex(p => p.id === id)
