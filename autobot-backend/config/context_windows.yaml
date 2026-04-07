@@ -27,6 +27,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -39,6 +40,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -48,6 +50,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -57,6 +60,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -66,6 +70,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 40
@@ -75,6 +80,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 40
@@ -84,6 +90,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 40
@@ -93,6 +100,7 @@ models:
     context_window_tokens: 8192
     max_output_tokens: 4096
     compression_threshold: 8192
+    essential_story_tokens: 300
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -102,6 +110,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -111,6 +120,7 @@ models:
     context_window_tokens: 32768
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -120,6 +130,7 @@ models:
     context_window_tokens: 16384
     max_output_tokens: 4096
     compression_threshold: 16384
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -129,6 +140,7 @@ models:
     context_window_tokens: 16384
     max_output_tokens: 4096
     compression_threshold: 16384
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -138,6 +150,7 @@ models:
     context_window_tokens: 64000
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 30
@@ -147,6 +160,7 @@ models:
     context_window_tokens: 4096
     max_output_tokens: 2048
     compression_threshold: 4096
+    essential_story_tokens: 300
     message_budget:
       system_prompt: 300
       recent_messages: 10
@@ -156,6 +170,7 @@ models:
     context_window_tokens: 16384
     max_output_tokens: 4096
     compression_threshold: 16384
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -165,6 +180,7 @@ models:
     context_window_tokens: 8192
     max_output_tokens: 4096
     compression_threshold: 8192
+    essential_story_tokens: 300
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -174,6 +190,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 40
@@ -186,6 +203,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32000
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -195,6 +213,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32000
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -204,6 +223,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32000
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -213,6 +233,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32000
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -222,6 +243,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -231,6 +253,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -240,6 +263,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 16000
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -249,6 +273,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -261,6 +286,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 16384
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 800
       recent_messages: 50
@@ -270,6 +296,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 16384
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 800
       recent_messages: 50
@@ -279,6 +306,7 @@ models:
     context_window_tokens: 1047576
     max_output_tokens: 32768
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -288,6 +316,7 @@ models:
     context_window_tokens: 1047576
     max_output_tokens: 32768
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -297,6 +326,7 @@ models:
     context_window_tokens: 1047576
     max_output_tokens: 32768
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -306,6 +336,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 4096
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 800
       recent_messages: 50
@@ -315,6 +346,7 @@ models:
     context_window_tokens: 8192
     max_output_tokens: 4096
     compression_threshold: 8192
+    essential_story_tokens: 300
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -324,6 +356,7 @@ models:
     context_window_tokens: 16385
     max_output_tokens: 4096
     compression_threshold: 16385
+    essential_story_tokens: 600
     message_budget:
       system_prompt: 500
       recent_messages: 20
@@ -333,6 +366,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32768
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -342,6 +376,7 @@ models:
     context_window_tokens: 128000
     max_output_tokens: 16384
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 800
       recent_messages: 50
@@ -351,6 +386,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 32768
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -360,6 +396,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 16384
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -369,6 +406,7 @@ models:
     context_window_tokens: 200000
     max_output_tokens: 16384
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 80
@@ -381,6 +419,7 @@ models:
     context_window_tokens: 1048576
     max_output_tokens: 65536
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -390,6 +429,7 @@ models:
     context_window_tokens: 1048576
     max_output_tokens: 65536
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -399,6 +439,7 @@ models:
     context_window_tokens: 1048576
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -408,6 +449,7 @@ models:
     context_window_tokens: 2097152
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -417,6 +459,7 @@ models:
     context_window_tokens: 1048576
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 1000
       recent_messages: 100
@@ -429,6 +472,7 @@ models:
     context_window_tokens: 65536
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 30
@@ -438,6 +482,7 @@ models:
     context_window_tokens: 65536
     max_output_tokens: 8192
     compression_threshold: 32768
+    essential_story_tokens: 800
     message_budget:
       system_prompt: 500
       recent_messages: 30
