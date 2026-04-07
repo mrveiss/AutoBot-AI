@@ -1,0 +1,35 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Docker role configuration defaults (#3424)
+
+# Docker package source
+docker_apt_gpg_url: "https://download.docker.com/linux/ubuntu/gpg"
+docker_apt_gpg_key_path: "/etc/apt/keyrings/docker.asc"
+docker_apt_repo_arch: "amd64"
+docker_apt_repo_channel: "stable"
+
+# Docker Compose plugin version (empty = latest from apt)
+docker_compose_plugin_version: ""
+
+# Service account that owns deployed containers
+docker_service_user: "autobot"
+docker_service_group: "autobot"
+
+# Image to pull before running containers (overridden per-deployment via extra_vars)
+docker_image: ""
+
+# Container list — each entry is a dict with keys:
+#   name          (str)  container name
+#   image         (str)  full image:tag reference
+#   ports         (list) "host_port:container_port/proto" strings (optional)
+#   environment   (dict) key/value env vars (optional)
+#   restart_policy (str) Docker restart policy (default: unless-stopped)
+docker_containers: []
+
+# Default restart policy applied when a container spec omits restart_policy
+docker_default_restart_policy: "unless-stopped"
+
+# Post-deploy verification: seconds to wait for each container to reach running state
+docker_verify_timeout: 30

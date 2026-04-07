@@ -96,6 +96,12 @@
         name: monitoring
       when: "'monitoring' in role_list"
 
+    # Container Roles (#3424)
+    - name: Deploy docker role
+      ansible.builtin.include_role:
+        name: docker
+      when: "'docker' in role_list"
+
     - name: Deployment complete
       ansible.builtin.debug:
         msg: "Successfully deployed roles: {{ role_list | join(', ') }}"
