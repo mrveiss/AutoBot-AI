@@ -21,7 +21,7 @@ from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
-from .standardized_agent import ActionHandler, StandardizedAgent
+from .standardized_agent import ActionHandler, StandardizedAgent, _working_memory_available
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,36 @@ class SentimentAnalysisAgent(StandardizedAgent):
                 "agent_type": "sentiment_analysis",
                 "model_used": self.model_name,
             }
+
+    async def _before_process(self, context: dict) -> dict:
+        """Inject cached session sentiment history into context (example override).
+
+        When WorkingMemoryService becomes available (issue #3768) this can load
+        prior session data.  Until then it is a documented no-op that shows the
+        expected override pattern.
+        """
+        if _working_memory_available:
+            session_id = context.get("session_id")
+            if session_id:
+                from autobot_backend.memory.working_memory import WorkingMemoryService
+                history = await WorkingMemoryService.load(session_id, key="sentiment_history")
+                if history:
+                    context["sentiment_history"] = history
+        return context
+
+    async def _after_process(self, context: dict, result: Any) -> None:
+        """Persist the most recent sentiment label to working memory (example override)."""
+        if not (_working_memory_available and result):
+            return
+        session_id = context.get("session_id")
+        if not session_id:
+            return
+        sentiment = result.get("response", "") if isinstance(result, dict) else ""
+        if sentiment:
+            from autobot_backend.memory.working_memory import WorkingMemoryService
+            await WorkingMemoryService.save(
+                session_id, key="sentiment_history", value=sentiment
+            )
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for sentiment analysis tasks."""
