@@ -230,12 +230,26 @@ async def _check_env_drift() -> None:
 
 
 async def _init_config(app: FastAPI) -> None:
-    """Helper for initialize_critical_services. Ref: #1088."""
+    """Helper for initialize_critical_services. Ref: #1088, #3398."""
     logger.info("✅ [ 10%] Config: Loading unified configuration...")
     config = ConfigManager()
     app.state.config = config
     await update_app_state("config", config)
     logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+
+    # Issue #3398: Run startup validation — log override warnings, fail fast on
+    # invalid values (e.g. negative ports, missing required keys).
+    validation_result = config.validate_startup()
+    if not validation_result.valid:
+        error_summary = "; ".join(validation_result.errors)
+        raise RuntimeError(
+            f"Configuration validation failed at startup: {error_summary}"
+        )
+    if validation_result.warnings:
+        logger.warning(
+            "Config: %d override warning(s) detected — review logged warnings above",
+            len(validation_result.warnings),
+        )
 
 
 async def _init_security_layer(app: FastAPI) -> None:
