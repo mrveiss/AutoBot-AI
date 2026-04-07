@@ -119,6 +119,13 @@ class PropertyGraph:
         bugs = await graph.query_nodes({"type": "bug", "severity": "high"})
         subgraph = await graph.subgraph("file:main.py", max_depth=2)
         path = await graph.shortest_path("file:main.py", "bug:123")
+
+    **Property serialisation:** All property values are stored as strings in
+    Redis.  Numeric and boolean values are coerced via ``str()``.  When
+    querying with ``query_nodes()``, pass string representations of the values
+    you stored — e.g. ``query_nodes({"confidence": "0.9"})`` not
+    ``{"confidence": 0.9}``.  dict/list values are JSON-encoded and excluded
+    from the property index (not queryable via ``query_nodes``).
     """
 
     def __init__(self, database: str = "knowledge") -> None:

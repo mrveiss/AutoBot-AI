@@ -38,6 +38,8 @@ class AgentDiaryService:
     """
 
     CATEGORY = "AGENT_DIARY"
+    # Issue #3808: generous fetch window — filters by category+source narrow it down
+    _DIARY_FETCH_LIMIT = 500
 
     # ------------------------------------------------------------------
     # Write
@@ -108,11 +110,10 @@ class AgentDiaryService:
         try:
             kb = await _get_kb()
             # Issue #3808: pass limit to avoid a full O(n) KB scan.
-            # We fetch a generous window (500) so that filtering by category+source
+            # We fetch a generous window so that filtering by category+source
             # still yields enough entries even on large KBs.  The result is then
             # sorted and capped to last_n.
-            _FETCH_LIMIT = 500
-            all_facts = await kb.get_all_facts(limit=_FETCH_LIMIT)
+            all_facts = await kb.get_all_facts(limit=_DIARY_FETCH_LIMIT)
             entries = [
                 f for f in all_facts
                 if (f.get("metadata") or {}).get("category") == self.CATEGORY

@@ -1139,6 +1139,10 @@ class FeatureConfig(BaseSettings):
     # Subsystem feature flags — issue #3009 (plan short-name fields)
     # These complement the *_enabled fields above with concise names.
     # Heavy optional subsystems (computer_vision, training) default to False.
+    #
+    # Env var aliases use suffixes to avoid collisions with the existing
+    # *_enabled fields above (AUTOBOT_FEATURE_NPU, AUTOBOT_FEATURE_VOICE, etc.
+    # are already claimed by those fields).
     npu: bool = Field(default=True, alias="AUTOBOT_FEATURE_NPU_2")
     voice: bool = Field(default=True, alias="AUTOBOT_FEATURE_VOICE_2")
     browser_automation: bool = Field(
