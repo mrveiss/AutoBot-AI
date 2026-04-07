@@ -549,7 +549,7 @@ async def get_variants(
 
     from autobot_shared.redis_client import get_redis_client
 
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     key = f"autoresearch:prompt_opt:session:{session_id}"
     raw = await redis.get(key)
     if raw is None:
@@ -580,7 +580,7 @@ async def submit_variant_score(
             status_code=400, detail="Invalid session_id or variant_id format"
         )
 
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     key = f"autoresearch:prompt_review:{session_id}:{variant_id}"
     notify_key = HUMAN_REVIEW_NOTIFY_KEY.format(session_id=session_id, variant_id=variant_id)
     await redis.set(
@@ -610,7 +610,7 @@ async def list_pending_approvals(
 
     from autobot_shared.redis_client import get_redis_client
 
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     approvals = []
     async for key in redis.scan_iter("autoresearch:approval:pending:*"):
         raw = await redis.get(key)
@@ -643,7 +643,7 @@ async def submit_approval_decision(
     """Submit approve/reject decision for an experiment."""
     from autobot_shared.redis_client import get_redis_client
 
-    redis = get_redis_client(async_client=True, database="main")
+    redis = await get_redis_client(async_client=True, database="main")
     status_key = f"autoresearch:approval:status:{session_id}:{experiment_id}"
     current = await redis.get(status_key)
     if current is None:

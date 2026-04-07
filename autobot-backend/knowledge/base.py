@@ -334,7 +334,7 @@ class KnowledgeBaseCore:
             )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = get_redis_client(
+            self.aioredis_client = await get_redis_client(
                 async_client=True, database="knowledge"
             )
 
