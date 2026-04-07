@@ -11,6 +11,7 @@ import { ref, watch } from 'vue'
 import { setLocale } from '@/i18n'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePreferences')
 
@@ -127,10 +128,10 @@ function applyLayoutDensity(density: LayoutDensity): void {
  * Sync language preference to backend personality profile
  */
 function syncLanguageToBackend(code: string): void {
-  apiClient.get('/api/personality/active').then((res) => {
+  apiClient.get(`${getApiBase()}/personality/active`).then((res) => {
     if (res.data && res.data.id) {
       apiClient.put(
-        `/api/personality/profiles/${res.data.id}`,
+        `${getApiBase()}/personality/profiles/${res.data.id}`,
         { language_code: code }
       )
     }

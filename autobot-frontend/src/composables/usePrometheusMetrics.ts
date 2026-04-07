@@ -15,6 +15,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger
 const logger = createLogger('usePrometheusMetrics')
@@ -295,7 +296,7 @@ export function usePrometheusMetrics(
 
   async function fetchDashboard(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/dashboard/overview')
+      const response = await api.get(`${getApiBase()}/monitoring/dashboard/overview`)
       if (response.ok) {
         dashboard.value = await response.json()
         lastUpdate.value = new Date()
@@ -312,7 +313,7 @@ export function usePrometheusMetrics(
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/services/health')
+      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
       if (response.ok) {
         services.value = await response.json()
         error.value = null
@@ -328,7 +329,7 @@ export function usePrometheusMetrics(
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/alerts/check')
+      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
       if (response.ok) {
         alerts.value = await response.json()
         error.value = null
@@ -344,7 +345,7 @@ export function usePrometheusMetrics(
 
   async function fetchRecommendations(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/optimization/recommendations')
+      const response = await api.get(`${getApiBase()}/monitoring/optimization/recommendations`)
       if (response.ok) {
         recommendations.value = await response.json()
         error.value = null
@@ -360,7 +361,7 @@ export function usePrometheusMetrics(
 
   async function fetchGPUDetails(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/hardware/gpu')
+      const response = await api.get(`${getApiBase()}/monitoring/hardware/gpu`)
       if (response.ok) {
         gpuDetails.value = await response.json()
         error.value = null
@@ -376,7 +377,7 @@ export function usePrometheusMetrics(
 
   async function fetchNPUDetails(): Promise<void> {
     try {
-      const response = await api.get('/api/monitoring/hardware/npu')
+      const response = await api.get(`${getApiBase()}/monitoring/hardware/npu`)
       if (response.ok) {
         npuDetails.value = await response.json()
         error.value = null
@@ -585,7 +586,7 @@ export function useSystemMetrics(pollInterval = 10000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/metrics/current')
+      const response = await api.get(`${getApiBase()}/monitoring/metrics/current`)
       if (response.ok) {
         const data = await response.json()
         metrics.value = data.metrics?.system || null
@@ -646,7 +647,7 @@ export function useServiceHealth(pollInterval = 15000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/services/health')
+      const response = await api.get(`${getApiBase()}/monitoring/services/health`)
       if (response.ok) {
         const data: ServicesSummary = await response.json()
         services.value = data.services || []
@@ -736,7 +737,7 @@ export function useAlerts(pollInterval = 30000) {
   async function fetch() {
     isLoading.value = true
     try {
-      const response = await api.get('/api/monitoring/alerts/check')
+      const response = await api.get(`${getApiBase()}/monitoring/alerts/check`)
       if (response.ok) {
         const data: AlertsSummary = await response.json()
         alerts.value = data.alerts || []

@@ -10,7 +10,7 @@
 
 import { ref, reactive, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
-import { getConfig } from '@/config/ssot-config'
+import { getConfig, getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
@@ -155,8 +155,8 @@ export interface AnalysisTaskEntry {
 export function usePatternAnalysis() {
   // Background task for pattern summary (#1332)
   const summaryTask = useBackgroundTask(
-    '/api/analytics/codebase/patterns/summary',
-    '/api/analytics/codebase/patterns/summary/tasks/clear-stuck'
+    `${getApiBase()}/analytics/codebase/patterns/summary`,
+    `${getApiBase()}/analytics/codebase/patterns/summary/tasks/clear-stuck`
   )
 
   // Reactive state

@@ -12,6 +12,7 @@
 import { ref, type Ref } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -174,7 +175,7 @@ async function fetchVmStatus(): Promise<[SystemService[], boolean]> {
   try {
     const vmResponse =
       await apiEndpointMapper.fetchWithFallback(
-        '/api/service-monitor/vms/status',
+        `${getApiBase()}/service-monitor/vms/status`,
         { timeout: 5000 },
       ) as FallbackResponse
     const vmData: VmStatusResponse = await vmResponse.json()
@@ -224,7 +225,7 @@ async function fetchServiceStatus(): Promise<[SystemService[], boolean]> {
   try {
     const resp =
       await apiEndpointMapper.fetchWithFallback(
-        '/api/service-monitor/services',
+        `${getApiBase()}/service-monitor/services`,
         { timeout: 5000 },
       ) as FallbackResponse
     const data: ServicesResponse = await resp.json()

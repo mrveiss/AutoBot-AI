@@ -22,6 +22,7 @@ import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePermissionStore } from '@/stores/usePermissionStore'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useCommandApproval')
 
@@ -118,7 +119,7 @@ export function useCommandApproval() {
 
       try {
         const backendUrl = await appConfig.getApiUrl(
-          `/api/agent-terminal/commands/${command_id}`
+          `${getApiBase()}/agent-terminal/commands/${command_id}`
         )
         const response = await fetchWithAuth(backendUrl, { signal })
 
@@ -219,7 +220,7 @@ export function useCommandApproval() {
     try {
       // Get backend URL from appConfig
       const backendUrl = await appConfig.getApiUrl(
-        `/api/agent-terminal/sessions/${terminal_session_id}/approve`
+        `${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`
       )
 
       const response = await fetchWithAuth(backendUrl, {

@@ -12,7 +12,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { getSLMUrl } from '@/config/ssot-config'
+import { getSLMUrl, getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
@@ -192,7 +192,7 @@ async function fetchNodes(): Promise<SLMNode[]> {
   error.value = null
 
   try {
-    const response = await slmFetch('/api/nodes')
+    const response = await slmFetch(`${getApiBase()}/nodes`)
     const data = await response.json()
     nodes.value = data.nodes || []
     return nodes.value
@@ -219,7 +219,7 @@ async function fetchNodeCredentials(nodeId: string): Promise<TLSCredential[]> {
   error.value = null
 
   try {
-    const response = await slmFetch(`/api/nodes/${nodeId}/tls-credentials`)
+    const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`)
     const data = await response.json()
     credentials.value = data.credentials || []
     return credentials.value
@@ -245,7 +245,7 @@ async function createCredential(
   error.value = null
 
   try {
-    const response = await slmFetch(`/api/nodes/${nodeId}/tls-credentials`, {
+    const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -276,7 +276,7 @@ async function updateCredential(
   error.value = null
 
   try {
-    const response = await slmFetch(`/api/tls/credentials/${credentialId}`, {
+    const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     })
@@ -307,7 +307,7 @@ async function deleteCredential(credentialId: string): Promise<boolean> {
   error.value = null
 
   try {
-    await slmFetch(`/api/tls/credentials/${credentialId}`, {
+    await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
       method: 'DELETE',
     })
 
@@ -331,7 +331,7 @@ async function deleteCredential(credentialId: string): Promise<boolean> {
  */
 async function getCredential(credentialId: string): Promise<TLSCredential | null> {
   try {
-    const response = await slmFetch(`/api/tls/credentials/${credentialId}`)
+    const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`)
     return await response.json()
   } catch (err: unknown) {
     logger.error('Error fetching TLS credential:', err)
@@ -351,7 +351,7 @@ async function fetchAllEndpoints(): Promise<TLSEndpoint[]> {
   error.value = null
 
   try {
-    const response = await slmFetch('/api/tls/endpoints')
+    const response = await slmFetch(`${getApiBase()}/tls/endpoints`)
     const data = await response.json()
     endpoints.value = data.endpoints || []
     return endpoints.value
@@ -371,7 +371,7 @@ async function fetchAllEndpoints(): Promise<TLSEndpoint[]> {
  */
 async function fetchExpiringCertificates(days: number = 30): Promise<TLSEndpoint[]> {
   try {
-    const response = await slmFetch(`/api/tls/expiring?days=${days}`)
+    const response = await slmFetch(`${getApiBase()}/tls/expiring?days=${days}`)
     const data = await response.json()
     return data.endpoints || []
   } catch (err: unknown) {

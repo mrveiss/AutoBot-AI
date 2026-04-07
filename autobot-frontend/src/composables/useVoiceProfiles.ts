@@ -11,6 +11,7 @@ import { ref, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useVoiceProfiles')
 
@@ -52,7 +53,7 @@ export function useVoiceProfiles() {
     loading.value = true
     error.value = null
     try {
-      const res = await fetchWithAuth('/api/voice/voices')
+      const res = await fetchWithAuth(`${getApiBase()}/voice/voices`)
       if (!res.ok) {
         error.value = `Failed to fetch voices: ${res.status}`
         return
@@ -84,7 +85,7 @@ export function useVoiceProfiles() {
       const formData = new FormData()
       formData.append('name', name)
       formData.append('audio', audioBlob, filename)
-      const res = await fetchWithAuth('/api/voice/voices/create', {
+      const res = await fetchWithAuth(`${getApiBase()}/voice/voices/create`, {
         method: 'POST',
         body: formData,
       })
@@ -108,7 +109,7 @@ export function useVoiceProfiles() {
     loading.value = true
     error.value = null
     try {
-      const res = await fetchWithAuth(`/api/voice/voices/${voiceId}`, {
+      const res = await fetchWithAuth(`${getApiBase()}/voice/voices/${voiceId}`, {
         method: 'DELETE',
       })
       if (!res.ok) {
@@ -136,7 +137,7 @@ export function useVoiceProfiles() {
 
   async function fetchPersonalityVoice(): Promise<void> {
     try {
-      const res = await fetchWithAuth('/api/personality/active')
+      const res = await fetchWithAuth(`${getApiBase()}/personality/active`)
       if (res.ok) {
         const profile = await res.json()
         personalityVoiceId.value = profile?.voice_id ?? ''
