@@ -731,10 +731,11 @@ class MCPManualService:
         sources = []
 
         # Common documentation directories
+        _base_dir = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         common_doc_dirs = [
             "/usr/share/doc",
             "/usr/local/share/doc",
-            "/opt/autobot/docs",
+            f"{_base_dir}/docs",
             f"{PATH.PROJECT_ROOT}/docs",
             "/usr/share/man",
             "/usr/local/share/man",

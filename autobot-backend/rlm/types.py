@@ -16,6 +16,8 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Dict
 
+from autobot_shared.ssot_config import ROUTING_MODEL
+
 
 class ReflectionVerdict(Enum):
     """Outcome of a self-reflection evaluation."""
@@ -76,7 +78,7 @@ class RLMConfig:
     max_reflections: int = 3
     quality_threshold: float = 0.7
     complexity_gate: float = 0.7
-    model: str = "llama3.2:latest"
+    model: str = ROUTING_MODEL
     temperature: float = 0.2
     max_eval_tokens: int = 512
     timeout_ms: int = 10000

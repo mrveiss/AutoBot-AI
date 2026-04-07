@@ -37,6 +37,7 @@ get_staged_files() {
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(test_|_test\.py|\.test\.ts|\.spec\.ts)' | \
         grep -v -E '(ssot_config\.py|ssot-config\.ts|threshold_constants\.py)' | \
+        grep -v -E '(path_constants\.py|network_constants\.py|security_constants\.py)' | \
         grep -v -E '(constants/|config\.py$|\.env)' || true
 }
 
@@ -230,6 +231,91 @@ check_hardcoded_roles() {
     done < "$file"
 }
 
+# Check for hardcoded AutoBot file paths (#3397)
+# Catches /opt/autobot, /tmp/autobot, /var/lib/autobot used as bare string
+# literals instead of going through SSOT config.path or AUTOBOT_BASE_DIR env var.
+check_hardcoded_paths() {
+    local file="$1"
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip comments
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]] || [[ "$line" =~ ^[[:space:]]*\* ]]; then
+            continue
+        fi
+
+        # Skip if already using env var or SSOT config
+        if echo "$line" | grep -qE '(AUTOBOT_BASE_DIR|os\.environ\.get|getenv|config\.path)'; then
+            continue
+        fi
+
+        # Skip string assignments in ssot_config / path_constants (these ARE the SSOT)
+        if echo "$line" | grep -qE '(PathConfig|PathConstants|default=.*opt/autobot|Field\()'; then
+            continue
+        fi
+
+        # Skip shell-style ${VAR:-/opt/autobot} expansions — those use the env var
+        if echo "$line" | grep -qE '\$\{[A-Z_]+:-/opt/autobot'; then
+            continue
+        fi
+
+        # Detect bare /opt/autobot, /tmp/autobot, /var/lib/autobot path literals
+        if echo "$line" | grep -qE '"(/opt/autobot|/tmp/autobot|/var/lib/autobot)'; then
+            local path_val
+            path_val=$(echo "$line" | grep -oE '"(/opt/autobot|/tmp/autobot|/var/lib/autobot)[^"]*"' | head -1)
+            echo -e "${RED}VIOLATION${NC} $file:$line_num"
+            echo "  Hardcoded AutoBot file path: $path_val"
+            echo -e "  ${CYAN}Fix: Use config.path.base_dir from ssot_config or os.environ.get('AUTOBOT_BASE_DIR', '/opt/autobot')${NC}"
+            echo "  Line: ${line:0:80}"
+            echo ""
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
+# Check for hardcoded model name strings outside SSOT constants (#3397)
+# Catches model name literals that should come from ssot_config constants.
+check_hardcoded_model_names() {
+    local file="$1"
+    local line_num=0
+
+    # Model name patterns that have SSOT equivalents
+    local model_pattern="llama3\.2:latest|llama3\.2:1b|qwen3\.5:9b|nomic-embed-text:latest|gemma2:2b|phi3:mini|mistral:7b-instruct|dolphin-llama3:8b"
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip comments
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ "$line" =~ ^[[:space:]]*// ]]; then
+            continue
+        fi
+
+        # Skip if using SSOT constants or config
+        if echo "$line" | grep -qE '(ROUTING_MODEL|CLASSIFICATION_MODEL|LIGHT_PROCESSING_MODEL|INSTRUCTION_MODEL|SYSTEM_MODEL|QUALITY_MODEL|DEFAULT_LLM_MODEL|DEFAULT_EMBEDDING_MODEL|config\.llm\.)'; then
+            continue
+        fi
+
+        # Skip assignments in ssot_config itself (these define the constants)
+        if echo "$line" | grep -qE '^(ROUTING_MODEL|CLASSIFICATION_MODEL|LIGHT_PROCESSING_MODEL|INSTRUCTION_MODEL|SYSTEM_MODEL|QUALITY_MODEL|DEFAULT_LLM_MODEL|DEFAULT_EMBEDDING_MODEL)\s*='; then
+            continue
+        fi
+
+        # Detect bare model name string literals
+        if echo "$line" | grep -qE "\"(${model_pattern})\""; then
+            local model_val
+            model_val=$(echo "$line" | grep -oE "\"(${model_pattern})\"" | head -1)
+            echo -e "${RED}VIOLATION${NC} $file:$line_num"
+            echo "  Hardcoded model name: $model_val"
+            echo -e "  ${CYAN}Fix: Import ROUTING_MODEL/DEFAULT_LLM_MODEL/etc from autobot_shared.ssot_config${NC}"
+            echo "  Line: ${line:0:80}"
+            echo ""
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
 # Check for hardcoded category strings
 check_hardcoded_categories() {
     local file="$1"
@@ -289,6 +375,8 @@ main() {
             check_magic_numbers "$file"
             check_hardcoded_roles "$file"
             check_hardcoded_categories "$file"
+            check_hardcoded_paths "$file"
+            check_hardcoded_model_names "$file"
         fi
     done
 

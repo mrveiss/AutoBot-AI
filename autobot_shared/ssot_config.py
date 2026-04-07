@@ -944,6 +944,67 @@ class DatabasePoolConfig(BaseSettings):
     )
 
 
+class PathConfig(BaseSettings):
+    """
+    File-system path configuration.
+
+    Provides a single source of truth for well-known AutoBot directories so
+    production code never needs to hard-code paths like /opt/autobot.
+
+    Override any value via environment variable (e.g. AUTOBOT_BASE_DIR=/srv/autobot).
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Installation root — all derived paths use this as their base.
+    # Default matches the standard Ansible deployment target.
+    base_dir: str = Field(default="/opt/autobot", alias="AUTOBOT_BASE_DIR")
+
+    # Well-known sub-directories (all relative to base_dir unless absolute).
+    # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.
+    plugins_dir: str = Field(default="plugins", alias="AUTOBOT_PLUGINS_DIR")
+    data_dir: str = Field(default="data", alias="AUTOBOT_DATA_DIR")
+    logs_dir: str = Field(default="logs", alias="AUTOBOT_LOG_DIR")
+    models_dir: str = Field(default="models", alias="AUTOBOT_MODELS_DIR")
+    docs_dir: str = Field(default="docs", alias="AUTOBOT_DOCS_DIR")
+
+    def resolve(self, relative: str) -> Path:
+        """Resolve a path relative to base_dir."""
+        p = Path(relative)
+        if p.is_absolute():
+            return p
+        return Path(self.base_dir) / p
+
+    @property
+    def plugins_path(self) -> Path:
+        """Absolute path to the plugins directory."""
+        return self.resolve(self.plugins_dir)
+
+    @property
+    def data_path(self) -> Path:
+        """Absolute path to the data directory."""
+        return self.resolve(self.data_dir)
+
+    @property
+    def logs_path(self) -> Path:
+        """Absolute path to the logs directory."""
+        return self.resolve(self.logs_dir)
+
+    @property
+    def models_path(self) -> Path:
+        """Absolute path to the models directory."""
+        return self.resolve(self.models_dir)
+
+    @property
+    def docs_path(self) -> Path:
+        """Absolute path to the docs directory."""
+        return self.resolve(self.docs_dir)
+
+
 class FeatureConfig(BaseSettings):
     """Feature flags configuration."""
 
@@ -1011,6 +1072,7 @@ class AutoBotConfig(BaseSettings):
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
+    path: PathConfig = Field(default_factory=PathConfig)  # Issue #3397
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
