@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 class SessionTakeoverTestSuite:
     """Comprehensive test suite for session takeover functionality"""
 
-    def __init__(self, base_url: str = get_test_backend_url()):
-        self.base_url = base_url
+    def __init__(self, base_url: str | None = None):
+        self.base_url = base_url or get_test_backend_url()
         self.test_session_id = f"test_session_{int(time.time())}"
         self.workflow_manager = None
         self.test_results = []
