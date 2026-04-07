@@ -149,6 +149,20 @@ class TimingConstants:
     KB_INIT_DELAY = 3.0  # Wait for knowledge base async initialization
 
 
+def exponential_backoff_delay(attempt: int, base: float = 2.0, cap: float = 60.0) -> float:
+    """Return capped exponential backoff delay in seconds.
+
+    Args:
+        attempt: Zero-based attempt index (0 → base**0 = 1 s, 1 → 2 s, …).
+        base: Backoff base (default 2.0).
+        cap: Maximum delay in seconds (default 60.0, matching RetryConfig.BACKOFF_MAX_DELAY).
+
+    Returns:
+        Delay in seconds, never exceeding *cap*.
+    """
+    return min(base**attempt, cap)
+
+
 class RetryConfig:
     """Retry configuration constants."""
 
