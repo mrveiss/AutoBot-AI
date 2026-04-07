@@ -16,7 +16,7 @@ from typing import Callable
 
 from fastapi import HTTPException
 
-from constants.threshold_constants import RetryConfig
+from constants.threshold_constants import RetryConfig, exponential_backoff_delay
 
 from .boundary_manager import get_error_boundary_manager
 from .types import APIErrorResponse, ErrorCategory, ErrorContext, RecoveryStrategy
@@ -57,7 +57,7 @@ async def _handle_async_attempt(
         if attempt == max_retries:
             return (True, await manager.handle_error(e, context))
         if recovery_strategy == RecoveryStrategy.RETRY:
-            await asyncio.sleep(2**attempt)
+            await asyncio.sleep(exponential_backoff_delay(attempt))
             return (False, None)
         return (True, await manager.handle_error(e, context))
 
@@ -95,7 +95,7 @@ def _handle_sync_attempt(
         if attempt == max_retries:
             return (True, asyncio.run(manager.handle_error(e, context)))
         if recovery_strategy == RecoveryStrategy.RETRY:
-            time.sleep(2**attempt)
+            time.sleep(exponential_backoff_delay(attempt))
             return (False, None)
         return (True, asyncio.run(manager.handle_error(e, context)))
 
