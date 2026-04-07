@@ -200,6 +200,33 @@
     - restart celery
   tags: ['backend', 'deploy']
 
+# Issue #3649: Also sync to the standalone /opt/autobot/autobot_shared/ that workers
+# resolve via PYTHONPATH. The backend venv editable-install points at backend_install_dir
+# but Celery workers and other services import from the standalone copy — skipping this
+# sync caused ModuleNotFoundError when new modules were added (pagination.py, task_result.py).
+- name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_shared_standalone_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--delete"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Fix ownership of standalone autobot_shared (#3649)"
+  ansible.builtin.file:
+    path: "{{ backend_shared_standalone_dir }}"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
+  tags: ['backend', 'deploy']
+
 - name: Create backend symlink for imports
   ansible.builtin.file:
     src: "{{ backend_code_dir }}"
