@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+import asyncio
 import datetime
 import json
 import logging
@@ -727,6 +728,52 @@ async def get_update_status(
 
 # ==================== Config Sync Endpoint (Issue #3398) ====================
 
+# Allowlist of top-level keys that callers are permitted to sync (Issue #3881).
+# Extend this set when new configuration sections are introduced.
+_SYNC_ALLOWED_TOP_LEVEL_KEYS: frozenset = frozenset({
+    "backend",
+    "memory",
+    "logging",
+    "security",
+    "ui",
+    "chat",
+    "agents",
+    "knowledge",
+    "integrations",
+    "features",
+    "notifications",
+    "analytics",
+    "models",
+    "redis",
+    "database",
+    "search",
+    "tools",
+    "workflows",
+    "scheduler",
+    "monitoring",
+})
+
+# Maximum nesting depth accepted from callers (Issue #3881).
+_SYNC_MAX_DEPTH: int = 8
+
+# Maximum payload size in bytes before we reject the request (Issue #3881).
+_SYNC_MAX_PAYLOAD_BYTES: int = 512 * 1024  # 512 KiB
+
+
+def _exceeds_depth(obj: dict, current_depth: int = 0) -> bool:
+    """Return True if *obj* contains dict nesting deeper than *_SYNC_MAX_DEPTH*.
+
+    Only dict values contribute to the depth count; lists, strings, and scalars
+    are considered leaves and are not traversed.
+    """
+    if current_depth > _SYNC_MAX_DEPTH:
+        return True
+    for value in obj.values():
+        if isinstance(value, dict):
+            if _exceeds_depth(value, current_depth + 1):
+                return True
+    return False
+
 
 class ConfigSyncRequest(BaseModel):
     """Request body for POST /api/settings/sync.
@@ -778,10 +825,10 @@ async def _atomic_write_json(target: Path, data: dict) -> None:
     try:
         async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
             await fh.write(json.dumps(data, indent=2, ensure_ascii=False))
-        os.replace(tmp_path, str(target))
+        await asyncio.to_thread(os.replace, tmp_path, str(target))
     except Exception:
         try:
-            os.unlink(tmp_path)
+            await asyncio.to_thread(os.unlink, tmp_path)
         except OSError:
             pass
         raise
@@ -818,6 +865,28 @@ async def sync_config(
 
     if not request.settings:
         return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
+
+    # --- Issue #3881: reject oversized, too-deep, or disallowed payloads ----
+    raw_payload = json.dumps(request.settings, ensure_ascii=False)
+    if len(raw_payload.encode("utf-8")) > _SYNC_MAX_PAYLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Payload exceeds maximum allowed size of {_SYNC_MAX_PAYLOAD_BYTES} bytes.",
+        )
+
+    disallowed_keys = set(request.settings) - _SYNC_ALLOWED_TOP_LEVEL_KEYS
+    if disallowed_keys:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Disallowed top-level key(s): {sorted(disallowed_keys)}",
+        )
+
+    if _exceeds_depth(request.settings):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Payload nesting exceeds maximum allowed depth of {_SYNC_MAX_DEPTH}.",
+        )
+    # -------------------------------------------------------------------------
 
     before_config: dict = ConfigService.get_full_config()
     merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
