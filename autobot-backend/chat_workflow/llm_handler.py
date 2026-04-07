@@ -318,7 +318,6 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
     def _build_full_prompt(
         self,
-        system_prompt: str,
         knowledge_context: str,
         conversation_context: str,
         message: str,
@@ -431,7 +430,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             session.metadata["used_knowledge"] = False
 
         full_prompt = self._build_full_prompt(
-            system_prompt, knowledge_context, conversation_context, message
+            knowledge_context, conversation_context, message
         )
         full_prompt = await _emit_full_prompt_ready(
             full_prompt,
