@@ -591,7 +591,6 @@ class EnterpriseFeatureManager:
                 "capabilities": [
                     "advanced_web_research",
                     "librarian_agent_coordination",
-                    "mcp_manual_integration",
                     "research_quality_control",
                 ],
                 "config_updates": config_updates,
