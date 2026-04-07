@@ -54,7 +54,10 @@ class StandardizedAgent(BaseAgent):
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
 
-        # Unified memory facade — subsystems accessed via properties
+        # Unified memory facade — subsystems accessed via properties:
+        #   self.memory_manager.working_memory  (WorkingMemoryService)
+        #   self.memory_manager.essential_story (EssentialStoryGenerator)
+        #   self.memory_manager.agent_diary     (AgentDiaryService)
         self.memory_manager: UnifiedMemoryManager = UnifiedMemoryManager()
 
         # Action handlers mapping - to be configured by subclasses

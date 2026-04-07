@@ -557,24 +557,36 @@ class UnifiedMemoryManager:
             raise ValueError(f"Unknown storage strategy: {strategy}")
 
     # ========================================================================
-    # SESSION-SCOPED WORKING MEMORY (Redis, TTL-backed)
+    # MEMORY SUBSYSTEM PROPERTIES
+    # Agents access all three subsystems via these properties so they
+    # never need to import WorkingMemoryService, EssentialStoryGenerator,
+    # or AgentDiaryService directly.
     # ========================================================================
 
     @property
     def working_memory(self) -> WorkingMemoryService:
-        """Return the WorkingMemoryService instance."""
+        """Redis-backed session-scoped short-term memory (eager, TTL-backed).
+
+        Instantiated at construction time; safe to call immediately.
+        """
         return self._working_memory
 
     @property
     def essential_story(self) -> EssentialStoryGenerator:
-        """Return the EssentialStoryGenerator instance (lazy-init)."""
+        """Always-loaded compact memory summary generator (lazy-init).
+
+        First access constructs the instance; subsequent accesses are free.
+        """
         if self._essential_story is None:
             self._essential_story = EssentialStoryGenerator()
         return self._essential_story
 
     @property
     def agent_diary(self) -> AgentDiaryService:
-        """Return the AgentDiaryService instance (lazy-init)."""
+        """Per-agent cross-session journal backed by the knowledge base (lazy-init).
+
+        First access constructs the instance; subsequent accesses are free.
+        """
         if self._agent_diary is None:
             self._agent_diary = AgentDiaryService()
         return self._agent_diary
