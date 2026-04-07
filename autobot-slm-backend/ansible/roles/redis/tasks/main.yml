@@ -75,21 +75,14 @@
   become: yes
   tags: ['redis', 'ownership']
 
-- name: "Redis | Create Redis data directory"
-  file:
-    path: /var/lib/redis-stack
-    state: directory
-    owner: autobot
-    group: autobot
-    mode: '0755'
-  become: yes
-  tags: ['redis', 'directories']
-
 # Issue #3396: Ownership is set to autobot:autobot (not redis:redis) so the
 # autobot service user can read and write the data directory without sudo.
 # The systemd service override (redis-stack-override.conf.j2) runs
 # redis-stack-server as User=autobot Group=autobot to match.
-- name: "Redis | Fix Redis Stack data directory permissions"
+# recurse:yes enforces ownership on all existing files idempotently —
+# the file module only marks changed when it actually modifies something,
+# so it will NOT trigger the restart handler on clean runs.
+- name: "Redis | Create Redis data directory with autobot:autobot ownership"
   file:
     path: /var/lib/redis-stack
     state: directory
@@ -99,14 +92,14 @@
   become: yes
   tags: ['redis', 'ownership']
 
-# Issue #3396: Recursively fix ownership of any existing data files written
-# by a prior redis:redis run so redis-stack-server (now running as autobot)
-# can read and write them without sudo.
 - name: "Redis | Enforce autobot:autobot ownership on Redis data files (recursive)"
-  ansible.builtin.command:
-    cmd: chown -R autobot:autobot /var/lib/redis-stack
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: autobot
+    group: autobot
+    recurse: yes
   become: yes
-  changed_when: true
   tags: ['redis', 'ownership']
 
 - name: "Redis | Set vm.overcommit_memory for background saves"
