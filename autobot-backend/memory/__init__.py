@@ -16,15 +16,44 @@ Package Structure:
   - general_storage.py: Category-based memory
 - cache.py: LRU caching implementation
 - monitor.py: System memory monitoring
-- manager.py: Main UnifiedMemoryManager class
+- working_memory.py: Redis-backed session-scoped short-term memory
+- essential_story.py: Always-loaded compact memory summary for LLM prompts
+- agent_diary.py: Per-agent cross-session journal backed by knowledge base
+- manager.py: Main UnifiedMemoryManager class (composes all subsystems)
 - compat.py: Backward compatibility wrappers
+
+All three memory subsystems (WorkingMemoryService, EssentialStoryGenerator,
+AgentDiaryService) are exposed as properties on UnifiedMemoryManager so agents
+access them via ``self.memory_manager.working_memory``, etc., without direct
+subsystem imports.
 
 For backward compatibility, all exports from the original unified_memory_manager.py
 are re-exported here.
 """
 
+# Enums
+from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
+
+# Data Models
+from .models import MemoryEntry, TaskExecutionRecord
+
+# Protocols
+from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
+
+# Storage Components
+from .storage import GeneralStorage, TaskStorage
+
 # Cache and Monitor
 from .cache import LRUCacheManager
+from .monitor import MemoryMonitor
+
+# Memory Subsystems (exposed via UnifiedMemoryManager properties)
+from .agent_diary import AgentDiaryService
+from .essential_story import EssentialStoryGenerator
+from .working_memory import WorkingMemoryService
+
+# Main Manager (composes all subsystems above)
+from .manager import UnifiedMemoryManager
 
 # Backward Compatibility Wrappers
 from .compat import (
@@ -34,26 +63,11 @@ from .compat import (
     get_long_term_memory_manager,
 )
 
-# Enums
-from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
-
-# Main Manager
-from .agent_diary import AgentDiaryService
-from .manager import UnifiedMemoryManager
-
-# Data Models
-from .models import MemoryEntry, TaskExecutionRecord
-from .monitor import MemoryMonitor
-
-# Protocols
-from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
-
-# Storage Components
-from .storage import GeneralStorage, TaskStorage
-
 __all__ = [
-    # Agent Diary
+    # Memory subsystems
     "AgentDiaryService",
+    "EssentialStoryGenerator",
+    "WorkingMemoryService",
     # Enums
     "TaskStatus",
     "TaskPriority",

@@ -19,20 +19,10 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from memory.manager import UnifiedMemoryManager
 from prompt_manager import get_language_instruction, resolve_language
 
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
-
-try:
-    from memory.working_memory import WorkingMemoryService
-    _working_memory_available = True
-except ImportError:
-    logging.getLogger(__name__).warning(
-        "WorkingMemoryService not available (issue #3768 not merged); "
-        "memory lifecycle hooks will use no-op stubs"
-    )
-    WorkingMemoryService = None  # type: ignore[assignment,misc]
-    _working_memory_available = False
 
 
 @dataclass
@@ -64,6 +54,10 @@ class StandardizedAgent(BaseAgent):
         super().__init__(agent_type, deployment_mode)
         self.logger = logging.getLogger(f"{__name__}.{agent_type}")
 
+        # Lazy memory facade — created on first access so agents that never
+        # use memory don't pay the UnifiedMemoryManager construction cost.
+        self._memory_manager: Optional[UnifiedMemoryManager] = None
+
         # Action handlers mapping - to be configured by subclasses
         self._action_handlers: Dict[str, ActionHandler] = {}
 
@@ -79,6 +73,15 @@ class StandardizedAgent(BaseAgent):
         # Lock for thread-safe counter access
         # Named differently from BaseAgent._stats_lock (threading.Lock)
         self._async_stats_lock = asyncio.Lock()
+
+    @property
+    def memory_manager(self) -> UnifiedMemoryManager:
+        """Unified memory facade (lazy-init). Subsystems via properties:
+        working_memory, essential_story, agent_diary.
+        """
+        if self._memory_manager is None:
+            self._memory_manager = UnifiedMemoryManager()
+        return self._memory_manager
 
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
@@ -179,7 +182,7 @@ class StandardizedAgent(BaseAgent):
         """Load working memory into context before request handling.
 
         Override in subclasses to enrich the context with session state
-        or prior conversation history from WorkingMemoryService.
+        or prior conversation history from ``self.memory_manager.working_memory``.
 
         Args:
             context: Mutable context dict forwarded from the request.
@@ -193,7 +196,7 @@ class StandardizedAgent(BaseAgent):
         """Persist key outputs to working memory after request handling.
 
         Override in subclasses to write agent outputs back to
-        WorkingMemoryService so downstream agents can share state.
+        ``self.memory_manager.working_memory`` so downstream agents can share state.
 
         Args:
             context: Context dict as returned by _before_process.
