@@ -2,9 +2,12 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Anthropic Adapter - Adapter for external Anthropic API.
+Anthropic Adapter - Adapter for external Anthropic API (#1403).
 
-Issue #1403: Provides Claude model access via the Anthropic SDK.
+Delegates execution to ``llm_providers.AnthropicProvider`` which owns the
+canonical Claude implementation (extended thinking, beta headers, think-block
+stripping).  This adapter's sole responsibility is the ``test_environment()``
+diagnostic method used by ``api/adapters.py``.
 """
 
 import logging
@@ -34,88 +37,40 @@ ANTHROPIC_MODELS = [
 
 
 class AnthropicAdapter(AdapterBase):
-    """Adapter for the Anthropic Claude API (#1403)."""
+    """Adapter for the Anthropic Claude API (#1403).
+
+    All inference is delegated to ``llm_providers.AnthropicProvider`` so there
+    is a single implementation of the Anthropic request/response logic.
+    """
 
     def __init__(self, config: Optional[AdapterConfig] = None):
         super().__init__("anthropic_api", config)
-        self._api_key: Optional[str] = None
-        self._client = None
+        self._provider = None
 
-    def _get_api_key(self) -> Optional[str]:
-        """Resolve API key from config or environment."""
-        if self._api_key:
-            return self._api_key
-        self._api_key = self.config.settings.get("api_key") or os.getenv(
-            "ANTHROPIC_API_KEY", ""
-        )
-        return self._api_key
+    def _ensure_provider(self):
+        """Lazily construct the canonical AnthropicProvider."""
+        if self._provider is None:
+            from llm_providers.anthropic_provider import AnthropicProvider
 
-    def _ensure_client(self):
-        """Lazily initialize the Anthropic client."""
-        if self._client is None:
-            import anthropic
-
-            api_key = self._get_api_key()
-            if not api_key:
-                raise ValueError("Anthropic API key not configured")
-            self._client = anthropic.AsyncAnthropic(api_key=api_key)
-        return self._client
+            api_key = self.config.settings.get("api_key") or os.getenv(
+                "ANTHROPIC_API_KEY", ""
+            )
+            self._provider = AnthropicProvider(
+                settings={"api_key": api_key} if api_key else {}
+            )
+        return self._provider
 
     async def execute(self, request: LLMRequest) -> LLMResponse:
-        """Execute LLM call via Anthropic API."""
-        client = self._ensure_client()
-        start = time.time()
-
-        system_msg = ""
-        messages = []
-        for msg in request.messages:
-            if msg.get("role") == "system":
-                system_msg = msg.get("content", "")
-            else:
-                messages.append(
-                    {
-                        "role": msg.get("role", "user"),
-                        "content": msg.get("content", ""),
-                    }
-                )
-
-        kwargs = {
-            "model": request.model_name or ANTHROPIC_CLAUDE_SONNET4_6,
-            "max_tokens": request.max_tokens or 4096,
-            "messages": messages,
-            "temperature": request.temperature,
-        }
-        if system_msg:
-            kwargs["system"] = system_msg
-
-        response = await client.messages.create(**kwargs)
-        elapsed = time.time() - start
-
-        content = ""
-        if response.content:
-            content = response.content[0].text
-
-        return LLMResponse(
-            content=content,
-            model=response.model,
-            provider="anthropic",
-            processing_time=elapsed,
-            request_id=request.request_id,
-            usage={
-                "prompt_tokens": response.usage.input_tokens,
-                "completion_tokens": response.usage.output_tokens,
-                "total_tokens": (
-                    response.usage.input_tokens + response.usage.output_tokens
-                ),
-            },
-        )
+        """Execute LLM call via AnthropicProvider."""
+        provider = self._ensure_provider()
+        return await provider.chat_completion(request)
 
     async def test_environment(self) -> EnvironmentTestResult:
         """Test Anthropic API connectivity."""
         diagnostics: List[DiagnosticMessage] = []
         start = time.time()
 
-        api_key = self._get_api_key()
+        api_key = self.config.settings.get("api_key") or os.getenv("ANTHROPIC_API_KEY", "")
         if not api_key:
             diagnostics.append(
                 DiagnosticMessage(
@@ -138,19 +93,15 @@ class AnthropicAdapter(AdapterBase):
         )
 
         try:
-            client = self._ensure_client()
-            resp = await client.messages.count_tokens(
-                model=ANTHROPIC_CLAUDE_SONNET4_6,
-                messages=[{"role": "user", "content": "test"}],
-            )
+            provider = self._ensure_provider()
+            available = await provider.is_available()
             diagnostics.append(
                 DiagnosticMessage(
-                    level=DiagnosticLevel.INFO,
-                    message="API authentication successful",
-                    details={"input_tokens": resp.input_tokens},
+                    level=DiagnosticLevel.INFO if available else DiagnosticLevel.ERROR,
+                    message="API authentication successful" if available else "API check failed",
                 )
             )
-        except Exception as e:
+        except Exception:
             diagnostics.append(
                 DiagnosticMessage(
                     level=DiagnosticLevel.ERROR,
