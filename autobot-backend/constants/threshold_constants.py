@@ -39,6 +39,7 @@ class WorkflowThresholds:
 
     SAFETY_THRESHOLD = 0.7  # Minimum safety score required
     QUALITY_THRESHOLD = 0.6  # Minimum quality score required
+    DOC_GENERATION_THRESHOLD = 0.8  # Minimum score to trigger auto-documentation
 
 
 class ComputerVisionThresholds:
