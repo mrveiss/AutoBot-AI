@@ -583,12 +583,14 @@ class DeploymentService:
             try:
                 ssh_user, ssh_port, ssh_password = self._get_ssh_credentials(node)
 
+                extra = deployment.extra_data or {}
                 output = await self._execute_ansible_playbook(
                     node.ip_address,
                     deployment.roles,
                     ssh_user=ssh_user,
                     ssh_port=ssh_port,
                     ssh_password=ssh_password,
+                    playbook=extra.get("playbook"),
                 )
 
                 deployment.status = DeploymentStatus.COMPLETED.value
@@ -709,6 +711,7 @@ class DeploymentService:
         ssh_user: Optional[str] = None,
         ssh_port: Optional[int] = None,
         ssh_password: Optional[str] = None,
+        playbook: Optional[str] = None,
     ) -> str:
         """
         Execute an Ansible playbook for the given roles.
@@ -719,11 +722,12 @@ class DeploymentService:
             ssh_user: SSH username (optional, uses ansible default if not provided)
             ssh_port: SSH port (optional, uses 22 if not provided)
             ssh_password: SSH password for authentication and sudo (optional)
+            playbook: Playbook filename override (optional, defaults to deploy.yml)
 
         Returns:
             Ansible playbook output
         """
-        playbook_path = self.ansible_dir / "deploy.yml"
+        playbook_path = self.ansible_dir / (playbook or "deploy.yml")
 
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
