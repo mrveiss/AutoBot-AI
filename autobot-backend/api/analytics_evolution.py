@@ -816,7 +816,10 @@ def _generate_csv_response(timeline_data: list) -> StreamingResponse:
         iter([csv_content]),
         media_type="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=evolution_data_{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.csv"
+            "Content-Disposition": (
+                "attachment; filename=evolution_data_"
+                f"{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.csv"
+            )
         },
     )
 
