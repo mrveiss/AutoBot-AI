@@ -119,36 +119,46 @@ def _is_task_stale(task_info: dict) -> bool:
         return False
 
 
-def _get_active_indexing_task() -> Optional[dict]:
+def _get_active_indexing_task(source_id: Optional[str] = None) -> Optional[dict]:
     """
     Check if there's an active indexing task and return its info.
 
     Issue #540: Used to show indexing status in stats endpoint.
     Uses _tasks_sync_lock for thread safety when accessing indexing_tasks.
     Ignores stale tasks that have been running for more than 1 hour.
+    Issue #3685: Filters by source_id to prevent cross-project leakage.
+
+    Args:
+        source_id: When provided, only return a task belonging to this project.
 
     Returns:
-        Task info dict if indexing is in progress, None otherwise.
+        Task info dict if indexing is in progress for this project, None otherwise.
     """
     with _tasks_sync_lock:
         for task_id, task_info in indexing_tasks.items():
-            if task_info.get("status") == "running":
-                # Issue #540: Skip stale tasks (stuck for >1 hour)
-                if _is_task_stale(task_info):
-                    logger.warning(
-                        "Ignoring stale indexing task %s (started: %s)",
-                        task_id,
-                        task_info.get("started_at"),
-                    )
-                    continue
+            if task_info.get("status") != "running":
+                continue
 
-                return {
-                    "task_id": task_id,
-                    "progress": task_info.get("progress", {}),
-                    "phases": task_info.get("phases", {}),
-                    "stats": task_info.get("stats", {}),
-                    "started_at": task_info.get("started_at"),
-                }
+            # Issue #3685: Skip tasks belonging to a different project
+            if source_id is not None and task_info.get("source_id") != source_id:
+                continue
+
+            # Issue #540: Skip stale tasks (stuck for >1 hour)
+            if _is_task_stale(task_info):
+                logger.warning(
+                    "Ignoring stale indexing task %s (started: %s)",
+                    task_id,
+                    task_info.get("started_at"),
+                )
+                continue
+
+            return {
+                "task_id": task_id,
+                "progress": task_info.get("progress", {}),
+                "phases": task_info.get("phases", {}),
+                "stats": task_info.get("stats", {}),
+                "started_at": task_info.get("started_at"),
+            }
     return None
 
 
@@ -196,7 +206,8 @@ async def get_codebase_stats(source_id: Optional[str] = None):
     Issue #1710: source_id filters to per-project stats.
     """
     # Issue #540: Check if indexing is in progress
-    active_task = _get_active_indexing_task()
+    # Issue #3685: Filter by source_id to prevent cross-project leakage
+    active_task = _get_active_indexing_task(source_id=source_id)
 
     code_collection = await asyncio.to_thread(get_code_collection)
 
