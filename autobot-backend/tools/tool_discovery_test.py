@@ -97,7 +97,7 @@ def test_discover_tools_empty_essential_tools(
     """
     Test case with an empty ESSENTIAL_TOOLS list.
     """
-    with patch("src.tool_discovery.ESSENTIAL_TOOLS", []):
+    with patch("tool_discovery.ESSENTIAL_TOOLS", []):
         found_tools = discover_tools()
         assert len(found_tools) == 0
         assert found_tools == {}
