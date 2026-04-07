@@ -196,6 +196,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatFileSize, formatTimeAgo } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -246,7 +247,7 @@ const loadHealthDashboard = async () => {
   isLoadingHealth.value = true
 
   try {
-    const response = await apiClient.get('/api/knowledge-maintenance/health/dashboard')
+    const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/health/dashboard`)
     const data = await parseApiResponse(response)
 
     if (data) {
