@@ -214,6 +214,7 @@ import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -332,9 +333,9 @@ async function fetchTimeline() {
 
     // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
     const [timelineRes, trendsRes, patternsRes] = await Promise.all([
-      fetchWithAuth(`/api/evolution/timeline?${params}`),
-      fetchWithAuth(`/api/evolution/trends?days=${selectedDays.value}`),
-      fetchWithAuth('/api/evolution/patterns')
+      fetchWithAuth(`${getApiBase()}/evolution/timeline?${params}`),
+      fetchWithAuth(`${getApiBase()}/evolution/trends?days=${selectedDays.value}`),
+      fetchWithAuth(`${getApiBase()}/evolution/patterns`)
     ])
 
     if (!timelineRes.ok || !trendsRes.ok) {
@@ -368,7 +369,7 @@ async function exportData() {
 
     // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
     const response = await fetchWithAuth(
-      `/api/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
+      `${getApiBase()}/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
     )
 
     if (!response.ok) throw new Error('Export failed')

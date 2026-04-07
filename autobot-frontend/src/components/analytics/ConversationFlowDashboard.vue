@@ -264,6 +264,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('ConversationFlowDashboard')
 
@@ -333,7 +334,7 @@ const maxHourlyCount = computed(() => {
 const runAnalysis = async () => {
   isLoading.value = true
   try {
-    const response = await fetchWithAuth(`/api/conversation-flow/analyze?hours=${timeRange.value}`)
+    const response = await fetchWithAuth(`${getApiBase()}/conversation-flow/analyze?hours=${timeRange.value}`)
     if (response.ok) {
       analysisResult.value = await response.json()
     }

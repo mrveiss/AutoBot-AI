@@ -150,6 +150,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('AgentCostPanel')
 const { t } = useI18n()
@@ -192,7 +193,7 @@ const formatNumber = (num: number): string => {
 const fetchAgentCosts = async () => {
   loading.value = true
   try {
-    const res = await api.get<{ data: { agents: AgentCost[] } }>('/api/cost/by-agent')
+    const res = await api.get<{ data: { agents: AgentCost[] } }>(`${getApiBase()}/cost/by-agent`)
     agents.value = res.data?.agents || []
   } catch (error) {
     logger.error('Failed to fetch agent costs:', error)
@@ -219,7 +220,7 @@ const saveBudget = async () => {
   budgetDialog.value.saving = true
   try {
     await api.put(
-      `/api/cost/by-agent/${budgetDialog.value.agentId}/budget`,
+      `${getApiBase()}/cost/by-agent/${budgetDialog.value.agentId}/budget`,
       { budget_monthly_usd: budgetDialog.value.amount }
     )
     closeBudgetDialog()
