@@ -6296,7 +6296,8 @@
     "agentRegistry": "Agents",
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "Open SLM Admin Panel",
-    "profileSettings": "Profile Settings"
+    "profileSettings": "Profile Settings",
+    "switchLanguage": "Switch language"
   },
   "reasoningTrace": {
     "title": "Reasoning trace",
