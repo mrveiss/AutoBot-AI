@@ -137,6 +137,9 @@ class MCPDispatcher:
         Refreshes the tool cache if stale (TTL-based, #2598).
         Rejects admin-only tools when role != "admin" (#2598).
 
+        Issue #3232: emits agent.tool.call before dispatch and
+        agent.tool.result after, with sensitive argument redaction.
+
         Args:
             tool_name: Tool name from the LLM tool call.
             arguments: Tool arguments dict.
@@ -145,6 +148,8 @@ class MCPDispatcher:
         Returns:
             Dict with keys: success (bool), result (str | dict), bridge (str | None).
         """
+        from chat_workflow.cot_events import emit_tool_call, emit_tool_result
+
         await self._ensure_cache_fresh()
 
         if role != "admin" and self._is_admin_only(tool_name):
@@ -169,7 +174,18 @@ class MCPDispatcher:
 
         bridge = tool.get("bridge", "unknown")
         endpoint = tool.get("endpoint", "")
-        return await self._call_bridge(tool_name, bridge, endpoint, arguments)
+
+        # Issue #3232: emit CoT events around bridge call.
+        _cot_start = emit_tool_call(tool_name, arguments)
+        result = await self._call_bridge(tool_name, bridge, endpoint, arguments)
+        emit_tool_result(
+            tool_name,
+            result.get("result", ""),
+            _cot_start,
+            success=result.get("success", False),
+            bridge=bridge,
+        )
+        return result
 
     async def _call_bridge(
         self, tool_name: str, bridge: str, endpoint: str, arguments: dict
