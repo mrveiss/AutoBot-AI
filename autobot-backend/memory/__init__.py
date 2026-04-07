@@ -38,6 +38,7 @@ from .compat import (
 from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
 
 # Main Manager
+from .agent_diary import AgentDiaryService
 from .manager import UnifiedMemoryManager
 
 # Data Models
@@ -51,6 +52,8 @@ from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 from .storage import GeneralStorage, TaskStorage
 
 __all__ = [
+    # Agent Diary
+    "AgentDiaryService",
     # Enums
     "TaskStatus",
     "TaskPriority",
