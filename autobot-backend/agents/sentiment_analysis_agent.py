@@ -21,7 +21,14 @@ from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
-from .standardized_agent import ActionHandler, StandardizedAgent, _working_memory_available
+from .standardized_agent import ActionHandler, StandardizedAgent
+
+try:
+    from autobot_backend.memory.working_memory import WorkingMemoryService as _WMS
+    _working_memory_available = True
+except ImportError:
+    _WMS = None
+    _working_memory_available = False
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +51,7 @@ class SentimentAnalysisAgent(StandardizedAgent):
             "opinion_mining",
             "tone_detection",
         ]
+        self._wm = _WMS() if _working_memory_available else None
         self._register_action_handlers()
         logger.info(
             "Sentiment Analysis Agent initialized: provider=%s, model=%s",
@@ -140,11 +148,10 @@ class SentimentAnalysisAgent(StandardizedAgent):
         prior session data.  Until then it is a documented no-op that shows the
         expected override pattern.
         """
-        if _working_memory_available:
+        if _working_memory_available and self._wm is not None:
             session_id = context.get("session_id")
             if session_id:
-                from autobot_backend.memory.working_memory import WorkingMemoryService
-                history = await WorkingMemoryService.load(session_id, key="sentiment_history")
+                history = await self._wm.get(session_id, "sentiment_history")
                 if history:
                     context["sentiment_history"] = history
         return context
@@ -157,11 +164,8 @@ class SentimentAnalysisAgent(StandardizedAgent):
         if not session_id:
             return
         sentiment = result.get("response", "") if isinstance(result, dict) else ""
-        if sentiment:
-            from autobot_backend.memory.working_memory import WorkingMemoryService
-            await WorkingMemoryService.save(
-                session_id, key="sentiment_history", value=sentiment
-            )
+        if sentiment and self._wm is not None:
+            await self._wm.store(session_id, "sentiment_history", sentiment)
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for sentiment analysis tasks."""

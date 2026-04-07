@@ -77,7 +77,8 @@ class StandardizedAgent(BaseAgent):
         self._last_error = None
 
         # Lock for thread-safe counter access
-        self._async_stats_lock = asyncio.Lock()  # Named differently from BaseAgent._stats_lock (threading.Lock)
+        # Named differently from BaseAgent._stats_lock (threading.Lock)
+        self._async_stats_lock = asyncio.Lock()
 
     def register_action_handler(self, action: str, handler: ActionHandler):
         """Register an action handler for this agent"""
@@ -97,7 +98,8 @@ class StandardizedAgent(BaseAgent):
         """Validate action and get handler method (Issue #398: extracted).
 
         Returns:
-            (error_response, handler_config, handler_method) - error_response is set if validation fails
+            (error_response, handler_config, handler_method) - error_response is set
+            if validation fails.
         """
         if not request.action:
             return (
@@ -113,7 +115,8 @@ class StandardizedAgent(BaseAgent):
             return (
                 self._create_error_response(
                     request,
-                    f"Unsupported action '{request.action}'. Supported actions: {supported_actions}",
+                    f"Unsupported action '{request.action}'. "
+                    f"Supported actions: {supported_actions}",
                     "unsupported_action",
                 ),
                 None,
@@ -196,6 +199,7 @@ class StandardizedAgent(BaseAgent):
             context: Context dict as returned by _before_process.
             result:  The handler return value (may be None on error).
         """
+        pass
 
     async def process_request(self, request: AgentRequest) -> AgentResponse:
         """Standardized request processing (Issue #398: refactored to use helpers)."""
@@ -228,6 +232,10 @@ class StandardizedAgent(BaseAgent):
                     request.request_id,
                     hook_exc,
                 )
+
+            # Note: enriched context is available to _after_process.
+            # Handlers access request.payload directly; context carries
+            # cross-hook state (session_id, working memory entries, etc.).
 
             # Validate and get handler (Issue #398: extracted)
             (
