@@ -987,6 +987,9 @@ class LLMInterface:
                 span.set_attribute("llm.provider", response.provider or "unknown")
                 span.set_attribute("llm.cached", getattr(response, "cached", False))
                 span.set_attribute("llm.error", bool(response.error))
+                # Issue #3389: attach cache hit rate for vLLM prefix-caching visibility
+                if (response.provider or "") == "vllm":
+                    self._calculate_cache_hit_rate(response)
                 return response
             except Exception as e:
                 processing_time = time.time() - start_time
@@ -1375,7 +1378,19 @@ class LLMInterface:
         additional_params: dict | None = None,
         **llm_params,
     ) -> LLMResponse:
-        """Chat completion with vLLM-optimized prompts. Issue #620."""
+        """Chat completion with vLLM-optimized prompts.
+
+        Builds a prefix-cache-friendly prompt (static base + dynamic suffix) and
+        routes the request directly to vLLM, bypassing the provider routing layer.
+        Cache hit rate is attached to response.metadata["cache_hit_rate"].
+
+        Issue #620 (original implementation), Issue #3389 (bug-fix: was incorrectly
+        passing LLMRequest to chat_completion(messages: list) — now calls
+        _execute_with_fallback directly so the pre-built request is honoured).
+        """
+        import time
+        import uuid
+
         from agent_tier_classifier import get_base_prompt_for_agent
         from prompt_manager import get_optimized_prompt
 
@@ -1389,16 +1404,30 @@ class LLMInterface:
             additional_params=additional_params,
         )
 
+        request_id = llm_params.pop("request_id", str(uuid.uuid4()))
+        start_time = time.time()
+
         request = LLMRequest(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
             provider="vllm",
+            request_id=request_id,
             **llm_params,
         )
 
-        response = await self.chat_completion(request)
+        response = await self._execute_with_fallback(request, "vllm")
+        response = await self._finalize_response(
+            response,
+            request.messages,
+            request.model_name or "",
+            "vllm",
+            None,
+            request_id,
+            start_time,
+            session_id,
+        )
         self._calculate_cache_hit_rate(response)
         return response
 
