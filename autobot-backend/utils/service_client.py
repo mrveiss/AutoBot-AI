@@ -21,6 +21,7 @@ import aiohttp
 import structlog
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as _ssot_config
 from security.service_auth import ServiceAuthManager
 
 logger = structlog.get_logger()
@@ -34,7 +35,7 @@ class ServiceHTTPClient:
     required authentication headers.
     """
 
-    def __init__(self, service_id: str, service_key: str, timeout: float = 30.0):
+    def __init__(self, service_id: str, service_key: str, timeout: float = _ssot_config.timeout.default_request):
         """
         Initialize authenticated HTTP client.
 

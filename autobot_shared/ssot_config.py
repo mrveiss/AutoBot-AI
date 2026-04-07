@@ -528,6 +528,27 @@ class TimeoutConfig(BaseSettings):
     # Sandbox execution timeout for skill package tests
     skill_test: float = Field(default=15.0, alias="AUTOBOT_TIMEOUT_SKILL_TEST")
 
+    # Secure sandbox / subprocess execution (docker, shell code execution)
+    sandbox: float = Field(default=300.0, alias="AUTOBOT_SANDBOX_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # Service-to-service / LLM request (seconds)                          #
+    # ------------------------------------------------------------------ #
+
+    # General inter-service HTTP request (e.g. ServiceHTTPClient)
+    default_request: float = Field(default=30.0, alias="AUTOBOT_REQUEST_TIMEOUT")
+
+    # LLM inference request (longer than generic HTTP — model may take time)
+    llm_request: float = Field(default=60.0, alias="AUTOBOT_LLM_REQUEST_TIMEOUT")
+
+    # ------------------------------------------------------------------ #
+    # HTTP connection pool (seconds)                                       #
+    # ------------------------------------------------------------------ #
+
+    connection_pool_read: float = Field(default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT")
+    connection_pool_write: float = Field(default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT")
+    connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
+
     # ------------------------------------------------------------------ #
     # Legacy / frontend aliases (milliseconds)                             #
     # ------------------------------------------------------------------ #
