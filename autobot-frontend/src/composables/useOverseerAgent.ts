@@ -12,7 +12,7 @@
 
 import { ref, computed, onUnmounted, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { getBackendUrl } from '@/config/ssot-config'
+import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useOverseerAgent')
 
@@ -125,7 +125,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     const backendUrl = getBackendUrl()
     // Convert http(s) to ws(s)
     const wsUrl = backendUrl.replace(/^http/, 'ws')
-    return `${wsUrl}/api/overseer/ws/${sessionId}`
+    return `${wsUrl}${getApiBase()}/overseer/ws/${sessionId}`
   }
 
   /**

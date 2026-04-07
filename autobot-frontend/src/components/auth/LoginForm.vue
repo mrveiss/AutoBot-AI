@@ -95,6 +95,7 @@ const { t } = useI18n()
 const logger = createLogger('LoginForm')
 import { useUserStore, type UserProfile } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 
 const router = useRouter()
@@ -186,7 +187,7 @@ async function handleLogin() {
 
   try {
     // ApiClient.post() returns parsed JSON directly (#810)
-    const response = await ApiClient.post('/api/auth/login', {
+    const response = await ApiClient.post(`${getApiBase()}/auth/login`, {
       username: credentials.username,
       password: credentials.password
     })

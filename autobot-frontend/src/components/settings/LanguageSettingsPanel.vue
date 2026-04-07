@@ -66,6 +66,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePreferences } from '@/composables/usePreferences'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LanguageSettingsPanel')
@@ -80,7 +81,7 @@ const statusType = ref<'success' | 'error'>('success')
 
 onMounted(async () => {
   try {
-    const response = await apiClient.get('/api/personality/languages')
+    const response = await apiClient.get(`${getApiBase()}/personality/languages`)
     if (response.data && typeof response.data === 'object') {
       languages.value = response.data
     }

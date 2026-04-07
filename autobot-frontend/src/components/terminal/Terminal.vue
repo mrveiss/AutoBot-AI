@@ -78,6 +78,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
+import { getApiBase } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
 import { useTabCompletion } from '@/composables/useTabCompletion'
@@ -207,7 +208,7 @@ const initializeSession = async (): Promise<string> => {
       // Chat terminal - check if session already exists
 
       const sessionsUrl = await appConfig.getApiUrl(
-        `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
+        `${getApiBase()}/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
       )
       const response = await fetchWithAuth(sessionsUrl)
       if (!response.ok) {
@@ -223,7 +224,7 @@ const initializeSession = async (): Promise<string> => {
       } else {
         // Create new session via AgentTerminalService
 
-        const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
+        const createUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions`)
         const createResponse = await fetchWithAuth(createUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
