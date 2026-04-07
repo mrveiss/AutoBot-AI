@@ -1901,7 +1901,9 @@ before summarizing.
 
         try:
             async with await http_client.post(
-                ollama_endpoint, json=payload, timeout=aiohttp.ClientTimeout(total=TIMEOUT_HTTP_DEFAULT)
+                ollama_endpoint,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=None, connect=TIMEOUT_HTTP_DEFAULT),
             ) as response:
                 logger.info(
                     "[ChatWorkflowManager] Ollama response status: %s", response.status
@@ -3010,10 +3012,14 @@ before summarizing.
                 from .graph import delete_thread_checkpoints
 
                 await delete_thread_checkpoints(session_id)
+            if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+                error_content = "The model is taking too long to respond. Please try again."
+            else:
+                error_content = str(exc) or f"{type(exc).__name__}: unexpected error"
             queue.put_nowait(
                 {
                     "type": "error",
-                    "content": str(exc) or f"{type(exc).__name__}: unexpected error",
+                    "content": error_content,
                 }
             )
         finally:
