@@ -174,6 +174,16 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Issue #3850: web research settings UI
+        path: 'web-research-settings',
+        name: 'knowledge-web-research-settings',
+        component: () => import('@/components/knowledge/WebResearchSettings.vue'),
+        meta: {
+          title: 'Web Research Settings',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'manpages',
         redirect: () => ({
           path: '/knowledge/categories',
