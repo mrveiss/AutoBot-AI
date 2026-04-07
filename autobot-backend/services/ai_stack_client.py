@@ -11,6 +11,7 @@ This module provides a centralized interface for communicating with the AI Stack
 import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -23,6 +24,34 @@ from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
+
+# Rate-limit connection error log messages to prevent log flooding (#3686).
+# The first failure is logged at WARNING; subsequent failures within the
+# suppression window are demoted to DEBUG.
+_ERROR_LOG_SUPPRESS_SECONDS: int = 60
+_last_connection_error_log: float = 0.0
+
+
+def _log_connection_error(attempt: int, exc: Exception) -> None:
+    """Log AI Stack connection errors with rate-limiting to prevent log flooding.
+
+    The first failure in each suppression window is emitted at WARNING level.
+    Subsequent failures within _ERROR_LOG_SUPPRESS_SECONDS are emitted at DEBUG
+    to keep backend-error.log readable (#3686).
+    """
+    global _last_connection_error_log
+    now = time.monotonic()
+    elapsed = now - _last_connection_error_log
+    if elapsed >= _ERROR_LOG_SUPPRESS_SECONDS:
+        logger.warning(
+            "AI Stack client error (attempt %s): %s — suppressing repeated errors for %ds",
+            attempt,
+            exc,
+            _ERROR_LOG_SUPPRESS_SECONDS,
+        )
+        _last_connection_error_log = now
+    else:
+        logger.debug("AI Stack client error (attempt %s, suppressed): %s", attempt, exc)
 
 
 class AIStackError(Exception):
@@ -55,7 +84,7 @@ async def _process_ai_stack_response(
     response_text = await response.text()
 
     if response.status >= 400:
-        logger.error("AI Stack error %s: %s", response.status, response_text)
+        logger.warning("AI Stack error %s: %s", response.status, response_text)
 
         if response.status >= 500 and attempt < retry_attempts - 1:
             return None, True, None  # Retry on server errors
@@ -223,7 +252,7 @@ class AIStackClient:
                     return result
 
             except aiohttp.ClientError as e:
-                logger.error("AI Stack client error (attempt %s): %s", attempt + 1, e)
+                _log_connection_error(attempt + 1, e)
                 if attempt < self.retry_attempts - 1:
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                     continue
@@ -233,7 +262,7 @@ class AIStackClient:
                     details={"error": type(e).__name__, "url": url},
                 )
             except Exception as e:
-                logger.error("Unexpected error in AI Stack request: %s", e)
+                logger.warning("Unexpected error in AI Stack request: %s", e)
                 raise AIStackError(
                     "Unexpected error during AI Stack request",
                     details={"error": type(e).__name__, "url": url},
