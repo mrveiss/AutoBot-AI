@@ -256,8 +256,6 @@ class BaseAgent(ABC):
         Persists each invocation to AgentAnalytics (Redis db=ANALYTICS) so
         usage data is queryable via GET /api/agents/usage.
         """
-        import uuid
-
         start_time = datetime.now(tz=timezone.utc)
         task_id = str(uuid.uuid4())
 
