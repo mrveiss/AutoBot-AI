@@ -146,7 +146,7 @@ models:
   phi3:
     context_window_tokens: 4096
     max_output_tokens: 2048
-    compression_threshold: 8192
+    compression_threshold: 4096
     message_budget:
       system_prompt: 300
       recent_messages: 10

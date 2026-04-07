@@ -70,12 +70,14 @@ class TestShouldCompress:
         assert not await svc.should_compress("phi3", 8192)
 
     @pytest.mark.asyncio
-    async def test_large_model_skips_compression(self) -> None:
-        """Models with threshold > 8192 should never compress."""
+    async def test_large_model_compresses_when_content_exceeds_threshold(self) -> None:
+        """Large models compress only when content genuinely exceeds their threshold."""
         svc = _make_svc()
         svc._model_thresholds["gpt-4o"] = 32768
-        # Even with huge content, large models skip compression
-        assert not await svc.should_compress("gpt-4o", 999999)
+        # Content well below the large-model threshold — no compression
+        assert not await svc.should_compress("gpt-4o", 10000)
+        # Content above the large-model threshold — compression fires
+        assert await svc.should_compress("gpt-4o", 40000)
 
 
 # ---------------------------------------------------------------------------
@@ -105,8 +107,8 @@ class TestCompressHistory:
         # Allow budget for only 2 messages (~6 tokens each -> 12 tokens needed)
         # Each message is 6 words * 1.3 = 7 tokens
         result = await svc.compress_history(messages, 15)
-        # First element must be a system summary
-        assert result[0]["role"] == "system"
+        # First element must be an assistant summary (system mid-history is invalid)
+        assert result[0]["role"] == "assistant"
         assert "omitted" in result[0]["content"]
         # Fewer messages than original
         assert len(result) < len(messages) + 1  # +1 for the summary
@@ -210,8 +212,8 @@ class TestCompressKbResults:
 # ---------------------------------------------------------------------------
 
 class TestLoadThresholds:
-    def test_phi3_threshold_is_8192(self) -> None:
-        """phi3 should have compression_threshold == 8192 in context_windows.yaml."""
+    def test_phi3_threshold_matches_context_window(self) -> None:
+        """phi3 compression_threshold must equal its context_window_tokens (4096)."""
         from pathlib import Path
 
         # Locate the real YAML relative to this test file
@@ -222,7 +224,7 @@ class TestLoadThresholds:
             pytest.skip("context_windows.yaml not found")
 
         svc = ContextCompressionService(config_path=yaml_path)
-        assert svc._get_threshold("phi3") == 8192
+        assert svc._get_threshold("phi3") == 4096
 
     def test_large_model_threshold_above_default(self) -> None:
         """Large models (e.g. gpt-4o) should have threshold > 8192."""

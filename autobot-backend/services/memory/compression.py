@@ -52,10 +52,17 @@ class ContextCompressionService:
             kb_results = await svc.compress_kb_results(kb_results, max_tokens)
     """
 
-    def __init__(self, config_path: Optional[Path] = None) -> None:
-        self._config_path = config_path or _CONFIG_PATH
-        self._model_thresholds: Dict[str, int] = {}
-        self._load_thresholds()
+    def __init__(
+        self,
+        config_path: Optional[Path] = None,
+        model_thresholds: Optional[Dict[str, int]] = None,
+    ) -> None:
+        if model_thresholds is not None:
+            self._model_thresholds: Dict[str, int] = model_thresholds
+        else:
+            self._config_path = config_path or _CONFIG_PATH
+            self._model_thresholds = {}
+            self._load_thresholds()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -91,7 +98,9 @@ class ContextCompressionService:
     async def should_compress(self, model_name: str, content_tokens: int) -> bool:
         """Return True if content_tokens exceeds the model's compression_threshold.
 
-        Large models (threshold > 8192) always return False — no compression.
+        The threshold in context_windows.yaml encodes the correct per-model value:
+        small models (e.g. phi3 = 4096) compress aggressively; large models
+        (e.g. gpt-4o = 32768) compress only when content is genuinely oversized.
 
         Args:
             model_name: The active LLM model name.
@@ -101,8 +110,6 @@ class ContextCompressionService:
             True when compression should be applied.
         """
         threshold = self._get_threshold(model_name)
-        if threshold > _DEFAULT_COMPRESSION_THRESHOLD:
-            return False
         return content_tokens > threshold
 
     async def compress_history(
@@ -146,10 +153,10 @@ class ContextCompressionService:
             return messages
 
         summary = {
-            "role": "system",
+            "role": "assistant",
             "content": (
-                f"[Context compressed: {dropped_count} earlier message(s) omitted to fit"
-                f" the model's {target_tokens}-token history budget.]"
+                f"[Summary: {dropped_count} earlier message(s) were omitted to fit"
+                f" the {target_tokens}-token history budget.]"
             ),
         }
         return [summary] + kept
