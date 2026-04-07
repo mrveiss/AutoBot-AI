@@ -62,11 +62,7 @@ class LLMSettings(BaseSettings):
         default="microsoft/DialoGPT-medium", description="HuggingFace model"
     )
 
-    class Config:
-        """Pydantic config for LLM settings with AUTOBOT_ env prefix."""
-
-        env_prefix = "AUTOBOT_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_", case_sensitive=False)
 
 
 class RedisSettings(BaseSettings):
@@ -90,11 +86,7 @@ class RedisSettings(BaseSettings):
             raise ValueError("Port must be between 1 and 65535")
         return v
 
-    class Config:
-        """Pydantic config for Redis settings with AUTOBOT_REDIS_ env prefix."""
-
-        env_prefix = "AUTOBOT_REDIS_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_REDIS_", case_sensitive=False)
 
 
 class DataSettings(BaseSettings):
@@ -120,11 +112,7 @@ class DataSettings(BaseSettings):
         default="data/chromadb", description="ChromaDB storage path"
     )
 
-    class Config:
-        """Pydantic config for Data settings with AUTOBOT_DATA_ env prefix."""
-
-        env_prefix = "AUTOBOT_DATA_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_DATA_", case_sensitive=False)
 
 
 class BackendSettings(BaseSettings):
@@ -165,11 +153,7 @@ class BackendSettings(BaseSettings):
             raise ValueError(f"Log level must be one of: {list(_VALID_LOG_LEVELS)}")
         return v.lower()
 
-    class Config:
-        """Pydantic config for Backend settings with AUTOBOT_BACKEND_ env prefix."""
-
-        env_prefix = "AUTOBOT_BACKEND_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_BACKEND_", case_sensitive=False)
 
 
 class SecuritySettings(BaseSettings):
@@ -187,11 +171,7 @@ class SecuritySettings(BaseSettings):
         default={}, description="User roles and permissions"
     )
 
-    class Config:
-        """Pydantic config for Security settings with AUTOBOT_SECURITY_ env prefix."""
-
-        env_prefix = "AUTOBOT_SECURITY_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_SECURITY_", case_sensitive=False)
 
 
 class DiagnosticsSettings(BaseSettings):
@@ -208,11 +188,7 @@ class DiagnosticsSettings(BaseSettings):
         default=False, description="Automatically apply suggested fixes"
     )
 
-    class Config:
-        """Pydantic config for Diagnostics settings with AUTOBOT_DIAGNOSTICS_ env prefix."""
-
-        env_prefix = "AUTOBOT_DIAGNOSTICS_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_DIAGNOSTICS_", case_sensitive=False)
 
 
 class MemorySettings(BaseSettings):
@@ -225,11 +201,7 @@ class MemorySettings(BaseSettings):
         default=10000, description="Maximum entries per category"
     )
 
-    class Config:
-        """Pydantic config for Memory settings with AUTOBOT_MEMORY_ env prefix."""
-
-        env_prefix = "AUTOBOT_MEMORY_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_MEMORY_", case_sensitive=False)
 
 
 class OrchestratorSettings(BaseSettings):
@@ -251,11 +223,7 @@ class OrchestratorSettings(BaseSettings):
             )
         return v
 
-    class Config:
-        """Pydantic config for Orchestrator settings with AUTOBOT_ORCHESTRATOR_ env prefix."""
-
-        env_prefix = "AUTOBOT_ORCHESTRATOR_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="AUTOBOT_ORCHESTRATOR_", case_sensitive=False)
 
 
 class AutoBotSettings(BaseSettings):
