@@ -14,6 +14,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
 import {
   useSlmUserApi,
@@ -130,9 +131,10 @@ const passwordChangeUserId = computed(() => {
 const passwordChangeApiEndpoint = computed(() => {
   const uid = passwordChangeUserId.value
   if (!uid) return ''
-  if (selectedUserType.value === 'slm') return `/api/slm-users/${uid}/change-password`
-  if (selectedUserType.value === 'autobot') return `/api/autobot-users/${uid}/change-password`
-  return `/api/users/${uid}/change-password`
+  const base = getSlmApiBase()
+  if (selectedUserType.value === 'slm') return `${base}/slm-users/${uid}/change-password`
+  if (selectedUserType.value === 'autobot') return `${base}/autobot-users/${uid}/change-password`
+  return `${base}/users/${uid}/change-password`
 })
 
 // ===========================================================================

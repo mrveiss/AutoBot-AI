@@ -24,7 +24,7 @@ from user_management.schemas.user import (
     PasswordChange,
 )
 from user_management.services import TenantContext, UserService
-from user_management.services.user_service import InvalidCredentialsError, UserNotFoundError
+from user_management.services.user_service import UserNotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/slm-users", tags=["slm-users"])
@@ -157,8 +157,6 @@ async def change_slm_user_password(
         return {"message": "Password updated successfully"}
     except UserNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from e
-    except InvalidCredentialsError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
