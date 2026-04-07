@@ -25,10 +25,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.websocket import ws_manager
-from services.ansible_secrets import _SECRET_TO_ANSIBLE_VAR
+from services.ansible_secrets import fetch_deploy_secrets
 from services.auth import get_current_user
 from services.database import db_service
-from services.encryption import decrypt_data
 from services.playbook_executor import get_playbook_executor
 
 logger = logging.getLogger(__name__)
@@ -187,31 +186,6 @@ def _build_infra_vars(
             infra_vars[host_var.replace("_host", "_port")] = port
     return infra_vars
 
-
-async def _fetch_provision_secrets() -> dict[str, str]:
-    """Read stored secrets and map them to Ansible extra_vars (#3079)."""
-    from sqlalchemy import select
-
-    from models.database import SystemSecret
-
-    extra: dict[str, str] = {}
-    try:
-        async with db_service.session() as session:
-            result = await session.execute(
-                select(SystemSecret).where(
-                    SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys()))
-                )
-            )
-            for secret in result.scalars().all():
-                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
-                if not ansible_var:
-                    continue
-                value = decrypt_data(secret.encrypted_value)
-                if value:
-                    extra[ansible_var] = value
-    except Exception:
-        logger.exception("Failed to load provision secrets")
-    return extra
 
 
 def _build_host_entries(
@@ -944,8 +918,8 @@ async def _run_provisioning_task(
                 )
                 await ws_manager.send_provision_status("running", stage, elapsed)
 
-        # Issue #3079: Pass stored secrets as Ansible extra_vars
-        extra_vars = await _fetch_provision_secrets()
+        # Issue #3079: Pass stored secrets as Ansible extra_vars (#3778)
+        extra_vars = await fetch_deploy_secrets()
 
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
