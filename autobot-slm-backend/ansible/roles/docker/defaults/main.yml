@@ -7,7 +7,7 @@
 # Docker package source
 docker_apt_gpg_url: "https://download.docker.com/linux/ubuntu/gpg"
 docker_apt_gpg_key_path: "/etc/apt/keyrings/docker.asc"
-docker_apt_repo_arch: "amd64"
+docker_apt_repo_arch: "{{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }}"
 docker_apt_repo_channel: "stable"
 
 # Docker Compose plugin version (empty = latest from apt)
