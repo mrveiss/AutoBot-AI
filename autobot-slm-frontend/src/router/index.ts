@@ -11,6 +11,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 // One-time wizard completion check (Issue #1294)
 let wizardCheckDone = false
@@ -506,7 +507,7 @@ router.beforeEach(async (to, _from) => {
     wizardCheckDone = true
     try {
       const token = sessionStorage.getItem('slm_access_token')
-      const { data } = await axios.get('/api/setup/status', {
+      const { data } = await axios.get(`${getSlmApiBase()}/setup/status`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!data.completed) {
