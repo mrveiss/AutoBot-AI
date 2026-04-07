@@ -94,26 +94,30 @@ class AgentDiaryService:
     async def read(self, agent_name: str, last_n: int = 10) -> List[Dict[str, Any]]:
         """Return the last *last_n* diary entries for *agent_name*, newest first.
 
+        Uses a metadata-filtered listing (``get_all_facts``) rather than
+        semantic search so that all entries are deterministically retrieved
+        regardless of their semantic similarity to a query string.
+
         Args:
             agent_name: Agent whose entries to retrieve.
             last_n:     Maximum number of entries to return.
 
         Returns:
-            List of result dicts from the KB search (may be empty on error).
+            List of fact dicts sorted newest-first (may be empty on error).
         """
         try:
             kb = await _get_kb()
-            filters = {"source": agent_name, "category": self.CATEGORY}
-            results = await kb.search(
-                query=f"agent diary {agent_name}",
-                top_k=last_n,
-                filters=filters,
-            )
-            results.sort(
+            all_facts = await kb.get_all_facts()
+            entries = [
+                f for f in all_facts
+                if (f.get("metadata") or {}).get("category") == self.CATEGORY
+                and (f.get("metadata") or {}).get("source") == agent_name
+            ]
+            entries.sort(
                 key=lambda r: r.get("metadata", {}).get("diary_timestamp", ""),
                 reverse=True,
             )
-            return results[:last_n]
+            return entries[:last_n]
         except Exception as exc:
             logger.warning(
                 "AgentDiary read failed for agent=%s: %s", agent_name, exc

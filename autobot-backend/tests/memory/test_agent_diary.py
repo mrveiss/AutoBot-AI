@@ -17,19 +17,27 @@ from memory.agent_diary import AgentDiaryService
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_kb_mock(store_result=None, search_result=None):
+def _make_kb_mock(store_result=None, search_result=None, all_facts_result=None):
     """Return an async mock KnowledgeBase stub."""
     kb = MagicMock()
     kb.store_fact = AsyncMock(
         return_value=store_result or {"status": "success", "fact_id": "fact-001"}
     )
     kb.search = AsyncMock(return_value=search_result or [])
+    kb.get_all_facts = AsyncMock(return_value=all_facts_result or [])
     return kb
 
 
-def _result_with_ts(ts: str) -> dict:
-    """Build a minimal KB search result dict."""
-    return {"content": "entry", "metadata": {"diary_timestamp": ts, "source": "a"}}
+def _result_with_ts(ts: str, agent: str = "agent_a") -> dict:
+    """Build a minimal KB fact/search result dict."""
+    return {
+        "content": "entry",
+        "metadata": {
+            "diary_timestamp": ts,
+            "source": agent,
+            "category": AgentDiaryService.CATEGORY,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -78,12 +86,12 @@ class TestWrite:
 class TestRead:
     @pytest.mark.asyncio
     async def test_read_returns_newest_first(self):
-        results = [
+        all_facts = [
             _result_with_ts("2026-01-01T10:00:00+00:00"),
             _result_with_ts("2026-01-03T10:00:00+00:00"),
             _result_with_ts("2026-01-02T10:00:00+00:00"),
         ]
-        kb = _make_kb_mock(search_result=results)
+        kb = _make_kb_mock(all_facts_result=all_facts)
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
             entries = await diary.read("agent_a", last_n=3)
@@ -93,16 +101,32 @@ class TestRead:
 
     @pytest.mark.asyncio
     async def test_read_respects_last_n(self):
-        results = [_result_with_ts(f"2026-01-0{i}T00:00:00+00:00") for i in range(1, 6)]
-        kb = _make_kb_mock(search_result=results)
+        all_facts = [_result_with_ts(f"2026-01-0{i}T00:00:00+00:00") for i in range(1, 6)]
+        kb = _make_kb_mock(all_facts_result=all_facts)
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
             entries = await diary.read("agent_a", last_n=2)
         assert len(entries) == 2
 
     @pytest.mark.asyncio
+    async def test_read_filters_by_agent_and_category(self):
+        """read() must not return entries belonging to a different agent."""
+        all_facts = [
+            _result_with_ts("2026-01-01T10:00:00+00:00", agent="agent_a"),
+            _result_with_ts("2026-01-02T10:00:00+00:00", agent="other_agent"),
+            _result_with_ts("2026-01-03T10:00:00+00:00", agent="agent_a"),
+        ]
+        kb = _make_kb_mock(all_facts_result=all_facts)
+        with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
+            diary = AgentDiaryService()
+            entries = await diary.read("agent_a", last_n=10)
+
+        assert len(entries) == 2
+        assert all(e["metadata"]["source"] == "agent_a" for e in entries)
+
+    @pytest.mark.asyncio
     async def test_read_empty_diary_returns_empty_list(self):
-        kb = _make_kb_mock(search_result=[])
+        kb = _make_kb_mock(all_facts_result=[])
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
             entries = await diary.read("agent_x")
@@ -111,11 +135,21 @@ class TestRead:
     @pytest.mark.asyncio
     async def test_read_graceful_on_kb_error(self):
         kb = MagicMock()
-        kb.search = AsyncMock(side_effect=RuntimeError("KB down"))
+        kb.get_all_facts = AsyncMock(side_effect=RuntimeError("KB down"))
         with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
             diary = AgentDiaryService()
             entries = await diary.read("agent_y")
         assert entries == []
+
+    @pytest.mark.asyncio
+    async def test_read_does_not_call_search(self):
+        """read() must use get_all_facts, not kb.search."""
+        kb = _make_kb_mock(all_facts_result=[])
+        with patch("memory.agent_diary._get_kb", AsyncMock(return_value=kb)):
+            diary = AgentDiaryService()
+            await diary.read("agent_a")
+        kb.get_all_facts.assert_awaited_once()
+        kb.search.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
