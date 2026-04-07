@@ -2,9 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 import datetime
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
+
+import aiofiles
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException
@@ -718,3 +723,124 @@ async def get_update_status(
     except Exception as e:
         logger.error("Error checking update status: %s", str(e))
         raise_server_error("UPDATES_0004", "Error checking update status")
+
+
+# ==================== Config Sync Endpoint (Issue #3398) ====================
+
+
+class ConfigSyncRequest(BaseModel):
+    """Request body for POST /api/settings/sync.
+
+    The *settings* dict is merged into the active settings.json so callers
+    can send partial payloads — only the provided keys are changed.
+    """
+
+    settings: dict
+
+
+class ConfigSyncResponse(BaseModel):
+    """Response body for POST /api/settings/sync."""
+
+    status: str
+    changed: dict  # keys that changed: {key: {"before": old, "after": new}}
+    unchanged_keys: int
+
+
+def _compute_flat_diff(before: dict, after: dict, prefix: str = "") -> dict:
+    """Return a flat dict of keys whose values changed between *before* and *after*.
+
+    Only leaf values are compared; nested dicts are recursed into.
+    """
+    diff: dict = {}
+    all_keys = set(before) | set(after)
+    for key in all_keys:
+        full_key = f"{prefix}.{key}" if prefix else key
+        bval = before.get(key)
+        aval = after.get(key)
+        if isinstance(bval, dict) and isinstance(aval, dict):
+            diff.update(_compute_flat_diff(bval, aval, prefix=full_key))
+        elif bval != aval:
+            diff[full_key] = {"before": bval, "after": aval}
+    return diff
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="sync_config",
+    error_code_prefix="SETTINGS",
+)
+@router.post("/sync", response_model=ConfigSyncResponse)
+async def sync_config(
+    request: ConfigSyncRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _: None = Depends(check_admin_permission),
+):
+    """Atomically merge *request.settings* into settings.json (Issue #3398).
+
+    The write is atomic: the new JSON is written to a temp file then renamed
+    over the target, preventing a half-written file from corrupting config.
+    Requires operator/admin permission.  Returns a diff of what changed so the
+    caller can display a confirmation to the user.
+    """
+    import copy
+
+    from config.loader import deep_merge
+    from constants.path_constants import PATH
+
+    if not request.settings:
+        return ConfigSyncResponse(status="skipped", changed={}, unchanged_keys=0)
+
+    before_config: dict = ConfigService.get_full_config()
+
+    # Merge the incoming payload onto the current config.
+    merged_config = deep_merge(copy.deepcopy(before_config), request.settings)
+
+    # Persist atomically: write to tmp then rename (non-blocking write).
+    settings_file = PATH.PROJECT_ROOT / "config" / "settings.json"
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        dir=str(settings_file.parent), suffix=".tmp", prefix="settings_"
+    )
+    os.close(tmp_fd)  # aiofiles will reopen by path
+    try:
+        async with aiofiles.open(tmp_path, "w", encoding="utf-8") as fh:
+            await fh.write(json.dumps(merged_config, indent=2, ensure_ascii=False))
+        os.replace(tmp_path, str(settings_file))
+    except Exception:
+        # Clean up tmp file if write or rename failed.
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    # Invalidate the ConfigService cache so the next read picks up the new file.
+    ConfigService.clear_cache()
+
+    changed = _compute_flat_diff(before_config, merged_config)
+    # Count leaf keys in the incoming payload that were not modified.
+    all_incoming_leaf_count = len(_compute_flat_diff({}, request.settings))
+    unchanged_keys = max(0, all_incoming_leaf_count - len(changed))
+
+    # Audit trail (same pattern as existing save_settings endpoint).
+    await ConfigRevisionService(session).create_revision(
+        entity_type="system",
+        entity_id="settings",
+        before_config=before_config,
+        after_config=merged_config,
+        source="api_sync",
+        created_by="admin",
+    )
+
+    logger.info(
+        "Config sync: %d key(s) changed, %d unchanged",
+        len(changed),
+        unchanged_keys,
+    )
+
+    return ConfigSyncResponse(
+        status="ok",
+        changed=changed,
+        unchanged_keys=unchanged_keys,
+    )
