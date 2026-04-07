@@ -1051,6 +1051,28 @@ async def _wire_npu_task_queue() -> None:
         )
 
 
+async def _init_voice_interface(app: FastAPI) -> None:
+    """Initialize VoiceInterface and attach it to app.state (#3848).
+
+    NON-CRITICAL: voice endpoints return 503 when this is unavailable.
+    Runs in Phase 2 because voice hardware is not required for core operation.
+    """
+    logger.info("[ 99%%] Voice Interface: Initializing...")
+    try:
+        from voice_interface import VoiceInterface
+
+        voice_interface = VoiceInterface()
+        app.state.voice_interface = voice_interface
+        logger.info("[ 99%%] Voice Interface: Initialized and attached to app.state")
+    except Exception as e:
+        logger.warning(
+            "Voice interface initialization failed (non-critical): %s — "
+            "voice endpoints will return 503",
+            e,
+        )
+        app.state.voice_interface = None
+
+
 async def _wire_scheduler_executor() -> None:
     """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
 
@@ -1145,6 +1167,7 @@ async def initialize_background_services(app: FastAPI):
         await _seed_agent_registry()
         await _wire_npu_task_queue()
         await _wire_scheduler_executor()
+        await _init_voice_interface(app)
 
         await update_app_state_multi(
             initialization_status="ready",
