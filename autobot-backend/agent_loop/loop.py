@@ -657,7 +657,7 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             call_hash = self._compute_tool_call_hash(tool)
             count = self._current_context.record_tool_call_hash(call_hash)
             tool_name = tool.get("tool_name", "unknown")
-            if count > threshold:
+            if count >= threshold:
                 logger.warning(
                     "AgentLoop: Detected repetitive tool call: %s called %d times "
                     "with identical args (threshold=%d)",
