@@ -13,6 +13,7 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import AutoBotMemoryGraphCore
@@ -21,12 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 def _is_entity_valid(entity: Dict[str, Any]) -> bool:
-    """Return True if entity has no valid_to set (currently valid).
+    """Return True if entity is currently valid.
 
+    An entity is valid when valid_to is absent (None) or is a future timestamp.
     Entities without valid_to in Redis (legacy) are treated as valid.
     """
     valid_to = (entity.get("metadata") or {}).get("valid_to")
-    return valid_to is None
+    if valid_to is None:
+        return True
+    # valid_to is an ISO-8601 string; compare lexicographically (works for UTC ISO strings)
+    return valid_to > datetime.now(tz=timezone.utc).isoformat()
 
 
 def _is_entity_valid_at(entity: Dict[str, Any], as_of: str) -> bool:

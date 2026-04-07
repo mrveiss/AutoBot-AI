@@ -119,7 +119,7 @@ class TestIsEntityValid:
 
     def test_future_valid_to_still_valid(self):
         future = _iso(_now() + timedelta(hours=1))
-        assert _is_entity_valid(_entity(valid_to=future)) is False  # valid_to set = expired
+        assert _is_entity_valid(_entity(valid_to=future)) is True  # still valid until future
 
 
 # ---------------------------------------------------------------------------
