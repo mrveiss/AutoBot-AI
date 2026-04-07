@@ -1,0 +1,11 @@
+# Dev venv requirements — use: pip install -r requirements-dev.txt
+# Pulls full backend dependency chain plus explicit dev-only extras.
+# Issue #3723: security/ and memory/ test packages failed collection with
+# ModuleNotFoundError because these two packages were missing from the venv.
+
+-r autobot-backend/requirements.txt
+
+# Explicit re-declaration ensures both packages are present in the dev venv
+# even when pip resolves the -r chain in unexpected order.
+structlog>=25.4.0    # service_auth_enforcement, service_auth_logging, service_client
+aiosqlite>=0.21.0   # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
