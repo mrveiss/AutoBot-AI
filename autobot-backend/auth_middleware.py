@@ -14,10 +14,14 @@ import os
 import secrets
 from typing import Dict, Optional, Tuple
 
-import bcrypt
-import jwt
 from fastapi import Request
 
+from autobot_shared.auth.jwt_core import (
+    decode_jwt_or_none,
+    encode_jwt,
+    hash_password,
+    verify_password,
+)
 from config import ConfigManager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
@@ -35,7 +39,6 @@ class AuthenticationMiddleware:
         self.security_config = config.get("security_config", {})
         self.enable_auth = self.security_config.get("enable_auth", True)
         self.jwt_secret = self._get_jwt_secret()
-        self.jwt_algorithm = "HS256"
         self.jwt_expiry_hours = 24
         self.session_timeout_minutes = self.security_config.get(
             "session_timeout_minutes", 30
@@ -115,17 +118,12 @@ class AuthenticationMiddleware:
             return secure_secret
 
     def hash_password(self, password: str) -> str:
-        """Hash password using bcrypt"""
-        salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+        """Hash password using bcrypt."""
+        return hash_password(password)
 
     def verify_password(self, password: str, hashed: str) -> bool:
-        """Verify password against hash"""
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-        except Exception as e:
-            logger.error("Password verification error: %s", e)
-            return False
+        """Verify password against hash."""
+        return verify_password(password, hashed)
 
     def is_account_locked(self, username: str) -> bool:
         """Check if account is locked due to failed attempts"""
@@ -274,11 +272,7 @@ class AuthenticationMiddleware:
             "username": user_data["username"],
             "role": user_data["role"],
             "email": user_data.get("email", ""),
-            "iat": datetime.datetime.utcnow(),
-            "exp": (
-                datetime.datetime.utcnow()
-                + datetime.timedelta(hours=self.jwt_expiry_hours)
-            ),
+            "iat": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
         }
 
         # Issue #684: Include org/user hierarchy in token
@@ -287,27 +281,20 @@ class AuthenticationMiddleware:
         if user_data.get("org_id"):
             payload["org_id"] = str(user_data["org_id"])
 
-        return jwt.encode(payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+        return encode_jwt(payload, secret=self.jwt_secret, expiry_hours=self.jwt_expiry_hours)
 
     def verify_jwt_token(self, token: str) -> Optional[Dict]:
-        """Verify and decode JWT token"""
-        try:
-            payload = jwt.decode(
-                token, self.jwt_secret, algorithms=[self.jwt_algorithm]
-            )
-
-            # Check if user still exists and is active
-            username = payload.get("username")
-            if username and self.is_account_locked(username):
-                return None
-
-            return payload
-        except jwt.ExpiredSignatureError:
-            logger.warning("JWT token expired")
+        """Verify and decode JWT token."""
+        payload = decode_jwt_or_none(token, self.jwt_secret)
+        if payload is None:
             return None
-        except jwt.InvalidTokenError as e:
-            logger.warning("Invalid JWT token: %s", e)
+
+        # Check if user is locked out even when token is structurally valid
+        username = payload.get("username")
+        if username and self.is_account_locked(username):
             return None
+
+        return payload
 
     def create_session(self, user_data: Dict, request: Request) -> str:
         """Create authenticated session with Redis persistence"""
