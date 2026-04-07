@@ -487,16 +487,22 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Quick subprocess (health query, lspci, xrandr, …)
-    subprocess_short: float = Field(default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT")
+    subprocess_short: float = Field(
+        default=5.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_SHORT"
+    )
 
     # Standard subprocess (git operations, rsync small payload)
     subprocess: float = Field(default=30.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS")
 
     # Long-running subprocess (Ansible playbook, large rsync, deploy)
-    subprocess_long: float = Field(default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG")
+    subprocess_long: float = Field(
+        default=300.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_LONG"
+    )
 
     # Very long subprocess (full deployment pipeline, TLS provisioning)
-    subprocess_deploy: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY")
+    subprocess_deploy: float = Field(
+        default=600.0, alias="AUTOBOT_TIMEOUT_SUBPROCESS_DEPLOY"
+    )
 
     # ------------------------------------------------------------------ #
     # MCP / skill processes (seconds)                                      #
@@ -519,7 +525,9 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     # Default cap for a background task before it is considered hung
-    background_task: float = Field(default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK")
+    background_task: float = Field(
+        default=600.0, alias="AUTOBOT_TIMEOUT_BACKGROUND_TASK"
+    )
 
     # ------------------------------------------------------------------ #
     # Skill / code validation (seconds)                                    #
@@ -546,7 +554,9 @@ class TimeoutConfig(BaseSettings):
     # ------------------------------------------------------------------ #
 
     connection_pool_read: float = Field(default=60.0, alias="AUTOBOT_POOL_READ_TIMEOUT")
-    connection_pool_write: float = Field(default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT")
+    connection_pool_write: float = Field(
+        default=30.0, alias="AUTOBOT_POOL_WRITE_TIMEOUT"
+    )
     connection_pool: float = Field(default=30.0, alias="AUTOBOT_POOL_TIMEOUT")
 
     # ------------------------------------------------------------------ #
@@ -1193,7 +1203,9 @@ class AutoBotConfig(BaseSettings):
     feature: FeatureConfig = Field(default_factory=FeatureConfig)
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
-    path: PathConfig = Field(default_factory=PathConfig)  # Issue #3397
+    path: PathConfig = Field(
+        default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
+    )  # Issue #3397; alias avoids collision with system PATH env var
 
     # Top-level settings
     deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
