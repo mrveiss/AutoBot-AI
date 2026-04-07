@@ -92,7 +92,7 @@ export function useEvolution(sourceId?: string | ComputedRef<string | undefined>
 
   // API client with auth token
   const api = axios.create({
-    baseURL: `${getApiBase()}/analytics/evolution`,
+    baseURL: `${getApiBase()}/evolution`,
     timeout: 120000, // 2 minutes for long-running analysis
     headers: {
       'Content-Type': 'application/json',
