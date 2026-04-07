@@ -5,6 +5,7 @@
 
 import { cacheBuster } from './CacheBuster.js';
 import { createLogger } from '@/utils/debugUtils';
+import { getApiBase } from '@/config/ssot-config';
 
 // Create scoped logger for FrontendHealthMonitor
 const logger = createLogger('FrontendHealthMonitor');
@@ -192,7 +193,7 @@ class FrontendHealthMonitor {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.config.apiTimeout);
 
-            const response = await fetch('/api/health', {
+            const response = await fetch(`${getApiBase()}/health`, {
                 signal: controller.signal,
                 headers: cacheBuster.getBustHeaders()
             });
