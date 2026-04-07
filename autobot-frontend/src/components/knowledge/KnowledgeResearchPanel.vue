@@ -20,6 +20,7 @@ import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import { useUserStore } from '@/stores/useUserStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const logger = createLogger('KnowledgeResearchPanel')
 const userStore = useUserStore()
@@ -40,7 +41,42 @@ const viewportWidth = ref(1280)
 const viewportHeight = ref(720)
 
 let screenshotInterval: ReturnType<typeof setInterval> | null = null
-let ws: WebSocket | null = null
+
+// Research WebSocket URL — set dynamically when research starts
+const researchWsUrl = ref('')
+const {
+  send: wsSend,
+  connect: wsConnect,
+  disconnect: wsDisconnect,
+} = useWebSocket(researchWsUrl, {
+  autoConnect: false,
+  autoReconnect: false,
+  parseJSON: false,
+  onOpen: () => {
+    statusText.value = t('knowledge.research.statusStarting')
+    wsSend(JSON.stringify({ action: 'start', query: query.value.trim(), store: true }))
+  },
+  onMessage: (data: string) => {
+    try {
+      _handleEvent(JSON.parse(data) as Record<string, unknown>)
+    } catch (e) {
+      logger.warn('Failed to parse WS message:', e)
+    }
+  },
+  onError: () => {
+    logger.error('Research WS error')
+    errorMsg.value = t('knowledge.research.errorWebSocket')
+    isResearching.value = false
+    stopScreenshotPolling()
+  },
+  onClose: () => {
+    if (isResearching.value) {
+      isResearching.value = false
+      stopScreenshotPolling()
+      statusText.value = t('knowledge.research.statusDisconnected')
+    }
+  },
+})
 
 interface SourceCard {
   url: string
@@ -171,10 +207,7 @@ function _handleEvent(event: Record<string, unknown>): void {
 }
 
 function closeWs(): void {
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  wsDisconnect()
 }
 
 async function startResearch(): Promise<void> {
@@ -185,50 +218,15 @@ async function startResearch(): Promise<void> {
   sources.value = []
   isResearching.value = true
   statusText.value = t('knowledge.research.statusConnecting')
-  closeWs()
+  wsDisconnect()
 
   await checkBrowserStatus()
   startScreenshotPolling()
 
-  try {
-    const wsUrl = _buildWsUrl()
-    logger.info('Connecting research WS:', wsUrl)
-    ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      statusText.value = t('knowledge.research.statusStarting')
-      ws!.send(JSON.stringify({ action: 'start', query: q, store: true }))
-    }
-
-    ws.onmessage = (msg) => {
-      try {
-        const data = JSON.parse(msg.data) as Record<string, unknown>
-        _handleEvent(data)
-      } catch (e) {
-        logger.warn('Failed to parse WS message:', e)
-      }
-    }
-
-    ws.onerror = (e) => {
-      logger.error('Research WS error:', e)
-      errorMsg.value = t('knowledge.research.errorWebSocket')
-      isResearching.value = false
-      stopScreenshotPolling()
-    }
-
-    ws.onclose = () => {
-      if (isResearching.value) {
-        isResearching.value = false
-        stopScreenshotPolling()
-        statusText.value = t('knowledge.research.statusDisconnected')
-      }
-    }
-  } catch (e) {
-    logger.error('Failed to open research WS:', e)
-    errorMsg.value = t('knowledge.research.errorConnect')
-    isResearching.value = false
-    stopScreenshotPolling()
-  }
+  const wsUrl = _buildWsUrl()
+  logger.info('Connecting research WS:', wsUrl)
+  researchWsUrl.value = wsUrl
+  wsConnect()
 }
 
 function stopResearch(): void {

@@ -425,7 +425,8 @@ import { useRoute } from 'vue-router';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
-import { getCssVar } from '@/composables/useCssVars'
+import { getCssVar } from '@/composables/useCssVars';
+import { useWebSocket } from '@/composables/useWebSocket';
 
 const logger = createLogger('CodeQualityDashboard');
 
@@ -525,8 +526,40 @@ const trendData = ref<Array<{ date: string; score: number }>>([]);
 const codebaseStats = ref({ files: 0, lines: 0, issues: 0 });
 const drillDownData = ref({ total_files: 0, total_issues: 0, average_score: 0, files: [] as any[] });
 
-let ws: WebSocket | null = null;
-let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+// WebSocket managed via useWebSocket composable
+const _qualityWsUrl = (() => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/api/quality/ws`;
+})();
+const {
+  connect: wsConnect,
+  disconnect: wsDisconnect,
+} = useWebSocket(_qualityWsUrl, {
+  autoConnect: false,
+  autoReconnect: true,
+  reconnectDelay: 5000,
+  maxReconnectAttempts: 0,
+  parseJSON: false,
+  onOpen: () => {
+    wsConnected.value = true;
+    logger.debug('WebSocket connected');
+  },
+  onClose: () => {
+    wsConnected.value = false;
+    logger.debug('WebSocket disconnected');
+  },
+  onError: (error) => {
+    logger.error('WebSocket error:', error);
+    wsConnected.value = false;
+  },
+  onMessage: (data: string) => {
+    try {
+      handleWebSocketMessage(JSON.parse(data));
+    } catch (error) {
+      logger.error('Failed to parse WebSocket message:', error);
+    }
+  },
+});
 
 // Computed
 const scoreCircleLength = computed(() => 2 * Math.PI * 54);
@@ -798,35 +831,7 @@ function closeExportMenu(): void {
 
 function connectWebSocket(): void {
   // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}/api/quality/ws`;
-  ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    wsConnected.value = true;
-    logger.debug('WebSocket connected');
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      handleWebSocketMessage(message);
-    } catch (error) {
-      logger.error('Failed to parse WebSocket message:', error);
-    }
-  };
-
-  ws.onclose = () => {
-    wsConnected.value = false;
-    logger.debug('WebSocket disconnected');
-    // Reconnect after 5 seconds
-    wsReconnectTimer = setTimeout(connectWebSocket, 5000);
-  };
-
-  ws.onerror = (error) => {
-    logger.error('WebSocket error:', error);
-    wsConnected.value = false;
-  };
+  wsConnect();
 }
 
 function handleWebSocketMessage(message: any): void {
@@ -969,14 +974,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (wsReconnectTimer) {
-    clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = null;
-  }
-  if (ws) {
-    ws.onclose = null;
-    ws.close();
-  }
+  // useWebSocket handles WebSocket cleanup via its own onUnmounted
 });
 
 watch(selectedPeriod, () => {
