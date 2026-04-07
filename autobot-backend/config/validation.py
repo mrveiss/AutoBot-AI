@@ -22,11 +22,18 @@ logger = logging.getLogger(__name__)
 _PORT_MIN = 1
 _PORT_MAX = 65535
 
-# Config keys that must resolve to a non-empty value before serving requests.
+# Config keys that must resolve to a non-None value before serving requests.
 # Each entry is a dot-notation path checked via get_nested().
 _REQUIRED_CONFIG_KEYS: List[str] = [
-    "memory.redis.host",
     "backend.server_host",
+]
+
+# Config keys required only when a feature flag is enabled.
+# Each tuple is (required_key, guard_path, guard_enabled_value).
+# When the guard key is absent the default is to treat the feature as enabled
+# (backward-compatible behaviour for configs that predate the flag).
+_CONDITIONAL_REQUIRED_CONFIG_KEYS: List[tuple] = [
+    ("memory.redis.host", ["memory", "redis", "enabled"], True),
 ]
 
 
@@ -104,14 +111,29 @@ def validate_startup_config(raw_config: Dict[str, Any]) -> ConfigValidationResul
     """
     result = ConfigValidationResult()
 
-    # --- 1. Required keys ---
+    # --- 1a. Unconditionally required keys ---
     for dotted_key in _REQUIRED_CONFIG_KEYS:
         path = dotted_key.split(".")
         value = _get_nested_value(raw_config, path)
-        if not value:
+        if value is None:
             result.add_error(
-                f"Required config key '{dotted_key}' is missing or empty"
+                f"Required config key '{dotted_key}' is missing"
             )
+
+    # --- 1b. Conditionally required keys (gated on a feature flag) ---
+    for required_key, guard_path, guard_enabled_value in _CONDITIONAL_REQUIRED_CONFIG_KEYS:
+        guard_value = _get_nested_value(raw_config, guard_path)
+        # Default to enabled when the guard key is absent (backward compat).
+        feature_enabled = guard_value if guard_value is not None else guard_enabled_value
+        if feature_enabled == guard_enabled_value:
+            path = required_key.split(".")
+            value = _get_nested_value(raw_config, path)
+            if value is None:
+                result.add_error(
+                    f"Required config key '{required_key}' is missing "
+                    f"(required when {'.'.join(str(p) for p in guard_path)} "
+                    f"is {guard_enabled_value!r})"
+                )
 
     # --- 2. Port range validation ---
     for path, label in _PORT_CONFIG_PATHS:
