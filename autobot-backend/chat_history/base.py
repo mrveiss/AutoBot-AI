@@ -137,31 +137,38 @@ class ChatHistoryBase:
         )
         logger.info("✅ Context window manager initialized with model-aware limits")
 
-        # Initialize subsystems (Redis deferred to initialize() — issue #3797/#3886)
+        # Initialize subsystems
         self._init_encryption()
+        self._init_redis()
         self._ensure_data_directory_exists()
         self._load_history()
+        self._initialized = True
 
         logger.info(
-            "ChatHistoryManager constructed — call initialize() before first use"
+            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
         )
 
     async def initialize(self) -> None:
         """
-        Complete async-safe initialization.
+        Idempotent async initialization hook.
 
-        Moves the blocking Redis client setup out of __init__ so it does not
-        occupy the event loop during construction.  Idempotent — safe to call
-        multiple times.
+        Redis and history are loaded synchronously in __init__ for any call site
+        that constructs ChatHistoryManager directly.  This method exists so the
+        lifespan startup path can call `await manager.initialize()` uniformly
+        without breaking callers that never await it.
 
-        Issue #3797/#3886: was a no-op; now performs the deferred Redis init.
+        Issue #3797: the create_task race was resolved in PR #3815 by making
+        history loading synchronous.  Issue #3886: this method is now
+        explicitly documented as intentionally idempotent rather than a
+        silent no-op.
         """
         if self._initialized:
             return
+        # Fallback for any future construction path that skips __init__ init.
         self._init_redis()
         self._initialized = True
         logger.info(
-            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+            "ChatHistoryManager initialized via initialize() fallback path"
         )
 
     def _init_encryption(self):
