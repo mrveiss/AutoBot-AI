@@ -740,6 +740,8 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             from datetime import datetime, timedelta, timezone
 
             last_updated = datetime.fromisoformat(man_info.last_updated)
+            if last_updated.tzinfo is None:
+                last_updated = last_updated.replace(tzinfo=timezone.utc)
             age_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=max_age_hours)
 
             return last_updated > age_threshold
