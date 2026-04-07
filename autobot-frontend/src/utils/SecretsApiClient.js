@@ -6,6 +6,7 @@
  */
 
 import { ApiClient } from './ApiClient';
+import { getApiBase } from '@/config/ssot-config';
 
 class SecretsApiClient {
     constructor() {
@@ -64,7 +65,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.post('/api/secrets/', secretData);
+        const response = await this.apiClient.post(`${getApiBase()}/secrets/`, secretData);
         return response;
     }
 
@@ -142,7 +143,7 @@ class SecretsApiClient {
      */
     async getSecretTypes() {
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get('/api/secrets/types');
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/types`);
         return response;
     }
 
@@ -151,7 +152,7 @@ class SecretsApiClient {
      */
     async getSecretsStats() {
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get('/api/secrets/stats');
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/stats`);
         return response;
     }
 
