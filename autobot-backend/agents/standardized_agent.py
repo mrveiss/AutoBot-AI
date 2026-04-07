@@ -24,7 +24,7 @@ from prompt_manager import get_language_instruction, resolve_language
 from .base_agent import AgentRequest, AgentResponse, BaseAgent, DeploymentMode
 
 try:
-    from autobot_backend.memory.working_memory import WorkingMemoryService
+    from memory.working_memory import WorkingMemoryService
     _working_memory_available = True
 except ImportError:
     logging.getLogger(__name__).warning(
