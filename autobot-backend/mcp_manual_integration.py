@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
+from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
@@ -731,11 +732,10 @@ class MCPManualService:
         sources = []
 
         # Common documentation directories
-        _base_dir = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
         common_doc_dirs = [
             "/usr/share/doc",
             "/usr/local/share/doc",
-            f"{_base_dir}/docs",
+            str(config.path.docs_path),
             f"{PATH.PROJECT_ROOT}/docs",
             "/usr/share/man",
             "/usr/local/share/man",
