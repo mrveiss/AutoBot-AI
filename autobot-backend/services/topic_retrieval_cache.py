@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from autobot_shared.redis_client import get_redis_client
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ def compute_centroid(embeddings: List[List[float]]) -> List[float]:
 # ---------------------------------------------------------------------------
 
 
-class TopicRetrievalCache:
+class TopicRetrievalCache(AsyncInitializable):
     """Topic-centroid cache for cross-query chunk reuse.
 
     Usage::
@@ -108,10 +109,9 @@ class TopicRetrievalCache:
     """
 
     def __init__(self, cache_config: Optional[TopicCacheConfig] = None):
+        super().__init__(component_name="topic_retrieval_cache")
         self._config = cache_config or TopicCacheConfig()
         self._collection = None
-        self._initialized = False
-        self._init_lock = asyncio.Lock()
         self._hits = 0
         self._misses = 0
         self._stores = 0
@@ -121,30 +121,19 @@ class TopicRetrievalCache:
     # Initialisation
     # ------------------------------------------------------------------
 
-    async def initialize(self) -> bool:
-        """Create / open the ChromaDB collection (lazy, idempotent)."""
-        if self._initialized:
-            return True
-        async with self._init_lock:
-            if self._initialized:
-                return True
-            try:
-                collection = await self._get_or_create_collection()
-                if collection is None:
-                    return False
-                self._collection = collection
-                self._initialized = True
-                logger.info(
-                    "TopicRetrievalCache initialised "
-                    "(threshold=%.2f, max_topics=%d)",
-                    self._config.similarity_threshold,
-                    self._config.max_topics,
-                )
-                return True
-            except Exception as exc:
-                logger.error("TopicRetrievalCache init failed: %s", exc)
-                self._errors += 1
-                return False
+    async def _initialize_impl(self) -> bool:
+        """Create / open the ChromaDB collection."""
+        collection = await self._get_or_create_collection()
+        if collection is None:
+            self._errors += 1
+            return False
+        self._collection = collection
+        logger.info(
+            "TopicRetrievalCache initialised (threshold=%.2f, max_topics=%d)",
+            self._config.similarity_threshold,
+            self._config.max_topics,
+        )
+        return True
 
     async def _get_or_create_collection(self):
         """Open or create the ChromaDB collection."""
