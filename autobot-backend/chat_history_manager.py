@@ -473,7 +473,7 @@ class ChatHistoryManager:
                 logging.warning(f"Chat session {session_id} not found for deletion")
                 return False
 
-            os.remove(chat_file)
+            await aiofiles.os.remove(chat_file)
             logging.info(f"Chat session '{session_id}' deleted successfully")
             return True
 
