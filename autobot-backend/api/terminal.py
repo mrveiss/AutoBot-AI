@@ -911,53 +911,6 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
             await terminal.cleanup()
 
 
-# Backward compatibility endpoints
-
-
-@router.websocket("/ws/simple/{session_id}")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="simple_terminal_websocket_compat",
-    error_code_prefix="TERMINAL",
-)
-async def simple_terminal_websocket_compat(websocket: WebSocket, session_id: str):
-    """Backward compatibility for simple terminal WebSocket"""
-    # Set session to standard security for compatibility
-    if session_id not in session_manager.session_configs:
-        session_manager.session_configs[session_id] = {
-            "session_id": session_id,
-            "security_level": SecurityLevel.STANDARD,
-            "enable_logging": False,
-            "enable_workflow_control": True,
-            "created_at": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    # Route to main WebSocket handler
-    await consolidated_terminal_websocket(websocket, session_id)
-
-
-@router.websocket("/ws/secure/{session_id}")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="secure_terminal_websocket_compat",
-    error_code_prefix="TERMINAL",
-)
-async def secure_terminal_websocket_compat(websocket: WebSocket, session_id: str):
-    """Backward compatibility for secure terminal WebSocket"""
-    # Set session to elevated security for compatibility
-    if session_id not in session_manager.session_configs:
-        session_manager.session_configs[session_id] = {
-            "session_id": session_id,
-            "security_level": SecurityLevel.ELEVATED,
-            "enable_logging": True,
-            "enable_workflow_control": True,
-            "created_at": datetime.now(tz=timezone.utc).isoformat(),
-        }
-
-    # Route to main WebSocket handler
-    await consolidated_terminal_websocket(websocket, session_id)
-
-
 # SSH Terminal WebSocket (Issue #715 - Infrastructure host connections)
 # Issue #729: DEPRECATED - SSH connections to infrastructure hosts moved to slm-server
 # This endpoint now returns a deprecation message and redirects to SLM
@@ -1121,32 +1074,21 @@ async def terminal_info(
     return {
         "name": "Consolidated Terminal API",
         "version": "1.0.0",
-        "description": "Unified terminal API combining all previous implementations",
+        "description": "Single canonical terminal API — all previous implementations consolidated here (#3383)",
         "features": [
             "REST API for session management",
             "WebSocket-based real-time terminal access",
             "Security assessment and command auditing",
             "Workflow automation control integration",
             "Multi-level security controls",
-            "Backward compatibility with existing endpoints",
         ],
         "endpoints": {
             "sessions": "/api/terminal/sessions",
-            "websocket_primary": "/api/terminal/ws/{session_id}",
-            # Issue #3332: /ws/simple and /ws/secure are compat aliases — use /ws/{session_id}
-            "websocket_simple": "/api/terminal/ws/simple/{session_id} (compat alias)",
-            "websocket_secure": "/api/terminal/ws/secure/{session_id} (compat alias)",
+            "websocket": "/api/terminal/ws/{session_id}",
             # Issue #729: SSH to infrastructure hosts moved to slm-server
             "websocket_ssh": "/api/terminal/ws/ssh/{host_id} (deprecated - use SLM)",
         },
         "security_levels": [level.value for level in SecurityLevel],
-        # Issue #3332: simple_terminal_websocket.py, secure_terminal_websocket.py,
-        # and base_terminal.py are deprecated — logic consolidated here.
-        "deprecated_modules": [
-            "api/simple_terminal_websocket.py",
-            "api/secure_terminal_websocket.py",
-            "api/base_terminal.py",
-        ],
         # Issue #729: Layer separation notice
         "notice": "SSH connections to infrastructure hosts have been moved to slm-server. "
         "Use slm-admin or the SLM API for infrastructure terminal access.",
