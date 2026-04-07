@@ -86,6 +86,10 @@ class AgentLoop:
         self._current_context: Optional[TaskContext] = None
         self._iteration_count = 0
         self._consecutive_errors = 0
+        # Issue #3877: explicit flag set when repetition halt fires; checked by
+        # _should_continue() so the main while-loop exits on the very next guard
+        # check rather than relying solely on _should_iterate()'s error detection.
+        self._halted_on_repetition: bool = False
 
     # =========================================================================
     # Properties
@@ -139,6 +143,7 @@ class AgentLoop:
         self._state = LoopState.INITIALIZING
         self._iteration_count = 0
         self._consecutive_errors = 0
+        self._halted_on_repetition = False
 
     async def _execute_main_loop(self) -> list[IterationResult]:
         """Execute the main iteration loop.
@@ -420,9 +425,13 @@ class AgentLoop:
         if not tools:
             return {}
 
-        # Issue #3255: Halt before execution if identical call repeated too often
+        # Issue #3255 / #3877: Halt before execution if identical call repeated too often.
+        # Setting _halted_on_repetition=True ensures _should_continue() terminates the
+        # main while-loop immediately after this iteration, independent of whether
+        # _should_iterate() correctly classifies the error result.
         repeated_tool = self._check_tool_call_repetition(tools)
         if repeated_tool is not None:
+            self._halted_on_repetition = True
             return {
                 repeated_tool: {
                     "error": (
@@ -630,13 +639,35 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         two calls with identical intent produce the same hash regardless of
         dict-insertion order.
 
-        Issue #3255.
+        Issue #3255 / #3868 / #3874:
+        - Non-dict args are serialized as a tagged wrapper so distinct values
+          (e.g. a string "foo" vs None) yield distinct hashes rather than all
+          collapsing to the same empty-dict hash.
+        - json.dumps is wrapped in try/except TypeError so non-JSON-serializable
+          objects (e.g. custom class instances) fall back to a repr()-based
+          canonical form without raising.
         """
         tool_name = tool.get("tool_name", "")
         args = tool.get("args", tool.get("arguments", tool.get("parameters", {})))
+
+        # Issue #3874: preserve distinctness for non-dict args instead of coercing
+        # every non-dict value to the same empty dict {}.
         if not isinstance(args, dict):
-            args = {}
-        canonical = json.dumps({"n": tool_name, "a": args}, sort_keys=True)
+            args_payload: Any = {
+                "__type__": type(args).__name__,
+                "__repr__": repr(args)[:200],
+            }
+        else:
+            args_payload = args
+
+        # Issue #3868: json.dumps raises TypeError for non-serializable objects
+        # (e.g. dataclass, custom types).  Fall back to repr() so the hash is
+        # still deterministic and meaningful.
+        try:
+            canonical = json.dumps({"n": tool_name, "a": args_payload}, sort_keys=True)
+        except TypeError:
+            canonical = repr({"n": tool_name, "a": args_payload})
+
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _check_tool_call_repetition(
@@ -669,7 +700,13 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
         return None
 
     def _should_continue(self) -> bool:
-        """Check if the loop should continue."""
+        """Check if the loop should continue.
+
+        Issue #3877: Also returns False when a repetition halt has fired so the
+        main while-loop exits even if _should_iterate() did not catch the error.
+        """
+        if self._halted_on_repetition:
+            return False
         if self._state not in (LoopState.RUNNING, LoopState.PAUSED):
             return False
         if self._iteration_count >= self.config.max_iterations:
