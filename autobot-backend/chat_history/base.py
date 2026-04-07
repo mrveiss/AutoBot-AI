@@ -88,6 +88,8 @@ class ChatHistoryBase:
         self.history: list = []
         self.redis_client = None
         self.encryption_enabled = is_encryption_enabled()
+        # Issue #3797/#3886: tracks whether initialize() has been called
+        self._initialized: bool = False
 
         # Performance optimization settings
         self.max_messages = 10000
@@ -135,18 +137,32 @@ class ChatHistoryBase:
         )
         logger.info("✅ Context window manager initialized with model-aware limits")
 
-        # Initialize subsystems
+        # Initialize subsystems (Redis deferred to initialize() — issue #3797/#3886)
         self._init_encryption()
-        self._init_redis()
         self._ensure_data_directory_exists()
         self._load_history()
 
         logger.info(
-            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+            "ChatHistoryManager constructed — call initialize() before first use"
         )
 
     async def initialize(self) -> None:
-        """No-op: history is loaded synchronously in __init__ for the modern implementation."""
+        """
+        Complete async-safe initialization.
+
+        Moves the blocking Redis client setup out of __init__ so it does not
+        occupy the event loop during construction.  Idempotent — safe to call
+        multiple times.
+
+        Issue #3797/#3886: was a no-op; now performs the deferred Redis init.
+        """
+        if self._initialized:
+            return
+        self._init_redis()
+        self._initialized = True
+        logger.info(
+            "ChatHistoryManager ready (Memory Graph will initialize on first async operation)"
+        )
 
     def _init_encryption(self):
         """Initialize encryption service if enabled."""
