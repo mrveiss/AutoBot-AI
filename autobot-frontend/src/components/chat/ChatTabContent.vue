@@ -3,7 +3,24 @@
     <!-- Chat Tab Content - Content scrolls, input stays sticky -->
     <div v-if="activeTab === 'chat'" class="flex-1 flex flex-col">
       <div class="flex-1">
-        <ChatMessages @tool-call-detected="handleToolCallDetected" />
+        <!-- Issue #4003: Lazy-load ChatMessages with Suspense fallback for fast initial paint -->
+        <Suspense>
+          <template #default>
+            <ChatMessages @tool-call-detected="handleToolCallDetected" />
+          </template>
+          <template #fallback>
+            <!-- Skeleton loader while ChatMessages is loading -->
+            <div class="flex-1 flex flex-col gap-3 p-4 bg-autobot-bg-primary animate-pulse">
+              <div class="h-16 bg-autobot-bg-secondary rounded"></div>
+              <div class="h-12 bg-autobot-bg-secondary rounded"></div>
+              <div class="flex-1 flex flex-col gap-2">
+                <div class="h-8 bg-autobot-bg-secondary rounded w-3/4"></div>
+                <div class="h-8 bg-autobot-bg-secondary rounded w-full"></div>
+                <div class="h-8 bg-autobot-bg-secondary rounded w-5/6"></div>
+              </div>
+            </div>
+          </template>
+        </Suspense>
       </div>
       <ChatInput class="shrink-0" @vision-send-to-chat="(p: any) => emit('vision-send-to-chat', p)" />
     </div>
@@ -120,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -129,7 +146,8 @@ const { t } = useI18n()
 const logger = createLogger('ChatTabContent')
 
 // Component imports
-import ChatMessages from './ChatMessages.vue'
+// Issue #4003: Lazy-load ChatMessages (2221 lines) to reduce initial parse time
+const ChatMessages = defineAsyncComponent(() => import('./ChatMessages.vue'))
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/file-browser/FileBrowser.vue'
 import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Issue #1130: screenshot-based browser

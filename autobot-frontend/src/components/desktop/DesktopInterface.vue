@@ -94,7 +94,7 @@
             <button @click="showScreenshotModal = false" class="close-btn">×</button>
           </div>
           <div class="screenshot-body">
-            <img v-if="screenshotData" :src="screenshotData" :alt="$t('desktop.interface.screenshotAlt')" class="screenshot-image" />
+            <img v-if="screenshotData" :src="screenshotData" :alt="$t('desktop.interface.screenshotAlt')" class="screenshot-image" loading="lazy" />
           </div>
           <div class="screenshot-footer">
             <button @click="downloadScreenshot" class="download-btn">

@@ -2,9 +2,9 @@
   <span
     class="quality-badge"
     :class="qualityClass"
-    :title="$t('knowledge.qualityScore.title', { score: (score * 100).toFixed(0) })"
+    :title="$t('knowledge.qualityScore.title', { score: (safeScore * 100).toFixed(0) })"
   >
-    {{ (score * 100).toFixed(0) }}%
+    {{ (safeScore * 100).toFixed(0) }}%
   </span>
 </template>
 
@@ -12,12 +12,14 @@
 import { computed } from 'vue'
 
 const props = defineProps<{
-  score: number
+  score: number | null | undefined
 }>()
 
+const safeScore = computed(() => props.score ?? 0)
+
 const qualityClass = computed(() => {
-  if (props.score >= 0.8) return 'quality-high'
-  if (props.score >= 0.5) return 'quality-medium'
+  if (safeScore.value >= 0.8) return 'quality-high'
+  if (safeScore.value >= 0.5) return 'quality-medium'
   return 'quality-low'
 })
 </script>

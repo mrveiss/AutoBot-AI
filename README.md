@@ -1,294 +1,270 @@
-# AutoBot
+# AutoBot: Self-Hosted AI Automation Platform
 
-> AI-powered autonomous platform for Linux administration, multi-modal AI interaction, and intelligent workflow automation.
+> **One Dashboard. Your Infrastructure. Complete Control.**
+>
+> AutoBot is a self-hosted platform that brings conversational AI to distributed Linux administration, fleet management, and infrastructure automation — all from a beautiful, modern interface.
 
-AutoBot is a self-hosted platform that combines a conversational AI assistant with a distributed automation engine. Chat with AI models, run browser and terminal automation, manage knowledge bases, analyze codebases, and administer a fleet of Linux nodes — all from a single web dashboard.
+[![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/mrveiss?label=Sponsor&logo=GitHub&style=flat-square)](https://github.com/sponsors/mrveiss)
 
-**Status:** Active development · v1.5.0
+## Quick Start (3 Steps)
 
----
-
-## Screenshots
-
-<table>
-<tr>
-<td><img src="docs/screenshots/01-chat.png" alt="Chat Interface" width="460"/><br><em>AI Chat with voice, terminal, browser &amp; desktop tabs</em></td>
-<td><img src="docs/screenshots/03-automation.png" alt="Workflow Automation" width="460"/><br><em>Visual Workflow Builder with execution strategy selection</em></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/04-analytics.png" alt="Codebase Analytics" width="460"/><br><em>Real-time codebase analytics and code quality scoring</em></td>
-<td><img src="docs/screenshots/06-slm-fleet.png" alt="Fleet Management" width="460"/><br><em>Service Lifecycle Manager — fleet health across all nodes</em></td>
-</tr>
-</table>
-
----
-
-## What You Can Do
-
-| Module | What it does |
-|--------|-------------|
-| **Chat** | Conversational AI backed by Ollama and 8 LLM provider types. Voice input/output, file attachments, inline terminal, embedded browser, and VNC desktop — all within a single chat session |
-| **Knowledge Base** | Upload documents and code, then query via semantic search or RAG-enhanced AI answers. Browse by category or explore the entity knowledge graph |
-| **Automation** | Visual workflow builder with sequential, parallel, pipeline, collaborative, and adaptive execution strategies. Describe workflows in natural language |
-| **Analytics** | Index and analyze codebases in real-time. Code quality scores, duplicate detection, API coverage, hardcoded value scanning, and business intelligence dashboards |
-| **Vision** | AI screen capture and element analysis. Identify UI components, extract text from screenshots, and feed results into automation workflows |
-| **SLM Admin** | Service Lifecycle Manager — deploy, monitor, update, and roll back services across a fleet of Linux nodes via Ansible automation |
-
----
-
-## Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| OS | Linux or WSL2 | Ubuntu 22.04 LTS |
-| RAM | 16 GB | 32 GB+ |
-| CPU | 8 cores | 16+ cores |
-| Storage | 50 GB | 200 GB+ (model + knowledge base storage) |
-| GPU | — | NVIDIA (CUDA) or Intel NPU for accelerated inference |
-| Python | 3.12 | 3.12 (deadsnakes PPA + venv) |
-| Node.js | 18 | 20 |
-
----
-
-## Quick Start
-
-### 1. Clone the repository
-
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 ```
 
-### 2. Run the installer
-
+### 2. Start with Docker
 ```bash
-sudo ./install.sh              # Interactive install
-sudo ./install.sh --unattended # Unattended (CI/automation)
-```
-
-Installs system packages, deploys the SLM backend via Ansible, configures nginx, and starts all services. Takes 10-20 minutes. See [INSTALL.md](INSTALL.md) for details.
-
-### Docker (Single Node)
-
-Run the entire stack on one machine with Docker Compose:
-
-```bash
-# Core services (backend, SLM, frontend, Redis, PostgreSQL, ChromaDB)
-docker compose up -d --build
-
-# Include local Ollama LLM
-docker compose --profile ollama up -d --build
-
-# Include Prometheus + Grafana monitoring
-docker compose --profile monitoring up -d --build
-```
-
-Once running:
-
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost |
-| SLM Admin | http://localhost/slm |
-| Backend API | http://localhost/api |
-| RedisInsight | http://localhost:8001 |
-| Ollama | http://localhost:11434 (if `--profile ollama`) |
-| Grafana | http://localhost:3000 (if `--profile monitoring`) |
-
-**Dev mode** with hot reload:
-
-```bash
-cp docker-compose.override.example.yml docker-compose.override.yml
+cp .env.example .env
 docker compose up -d
 ```
 
-See [INSTALL.md](INSTALL.md) for more Docker options.
+### 3. Open Your Dashboard
+Visit **http://localhost** in your browser. AutoBot is ready to use.
 
-### 3. Follow the Setup Wizard
+---
 
-Open `https://<server-ip>` in your browser, log in with the credentials printed at install completion, and follow the Setup Wizard to add and configure fleet nodes.
+## What AutoBot Does
 
-### 4. Open the interface
+AutoBot combines conversational AI with distributed automation to give you:
 
-| Interface | URL | Default credentials |
-|-----------|-----|---------------------|
-| User Frontend | https://172.16.168.21 | admin / admin |
-| Backend API docs | https://172.16.168.20:8443/docs | — |
-| SLM Fleet Admin | https://172.16.168.19 | admin / admin |
-| VNC Desktop | http://127.0.0.1:6080 | — |
+- **Unified Dashboard** — Manage infrastructure, fleet operations, and analytics from one place
+- **Natural Language Control** — Issue commands in plain English; AutoBot handles the complexity
+- **Knowledge Integration** — Build custom knowledge bases for your infrastructure and workflows
+- **Code Analytics** — Understand codebases, extract insights, identify risks
+- **Vision Processing** — Analyze screenshots and diagrams to guide infrastructure decisions
+- **Fleet Management** — Orchestrate multi-server deployments, updates, and monitoring with Ansible
+- **Self-Hosted & Private** — Full data control, no external dependencies, runs on your hardware
 
-> **Change the default password on first login.**
+---
 
-### 5. Verify services are running
+## System Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **CPU** | 4 cores | 8+ cores |
+| **RAM** | 8 GB | 16+ GB |
+| **Storage** | 20 GB SSD | 50+ GB SSD |
+| **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
+| **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
+| **Docker** | 24.0+ | 25.0+ |
+
+---
+
+## Features at a Glance
+
+| Feature | Capability |
+|---------|-----------|
+| **Chat** | Multi-turn conversations with function calling, streaming responses |
+| **Knowledge Bases** | RAG-powered retrieval from documents, code, infrastructure docs |
+| **Workflow Builder** | Visual and code-based workflow creation for infrastructure tasks |
+| **Codebase Analytics** | Code structure analysis, risk detection, dependency insights |
+| **Vision** | Image/screenshot analysis for infrastructure troubleshooting |
+| **Fleet Management** | Ansible-powered multi-server orchestration and monitoring |
+
+---
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    User["👤 User<br/>(Browser)"]
+    Frontend["🎨 Frontend<br/>(Vue.js)"]
+    Backend["⚡ Backend<br/>(FastAPI)"]
+    
+    Redis["🔴 Redis<br/>(Cache/Queue)"]
+    PostgreSQL["🐘 PostgreSQL<br/>(Data)"]
+    ChromaDB["🔍 ChromaDB<br/>(Vectors)"]
+    
+    SLM["🧠 Small LLM<br/>(Ollama)"]
+    
+    Ansible["🔧 Ansible<br/>(Fleet Ops)"]
+    Browser["🌐 Browser Automation<br/>(Chromium)"]
+
+    User -->|HTTP/WS| Frontend
+    Frontend -->|API| Backend
+    
+    Backend -->|Read/Write| Redis
+    Backend -->|Query| PostgreSQL
+    Backend -->|Vector Search| ChromaDB
+    Backend -->|Inference| SLM
+    
+    Backend -->|Execute| Ansible
+    Backend -->|Control| Browser
+
+    style User fill:#e1f5ff
+    style Frontend fill:#f3e5f5
+    style Backend fill:#fff3e0
+    style Redis fill:#ffebee
+    style PostgreSQL fill:#e8f5e9
+    style ChromaDB fill:#fce4ec
+    style SLM fill:#f1f8e9
+    style Ansible fill:#ede7f6
+    style Browser fill:#e0f2f1
+```
+
+---
+
+## Deployment Options
+
+### Docker (Recommended for Most Users)
+Fastest way to get started. Includes all services pre-configured.
 
 ```bash
-scripts/start-services.sh status
+docker compose up -d
 ```
 
----
+### Native Installation
+For development or custom setups. See [INSTALL.md](INSTALL.md).
 
-## How to Use
-
-### Chat
-
-The main interface at **https://172.16.168.21/chat**. Start a conversation and switch between:
-
-- **Chat** — send messages to the AI assistant
-- **Files** — browse and manage files on the server
-- **Terminal** — run shell commands without leaving the chat
-- **Browser** — embedded Playwright browser with visual automation
-- **noVNC** — full remote desktop access
-
-**Input toolbar shortcuts:** `KB` searches the knowledge base, `Explain`, `Summarize`, and `Translate` are one-click AI actions. Mic button enables voice input. Attach files with the paperclip.
-
----
-
-### Knowledge Base
-
-Go to **Knowledge → Search**. Two modes:
-
-- **Traditional Search** — fast semantic search across all indexed documents
-- **RAG Enhanced** — full AI pipeline with retrieval-augmented generation for richer answers
-
-Filter by category or access level (Platform, Public, System, User). Upload and manage documents at **Knowledge → Manage**. Explore entity relationships at **Knowledge → Graph**.
-
----
-
-### Automation
-
-Go to **Automation → Workflow Builder**. Choose an execution strategy:
-
-| Strategy | When to use |
-|----------|------------|
-| **Sequential** | Tasks with strict dependencies |
-| **Parallel** | Independent tasks that can run concurrently |
-| **Pipeline** | Output of one stage feeds into the next |
-| **Collaborative** | Multiple agents sharing context in real-time |
-| **Adaptive** | Strategy adjusts dynamically based on progress |
-
-Use **Natural Language** mode to describe what you want in plain English — AutoBot generates the workflow automatically. Run workflows with **Runner** and review history under **History**.
-
----
-
-### Analytics
-
-Go to **Analytics → Codebase**. Point it at a codebase directory and click **Index Codebase**. Available analyses:
-
-- Code quality score, code smells, health score
-- Duplicate detection, hardcoded value scanning
-- API endpoint coverage, NPU compatibility check
-- Communication patterns, performance metrics
-- Export to report
-
----
-
-### Vision
-
-Go to **Vision → Image Processing**. Click **Capture & Analyze** to take a screenshot of the connected desktop and run AI element detection. Enable **Auto-refresh** to continuously monitor a screen. Use detected elements as inputs for browser automation workflows.
-
----
-
-### SLM Fleet Admin
-
-Accessed at **https://172.16.168.19** or via the **SLM Admin** button in the top-right corner.
-
-| Section | Purpose |
-|---------|---------|
-| **Fleet Overview** | Real-time CPU/RAM/disk health across all nodes |
-| **Orchestration** | Start, stop, restart services on any node |
-| **Deployments** | Roll out code updates via Ansible playbooks |
-| **Backups** | Schedule and restore node backups |
-| **Replication** | Manage data replication between nodes |
-| **Code Sync** | Push code updates to the fleet from git |
-| **Agents** | View and manage AI agents running across nodes |
-| **Updates** | Check and apply software updates |
-| **Skills** | Deploy AI skill libraries to nodes |
-| **Monitoring** | Prometheus metrics and alerting |
-
----
-
-## Architecture
-
-AutoBot runs as a distributed system. Each component is isolated on its own node:
-
-```
-                        User Browser
-                             │
-                    ┌────────▼─────────┐
-                    │  Frontend (.21)  │
-                    │  Vue 3 + Vite    │
-                    └────────┬─────────┘
-                             │ HTTPS / WebSocket
-                    ┌────────▼─────────┐
-                    │  Backend (.20)   │
-                    │  FastAPI · Py3.12│
-                    │  RTX 4070 · 22c  │
-                    └──┬──┬──┬──┬──┬──┘
-                       │  │  │  │  │
-           ┌───────────┘  │  │  │  └────────────┐
-           │              │  │  │               │
-     Redis (.23)    AI Stack  Browser VM    NPU VM (.22)
-     Vector DB +    (.24)     (.25)         Intel OpenVINO
-     Session store  LLM       Playwright    Hardware accel
-                              automation
-                                   │
-                          ┌────────▼────────┐
-                          │   SLM (.19)     │
-                          │  Fleet Manager  │
-                          │  Ansible ctrl   │
-                          └─────────────────┘
-```
-
-**Tech stack at a glance:**
-- Backend: Python 3.12, FastAPI, asyncpg, ChromaDB, Ollama
-- Frontend: Vue 3, TypeScript, Vite
-- Data: Redis Stack, PostgreSQL (user management), ChromaDB (vectors)
-- Infra: Ansible, systemd, nginx, self-signed TLS
-
----
-
-## Service Management
-
+### Development Mode
+For contributing to AutoBot:
 ```bash
-# Start / stop / restart all services
-scripts/start-services.sh start
-scripts/start-services.sh stop
-scripts/start-services.sh restart
-
-# Start specific service
-scripts/start-services.sh start backend
-
-# View logs
-scripts/start-services.sh logs backend
-scripts/start-services.sh logs frontend
-
-# Open SLM GUI
-scripts/start-services.sh gui
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-Direct systemctl:
+---
+
+## Core Services
+
+AutoBot runs as a coordinated set of services:
+
+| Service | Role | Port |
+|---------|------|------|
+| **Frontend** | Vue.js UI, TLS termination | 80, 443 |
+| **Backend** | FastAPI API server | 8001 |
+| **Redis** | Cache, message queue | 6379 |
+| **PostgreSQL** | Relational database | 5432 |
+| **ChromaDB** | Vector embeddings store | 8100 |
+| **SLM (Ollama)** | Small language model inference | 11434 (optional) |
+| **Prometheus** | Metrics collection | 9090 (optional) |
+| **Grafana** | Monitoring dashboards | 3000 (optional) |
+
+---
+
+## Usage Guide
+
+### Dashboard Overview
+Once running, navigate to **http://localhost** to access:
+- **Chat Interface** — Start conversing with AutoBot about your infrastructure
+- **Knowledge Bases** — Upload and manage documents, codebases, runbooks
+- **Workflows** — Create automated tasks and infrastructure operations
+- **Fleet Management** — View and orchestrate multiple servers
+- **Analytics** — Monitor system health, performance, and activity
+
+### Example: Managing a Fleet
 ```bash
-sudo systemctl start autobot-backend
-sudo systemctl status autobot-backend
-journalctl -u autobot-backend -f
+# In the AutoBot chat:
+# "Deploy the latest application version to all production servers"
+# AutoBot handles the Ansible orchestration automatically
 ```
+
+### Example: Infrastructure Insights
+```bash
+# Ask AutoBot to analyze your codebase:
+# "What are the critical dependencies in the auth module?"
+```
+
+---
+
+## Configuration
+
+All configuration uses environment variables in `.env`. See `.env.example` for all options.
+
+Key settings:
+- `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
+- `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
+- `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
+
+---
+
+## Contributing
+
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
+
+1. Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+2. Look for issues tagged `good-first-issue` if you're new
+3. Bounty opportunities available on some issues — see the `bounty` label
+
+---
+
+## Support
+
+- 💬 **Questions?** Start a discussion in [GitHub Discussions](https://github.com/mrveiss/AutoBot-AI/discussions)
+- 🐛 **Found a bug?** Open an [issue](https://github.com/mrveiss/AutoBot-AI/issues)
+- 💡 **Have an idea?** Share it in [Discussions → Ideas](https://github.com/mrveiss/AutoBot-AI/discussions/categories/ideas)
+
+---
+
+## Sponsors & Supporters
+
+Support AutoBot's development:
+
+- **[GitHub Sponsors](https://github.com/sponsors/mrveiss)** — Get updates and direct support
+- **[Ko-fi](https://ko-fi.com/mrveiss)** — One-time or recurring donations
+
+Your support helps us:
+- Maintain and improve the codebase
+- Add new features and capabilities
+- Expand documentation and examples
+- Grow the community
+
+---
+
+## License
+
+AutoBot is open source. See [LICENSE](LICENSE) for details.
+
+---
+
+## Roadmap
+
+### Upcoming
+- [ ] Multi-user authentication and RBAC
+- [ ] Kubernetes orchestration support
+- [ ] Advanced analytics dashboards
+- [ ] Custom integrations marketplace
+- [ ] Mobile companion app
+
+### Under Consideration
+- Cloud deployment templates
+- Managed hosting option
+- Enterprise features (SAML, audit logs)
+
+---
+
+## Technology Stack
+
+- **Frontend**: Vue.js, TypeScript, Vite
+- **Backend**: FastAPI, Python, AsyncIO
+- **Database**: PostgreSQL, Redis, ChromaDB
+- **LLM**: Ollama (local), LangChain
+- **Orchestration**: Ansible, Docker, Kubernetes (coming)
+- **Infrastructure**: Docker Compose, systemd
 
 ---
 
 ## Documentation
 
-| Topic | Link |
-|-------|------|
-| Developer Reference | [docs/developer/AUTOBOT_REFERENCE.md](docs/developer/AUTOBOT_REFERENCE.md) |
-| Getting Started (full) | [docs/GETTING_STARTED_COMPLETE.md](docs/GETTING_STARTED_COMPLETE.md) |
-| API Documentation | [docs/api/COMPREHENSIVE_API_DOCUMENTATION.md](docs/api/COMPREHENSIVE_API_DOCUMENTATION.md) |
-| Redis Architecture | [docs/api/redis-documentation.md](docs/api/redis-documentation.md) |
-| Distributed Architecture | [docs/architecture/DISTRIBUTED_6VM_ARCHITECTURE.md](docs/architecture/DISTRIBUTED_6VM_ARCHITECTURE.md) |
-| Service Management | [docs/developer/SERVICE_MANAGEMENT.md](docs/developer/SERVICE_MANAGEMENT.md) |
-| Troubleshooting | [docs/troubleshooting/INDEX.md](docs/troubleshooting/INDEX.md) |
-| Infrastructure & Scripts | [autobot-infrastructure/README.md](autobot-infrastructure/README.md) |
-
-For development workflow, coding standards, and rules: see [CLAUDE.md](CLAUDE.md).
+Full documentation coming soon. In the meantime:
+- See [INSTALL.md](INSTALL.md) for detailed setup instructions
+- Check [CONTRIBUTING.md](CONTRIBUTING.md) to get involved
+- Explore [docs/](docs/) for architecture details
 
 ---
 
-*Copyright © 2025 mrveiss. All rights reserved.*
+## Status
+
+**Current Version**: v1.5.0 (Active Development)
+
+AutoBot is actively developed and used for infrastructure automation. It's suitable for:
+- ✅ Self-hosted deployments on your infrastructure
+- ✅ Development and testing environments
+- ✅ Learning AI-driven automation
+- 🚀 Production use (with monitoring and backups)
+
+---
+
+**Made with ❤️ by the AutoBot community**

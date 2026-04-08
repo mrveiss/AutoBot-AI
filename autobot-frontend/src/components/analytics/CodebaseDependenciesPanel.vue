@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
 import ModuleImportsChart from '@/components/charts/ModuleImportsChart.vue'
-import ImportTreeChart from '@/components/charts/ImportTreeChart.vue'
-import FunctionCallGraph from '@/components/charts/FunctionCallGraph.vue'
+
+// Lazy-load Cytoscape-based components to defer ~300KB library loading
+const ImportTreeChart = defineAsyncComponent(() => import('@/components/charts/ImportTreeChart.vue'))
+const FunctionCallGraph = defineAsyncComponent(() => import('@/components/charts/FunctionCallGraph.vue'))
 
 const { t: _t } = useI18n()
 
@@ -226,17 +229,27 @@ const emit = defineEmits<{
       <button @click="emit('load-import-tree')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
     </div>
 
-    <!-- Import Tree Content -->
+    <!-- Import Tree Content with Suspense -->
     <div v-else-if="importTreeData && importTreeData.length > 0" class="import-tree-content">
-      <ImportTreeChart
-        :data="importTreeData"
-        :title="$t('analytics.codebase.charts.fileImportRelationships')"
-        :subtitle="$t('analytics.codebase.charts.clickToExpandImports')"
-        :height="500"
-        :loading="importTreeLoading"
-        :error="importTreeError"
-        @navigate="(path: string) => emit('file-navigate', path)"
-      />
+      <Suspense>
+        <template #default>
+          <ImportTreeChart
+            :data="importTreeData"
+            :title="$t('analytics.codebase.charts.fileImportRelationships')"
+            :subtitle="$t('analytics.codebase.charts.clickToExpandImports')"
+            :height="500"
+            :loading="importTreeLoading"
+            :error="importTreeError"
+            @navigate="(path: string) => emit('file-navigate', path)"
+          />
+        </template>
+        <template #fallback>
+          <div class="loading-skeleton">
+            <div class="skeleton-header"></div>
+            <div class="skeleton-content"></div>
+          </div>
+        </template>
+      </Suspense>
     </div>
 
     <!-- Empty state -->
@@ -271,19 +284,29 @@ const emit = defineEmits<{
       <button @click="emit('load-call-graph')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
     </div>
 
-    <!-- Call Graph Content -->
+    <!-- Call Graph Content with Suspense -->
     <div v-else-if="callGraphData && callGraphData.nodes?.length > 0" class="call-graph-content">
-      <FunctionCallGraph
-        :data="callGraphData"
-        :summary="(callGraphSummary as any)"
-        :orphaned-functions="callGraphOrphaned"
-        :title="$t('analytics.codebase.charts.functionCallRelationships')"
-        :subtitle="$t('analytics.codebase.charts.viewFunctionCalls')"
-        :height="600"
-        :loading="callGraphLoading"
-        :error="callGraphError"
-        @select="(id: string) => emit('function-select', id)"
-      />
+      <Suspense>
+        <template #default>
+          <FunctionCallGraph
+            :data="callGraphData"
+            :summary="(callGraphSummary as any)"
+            :orphaned-functions="callGraphOrphaned"
+            :title="$t('analytics.codebase.charts.functionCallRelationships')"
+            :subtitle="$t('analytics.codebase.charts.viewFunctionCalls')"
+            :height="600"
+            :loading="callGraphLoading"
+            :error="callGraphError"
+            @select="(id: string) => emit('function-select', id)"
+          />
+        </template>
+        <template #fallback>
+          <div class="loading-skeleton">
+            <div class="skeleton-header"></div>
+            <div class="skeleton-content-large"></div>
+          </div>
+        </template>
+      </Suspense>
     </div>
 
     <!-- Empty state -->
@@ -724,5 +747,53 @@ const emit = defineEmits<{
 
 .call-graph-content {
   margin-top: 16px;
+}
+
+/* Loading Skeleton */
+.loading-skeleton {
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.skeleton-header {
+  height: 24px;
+  background: linear-gradient(90deg, rgba(71, 85, 105, 0.3) 0%, rgba(71, 85, 105, 0.5) 50%, rgba(71, 85, 105, 0.3) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  width: 40%;
+}
+
+.skeleton-content {
+  flex: 1;
+  background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  min-height: 400px;
+}
+
+.skeleton-content-large {
+  flex: 1;
+  background: linear-gradient(90deg, rgba(71, 85, 105, 0.2) 0%, rgba(71, 85, 105, 0.4) 50%, rgba(71, 85, 105, 0.2) 100%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+  min-height: 550px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 </style>

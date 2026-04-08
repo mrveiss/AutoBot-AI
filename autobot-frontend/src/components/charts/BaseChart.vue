@@ -452,6 +452,7 @@ watch(
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   border: 1px solid var(--border-subtle);
+  contain: layout style;
 }
 
 .chart-loading {

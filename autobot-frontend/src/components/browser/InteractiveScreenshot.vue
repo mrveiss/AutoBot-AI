@@ -101,6 +101,7 @@ function submitType() {
         :alt="t('browser.interactive.screenshotAlt')"
         class="screenshot-img"
         :class="{ 'screenshot-img--loading': loading, 'screenshot-img--clickable': interactive }"
+        loading="lazy"
         @click="handleClick"
       />
       <div v-if="loading" class="loading-overlay">
