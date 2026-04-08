@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -112,7 +112,7 @@ class TaskEntry:
         Returns:
             Generated task ID string.
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         desc_hash = hashlib.md5(
             self.description.encode(), usedforsecurity=False
         ).hexdigest()[:8]
@@ -347,11 +347,11 @@ class AsyncEnhancedMemoryManager:
             async with aiosqlite.connect(self.db_path) as conn:
                 updates = {
                     "status": status.value,
-                    "updated_at": datetime.now().timestamp(),
+                    "updated_at": datetime.now(tz=timezone.utc).timestamp(),
                 }
 
                 if status in TERMINAL_TASK_STATUSES:
-                    updates["completed_at"] = datetime.now().timestamp()
+                    updates["completed_at"] = datetime.now(tz=timezone.utc).timestamp()
 
                 if metadata:
                     # Get existing metadata and merge
@@ -391,7 +391,7 @@ class AsyncEnhancedMemoryManager:
         await self._init_database()
 
         if not record.record_id:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             hash_input = f"{record.task_id}_{record.action}".encode()
             record_hash = hashlib.md5(hash_input, usedforsecurity=False).hexdigest()[:8]
             record.record_id = f"exec_{timestamp}_{record_hash}"
@@ -567,7 +567,7 @@ class AsyncEnhancedMemoryManager:
                         content,
                         content_hash,
                         json.dumps(metadata or {}),
-                        datetime.now().timestamp(),
+                        datetime.now(tz=timezone.utc).timestamp(),
                         embedding,
                         reference_path,
                     ),
@@ -617,7 +617,7 @@ class AsyncEnhancedMemoryManager:
 
     async def _gather_recent_activity(self, conn) -> Dict[str, Any]:
         """Gather recent activity counts (last 24 hours). Issue #620."""
-        recent_timestamp = (datetime.now() - timedelta(hours=24)).timestamp()
+        recent_timestamp = (datetime.now(tz=timezone.utc) - timedelta(hours=24)).timestamp()
         activity = {}
 
         cursor = await conn.execute(
@@ -652,7 +652,7 @@ class AsyncEnhancedMemoryManager:
         """Clean up old data with async performance"""
         await self._init_database()
 
-        cutoff_timestamp = (datetime.now() - timedelta(days=retention_days)).timestamp()
+        cutoff_timestamp = (datetime.now(tz=timezone.utc) - timedelta(days=retention_days)).timestamp()
 
         try:
             async with aiosqlite.connect(self.db_path) as conn:

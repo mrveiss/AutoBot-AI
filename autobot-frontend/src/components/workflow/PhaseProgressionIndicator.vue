@@ -142,6 +142,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const logger = createLogger('PhaseProgressionIndicator')
@@ -191,7 +192,7 @@ async function loadValidationData(): Promise<void> {
   hasLoadError.value = false
 
   try {
-    const data = await api.get<ValidationReport>('/api/validation-dashboard/report')
+    const data = await api.get<ValidationReport>(`${getApiBase()}/validation-dashboard/report`)
 
     if (data.status === 'success' && data.report) {
       const overview = data.report.system_overview

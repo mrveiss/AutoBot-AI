@@ -12,7 +12,7 @@ import ast
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -541,7 +541,7 @@ async def analyze_path(
 
     Issue #744: Requires admin authentication.
     """
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
 
     # Validate path stays within allowed roots before analysis (#3164)
     safe_path = validate_path(path)
@@ -581,8 +581,8 @@ async def analyze_path(
         low_count=low,
         issues=all_issues,
         files_analyzed=len(files_to_analyze) or 5,
-        duration_ms=round((datetime.now() - start_time).total_seconds() * 1000, 2),
-        timestamp=datetime.now().isoformat(),
+        duration_ms=round((datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000, 2),
+        timestamp=datetime.now(tz=timezone.utc).isoformat(),
         score=score,
     )
 

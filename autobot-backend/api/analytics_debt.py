@@ -17,7 +17,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_30_DAYS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -205,7 +206,7 @@ async def calculate_debt_from_analysis(
         "top_files": aggregations["top_files"],
         "roi_ranking": roi_ranking,
         "items": [item.to_dict() for item in debt_items],
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -488,8 +489,8 @@ def _store_debt_result(debt_result: Dict[str, Any]) -> None:
     if not debt_redis:
         return
     try:
-        key = f"{DEBT_PREFIX}calculation:{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        debt_redis.set(key, json.dumps(debt_result), ex=86400 * 30)  # Keep 30 days
+        key = f"{DEBT_PREFIX}calculation:{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        debt_redis.set(key, json.dumps(debt_result), ex=TTL_30_DAYS)
         debt_redis.set(f"{DEBT_PREFIX}latest", key)
     except Exception as e:
         logger.warning("Failed to store debt calculation: %s", e)

@@ -9,7 +9,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
@@ -193,7 +193,7 @@ class EventExtractor(BaseCognifier):
                 pass
 
         # Relative patterns — naive local date for consistency with ISO path
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         if "today" in expression.lower():
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
         if "yesterday" in expression.lower():

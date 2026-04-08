@@ -113,6 +113,14 @@ Subagents cannot autonomously acquire Bash permission. Run batch file-manipulati
 
 **Always close the issue after implementation.** PRs targeting `Dev_new_gui` will NOT auto-close issues — verify with `gh issue view`.
 
+**GitHub CLI Workarounds:**
+
+- `gh pr edit --body "..."` silently fails when the repo has classic Projects attached (GraphQL deprecation error). Use the REST API instead:
+
+  ```bash
+  gh api repos/mrveiss/AutoBot-AI/pulls/$PR_NUMBER -X PATCH -f body="new body here"
+  ```
+
 ---
 
 ## Debugging, Errors, Self-Improvement

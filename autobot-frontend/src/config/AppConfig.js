@@ -8,6 +8,7 @@
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
+import { getApiBase } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 
@@ -379,7 +380,7 @@ export class AppConfigService {
    */
   async _doLoadRemoteConfig() {
     try {
-      const response = await this.fetchApi('/api/frontend-config', {
+      const response = await this.fetchApi(`${getApiBase()}/frontend-config`, {
         timeout: 5000, // Short timeout for config loading
         cacheBust: false // Don't cache bust config requests
       });
@@ -472,7 +473,7 @@ export class AppConfigService {
    */
   async validateConnection() {
     try {
-      const response = await this.fetchApi('/api/system/health', {
+      const response = await this.fetchApi(`${getApiBase()}/system/health`, {
         method: 'GET',
         timeout: 5000,
         cacheBust: true
@@ -556,7 +557,7 @@ export class AppConfigService {
       }
 
       // Try to fetch from backend API
-      const response = await this.fetchApi('/api/system/frontend-config', {
+      const response = await this.fetchApi(`${getApiBase()}/system/frontend-config`, {
         timeout: 5000,
         cacheBust: false
       });

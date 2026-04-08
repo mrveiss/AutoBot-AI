@@ -11,6 +11,7 @@
 
 import { computed, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { getBackendUrl } from '@/config/ssot-config'
 
 interface Revision {
   id: string
@@ -54,7 +55,7 @@ async function fetchRevisions() {
   selectedRevision.value = null
   try {
     const res = await fetch(
-      `/autobot-api/config-revisions/${entityType.value}/${entityId.value}?limit=50`,
+      `${getBackendUrl()}/config-revisions/${entityType.value}/${entityId.value}?limit=50`,
       { headers: headers.value },
     )
     if (!res.ok) throw new Error(`Failed to load revisions: ${res.status}`)
@@ -71,7 +72,7 @@ async function rollback(revisionId: string) {
   rollbackLoading.value = true
   try {
     const res = await fetch(
-      `/autobot-api/config-revisions/${entityType.value}/${entityId.value}/${revisionId}/rollback`,
+      `${getBackendUrl()}/config-revisions/${entityType.value}/${entityId.value}/${revisionId}/rollback`,
       { method: 'POST', headers: headers.value },
     )
     if (!res.ok) {

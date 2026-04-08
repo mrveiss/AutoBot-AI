@@ -12,7 +12,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
 import httpx
@@ -113,7 +113,7 @@ async def _get_code_analysis_status() -> Dict[str, Any]:
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
 async def get_dashboard_overview(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive dashboard overview (Issue #398: refactored)."""
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now(tz=timezone.utc).isoformat()
 
     results = await asyncio.gather(
         hardware_monitor.get_system_health(),
@@ -290,7 +290,7 @@ async def get_performance_metrics(current_user: Dict = Depends(get_current_user)
 
     # Store current metrics in history
     current_snapshot = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "cpu_percent": metrics.get("system_performance", {}).get("cpu_percent", 0),
         "memory_percent": (
             metrics.get("system_performance", {}).get("memory_percent", 0)
@@ -320,7 +320,7 @@ async def get_communication_patterns(current_user: Dict = Depends(get_current_us
     patterns = await analytics_controller.analyze_communication_patterns()
 
     # Add additional analysis
-    patterns["analysis_timestamp"] = datetime.now().isoformat()
+    patterns["analysis_timestamp"] = datetime.now(tz=timezone.utc).isoformat()
     patterns["pattern_insights"] = []
 
     # Analyze for insights
@@ -374,8 +374,8 @@ async def get_usage_statistics(current_user: Dict = Depends(get_current_user)):
 
     # Add time-based analysis
     stats["analysis_period"] = {
-        "start_time": analytics_state.get("session_start", datetime.now().isoformat()),
-        "current_time": datetime.now().isoformat(),
+        "start_time": analytics_state.get("session_start", datetime.now(tz=timezone.utc).isoformat()),
+        "current_time": datetime.now(tz=timezone.utc).isoformat(),
         "data_points": len(analytics_state["api_call_patterns"]),
     }
 
@@ -440,7 +440,7 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
     )
 
     realtime_data: Dict[str, Any] = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "system_metrics": {
             name: {
                 "value": metric.value,
@@ -456,8 +456,8 @@ async def _collect_realtime_metrics_data() -> Dict[str, Any]:
             [
                 call
                 for call in analytics_state["api_call_patterns"]
-                if datetime.fromisoformat(call["timestamp"])
-                > datetime.now() - timedelta(minutes=1)
+                if _parse_timestamp(call["timestamp"])
+                > datetime.now(tz=timezone.utc) - timedelta(minutes=1)
             ]
         ),
         # Issue #596: Fixed key names to match hardware_monitor.get_system_resources() output
@@ -496,7 +496,7 @@ async def track_analytics_event(
     """Track a real-time analytics event"""
     # Store event in analytics state
     event_data = event.dict()
-    event_data["processed_at"] = datetime.now().isoformat()
+    event_data["processed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     # Store in Redis for persistence
     redis_conn = await analytics_controller.get_redis_connection(RedisDatabase.METRICS)
@@ -537,6 +537,19 @@ async def track_analytics_event(
     }
 
 
+def _parse_timestamp(timestamp_str: str) -> datetime:
+    """Parse an ISO-format timestamp string and ensure it is UTC-aware.
+
+    Pre-#3615 Redis data may store naive datetime strings. After parsing with
+    fromisoformat(), normalize any naive result to UTC so comparisons with
+    UTC-aware datetimes do not raise TypeError.
+    """
+    dt = datetime.fromisoformat(timestamp_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _parse_historical_calls(api_calls: list, cutoff_time: datetime) -> list:
     """Parse and filter historical API calls. (Issue #315 - extracted)
 
@@ -551,7 +564,7 @@ def _parse_historical_calls(api_calls: list, cutoff_time: datetime) -> list:
     for call_json in api_calls:
         try:
             call_data = json.loads(call_json)
-            call_time = datetime.fromisoformat(call_data["timestamp"])
+            call_time = _parse_timestamp(call_data["timestamp"])
             if call_time > cutoff_time:
                 historical_calls.append(call_data)
         except Exception as e:
@@ -611,7 +624,7 @@ async def get_historical_trends(
 
     try:
         # Get historical API calls (Issue #315 - refactored to reduce nesting)
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
         api_calls = await redis_conn.lrange("analytics:api_calls", 0, -1)
 
         historical_calls = _parse_historical_calls(api_calls, cutoff_time)
@@ -700,7 +713,7 @@ async def websocket_realtime_analytics(websocket: WebSocket):
             {
                 "type": "connected",
                 "message": "Real-time analytics streaming connected",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 
@@ -731,7 +744,7 @@ async def websocket_realtime_analytics(websocket: WebSocket):
 async def start_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Start continuous analytics collection"""
     # Initialize session tracking
-    analytics_state["session_start"] = datetime.now().isoformat()
+    analytics_state["session_start"] = datetime.now(tz=timezone.utc).isoformat()
 
     # Start metrics collection
     collector = analytics_controller.metrics_collector
@@ -772,7 +785,7 @@ def _build_analytics_status_base(collector) -> Dict[str, Any]:
     """Build base analytics status dict (Issue #398: extracted)."""
     return {
         "analytics_system": "operational",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "collection_status": {
             "is_collecting": collector._is_collecting,
             "buffer_size": len(collector._metrics_buffer),
@@ -877,7 +890,7 @@ def _build_performance_message(performance_data: dict) -> dict:
             "gpu_utilization": hw_perf.get("gpu_utilization", 0),
             "active_connections": len(analytics_state["websocket_connections"]),
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -890,7 +903,7 @@ def _build_api_activity_message(recent_calls: list) -> dict:
             "recent_calls": recent_calls[-5:],
             "total_api_calls": sum(analytics_controller.api_frequencies.values()),
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -903,7 +916,7 @@ def _build_health_message(alerts: list, critical_alerts: list) -> dict:
             "critical_alerts_count": len(critical_alerts),
             "critical_alerts": critical_alerts,
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -912,7 +925,7 @@ def _build_error_message(error: Exception) -> dict:
     return {
         "type": "error",
         "message": str(error),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -930,17 +943,17 @@ def _build_snapshot_response(snapshot_data: dict) -> dict:
     return {
         "type": "snapshot_response",
         "data": snapshot_data,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
 def _get_recent_api_calls(cutoff_seconds: int = 10) -> list:
     """Get recent API calls within cutoff period."""
-    cutoff = datetime.now() - timedelta(seconds=cutoff_seconds)
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(seconds=cutoff_seconds)
     return [
         call
         for call in analytics_state["api_call_patterns"]
-        if datetime.fromisoformat(call["timestamp"]) > cutoff
+        if _parse_timestamp(call["timestamp"]) > cutoff
     ]
 
 
@@ -969,7 +982,7 @@ async def _handle_realtime_client_command(websocket: WebSocket, message: str) ->
                 {
                     "type": "subscription_confirmed",
                     "subscribed_to": command.get("metrics", "all"),
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 }
             )
         elif cmd_type == "get_current":
@@ -978,7 +991,7 @@ async def _handle_realtime_client_command(websocket: WebSocket, message: str) ->
                 {
                     "type": "current_snapshot",
                     "data": current_data,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 }
             )
 
@@ -987,7 +1000,7 @@ async def _handle_realtime_client_command(websocket: WebSocket, message: str) ->
             {
                 "type": "error",
                 "message": "Invalid JSON in client message",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 
@@ -1001,7 +1014,7 @@ def _build_periodic_update(current_data: dict) -> dict:
             "active_connections": current_data.get("active_connections", 0),
             "recent_api_calls": current_data.get("recent_api_calls", []),
         },
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -1135,7 +1148,7 @@ async def websocket_live_analytics(websocket: WebSocket):
             {
                 "type": "connection_established",
                 "channels": ["performance", "api_activity", "system_health", "alerts"],
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 
@@ -1184,7 +1197,7 @@ async def websocket_live_analytics(websocket: WebSocket):
 #     logger.info("Initializing Enhanced Analytics API...")
 #
 #     # Initialize session
-#     analytics_state["session_start"] = datetime.now().isoformat()
+#     analytics_state["session_start"] = datetime.now(tz=timezone.utc).isoformat()
 #
 #     # Start metrics collection
 #     collector = analytics_controller.metrics_collector
@@ -1224,7 +1237,7 @@ async def _run_dashboard_analysis(task_id: str) -> None:
         realtime = await _get_realtime_metrics()
 
         result = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "system_health": system_health,
             "performance_metrics": performance,
             "communication_patterns": communication,

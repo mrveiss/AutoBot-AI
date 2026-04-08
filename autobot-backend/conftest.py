@@ -26,7 +26,7 @@ sys.path.insert(0, str(shared_root))
 
 # Stub optional heavy dependencies that may not be installed in the dev venv.
 # These are only needed at runtime on the target VM; tests use mocks.
-_OPTIONAL_STUBS = ["prometheus_client"]
+_OPTIONAL_STUBS = ["prometheus_client", "xxhash", "torch", "torch.nn", "torch.cuda"]
 for _mod in _OPTIONAL_STUBS:
     if _mod not in sys.modules:
         try:

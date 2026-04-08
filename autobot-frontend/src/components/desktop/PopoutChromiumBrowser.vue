@@ -361,6 +361,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { NetworkConstants } from '@/constants/network'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for PopoutChromiumBrowser
 const logger = createLogger('PopoutChromiumBrowser')
@@ -433,7 +434,7 @@ export default {
     // Browser modes - VNC for actual browser display and takeover
     const browserMode = ref('vnc') // 'vnc', 'api', 'native', 'remote'
     const vncUrl = ref('') // Will be loaded async
-    const playwrightApiUrl = ref('/api/playwright') // Use relative path to avoid double base URL
+    const playwrightApiUrl = ref(`${getApiBase()}/playwright`) // Use getApiBase() for configurable prefix
     const remoteDebugUrl = ref('') // Will be loaded async if needed
 
     // Resize observer
@@ -491,7 +492,7 @@ export default {
           try {
             // ApiClient.get() returns parsed JSON directly, throws on error
             // Issue #552: Fixed path to match backend /api/research-browser/
-            sessionData = await apiClient.get(`/api/research-browser/browser/${props.sessionId}`)
+            sessionData = await apiClient.get(`${getApiBase()}/research-browser/browser/${props.sessionId}`)
           } catch (sessionError) {
             logger.warn('Could not get session info, using manual mode')
           }
@@ -622,7 +623,7 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/back') as unknown as PlaywrightNavigationResponse
+        return await apiClient.post(`${getApiBase()}/playwright/back`) as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: (result) => {
@@ -657,7 +658,7 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/forward') as unknown as PlaywrightNavigationResponse
+        return await apiClient.post(`${getApiBase()}/playwright/forward`) as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: (result) => {
@@ -691,7 +692,7 @@ export default {
         }
 
         // ApiClient.post() returns parsed JSON directly, throws on error
-        return await apiClient.post('/api/playwright/reload') as unknown as PlaywrightNavigationResponse
+        return await apiClient.post(`${getApiBase()}/playwright/reload`) as unknown as PlaywrightNavigationResponse
       },
       {
         onSuccess: async (result) => {

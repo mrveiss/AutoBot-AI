@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import TimingConstants
+from constants.error_constants import ERR_SESSION_NOT_FOUND
 from desktop_streaming_manager import desktop_streaming
 from enhanced_memory_manager_async import TaskPriority
 from takeover_manager import TakeoverTrigger, takeover_manager
@@ -127,7 +128,7 @@ async def terminate_streaming_session(
         logger.info("Desktop streaming session terminated: %s", session_id)
         return {"success": True, "session_id": session_id}
     else:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
 
 @with_error_handling(
@@ -358,7 +359,7 @@ async def complete_takeover_session(
     if success:
         return {"success": True, "session_id": session_id, "status": "completed"}
     else:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)
 
 
 @with_error_handling(

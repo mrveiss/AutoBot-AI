@@ -15,20 +15,28 @@ import select
 import struct
 import termios
 import time
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 
-class InteractiveTerminalAgent:
-    """Agent that manages interactive terminal sessions with full I/O"""
+class InteractiveTerminalAgent(StandardizedAgent):
+    """Agent that manages interactive terminal sessions with full I/O.
+
+    Inherits StandardizedAgent for standardized action routing. The chat_id
+    identifies the session and is passed at construction (per-session pattern).
+    """
 
     def __init__(self, chat_id: str):
         """Initialize interactive terminal agent with PTY session management."""
+        super().__init__("interactive_terminal")
         self.chat_id = chat_id
         self.master_fd: Optional[int] = None
         self.slave_fd: Optional[int] = None
@@ -41,6 +49,103 @@ class InteractiveTerminalAgent:
         self._buffer_lock = asyncio.Lock()  # Lock for output_buffer access
         self.start_time = None
         self.terminal_size = (80, 24)  # cols, rows
+
+        self.register_actions(
+            {
+                "start_session": ActionHandler(
+                    handler_method="handle_start_session",
+                    required_params=["command"],
+                    description="Start an interactive PTY terminal session",
+                ),
+                "send_input": ActionHandler(
+                    handler_method="handle_send_input",
+                    required_params=["input"],
+                    description="Send input to the active terminal session",
+                ),
+                "send_signal": ActionHandler(
+                    handler_method="handle_send_signal",
+                    required_params=["signal_type"],
+                    description="Send a signal to the terminal process",
+                ),
+                "resize": ActionHandler(
+                    handler_method="handle_resize",
+                    required_params=["cols", "rows"],
+                    description="Resize the terminal",
+                ),
+                "take_control": ActionHandler(
+                    handler_method="handle_take_control",
+                    description="Transfer terminal control to the user",
+                ),
+                "return_control": ActionHandler(
+                    handler_method="handle_return_control",
+                    description="Return terminal control to the agent",
+                ),
+                "wait": ActionHandler(
+                    handler_method="handle_wait",
+                    description="Wait for the terminal session to complete",
+                ),
+            }
+        )
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are an interactive terminal session manager. "
+            "Execute commands in a PTY, stream output, and handle sudo/interactive prompts."
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of supported agent capabilities."""
+        return [
+            "pty_session",
+            "interactive_commands",
+            "sudo_handling",
+            "user_takeover",
+            "signal_forwarding",
+        ]
+
+    async def handle_start_session(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle start_session action."""
+        command = request.payload["command"]
+        env = request.payload.get("env")
+        cwd = request.payload.get("cwd")
+        await self.start_session(command, env=env, cwd=cwd)
+        return {"status": "started", "command": command, "chat_id": self.chat_id}
+
+    async def handle_send_input(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle send_input action."""
+        user_input = request.payload["input"]
+        is_password = request.payload.get("is_password", False)
+        await self.send_input(user_input, is_password=is_password)
+        return {"status": "sent"}
+
+    async def handle_send_signal(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle send_signal action."""
+        signal_type = request.payload["signal_type"]
+        await self.send_signal(signal_type)
+        return {"status": "sent", "signal_type": signal_type}
+
+    async def handle_resize(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle resize action."""
+        cols = request.payload["cols"]
+        rows = request.payload["rows"]
+        await self.resize_terminal(cols, rows)
+        return {"status": "resized", "cols": cols, "rows": rows}
+
+    async def handle_take_control(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle take_control action."""
+        await self.take_control()
+        return {"status": "user_control"}
+
+    async def handle_return_control(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle return_control action."""
+        await self.return_control()
+        return {"status": "agent_control"}
+
+    async def handle_wait(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle wait action."""
+        timeout = request.payload.get("timeout") if request.payload else None
+        return await self.wait_for_completion(timeout=timeout)
 
     def _setup_pty(self) -> None:
         """Create and configure pseudo-terminal for session. Issue #620."""
@@ -249,7 +354,7 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "output": output,
                 "type": "output",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -261,7 +366,7 @@ class InteractiveTerminalAgent:
                 "chat_id": self.chat_id,
                 "output": f"❌ Error: {error}",
                 "type": "error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -412,7 +517,7 @@ class InteractiveTerminalAgent:
             }
 
     async def cleanup(self):
-        """Clean up terminal session"""
+        """Clean up terminal session and reset agent stats."""
         self.session_active = False
 
         if self.process:
@@ -442,3 +547,4 @@ class InteractiveTerminalAgent:
         self.process = None
 
         logger.info("Cleaned up terminal session for chat %s", self.chat_id)
+        await super().cleanup()

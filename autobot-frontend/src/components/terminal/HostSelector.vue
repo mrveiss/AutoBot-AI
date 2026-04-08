@@ -43,6 +43,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useTerminalStore, AVAILABLE_HOSTS, type HostConfig } from '@/composables/useTerminalStore'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('HostSelector')
 
@@ -105,7 +106,7 @@ const loadInfrastructureHosts = async () => {
   loading.value = true
   try {
     // Use relative URL to go through Vite proxy
-    const response = await fetchWithAuth('/api/infrastructure/hosts')
+    const response = await fetchWithAuth(`${getApiBase()}/infrastructure/hosts`)
     if (!response.ok) {
       throw new Error(`Failed to load hosts: ${response.statusText}`)
     }

@@ -35,7 +35,7 @@ async def analyze_architectural_patterns():
     _analyze_component_dependencies(results)
     # Save detailed report
     report_path = Path("architectural_analysis_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, default=str)
 
     print(f"📋 Detailed report saved to: {report_path}")  # noqa: print

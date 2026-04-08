@@ -62,32 +62,25 @@ Issue #1330: Language switcher component in Settings
 
 <script setup lang="ts">
 // Issue #1331: Use usePreferences for language persistence
-import { ref, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePreferences } from '@/composables/usePreferences'
-import apiClient from '@/utils/ApiClient'
+import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LanguageSettingsPanel')
 const { t } = useI18n()
 const { language, setLanguage } = usePreferences()
+const { languages: availableLanguages } = useAvailableLanguages()
 
 const selectedLanguage = ref(language.value)
-const languages = ref<Record<string, string>>({ en: 'English' })
+// Convert to Record<string,string> for the existing template's v-for="(name, code) in languages"
+const languages = computed<Record<string, string>>(() =>
+  Object.fromEntries(availableLanguages.value.map(l => [l.code, l.name]))
+)
 const announcement = ref('')
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error'>('success')
-
-onMounted(async () => {
-  try {
-    const response = await apiClient.get('/api/personality/languages')
-    if (response.data && typeof response.data === 'object') {
-      languages.value = response.data
-    }
-  } catch (error) {
-    logger.error('Failed to load supported languages', error)
-  }
-})
 
 async function handleLanguageChange() {
   const locale = selectedLanguage.value

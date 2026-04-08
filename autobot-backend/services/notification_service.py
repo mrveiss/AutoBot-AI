@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _NOTIFICATIONS_REDIS_DB = "main"
-_NOTIFICATION_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+_NOTIFICATION_TTL_SECONDS = TTL_7_DAYS
 
 
 class NotificationChannel(str, Enum):

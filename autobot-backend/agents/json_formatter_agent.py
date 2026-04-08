@@ -18,6 +18,9 @@ from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import StringParsingConstants
 
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,17 +36,18 @@ class JSONParseResult:
     warnings: List[str]
 
 
-class JSONFormatterAgent:
+class JSONFormatterAgent(StandardizedAgent):
     """
     Specialized agent for handling JSON formatting and parsing.
 
     This agent provides multiple strategies for extracting and fixing
-    malformed JSON from LLM responses.
+    malformed JSON from LLM responses. Inherits StandardizedAgent for
+    standardized action routing and performance tracking.
     """
 
     def __init__(self):
-        """Initialize the JSON formatter agent"""
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        """Initialize the JSON formatter agent with parse action handler."""
+        super().__init__("json_formatter")
         self.parse_attempts = 0
         self.successful_parses = 0
         self._stats_lock = threading.Lock()  # Lock for thread-safe counter access
@@ -55,6 +59,52 @@ class JSONFormatterAgent:
             (r'{\s*""\s*:', '{"'),  # Leading empty key
             (r':\s*""\s*}', ':""}'),  # Trailing empty value
         ]
+
+        self.register_actions(
+            {
+                "parse": ActionHandler(
+                    handler_method="handle_parse",
+                    required_params=["input"],
+                    description="Parse and fix malformed JSON from LLM responses",
+                ),
+                "validate": ActionHandler(
+                    handler_method="handle_validate",
+                    required_params=["data", "schema"],
+                    description="Validate data dict against an expected type schema",
+                ),
+            }
+        )
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a JSON formatting assistant. "
+            "Parse, validate, and repair malformed JSON responses from LLMs."
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of supported agent capabilities."""
+        return ["parse", "validate", "json_extraction", "json_repair"]
+
+    async def handle_parse(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle parse action — wraps parse_llm_response for AgentRequest callers."""
+        input_text = request.payload["input"]
+        expected_schema = request.payload.get("expected_schema")
+        result = self.parse_llm_response(input_text, expected_schema)
+        return {
+            "success": result.success,
+            "data": result.data,
+            "method_used": result.method_used,
+            "confidence": result.confidence,
+            "warnings": result.warnings,
+        }
+
+    async def handle_validate(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle validate action — wraps validate_against_schema for AgentRequest callers."""
+        data = request.payload["data"]
+        schema = request.payload["schema"]
+        validated = self.validate_against_schema(data, schema)
+        return {"validated": validated}
 
     def _create_empty_input_result(self, response: str) -> JSONParseResult:
         """

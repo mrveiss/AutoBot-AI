@@ -64,25 +64,43 @@
   become: yes
   tags: ['redis', 'packages']
 
-- name: "Redis | Create Redis data directory"
-  file:
-    path: /var/lib/redis-stack
-    state: directory
-    owner: redis
-    group: redis
-    mode: '0755'
+# Issue #3396: Add autobot to the redis group as defense-in-depth so that
+# any package-managed files (e.g. binary/lib paths) that retain redis:redis
+# ownership remain group-readable by the autobot service user.
+- name: "Redis | Add autobot user to redis group"
+  user:
+    name: autobot
+    groups: redis
+    append: yes
   become: yes
-  tags: ['redis', 'directories']
+  tags: ['redis', 'ownership']
 
-- name: "Redis | Fix Redis Stack data directory permissions"
+# Issue #3396: Ownership is set to autobot:autobot (not redis:redis) so the
+# autobot service user can read and write the data directory without sudo.
+# The systemd service override (redis-stack-override.conf.j2) runs
+# redis-stack-server as User=autobot Group=autobot to match.
+# recurse:yes enforces ownership on all existing files idempotently —
+# the file module only marks changed when it actually modifies something,
+# so it will NOT trigger the restart handler on clean runs.
+- name: "Redis | Create Redis data directory with autobot:autobot ownership"
   file:
     path: /var/lib/redis-stack
     state: directory
-    owner: redis
-    group: redis
+    owner: autobot
+    group: autobot
     mode: '0750'
   become: yes
-  tags: ['redis', 'configuration']
+  tags: ['redis', 'ownership']
+
+- name: "Redis | Enforce autobot:autobot ownership on Redis data files (recursive)"
+  file:
+    path: /var/lib/redis-stack
+    state: directory
+    owner: autobot
+    group: autobot
+    recurse: yes
+  become: yes
+  tags: ['redis', 'ownership']
 
 - name: "Redis | Set vm.overcommit_memory for background saves"
   ansible.builtin.sysctl:
@@ -98,8 +116,8 @@
   template:
     src: redis-stack.conf.j2
     dest: /etc/redis-stack.conf
-    owner: redis
-    group: redis
+    owner: autobot
+    group: autobot
     mode: '0640'
     backup: yes
   become: yes
@@ -197,8 +215,8 @@
   file:
     path: /var/backups/redis
     state: directory
-    owner: redis
-    group: redis
+    owner: autobot
+    group: autobot
     mode: '0755'
   become: yes
   tags: ['redis', 'backup']

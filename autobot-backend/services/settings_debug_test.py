@@ -13,6 +13,8 @@ import requests
 # Add the project root to Python path
 sys.path.insert(0, os.getcwd())
 
+from tests.test_helpers import get_test_backend_url
+
 from config import global_config_manager
 from services.config_service import ConfigService
 
@@ -74,7 +76,7 @@ async def test_api_endpoint():
 
     try:
         start_time = time.time()
-        response = requests.get("http://localhost:8001/api/settings/", timeout=10)
+        response = requests.get(get_test_backend_url() + "/api/settings/", timeout=10)
         end_time = time.time()
 
         if response.status_code == 200:

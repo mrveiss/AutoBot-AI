@@ -7,7 +7,7 @@ Tracks which files have been imported into the knowledge base
 """
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -95,8 +95,8 @@ class ImportTracker:
                 file_hash,
                 file_size,
                 category,
-                datetime.now().isoformat(),
-                datetime.now().isoformat(),
+                datetime.now(tz=timezone.utc).isoformat(),
+                datetime.now(tz=timezone.utc).isoformat(),
                 facts_count,
                 json.dumps(metadata) if metadata else None,
             ),
@@ -120,7 +120,7 @@ class ImportTracker:
             (file_path, import_status, last_checked, error_message)
             VALUES (?, 'failed', ?, ?)
         """,
-            (file_path, datetime.now().isoformat(), error_message),
+            (file_path, datetime.now(tz=timezone.utc).isoformat(), error_message),
         )
 
         conn.commit()

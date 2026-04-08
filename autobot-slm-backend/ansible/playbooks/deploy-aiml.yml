@@ -6,6 +6,14 @@
 # Deploys ChromaDB vector database and AI Stack API (agent router)
 ---
 
+# -------------------------------------------------------------------
+# Pre-flight: Sync code_source from GitHub before roles run (#3604)
+# -------------------------------------------------------------------
+- name: "Pre-flight: Sync code_source"
+  import_playbook: pre-flight-code-sync.yml
+  tags: ['pre-flight']
+
+
 - name: "Deploy AI/ML Infrastructure (ChromaDB + AI Stack API)"
   hosts: aiml
   become: true
@@ -28,7 +36,7 @@
     - name: Wait for ChromaDB to be ready
       ansible.builtin.wait_for:
         host: "127.0.0.1"
-        port: "{{ chromadb_port | default(8000) }}"
+        port: "{{ chromadb_port | default(8100) }}"
         timeout: 60
         delay: 5
 
@@ -41,7 +49,7 @@
 
     - name: Verify ChromaDB health
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ chromadb_port | default(8000) }}/api/v2/heartbeat"
+        url: "http://127.0.0.1:{{ chromadb_port | default(8100) }}/api/v2/heartbeat"
         return_content: true
       register: chromadb_health
       failed_when: chromadb_health.status != 200
@@ -61,7 +69,7 @@
       ansible.builtin.debug:
         msg:
           - "AI/ML infrastructure deployed successfully"
-          - "ChromaDB: http://{{ ansible_host }}:{{ chromadb_port | default(8000) }}"
+          - "ChromaDB: http://{{ ansible_host }}:{{ chromadb_port | default(8100) }}"
           - "AI Stack API: http://{{ ansible_host }}:{{ ai_port | default(8080) }}"
           - "ChromaDB health: {{ chromadb_health.json | default('OK') }}"
           - "AI Stack health: {{ ai_stack_health.json | default('OK') }}"

@@ -18,6 +18,7 @@ import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
@@ -32,8 +33,8 @@ _failed_auth_tracker: Dict[str, List[float]] = defaultdict(list)
 # Endpoints that DO NOT require service authentication (frontend-accessible)
 EXEMPT_PATHS: List[str] = [
     # Health and version endpoints
-    "/health",  # Health check (no /api prefix)
-    "/api/health",  # API health check
+    PATH_HEALTH,  # Health check (no /api prefix)
+    PATH_API_HEALTH,  # API health check
     "/api/version",  # Version information
     # User-facing chat and conversation endpoints
     "/api/chat",

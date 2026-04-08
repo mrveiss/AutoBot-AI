@@ -14,7 +14,7 @@ import logging
 import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -191,14 +191,14 @@ class AsyncSQLiteConnectionPool:
         if not self._initialized:
             await self._initialize_pool()
 
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         conn = None
 
         try:
             conn = await self._acquire_connection()
 
             # Record wait time
-            wait_time = (datetime.now() - start_time).total_seconds()
+            wait_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
             self._stats.total_wait_time += wait_time
             self._stats.active_connections += 1
 

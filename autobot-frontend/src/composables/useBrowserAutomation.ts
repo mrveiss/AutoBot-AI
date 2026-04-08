@@ -10,6 +10,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useBrowserAutomation')
 
@@ -85,7 +86,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchWorkerStatus(): Promise<void> {
     try {
-      const data = await ApiClient.get('/api/browser/status')
+      const data = await ApiClient.get(`${getApiBase()}/browser/status`)
       workerStatus.value = data
       logger.debug('Fetched worker status:', data)
     } catch (err) {
@@ -99,7 +100,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/browser/launch', { url: url || 'about:blank' })
+      const data = await ApiClient.post(`${getApiBase()}/browser/launch`, { url: url || 'about:blank' })
       sessions.value.push(data.session)
       currentSession.value = data.session
       logger.debug('Launched browser session:', data.session)
@@ -118,7 +119,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      await ApiClient.post('/api/browser/close', { session_id: sessionId })
+      await ApiClient.post(`${getApiBase()}/browser/close`, { session_id: sessionId })
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       if (currentSession.value?.id === sessionId) {
         currentSession.value = null
@@ -137,7 +138,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function fetchSessions(): Promise<void> {
     try {
-      const data = await ApiClient.get('/api/browser/sessions')
+      const data = await ApiClient.get(`${getApiBase()}/browser/sessions`)
       sessions.value = data.sessions || []
       logger.debug('Fetched sessions:', sessions.value.length)
     } catch (err) {
@@ -149,7 +150,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
 
   async function getSession(sessionId: string): Promise<BrowserSession | null> {
     try {
-      const data = await ApiClient.get(`/api/browser/session/${sessionId}`)
+      const data = await ApiClient.get(`${getApiBase()}/browser/session/${sessionId}`)
       currentSession.value = data
       logger.debug('Fetched session details:', data)
       return data
@@ -165,7 +166,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      await ApiClient.post('/api/browser/navigate', { session_id: sessionId, url })
+      await ApiClient.post(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
       logger.debug('Navigated to:', url)
       await fetchSessions()
       return true
@@ -183,7 +184,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      await ApiClient.post('/api/browser/click', { session_id: sessionId, selector })
+      await ApiClient.post(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
       logger.debug('Clicked element:', selector)
       return true
     } catch (err) {
@@ -200,7 +201,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      await ApiClient.post('/api/browser/type', { session_id: sessionId, selector, text })
+      await ApiClient.post(`${getApiBase()}/browser/type`, { session_id: sessionId, selector, text })
       logger.debug('Typed text into:', selector)
       return true
     } catch (err) {
@@ -217,7 +218,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/browser/screenshot', { session_id: sessionId })
+      const data = await ApiClient.post(`${getApiBase()}/browser/screenshot`, { session_id: sessionId })
       screenshots.value.unshift(data)
       logger.debug('Captured screenshot')
       return data
@@ -235,7 +236,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/browser/execute', { session_id: sessionId, script })
+      const data = await ApiClient.post(`${getApiBase()}/browser/execute`, { session_id: sessionId, script })
       logger.debug('Executed script, result:', data.result)
       return data.result
     } catch (err) {
@@ -252,7 +253,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      const data = await ApiClient.post('/api/browser/automation/run', { script })
+      const data = await ApiClient.post(`${getApiBase()}/browser/automation/run`, { script })
       logger.debug('Automation script completed:', data)
       return data.result
     } catch (err) {
@@ -269,7 +270,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
     isLoading.value = true
     error.value = null
     try {
-      await ApiClient.delete(`/api/browser/session/${sessionId}`)
+      await ApiClient.delete(`${getApiBase()}/browser/session/${sessionId}`)
       sessions.value = sessions.value.filter(s => s.id !== sessionId)
       logger.debug('Deleted session:', sessionId)
       return true

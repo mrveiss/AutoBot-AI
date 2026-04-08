@@ -396,6 +396,13 @@ Respond with valid JSON:
         """Return default step count for complexity level."""
         return 1 if complexity == TaskComplexity.SIMPLE else 3
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a fast, lightweight classification assistant powered by Gemma. "
+            "Quickly determine workflow complexity and intent from user requests with minimal latency."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities."""
         return self.capabilities.copy()

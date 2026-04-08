@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
+from constants.ttl_constants import TTL_5_MINUTES
 from knowledge.search_components.reranking import RerankWeights, compute_blended_score
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
@@ -162,7 +163,7 @@ class AdvancedRAGOptimizer:
     def _init_performance_tracking(self) -> None:
         """Initialize performance tracking components. Issue #620."""
         self.query_cache = {}
-        self.cache_ttl_seconds = 300  # 5 minutes
+        self.cache_ttl_seconds = TTL_5_MINUTES
 
     def _evict_cache(self) -> None:
         """Enforce MAX_CACHE_ENTRIES: sweep expired first, then oldest. Issue #1732."""

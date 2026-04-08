@@ -229,6 +229,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -333,7 +334,7 @@ const runAnalysis = async () => {
   isAnalyzing.value = true
   try {
     const response = await fetchWithAuth(
-      `/api/log-patterns/mine?hours=${timeRange.value}&include_anomalies=true&include_trends=true`
+      `${getApiBase()}/log-patterns/mine?hours=${timeRange.value}&include_anomalies=true&include_trends=true`
     )
     if (response.ok) {
       miningResult.value = await response.json()
@@ -347,7 +348,7 @@ const runAnalysis = async () => {
 
 const fetchRealtimeData = async () => {
   try {
-    const response = await fetchWithAuth('/api/log-patterns/realtime')
+    const response = await fetchWithAuth(`${getApiBase()}/log-patterns/realtime`)
     if (response.ok) {
       realtimeData.value = await response.json()
     }

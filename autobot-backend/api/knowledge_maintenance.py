@@ -18,7 +18,7 @@ Includes:
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path as PathLib
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -438,7 +438,7 @@ async def get_health_dashboard(
 
     return {
         "status": _determine_health_status(stats, quality),
-        "last_updated": datetime.now().isoformat(),
+        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
         "stats": _build_stats_summary(stats),
         "quality": _build_quality_summary(quality),
         "top_recommendations": quality.get("recommendations", [])[:3],

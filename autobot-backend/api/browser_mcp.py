@@ -622,7 +622,7 @@ async def navigate_mcp(request: NavigateRequest) -> Metadata:
         "action": "navigate",
         "url": request.url,
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -649,7 +649,7 @@ async def click_mcp(request: ClickRequest) -> Metadata:
         "action": "click",
         "selector": request.selector,
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -681,7 +681,7 @@ async def fill_mcp(request: FillRequest) -> Metadata:
         "selector": request.selector,
         "value_length": len(request.value),
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -712,7 +712,7 @@ async def screenshot_mcp(request: ScreenshotRequest) -> Metadata:
         "full_page": request.full_page,
         "base64_image": result.get("image"),
         "mime_type": "image/png",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -742,7 +742,7 @@ async def evaluate_mcp(request: EvaluateRequest) -> Metadata:
         "action": "evaluate",
         "script_preview": request.script[:100],
         "result": result.get("result"),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -774,7 +774,7 @@ async def wait_for_selector_mcp(request: WaitForSelectorRequest) -> Metadata:
         "selector": request.selector,
         "state": request.state,
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -798,7 +798,7 @@ async def get_text_mcp(request: GetTextRequest) -> Metadata:
         "action": "get_text",
         "selector": request.selector,
         "text": result.get("text"),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -826,7 +826,7 @@ async def get_attribute_mcp(request: GetAttributeRequest) -> Metadata:
         "selector": request.selector,
         "attribute": request.attribute,
         "value": result.get("value"),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -854,7 +854,7 @@ async def select_mcp(request: SelectRequest) -> Metadata:
         "selector": request.selector,
         "value": request.value,
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -878,7 +878,7 @@ async def hover_mcp(request: HoverRequest) -> Metadata:
         "action": "hover",
         "selector": request.selector,
         "result": result,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -928,5 +928,5 @@ async def get_browser_mcp_status() -> Metadata:
             "reset_time": reset_time_iso,
         },
         "tools_available": 10,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }

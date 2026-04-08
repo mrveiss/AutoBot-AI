@@ -112,10 +112,15 @@ class KnowledgeSyncConfig:
 class TimingConstants:
     """Common timing values used throughout the codebase."""
 
+    # Sub-millisecond yields (asyncio.sleep)
+    YIELD_INTERVAL = 0.001  # Brief yield to event loop between batches
+
     # Short delays (sub-second)
     POLL_INTERVAL = 0.01  # Short polling loop delay to prevent CPU spinning
+    FAST_POLL_INTERVAL = 0.02  # Fast polling / short scan simulation delay
     STREAMING_CHUNK_DELAY = 0.05  # Delay between streaming chunks for UX
     MICRO_DELAY = 0.1
+    DEBOUNCE_INTERVAL_S = 0.2  # Debounce / short API simulation delay
     SHORT_DELAY = 0.5
     STANDARD_DELAY = 1.0
 
@@ -130,6 +135,7 @@ class TimingConstants:
     VERY_LONG_TIMEOUT = 300
 
     # Long interval values
+    SESSION_CLEANUP_INTERVAL = 60  # Background session cleanup polling interval (1 min)
     HOURLY_INTERVAL = 3600  # 1 hour in seconds
 
     # Error recovery
@@ -141,6 +147,20 @@ class TimingConstants:
         2.0  # Wait for service to initialize after start/stop/restart
     )
     KB_INIT_DELAY = 3.0  # Wait for knowledge base async initialization
+
+
+def exponential_backoff_delay(attempt: int, base: float = 2.0, cap: float = 60.0) -> float:
+    """Return capped exponential backoff delay in seconds.
+
+    Args:
+        attempt: Zero-based attempt index (0 → base**0 = 1 s, 1 → 2 s, …).
+        base: Backoff base (default 2.0).
+        cap: Maximum delay in seconds (default 60.0, matching RetryConfig.BACKOFF_MAX_DELAY).
+
+    Returns:
+        Delay in seconds, never exceeding *cap*.
+    """
+    return min(base**attempt, cap)
 
 
 class RetryConfig:
@@ -487,9 +507,9 @@ class ProtocolDefaults:
     WSS: str = "wss"
     TCP: str = "tcp"
 
-    # Health endpoints
-    HEALTH_ENDPOINT: str = "/health"
-    API_HEALTH_ENDPOINT: str = "/api/health"
+    # Health endpoints — imported from api_constants (Issue #3531)
+    from constants.api_constants import PATH_HEALTH as HEALTH_ENDPOINT  # noqa: F401
+    from constants.api_constants import PATH_API_HEALTH as API_HEALTH_ENDPOINT  # noqa: F401
 
     # API version
     API_VERSION: str = "1.0"

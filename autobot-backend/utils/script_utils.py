@@ -8,7 +8,7 @@ Eliminates code duplication across deployment, backup, and monitoring scripts
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import FrozenSet, Optional
 
 # Issue #380: Module-level frozenset for confirmation responses
@@ -116,7 +116,7 @@ class ScriptFormatter:
     @staticmethod
     def print_timestamp():
         """Print current timestamp"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         print(f"⏰ {timestamp}")  # noqa: print
 
     @staticmethod

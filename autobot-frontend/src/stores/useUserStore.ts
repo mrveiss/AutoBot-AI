@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useUserStore')
 
@@ -318,7 +319,7 @@ export const useUserStore = defineStore('user', () => {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout
 
-      const response = await fetch('/api/auth/me', {
+      const response = await fetch(`${getApiBase()}/auth/me`, {
         signal: controller.signal,
         headers: {
           'Accept': 'application/json'
@@ -382,7 +383,7 @@ export const useUserStore = defineStore('user', () => {
         headers['Authorization'] = `Bearer ${authState.value.token}`
       }
 
-      const response = await fetch('/api/auth/change-password', {
+      const response = await fetch(`${getApiBase()}/auth/change-password`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

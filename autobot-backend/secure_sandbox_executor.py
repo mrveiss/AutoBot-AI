@@ -23,6 +23,8 @@ import docker
 from docker.errors import DockerException, ImageNotFound
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -634,7 +636,7 @@ class SecureSandboxExecutor:
                             await asyncio.to_thread(
                                 lambda: (
                                     self.redis_client.lpush(event_key, event_json),
-                                    self.redis_client.expire(event_key, 3600),
+                                    self.redis_client.expire(event_key, TTL_1_HOUR),
                                 )
                             )
 
@@ -691,7 +693,7 @@ class SecureSandboxExecutor:
             success = result.success
 
             def _store_metrics():
-                self.redis_client.setex(metrics_key, 3600, metrics_json)
+                self.redis_client.setex(metrics_key, TTL_1_HOUR, metrics_json)
                 stat_key = "successful_executions" if success else "failed_executions"
                 self.redis_client.hincrby("autobot:sandbox:stats", stat_key, 1)
 
@@ -783,7 +785,7 @@ secure_sandbox = None  # Will be initialized on first access via get_secure_sand
 async def execute_in_sandbox(
     command: Union[str, List[str]],
     security_level: str = "high",
-    timeout: int = 300,
+    timeout: int = int(_ssot_config.timeout.sandbox),
     **kwargs,
 ) -> SandboxResult:
     """

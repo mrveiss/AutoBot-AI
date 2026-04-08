@@ -10,7 +10,7 @@ Contains agent execution logic, result synthesis, and fallback handling.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from .types import CLASSIFICATION_TERMS, CODE_SEARCH_TERMS, AgentType
@@ -142,7 +142,7 @@ class AgentExecutor:
             raise Exception("No suitable distributed agent found")
 
         task_id = f"task_{uuid.uuid4().hex[:8]}"
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
 
         try:
             self.distributed_manager.add_active_task(selected_agent.agent_id, task_id)
@@ -150,7 +150,7 @@ class AgentExecutor:
                 task_id, selected_agent.agent_type, request, context, chat_history
             )
             response = await selected_agent.process_request(agent_request)
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             return self._build_distributed_response(
                 response,

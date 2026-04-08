@@ -7,6 +7,8 @@ import asyncio
 import logging
 from datetime import datetime
 
+from tests.test_helpers import get_test_backend_url
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -226,7 +228,7 @@ async def test_api_integration():
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(
-                    "http://localhost:8001/api/alerts/health"
+                    get_test_backend_url() + "/api/alerts/health"
                 ) as response:
                     if response.status == 200:
                         data = await response.json()

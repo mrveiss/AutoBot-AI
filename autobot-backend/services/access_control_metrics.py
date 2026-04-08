@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from autobot_shared.redis_client import get_redis_client
@@ -83,8 +83,8 @@ class AccessControlMetrics:
         try:
             redis = await self._get_redis()
 
-            timestamp = datetime.now().timestamp()
-            date_str = datetime.now().strftime("%Y-%m-%d")
+            timestamp = datetime.now(tz=timezone.utc).timestamp()
+            date_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             violation_id = str(uuid.uuid4())
 
             # Create violation record
@@ -247,7 +247,7 @@ class AccessControlMetrics:
 
             # Build list of dates to query
             dates = [
-                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                 for day_offset in range(days)
             ]
 
@@ -321,7 +321,7 @@ class AccessControlMetrics:
 
             # Build list of dates to query
             dates = [
-                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                 for day_offset in range(min(7, self.retention_days))
             ]
 
@@ -383,7 +383,7 @@ class AccessControlMetrics:
 
             # Build list of dates to query
             dates = [
-                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                 for day_offset in range(days)
             ]
 
@@ -435,7 +435,7 @@ class AccessControlMetrics:
 
             # Build list of dates to query
             dates = [
-                (datetime.now() - timedelta(days=day_offset)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=day_offset)).strftime("%Y-%m-%d")
                 for day_offset in range(days)
             ]
 
@@ -476,7 +476,7 @@ class AccessControlMetrics:
             # Collect all keys to delete first - eliminates N+1 individual delete calls
             all_keys_to_delete = []
             for days_back in range(self.retention_days, 365):  # Check up to 1 year back
-                date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+                date = (datetime.now(tz=timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
                 all_keys_to_delete.extend(
                     [

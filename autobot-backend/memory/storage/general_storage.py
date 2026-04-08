@@ -7,7 +7,7 @@ General Storage Implementation - Category-based memory management
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
@@ -168,7 +168,7 @@ class GeneralStorage:
 
     async def cleanup_old(self, retention_days: int) -> int:
         """Remove entries older than retention period"""
-        cutoff = datetime.now() - timedelta(days=retention_days)
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
 
         try:
             async with self._get_connection() as conn:

@@ -24,7 +24,7 @@ from redis import asyncio as aioredis
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_management.types import DATABASE_MAPPING
-from config import ConfigManager
+from config.manager import get_config_manager
 from utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from utils.chromadb_client import wrap_collection_async
 from utils.knowledge_base_timeouts import kb_timeouts
@@ -32,8 +32,7 @@ from utils.knowledge_base_timeouts import kb_timeouts
 if TYPE_CHECKING:
     pass
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 logger = logging.getLogger(__name__)
 
@@ -334,9 +333,9 @@ class KnowledgeBaseCore:
             )
 
             # Get async Redis client using pool manager
-            self.aioredis_client = get_redis_client(
-                async_client=True, database="knowledge"
-            )
+            # Issue #3962: Separated await from assignment to resolve coroutine handling
+            redis_coro = get_redis_client(async_client=True, database="knowledge")
+            self.aioredis_client = await redis_coro
 
             # Test async connection
             await self.aioredis_client.ping()

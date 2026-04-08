@@ -46,6 +46,7 @@ from api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from api.knowledge_suggestions import router as knowledge_suggestions_router
 from api.knowledge_tags import router as knowledge_tags_router
 from api.knowledge_verification import router as knowledge_verification_router
+from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.llm import router as llm_router
 from api.llm_providers import router as llm_providers_router
 from api.mcp_registry import router as mcp_registry_router
@@ -114,6 +115,12 @@ def _get_core_knowledge_routers() -> list:
             "/knowledge_base",
             ["knowledge-verification"],
             "knowledge_verification",
+        ),
+        (
+            knowledge_rag_feedback_router,
+            "/knowledge_base",
+            ["knowledge-rag-feedback"],
+            "knowledge_rag_feedback",
         ),
     ]
 

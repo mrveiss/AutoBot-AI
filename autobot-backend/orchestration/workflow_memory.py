@@ -45,6 +45,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_1_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ logger = logging.getLogger(__name__)
 MEMORY_KEY_PREFIX = "workflow:memory:"
 
 # Default TTL matches a typical long-running workflow session (1 hour).
-DEFAULT_TTL_SECONDS = 3600
+DEFAULT_TTL_SECONDS = TTL_1_HOUR
 
 
 class WorkflowMemory:

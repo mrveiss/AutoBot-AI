@@ -11,6 +11,7 @@ import apiClient from '@/utils/ApiClient'
 import appConfig from '@/config/AppConfig.js'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for useKnowledgeVectorization
 const logger = createLogger('useKnowledgeVectorization')
@@ -85,7 +86,7 @@ export function useKnowledgeVectorization() {
   const fetchDocumentStatus = async (documentId: string): Promise<VectorizationStatus> => {
     try {
       // Query actual backend status
-      const response = await apiClient.post('/api/knowledge_base/vectorization_status', {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
         fact_ids: [documentId],
         use_cache: true
       })
@@ -127,7 +128,7 @@ export function useKnowledgeVectorization() {
       for (let i = 0; i < documentIds.length; i += batchSize) {
         const batch = documentIds.slice(i, i + batchSize)
 
-        const response = await apiClient.post('/api/knowledge_base/vectorization_status', {
+        const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorization_status`, {
           fact_ids: batch,
           use_cache: true
         })
@@ -281,7 +282,7 @@ export function useKnowledgeVectorization() {
 
       // Call backend API to vectorize the fact with proper timeout
       // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-      const response = await apiClient.post(`/api/knowledge_base/vectorize_fact/${documentId}`, undefined, {
+      const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_fact/${documentId}`, undefined, {
         timeout: knowledgeTimeout
       })
 
@@ -306,7 +307,7 @@ export function useKnowledgeVectorization() {
 
         // Use knowledge timeout for job status polling as well
         // Issue #648: Use parseApiResponse to handle both Response objects and parsed JSON
-        const jobResponse = await apiClient.get(`/api/knowledge_base/vectorize_job/${jobId}`, {
+        const jobResponse = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_job/${jobId}`, {
           timeout: knowledgeTimeout
         })
         const jobData = await parseApiResponse(jobResponse)
@@ -354,7 +355,7 @@ export function useKnowledgeVectorization() {
   ): Promise<{ succeeded: string[], failed: string[] }> => {
     const knowledgeTimeout = appConfig.getTimeout('knowledge')
     const batchTimeout = Math.min(knowledgeTimeout * documentIds.length, 300000)
-    const response = await apiClient.post('/api/knowledge_base/vectorize_documents', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_documents`, {
       document_ids: documentIds
     }, {
       timeout: batchTimeout

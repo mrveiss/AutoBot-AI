@@ -11,13 +11,14 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
@@ -69,7 +70,7 @@ class ServiceEndpoint:
     host: str
     port: int
     protocol: str = "http"
-    health_endpoint: str = "/health"
+    health_endpoint: str = PATH_HEALTH
     required: bool = True
     timeout: float = ServiceDiscoveryConfig.BACKEND_TIMEOUT
     retry_count: int = RetryConfig.DEFAULT_RETRIES
@@ -173,7 +174,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.NPU_WORKER_TIMEOUT,
             required=False,
         )
@@ -214,7 +215,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.AI_STACK_TIMEOUT,
             required=False,
         )
@@ -233,7 +234,7 @@ class ServiceDiscovery:
             host=host,
             port=port,
             protocol="http",
-            health_endpoint="/health",
+            health_endpoint=PATH_HEALTH,
             timeout=ServiceDiscoveryConfig.BROWSER_SERVICE_TIMEOUT,
             required=False,
         )
@@ -257,7 +258,7 @@ class ServiceDiscovery:
             host=backend_host,
             port=int(backend_port),
             protocol="http",
-            health_endpoint="/api/health",
+            health_endpoint=PATH_API_HEALTH,
             timeout=ServiceDiscoveryConfig.BACKEND_TIMEOUT,
             required=True,
         )
@@ -282,7 +283,7 @@ class ServiceDiscovery:
             host=ollama_host,
             port=int(ollama_port),
             protocol="http",
-            health_endpoint="/api/tags",
+            health_endpoint=PATH_OLLAMA_TAGS,
             timeout=ServiceDiscoveryConfig.OLLAMA_TIMEOUT,
             required=True,
         )
@@ -387,7 +388,7 @@ class ServiceDiscovery:
             return None
         if not last_check:
             return None
-        time_since_check = (datetime.now() - last_check).seconds
+        time_since_check = (datetime.now(tz=timezone.utc) - last_check).seconds
         check_threshold = (
             self.health_check_interval
             * ServiceDiscoveryConfig.CIRCUIT_BREAKER_CHECK_MULTIPLIER
@@ -400,11 +401,11 @@ class ServiceDiscovery:
         """Update service status after health check (under lock)."""
         async with self._lock:
             service.status = status
-            service.last_check = datetime.now()
+            service.last_check = datetime.now(tz=timezone.utc)
             service.response_time = response_time
             if status == ServiceStatus.HEALTHY:
                 service.consecutive_failures = 0
-                service.last_healthy = datetime.now()
+                service.last_healthy = datetime.now(tz=timezone.utc)
                 service.error_message = None
             else:
                 service.consecutive_failures += 1
@@ -415,7 +416,7 @@ class ServiceDiscovery:
         """Update service status after health check error (under lock)."""
         async with self._lock:
             service.status = ServiceStatus.UNHEALTHY
-            service.last_check = datetime.now()
+            service.last_check = datetime.now(tz=timezone.utc)
             service.consecutive_failures += 1
             service.error_message = error
             service.response_time = response_time
@@ -608,7 +609,7 @@ class ServiceDiscovery:
             }
 
         summary = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "total_services": len(services_snapshot),
             "healthy": 0,
             "degraded": 0,

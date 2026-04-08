@@ -27,6 +27,7 @@ import type {
   BatchJobStatus
 } from '@/types/batch-processing'
 import { isTerminalStatus } from '@/types/batch-processing'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useBatchProcessing')
 
@@ -49,7 +50,7 @@ export function useBatchProcessingApi() {
           if (filter?.limit) params.append('limit', filter.limit.toString())
 
           const queryString = params.toString()
-          const url = `/api/batch-jobs${queryString ? `?${queryString}` : ''}`
+          const url = `${getApiBase()}/batch-jobs${queryString ? `?${queryString}` : ''}`
           const response = await api.get(url)
           return await response.json()
         },
@@ -73,7 +74,7 @@ export function useBatchProcessingApi() {
     async getJob(jobId: string): Promise<BatchJob | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`/api/batch-jobs/${jobId}`)
+          const response = await api.get(`${getApiBase()}/batch-jobs/${jobId}`)
           return await response.json()
         },
         {
@@ -89,7 +90,7 @@ export function useBatchProcessingApi() {
     async createJob(request: CreateBatchJobRequest): Promise<CreateBatchJobResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post('/api/batch-jobs', request)
+          const response = await api.post(`${getApiBase()}/batch-jobs`, request)
           return await response.json()
         },
         {
@@ -104,7 +105,7 @@ export function useBatchProcessingApi() {
     async deleteJob(jobId: string): Promise<{ status: string } | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.delete(`/api/batch-jobs/${jobId}`)
+          const response = await api.delete(`${getApiBase()}/batch-jobs/${jobId}`)
           return await response.json()
         },
         {
@@ -119,7 +120,7 @@ export function useBatchProcessingApi() {
     async cancelJob(jobId: string): Promise<{ status: string } | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`/api/batch-jobs/${jobId}/cancel`)
+          const response = await api.post(`${getApiBase()}/batch-jobs/${jobId}/cancel`)
           return await response.json()
         },
         {
@@ -134,7 +135,7 @@ export function useBatchProcessingApi() {
     async getJobLogs(jobId: string): Promise<BatchJobLogsResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`/api/batch-jobs/${jobId}/logs`)
+          const response = await api.get(`${getApiBase()}/batch-jobs/${jobId}/logs`)
           return await response.json()
         },
         {
@@ -150,7 +151,7 @@ export function useBatchProcessingApi() {
     async listTemplates(): Promise<BatchTemplatesListResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/batch-templates')
+          const response = await api.get(`${getApiBase()}/batch-templates`)
           return await response.json()
         },
         {
@@ -166,7 +167,7 @@ export function useBatchProcessingApi() {
     async createTemplate(request: CreateBatchTemplateRequest): Promise<BatchTemplate | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post('/api/batch-templates', request)
+          const response = await api.post(`${getApiBase()}/batch-templates`, request)
           return await response.json()
         },
         {
@@ -181,7 +182,7 @@ export function useBatchProcessingApi() {
     async deleteTemplate(templateId: string): Promise<{ status: string } | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.delete(`/api/batch-templates/${templateId}`)
+          const response = await api.delete(`${getApiBase()}/batch-templates/${templateId}`)
           return await response.json()
         },
         {
@@ -196,7 +197,7 @@ export function useBatchProcessingApi() {
     async listSchedules(): Promise<BatchSchedulesListResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/batch-schedules')
+          const response = await api.get(`${getApiBase()}/batch-schedules`)
           return await response.json()
         },
         {
@@ -212,7 +213,7 @@ export function useBatchProcessingApi() {
     async createSchedule(request: CreateBatchScheduleRequest): Promise<BatchSchedule | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post('/api/batch-schedules', request)
+          const response = await api.post(`${getApiBase()}/batch-schedules`, request)
           return await response.json()
         },
         {
@@ -227,7 +228,7 @@ export function useBatchProcessingApi() {
     async toggleSchedule(scheduleId: string, enabled: boolean): Promise<BatchSchedule | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.patch(`/api/batch-schedules/${scheduleId}`, { enabled })
+          const response = await api.patch(`${getApiBase()}/batch-schedules/${scheduleId}`, { enabled })
           return await response.json()
         },
         {
@@ -242,7 +243,7 @@ export function useBatchProcessingApi() {
     async deleteSchedule(scheduleId: string): Promise<{ status: string } | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.delete(`/api/batch-schedules/${scheduleId}`)
+          const response = await api.delete(`${getApiBase()}/batch-schedules/${scheduleId}`)
           return await response.json()
         },
         {
@@ -257,7 +258,7 @@ export function useBatchProcessingApi() {
     async getHealth(): Promise<BatchHealthResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/batch-jobs/health')
+          const response = await api.get(`${getApiBase()}/batch-jobs/health`)
           return await response.json()
         },
         {

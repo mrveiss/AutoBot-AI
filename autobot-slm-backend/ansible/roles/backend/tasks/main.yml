@@ -27,6 +27,37 @@
     state: present
   tags: ['backend', 'users']
 
+# ==========================================================
+# WSL2 auto-detection (#3503): 127.0.0.1 is ECONNREFUSED on
+# WSL2 mirrored networking — override backend_ai_stack_host
+# per-host at deploy time if it has not been explicitly set.
+# ==========================================================
+- name: "Backend | Read /proc/version to detect WSL2 (#3503)"
+  ansible.builtin.slurp:
+    src: /proc/version
+  register: _proc_version
+  changed_when: false
+  failed_when: false
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_ai_stack_host=10.255.255.254 on WSL2 hosts (#3503)"
+  ansible.builtin.set_fact:
+    backend_ai_stack_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_ai_stack_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
+- name: "Backend | Set backend_chromadb_host=10.255.255.254 on WSL2 hosts (#3541)"
+  ansible.builtin.set_fact:
+    backend_chromadb_host: "10.255.255.254"
+  when:
+    - _proc_version.content is defined
+    - (_proc_version.content | b64decode | lower) is search('microsoft')
+    - backend_chromadb_host == '127.0.0.1'
+  tags: ['backend', 'config']
+
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
@@ -140,6 +171,9 @@
       - "--exclude=*.egg-info"
       - "--exclude=.git"
       - "--exclude=venv"
+  notify:
+    - restart backend
+    - restart celery
   tags: ['backend', 'deploy']
 
 - name: Sync backend config directory from code_source
@@ -149,6 +183,7 @@
     rsync_opts:
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
+  notify: restart backend
   tags: ['backend', 'deploy']
 
 - name: Sync autobot_shared to backend install dir
@@ -160,6 +195,36 @@
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
       - "--exclude=.git"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+# Issue #3649: Also sync to the standalone /opt/autobot/autobot_shared/ that workers
+# resolve via PYTHONPATH. The backend venv editable-install points at backend_install_dir
+# but Celery workers and other services import from the standalone copy — skipping this
+# sync caused ModuleNotFoundError when new modules were added (pagination.py, task_result.py).
+- name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_shared_standalone_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--delete"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Fix ownership of standalone autobot_shared (#3649)"
+  ansible.builtin.file:
+    path: "{{ backend_shared_standalone_dir }}"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
   tags: ['backend', 'deploy']
 
 - name: Create backend symlink for imports
@@ -190,6 +255,29 @@
     mode: "0644"
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
+
+# Issue #3873: permission_rules.yaml is read from /opt/autobot/config/ at
+# runtime (three levels up from services/permission_matcher.py).  The clean
+# task that previously wiped /opt/autobot/config has been removed; this task
+# ensures the directory and file are always present after each deploy.
+- name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+  ansible.builtin.file:
+    path: "{{ backend_install_dir | dirname }}/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  tags: ['backend', 'config']
+
+- name: "Backend | Deploy permission_rules.yaml to infrastructure config path (#3873)"
+  ansible.builtin.copy:
+    src: permission_rules.yaml
+    dest: "{{ backend_install_dir | dirname }}/config/permission_rules.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  notify: restart backend
+  tags: ['backend', 'config']
 
 - name: Check if backend code already synced
   ansible.builtin.stat:
@@ -252,6 +340,9 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
 
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
@@ -292,6 +383,9 @@
     PIP_DEFAULT_TIMEOUT: "120"
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: backend_install_dir is defined
+  notify:
+    - restart backend
+    - restart celery
 
 # ==========================================================
 # PostgreSQL for User Management (Issue #2953)
@@ -492,3 +586,31 @@
     direction: in
   when: _backend_ufw_check.rc == 0
   tags: ['backend', 'ufw']
+
+# ==========================================================
+# Post-deploy smoke test (#3687)
+# systemd reports active (running) even when all uvicorn
+# workers crash-loop because the master process stays alive.
+# Probing the TCP port and /api/health catches that case and
+# fails the play before the deploy is marked complete.
+# Issue #3856: flush handlers here so any pending restart fires
+# before the health check, not after.
+# ==========================================================
+- name: "Backend | Flush handlers before smoke test (#3856)"
+  ansible.builtin.meta: flush_handlers
+  tags: ['backend', 'smoke-test']
+
+- name: "Backend | Wait for backend to accept connections (#3687)"
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ backend_health_check_port }}"
+    timeout: "{{ backend_health_check_timeout }}"
+  tags: ['backend', 'smoke-test']
+
+- name: "Backend | Verify /api/health returns 200 (#3687)"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ backend_health_check_port }}/api/health"
+    status_code: 200
+  retries: 3
+  delay: 5
+  tags: ['backend', 'smoke-test']

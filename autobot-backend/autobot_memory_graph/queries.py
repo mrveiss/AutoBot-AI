@@ -13,11 +13,41 @@ Part of the modular autobot_memory_graph package (Issue #716).
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .core import AutoBotMemoryGraphCore
 
 logger = logging.getLogger(__name__)
+
+
+def _is_entity_valid(entity: Dict[str, Any]) -> bool:
+    """Return True if entity is currently valid.
+
+    An entity is valid when valid_to is absent (None) or is a future timestamp.
+    Entities without valid_to in Redis (legacy) are treated as valid.
+    """
+    valid_to = (entity.get("metadata") or {}).get("valid_to")
+    if valid_to is None:
+        return True
+    # valid_to is an ISO-8601 string; compare lexicographically (works for UTC ISO strings)
+    return valid_to > datetime.now(tz=timezone.utc).isoformat()
+
+
+def _is_entity_valid_at(entity: Dict[str, Any], as_of: str) -> bool:
+    """Return True if entity was valid at the given ISO-8601 timestamp.
+
+    Conditions: valid_from <= as_of AND (valid_to IS NULL OR valid_to >= as_of)
+    """
+    metadata = entity.get("metadata") or {}
+    valid_from = metadata.get("valid_from")
+    valid_to = metadata.get("valid_to")
+
+    if valid_from and valid_from > as_of:
+        return False
+    if valid_to is not None and valid_to < as_of:
+        return False
+    return True
 
 
 class QueryOperationsMixin:
@@ -169,17 +199,20 @@ class QueryOperationsMixin:
         query_lower: str,
         entity_type: Optional[str],
         limit: int,
+        include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Fetch entities in batches and filter by query criteria.
 
         Issue #620.
+        Issue #3790: added include_expired filter.
 
         Args:
             keys: List of Redis keys to fetch
             query_lower: Lowercase search query
             entity_type: Optional entity type filter
             limit: Maximum entities to return
+            include_expired: When False (default), exclude invalidated entities
 
         Returns:
             List of matching entity dictionaries
@@ -196,9 +229,11 @@ class QueryOperationsMixin:
             batch_results = await pipe.execute()
 
             for entity in batch_results:
-                if entity and self._entity_matches_query(
-                    entity, query_lower, entity_type
-                ):
+                if not entity:
+                    continue
+                if not include_expired and not _is_entity_valid(entity):
+                    continue
+                if self._entity_matches_query(entity, query_lower, entity_type):
                     entities.append(entity)
                     if len(entities) >= limit:
                         return entities
@@ -210,17 +245,20 @@ class QueryOperationsMixin:
         query: str,
         entity_type: Optional[str],
         limit: int,
+        include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Fallback search when RediSearch is unavailable.
 
         Issue #315: Original refactoring.
         Issue #620: Further refactored using Extract Method pattern.
+        Issue #3790: added include_expired filter.
 
         Args:
             query: Search query string
             entity_type: Optional entity type filter
             limit: Maximum results to return
+            include_expired: When False (default), exclude invalidated entities
 
         Returns:
             List of matching entities
@@ -233,7 +271,7 @@ class QueryOperationsMixin:
                 return []
 
             return await self._batch_fetch_and_filter_entities(
-                keys, query_lower, entity_type, limit
+                keys, query_lower, entity_type, limit, include_expired=include_expired
             )
 
         except Exception as e:
@@ -247,6 +285,7 @@ class QueryOperationsMixin:
         tags: Optional[List[str]] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        include_expired: bool = False,
     ) -> List[Dict[str, Any]]:
         """Semantic search across all entities.
 
@@ -256,6 +295,7 @@ class QueryOperationsMixin:
             tags: Filter by tags (any match)
             status: Filter by status
             limit: Maximum results to return
+            include_expired: When False (default), exclude invalidated entities
 
         Returns:
             List of matching entities sorted by relevance
@@ -268,13 +308,58 @@ class QueryOperationsMixin:
             )
             try:
                 entities = await self._execute_redis_search(redis_query, limit)
+                if not include_expired:
+                    entities = [e for e in entities if _is_entity_valid(e)]
                 logger.info(
                     "Search query '%s' returned %d results", query, len(entities)
                 )
                 return entities
             except Exception as search_error:
                 logger.warning("RediSearch failed, using fallback: %s", search_error)
-                return await self._fallback_search(query, entity_type, limit)
+                return await self._fallback_search(
+                    query, entity_type, limit, include_expired=include_expired
+                )
         except Exception as e:
             logger.error("Search failed: %s", e)
+            return []
+
+    async def get_entities_as_of(
+        self: AutoBotMemoryGraphCore,
+        entity_type: str,
+        as_of: str,
+    ) -> List[Dict[str, Any]]:
+        """Return entities of a given type that were valid at a specific point in time.
+
+        Condition: valid_from <= as_of AND (valid_to IS NULL OR valid_to >= as_of)
+        Entities without valid_from are treated as always valid from the beginning.
+
+        Args:
+            entity_type: Entity type to filter by
+            as_of: ISO-8601 timestamp representing the point in time
+
+        Returns:
+            List of entity dictionaries valid at the given timestamp
+        """
+        self.ensure_initialized()
+
+        try:
+            keys = await self._collect_entity_keys(limit=1000)
+            if not keys:
+                return []
+
+            pipe = self.redis_client.pipeline()
+            for key in keys:
+                pipe.json().get(key)
+            raw_results = await pipe.execute()
+
+            return [
+                e
+                for e in raw_results
+                if e
+                and e.get("type") == entity_type
+                and _is_entity_valid_at(e, as_of)
+            ]
+
+        except Exception as e:
+            logger.error("get_entities_as_of failed: %s", e)
             return []

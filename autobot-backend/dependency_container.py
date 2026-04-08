@@ -16,7 +16,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 import redis.asyncio as async_redis
 
 from autobot_shared.redis_client import get_redis_client
-from config import ConfigManager, unified_config_manager
+from config.manager import ConfigManager, get_config_manager
 from llm_interface import LLMInterface, get_llm_interface
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ class AsyncServiceContainer:
 
     async def _create_config_manager(self) -> ConfigManager:
         """Factory for config manager"""
-        return unified_config_manager
+        return get_config_manager()
 
     async def _create_llm_interface(self) -> LLMInterface:
         """Factory for LLM interface"""

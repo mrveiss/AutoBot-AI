@@ -12,9 +12,7 @@
 import { ref, computed, readonly, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-
-// Skills API is on the main AutoBot backend, proxied via nginx
-const API_BASE = '/autobot-api/skills/'
+import { getBackendUrl } from '@/config/ssot-config'
 
 // =============================================================================
 // Type Definitions
@@ -84,7 +82,7 @@ export function useSkills() {
   const initialized = ref(false)
 
   const api = axios.create({
-    baseURL: API_BASE,
+    baseURL: `${getBackendUrl()}/skills/`,
     timeout: 15000,
   })
 
@@ -281,10 +279,6 @@ export interface GovernanceConfig {
   default_trust_level: string
 }
 
-// Governance API base — hits main backend via SLM nginx proxy
-const SKILLS_REPOS_BASE = '/autobot-api/skills/repos'
-const SKILLS_GOV_BASE = '/autobot-api/skills/governance'
-
 // =============================================================================
 // useSkillGovernance Composable
 // =============================================================================
@@ -312,7 +306,7 @@ export function useSkillGovernance() {
   async function fetchRepos(): Promise<void> {
     loading.value = true
     try {
-      const { data } = await api.get<SkillRepo[]>(SKILLS_REPOS_BASE)
+      const { data } = await api.get<SkillRepo[]>(`${getBackendUrl()}/skills/repos`)
       repos.value = data
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch repos'
@@ -325,7 +319,7 @@ export function useSkillGovernance() {
     payload: Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>,
   ): Promise<unknown> {
     try {
-      const { data } = await api.post(SKILLS_REPOS_BASE, payload)
+      const { data } = await api.post(`${getBackendUrl()}/skills/repos`, payload)
       await fetchRepos()
       return data
     } catch (e: unknown) {
@@ -336,7 +330,7 @@ export function useSkillGovernance() {
 
   async function syncRepo(repoId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${SKILLS_REPOS_BASE}/${repoId}/sync`)
+      const { data } = await api.post(`${getBackendUrl()}/skills/repos/${repoId}/sync`)
       await fetchRepos()
       return data
     } catch (e: unknown) {
@@ -347,7 +341,7 @@ export function useSkillGovernance() {
 
   async function fetchApprovals(): Promise<void> {
     try {
-      const { data } = await api.get<SkillApproval[]>(`${SKILLS_GOV_BASE}/approvals`)
+      const { data } = await api.get<SkillApproval[]>(`${getBackendUrl()}/skills/governance/approvals`)
       approvals.value = data
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch approvals'
@@ -361,7 +355,7 @@ export function useSkillGovernance() {
     notes = '',
   ): Promise<void> {
     try {
-      await api.post(`${SKILLS_GOV_BASE}/approvals/${approvalId}`, {
+      await api.post(`${getBackendUrl()}/skills/governance/approvals/${approvalId}`, {
         approved,
         notes,
         trust_level: trustLevel,
@@ -374,7 +368,7 @@ export function useSkillGovernance() {
 
   async function fetchDrafts(): Promise<void> {
     try {
-      const { data } = await api.get<Record<string, unknown>[]>(`${SKILLS_GOV_BASE}/drafts`)
+      const { data } = await api.get<Record<string, unknown>[]>(`${getBackendUrl()}/skills/governance/drafts`)
       drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch drafts'
@@ -383,7 +377,7 @@ export function useSkillGovernance() {
 
   async function testDraft(skillId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/test`)
+      const { data } = await api.post(`${getBackendUrl()}/skills/governance/drafts/${skillId}/test`)
       return data
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Test draft failed'
@@ -393,7 +387,7 @@ export function useSkillGovernance() {
 
   async function promoteDraft(skillId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/promote`)
+      const { data } = await api.post(`${getBackendUrl()}/skills/governance/drafts/${skillId}/promote`)
       await fetchDrafts()
       return data
     } catch (e: unknown) {
@@ -404,7 +398,7 @@ export function useSkillGovernance() {
 
   async function fetchGovernance(): Promise<void> {
     try {
-      const { data } = await api.get<GovernanceConfig>(`${SKILLS_GOV_BASE}/`)
+      const { data } = await api.get<GovernanceConfig>(`${getBackendUrl()}/skills/governance/`)
       governanceConfig.value = data
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch governance config'
@@ -413,7 +407,7 @@ export function useSkillGovernance() {
 
   async function setGovernanceMode(mode: GovernanceConfig['mode']): Promise<void> {
     try {
-      await api.put(`${SKILLS_GOV_BASE}/`, { mode })
+      await api.put(`${getBackendUrl()}/skills/governance/`, { mode })
       await fetchGovernance()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to update governance mode'

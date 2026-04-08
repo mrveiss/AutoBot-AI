@@ -520,6 +520,7 @@ import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
 import appConfig from '@/config/AppConfig.js'
+import { getApiBase } from '@/config/ssot-config'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
@@ -1041,7 +1042,7 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
 
   const poll = async () => {
     try {
-      const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/commands/${command_id}`)
+      const backendUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/commands/${command_id}`)
       const response = await fetchWithAuth(backendUrl)
 
       if (!response.ok) {
@@ -1127,7 +1128,7 @@ const approveCommand = async (
 
   try {
     // Get backend URL from appConfig
-    const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/sessions/${terminal_session_id}/approve`)
+    const backendUrl = await appConfig.getApiUrl(`${getApiBase()}/agent-terminal/sessions/${terminal_session_id}/approve`)
 
     const response = await fetchWithAuth(backendUrl, {
       method: 'POST',

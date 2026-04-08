@@ -181,14 +181,14 @@ raise_auth_error("AUTH_0002")
 
 ### Migration Steps:
 
-1. **Identify the error pattern** in `config/error_migration_map.yaml`
+1. **Identify the error pattern** in `autobot-backend/static/error_messages.yaml`
 2. **Find matching catalog code**
 3. **Import appropriate helper function**
 4. **Replace HTTPException with catalog call**
 5. **Add context if needed** (preserve original exception details)
 6. **Remove hardcoded status codes**
 
-**See:** `config/error_migration_map.yaml` for common patterns and mappings
+**See:** `autobot-backend/static/error_messages.yaml` for common patterns and mappings
 
 ---
 
@@ -271,7 +271,7 @@ knowledge_base:
 
 ### 7. Update Tests
 
-Add test case to `tests/test_error_catalog.py`:
+Add test case to `autobot-backend/tests/` for the relevant module:
 
 ```python
 def test_new_error_code(self):
@@ -389,7 +389,7 @@ Catalog is validated on load:
 **Run validation tests:**
 
 ```bash
-pytest tests/test_error_catalog.py -v
+pytest autobot-backend/tests/ -v -k error_catalog
 ```
 
 ---
@@ -397,11 +397,11 @@ pytest tests/test_error_catalog.py -v
 ## References
 
 - **Error Catalog:** `config/error_messages.yaml`
-- **Migration Map:** `config/error_migration_map.yaml`
+- **Error Messages:** `autobot-backend/static/error_messages.yaml`
 - **Catalog Loader:** `src/utils/error_catalog.py`
 - **HTTP Helpers:** `src/utils/catalog_http_exceptions.py`
 - **Error Boundaries:** `src/utils/error_boundaries.py`
-- **Tests:** `tests/test_error_catalog.py`
+- **Tests:** `autobot-backend/utils/catalog_http_exceptions.py`
 
 ---
 

@@ -18,11 +18,12 @@ from typing import Optional
 
 from autobot_shared.redis_client import get_redis_client
 from constants.redis_constants import REDIS_KEY
+from constants.ttl_constants import TTL_7_DAYS
 from services.notification_service import NotificationConfig
 
 logger = logging.getLogger(__name__)
 
-_NOTIF_CONFIG_TTL = 7 * 24 * 3600  # 7 days, matches notification store TTL
+_NOTIF_CONFIG_TTL = TTL_7_DAYS
 
 
 def _notif_config_key(workflow_id: str) -> str:

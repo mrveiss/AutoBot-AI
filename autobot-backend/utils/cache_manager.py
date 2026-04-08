@@ -27,6 +27,7 @@ from fastapi import Request
 
 # Import centralized Redis client utility
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_5_MINUTES
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ logger = logging.getLogger(__name__)
 class CacheManager:
     """Redis-based cache manager with TTL support"""
 
-    def __init__(self, default_ttl: int = 300):  # 5 minutes default
+    def __init__(self, default_ttl: int = TTL_5_MINUTES):
         """Initialize cache manager with default TTL and Redis client state."""
         self.default_ttl = default_ttl
         self.cache_prefix = "cache:"
@@ -225,7 +226,7 @@ def _resolve_cache_key(
 
 
 # FastAPI 0.115.9 compatible decorator for caching API responses
-def cache_response(cache_key: str = None, ttl: int = 300):
+def cache_response(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     FastAPI 0.115.9 compatible decorator to cache API endpoint responses
 
@@ -288,7 +289,7 @@ def _is_cacheable_response(result: Any) -> bool:
 
 
 # Simple cache decorator for non-HTTP functions
-def cache_function(cache_key: str = None, ttl: int = 300):
+def cache_function(cache_key: str = None, ttl: int = TTL_5_MINUTES):
     """
     Simple cache decorator for non-FastAPI functions
 

@@ -8,13 +8,14 @@ import logging
 from typing import Any, Dict, Optional
 
 from autobot_shared.ssot_config import config
+from utils.async_initializable import AsyncInitializable
 
 from .protocols import CacheProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class CacheCoordinator:
+class CacheCoordinator(AsyncInitializable):
     """
     Orchestrates all registered caches with memory-aware eviction.
 
@@ -27,10 +28,11 @@ class CacheCoordinator:
     - Provide unified statistics
 
     Issue: #743 - Memory Optimization (Phase 3.3)
+    Issue: #3390 - Migrated to AsyncInitializable lazy-init pattern
     Reads default thresholds from SSOT config.cache.coordinator
 
     Usage:
-        coordinator = CacheCoordinator.get_instance()
+        coordinator = await get_cache_coordinator()
         coordinator.register(my_cache)
         await coordinator.check_pressure()
         stats = coordinator.get_unified_stats()
@@ -39,17 +41,23 @@ class CacheCoordinator:
     _instance: Optional["CacheCoordinator"] = None
 
     def __init__(self):
+        super().__init__(component_name="cache_coordinator")
         self._caches: Dict[str, CacheProtocol] = {}
+        self._pressure_threshold: float = 0.0
+        self._eviction_ratio: float = 0.0
+        self._pressure_triggered_count = 0
+        self._eviction_lock = asyncio.Lock()
+
+    async def _initialize_impl(self) -> bool:
+        """Load SSOT config values. No blocking I/O required."""
         # Issue #743: Read from SSOT config
         self._pressure_threshold = config.cache.coordinator.pressure_threshold
         self._eviction_ratio = config.cache.coordinator.eviction_ratio
-        self._pressure_triggered_count = 0
-        self._lock = asyncio.Lock()
-        self._initialized = False
+        return True
 
     @classmethod
-    def get_instance(cls) -> "CacheCoordinator":
-        """Get singleton instance."""
+    def get_sync_instance(cls) -> "CacheCoordinator":
+        """Get singleton instance synchronously (skips async init — call initialize() first)."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -104,7 +112,7 @@ class CacheCoordinator:
         Returns:
             True if eviction was triggered, False otherwise
         """
-        async with self._lock:
+        async with self._eviction_lock:
             mem_percent = self.get_memory_percent()
             if mem_percent > self._pressure_threshold:
                 logger.warning(f"Memory pressure detected: {mem_percent:.1%}")
@@ -175,6 +183,8 @@ class CacheCoordinator:
             self._eviction_ratio = max(0.0, min(1.0, eviction_ratio))
 
 
-def get_cache_coordinator() -> CacheCoordinator:
-    """Get the global cache coordinator instance."""
-    return CacheCoordinator.get_instance()
+async def get_cache_coordinator() -> CacheCoordinator:
+    """Get and lazily initialize the global cache coordinator instance."""
+    coordinator = CacheCoordinator.get_sync_instance()
+    await coordinator.initialize()
+    return coordinator

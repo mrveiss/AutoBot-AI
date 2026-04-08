@@ -10,7 +10,7 @@ Contains workflow documentation generation and knowledge extraction.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .types import AgentProfile, DocumentationType, WorkflowDocumentation
@@ -65,7 +65,7 @@ class WorkflowDocumenter:
         Returns:
             Created WorkflowDocumentation instance
         """
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         doc = WorkflowDocumentation(
             workflow_id=workflow_id,
             title=title,
@@ -106,7 +106,7 @@ class WorkflowDocumenter:
             "specializations": agent_profile.specializations,
             "max_concurrent_tasks": agent_profile.max_concurrent_tasks,
             "preferred_task_types": agent_profile.preferred_task_types,
-            "registration_time": datetime.now().isoformat(),
+            "registration_time": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         # Store in knowledge base
@@ -131,7 +131,7 @@ class WorkflowDocumenter:
             workflow_doc: The workflow documentation to update
             execution_result: Results from workflow execution
         """
-        workflow_doc.updated_at = datetime.now()
+        workflow_doc.updated_at = datetime.now(tz=timezone.utc)
         workflow_doc.content.update(
             {
                 "execution_result": execution_result,
@@ -139,7 +139,7 @@ class WorkflowDocumenter:
                 "success_rate": execution_result.get("success_rate", 0),
                 "status": execution_result.get("status", "unknown"),
                 "interactions": len(execution_result.get("interactions", [])),
-                "end_time": datetime.now().isoformat(),
+                "end_time": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 
@@ -340,7 +340,7 @@ class WorkflowDocumenter:
         workflow_doc.content.update(
             {
                 "error_message": error_message,
-                "failure_time": datetime.now().isoformat(),
+                "failure_time": datetime.now(tz=timezone.utc).isoformat(),
                 "failure_analysis": (
                     "Workflow execution failed - requires investigation"
                 ),

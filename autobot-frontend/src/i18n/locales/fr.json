@@ -1658,7 +1658,9 @@
       "issueResolved": "Issue marked as resolved",
       "failedToUpdate": "Failed to update issue status",
       "markedFalsePositive": "Marked as false positive",
-      "failedToLoadReview": "Failed to load review details"
+      "failedToLoadReview": "Failed to load review details",
+      "reviewLoaded": "Revue chargée depuis l'historique.",
+      "reviewNotAvailable": "Détails de la revue non disponibles — relancez l'analyse pour voir les résultats."
     },
     "performanceAnalysis": {
       "title": "Performance Analysis",
@@ -3034,6 +3036,28 @@
       "aboutPopulateCommands": "Découvre les commandes système disponibles et crée des entrées de connaissances avec les informations d'utilisation, les options et des exemples.",
       "aboutIndexDocs": "Indexe les fichiers de documentation depuis les répertoires configurés (ex. : /usr/share/doc) dans la base de connaissances.",
       "aboutWhenToUse": "Exécutez <strong>Initialiser</strong> en premier sur les nouveaux systèmes. Utilisez <strong>Actualiser les pages man</strong> et <strong>Alimenter les commandes</strong> après l'installation de nouveaux logiciels. <strong>Réindexer</strong> si les performances de recherche se dégradent."
+    },
+    "vectorization": {
+      "actionVectorize": "Vectoriser",
+      "actionRetry": "Réessayer",
+      "actionInProgress": "En cours...",
+      "actionAlreadyDone": "Vectorisé",
+      "tooltipVectorize": "Vectoriser ce document",
+      "tooltipRetry": "Réessayer la vectorisation",
+      "tooltipInProgress": "Vectorisation en cours",
+      "tooltipAlreadyDone": "Déjà vectorisé"
+    },
+    "batchSelection": {
+      "selected": "{count} sélectionné(s)",
+      "eligible": "{count} éligible(s)",
+      "vectorizeSelected": "Vectoriser {count}",
+      "vectorizing": "Vectorisation...",
+      "noneEligible": "Aucun éligible",
+      "vectorizeSelectedTooltip": "Vectoriser {count} documents sélectionnés",
+      "vectorizingTooltip": "Vectorisation en cours",
+      "noneEligibleTooltip": "Tous les documents sélectionnés sont déjà vectorisés ou en attente",
+      "clearSelection": "Effacer",
+      "clearSelectionTitle": "Effacer la sélection"
     }
   },
   "workflow": {
@@ -6083,6 +6107,14 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
+    "desktop": "Desktop",
+    "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
+  },
+  "reasoningTrace": {
+    "title": "Trace de raisonnement",
+    "toggleLabel": "Basculer le panneau de trace de raisonnement",
+    "success": "Succes",
+    "error": "Erreur"
   }
 }

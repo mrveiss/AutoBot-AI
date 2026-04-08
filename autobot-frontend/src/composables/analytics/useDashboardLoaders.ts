@@ -17,6 +17,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useDashboardLoaders')
 
@@ -56,7 +57,7 @@ export interface UseDashboardLoadersDeps {
 }
 
 export function useDashboardLoaders(deps: UseDashboardLoadersDeps) {
-  const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
+  const dashboardTask = useBackgroundTask(`${getApiBase()}/analytics/dashboard/overview`)
 
   const systemOverview = ref<SystemOverviewData | null>(null)
   const communicationPatterns = ref<CommunicationPatternsData | null>(null)

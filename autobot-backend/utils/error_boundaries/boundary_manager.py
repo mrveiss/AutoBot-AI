@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import RetryConfig
+from constants.ttl_constants import TTL_24_HOURS
 
 try:
     from autobot_shared.redis_client import get_redis_client
@@ -318,7 +319,7 @@ class ErrorBoundaryManager:
                 "stack_trace": error_report.stack_trace[:1000],
             }
 
-            self.redis_client.setex(redis_key, 86400, json.dumps(error_data))
+            self.redis_client.setex(redis_key, TTL_24_HOURS, json.dumps(error_data))
 
             # Log error
             logger.error("Error %s: %s", error_report.error_id, error_report.message)

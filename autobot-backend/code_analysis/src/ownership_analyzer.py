@@ -19,7 +19,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -30,18 +30,17 @@ if str(_project_root) not in sys.path:
 
 try:
     from autobot_shared.redis_client import get_redis_client
-    from config import UnifiedConfig
+    from constants.ttl_constants import TTL_1_HOUR
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:
     get_redis_client = None
-    UnifiedConfig = None
+    TTL_1_HOUR = 3_600
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
 
 
-config = UnifiedConfig() if _CONFIG_AVAILABLE else None
 logger = logging.getLogger(__name__)
 
 # Directories to skip during analysis
@@ -573,7 +572,7 @@ class OwnershipAnalyzer:
                 author_data[do.primary_owner]["areas"].add(do.directory_path)
 
         # Calculate scores
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         recency_cutoff = now - timedelta(days=days_for_recency)
 
         max_lines = max((d["lines"] for d in author_data.values()), default=1)
@@ -634,7 +633,7 @@ class OwnershipAnalyzer:
     ) -> List[KnowledgeGap]:
         """Detect knowledge gaps in the codebase"""
         gaps = []
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         recency_cutoff = now - timedelta(days=days_for_recency)
 
         # Check file-level gaps
@@ -854,7 +853,7 @@ class OwnershipAnalyzer:
         if self.redis_client:
             try:
                 value = json.dumps(results, default=str)
-                await self.redis_client.setex(self.OWNERSHIP_KEY, 3600, value)
+                await self.redis_client.setex(self.OWNERSHIP_KEY, TTL_1_HOUR, value)
             except Exception as e:
                 logger.warning(f"Failed to cache results: {e}")
 

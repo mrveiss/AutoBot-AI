@@ -11,6 +11,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, HTTPException
 
 from auth_middleware import check_admin_permission
+from constants.ttl_constants import TTL_5_MINUTES
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
 
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Cache for prompts to avoid re-reading files on every request
 _prompts_cache: Optional[Dict] = None
 _cache_timestamp: float = 0
-_cache_ttl: int = 300  # 5 minutes cache
+_cache_ttl: int = TTL_5_MINUTES
 
 # Lock for thread-safe cache access
 _cache_lock = asyncio.Lock()

@@ -7,6 +7,8 @@ Provides efficient aiohttp client session management to prevent resource exhaust
 """
 
 import asyncio
+import hashlib
+import hmac
 import logging
 import time
 from typing import Any, Dict, Optional
@@ -401,6 +403,50 @@ async def close_http_client():
     if _http_client:
         await _http_client.close()
         _http_client = None
+
+
+def sign_request(
+    service_id: str,
+    service_key: str,
+    method: str,
+    path: str,
+    timestamp: int,
+) -> Dict[str, str]:
+    """
+    Generate HMAC-SHA256 authentication headers for service-to-service requests.
+
+    Produces the three headers that ``ServiceAuthManager.validate_signature``
+    expects on the receiving end:
+
+    * ``X-Service-ID``        — caller's service identifier
+    * ``X-Service-Signature`` — HMAC-SHA256 over ``service_id:method:path:timestamp``
+    * ``X-Service-Timestamp`` — Unix epoch seconds as a decimal string
+
+    This is a pure, synchronous function with no I/O — safe to call from any
+    async or sync context.
+
+    Args:
+        service_id: This service's identifier (e.g. ``'main-backend'``).
+        service_key: 256-bit hex-encoded secret shared with the destination.
+        method: HTTP method in upper-case (e.g. ``'GET'``, ``'POST'``).
+        path: URL path component only (e.g. ``'/api/inference'``).
+        timestamp: Unix timestamp (seconds).  Must be within the receiver's
+            replay-attack window (default ±300 s).
+
+    Returns:
+        Dict mapping header name → value, ready to merge into request headers.
+    """
+    message = f"{service_id}:{method}:{path}:{timestamp}"
+    signature = hmac.new(
+        service_key.encode(encoding="utf-8"),
+        message.encode(encoding="utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return {
+        "X-Service-ID": service_id,
+        "X-Service-Signature": signature,
+        "X-Service-Timestamp": str(timestamp),
+    }
 
 
 # Example usage patterns for migration

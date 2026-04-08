@@ -9,7 +9,7 @@
  */
 
 import { ref } from 'vue';
-import { getBackendUrl } from '@/config/ssot-config';
+import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
@@ -77,7 +77,7 @@ async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
-  const url = `${getBackendUrl()}${endpoint}`;
+  const url = endpoint;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
@@ -132,7 +132,7 @@ export function useWorkflowNotificationConfig() {
       const res = await apiRequest<{
         success: boolean;
         notification_config: NotificationConfig | null;
-      }>(`/api/workflow-automation/notification_config/${workflowId}`);
+      }>(`${getApiBase()}/workflow-automation/notification_config/${workflowId}`);
 
       if (!res.success || !res.data) {
         configError.value = res.error ?? 'Failed to load config';
@@ -153,7 +153,7 @@ export function useWorkflowNotificationConfig() {
     configError.value = null;
     try {
       const res = await apiRequest<{ success: boolean }>(
-        `/api/workflow-automation/notification_config/${workflowId}`,
+        `${getApiBase()}/workflow-automation/notification_config/${workflowId}`,
         { method: 'PUT', body: JSON.stringify(payload) },
       );
       if (!res.success) {

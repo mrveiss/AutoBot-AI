@@ -34,7 +34,8 @@ async def switch_llm_provider(
 ):
     """Switch active LLM provider at runtime.
 
-    Body: {"provider": "openai", "model": "gpt-4", "validate": true}
+    Body: {"provider": "openai", "model": "<model-name>", "validate": true}
+    See ModelConstants.DEFAULT_OPENAI_MODEL for the default OpenAI model.
     """
     provider = switch_data.get("provider")
     if not provider:

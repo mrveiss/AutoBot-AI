@@ -7,6 +7,7 @@ Verifies backward compatibility and Feature Envy fixes
 """
 
 from utils.model_optimizer import (
+    ModelCapabilityTier,
     ModelInfo,
     ModelOptimizer,
     ModelPerformanceLevel,
@@ -14,7 +15,6 @@ from utils.model_optimizer import (
     ModelSelector,
     SystemResourceAnalyzer,
     SystemResources,
-    TaskComplexity,
     TaskRequest,
     get_model_optimizer,
 )
@@ -26,7 +26,7 @@ def test_imports():
     assert get_model_optimizer is not None
     assert TaskRequest is not None
     assert ModelInfo is not None
-    assert TaskComplexity is not None
+    assert ModelCapabilityTier is not None
     assert ModelPerformanceLevel is not None
     # New classes
     assert SystemResources is not None
@@ -65,22 +65,22 @@ def test_system_resources_dataclass():
 def test_task_request_analyze_complexity():
     """Test TaskRequest.analyze_complexity() method (Tell Don't Ask)"""
     complexity_keywords = {
-        TaskComplexity.SIMPLE: ["what", "define"],
-        TaskComplexity.MODERATE: ["analyze", "explain"],
-        TaskComplexity.COMPLEX: ["design", "develop"],
-        TaskComplexity.SPECIALIZED: ["research paper", "scientific"],
+        ModelCapabilityTier.SIMPLE: ["what", "define"],
+        ModelCapabilityTier.MODERATE: ["analyze", "explain"],
+        ModelCapabilityTier.COMPLEX: ["design", "develop"],
+        ModelCapabilityTier.SPECIALIZED: ["research paper", "scientific"],
     }
 
     # Simple query
     simple_task = TaskRequest(query="What is Python?", task_type="chat")
-    assert simple_task.analyze_complexity(complexity_keywords) == TaskComplexity.SIMPLE
+    assert simple_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.SIMPLE
 
     # Complex query
     complex_task = TaskRequest(
         query="Design a scalable microservices architecture", task_type="code"
     )
     assert (
-        complex_task.analyze_complexity(complexity_keywords) == TaskComplexity.COMPLEX
+        complex_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.COMPLEX
     )
 
     # Specialized query
@@ -89,7 +89,7 @@ def test_task_request_analyze_complexity():
     )
     assert (
         specialized_task.analyze_complexity(complexity_keywords)
-        == TaskComplexity.SPECIALIZED
+        == ModelCapabilityTier.SPECIALIZED
     )
 
     print("✅ TaskRequest.analyze_complexity() works correctly")  # noqa: print
@@ -161,7 +161,7 @@ def test_model_optimizer_backward_compatibility_methods():
     # Test analyze_task_complexity() works
     task = TaskRequest(query="What is Python?", task_type="chat")
     complexity = optimizer.analyze_task_complexity(task)
-    assert isinstance(complexity, TaskComplexity)
+    assert isinstance(complexity, ModelCapabilityTier)
 
     print("✅ ModelOptimizer backward compatibility methods work")  # noqa: print
 
@@ -191,7 +191,7 @@ def test_model_optimizer_delegation():
     models = [model1, model2]
 
     # Test filter_by_complexity delegation
-    filtered = optimizer._filter_models_by_complexity(TaskComplexity.COMPLEX, models)
+    filtered = optimizer._filter_models_by_complexity(ModelCapabilityTier.COMPLEX, models)
     assert len(filtered) == 1  # Only advanced model
     assert filtered[0].name == "large-model"
 
@@ -252,7 +252,7 @@ def test_model_selector_methods():
     models = [lightweight, standard, advanced]
 
     # Test filter_by_complexity
-    filtered = selector.filter_by_complexity(models, TaskComplexity.COMPLEX)
+    filtered = selector.filter_by_complexity(models, ModelCapabilityTier.COMPLEX)
     assert len(filtered) == 1  # Only advanced
     assert filtered[0].name == "advanced"
 

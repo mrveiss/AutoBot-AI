@@ -20,6 +20,7 @@ import aiohttp
 import psutil
 
 # Import existing monitoring infrastructure
+from constants.api_constants import PATH_API_HEALTH
 
 logger = logging.getLogger(__name__)
 
@@ -684,7 +685,7 @@ class Phase9PerformanceMonitor:
                 "name": "Backend API",
                 "host": ssot_config.vm.main,
                 "port": 8001,
-                "path": "/api/health",
+                "path": PATH_API_HEALTH,
             },
             {
                 "name": "Frontend",

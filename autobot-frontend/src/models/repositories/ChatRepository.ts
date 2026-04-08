@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
-import { getBackendUrl } from '@/config/ssot-config'
+import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import type { ChatMessage } from '@/types/api'
 
@@ -226,7 +226,7 @@ export class ChatRepository {
       }
 
       // Use native fetch API for proper SSE streaming support
-      const url = `${this.baseURL}/api/chats/${chatId}/message`
+      const url = `${this.baseURL}${getApiBase()}/chats/${chatId}/message`
       const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
       const authToken = this._getAuthToken()
       if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`
@@ -274,7 +274,7 @@ export class ChatRepository {
   ): Promise<void> {
     try {
       const response = await this.axios.post(
-        '/api/chat',
+        `${getApiBase()}/chat`,
         {
           message,
           chat_id: chatId,
@@ -321,7 +321,7 @@ export class ChatRepository {
   // Create new chat session
   async createNewChat(title?: string, metadata?: Record<string, unknown>): Promise<ChatSession> {
     try {
-      const response = await this.post('/api/chat/sessions', {
+      const response = await this.post(`${getApiBase()}/chat/sessions`, {
         title: title || 'New Chat',
         metadata: metadata || {}
       })
@@ -340,7 +340,7 @@ export class ChatRepository {
   // Get list of all chat sessions (for compatibility with controller)
   async getChatList(): Promise<ChatSession[]> {
     try {
-      const response = await this.get('/api/chat/sessions')
+      const response = await this.get(`${getApiBase()}/chat/sessions`)
       // Fix: axios wraps response in .data, and API response has { data: { sessions: [...] } }
       const sessions = response.data?.data?.sessions || response.data?.sessions || []
 
@@ -362,7 +362,7 @@ export class ChatRepository {
   // Get single session by ID
   async getSession(sessionId: string): Promise<ChatSession> {
     try {
-      const response = await this.get(`/api/chat/sessions/${sessionId}`)
+      const response = await this.get(`${getApiBase()}/chat/sessions/${sessionId}`)
       return response.data
     } catch (error: unknown) {
       logger.error('Failed to get session:', error)
@@ -374,7 +374,7 @@ export class ChatRepository {
   async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
     try {
       logger.debug(`Fetching messages for session: ${sessionId}`)
-      const response = await this.get(`/api/chat/sessions/${sessionId}`)
+      const response = await this.get(`${getApiBase()}/chat/sessions/${sessionId}`)
       const data = response.data
       logger.debug(`Raw API response:`, JSON.stringify(data).substring(0, 200))
 
@@ -473,7 +473,7 @@ export class ChatRepository {
         params.file_options = JSON.stringify(fileOptions)
       }
 
-      const response = await this.delete(`/api/chat/sessions/${chatId}`, { params })
+      const response = await this.delete(`${getApiBase()}/chat/sessions/${chatId}`, { params })
       return response.data || response
     } catch (error: unknown) {
       logger.error('Failed to delete chat:', error)
@@ -485,7 +485,7 @@ export class ChatRepository {
   // Issue #552: Fixed path - backend uses /api/chat/reset
   async resetChat(): Promise<AxiosResponse> {
     try {
-      const response = await this.post('/api/chat/reset')
+      const response = await this.post(`${getApiBase()}/chat/reset`)
       return response.data || response
     } catch (error: unknown) {
       logger.error('Failed to reset chat:', error)
@@ -497,7 +497,7 @@ export class ChatRepository {
   // Issue #552: Fixed path - backend uses /api/chat/sessions
   async getChatHistory(): Promise<{ messages: ChatMessage[] }> {
     try {
-      const response = await this.get('/api/chat/sessions')
+      const response = await this.get(`${getApiBase()}/chat/sessions`)
       return response.data || response
     } catch (error: unknown) {
       logger.warn('Failed to get chat history (legacy):', error)
@@ -509,7 +509,7 @@ export class ChatRepository {
     try {
       // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
       // Backend expects: { data: { messages: [...], name: "..." } }
-      const response = await this.post(`/api/chats/${params.chatId}/save`, {
+      const response = await this.post(`${getApiBase()}/chats/${params.chatId}/save`, {
         data: {
           messages: params.messages,
           name: params.name || ''
@@ -533,7 +533,7 @@ export class ChatRepository {
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.get(`/api/chat-knowledge/chat/sessions/${sessionId}/facts`)
+      const response = await this.get(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`)
       return response.data || response
     } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
@@ -552,7 +552,7 @@ export class ChatRepository {
   ): Promise<PreserveFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.post(`/api/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
+      const response = await this.post(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
         fact_ids: factIds,
         preserve
       })

@@ -24,6 +24,8 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from constants.ttl_constants import TTL_5_MINUTES
+
 logger = logging.getLogger(__name__)
 
 # Redis import — graceful fallback if unavailable
@@ -52,7 +54,7 @@ class TokenOptimizerConfig:
     min_block_length: int = 200
     min_preamble_length: int = 500
     l1_max_entries: int = 100
-    l1_ttl_seconds: int = 300
+    l1_ttl_seconds: int = TTL_5_MINUTES
     l2_ttl_seconds: int = 86400
     compaction_ratio: float = 0.6
     redis_key_prefix: str = "autobot:token_opt:"
@@ -135,7 +137,7 @@ class L1Cache:
     corrupt the LRU ordering or the entry hit-count fields. Issue #2577.
     """
 
-    def __init__(self, max_entries: int = 100, ttl_seconds: int = 300):
+    def __init__(self, max_entries: int = 100, ttl_seconds: int = TTL_5_MINUTES):
         self._cache: OrderedDict[str, CompactionEntry] = OrderedDict()
         self._max_entries = max_entries
         self._ttl_seconds = ttl_seconds

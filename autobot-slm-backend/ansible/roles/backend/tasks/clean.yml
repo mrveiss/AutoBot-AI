@@ -8,8 +8,10 @@
 # Safe to run any time; all removes are conditional.
 #
 # LEGACY directory deletions (npu-worker, browser-service, ai-stack,
-# autobot-user-backend, config) run unconditionally because NO current role
+# autobot-user-backend) run unconditionally because NO current role
 # deploys to those paths — they are pre-rename leftovers.
+# NOTE: /opt/autobot/config is NOT removed here (#3873) — it holds
+# permission_rules.yaml which permission_matcher.py reads at runtime.
 #
 # Wrong-node deletions of CURRENT canonical dirs (autobot-slm-frontend,
 # autobot-slm-backend) ONLY run when node_roles is defined (dynamic inventory).
@@ -40,11 +42,6 @@
     state: absent
   tags: ['clean']
 
-- name: "Backend | Clean: stale top-level config/ (pre-reorganization duplicate)"
-  ansible.builtin.file:
-    path: /opt/autobot/config
-    state: absent
-  tags: ['clean']
 
 - name: "Backend | Clean: wrong-node autobot-slm-frontend dir"
   ansible.builtin.file:

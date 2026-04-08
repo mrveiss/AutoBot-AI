@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from constants.threshold_constants import TimingConstants
 from services.process_adapter_service import ProcessAdapterService
 
 logger = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ async def stream_process_logs(
             ):
                 await websocket.send_json({"done": True, "status": data["status"]})
                 break
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
     except Exception:
         pass
     finally:

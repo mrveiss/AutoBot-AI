@@ -1,6 +1,7 @@
 import type { ApiResponse, RequestOptions } from '@/types/models'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { extractErrorMessage } from '@/utils/errorExtract'
+import { getApiBase } from '@/config/ssot-config'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
 
@@ -41,10 +42,10 @@ export class ApiRepository {
       defaultTTL: 5 * 60 * 1000, // 5 minutes
       maxSize: 100,
       endpoints: {
-        '/api/settings/': 10 * 60 * 1000, // 10 minutes
-        '/api/system/health': 30 * 1000,   // 30 seconds
-        '/api/prompts/': 15 * 60 * 1000,   // 15 minutes
-        '/api/chats': 2 * 60 * 1000,       // 2 minutes
+        [`${getApiBase()}/settings/`]: 10 * 60 * 1000, // 10 minutes
+        [`${getApiBase()}/system/health`]: 30 * 1000,   // 30 seconds
+        [`${getApiBase()}/prompts/`]: 15 * 60 * 1000,   // 15 minutes
+        [`${getApiBase()}/chats`]: 2 * 60 * 1000,       // 2 minutes
       }
     }
   }
@@ -294,7 +295,7 @@ export class ApiRepository {
   async testConnection(): Promise<{ connected: boolean; latency?: number; message: string }> {
     try {
       const start = Date.now()
-      await this.get('/api/system/health')
+      await this.get(`${getApiBase()}/system/health`)
       const latency = Date.now() - start
 
       return {

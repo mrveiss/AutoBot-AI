@@ -302,7 +302,11 @@
 
 - name: "SLM | Set co-located frontend flag (#3013)"
   ansible.builtin.set_fact:
-    slm_colocated_frontend: "{{ _colocated_frontend_check.stat.exists | default(false) }}"
+    slm_colocated_frontend: >-
+      {{
+        (slm_colocated_frontend | default(false) | bool) or
+        (_colocated_frontend_check.stat.exists | default(false) | bool)
+      }}
   tags: ['slm', 'frontend', 'nginx']
 
 # ==========================================================
@@ -506,6 +510,19 @@
     slm_admin_password: "{{ _slm_admin_password_result.stdout }}"
   no_log: true
   tags: ['slm', 'service']
+
+# ==========================================================
+# Admin CLI (#3691)
+# ==========================================================
+- name: "SLM | Install autobot-admin CLI"
+  ansible.builtin.copy:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-slm-backend/scripts/autobot-admin.py"
+    dest: /usr/local/bin/autobot-admin
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  tags: ['slm', 'admin-cli']
 
 - name: "SLM | Display deployment summary"
   ansible.builtin.debug:

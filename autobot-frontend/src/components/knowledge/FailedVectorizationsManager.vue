@@ -101,6 +101,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
@@ -129,7 +130,7 @@ const { execute: fetchFailedJobs, loading, error } = useAsyncOperation()
 
 // Fetch failed jobs
 const fetchFailedJobsFn = async () => {
-  const response = await apiClient.get('/api/knowledge_base/vectorize_jobs/failed')
+  const response = await apiClient.get(`${getApiBase()}/knowledge_base/vectorize_jobs/failed`)
   const data = await parseApiResponse(response)
 
   if (data.status === 'success') {
@@ -149,7 +150,7 @@ const retryJob = async (jobId: string) => {
   retryingJobs.value.add(jobId)
 
   try {
-    const response = await apiClient.post(`/api/knowledge_base/vectorize_jobs/${jobId}/retry`)
+    const response = await apiClient.post(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}/retry`)
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
@@ -175,7 +176,7 @@ const deleteJob = async (jobId: string) => {
   }
 
   await fetchFailedJobs(async () => {
-    const response = await apiClient.delete(`/api/knowledge_base/vectorize_jobs/${jobId}`)
+    const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/${jobId}`)
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
@@ -194,7 +195,7 @@ const clearAllFailed = async () => {
   }
 
   await fetchFailedJobs(async () => {
-    const response = await apiClient.delete('/api/knowledge_base/vectorize_jobs/failed/clear')
+    const response = await apiClient.delete(`${getApiBase()}/knowledge_base/vectorize_jobs/failed/clear`)
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {

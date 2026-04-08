@@ -9,7 +9,7 @@ Monitors system performance during workflow execution
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import psutil
@@ -144,7 +144,7 @@ class SystemResourceMonitor:
         Issue #620: Further extraction of disk and network metrics builders.
         """
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "cpu": {
                 "percent": cpu_percent,
                 "count": cpu_count,
@@ -202,7 +202,7 @@ class SystemResourceMonitor:
         except Exception as e:
             logger.error("Failed to collect system metrics: %s", e)
             return {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "error": "Failed to collect system metrics",
                 "cpu": {"percent": 0},
                 "memory": {"percent": 0, "used_mb": 0},
@@ -228,7 +228,7 @@ class SystemResourceMonitor:
                 "disk_percent": (
                     psutil.disk_usage("/").used / psutil.disk_usage("/").total * 100
                 ),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error("Failed to get current metrics: %s", e)
@@ -244,7 +244,7 @@ class SystemResourceMonitor:
         Returns:
             List of recent data points within the time window
         """
-        cutoff_time = datetime.now().timestamp() - (minutes * 60)
+        cutoff_time = datetime.now(tz=timezone.utc).timestamp() - (minutes * 60)
         recent_data = []
 
         for data in reversed(self.resource_history):
@@ -407,7 +407,7 @@ class SystemResourceMonitor:
                 "critical_alerts": critical,
                 "warnings": warnings,
                 "current_metrics": current,
-                "check_timestamp": datetime.now().isoformat(),
+                "check_timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -427,7 +427,7 @@ class SystemResourceMonitor:
                     ),
                     "summary": self.get_resource_summary(),
                     "thresholds_check": self.check_resource_thresholds(),
-                    "export_timestamp": datetime.now().isoformat(),
+                    "export_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 }
                 return json.dumps(export_data, indent=2, default=str)
             else:

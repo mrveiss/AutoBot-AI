@@ -53,7 +53,7 @@ async def execute_a2a_task(
 
     try:
         # Late import to avoid circular deps at module load time
-        from agents.agent_orchestrator import get_agent_orchestrator
+        from agents.agent_orchestration import get_agent_orchestrator
 
         orchestrator = get_agent_orchestrator()
         result: Dict[str, Any] = await orchestrator.process_request(

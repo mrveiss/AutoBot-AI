@@ -8,7 +8,7 @@ Handles workflow control actions (pause, resume, cancel, approve, skip).
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -46,7 +46,7 @@ class WorkflowController:
 
         # Log user intervention
         intervention = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "action": action,
             "step_id": control_request.step_id,
             "user_input": control_request.user_input,

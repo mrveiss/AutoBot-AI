@@ -4,15 +4,18 @@
 """
 Retrieval Pattern Learner — closes the RAG feedback loop. Issue #2095.
 
-Consumes rag:feedback:{date} Redis streams, scores retrieval trajectories by
-user acceptance (rerank-position gain), distils successful patterns into
-reusable Redis hashes, and exposes a query-time hint API so RAGService can
-adapt its strategy based on historical evidence.
+Consumes rag:feedback:{user_id}:{date} Redis streams (Issue #3240), scores
+retrieval trajectories by user acceptance (rerank-position gain), distils
+successful patterns into reusable Redis hashes namespaced per user, and
+exposes a query-time hint API so RAGService can adapt its strategy based on
+historical evidence.  When no user-scoped pattern exists, lookup falls back
+to the global (user_id="__global__") namespace.
 
 Redis key layout
 ----------------
-rag:retrieval_patterns:{pattern_hash}   HASH   — per-pattern metrics & hints
-rag:rl:cursor:{date}                    STRING — last processed entry ID per day
+rag:retrieval_patterns:{user_id}:{pattern_hash}  HASH   — per-user pattern metrics & hints
+rag:retrieval_patterns:__global__:{pattern_hash} HASH   — global fallback patterns
+rag:rl:cursors                                   HASH   — last processed stream ID per key
 """
 
 import hashlib
@@ -24,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from constants.ttl_constants import TTL_30_DAYS
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -31,7 +36,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Patterns are kept for 30 days; unused ones are pruned at consolidation time.
-_PATTERN_TTL_SECONDS = 30 * 24 * 3600
+_PATTERN_TTL_SECONDS = TTL_30_DAYS
 # Minimum usage count before we prune old patterns.
 _PRUNE_MIN_USAGE = 3
 # Cosine-similarity threshold above which two patterns are considered duplicates.
@@ -42,8 +47,10 @@ _SUCCESS_THRESHOLD = 0.6
 _XRANGE_BATCH = 100
 # Redis cursor hash key (one entry per date key).
 _CURSOR_HASH_KEY = "rag:rl:cursors"
-# Hash prefix for distilled patterns.
+# Hash prefix for distilled patterns (Issue #3240: namespaced by user_id).
 _PATTERN_KEY_PREFIX = "rag:retrieval_patterns:"
+# Sentinel used when no authenticated user is available (global/system scope).
+GLOBAL_USER = "__global__"
 
 
 # ---------------------------------------------------------------------------
@@ -179,14 +186,24 @@ class RetrievalLearner:
     # Stream consumption
     # ------------------------------------------------------------------
 
-    async def consume_feedback_stream(self, date_key: Optional[str] = None) -> int:
-        """Consume new events from rag:feedback:{date_key} and distil patterns.
+    async def consume_feedback_stream(
+        self,
+        date_key: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> int:
+        """Consume new events from rag:feedback:{user_id}:{date_key} and distil patterns.
+
+        Issue #3240: feedback streams are now namespaced by user_id so per-user
+        retrieval patterns are learned independently.  When user_id is None the
+        global sentinel ``__global__`` is used, which preserves backward
+        compatibility with system-level schedulers.
 
         Uses a per-stream cursor so repeated scheduler calls only read NEW
         entries. Mirrors EdgeLearner.consume_feedback_stream() design.
 
         Args:
             date_key: UTC date string YYYY-MM-DD. Defaults to today.
+            user_id:  Authenticated user identifier. Defaults to global scope.
 
         Returns:
             Number of new events processed.
@@ -194,7 +211,8 @@ class RetrievalLearner:
         if date_key is None:
             date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
-        stream_key = f"rag:feedback:{date_key}"
+        uid = user_id or GLOBAL_USER
+        stream_key = f"rag:feedback:{uid}:{date_key}"
         await self._load_cursors()
 
         resume_id = self._cursors.get(stream_key, "0-0")
@@ -220,7 +238,7 @@ class RetrievalLearner:
                 break
 
             for entry_id, fields in entries:
-                await self._process_feedback_event(fields)
+                await self._process_feedback_event(fields, user_id=uid)
                 ts, seq = (
                     entry_id.decode() if isinstance(entry_id, bytes) else entry_id
                 ).split("-")
@@ -247,8 +265,13 @@ class RetrievalLearner:
     # Event processing & pattern distillation
     # ------------------------------------------------------------------
 
-    async def _process_feedback_event(self, fields: Dict) -> None:
-        """Score a single feedback event and distil a pattern if successful."""
+    async def _process_feedback_event(
+        self, fields: Dict, user_id: str = GLOBAL_USER
+    ) -> None:
+        """Score a single feedback event and distil a pattern if successful.
+
+        Issue #3240: user_id scopes the distilled pattern to the originating user.
+        """
 
         def _decode(v):
             return v.decode("utf-8") if isinstance(v, bytes) else v
@@ -273,7 +296,7 @@ class RetrievalLearner:
         categories = _extract_categories(ranked_ids)
         strategy_hints = _build_strategy_hints(complexity, len(ranked_ids))
 
-        await self._distil_pattern(complexity, categories, strategy_hints)
+        await self._distil_pattern(complexity, categories, strategy_hints, user_id=user_id)
 
     @staticmethod
     def _score_trajectory(retrieved_ids: List[str], ranked_ids: List[str]) -> bool:
@@ -305,14 +328,17 @@ class RetrievalLearner:
         query_type: str,
         categories: List[str],
         strategy_hints: Dict[str, str],
+        user_id: str = GLOBAL_USER,
     ) -> None:
         """Upsert a retrieval pattern in Redis.
 
-        The pattern hash is derived from (query_type, sorted categories) so
-        that semantically identical patterns always map to the same key.
+        Issue #3240: redis_key is namespaced by user_id so each user's patterns
+        are stored independently.  The pattern hash is derived from
+        (query_type, sorted categories) so semantically identical patterns from
+        the same user map to the same key.
         """
         pattern_hash = _compute_pattern_hash(query_type, categories)
-        redis_key = f"{_PATTERN_KEY_PREFIX}{pattern_hash}"
+        redis_key = f"{_PATTERN_KEY_PREFIX}{user_id}:{pattern_hash}"
 
         try:
             redis = await self._get_redis()
@@ -352,12 +378,15 @@ class RetrievalLearner:
         query: str,
         complexity: str = "simple",
         categories: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
     ) -> Optional[RetrievalPattern]:
         """Return the best matching historical pattern for a query, or None.
 
-        Matching strategy (fast, no embedding required):
-        1. Exact hash match on (complexity, sorted categories).
-        2. Complexity-only match (ignore categories) when no exact match.
+        Issue #3240: Matching is attempted in order:
+        1. User-scoped exact hash on (complexity, sorted categories).
+        2. User-scoped complexity-only hash (ignore categories).
+        3. Global exact hash — fallback when the user has no patterns yet.
+        4. Global complexity-only hash — final fallback.
 
         Only returns patterns with success_rate >= 0.6 and usage_count >= 3
         to avoid acting on sparse evidence.
@@ -367,32 +396,44 @@ class RetrievalLearner:
                         reserved for future embedding-based matching).
             complexity: QueryComplexity.value string.
             categories: Optional category list from the calling context.
+            user_id:    Authenticated user identifier for per-user scope.
+                        Falls back to global patterns when None or when the
+                        user has no qualifying patterns.
 
         Returns:
             Best matching RetrievalPattern or None.
         """
         _ = query  # reserved for future embedding-based lookup
         cats = sorted(categories) if categories else []
+        uid = user_id or GLOBAL_USER
 
-        candidates = [
-            _compute_pattern_hash(complexity, cats),
-            _compute_pattern_hash(complexity, []),  # complexity-only fallback
+        exact_hash = _compute_pattern_hash(complexity, cats)
+        complexity_hash = _compute_pattern_hash(complexity, [])
+
+        # Build candidate list: user-scoped first, then global fallback.
+        candidates: List[str] = [
+            f"{_PATTERN_KEY_PREFIX}{uid}:{exact_hash}",
+            f"{_PATTERN_KEY_PREFIX}{uid}:{complexity_hash}",
         ]
+        if uid != GLOBAL_USER:
+            # Append global fallback candidates (Issue #3240).
+            candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{exact_hash}")
+            candidates.append(f"{_PATTERN_KEY_PREFIX}{GLOBAL_USER}:{complexity_hash}")
 
         try:
             redis = await self._get_redis()
-            for ph in candidates:
-                redis_key = f"{_PATTERN_KEY_PREFIX}{ph}"
+            for redis_key in candidates:
                 raw = await redis.hgetall(redis_key)
                 if not raw:
                     continue
                 pattern = RetrievalPattern.from_redis_mapping(raw)
                 if pattern.success_rate >= 0.6 and pattern.usage_count >= 3:
                     logger.debug(
-                        "RetrievalLearner: matched pattern %s (rate=%.2f, usage=%d)",
-                        ph,
+                        "RetrievalLearner: matched pattern %s (rate=%.2f, usage=%d, key=%s)",
+                        pattern.pattern_hash,
                         pattern.success_rate,
                         pattern.usage_count,
+                        redis_key,
                     )
                     return pattern
         except Exception as exc:
@@ -400,8 +441,17 @@ class RetrievalLearner:
 
         return None
 
-    async def record_pattern_outcome(self, pattern_hash: str, success: bool) -> None:
+    async def record_pattern_outcome(
+        self,
+        pattern_hash: str,
+        success: bool,
+        user_id: Optional[str] = None,
+    ) -> None:
         """Update the success_rate of an existing pattern with a new outcome.
+
+        Issue #3240: user_id must match the scope used when the pattern was
+        matched so the correct namespaced Redis key is updated.  Falls back to
+        the global scope when user_id is None.
 
         Uses EMA (alpha=0.1) so that a single bad outcome does not discard an
         otherwise reliable pattern.
@@ -409,13 +459,15 @@ class RetrievalLearner:
         Args:
             pattern_hash: Hash key returned by get_matching_pattern().
             success:      True if the retrieval led to a satisfactory response.
+            user_id:      User scope; use None for global/system scope.
         """
-        redis_key = f"{_PATTERN_KEY_PREFIX}{pattern_hash}"
+        uid = user_id or GLOBAL_USER
+        redis_key = f"{_PATTERN_KEY_PREFIX}{uid}:{pattern_hash}"
         try:
             redis = await self._get_redis()
             raw = await redis.hgetall(redis_key)
             if not raw:
-                logger.debug("RetrievalLearner: no pattern found for %s", pattern_hash)
+                logger.debug("RetrievalLearner: no pattern found for %s", redis_key)
                 return
             pattern = RetrievalPattern.from_redis_mapping(raw)
             signal = 1.0 if success else 0.0

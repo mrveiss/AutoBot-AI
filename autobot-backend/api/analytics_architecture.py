@@ -22,7 +22,7 @@ import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -534,7 +534,7 @@ class ArchitectureAnalyzer:
         include_autobot_patterns: bool = True,
     ) -> ArchitectureReport:
         """Analyze architecture of specified paths (Issue #398: refactored)."""
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         self.pattern_matches = []
         self.file_analyses = {}
 

@@ -16,10 +16,13 @@ from uuid import uuid4
 
 from cryptography.fernet import Fernet
 
-from config import config_manager
+from config.manager import get_config_manager as _get_config_manager
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
+
+# Canonical singleton; avoids routing through config/__init__ lazy alias (Issue #3829)
+config_manager = _get_config_manager()
 
 _INSERT_SECRET_SQL = (
     "INSERT INTO secrets ("

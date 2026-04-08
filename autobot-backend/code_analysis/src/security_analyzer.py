@@ -13,10 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for import AST types

@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
 
 @dataclass
@@ -108,7 +109,7 @@ class AutoResearchConfig:
     )
     meta_agent_llm_model: str = field(
         default_factory=lambda: os.getenv(
-            "AUTOBOT_META_AGENT_LLM_MODEL", "claude-sonnet-4-6"
+            "AUTOBOT_META_AGENT_LLM_MODEL", ANTHROPIC_CLAUDE_SONNET4_6
         )
     )
     meta_agent_test_timeout: int = field(

@@ -10,7 +10,7 @@ Implements intelligent phase progression logic with automated promotions and sel
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
@@ -492,7 +492,7 @@ class PhaseProgressionManager:
         logger.info("🔍 Checking phase progression eligibility...")
         validation_results = await self.validator.validate_all_phases()
         eligibility_results = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "eligible_phases": [],
             "blocked_phases": [],
             "completed_phases": [],
@@ -525,7 +525,7 @@ class PhaseProgressionManager:
         self.progression_history.append(
             {
                 "phase": phase_name,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "trigger": ProgressionTrigger.VALIDATION_COMPLETE.value,
                 "status": PhasePromotionStatus.PROMOTED.value,
             }
@@ -555,7 +555,7 @@ class PhaseProgressionManager:
         """Execute automated phase progression based on current state."""
         logger.info("🚀 Executing automated phase progression...")
         progression_results = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "progressions_attempted": [],
             "progressions_successful": [],
             "progressions_failed": [],
@@ -576,7 +576,7 @@ class PhaseProgressionManager:
             progression_results["progressions_attempted"].append(
                 {
                     "phase": phase_name,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "result": progression_result,
                 }
             )
@@ -589,7 +589,7 @@ class PhaseProgressionManager:
                     phase_name, progression_result, progression_results
                 )
 
-        self.last_progression_check = datetime.now()
+        self.last_progression_check = datetime.now(tz=timezone.utc)
         return progression_results
 
     async def _validate_prerequisites(self, rules: Dict[str, Any]) -> tuple[bool, set]:
@@ -665,7 +665,7 @@ class PhaseProgressionManager:
             # Create phase configuration file
             phase_config = {
                 "phase_name": phase_name,
-                "activated_at": datetime.now().isoformat(),
+                "activated_at": datetime.now(tz=timezone.utc).isoformat(),
                 "capabilities": rules.get("capabilities_unlocked", []),
                 "prerequisites": rules.get("prerequisites", []),
                 "auto_progression": rules.get("auto_progression", False),
@@ -825,12 +825,12 @@ class PhaseProgressionManager:
             return False
 
         cooldown_period = timedelta(seconds=self.config["progression_cooldown"])
-        return datetime.now() - self.last_progression_check < cooldown_period
+        return datetime.now(tz=timezone.utc) - self.last_progression_check < cooldown_period
 
     def get_current_system_capabilities(self) -> Dict[str, Any]:
         """Get current system capabilities and phase status"""
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "active_capabilities": list(self.current_capabilities),
             "progression_history": self.progression_history[
                 -10:
@@ -872,7 +872,7 @@ class PhaseProgressionManager:
         self.progression_history.append(
             {
                 "phase": phase_name,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "trigger": ProgressionTrigger.USER_REQUEST.value,
                 "user_id": user_id,
                 "status": progression_result["status"].value,

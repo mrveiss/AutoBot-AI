@@ -22,7 +22,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -400,7 +400,7 @@ class PatternLearningEngine:
             raw_score=stats_data.get("raw_score", 0.5),
             confidence_score=stats_data.get("confidence_score", 0.5),
             last_updated=datetime.fromisoformat(
-                stats_data.get("last_updated", datetime.now().isoformat())
+                stats_data.get("last_updated", datetime.now(tz=timezone.utc).isoformat())
             ),
             version=stats_data.get("version", 1),
         )
@@ -456,7 +456,7 @@ class PatternLearningEngine:
         # Generate feedback ID
         feedback_id = hashlib.sha256(
             f"{feedback.pattern_id}:{feedback.file_path}:{feedback.line_number}:"
-            f"{datetime.now().isoformat()}".encode()
+            f"{datetime.now(tz=timezone.utc).isoformat()}".encode()
         ).hexdigest()[:16]
 
         # Create feedback record
@@ -469,7 +469,7 @@ class PatternLearningEngine:
             code_snippet=feedback.code_snippet,
             developer_comment=feedback.developer_comment,
             suggested_fix=feedback.suggested_fix,
-            timestamp=feedback.timestamp or datetime.now(),
+            timestamp=feedback.timestamp or datetime.now(tz=timezone.utc),
             weight=FEEDBACK_WEIGHTS.get(feedback.feedback_type, 0.0),
         )
 
@@ -518,7 +518,7 @@ class PatternLearningEngine:
         # Recalculate confidence
         stats.raw_score = self._calculate_raw_score(stats)
         stats.confidence_score = self._calculate_confidence_score(stats)
-        stats.last_updated = datetime.now()
+        stats.last_updated = datetime.now(tz=timezone.utc)
         stats.version += 1
 
         # Persist to Redis
@@ -561,7 +561,7 @@ class PatternLearningEngine:
         )  # Max out at 20 feedback items
 
         # Time-weighted score
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         weighted_sum = 0.0
         weight_sum = 0.0
 
@@ -644,7 +644,7 @@ class PatternLearningEngine:
         new_feedback_count = sum(
             1
             for stats in self.pattern_stats.values()
-            if (datetime.now() - stats.last_updated).seconds < 3600
+            if (datetime.now(tz=timezone.utc) - stats.last_updated).seconds < 3600
         )
 
         return new_feedback_count >= 10
@@ -697,7 +697,7 @@ class PatternLearningEngine:
         if len(stats.feedback_history) < 5:
             return "stable"
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         recent_cutoff = now - timedelta(days=7)
 
         recent_scores = []
@@ -1018,7 +1018,7 @@ class PatternLearningEngine:
                     old_value=old_value,
                     new_value=False,
                     reason=analysis.get("reason", "Learning-based update"),
-                    applied_at=datetime.now(),
+                    applied_at=datetime.now(tz=timezone.utc),
                 )
 
                 # Persist update

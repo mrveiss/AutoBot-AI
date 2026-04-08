@@ -11,7 +11,7 @@ frontend TypeScript/Vue files for API calls.
 import ast
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -1104,7 +1104,7 @@ class EndpointMatcher:
             orphaned=orphaned_endpoints,
             missing=missing_endpoints,
             used=used_endpoints,
-            scan_timestamp=datetime.now().isoformat(),
+            scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
         )
 
 

@@ -12,11 +12,13 @@ import time
 
 import aiohttp
 
+from tests.test_helpers import get_test_backend_url
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BASE_URL = "http://localhost:8001"
+BASE_URL = get_test_backend_url()
 
 
 class ChatKnowledgeSystemTester:
@@ -455,6 +457,6 @@ if __name__ == "__main__":
         success = asyncio.run(main())
         exit(0 if success else 1)
     else:
-        logger.error("❌ Backend is not running at http://localhost:8001")
+        logger.error(f"❌ Backend is not running at {get_test_backend_url()}")
         logger.error("Please start the backend with: ./run_agent.sh")
         exit(1)

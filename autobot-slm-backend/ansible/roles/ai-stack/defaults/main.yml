@@ -12,6 +12,9 @@ ai_log_dir: /var/log/autobot
 # conflict with /var/lib/autobot (owned by autobot:autobot for the backend).
 ai_data_dir: /var/lib/autobot-ai
 
+# Co-located backend (used when ai-stack runs on the same host as autobot-backend)
+backend_install_dir: /opt/autobot/autobot-backend
+
 # Server settings
 ai_host: "0.0.0.0"
 ai_port: 8080

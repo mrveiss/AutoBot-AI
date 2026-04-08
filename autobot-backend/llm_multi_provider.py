@@ -39,7 +39,14 @@ config_manager = _get_cfg()
 from dotenv import load_dotenv
 
 from autobot_shared.logging_manager import get_llm_logger
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL, config as _ssot_config
+from constants.model_constants import (
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT35_TURBO_16K,
+    OPENAI_GPT4,
+    OPENAI_GPT4_TURBO,
+)
+from constants.threshold_constants import TimingConstants
 
 load_dotenv()
 
@@ -51,6 +58,7 @@ try:
 except Exception:
     import os
 
+    # codeql-suppress py/insecure-protocol: internal loopback-only Ollama endpoint
     _OLLAMA_DEFAULT_URL = os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
 
 logger = get_llm_logger("unified_llm")
@@ -97,7 +105,7 @@ class LLMRequest:
     stop: Optional[List[str]] = None
     stream: bool = False
     structured_output: bool = False
-    timeout: int = 60
+    timeout: int = int(_ssot_config.timeout.llm_request)
     retry_count: int = 3
     fallback_enabled: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -131,7 +139,7 @@ class ProviderConfig:
     default_model: str = ""
     available_models: List[str] = field(default_factory=list)
     max_concurrent_requests: int = 10
-    timeout: int = 60
+    timeout: int = int(_ssot_config.timeout.llm_request)
     retry_count: int = 3
     circuit_breaker_enabled: bool = True
     priority: int = 100  # Lower numbers = higher priority
@@ -356,7 +364,7 @@ class OpenAIProvider(LLMProvider):
         self._total_requests += 1
 
         try:
-            model = request.model_name or self.config.default_model or "gpt-3.5-turbo"
+            model = request.model_name or self.config.default_model or OPENAI_GPT35_TURBO
             params = self._build_openai_params(request, model)
             response = await self.client.chat.completions.create(**params)
             return self._build_openai_success_response(
@@ -387,7 +395,7 @@ class OpenAIProvider(LLMProvider):
 
     def get_available_models(self) -> List[str]:
         """Get available OpenAI models."""
-        return ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
+        return [OPENAI_GPT4, OPENAI_GPT4_TURBO, OPENAI_GPT35_TURBO, OPENAI_GPT35_TURBO_16K]
 
 
 class MockProvider(LLMProvider):
@@ -404,7 +412,7 @@ class MockProvider(LLMProvider):
 
         try:
             # Simulate processing time
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             # Generate mock response based on request type
             if request.llm_type == LLMType.EXTRACTION:
@@ -515,7 +523,7 @@ class UnifiedLLMInterface:
             provider_type=ProviderType.OPENAI,
             enabled=openai_enabled and bool(openai_api_key) and OPENAI_AVAILABLE,
             api_key=openai_api_key,
-            default_model="gpt-3.5-turbo",
+            default_model=OPENAI_GPT35_TURBO,
             priority=20,
         )
 

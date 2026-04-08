@@ -37,7 +37,7 @@ class EventManager:
             )
             return {"agent_behavior": {"debug_mode": False}}
         try:
-            with open(str(config_path), "r") as f:
+            with open(str(config_path), "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except Exception as e:
             logger.error(

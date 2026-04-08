@@ -36,6 +36,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
@@ -85,10 +86,7 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to list workers: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve workers",
-        )
+        raise_internal_error("Failed to retrieve workers")
 
 
 @with_error_handling(
@@ -129,15 +127,10 @@ async def add_worker(
 
     except ValueError as e:
         logger.warning("Worker registration failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        )
+        raise_invalid_input("worker", str(e))
     except Exception as e:
         logger.error("Failed to add worker: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to register worker",
-        )
+        raise_internal_error("Failed to register worker")
 
 
 @with_error_handling(
@@ -170,10 +163,7 @@ async def get_worker(
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         return worker
 
@@ -181,10 +171,7 @@ async def get_worker(
         raise
     except Exception as e:
         logger.error("Failed to get worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve worker",
-        )
+        raise_internal_error("Failed to retrieve worker")
 
 
 @with_error_handling(
@@ -220,10 +207,7 @@ async def update_worker(
     try:
         # Validate worker_id matches config
         if worker_config.id != worker_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Worker ID in path must match ID in configuration",
-            )
+            raise_invalid_input("worker_id", "must match ID in configuration")
 
         manager = await get_worker_manager()
         worker_details = await manager.update_worker(worker_id, worker_config)
@@ -233,17 +217,12 @@ async def update_worker(
 
     except ValueError as e:
         logger.warning("Worker update failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        )
+        raise_invalid_input("worker", str(e))
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to update worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update worker",
-        )
+        raise_internal_error("Failed to update worker")
 
 
 @with_error_handling(
@@ -277,15 +256,10 @@ async def remove_worker(
 
     except ValueError as e:
         logger.warning("Worker removal failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
-        )
+        raise_not_found("Worker", worker_id)
     except Exception as e:
         logger.error("Failed to remove worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to remove worker",
-        )
+        raise_internal_error("Failed to remove worker")
 
 
 @with_error_handling(
@@ -318,10 +292,7 @@ async def test_worker(
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         # Test connection using worker config
         test_result = await manager.test_worker_connection(worker.config)
@@ -335,10 +306,7 @@ async def test_worker(
         raise
     except Exception as e:
         logger.error("Failed to test worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to test worker",
-        )
+        raise_internal_error("Failed to test worker")
 
 
 @with_error_handling(
@@ -373,10 +341,7 @@ async def get_worker_metrics(
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         metrics = await manager.get_worker_metrics(worker_id)
         return metrics
@@ -385,10 +350,7 @@ async def get_worker_metrics(
         raise
     except Exception as e:
         logger.error("Failed to get metrics for worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve metrics",
-        )
+        raise_internal_error("Failed to retrieve metrics")
 
 
 # ==============================================
@@ -428,30 +390,21 @@ async def get_worker_log_level(
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
 
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{worker_url}/config/logging")
             if response.status_code != 200:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Worker returned error: {response.status_code}",
-                )
+                raise_internal_error(f"Worker returned error: {response.status_code}")
             return response.json()
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to get log level for worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get log level",
-        )
+        raise_internal_error("Failed to get log level")
 
 
 async def _send_log_level_to_worker(
@@ -465,10 +418,7 @@ async def _send_log_level_to_worker(
             f"{worker_url}/config/logging", params={"level": level}
         )
         if response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Worker returned error: {response.status_code}",
-            )
+            raise_internal_error(f"Worker returned error: {response.status_code}")
         logger.info("Set log level to %s for worker %s", level, worker_id)
         return response.json()
 
@@ -505,20 +455,14 @@ async def set_worker_log_level(
     valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
     if level not in valid_levels:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid log level '{level}'. Must be one of: {valid_levels}",
-        )
+        raise_invalid_input("log_level", f"must be one of: {valid_levels}")
 
     try:
         manager = await get_worker_manager()
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
         return await _send_log_level_to_worker(worker_url, level, worker_id)
@@ -527,10 +471,7 @@ async def set_worker_log_level(
         raise
     except Exception as e:
         logger.error("Failed to set log level for worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to set log level",
-        )
+        raise_internal_error("Failed to set log level")
 
 
 # ==============================================
@@ -562,10 +503,7 @@ async def get_load_balancing_config(
 
     except Exception as e:
         logger.error("Failed to get load balancing config: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve load balancing configuration",
-        )
+        raise_internal_error("Failed to retrieve load balancing configuration")
 
 
 @with_error_handling(
@@ -602,15 +540,10 @@ async def update_load_balancing_config(
 
     except ValueError as e:
         logger.warning("Load balancing config update failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
-        )
+        raise_invalid_input("load_balancing_config", str(e))
     except Exception as e:
         logger.error("Failed to update load balancing config: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update load balancing configuration",
-        )
+        raise_internal_error("Failed to update load balancing configuration")
 
 
 # ==============================================
@@ -660,10 +593,7 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get NPU status: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve NPU status",
-        )
+        raise_internal_error("Failed to retrieve NPU status")
 
 
 # ==============================================
@@ -747,10 +677,7 @@ async def unpair_worker(
         worker = await manager.get_worker(worker_id)
 
         if not worker:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Worker '{worker_id}' not found",
-            )
+            raise_not_found("Worker", worker_id)
 
         # Remove worker from registry
         await manager.remove_worker(worker_id)
@@ -766,10 +693,7 @@ async def unpair_worker(
         raise
     except Exception as e:
         logger.error("Failed to unpair worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to unpair worker",
-        )
+        raise_internal_error("Failed to unpair worker")
 
 
 def _generate_repair_bootstrap_config() -> dict:
@@ -828,10 +752,7 @@ async def _handle_existing_worker_removal(
         logger.warning(
             "Attempted to re-pair active worker %s without force flag", worker_id
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Worker is currently active. Use force=true to re-pair anyway.",
-        )
+        raise_invalid_input("worker", "Worker is currently active. Use force=true to re-pair anyway.")
 
     await manager.remove_worker(worker_id)
     logger.info("Removed existing registration for worker: %s", worker_id)
@@ -923,10 +844,7 @@ async def repair_worker(
         raise
     except Exception as e:
         logger.error("Failed to re-pair worker %s: %s", worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to re-pair worker",
-        )
+        raise_internal_error("Failed to re-pair worker")
 
 
 # ==============================================
@@ -969,10 +887,7 @@ async def _check_worker_health(
     try:
         health_response = await client.get(f"{worker_url}/health")
         if health_response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Worker health check failed: {health_response.status_code}",
-            )
+            raise_invalid_input("worker_url", f"health check failed: {health_response.status_code}")
         health_data = health_response.json()
 
         info = WorkerHealthInfo(
@@ -990,10 +905,7 @@ async def _check_worker_health(
         return info
 
     except httpx.RequestError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot reach worker at {worker_url}",
-        )
+        raise_invalid_input("worker_url", "Cannot reach worker at {worker_url}")
 
 
 def _generate_worker_id(health_info: WorkerHealthInfo) -> str:
@@ -1064,18 +976,12 @@ async def _send_pairing_request(
     try:
         pair_response = await client.post(f"{worker_url}/pair", json=pair_request)
         if pair_response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Worker rejected pairing: {pair_response.text}",
-            )
+            raise_invalid_input("worker_url", f"Worker rejected pairing: {pair_response.text}")
         pair_result = pair_response.json()
         return pair_result.get("device_info", {})
 
     except httpx.RequestError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to send pair request to worker",
-        )
+        raise_invalid_input("worker_url", "Failed to send pair request to worker")
 
 
 async def _register_worker_in_backend(
@@ -1194,10 +1100,7 @@ async def pair_worker(
         enabled = request.get("enabled", True)
 
         if not worker_url:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Worker URL is required",
-            )
+            raise_invalid_input("worker_url", "required")
 
         logger.info("Attempting to pair with worker at %s", worker_url)
         return await _execute_worker_pairing(worker_url, worker_name, enabled)
@@ -1206,10 +1109,7 @@ async def pair_worker(
         raise
     except Exception as e:
         logger.error("Failed to pair with worker: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to pair with worker",
-        )
+        raise_internal_error("Failed to pair with worker")
 
 
 # ==============================================
@@ -1255,10 +1155,9 @@ def _reject_unpaired_heartbeat(heartbeat: WorkerHeartbeat) -> None:
         heartbeat.worker_id,
         heartbeat.url,
     )
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Worker '{heartbeat.worker_id}' is not paired. "
-        f"Add worker via GUI or POST /api/npu/workers/pair",
+    raise_invalid_input(
+        "worker_id",
+        f"Worker '{heartbeat.worker_id}' is not paired. Add worker via GUI or POST /api/npu/workers/pair",
     )
 
 
@@ -1312,10 +1211,7 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
         raise
     except Exception as e:
         logger.error("Failed to process heartbeat from %s: %s", heartbeat.worker_id, e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to process heartbeat",
-        )
+        raise_internal_error("Failed to process heartbeat")
 
 
 def _build_worker_redis_config(ssot_config) -> dict:
@@ -1476,10 +1372,7 @@ async def worker_bootstrap(request: dict):
 
     except Exception as e:
         logger.error("Failed to bootstrap worker: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to bootstrap worker",
-        )
+        raise_internal_error("Failed to bootstrap worker")
 
 
 # ==============================================
@@ -1517,10 +1410,7 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get pool stats: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve pool stats",
-        )
+        raise_internal_error("Failed to retrieve pool stats")
 
 
 @with_error_handling(
@@ -1572,10 +1462,7 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get pool workers: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve pool workers",
-        )
+        raise_internal_error("Failed to retrieve pool workers")
 
 
 @with_error_handling(
@@ -1616,7 +1503,4 @@ async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)
 
     except Exception as e:
         logger.error("Failed to reload pool config: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reload pool configuration",
-        )
+        raise_internal_error("Failed to reload pool configuration")

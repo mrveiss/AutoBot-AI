@@ -24,7 +24,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
-from config import ConfigManager
+from autobot_shared.ssot_config import config as _ssot
 from constants.network_constants import NetworkConstants
 from utils.performance_monitoring.hardware import HardwareDetector
 from utils.performance_monitoring.metrics import (
@@ -37,7 +37,6 @@ from utils.performance_monitoring.metrics import (
 from utils.performance_monitoring.types import AUTOBOT_PROCESS_KEYWORDS
 
 logger = logging.getLogger(__name__)
-config = ConfigManager()
 
 
 class GPUCollector:
@@ -164,8 +163,8 @@ class NPUCollector:
     async def _get_worker_stats(self) -> Dict[str, Any]:
         """Get statistics from NPU worker service."""
         try:
-            npu_host = config.get_host("npu_worker")
-            npu_port = config.get_port("npu_worker")
+            npu_host = _ssot.vm.npu
+            npu_port = _ssot.port.npu
 
             http_client = get_http_client()
             async with await http_client.get(
@@ -270,7 +269,7 @@ class SystemCollector:
     async def _measure_network_latency(self) -> float:
         """Measure network latency to backend service."""
         try:
-            backend_host = config.get_host("backend")
+            backend_host = _ssot.vm.main
             start_time = time.time()
 
             http_client = get_http_client()
@@ -478,38 +477,38 @@ class ServiceCollector:
         return [
             {
                 "name": "Backend API",
-                "host": config.get_host("backend"),
-                "port": config.get_port("backend"),
+                "host": _ssot.vm.main,
+                "port": _ssot.port.backend,
                 "path": "/api/health",
             },
             {
                 "name": "Frontend",
-                "host": config.get_host("frontend"),
-                "port": config.get_port("frontend"),
+                "host": _ssot.vm.frontend,
+                "port": _ssot.port.frontend,
                 "path": "/",
             },
             {
                 "name": "Redis",
-                "host": config.get_host("redis"),
-                "port": config.get_port("redis"),
+                "host": _ssot.vm.redis,
+                "port": _ssot.port.redis,
                 "path": None,
             },
             {
                 "name": "AI Stack",
-                "host": config.get_host("ai_stack"),
-                "port": config.get_port("ai_stack"),
+                "host": _ssot.vm.aistack,
+                "port": _ssot.port.aistack,
                 "path": "/health",
             },
             {
                 "name": "NPU Worker",
-                "host": config.get_host("npu_worker"),
-                "port": config.get_port("npu_worker"),
+                "host": _ssot.vm.npu,
+                "port": _ssot.port.npu,
                 "path": "/health",
             },
             {
                 "name": "Browser Service",
-                "host": config.get_host("browser_service"),
-                "port": config.get_port("browser_service"),
+                "host": _ssot.vm.browser,
+                "port": _ssot.port.browser,
                 "path": "/health",
             },
         ]

@@ -9,7 +9,7 @@ like Datadog and New Relic.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -53,7 +53,7 @@ class MetricsQueryRequest(BaseModel):
     @validator("from_time")
     def validate_from_time(cls, v: Optional[int]) -> Optional[int]:
         """Ensure from_time is not in future."""
-        if v and v > int(datetime.now().timestamp()):
+        if v and v > int(datetime.now(tz=timezone.utc).timestamp()):
             raise ValueError("from_time cannot be in the future")
         return v
 
@@ -413,9 +413,9 @@ def _build_metrics_params(
         Dict with query parameters
     """
     if provider == "datadog":
-        to_time = request.to_time or int(datetime.now().timestamp())
+        to_time = request.to_time or int(datetime.now(tz=timezone.utc).timestamp())
         from_time = request.from_time or int(
-            (datetime.now() - timedelta(hours=1)).timestamp()
+            (datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()
         )
         return {"query": request.query, "from_time": from_time, "to_time": to_time}
     else:  # new_relic
@@ -432,6 +432,6 @@ def _build_events_params(request: EventsQueryRequest) -> Dict[str, Any]:
     Returns:
         Dict with query parameters
     """
-    end = request.end or int(datetime.now().timestamp())
-    start = request.start or int((datetime.now() - timedelta(hours=1)).timestamp())
+    end = request.end or int(datetime.now(tz=timezone.utc).timestamp())
+    start = request.start or int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp())
     return {"start": start, "end": end}

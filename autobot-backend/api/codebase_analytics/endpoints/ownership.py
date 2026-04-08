@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ownership", tags=["ownership"])
 
 # Cache for ownership analysis (in-memory, refreshed on demand)
-_ownership_analysis_cache: Optional[dict] = None
+# Keyed by source_id (or "") to prevent cross-project leakage (#3685)
+_ownership_analysis_cache: dict[str, dict] = {}
 _ownership_analysis_cache_lock = asyncio.Lock()
 
 
@@ -274,29 +275,33 @@ def _build_knowledge_gaps_error(message: str) -> dict:
     }
 
 
-async def _check_ownership_cache(refresh: bool) -> Optional[JSONResponse]:
+async def _check_ownership_cache(
+    refresh: bool, source_id: Optional[str] = None
+) -> Optional[JSONResponse]:
     """Check cache for ownership analysis results.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
+    Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
     """
     async with _ownership_analysis_cache_lock:
-        if _ownership_analysis_cache and not refresh:
+        cached = _ownership_analysis_cache.get(source_id or "")
+        if cached and not refresh:
             logger.info(
                 "Returning cached ownership analysis (%d files)",
-                _ownership_analysis_cache.get("summary", {}).get("total_files", 0),
+                cached.get("summary", {}).get("total_files", 0),
             )
-            return JSONResponse(_ownership_analysis_cache)
+            return JSONResponse(cached)
     return None
 
 
-async def _cache_ownership_result(result: dict) -> None:
+async def _cache_ownership_result(result: dict, source_id: Optional[str] = None) -> None:
     """Cache ownership analysis result.
 
     Issue #665: Extracted from get_ownership_analysis to reduce function length.
+    Issue #3685: Keyed by source_id to prevent cross-project cache leakage.
     """
-    global _ownership_analysis_cache
     async with _ownership_analysis_cache_lock:
-        _ownership_analysis_cache = result
+        _ownership_analysis_cache[source_id or ""] = result
 
 
 @router.get("/analysis")
@@ -315,15 +320,27 @@ async def get_ownership_analysis(
     ),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
-    cached = await _check_ownership_cache(refresh)
+    cached = await _check_ownership_cache(refresh, source_id=source_id)
     if cached:
         return cached
 
     project_root = _get_project_root()
+    # Issue #3685: Use clone_path for the correct project when source_id provided
+    if source_id and not path:
+        try:
+            from api.codebase_analytics.source_storage import get_source
+
+            source = await get_source(source_id)
+            if source and source.clone_path:
+                project_root = source.clone_path
+        except Exception:
+            logger.debug(
+                "Could not resolve clone_path for %s, using default", source_id
+            )
     if not path:
         path = project_root
 
-    error_response = _validate_path_security(path, project_root)
+    error_response = _validate_path_security(path, _get_project_root())
     if error_response:
         return error_response
 
@@ -349,7 +366,7 @@ async def get_ownership_analysis(
             )
 
         result = _build_ownership_result(analysis, path)
-        await _cache_ownership_result(result)
+        await _cache_ownership_result(result, source_id=source_id)
 
         logger.info(
             "Ownership analysis complete: %d files, %d gaps",
@@ -389,12 +406,11 @@ async def get_expertise_scores(
     - Recency of contributions
     - Number of files/directories owned
     """
-    # Check cache first
+    # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
-        if _ownership_analysis_cache and _ownership_analysis_cache.get(
-            "expertise_scores"
-        ):
-            scores = _ownership_analysis_cache["expertise_scores"]
+        cached = _ownership_analysis_cache.get(source_id or "")
+        if cached and cached.get("expertise_scores"):
+            scores = cached["expertise_scores"]
             return JSONResponse(_build_expertise_response(scores, len(scores), "cache"))
 
     # Run fresh analysis if no cache
@@ -452,12 +468,11 @@ async def get_knowledge_gaps(
     - Inactive maintainers
     - High ownership concentration
     """
-    # Check cache first
+    # Check cache first - Issue #3685: Scoped by source_id
     async with _ownership_analysis_cache_lock:
-        if _ownership_analysis_cache and _ownership_analysis_cache.get(
-            "knowledge_gaps"
-        ):
-            gaps = _ownership_analysis_cache["knowledge_gaps"]
+        cached = _ownership_analysis_cache.get(source_id or "")
+        if cached and cached.get("knowledge_gaps"):
+            gaps = cached["knowledge_gaps"]
             if risk_level:
                 gaps = [g for g in gaps if g.get("risk_level") == risk_level]
             return JSONResponse(

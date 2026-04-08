@@ -17,7 +17,7 @@ Endpoints:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -177,7 +177,7 @@ async def update_enforcement_mode(
             "data": {
                 "new_mode": update.mode.value,
                 "updated_by": admin.get("username"),
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(tz=timezone.utc).isoformat(),
             },
         }
 

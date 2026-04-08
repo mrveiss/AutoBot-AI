@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Issue #981: Use scoped logger — console.* was causing [object Object] in log output
 const logger = createLogger('RumAgent')
@@ -171,7 +172,7 @@ class RumAgent {
 
     // Issue #476: Initialize Prometheus metrics export
     this.prometheusEnabled = localStorage.getItem('rum_prometheus_enabled') !== 'false'
-    this.prometheusEndpoint = '/api/rum/metrics'
+    this.prometheusEndpoint = getApiBase() + '/rum/metrics'
     this.prometheusReportInterval = 30000 // 30 seconds
     this.lastPrometheusReport = 0
     this.pendingApiCalls = []

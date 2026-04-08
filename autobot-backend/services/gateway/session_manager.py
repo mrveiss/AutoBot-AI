@@ -13,6 +13,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from constants.threshold_constants import TimingConstants
+
 from .config import GatewayConfig
 from .types import ChannelType, GatewaySession, SessionStatus
 
@@ -208,7 +210,7 @@ class SessionManager:
         """Background task to clean up idle sessions."""
         while True:
             try:
-                await asyncio.sleep(60)  # Check every minute
+                await asyncio.sleep(TimingConstants.SESSION_CLEANUP_INTERVAL)  # Check every minute
                 await self._cleanup_idle_sessions()
             except asyncio.CancelledError:
                 break

@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from constants.status_enums import TaskStatus
+
 from orchestration.sub_workflow import (
     MAX_NESTING_DEPTH,
     SubWorkflowExecutor,
@@ -26,12 +28,12 @@ def _make_workflow_executor() -> MagicMock:
     """Return a MagicMock that satisfies WorkflowExecutor's interface."""
     executor = MagicMock()
     executor.execute_coordinated_workflow = AsyncMock(
-        return_value={"status": "completed", "step_results": {}}
+        return_value={"status": TaskStatus.COMPLETED.value, "step_results": {}}
     )
     return executor
 
 
-def _make_step_output(data: Dict[str, Any], status: str = "completed") -> StepOutput:
+def _make_step_output(data: Dict[str, Any], status: str = TaskStatus.COMPLETED.value) -> StepOutput:
     import json
 
     stdout = json.dumps(data)
@@ -144,7 +146,7 @@ class TestSubWorkflowExecutorBasic:
         workflow_def = {"steps": []}
         wf_executor = _make_workflow_executor()
         wf_executor.execute_coordinated_workflow = AsyncMock(
-            return_value={"status": "failed", "step_results": {}}
+            return_value={"status": TaskStatus.FAILED.value, "step_results": {}}
         )
         fetcher = MagicMock(return_value=workflow_def)
         executor = SubWorkflowExecutor(

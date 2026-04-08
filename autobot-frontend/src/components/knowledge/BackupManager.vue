@@ -124,6 +124,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -193,7 +194,7 @@ const showStatus = (type: StatusMessage['type'], text: string) => {
 const loadBackups = async () => {
   try {
     isLoadingBackups.value = true
-    const response = await apiClient.get('/api/knowledge-maintenance/backups')
+    const response = await apiClient.get(`${getApiBase()}/knowledge-maintenance/backups`)
     const data = await parseApiResponse(response)
 
     if (data.backups) {
@@ -211,7 +212,7 @@ const createBackup = async () => {
   try {
     isCreatingBackup.value = true
 
-    const response = await apiClient.post('/api/knowledge-maintenance/backup', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge-maintenance/backup`, {
       include_embeddings: backupOptions.value.includeEmbeddings,
       compression: backupOptions.value.compression,
       description: backupOptions.value.description || undefined
@@ -245,7 +246,7 @@ const restoreBackup = async (backupName: string) => {
     isRestoring.value = true
 
     // First, dry run to validate
-    const dryRunResponse = await apiClient.post('/api/knowledge-maintenance/restore', {
+    const dryRunResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/restore`, {
       backup_file: backupName,
       dry_run: true
     })
@@ -264,7 +265,7 @@ const restoreBackup = async (backupName: string) => {
     if (!confirmRestore) return
 
     // Actual restore
-    const restoreResponse = await apiClient.post('/api/knowledge-maintenance/restore', {
+    const restoreResponse = await apiClient.post(`${getApiBase()}/knowledge-maintenance/restore`, {
       backup_file: backupName,
       dry_run: false,
       skip_duplicates: true
@@ -295,7 +296,7 @@ const deleteBackup = async (backupName: string) => {
   try {
     isDeletingBackup.value = true
 
-    const response = await apiClient.delete('/api/knowledge-maintenance/backup', {
+    const response = await apiClient.delete(`${getApiBase()}/knowledge-maintenance/backup`, {
       body: JSON.stringify({ backup_file: backupName }),
       headers: { 'Content-Type': 'application/json' }
     } as any)

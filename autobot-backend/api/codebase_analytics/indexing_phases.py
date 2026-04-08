@@ -19,6 +19,8 @@ import asyncio
 import logging
 from typing import Callable, Optional
 
+from constants.threshold_constants import TimingConstants
+
 from .chromadb_storage import (
     _initialize_chromadb_collection,
     _prepare_batch_data,
@@ -73,7 +75,7 @@ async def _init_chromadb_with_retry(
     )
     if not code_collection:
         logger.warning("[Task %s] ChromaDB init failed, retrying once (#1249)", task_id)
-        await asyncio.sleep(2)
+        await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
         code_collection = await _initialize_chromadb_collection(
             task_id, update_progress, update_phase, source_id=source_id
         )

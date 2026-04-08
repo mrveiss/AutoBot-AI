@@ -23,6 +23,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from api.knowledge_models import ConsolidatedSearchRequest, EnhancedSearchRequest
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from knowledge.vector_search_engine import SearchResult as _EngineResult
+from knowledge.vector_search_engine import get_vector_search_engine
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
 
@@ -126,18 +128,44 @@ def _build_search_response(
 async def _execute_kb_search(
     kb_to_use, query: str, search_limit: int, mode: str
 ) -> list:
-    """Execute search on knowledge base (Issue #398: extracted).
+    """Execute search on knowledge base via VectorSearchEngine (Issue #3828).
 
-    Handles different KB implementations with correct parameters.
+    Routes through the canonical VectorSearchEngine for unified hardware
+    dispatch (NPU > GPU > CPU).  Falls back to the per-implementation KB
+    search methods only when the engine raises.
+
+    Issue #398: original KB-dispatch logic preserved as fallback.
     """
-    kb_class_name = kb_to_use.__class__.__name__
+    try:
+        engine = await get_vector_search_engine()
+        engine_results: list[_EngineResult] = await engine.search(
+            query=query,
+            top_k=search_limit,
+            hardware_backend="auto",
+        )
+        return [
+            {
+                "content": r.text,
+                "score": r.score,
+                "metadata": r.metadata,
+                "node_id": r.source,
+                "doc_id": r.source,
+            }
+            for r in engine_results
+        ]
+    except Exception as exc:
+        logger.warning(
+            "_execute_kb_search: VectorSearchEngine failed (%s), falling back to direct KB",
+            exc,
+        )
 
+    # Legacy per-implementation fallback
+    kb_class_name = kb_to_use.__class__.__name__
     if kb_class_name == "KnowledgeBaseV2":
         return await kb_to_use.search(query=query, top_k=search_limit)
-    else:
-        return await kb_to_use.search(
-            query=query, similarity_top_k=search_limit, mode=mode
-        )
+    return await kb_to_use.search(
+        query=query, similarity_top_k=search_limit, mode=mode
+    )
 
 
 async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:

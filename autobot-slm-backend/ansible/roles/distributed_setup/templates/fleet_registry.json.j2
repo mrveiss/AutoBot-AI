@@ -2,7 +2,7 @@
   "generated_at": "{{ ansible_date_time.iso8601 }}",
   "coordinator": {
     "host": "{{ coordinator_host }}",
-    "port": {{ backend_port }}
+    "port": {{ backend_nginx_port }}
   },
   "fleet_nodes": [
 {% for node in fleet_nodes %}

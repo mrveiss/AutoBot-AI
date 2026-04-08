@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -42,7 +42,7 @@ class MachineProfile:
         self.is_wsl: bool = False
         self.is_root: bool = False
         self.capabilities: Set[str] = set()
-        self.last_updated: datetime = datetime.now()
+        self.last_updated: datetime = datetime.now(tz=timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary for serialization"""
@@ -329,7 +329,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
                 "machine_id": self.current_machine_profile.machine_id,
                 "os_type": os_type.value,
                 "package_manager": package_manager,
-                "filtered_at": datetime.now().isoformat(),
+                "filtered_at": datetime.now(tz=timezone.utc).isoformat(),
             },
         }
 
@@ -462,7 +462,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         # Add machine-specific metadata
         adapted_workflow["machine_adaptation"] = {
             "machine_id": self.current_machine_profile.machine_id,
-            "adapted_at": datetime.now().isoformat(),
+            "adapted_at": datetime.now(tz=timezone.utc).isoformat(),
             "available_tools": len(available_required_tools),
             "skipped_tools": len(required_tools) - len(available_required_tools),
         }
@@ -737,10 +737,12 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             return False
 
         try:
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
 
             last_updated = datetime.fromisoformat(man_info.last_updated)
-            age_threshold = datetime.now() - timedelta(hours=max_age_hours)
+            if last_updated.tzinfo is None:
+                last_updated = last_updated.replace(tzinfo=timezone.utc)
+            age_threshold = datetime.now(tz=timezone.utc) - timedelta(hours=max_age_hours)
 
             return last_updated > age_threshold
         except Exception:
@@ -793,7 +795,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
 
         summary_data = {
             **results,
-            "integration_date": datetime.now().isoformat(),
+            "integration_date": datetime.now(tz=timezone.utc).isoformat(),
             "machine_id": profile.machine_id if profile else "unknown",
             "total_available_tools": (len(profile.available_tools) if profile else 0),
         }

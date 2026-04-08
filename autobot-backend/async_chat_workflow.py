@@ -15,11 +15,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
 from llm_interface import ChatMessage, LLMResponse
+from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +129,8 @@ class AsyncChatWorkflow:
         self.workflow_messages.append(message)
         logger.info("WORKFLOW MESSAGE (%s): %s", msg_type, content)
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5)
-    )
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=5.0,
+                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     @inject_services(llm="llm", config="config")
     async def process_chat_message(
         self, user_message: str, chat_id: str = "default", llm=None, config=None
@@ -325,9 +323,8 @@ class AsyncChatWorkflow:
         else:
             return MessageType.GENERAL_QUERY
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10)
-    )
+    @with_retry(RetryConfig(max_attempts=3, base_delay=1.0, max_delay=10.0,
+                            strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(self, user_message: str, llm) -> LLMResponse:
         """Generate LLM response with retry logic"""
 

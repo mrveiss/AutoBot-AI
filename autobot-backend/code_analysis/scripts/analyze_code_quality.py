@@ -337,12 +337,12 @@ async def run_comprehensive_quality_analysis():
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, default=str)
 
     # Generate summary report
     summary_path = Path("quality_summary.txt")
-    with open(summary_path, "w") as f:
+    with open(summary_path, "w", encoding="utf-8") as f:
         f.write(summary)
 
     print(f"\n=== Reports Generated ===")  # noqa: print

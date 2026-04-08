@@ -10,7 +10,7 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -736,7 +736,7 @@ def _create_initial_job_data(job_id: str, fact_id: str) -> Metadata:
         "fact_id": fact_id,
         "status": "processing",
         "progress": 10,
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
         "completed_at": None,
         "error": None,
         "result": None,
@@ -792,7 +792,7 @@ def _create_retry_job_data(
         "fact_id": fact_id,
         "status": "pending",
         "progress": 0,
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
         "completed_at": None,
         "error": None,
         "result": None,
@@ -866,7 +866,7 @@ def _create_pending_job_data(job_id: str, fact_id: str) -> Metadata:
         "fact_id": fact_id,
         "status": "pending",
         "progress": 0,
-        "started_at": datetime.now().isoformat(),
+        "started_at": datetime.now(tz=timezone.utc).isoformat(),
         "completed_at": None,
         "error": None,
         "result": None,
@@ -925,7 +925,7 @@ async def _handle_already_vectorized(
         {
             "status": "completed",
             "progress": 100,
-            "completed_at": datetime.now().isoformat(),
+            "completed_at": datetime.now(tz=timezone.utc).isoformat(),
             "result": {
                 "status": "skipped",
                 "message": "Fact already vectorized",
@@ -977,7 +977,7 @@ async def _perform_vectorization(
             f"Failed to vectorize fact {fact_id} in job {job_id}: {job_data['error']}"
         )
 
-    job_data["completed_at"] = datetime.now().isoformat()
+    job_data["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
     await _update_job_status(kb_instance, job_id, job_data)
 
 
@@ -1032,7 +1032,7 @@ async def _vectorize_fact_background(
             {
                 "status": "failed",
                 "progress": 0,
-                "completed_at": datetime.now().isoformat(),
+                "completed_at": datetime.now(tz=timezone.utc).isoformat(),
                 "error": error_msg,
                 "result": None,
             }

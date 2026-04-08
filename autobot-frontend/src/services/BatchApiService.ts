@@ -7,6 +7,7 @@ import apiClient from '@/utils/ApiClient';
 import type { ApiClient } from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
 import { extractErrorMessage } from '@/utils/errorExtract';
+import { getApiBase } from '@/config/ssot-config';
 
 // Create scoped logger for BatchApiService
 const logger = createLogger('BatchApiService');
@@ -235,17 +236,17 @@ export class BatchApiService {
 
   async loadEssentialChatData(): Promise<Record<string, unknown>> {
     const essentialRequests: BatchRequest[] = [
-      { endpoint: '/api/chats', method: 'GET', priority: 3 },
-      { endpoint: '/api/chat/health', method: 'GET', priority: 2 },
-      { endpoint: '/api/health', method: 'GET', priority: 1 }
+      { endpoint: `${getApiBase()}/chats`, method: 'GET', priority: 3 },
+      { endpoint: `${getApiBase()}/chat/health`, method: 'GET', priority: 2 },
+      { endpoint: `${getApiBase()}/health`, method: 'GET', priority: 1 }
     ];
 
     const results = await this.batchRequests(essentialRequests);
 
     return {
-      chat_sessions: results.find(r => r.endpoint === '/api/chats' && r.success)?.data || { sessions: [] },
-      chat_health: results.find(r => r.endpoint === '/api/chat/health' && r.success)?.data || { status: 'unknown' },
-      system_health: results.find(r => r.endpoint === '/api/health' && r.success)?.data || { status: 'unknown' }
+      chat_sessions: results.find(r => r.endpoint === `${getApiBase()}/chats` && r.success)?.data || { sessions: [] },
+      chat_health: results.find(r => r.endpoint === `${getApiBase()}/chat/health` && r.success)?.data || { status: 'unknown' },
+      system_health: results.find(r => r.endpoint === `${getApiBase()}/health` && r.success)?.data || { status: 'unknown' }
     };
   }
 

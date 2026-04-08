@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus
 
 logger = logging.getLogger(__name__)
@@ -170,7 +171,7 @@ class ProcessAdapterService:
         if agent_id is None:
             return
         while self._running_counts.get(agent_id, 0) >= self._max_concurrency:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
         self._running_counts[agent_id] = self._running_counts.get(agent_id, 0) + 1
         asyncio.create_task(self._run_process(run_id, agent_id), name=f"proc-{run_id}")
 

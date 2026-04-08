@@ -2,71 +2,42 @@
 /**
  * Secret Audit Log Component
  *
- * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
+ * Issue #3988: Display real audit logs from backend API instead of hardcoded mock data
  *
- * Displays audit trail of secret usage in the session.
+ * Displays audit trail of secret usage in the session with real backend data.
+ * Supports filtering by action type and user, with pagination support.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSessionActivityLogger, type SecretUsageAction } from '@/composables/useSessionActivityLogger'
-import { useChatStore } from '@/stores/useChatStore'
+import { useSecretsAuditApi, type AuditLogEntry } from '@/composables/useSecretsAuditApi'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('SecretAuditLog')
 const { t } = useI18n()
-const chatStore = useChatStore()
-const { getActivities } = useSessionActivityLogger()
 
-// Mock audit data
-interface SecretAuditEntry {
+// API composable
+const auditApi = useSecretsAuditApi()
+
+/**
+ * Secret action types for filtering
+ */
+type SecretAction = 'access' | 'inject' | 'copy' | 'reveal' | 'create' | 'read' | 'update' | 'delete'
+
+/**
+ * Transformed audit entry for display
+ */
+interface DisplayAuditEntry {
   id: string
   secretId: string
   secretName: string
-  action: SecretUsageAction
+  action: SecretAction
   userId: string
   username: string
   timestamp: Date
   metadata?: Record<string, unknown>
+  rawOperation: string
 }
-
-const mockAuditLog: SecretAuditEntry[] = [
-  {
-    id: 'audit-1',
-    secretId: 'secret-1',
-    secretName: 'GitHub API Token',
-    action: 'access',
-    userId: 'user-1',
-    username: 'alice',
-    timestamp: new Date(Date.now() - 300000),
-    metadata: { ip: '192.168.1.100' }
-  },
-  {
-    id: 'audit-2',
-    secretId: 'secret-2',
-    secretName: 'SSH Private Key',
-    action: 'inject',
-    userId: 'user-2',
-    username: 'bob',
-    timestamp: new Date(Date.now() - 600000)
-  },
-  {
-    id: 'audit-3',
-    secretId: 'secret-1',
-    secretName: 'GitHub API Token',
-    action: 'copy',
-    userId: 'user-1',
-    username: 'alice',
-    timestamp: new Date(Date.now() - 1800000)
-  },
-  {
-    id: 'audit-4',
-    secretId: 'secret-3',
-    secretName: 'Database Password',
-    action: 'reveal',
-    userId: 'user-3',
-    username: 'charlie',
-    timestamp: new Date(Date.now() - 3600000)
-  }
-]
 
 // Props
 const props = defineProps<{
@@ -75,14 +46,89 @@ const props = defineProps<{
 }>()
 
 // Local state
-const filterAction = ref<SecretUsageAction | 'all'>('all')
+const filterAction = ref<SecretAction | 'all'>('all')
 const filterUser = ref<string | 'all'>('all')
+const currentPage = ref(0)
+const pageSize = 50
+const isLoadingInitial = ref(true)
 
-// Filtered audit log
+// Fetch audit logs on mount
+onMounted(async () => {
+  await loadAuditLogs()
+})
+
+// Watch for filter changes and reload
+watch([filterAction, filterUser], async () => {
+  currentPage.value = 0
+  await loadAuditLogs()
+})
+
+/**
+ * Load audit logs from backend
+ */
+const loadAuditLogs = async () => {
+  isLoadingInitial.value = true
+  try {
+    const offset = currentPage.value * pageSize
+
+    await auditApi.fetchAuditLogs({
+      operationFilter: filterAction.value,
+      userIdFilter: filterUser.value,
+      limit: pageSize,
+      offset
+    })
+
+    logger.info(`Loaded ${auditApi.entries.value.length} audit log entries`)
+  } catch (error) {
+    logger.error('Failed to load audit logs:', error)
+  } finally {
+    isLoadingInitial.value = false
+  }
+}
+
+/**
+ * Transform backend audit entries to display format
+ * Filters and extracts secret-specific information from audit entries
+ */
+const transformedEntries = computed((): DisplayAuditEntry[] => {
+  return auditApi.entries.value
+    .filter(entry => {
+      // Only include secret-related operations
+      return entry.operation && entry.operation.startsWith('secrets.')
+    })
+    .map(entry => {
+      // Extract action from operation (e.g., 'secrets.access' -> 'access')
+      const action = (entry.operation?.split('.')[1] || 'access') as SecretAction
+
+      // Extract secret name and ID from metadata or resource
+      const secretName = (entry.metadata?.secret_name as string) || 'Unknown Secret'
+      const secretId = (entry.metadata?.secret_id as string) || entry.resource || 'unknown'
+
+      // Extract username from user_id or metadata
+      const username = (entry.metadata?.username as string) || entry.user_id || 'Unknown'
+
+      return {
+        id: entry.id,
+        secretId,
+        secretName,
+        action,
+        userId: entry.user_id || 'unknown',
+        username,
+        timestamp: new Date(entry.timestamp),
+        metadata: entry.metadata || {},
+        rawOperation: entry.operation
+      }
+    })
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+})
+
+/**
+ * Filtered audit log based on current filters
+ */
 const filteredLog = computed(() => {
-  let log = [...mockAuditLog]
+  let log = [...transformedEntries.value]
 
-  // Filter by secret ID
+  // Filter by secret ID if provided
   if (props.secretId) {
     log = log.filter(e => e.secretId === props.secretId)
   }
@@ -97,16 +143,25 @@ const filteredLog = computed(() => {
     log = log.filter(e => e.userId === filterUser.value)
   }
 
-  return log.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+  return log
 })
 
-// Unique users for filter
+/**
+ * Get unique users from the audit log for filter dropdown
+ */
 const uniqueUsers = computed(() => {
-  const users = new Set(mockAuditLog.map(e => ({ id: e.userId, name: e.username })))
+  const users = new Set<{ id: string; name: string }>()
+
+  transformedEntries.value.forEach(entry => {
+    users.add({ id: entry.userId, name: entry.username })
+  })
+
   return Array.from(users).sort((a, b) => a.name.localeCompare(b.name))
 })
 
-// Format timestamp
+/**
+ * Format timestamp to relative or absolute format
+ */
 const formatTime = (date: Date): string => {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
@@ -119,10 +174,13 @@ const formatTime = (date: Date): string => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-// Get action styling
-const getActionStyle = (action: SecretUsageAction): { color: string; icon: string } => {
+/**
+ * Get styling for action type
+ */
+const getActionStyle = (action: SecretAction): { color: string; icon: string } => {
   switch (action) {
     case 'access':
+    case 'read':
       return { color: 'text-blue-400 bg-blue-400/10', icon: 'key' }
     case 'inject':
       return { color: 'text-green-400 bg-green-400/10', icon: 'arrow-down-circle' }
@@ -130,6 +188,34 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
       return { color: 'text-yellow-400 bg-yellow-400/10', icon: 'clipboard' }
     case 'reveal':
       return { color: 'text-orange-400 bg-orange-400/10', icon: 'eye' }
+    case 'create':
+      return { color: 'text-green-500 bg-green-500/10', icon: 'plus-circle' }
+    case 'update':
+      return { color: 'text-purple-400 bg-purple-400/10', icon: 'pencil' }
+    case 'delete':
+      return { color: 'text-red-400 bg-red-400/10', icon: 'trash' }
+    default:
+      return { color: 'text-gray-400 bg-gray-400/10', icon: 'info-circle' }
+  }
+}
+
+/**
+ * Move to next page
+ */
+const nextPage = async () => {
+  if (auditApi.hasMore.value) {
+    currentPage.value++
+    await loadAuditLogs()
+  }
+}
+
+/**
+ * Move to previous page
+ */
+const prevPage = async () => {
+  if (currentPage.value > 0) {
+    currentPage.value--
+    await loadAuditLogs()
   }
 }
 </script>
@@ -151,9 +237,13 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
         >
           <option value="all">{{ $t('secrets.auditLog.allActions') }}</option>
           <option value="access">{{ $t('secrets.auditLog.access') }}</option>
+          <option value="read">{{ $t('secrets.auditLog.read') }}</option>
           <option value="inject">{{ $t('secrets.auditLog.inject') }}</option>
           <option value="copy">{{ $t('secrets.auditLog.copy') }}</option>
           <option value="reveal">{{ $t('secrets.auditLog.reveal') }}</option>
+          <option value="create">{{ $t('secrets.auditLog.create') }}</option>
+          <option value="update">{{ $t('secrets.auditLog.update') }}</option>
+          <option value="delete">{{ $t('secrets.auditLog.delete') }}</option>
         </select>
         <select
           v-model="filterUser"
@@ -167,8 +257,41 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
       </div>
     </div>
 
-    <!-- Audit log list -->
-    <div class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+    <!-- Loading State -->
+    <div
+      v-if="isLoadingInitial || auditApi.loading.value"
+      class="flex-1 flex items-center justify-center"
+    >
+      <div class="text-center">
+        <div class="inline-block">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+        </div>
+        <div class="mt-2 text-sm text-gray-400">{{ $t('common.loading') }}</div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div
+      v-else-if="auditApi.error.value"
+      class="flex-1 flex items-center justify-center p-4"
+    >
+      <div class="text-center text-red-400">
+        <i class="bi bi-exclamation-triangle text-2xl mb-2" />
+        <div class="text-sm">{{ auditApi.error.value }}</div>
+        <button
+          @click="loadAuditLogs"
+          class="mt-3 px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded text-red-300 transition-colors"
+        >
+          {{ $t('common.retry') }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Audit Log Entries -->
+    <div
+      v-else
+      class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar"
+    >
       <TransitionGroup name="audit">
         <div
           v-for="entry in filteredLog"
@@ -203,7 +326,7 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
             </div>
 
             <!-- Metadata -->
-            <div v-if="entry.metadata" class="text-xs text-gray-500 mt-1">
+            <div v-if="Object.keys(entry.metadata).length > 0" class="text-xs text-gray-500 mt-1">
               <details class="cursor-pointer">
                 <summary class="hover:text-gray-400">{{ $t('secrets.auditLog.details') }}</summary>
                 <pre class="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
@@ -223,6 +346,33 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
         <div class="text-xs text-gray-600">
           {{ $t('secrets.auditLog.noEntriesHint') }}
         </div>
+      </div>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div
+      v-if="!auditApi.loading.value && !auditApi.error.value && auditApi.entries.value.length > 0"
+      class="px-4 py-3 border-t border-gray-700 flex items-center justify-between"
+    >
+      <div class="text-xs text-gray-400">
+        {{ $t('common.page') }}: {{ currentPage + 1 }}
+        <span v-if="auditApi.hasMore.value"> ({{ $t('common.hasMore') }})</span>
+      </div>
+      <div class="flex gap-2">
+        <button
+          :disabled="currentPage === 0"
+          @click="prevPage"
+          class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-600 rounded text-gray-300 transition-colors"
+        >
+          {{ $t('common.previous') }}
+        </button>
+        <button
+          :disabled="!auditApi.hasMore.value"
+          @click="nextPage"
+          class="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-600 rounded text-gray-300 transition-colors"
+        >
+          {{ $t('common.next') }}
+        </button>
       </div>
     </div>
   </div>

@@ -6,6 +6,7 @@
  */
 
 import { ApiClient } from './ApiClient';
+import { getApiBase } from '@/config/ssot-config';
 
 class SecretsApiClient {
     constructor() {
@@ -35,7 +36,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get(`/api/secrets/?${params.toString()}`);
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/?${params.toString()}`);
         return response;
     }
 
@@ -50,7 +51,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get(`/api/secrets/${secretId}?${params.toString()}`);
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/${secretId}?${params.toString()}`);
         return response;
     }
 
@@ -64,7 +65,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.post('/api/secrets/', secretData);
+        const response = await this.apiClient.post(`${getApiBase()}/secrets/`, secretData);
         return response;
     }
 
@@ -79,7 +80,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.put(`/api/secrets/${secretId}?${params.toString()}`, updateData);
+        const response = await this.apiClient.put(`${getApiBase()}/secrets/${secretId}?${params.toString()}`, updateData);
         return response;
     }
 
@@ -94,7 +95,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.delete(`/api/secrets/${secretId}?${params.toString()}`);
+        const response = await this.apiClient.delete(`${getApiBase()}/secrets/${secretId}?${params.toString()}`);
         return response;
     }
 
@@ -109,7 +110,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.post(`/api/secrets/transfer?${params.toString()}`, transferData);
+        const response = await this.apiClient.post(`${getApiBase()}/secrets/transfer?${params.toString()}`, transferData);
         return response;
     }
 
@@ -118,7 +119,7 @@ class SecretsApiClient {
      */
     async getChatCleanupInfo(chatId) {
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get(`/api/secrets/chat/${chatId}/cleanup`);
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/chat/${chatId}/cleanup`);
         return response;
     }
 
@@ -133,7 +134,7 @@ class SecretsApiClient {
         }
 
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.delete(`/api/secrets/chat/${chatId}?${params.toString()}`);
+        const response = await this.apiClient.delete(`${getApiBase()}/secrets/chat/${chatId}?${params.toString()}`);
         return response;
     }
 
@@ -142,7 +143,7 @@ class SecretsApiClient {
      */
     async getSecretTypes() {
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get('/api/secrets/types');
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/types`);
         return response;
     }
 
@@ -151,7 +152,7 @@ class SecretsApiClient {
      */
     async getSecretsStats() {
         // Issue #552: Fixed path - removed duplicate /secrets prefix
-        const response = await this.apiClient.get('/api/secrets/stats');
+        const response = await this.apiClient.get(`${getApiBase()}/secrets/stats`);
         return response;
     }
 

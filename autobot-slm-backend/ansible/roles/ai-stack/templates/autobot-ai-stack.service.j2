@@ -11,10 +11,10 @@ Type=simple
 User={{ ai_user }}
 Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
-Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH={{ ai_install_dir }}:{{ ai_install_dir }}/src"
+Environment="PATH={{ backend_install_dir | default('/opt/autobot/autobot-backend') }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH={{ ai_install_dir }}:{{ ai_install_dir }}/src:{{ backend_install_dir | default('/opt/autobot/autobot-backend') }}"
 EnvironmentFile={{ ai_install_dir }}/.env
-ExecStart={{ ai_install_dir }}/venv/bin/uvicorn ai_api_server:app --host {{ ai_host }} --port {{ ai_port }} --workers 2
+ExecStart={{ backend_install_dir | default('/opt/autobot/autobot-backend') }}/venv/bin/uvicorn ai_api_server:app --host {{ ai_host }} --port {{ ai_port }} --workers 2
 Restart=always
 RestartSec=10
 StandardOutput=append:{{ ai_log_dir }}/ai-stack.log

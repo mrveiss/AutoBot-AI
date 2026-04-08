@@ -14,6 +14,7 @@ import type {
   UseCodeIntelAnalysisDeps,
   ConfigDuplicatesResult,
 } from './codeIntelTypes'
+import { getApiBase } from '@/config/ssot-config'
 
 export function useConfigDuplicates(
   deps: UseCodeIntelAnalysisDeps,
@@ -26,7 +27,7 @@ export function useConfigDuplicates(
     error: configDuplicatesError,
     load: _loadConfigDuplicates,
   } = useAnalyticsFetch<ConfigDuplicatesResult>(
-    '/api/analytics/codebase/config-duplicates',
+    `${getApiBase()}/analytics/codebase/config-duplicates`,
     (r) => {
       if (r.status === 'success') {
         return {

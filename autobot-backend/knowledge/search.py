@@ -30,6 +30,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
 
+# Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
+from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
+from knowledge.vector_search_engine import get_vector_search_engine
+
 # Import components from the search_components package
 from knowledge.search_components import (
     KeywordSearcher,
@@ -158,9 +162,15 @@ class SearchMixin:
         filters: Optional[Dict[str, Any]] = None,
         mode: str = "auto",
     ) -> List[Dict[str, Any]]:
-        """Search the knowledge base (Issue #398: refactored).
+        """Search the knowledge base.
 
+        Issue #398: refactored.
         Issue #934: filters is now passed to ChromaDB as a metadata where clause.
+        Issue #3828: delegates to VectorSearchEngine for unified hardware dispatch.
+
+        The legacy _execute_vector_search path is kept as the final fallback so
+        that any sub-class that overrides _query_chromadb / _deduplicate_results
+        continues to work correctly.
         """
         self.ensure_initialized()
         similarity_top_k = similarity_top_k or top_k
@@ -169,6 +179,32 @@ class SearchMixin:
         if invalid_result is not None:
             return invalid_result
 
+        try:
+            engine = await get_vector_search_engine()
+            engine_results: List[_EngineSearchResult] = await engine.search(
+                query=query,
+                top_k=similarity_top_k,
+                filters=filters,
+                hardware_backend="auto",
+            )
+            # Convert canonical SearchResult -> legacy dict format expected by callers
+            return [
+                {
+                    "content": r.text,
+                    "score": r.score,
+                    "metadata": r.metadata,
+                    "node_id": r.source,
+                    "doc_id": r.source,  # V1 compatibility
+                }
+                for r in engine_results
+            ]
+        except Exception as exc:
+            logger.warning(
+                "VectorSearchEngine delegation failed (%s), falling back to direct ChromaDB",
+                exc,
+            )
+
+        # Fallback: original direct ChromaDB path
         try:
             return await self._execute_vector_search(
                 query, similarity_top_k, filters=filters

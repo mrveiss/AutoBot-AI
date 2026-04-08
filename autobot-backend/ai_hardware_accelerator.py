@@ -13,7 +13,7 @@ import asyncio
 import io
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
@@ -23,6 +23,7 @@ import numpy as np
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 from config import cfg
 
 # Import centralized components
@@ -133,7 +134,7 @@ class HardwareDevice(Enum):
     CPU = "cpu"  # CPU fallback
 
 
-class TaskComplexity(Enum):
+class ProcessingLoad(Enum):
     """Task complexity levels for hardware routing."""
 
     LIGHTWEIGHT = "lightweight"  # < 1s, small models
@@ -160,9 +161,9 @@ class ProcessingTask:
     task_id: str
     task_type: str
     input_data: Dict[str, Any]
-    complexity: TaskComplexity
+    complexity: ProcessingLoad
     priority: int = 1
-    timeout_seconds: int = 30
+    timeout_seconds: int = int(_ssot_config.timeout.default_request)
     preferred_device: Optional[HardwareDevice] = None
 
 
@@ -218,7 +219,7 @@ class AIHardwareAccelerator:
         self.device_status = {
             HardwareDevice.NPU: {"available": False, "last_check": None},
             HardwareDevice.GPU: {"available": False, "last_check": None},
-            HardwareDevice.CPU: {"available": True, "last_check": datetime.now()},
+            HardwareDevice.CPU: {"available": True, "last_check": datetime.now(tz=timezone.utc)},
         }
 
         # Multi-modal models
@@ -267,7 +268,7 @@ class AIHardwareAccelerator:
 
         # CPU is always available
         self.device_status[HardwareDevice.CPU]["available"] = True
-        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now()
+        self.device_status[HardwareDevice.CPU]["last_check"] = datetime.now(tz=timezone.utc)
 
     async def _check_npu_availability(self):
         """Check NPU Worker availability."""
@@ -284,7 +285,7 @@ class AIHardwareAccelerator:
                     self.device_status[HardwareDevice.NPU]["available"] = npu_available
                     self.device_status[HardwareDevice.NPU][
                         "last_check"
-                    ] = datetime.now()
+                    ] = datetime.now(tz=timezone.utc)
 
                     if npu_available:
                         logger.info("NPU Worker available and ready")
@@ -304,7 +305,7 @@ class AIHardwareAccelerator:
         """Check GPU availability (Issue #315 - refactored to reduce nesting)."""
         torch = _get_torch()
 
-        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now()
+        self.device_status[HardwareDevice.GPU]["last_check"] = datetime.now(tz=timezone.utc)
 
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
             self.device_status[HardwareDevice.GPU]["available"] = False
@@ -320,7 +321,7 @@ class AIHardwareAccelerator:
                     temperature_c=gpu_metrics["temperature_c"],
                     power_usage_w=gpu_metrics["power_usage_w"],
                     available_memory_mb=gpu_metrics["available_memory_mb"],
-                    last_updated=datetime.now(),
+                    last_updated=datetime.now(tz=timezone.utc),
                 )
                 logger.info("GPU available: %s", torch.cuda.get_device_name(0))
             else:
@@ -354,7 +355,7 @@ class AIHardwareAccelerator:
             power_usage_w=HardwareAcceleratorConfig.NPU_BASE_POWER_W
             + (utilization / 100.0 * power_delta),  # 2-10W range
             available_memory_mb=HardwareAcceleratorConfig.NPU_MEMORY_MB,
-            last_updated=datetime.now(),
+            last_updated=datetime.now(tz=timezone.utc),
         )
 
     async def _hardware_monitoring_loop(self):
@@ -368,15 +369,15 @@ class AIHardwareAccelerator:
 
     def _classify_by_threshold(
         self, value: int, light_threshold: int, mod_threshold: int
-    ) -> TaskComplexity:
+    ) -> ProcessingLoad:
         """Classify by value thresholds (Issue #315 - extracted helper)."""
         if value < light_threshold:
-            return TaskComplexity.LIGHTWEIGHT
+            return ProcessingLoad.LIGHTWEIGHT
         if value < mod_threshold:
-            return TaskComplexity.MODERATE
-        return TaskComplexity.HEAVY
+            return ProcessingLoad.MODERATE
+        return ProcessingLoad.HEAVY
 
-    def _classify_task_complexity(self, task: ProcessingTask) -> TaskComplexity:
+    def _classify_task_complexity(self, task: ProcessingTask) -> ProcessingLoad:
         """Classify task complexity for optimal device routing (Issue #315 - refactored)."""
         task_type = task.task_type
         input_data = task.input_data
@@ -407,7 +408,7 @@ class AIHardwareAccelerator:
                 model_config.MODEL_SIZE_MODERATE_THRESHOLD_MB,
             )
 
-        return TaskComplexity.MODERATE  # Conservative default
+        return ProcessingLoad.MODERATE  # Conservative default
 
     def _is_device_under_threshold(
         self, device: HardwareDevice, threshold: float
@@ -488,9 +489,9 @@ class AIHardwareAccelerator:
             return task.preferred_device
 
         # Intelligent routing based on complexity and availability
-        if complexity == TaskComplexity.LIGHTWEIGHT:
+        if complexity == ProcessingLoad.LIGHTWEIGHT:
             return self._route_lightweight_task()
-        elif complexity == TaskComplexity.MODERATE:
+        elif complexity == ProcessingLoad.MODERATE:
             return self._route_moderate_task()
         else:  # HEAVY tasks
             return self._route_heavy_task()
@@ -854,7 +855,7 @@ class AIHardwareAccelerator:
     async def _process_on_cpu(self, task: ProcessingTask) -> Dict[str, Any]:
         """Process task on CPU (fallback)."""
         # Basic CPU processing fallback
-        await asyncio.sleep(0.1)  # Simulate processing
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate processing
 
         return {
             "result": f"CPU processed task {task.task_type}",
@@ -998,9 +999,9 @@ async def accelerated_embedding_generation(
             "text": content if modality == "text" else None,  # Backward compatibility
         },
         complexity=(
-            TaskComplexity.LIGHTWEIGHT
+            ProcessingLoad.LIGHTWEIGHT
             if modality == "text"
-            else TaskComplexity.MODERATE
+            else ProcessingLoad.MODERATE
         ),
         preferred_device=preferred_device,
     )
@@ -1049,11 +1050,11 @@ async def accelerated_semantic_search(
 
     # Determine complexity based on document count
     if len(documents) < 100:
-        complexity = TaskComplexity.LIGHTWEIGHT
+        complexity = ProcessingLoad.LIGHTWEIGHT
     elif len(documents) < 1000:
-        complexity = TaskComplexity.MODERATE
+        complexity = ProcessingLoad.MODERATE
     else:
-        complexity = TaskComplexity.HEAVY
+        complexity = ProcessingLoad.HEAVY
 
     task = ProcessingTask(
         task_id=f"search_{int(time.time()*1000)}",

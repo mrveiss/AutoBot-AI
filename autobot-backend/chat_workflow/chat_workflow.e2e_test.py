@@ -8,6 +8,8 @@ import asyncio
 
 import aiohttp
 
+from tests.test_helpers import get_test_backend_url
+
 
 async def test_chat_workflow():
     """Test chat messages that trigger different workflow types."""
@@ -20,7 +22,7 @@ async def test_chat_workflow():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.post("http://localhost:8001/api/chats/new") as response:
+            async with session.post(get_test_backend_url() + "/api/chats/new") as response:
                 if response.status == 200:
                     chat_data = await response.json()
                     chat_id = chat_data.get("chat_id")
@@ -66,7 +68,7 @@ async def test_chat_workflow():
 
             try:
                 async with session.post(
-                    "http://localhost:8001/api/chat", json=chat_request
+                    get_test_backend_url() + "/api/chat", json=chat_request
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
@@ -123,7 +125,7 @@ async def test_chat_workflow():
 
         try:
             async with session.get(
-                "http://localhost:8001/api/workflow/workflows"
+                get_test_backend_url() + "/api/workflow/workflows"
             ) as response:
                 if response.status == 200:
                     workflows_data = await response.json()
@@ -171,7 +173,7 @@ async def test_direct_workflow_execution():
 
         try:
             async with session.post(
-                "http://localhost:8001/api/workflow/execute", json=workflow_request
+                get_test_backend_url() + "/api/workflow/execute", json=workflow_request
             ) as response:
                 if response.status == 200:
                     result = await response.json()

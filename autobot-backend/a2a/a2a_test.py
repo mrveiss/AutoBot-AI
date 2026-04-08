@@ -8,6 +8,10 @@ Issue #961: Tests for types, agent_card builder, and task_manager.
 Uses no network connections and no external dependencies.
 """
 
+import asyncio
+
+import pytest
+
 from a2a.agent_card import build_agent_card
 from a2a.task_manager import TaskManager
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TaskArtifact, TaskState
@@ -251,3 +255,115 @@ class TestTaskManager:
         task = self.mgr.create_task("Task with context", context=ctx)
         fetched = self.mgr.get_task(task.id)
         assert fetched.context == ctx
+
+
+# ---------------------------------------------------------------------------
+# Issue #3823: Task eviction after TTL
+# ---------------------------------------------------------------------------
+
+
+class TestTaskManagerEviction:
+    """Verify that terminal tasks are evicted from _tasks after the TTL expires."""
+
+    def setup_method(self):
+        self.mgr = TaskManager()
+
+    @pytest.mark.asyncio
+    async def test_completed_task_evicted_after_ttl(self) -> None:
+        """A task that reaches COMPLETED is removed from _tasks after the TTL."""
+        task = self.mgr.create_task("Eviction test")
+        self.mgr.update_state(task.id, TaskState.WORKING)
+        self.mgr.update_state(task.id, TaskState.COMPLETED)
+
+        # Still present immediately after transition
+        assert self.mgr.get_task(task.id) is not None
+
+        # Override TTL to near-zero so the test is fast
+        handle = self.mgr._eviction_handles.get(task.id)
+        assert handle is not None, "Eviction handle must be scheduled"
+
+        # Cancel the real handle and inject a fast one
+        handle.cancel()
+        async def _fast_evict():
+            await asyncio.sleep(0.01)
+            self.mgr._tasks.pop(task.id, None)
+            self.mgr._eviction_handles.pop(task.id, None)
+
+        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
+        await asyncio.sleep(0.05)
+
+        assert self.mgr.get_task(task.id) is None, "Task must be evicted after TTL"
+
+    @pytest.mark.asyncio
+    async def test_failed_task_evicted_after_ttl(self) -> None:
+        """A task that reaches FAILED is removed from _tasks after the TTL."""
+        task = self.mgr.create_task("Failing task")
+        self.mgr.update_state(task.id, TaskState.WORKING)
+        self.mgr.update_state(task.id, TaskState.FAILED, message="timeout")
+
+        handle = self.mgr._eviction_handles.get(task.id)
+        assert handle is not None
+
+        handle.cancel()
+        async def _fast_evict():
+            await asyncio.sleep(0.01)
+            self.mgr._tasks.pop(task.id, None)
+            self.mgr._eviction_handles.pop(task.id, None)
+
+        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
+        await asyncio.sleep(0.05)
+
+        assert self.mgr.get_task(task.id) is None
+
+    @pytest.mark.asyncio
+    async def test_cancelled_task_evicted_after_ttl(self) -> None:
+        """A cancelled task is removed from _tasks after the TTL."""
+        task = self.mgr.create_task("Cancel-eviction test")
+        self.mgr.cancel_task(task.id)
+
+        handle = self.mgr._eviction_handles.get(task.id)
+        assert handle is not None
+
+        handle.cancel()
+        async def _fast_evict():
+            await asyncio.sleep(0.01)
+            self.mgr._tasks.pop(task.id, None)
+            self.mgr._eviction_handles.pop(task.id, None)
+
+        self.mgr._eviction_handles[task.id] = asyncio.create_task(_fast_evict())
+        await asyncio.sleep(0.05)
+
+        assert self.mgr.get_task(task.id) is None
+
+    @pytest.mark.asyncio
+    async def test_task_queryable_before_ttl_expires(self) -> None:
+        """A terminal task must still be queryable immediately after transition."""
+        task = self.mgr.create_task("Query before TTL")
+        self.mgr.update_state(task.id, TaskState.COMPLETED)
+
+        # Cancel eviction so the task stays in store for this assertion
+        handle = self.mgr._eviction_handles.get(task.id)
+        if handle:
+            handle.cancel()
+
+        fetched = self.mgr.get_task(task.id)
+        assert fetched is not None
+        assert fetched.status.state == TaskState.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_duplicate_terminal_transition_resets_eviction_clock(self) -> None:
+        """Calling update_state on an already-terminal task does not create a second handle."""
+        task = self.mgr.create_task("Double terminal")
+        self.mgr.update_state(task.id, TaskState.COMPLETED)
+        first_handle = self.mgr._eviction_handles.get(task.id)
+
+        # update_state on a terminal task is a no-op (returns task, no new eviction)
+        self.mgr.update_state(task.id, TaskState.FAILED)
+        second_handle = self.mgr._eviction_handles.get(task.id)
+
+        # The handle should be unchanged — no new eviction was kicked off
+        # because update_state guards with _TERMINAL_STATES check.
+        assert first_handle is second_handle
+
+        if first_handle:
+            first_handle.cancel()

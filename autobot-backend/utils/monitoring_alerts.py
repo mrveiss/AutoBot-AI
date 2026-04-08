@@ -9,9 +9,12 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
+
+from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +187,7 @@ class RedisNotificationChannel(AlertNotificationChannel):
                 "resolved_at": (
                     alert.resolved_at.isoformat()
                     if alert.resolved_at
-                    else datetime.now().isoformat()
+                    else datetime.now(tz=timezone.utc).isoformat()
                 ),
                 "tags": alert.tags,
             }
@@ -251,7 +254,7 @@ class WebSocketNotificationChannel(AlertNotificationChannel):
                     "resolved_at": (
                         alert.resolved_at.isoformat()
                         if alert.resolved_at
-                        else datetime.now().isoformat()
+                        else datetime.now(tz=timezone.utc).isoformat()
                     ),
                     "tags": alert.tags,
                 },
@@ -632,8 +635,8 @@ class MonitoringAlertsManager:
             severity=rule.severity,
             status=AlertStatus.ACTIVE,
             message=f"{rule.description} (Current: {current_value}, Threshold: {rule.threshold})",
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(tz=timezone.utc),
+            updated_at=datetime.now(tz=timezone.utc),
             tags=rule.tags.copy(),
         )
 
@@ -654,7 +657,7 @@ class MonitoringAlertsManager:
                     "tags": ",".join(alert.tags) if alert.tags else "",
                 }
                 self.redis_client.hset(f"alert:{rule.id}", mapping=alert_data)
-                self.redis_client.expire(f"alert:{rule.id}", 86400 * 7)  # 7 days
+                self.redis_client.expire(f"alert:{rule.id}", TTL_7_DAYS)  # 7 days
             except Exception as e:
                 logger.warning(f"Could not store alert in Redis: {e}")
 
@@ -676,8 +679,8 @@ class MonitoringAlertsManager:
         if rule_id in self.active_alerts:
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.RESOLVED
-            alert.resolved_at = datetime.now()
-            alert.updated_at = datetime.now()
+            alert.resolved_at = datetime.now(tz=timezone.utc)
+            alert.updated_at = datetime.now(tz=timezone.utc)
 
             # Update in Redis
             if self.redis_client:
@@ -757,7 +760,7 @@ class MonitoringAlertsManager:
                                 # Update existing alert
                                 alert = self.active_alerts[rule_id]
                                 alert.current_value = current_value
-                                alert.updated_at = datetime.now()
+                                alert.updated_at = datetime.now(tz=timezone.utc)
                 else:
                     # Condition not met, resolve alert if active
                     if rule_id in self.active_alerts:
@@ -794,7 +797,7 @@ class MonitoringAlertsManager:
 
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
-                await asyncio.sleep(30)  # Wait longer on error
+                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_LONG_DELAY)
 
     def stop_monitoring(self):
         """Stop the monitoring loop"""
@@ -814,9 +817,9 @@ class MonitoringAlertsManager:
         if rule_id in self.active_alerts:
             alert = self.active_alerts[rule_id]
             alert.status = AlertStatus.ACKNOWLEDGED
-            alert.acknowledged_at = datetime.now()
+            alert.acknowledged_at = datetime.now(tz=timezone.utc)
             alert.acknowledged_by = acknowledged_by
-            alert.updated_at = datetime.now()
+            alert.updated_at = datetime.now(tz=timezone.utc)
 
             # Update in Redis
             if self.redis_client:

@@ -307,6 +307,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for KnowledgeBrowser
@@ -416,7 +417,7 @@ const fetchEntries = async (cursor: string) => {
     limit: '100',
     cursor: cursor || '0'
   })
-  const response = await apiClient.get(`/api/knowledge_base/entries?${params}`)
+  const response = await apiClient.get(`${getApiBase()}/knowledge_base/entries?${params}`)
   const data = await parseApiResponse(response)
 
   // Handle both cursor-based and offset-based formats
@@ -677,7 +678,7 @@ const selectMainCategory = (mainCatId: string) => {
 
 const loadMainCategories = async () => {
   try {
-    const response = await apiClient.get('/api/knowledge_base/categories/main')
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
     const data = await parseApiResponse(response)
 
     if (data && data.categories) {
@@ -762,7 +763,7 @@ const refreshVectorizationStatus = async () => {
 // Load main knowledge tree with useAsyncOperation wrapper
 const loadKnowledgeTreeFn = async () => {
   // Load facts from knowledge base by category
-  const response = await apiClient.get('/api/knowledge_base/facts/by_category')
+  const response = await apiClient.get(`${getApiBase()}/knowledge_base/facts/by_category`)
   const data = await parseApiResponse(response)
 
   if (data && data.categories) {
@@ -1038,7 +1039,7 @@ const handlePopulate = async (categoryId: string) => {
 const loadFolderContents = async (folder: TreeNode) => {
   try {
     // Load files for this category
-    const response = await apiClient.post('/api/knowledge_base/search', {
+    const response = await apiClient.post(`${getApiBase()}/knowledge_base/search`, {
       query: '',
       category: folder.category,
       n_results: 100
@@ -1077,7 +1078,7 @@ const loadFileContent = async (file: TreeNode) => {
 
       if (factKey) {
         // Fetch full fact data from backend
-        const apiResponse = await apiClient.get(`/api/knowledge_base/fact/${factKey}`)
+        const apiResponse = await apiClient.get(`${getApiBase()}/knowledge_base/fact/${factKey}`)
         const response = await parseApiResponse(apiResponse)
 
         if (response && response.content) {

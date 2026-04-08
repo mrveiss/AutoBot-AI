@@ -1,5 +1,6 @@
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
+import { getApiBase } from '@/config/ssot-config';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -292,7 +293,7 @@ export class ApiClient {
       // Handle 401 — redirect to login (skip for auth endpoints)
       if (
         response.status === 401 &&
-        !endpoint.includes('/api/auth/')
+        !endpoint.includes(`${getApiBase()}/auth/`)
       ) {
         this._handleUnauthorized(endpoint);
       }
@@ -316,7 +317,11 @@ export class ApiClient {
       const errorData = await response.json();
       return {
         status: response.status,
-        message: errorData.message || errorData.detail || 'Unknown error',
+        message: (() => {
+          const raw = errorData.error || errorData.message || errorData.detail;
+          if (raw == null) return JSON.stringify(errorData) || 'Unknown error';
+          return typeof raw === 'string' ? raw : JSON.stringify(raw);
+        })(),
         details: errorData,
       };
     } catch {
@@ -505,7 +510,7 @@ export class ApiClient {
   // ==================================================================================
 
   async sendChatMessage(message: string, options: ChatMessageOptions = {}): Promise<ChatMessageResponse> {
-    const response = await this.rawRequest('/api/chat', {
+    const response = await this.rawRequest(`${getApiBase()}/chat`, {
       method: 'POST',
       body: {
         content: message,
@@ -530,30 +535,30 @@ export class ApiClient {
   }
 
   async createNewChat(): Promise<Record<string, unknown>> {
-    return await this.post('/api/chat/sessions', {});
+    return await this.post(`${getApiBase()}/chat/sessions`, {});
   }
 
   async getChatList(options: RequestOptions = {}): Promise<Record<string, unknown>> {
     const timeout = options.timeout || appConfig.getTimeout('short');
-    return await this.get('/api/chat/sessions', { ...options, timeout });
+    return await this.get(`${getApiBase()}/chat/sessions`, { ...options, timeout });
   }
 
   async getChatMessages(chatId: string): Promise<Record<string, unknown>> {
-    return await this.get(`/api/chat/sessions/${chatId}`);
+    return await this.get(`${getApiBase()}/chat/sessions/${chatId}`);
   }
 
   async saveChatMessages(chatId: string, messages: Record<string, unknown>[]): Promise<Record<string, unknown>> {
-    return await this.post(`/api/chats/${chatId}/save`, {
+    return await this.post(`${getApiBase()}/chats/${chatId}/save`, {
       data: { messages, name: '' },
     });
   }
 
   async deleteChat(chatId: string): Promise<Record<string, unknown>> {
-    return await this.delete(`/api/chat/sessions/${chatId}`);
+    return await this.delete(`${getApiBase()}/chat/sessions/${chatId}`);
   }
 
   async updateChatSession(chatId: string, updates: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.put(`/api/chat/sessions/${chatId}`, updates);
+    return await this.put(`${getApiBase()}/chat/sessions/${chatId}`, updates);
   }
 
   // ==================================================================================
@@ -561,7 +566,7 @@ export class ApiClient {
   // ==================================================================================
 
   async sendStreamingMessage(message: string, options: ChatMessageOptions = {}): Promise<Response> {
-    return await this.rawRequest('/api/chat/stream', {
+    return await this.rawRequest(`${getApiBase()}/chat/stream`, {
       method: 'POST',
       body: {
         content: message,
@@ -575,14 +580,14 @@ export class ApiClient {
 
   async exportChatSession(sessionId: string, format: string = 'json'): Promise<Blob> {
     const response = await this.rawRequest(
-      `/api/chat/sessions/${sessionId}/export?format=${format}`,
+      `${getApiBase()}/chat/sessions/${sessionId}/export?format=${format}`,
       { method: 'GET' }
     );
     return response.blob();
   }
 
   async getChatStats(): Promise<Record<string, unknown>> {
-    return await this.get('/api/chat/stats');
+    return await this.get(`${getApiBase()}/chat/stats`);
   }
 
   // ==================================================================================
@@ -591,28 +596,28 @@ export class ApiClient {
 
   async getSettings(options: RequestOptions = {}): Promise<Record<string, unknown>> {
     const timeout = options.timeout || appConfig.getTimeout('short');
-    return await this.get('/api/settings/', { ...options, timeout });
+    return await this.get(`${getApiBase()}/settings/`, { ...options, timeout });
   }
 
   async saveSettings(settings: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return await this.post('/api/settings/', settings);
+    return await this.post(`${getApiBase()}/settings/`, settings);
   }
 
   async getSystemHealth(): Promise<Record<string, unknown>> {
-    return await this.get('/api/system/health', {
+    return await this.get(`${getApiBase()}/system/health`, {
       timeout: appConfig.getTimeout('health'),
     });
   }
 
   async getServiceHealth(): Promise<Record<string, unknown>> {
-    return await this.get('/api/monitoring/services/health', {
+    return await this.get(`${getApiBase()}/monitoring/services/health`, {
       timeout: appConfig.getTimeout('health'),
     });
   }
 
   async checkHealth(): Promise<boolean> {
     try {
-      const health = await this.get<Record<string, unknown>>('/api/health', {
+      const health = await this.get<Record<string, unknown>>(`${getApiBase()}/health`, {
         timeout: appConfig.getTimeout('health'),
       });
       return health?.status === 'healthy';
@@ -623,7 +628,7 @@ export class ApiClient {
   }
 
   async checkChatHealth(): Promise<Record<string, unknown>> {
-    return await this.get('/api/chat/health', {
+    return await this.get(`${getApiBase()}/chat/health`, {
       timeout: appConfig.getTimeout('health'),
     });
   }
@@ -649,7 +654,7 @@ export class ApiClient {
         ? config.enable_workflow_control : true,
       initial_directory: config.initial_directory || null,
     };
-    return await this.post('/api/terminal/sessions', payload);
+    return await this.post(`${getApiBase()}/terminal/sessions`, payload);
   }
 
   async createAgentTerminalSession(config: AgentTerminalSessionConfig = {}): Promise<Record<string, unknown>> {
@@ -660,11 +665,11 @@ export class ApiClient {
       host: config.host || 'main',
       metadata: config.metadata || null,
     };
-    return await this.post('/api/agent-terminal/sessions', payload);
+    return await this.post(`${getApiBase()}/agent-terminal/sessions`, payload);
   }
 
   async getTerminalSessions(): Promise<Record<string, unknown>[]> {
-    const response = await this.get<Record<string, unknown>>('/api/terminal/sessions');
+    const response = await this.get<Record<string, unknown>>(`${getApiBase()}/terminal/sessions`);
     return (response.sessions || []) as Record<string, unknown>[];
   }
 
@@ -676,28 +681,28 @@ export class ApiClient {
     if (filters.agent_id) params.append('agent_id', filters.agent_id);
     if (filters.conversation_id) params.append('conversation_id', filters.conversation_id);
     const query = params.toString() ? `?${params.toString()}` : '';
-    const response = await this.get<Record<string, unknown>>(`/api/agent-terminal/sessions${query}`);
+    const response = await this.get<Record<string, unknown>>(`${getApiBase()}/agent-terminal/sessions${query}`);
     return (response.sessions || []) as Record<string, unknown>[];
   }
 
   async getTerminalSessionInfo(sessionId: string): Promise<Record<string, unknown>> {
-    return await this.get(`/api/terminal/sessions/${sessionId}`);
+    return await this.get(`${getApiBase()}/terminal/sessions/${sessionId}`);
   }
 
   async getAgentTerminalSessionInfo(sessionId: string): Promise<Record<string, unknown>> {
-    return await this.get(`/api/agent-terminal/sessions/${sessionId}`);
+    return await this.get(`${getApiBase()}/agent-terminal/sessions/${sessionId}`);
   }
 
   async deleteTerminalSession(sessionId: string): Promise<Record<string, unknown>> {
-    return await this.delete(`/api/terminal/sessions/${sessionId}`);
+    return await this.delete(`${getApiBase()}/terminal/sessions/${sessionId}`);
   }
 
   async deleteAgentTerminalSession(sessionId: string): Promise<Record<string, unknown>> {
-    return await this.delete(`/api/agent-terminal/sessions/${sessionId}`);
+    return await this.delete(`${getApiBase()}/agent-terminal/sessions/${sessionId}`);
   }
 
   async executeTerminalCommand(command: string, options: TerminalCommandOptions = {}): Promise<Record<string, unknown>> {
-    return await this.post('/api/terminal/command', {
+    return await this.post(`${getApiBase()}/terminal/command`, {
       command,
       timeout: options.timeout || 30000,
       cwd: options.cwd || null,
@@ -710,7 +715,7 @@ export class ApiClient {
   // ==================================================================================
 
   async getOrCreateChatBrowserSession(config: ChatBrowserSessionConfig = {}): Promise<Record<string, unknown>> {
-    return await this.post('/api/research-browser/chat-session', {
+    return await this.post(`${getApiBase()}/research-browser/chat-session`, {
       conversation_id: config.conversation_id,
       headless: config.headless || false,
       initial_url: config.initial_url || null,
@@ -718,11 +723,11 @@ export class ApiClient {
   }
 
   async getChatBrowserSession(conversationId: string): Promise<Record<string, unknown>> {
-    return await this.get(`/api/research-browser/chat-session/${conversationId}`);
+    return await this.get(`${getApiBase()}/research-browser/chat-session/${conversationId}`);
   }
 
   async deleteChatBrowserSession(conversationId: string): Promise<Record<string, unknown>> {
-    return await this.delete(`/api/research-browser/chat-session/${conversationId}`);
+    return await this.delete(`${getApiBase()}/research-browser/chat-session/${conversationId}`);
   }
 }
 

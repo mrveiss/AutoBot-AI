@@ -19,6 +19,7 @@ from api.user_management.dependencies import (
     require_org_context,
     require_user_management_enabled,
 )
+from autobot_shared.models.pagination import PaginationParams
 from user_management.services import TeamService, TenantContext
 from user_management.services.team_service import (
     DuplicateTeamError,
@@ -150,23 +151,22 @@ class MemberRemovedResponse(BaseModel):
     ],
 )
 async def list_teams(
-    limit: int = Query(50, ge=1, le=100, description="Maximum number of teams"),
-    offset: int = Query(0, ge=0, description="Number of teams to skip"),
+    pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="Search by name or description"),
     team_service: TeamService = Depends(get_team_service),
 ):
     """List teams with pagination."""
     teams, total = await team_service.list_teams(
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         search=search,
     )
 
     return TeamListResponse(
         teams=[_team_to_response(team) for team in teams],
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
 
 

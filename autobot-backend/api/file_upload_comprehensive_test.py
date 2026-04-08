@@ -17,11 +17,13 @@ import requests
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from tests.test_helpers import get_test_backend_url
+
 
 class FileUploadAPITests(unittest.TestCase):
     """Test file upload API endpoints"""
 
-    BASE_URL = "http://localhost:8001/api/files"
+    BASE_URL = get_test_backend_url() + "/api/files"
     HEADERS = {"X-User-Role": "admin"}
 
     def setUp(self):

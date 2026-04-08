@@ -84,6 +84,7 @@ import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -289,7 +290,7 @@ async function fetchData() {
 
   try {
     // Fetch historical metrics from backend
-    const response = await fetchWithAuth(`/api/monitoring/metrics/history?metric=${selectedMetric.value}&range=${timeRange.value}&machine=${props.machine}`)
+    const response = await fetchWithAuth(`${getApiBase()}/monitoring/metrics/history?metric=${selectedMetric.value}&range=${timeRange.value}&machine=${props.machine}`)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)

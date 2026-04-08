@@ -18,7 +18,7 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
@@ -245,7 +245,7 @@ class RelevanceScorer:
         if not created_at:
             return 0.5  # Neutral for unknown age
 
-        age = datetime.now() - created_at
+        age = datetime.now(tz=timezone.utc) - created_at
         if age.days <= 0:
             return 1.0
         if age.days >= max_age_days:
@@ -755,7 +755,7 @@ class SearchAnalytics:
         """
         event = SearchEvent(
             query=query,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             result_count=result_count,
             session_id=session_id,
             search_duration_ms=duration_ms,

@@ -11,12 +11,12 @@ import logging
 import os
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import aiofiles
 
-from config import ConfigManager
+from config.manager import get_config_manager
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -33,8 +33,7 @@ from utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 # Issue #665: JavaScript snippets for content extraction
 _JS_EXTRACT_TEXT = """
@@ -139,8 +138,8 @@ class ResearchBrowserSession:
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
-        self.created_at = datetime.now()
-        self.last_activity = datetime.now()
+        self.created_at = datetime.now(tz=timezone.utc)
+        self.last_activity = datetime.now(tz=timezone.utc)
         self.status = (
             "initializing"  # initializing, active, waiting_for_user, error, closed
         )
@@ -273,7 +272,7 @@ class ResearchBrowserSession:
                 "url": url,
                 "title": title,
                 "session_id": self.session_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -284,7 +283,7 @@ class ResearchBrowserSession:
 
         try:
             self.current_url = url
-            self.last_activity = datetime.now()
+            self.last_activity = datetime.now(tz=timezone.utc)
             await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
             if wait_for_load:
@@ -351,7 +350,7 @@ class ResearchBrowserSession:
             os.makedirs(temp_dir, exist_ok=True)
 
             # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = f"research_{self.session_id}_{timestamp}.mhtml"
             filepath = os.path.join(temp_dir, filename)
 

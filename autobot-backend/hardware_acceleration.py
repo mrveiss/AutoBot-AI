@@ -636,6 +636,29 @@ class HardwareAccelerationManager:
         except Exception as e:
             logger.error("Failed to configure system environment: %s", e)
 
+    def update_priorities(self, priority_order: list) -> None:
+        """Apply a new hardware priority ordering (issue #3288).
+
+        Args:
+            priority_order: Ordered list of acceleration type values, e.g.
+                ``["gpu", "npu", "cpu"]``.  Must be a permutation of all three
+                ``AccelerationType`` values.
+
+        Raises:
+            ValueError: If the list is not a valid permutation of npu/gpu/cpu.
+        """
+        valid_values = {t.value for t in AccelerationType}
+        given = set(priority_order)
+        if given != valid_values or len(priority_order) != len(valid_values):
+            raise ValueError(
+                f"priority_order must be a permutation of {sorted(valid_values)}, "
+                f"got {priority_order}"
+            )
+
+        self.device_priorities = [AccelerationType(v) for v in priority_order]
+        self._configure_device_priorities()
+        logger.info("Hardware priority updated to: %s", priority_order)
+
     def get_device_status(self) -> Dict[str, Any]:
         """Get current device status and utilization."""
         status = {"timestamp": psutil.boot_time(), "devices": {}, "recommendations": []}

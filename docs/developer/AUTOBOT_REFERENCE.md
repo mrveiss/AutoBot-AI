@@ -142,7 +142,7 @@ Workflow: Edit Ansible templates locally → commit → deploy via Ansible → v
 | System packages | `roles/common/tasks/main.yml` | `ansible-playbook deploy-full.yml --tags common` |
 | Database credentials | `roles/postgresql/defaults/main.yml` | `ansible-playbook deploy-full.yml --tags postgresql` |
 | Redis config | `roles/redis/templates/redis.conf.j2` | `ansible-playbook deploy-full.yml --tags redis` |
-| TLS certificates | `roles/slm_manager/tasks/tls.yml` | `ansible-playbook deploy-full.yml --tags tls` |
+| TLS certificates | `roles/nginx/tasks/main.yml` | `ansible-playbook deploy-full.yml --tags tls` |
 
 **Emergency Override (use ONLY in critical production incidents):**
 

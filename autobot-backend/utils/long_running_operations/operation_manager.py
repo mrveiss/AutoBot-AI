@@ -12,7 +12,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from constants.threshold_constants import TimingConstants
@@ -67,7 +67,7 @@ class OperationExecutionContext:
         context_data: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Save operation checkpoint."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         checkpoint_id = f"chk_{self.operation.operation_id}_{timestamp}"
         await self.checkpoint_manager.save_checkpoint(
             operation_id=self.operation.operation_id,
@@ -381,7 +381,7 @@ class LongRunningOperationManager:
             try:
                 await asyncio.sleep(interval)
                 if operation.status == OperationStatus.RUNNING:
-                    ts = int(datetime.now().timestamp())
+                    ts = int(datetime.now(tz=timezone.utc).timestamp())
                     checkpoint_id = f"periodic_{operation.operation_id}_{ts}"
                     await self.checkpoint_manager.save_checkpoint(
                         operation_id=operation.operation_id,

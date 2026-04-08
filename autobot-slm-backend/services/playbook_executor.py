@@ -15,6 +15,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from services.ansible_secrets import fetch_deploy_secrets
 from services.provision_progress import TaskProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -452,11 +453,16 @@ class PlaybookExecutor:
         if not effective_inventory.exists():
             raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
 
+        # Merge stored SLM secrets into extra_vars so standalone re-deploys
+        # receive the same secrets as the full wizard provisioning flow (#3519).
+        deploy_secrets = await fetch_deploy_secrets()
+        merged_extra_vars: Dict[str, str] = {**deploy_secrets, **(extra_vars or {})}
+
         cmd = self._build_ansible_command(
             playbook_path,
             limit,
             tags,
-            extra_vars,
+            merged_extra_vars or None,
             check_mode,
             inventory_path=effective_inventory,
         )

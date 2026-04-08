@@ -3910,7 +3910,7 @@ class TestScanForUnimportedFilesEndpoint:
 
         # Should preserve directory validation
         assert "if not scan_path.exists():" in source
-        assert "Directory not found" in source
+        assert ERR_DIRECTORY_NOT_FOUND in source
         assert "status_code=404" in source
 
     def test_scan_for_unimported_files_preserves_import_tracker(self):
@@ -4520,7 +4520,7 @@ class TestBatch26ListFiles:
             'status_code=403, detail="Insufficient permissions for file operations"'
             in source
         )
-        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=404, detail=ERR_DIRECTORY_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_list_files_preserves_business_logic(self):
@@ -4722,7 +4722,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_download_file_preserves_business_logic(self):
@@ -4771,7 +4771,7 @@ class TestBatch27ViewFile:
 
         source = inspect.getsource(view_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_view_file_preserves_business_logic(self):
@@ -4850,7 +4850,7 @@ class TestBatch28RenameFile:
         source = inspect.getsource(rename_file_or_directory)
         assert "status_code=403" in source
         assert 'status_code=400, detail="Invalid file/directory name"' in source
-        assert 'status_code=404, detail="File or directory not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND' in source
         assert "status_code=409" in source
 
     def test_rename_file_preserves_business_logic(self):
@@ -4899,7 +4899,7 @@ class TestBatch28PreviewFile:
 
         source = inspect.getsource(preview_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a file"' in source
 
     def test_preview_file_preserves_business_logic(self):
@@ -4977,7 +4977,7 @@ class TestBatch29DeleteFile:
 
         source = inspect.getsource(delete_file)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="File or directory not found"' in source
+        assert 'status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND' in source
 
     def test_delete_file_preserves_business_logic(self):
         import inspect
@@ -5105,7 +5105,7 @@ class TestBatch30GetDirectoryTree:
 
         source = inspect.getsource(get_directory_tree)
         assert "status_code=403" in source
-        assert 'status_code=404, detail="Directory not found"' in source
+        assert 'status_code=404, detail=ERR_DIRECTORY_NOT_FOUND' in source
         assert 'status_code=400, detail="Path is not a directory"' in source
 
     def test_get_directory_tree_preserves_business_logic(self):
@@ -5269,7 +5269,7 @@ class TestBatch31GetWorkflowDetails:
         from api.workflow import get_workflow_details
 
         source = inspect.getsource(get_workflow_details)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
 
     def test_get_workflow_details_preserves_business_logic(self):
         import inspect
@@ -5343,7 +5343,7 @@ class TestBatch32GetWorkflowStatus:
         from api.workflow import get_workflow_status
 
         source = inspect.getsource(get_workflow_status)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
 
     def test_get_workflow_status_preserves_business_logic(self):
         import inspect
@@ -5389,7 +5389,7 @@ class TestBatch32ApproveWorkflowStep:
         from api.workflow import approve_workflow_step
 
         source = inspect.getsource(approve_workflow_step)
-        assert 'status_code=404, detail="Workflow not found"' in source
+        assert 'status_code=404, detail=ERR_WORKFLOW_NOT_FOUND' in source
         assert 'status_code=404, detail="No pending approval' in source
 
     def test_approve_workflow_step_preserves_business_logic(self):
@@ -8403,7 +8403,7 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             "config = session_manager.session_configs.get(session_id)", source
         )
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("stats = {}", source)
@@ -8468,7 +8468,7 @@ class TestBatch53TerminalMigrations(unittest.TestCase):
             "config = session_manager.session_configs.get(session_id)", source
         )
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("if session_manager.has_connection(session_id):", source)
         self.assertIn("await session_manager.close_connection(session_id)", source)
@@ -8793,7 +8793,7 @@ class TestBatch55TerminalMigrations(unittest.TestCase):
         )
         self.assertIn("if not config:", source)
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn("is_active = session_manager.has_connection(session_id)", source)
         self.assertIn("if not is_active:", source)
@@ -8882,7 +8882,7 @@ class TestBatch56TerminalMigrations(unittest.TestCase):
         )
         self.assertIn("if not config:", source)
         self.assertIn(
-            'raise HTTPException(status_code=404, detail="Session not found")', source
+            'raise HTTPException(status_code=404, detail=ERR_SESSION_NOT_FOUND)', source
         )
         self.assertIn('"session_id": session_id', source)
         self.assertIn('config.get("enable_logging", False)', source)
@@ -10631,7 +10631,7 @@ class TestBatch65ResearchBrowserMigrations(unittest.TestCase):
                 f"{func.__name__} should preserve HTTPException raises",
             )
             self.assertIn(
-                '"Session not found"',
+                'ERR_SESSION_NOT_FOUND',
                 source,
                 f"{func.__name__} should check for session existence",
             )
@@ -10731,7 +10731,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
 
         source = inspect.getsource(navigate_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         # Should check session existence
         self.assertIn("if not session:", source)
 
@@ -10767,7 +10767,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_browser_info)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         # Should check session existence (after special chat-browser handling)
         self.assertIn("if not session:", source)
 
@@ -10859,7 +10859,7 @@ class TestBatch66ResearchBrowserMigrations(unittest.TestCase):
                 f"{func.__name__} should preserve HTTPException raises",
             )
             self.assertIn(
-                '"Session not found"',
+                'ERR_SESSION_NOT_FOUND',
                 source,
                 f"{func.__name__} should check for session existence",
             )
@@ -10961,7 +10961,7 @@ class TestBatch67AgentTerminalMigrations(unittest.TestCase):
 
         source = inspect.getsource(get_agent_terminal_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         self.assertIn("status_code=404", source)
         # Should check session existence
         self.assertIn("if not session_info:", source)
@@ -11093,7 +11093,7 @@ class TestBatch68AgentTerminalMigrations(unittest.TestCase):
 
         source = inspect.getsource(delete_agent_terminal_session)
         self.assertIn("HTTPException", source)
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
         self.assertIn("status_code=404", source)
         # Should check session close success
         self.assertIn("if not success:", source)
@@ -11237,7 +11237,7 @@ class TestBatch68AgentTerminalMigrations(unittest.TestCase):
             source,
             "delete_agent_terminal_session should preserve HTTPException raises",
         )
-        self.assertIn('"Session not found"', source)
+        self.assertIn('ERR_SESSION_NOT_FOUND', source)
 
     def test_batch68_business_logic_preservation(self):
         """Test batch 68 preserves all business logic"""
@@ -16538,7 +16538,7 @@ class TestBatch94AdvancedControlStreamingAndTakeoverCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Session not found", source)
+        self.assertIn(ERR_SESSION_NOT_FOUND, source)
 
     def test_batch_94_list_streaming_sessions_has_decorator(self):
         """Verify list_streaming_sessions has @with_error_handling decorator"""
@@ -16811,7 +16811,7 @@ class TestBatch95AdvancedControlTakeoverManagement(unittest.TestCase):
         # Should preserve 404 HTTPException for business logic
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Session not found", source)
+        self.assertIn(ERR_SESSION_NOT_FOUND, source)
         # Should NOT have outer try-catch wrapper
         try_count = source.count("try:")
         self.assertEqual(
@@ -17283,7 +17283,7 @@ class TestBatch97SchedulerWorkflowCRUD(unittest.TestCase):
         # Should preserve 404 HTTPException
         self.assertIn("HTTPException", source)
         self.assertIn("status_code=404", source)
-        self.assertIn("Workflow not found", source)
+        self.assertIn(ERR_WORKFLOW_NOT_FOUND, source)
         # Should have NO try-catch blocks (Mixed Pattern with direct checks)
         try_count = source.count("try:")
         self.assertEqual(
@@ -17656,7 +17656,7 @@ class TestBatch99SchedulerFINAL(unittest.TestCase):
         self.assertIn("Invalid JSON in variables parameter", source)
         # Should preserve 404 HTTPException for template not found
         self.assertIn("status_code=404", source)
-        self.assertIn("Template not found", source)
+        self.assertIn("ERR_TEMPLATE_NOT_FOUND", source)
         # Should have 1 inner try-catch for JSON parsing
         try_count = source.count("try:")
         self.assertEqual(try_count, 1, "Should have 1 inner try-catch for JSON parsing")
@@ -19086,7 +19086,10 @@ class TestBatch109MonitoringCOMPLETE(unittest.TestCase):
 
 
 class TestBatch110TerminalCOMPLETE(unittest.TestCase):
-    """Test batch 110 migration: terminal.py completion (4 endpoints - 3 WebSocket + 1 info - FINAL TO 100%)"""
+    """Test batch 110 migration: terminal.py completion (2 endpoints - 1 WebSocket + 1 info - FINAL TO 100%).
+
+    Issue #3383: /ws/simple and /ws/secure compat aliases removed — use /ws/{session_id}.
+    """
 
     def test_batch_110_terminal_info_simple_pattern(self):
         """Verify terminal_info uses Simple Pattern"""
@@ -19120,48 +19123,34 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("try:", source)
         self.assertIn("except", source)
 
-    def test_batch_110_simple_compat_websocket_mixed_pattern(self):
-        """Verify simple_terminal_websocket_compat uses Mixed Pattern"""
+    def test_batch_110_compat_aliases_removed(self):
+        """Verify compat aliases are gone — #3383 consolidation complete"""
         from api import terminal
 
-        source = inspect.getsource(terminal.simple_terminal_websocket_compat)
-        # Should have @with_error_handling decorator
-        self.assertIn("@with_error_handling", source)
-        # Should have operation parameter
-        self.assertIn('operation="simple_terminal_websocket_compat"', source)
+        self.assertFalse(
+            hasattr(terminal, "simple_terminal_websocket_compat"),
+            "simple_terminal_websocket_compat should be removed (#3383)",
+        )
+        self.assertFalse(
+            hasattr(terminal, "secure_terminal_websocket_compat"),
+            "secure_terminal_websocket_compat should be removed (#3383)",
+        )
 
-    def test_batch_110_secure_compat_websocket_mixed_pattern(self):
-        """Verify secure_terminal_websocket_compat uses Mixed Pattern"""
+    def test_batch_110_websocket_endpoint_has_decorator(self):
+        """Verify canonical WebSocket endpoint has @with_error_handling decorator"""
         from api import terminal
 
-        source = inspect.getsource(terminal.secure_terminal_websocket_compat)
-        # Should have @with_error_handling decorator
-        self.assertIn("@with_error_handling", source)
-        # Should have operation parameter
-        self.assertIn('operation="secure_terminal_websocket_compat"', source)
-
-    def test_batch_110_all_websocket_endpoints_have_decorator(self):
-        """Verify all 3 WebSocket endpoints have @with_error_handling decorator"""
-        from api import terminal
-
-        websocket_funcs = [
-            terminal.consolidated_terminal_websocket,
-            terminal.simple_terminal_websocket_compat,
-            terminal.secure_terminal_websocket_compat,
-        ]
-
-        for func in websocket_funcs:
-            source = inspect.getsource(func)
-            self.assertIn(
-                "@with_error_handling",
-                source,
-                f"{func.__name__} should have @with_error_handling decorator",
-            )
-            self.assertIn(
-                "@router.websocket",
-                source,
-                f"{func.__name__} should have @router.websocket decorator",
-            )
+        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn(
+            "@with_error_handling",
+            source,
+            "consolidated_terminal_websocket should have @with_error_handling decorator",
+        )
+        self.assertIn(
+            "@router.websocket",
+            source,
+            "consolidated_terminal_websocket should have @router.websocket decorator",
+        )
 
     def test_batch_110_terminal_100_percent_milestone(self):
         """Verify terminal.py has reached 100% migration (21st file to 100%)"""
@@ -19191,8 +19180,8 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
             if "@with_error_handling" in inspect.getsource(func)
         )
 
-        # terminal.py has 17 total endpoints (including 3 WebSocket endpoints)
-        total_endpoints = 17
+        # terminal.py has 15 total endpoints after #3383 compat alias removal
+        total_endpoints = 15
 
         # Should have migrated all endpoints
         self.assertEqual(
@@ -19217,21 +19206,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("websocket.accept", source_ws)
         self.assertIn("session_manager", source_ws)
 
-    def test_batch_110_websocket_endpoints_preserve_security_levels(self):
-        """Verify WebSocket endpoints preserve security level management"""
+    def test_batch_110_websocket_endpoint_preserves_security_levels(self):
+        """Verify canonical WebSocket endpoint preserves security level management"""
         from api import terminal
 
-        # Check consolidated endpoint
-        source1 = inspect.getsource(terminal.consolidated_terminal_websocket)
-        self.assertIn("SecurityLevel", source1)
-        self.assertIn("security_level", source1)
-
-        # Check compatibility endpoints
-        source2 = inspect.getsource(terminal.simple_terminal_websocket_compat)
-        self.assertIn("session_manager.session_configs", source2)
-
-        source3 = inspect.getsource(terminal.secure_terminal_websocket_compat)
-        self.assertIn("session_manager.session_configs", source3)
+        source = inspect.getsource(terminal.consolidated_terminal_websocket)
+        self.assertIn("SecurityLevel", source)
+        self.assertIn("security_level", source)
 
     # ==============================================
     # BATCH 111: auth.py - COMPLETE (100%)
@@ -23185,316 +23166,6 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("elapsed_time", source)
         self.assertIn("is_ready", source)
         self.assertIn("StartupPhase.READY", source)
-
-    # ==============================================
-    # BATCH 134: phase_management.py - COMPLETE (100%)
-    # ==============================================
-
-    def test_batch_134_get_phase_management_status_simple_pattern(self):
-        """Verify get_phase_management_status endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_phase_management_status)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_phase_management_status"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_run_full_phase_validation_simple_pattern(self):
-        """Verify run_full_phase_validation endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.run_full_phase_validation)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="run_full_phase_validation"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_run_custom_phase_validation_simple_pattern(self):
-        """Verify run_custom_phase_validation endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.run_custom_phase_validation)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="run_custom_phase_validation"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_check_progression_eligibility_simple_pattern(self):
-        """Verify check_progression_eligibility endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.check_progression_eligibility)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="check_progression_eligibility"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_execute_automated_progression_simple_pattern(self):
-        """Verify execute_automated_progression endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.execute_automated_progression)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="execute_automated_progression"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_trigger_manual_progression_simple_pattern(self):
-        """Verify trigger_manual_progression endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.trigger_manual_progression)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="trigger_manual_progression"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_get_available_phases_simple_pattern(self):
-        """Verify get_available_phases endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_available_phases)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_available_phases"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_get_current_capabilities_simple_pattern(self):
-        """Verify get_current_capabilities endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_current_capabilities)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_current_capabilities"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_get_progression_history_simple_pattern(self):
-        """Verify get_progression_history endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_progression_history)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_progression_history"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_phase_management_health_simple_pattern(self):
-        """Verify phase_management_health endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.phase_management_health)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="phase_management_health"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_update_progression_config_simple_pattern(self):
-        """Verify update_progression_config endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.update_progression_config)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="update_progression_config"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_get_progression_summary_report_simple_pattern(self):
-        """Verify get_progression_summary_report endpoint uses Simple Pattern"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_progression_summary_report)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_progression_summary_report"', source)
-        self.assertIn('error_code_prefix="PHASE"', source)
-
-    def test_batch_134_all_phase_management_endpoints_have_decorator(self):
-        """Verify all phase_management endpoints have @with_error_handling decorator"""
-        from api import phase_management
-
-        endpoint_functions = [
-            phase_management.get_phase_management_status,
-            phase_management.run_full_phase_validation,
-            phase_management.run_custom_phase_validation,
-            phase_management.check_progression_eligibility,
-            phase_management.execute_automated_progression,
-            phase_management.trigger_manual_progression,
-            phase_management.get_available_phases,
-            phase_management.get_current_capabilities,
-            phase_management.get_progression_history,
-            phase_management.phase_management_health,
-            phase_management.update_progression_config,
-            phase_management.get_progression_summary_report,
-        ]
-
-        for func in endpoint_functions:
-            source = inspect.getsource(func)
-            self.assertIn(
-                "@with_error_handling",
-                source,
-                f"Endpoint {func.__name__} missing @with_error_handling decorator",
-            )
-
-    def test_batch_134_phase_management_100_percent_milestone(self):
-        """Verify phase_management.py has reached 100% migration"""
-        from api import phase_management
-
-        endpoint_functions = [
-            phase_management.get_phase_management_status,
-            phase_management.run_full_phase_validation,
-            phase_management.run_custom_phase_validation,
-            phase_management.check_progression_eligibility,
-            phase_management.execute_automated_progression,
-            phase_management.trigger_manual_progression,
-            phase_management.get_available_phases,
-            phase_management.get_current_capabilities,
-            phase_management.get_progression_history,
-            phase_management.phase_management_health,
-            phase_management.update_progression_config,
-            phase_management.get_progression_summary_report,
-        ]
-
-        migrated_count = sum(
-            1
-            for func in endpoint_functions
-            if "@with_error_handling" in inspect.getsource(func)
-        )
-
-        total_endpoints = 12
-        self.assertEqual(
-            migrated_count,
-            total_endpoints,
-            f"Expected {total_endpoints} migrated endpoints, but found {migrated_count}",
-        )
-        progress_percentage = (migrated_count / total_endpoints) * 100
-        self.assertEqual(progress_percentage, 100.0)
-
-    def test_batch_134_migration_preserves_phase_validator_integration(self):
-        """Verify migration preserves PhaseValidator integration"""
-        from api import phase_management
-
-        # Check run_full_phase_validation preserves validator usage
-        source_full = inspect.getsource(phase_management.run_full_phase_validation)
-        self.assertIn("PhaseValidator()", source_full)
-        self.assertIn("await validator.validate_all_phases()", source_full)
-
-        # Check run_custom_phase_validation preserves validator usage
-        source_custom = inspect.getsource(phase_management.run_custom_phase_validation)
-        self.assertIn("PhaseValidator()", source_custom)
-        self.assertIn("ValidationRequest", source_custom)
-
-    def test_batch_134_migration_preserves_progression_manager_integration(self):
-        """Verify migration preserves ProgressionManager integration"""
-        from api import phase_management
-
-        # Check get_phase_management_status preserves manager usage
-        source_status = inspect.getsource(phase_management.get_phase_management_status)
-        self.assertIn("get_progression_manager()", source_status)
-        self.assertIn("get_current_system_capabilities()", source_status)
-
-        # Check check_progression_eligibility preserves manager usage
-        source_eligibility = inspect.getsource(
-            phase_management.check_progression_eligibility
-        )
-        self.assertIn("get_progression_manager()", source_eligibility)
-        self.assertIn(
-            "await progression_manager.check_progression_eligibility()",
-            source_eligibility,
-        )
-
-    def test_batch_134_migration_preserves_background_tasks_support(self):
-        """Verify migration preserves BackgroundTasks support for async progression"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.execute_automated_progression)
-        self.assertIn("BackgroundTasks", source)
-        self.assertIn("background_tasks.add_task", source)
-        self.assertIn("asyncio.new_event_loop", source)
-
-    def test_batch_134_migration_preserves_manual_progression_logic(self):
-        """Verify migration preserves manual progression with user tracking"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.trigger_manual_progression)
-        self.assertIn("PhaseProgressionRequest", source)
-        self.assertIn("trigger_manual_progression", source)
-        self.assertIn("phase_name=request.phase_name", source)
-        self.assertIn("user_id=request.user_id", source)
-        self.assertIn("JSONResponse", source)
-
-    def test_batch_134_migration_preserves_phase_rules_and_prerequisites(self):
-        """Verify migration preserves phase rules and prerequisites logic"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_available_phases)
-        self.assertIn("progression_rules", source)
-        self.assertIn("prerequisites", source)
-        self.assertIn("auto_progression", source)
-        self.assertIn("capabilities_unlocked", source)
-        self.assertIn("next_phases", source)
-
-    def test_batch_134_migration_preserves_capabilities_tracking(self):
-        """Verify migration preserves system capabilities tracking"""
-        from api import phase_management
-
-        # Check get_current_capabilities preserves capability access
-        source_capabilities = inspect.getsource(
-            phase_management.get_current_capabilities
-        )
-        self.assertIn("get_current_system_capabilities()", source_capabilities)
-
-        # Check get_phase_management_status preserves capability fields
-        source_status = inspect.getsource(phase_management.get_phase_management_status)
-        self.assertIn("auto_progression_enabled", source_status)
-        self.assertIn("system_maturity", source_status)
-
-    def test_batch_134_migration_preserves_progression_history(self):
-        """Verify migration preserves progression history tracking"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_progression_history)
-        self.assertIn("Query(10, ge=1, le=100)", source)
-        self.assertIn("progression_history[-limit:]", source)
-        self.assertIn("total_progressions", source)
-
-    def test_batch_134_migration_preserves_health_check_logic(self):
-        """Verify migration preserves health check comprehensive logic"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.phase_management_health)
-        self.assertIn("progression_manager", source)
-        self.assertIn("validator", source)
-        self.assertIn("auto_progression", source)
-        self.assertIn("last_progression_check", source)
-        self.assertIn("isoformat()", source)
-
-    def test_batch_134_migration_preserves_config_update_logic(self):
-        """Verify migration preserves configuration update logic"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.update_progression_config)
-        self.assertIn("allowed_keys", source)
-        self.assertIn("auto_progression_enabled", source)
-        self.assertIn("minimum_phase_duration", source)
-        self.assertIn("validation_threshold", source)
-        self.assertIn("updated_keys", source)
-
-    def test_batch_134_migration_preserves_summary_report_generation(self):
-        """Verify migration preserves comprehensive summary report generation"""
-        from api import phase_management
-
-        source = inspect.getsource(phase_management.get_progression_summary_report)
-        self.assertIn("await validator.validate_all_phases()", source)
-        self.assertIn(
-            "await progression_manager.check_progression_eligibility()", source
-        )
-        self.assertIn("overall_assessment", source)
-        self.assertIn("phase_completion", source)
-        self.assertIn("eligible_for_progression", source)
-        self.assertIn("blocked_phases", source)
-        self.assertIn("active_capabilities", source)
 
     # ==============================================
     # BATCH 135: state_tracking.py - COMPLETE (100%)

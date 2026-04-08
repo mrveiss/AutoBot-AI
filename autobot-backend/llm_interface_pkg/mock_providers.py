@@ -16,6 +16,9 @@ import logging
 import os
 from typing import Optional
 
+from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TIMEOUT_HTTP_LONG
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,7 +126,7 @@ class LocalLLM:
         """
         if not self._ollama_available:
             logger.debug("Using mock response (Ollama not configured)")
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
             return self._create_mock_response(prompt)
 
         try:
@@ -136,7 +139,7 @@ class LocalLLM:
             }
 
             async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=120.0)
+                timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
                 async with session.post(
                     f"{self._ollama_url}/api/chat", json=data, timeout=timeout
                 ) as response:
@@ -186,7 +189,7 @@ class MockPalm:
         Returns:
             MockQuotaStatus with simulated quota information
         """
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 
         class MockQuotaStatus:
             def __init__(self, remaining_tokens):
@@ -206,7 +209,7 @@ class MockPalm:
         Returns:
             Dict with mock generated text
         """
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         prompt = kwargs.get("prompt", "")
         return {

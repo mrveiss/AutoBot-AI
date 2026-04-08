@@ -167,7 +167,7 @@ async def search_events(
 ):
     """Search temporal events with filters."""
     try:
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         from autobot_shared.redis_client import get_redis_client
         from knowledge.temporal_search import TemporalSearchService
@@ -176,7 +176,7 @@ async def search_events(
         temporal_svc = TemporalSearchService(redis_client)
 
         start = datetime.fromisoformat(start_date) if start_date else datetime.min
-        end = datetime.fromisoformat(end_date) if end_date else datetime.now()
+        end = datetime.fromisoformat(end_date) if end_date else datetime.now(tz=timezone.utc)
         types_list = (
             [t.strip() for t in event_types.split(",")] if event_types else None
         )

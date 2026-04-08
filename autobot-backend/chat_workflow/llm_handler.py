@@ -15,8 +15,10 @@ from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import config as _ssot_config
+from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConstants
-from dependencies import global_config_manager
+from dependencies import get_config
 from extensions.base import HookContext
 from extensions.hooks import HookPoint
 from extensions.manager import get_extension_manager
@@ -131,13 +133,9 @@ class LLMHandlerMixin:
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
-        """Get Ollama endpoint from ConfigManager as fallback."""
-        from config import ConfigManager
-
-        config = ConfigManager()
-        ollama_host = config.get_host("ollama")
-        ollama_port = config.get_port("ollama")
-        return f"http://{ollama_host}:{ollama_port}/api/generate"
+        """Get Ollama endpoint from ssot_config as fallback (Issue #3829)."""
+        # _ssot_config is already imported at module level
+        return f"{_ssot_config.ollama_url}{PATH_OLLAMA_GENERATE}"
 
     def _get_ollama_endpoint(self) -> str:
         """Get Ollama endpoint from config with fallbacks.
@@ -146,13 +144,13 @@ class LLMHandlerMixin:
         Config may store just the base URL, so we ensure the path is appended.
         """
         try:
-            endpoint = global_config_manager.get_nested(
+            endpoint = get_config().get_nested(
                 "backend.llm.ollama.endpoint", None
             )
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 # Ensure /api/generate path is included
-                if not endpoint.endswith("/api/generate"):
-                    endpoint = endpoint.rstrip("/") + "/api/generate"
+                if not endpoint.endswith(PATH_OLLAMA_GENERATE):
+                    endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return endpoint
             logger.error(
                 "Invalid endpoint URL: %s, using config-based default", endpoint
@@ -169,10 +167,10 @@ class LLMHandlerMixin:
         Returns URL with /api/generate suffix.
         """
         try:
-            base_url = global_config_manager.get_ollama_endpoint_for_model(model_name)
+            base_url = get_config().get_ollama_endpoint_for_model(model_name)
             if base_url and base_url.startswith(_VALID_URL_SCHEMES):
-                if not base_url.endswith("/api/generate"):
-                    base_url = base_url.rstrip("/") + "/api/generate"
+                if not base_url.endswith(PATH_OLLAMA_GENERATE):
+                    base_url = base_url.rstrip("/") + PATH_OLLAMA_GENERATE
                 return base_url
         except Exception as e:
             logger.warning("Model endpoint routing failed: %s", e)
@@ -317,32 +315,32 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
 
     def _build_full_prompt(
         self,
-        system_prompt: str,
         knowledge_context: str,
         conversation_context: str,
         message: str,
     ) -> str:
-        """Build full prompt with optional knowledge context."""
+        """Build full prompt with optional knowledge context.
+
+        system_prompt is sent via the Ollama ``system`` field — not embedded here
+        to avoid double-injection and context-window waste.
+        """
         if knowledge_context:
             return (
-                system_prompt
-                + "\n\n"
-                + knowledge_context
+                knowledge_context
                 + "\n"
                 + conversation_context
                 + f"\n**Current user message:** {message}\n\nAssistant:"
             )
         return (
-            system_prompt
-            + conversation_context
+            conversation_context
             + f"\n**Current user message:** {message}\n\nAssistant:"
         )
 
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
-            default_model = global_config_manager.get_default_llm_model()
-            selected = global_config_manager.get_nested(
+            default_model = get_config().get_default_llm_model()
+            selected = get_config().get_nested(
                 "backend.llm.ollama.selected_model", default_model
             )
             if selected and isinstance(selected, str):
@@ -374,12 +372,23 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # then fall back to local config-based resolution (#1070 model routing).
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
-            if not slm_base.endswith("/api/generate"):
-                slm_base = slm_base.rstrip("/") + "/api/generate"
+            if not slm_base.endswith(PATH_OLLAMA_GENERATE):
+                slm_base = slm_base.rstrip("/") + PATH_OLLAMA_GENERATE
             ollama_endpoint = slm_base
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt(language=language)
+        # Issue #3787: Prepend always-loaded compact memory summary.
+        try:
+            from memory.essential_story import EssentialStoryGenerator
+
+            story = await EssentialStoryGenerator().generate(
+                model_name=selected_model
+            )
+            if story:
+                system_prompt = story + "\n\n" + system_prompt
+        except Exception as _ess_exc:
+            logger.warning("EssentialStory injection failed: %s", _ess_exc)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 
@@ -389,11 +398,47 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             knowledge_context, citations = await self._retrieve_knowledge_context(
                 message, session
             )
+            # Issue #3770: compress KB results when context exceeds model budget
+            if knowledge_context and citations:
+                from context_window_manager import ContextWindowManager
+                from services.memory.compression import ContextCompressionService
+
+                cwm = ContextWindowManager()
+                cwm.set_model(selected_model)
+                kc_tokens = cwm.estimate_tokens(knowledge_context)
+                max_kb_tokens = cwm.get_max_history_tokens()
+                if await cwm.async_should_compress(
+                    content_tokens=kc_tokens, model_name=selected_model
+                ):
+                    svc = ContextCompressionService(
+                        model_thresholds={
+                            name: spec.get("compression_threshold", 8192)
+                            for name, spec in cwm.config.get("models", {}).items()
+                            if isinstance(spec, dict)
+                        }
+                    )
+                    citations = await svc.compress_kb_results(
+                        citations, max_tokens=max_kb_tokens
+                    )
+                    # Rebuild knowledge context from trimmed citations
+                    if citations:
+                        lines = ["KNOWLEDGE CONTEXT:"]
+                        for i, c in enumerate(citations, 1):
+                            score = c.get("score", 0.0)
+                            content = c.get("content", "").strip()
+                            lines.append(f"{i}. [score: {score:.2f}] {content}")
+                        knowledge_context = "\n".join(lines)
+                        logger.info(
+                            "[#3770] KB compressed to %d citations (%d tokens)",
+                            len(citations), cwm.estimate_tokens(knowledge_context),
+                        )
+                    else:
+                        knowledge_context = ""
         else:
             session.metadata["used_knowledge"] = False
 
         full_prompt = self._build_full_prompt(
-            system_prompt, knowledge_context, conversation_context, message
+            knowledge_context, conversation_context, message
         )
         full_prompt = await _emit_full_prompt_ready(
             full_prompt,
@@ -434,7 +479,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
 
     def _get_interpretation_llm_options(self) -> Dict[str, Any]:
         """Get LLM options for command interpretation."""
-        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": 2048}
+        return {"temperature": 0.7, "top_p": 0.9, "num_ctx": ModelConstants.DEFAULT_NUM_CTX}
 
     async def _interpret_non_streaming(
         self,
@@ -598,7 +643,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         session_key = f"chat:session:{session_id}"
         try:
             session_data_json = await asyncio.wait_for(
-                self.redis_client.get(session_key), timeout=2.0
+                self.redis_client.get(session_key), timeout=_ssot_config.timeout.redis_op
             )
             if not session_data_json:
                 return None
@@ -674,13 +719,13 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         self, command: str, stdout: str, stderr: str, return_code: int
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
-        selected_model = global_config_manager.get_selected_model()
+        selected_model = get_config().get_selected_model()
         # Issue #1214: Try SLM discovery first, then config-based routing
         slm_base = await self._discover_ollama_from_slm()
         if slm_base:
             ollama_endpoint = slm_base
         else:
-            ollama_endpoint = global_config_manager.get_ollama_url_for_model(
+            ollama_endpoint = get_config().get_ollama_url_for_model(
                 selected_model
             )
 

@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from enhanced_orchestrator import get_orchestrator
+from orchestrator import get_orchestrator_sync as get_orchestrator
 from orchestrator import Orchestrator
 from services.notification_service import NotificationService
 from type_defs.common import Metadata

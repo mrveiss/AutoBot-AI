@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -139,7 +139,7 @@ class TakeoverManager:
             if timeout_minutes
             else self.default_timeout
         )
-        expires_at = datetime.now() + timeout
+        expires_at = datetime.now(tz=timezone.utc) + timeout
 
         return TakeoverRequest(
             request_id=request_id,
@@ -149,7 +149,7 @@ class TakeoverManager:
             affected_tasks=affected_tasks or [],
             reason=reason,
             context_data=context_data or {},
-            requested_at=datetime.now(),
+            requested_at=datetime.now(tz=timezone.utc),
             expires_at=expires_at,
             auto_approve=auto_approve or trigger in self.auto_approve_triggers,
         )
@@ -276,7 +276,7 @@ class TakeoverManager:
 
         request = self.pending_requests[request_id]
 
-        if request.expires_at and datetime.now() > request.expires_at:
+        if request.expires_at and datetime.now(tz=timezone.utc) > request.expires_at:
             await self._expire_request(request_id)
             raise ValueError(f"Takeover request has expired: {request_id}")
 
@@ -297,7 +297,7 @@ class TakeoverManager:
             request=request,
             state=TakeoverState.ACTIVE,
             human_operator=human_operator,
-            started_at=datetime.now(),
+            started_at=datetime.now(tz=timezone.utc),
             ended_at=None,
             actions_taken=[],
             system_snapshot=system_snapshot,
@@ -354,7 +354,7 @@ class TakeoverManager:
 
         # Record action
         action_record = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "action_type": action_type,
             "action_data": action_data,
             "operator": session.human_operator,
@@ -516,7 +516,7 @@ class TakeoverManager:
 
         session = self.active_sessions[session_id]
         session.state = TakeoverState.COMPLETED
-        session.ended_at = datetime.now()
+        session.ended_at = datetime.now(tz=timezone.utc)
         session.resolution = resolution
 
         # Resume all paused tasks
@@ -579,7 +579,7 @@ class TakeoverManager:
 
         try:
             snapshot = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "system_info": {
                     "cpu_percent": psutil.cpu_percent(),
                     "memory_percent": psutil.virtual_memory().percent,
@@ -599,7 +599,7 @@ class TakeoverManager:
             logger.error("Failed to capture system snapshot: %s", e)
             return {
                 "error": "Failed to capture system snapshot",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     async def _execute_trigger_handlers(self, request: TakeoverRequest):

@@ -20,11 +20,12 @@ Examples include:
 import asyncio
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -126,7 +127,7 @@ async def _process_and_checkpoint_files(
             indexed_files.append(file_info)
 
             # Update progress
-            elapsed = (datetime.now() - context.operation.started_at).total_seconds()
+            elapsed = (datetime.now(tz=timezone.utc) - context.operation.started_at).total_seconds()
             await context.update_progress(
                 f"Indexing {file_path.name}",
                 i + 1,
@@ -170,7 +171,7 @@ def _build_indexing_result(
     return {
         "total_files_processed": len(indexed_files),
         "files": indexed_files,
-        "completed_at": datetime.now().isoformat(),
+        "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         "resumed_from_checkpoint": resumed,
     }
 
@@ -258,7 +259,7 @@ def _build_security_scan_result(
         "total_vulnerabilities": total_vulnerabilities,
         "scan_results": scan_results,
         "scan_types": scan_types,
-        "completed_at": datetime.now().isoformat(),
+        "completed_at": datetime.now(tz=timezone.utc).isoformat(),
         "resumed_from_checkpoint": resumed,
     }
 
@@ -750,7 +751,7 @@ class ExistingOperationMigrator:
 
     async def _process_file_for_indexing(self, file_path: Path) -> Dict[str, Any]:
         """Process a single file for indexing (placeholder implementation)"""
-        await asyncio.sleep(0.01)  # Simulate processing time
+        await asyncio.sleep(TimingConstants.POLL_INTERVAL)  # Simulate processing time
 
         try:
             content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -759,14 +760,14 @@ class ExistingOperationMigrator:
                 "size": len(content),
                 "lines": len(content.splitlines()),
                 "extension": file_path.suffix,
-                "indexed_at": datetime.now().isoformat(),
+                "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
                 "content_hash": hash(content) % 1000000,  # Simple hash for example
             }
         except Exception:
             return {
                 "path": str(file_path),
                 "error": "Internal server error",
-                "indexed_at": datetime.now().isoformat(),
+                "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _run_single_test(self, test_file: Path) -> Dict[str, Any]:
@@ -795,7 +796,7 @@ class ExistingOperationMigrator:
                 "output": result.stdout,
                 "errors": result.stderr,
                 "exit_code": result.returncode,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except subprocess.TimeoutExpired:
@@ -804,7 +805,7 @@ class ExistingOperationMigrator:
                 "status": "TIMEOUT",
                 "duration": time.time() - start_time,
                 "error": "Test timed out after 5 minutes",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception:
             return {
@@ -812,7 +813,7 @@ class ExistingOperationMigrator:
                 "status": "ERROR",
                 "duration": time.time() - start_time,
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _check_vulnerability_patterns(
@@ -856,7 +857,7 @@ class ExistingOperationMigrator:
         self, file_path: Path, scan_types: List[str]
     ) -> Dict[str, Any]:
         """Scan a single file for security issues (placeholder implementation)"""
-        await asyncio.sleep(0.02)  # Simulate scan time
+        await asyncio.sleep(TimingConstants.FAST_POLL_INTERVAL)  # Simulate scan time
 
         vulnerabilities: List[Dict[str, Any]] = []
 
@@ -873,14 +874,14 @@ class ExistingOperationMigrator:
                 "file": str(file_path),
                 "vulnerabilities": vulnerabilities,
                 "scan_types": scan_types,
-                "scanned_at": datetime.now().isoformat(),
+                "scanned_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception:
             return {
                 "file": str(file_path),
                 "error": "Internal server error",
-                "scanned_at": datetime.now().isoformat(),
+                "scanned_at": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 
@@ -924,7 +925,7 @@ async def _wait_for_operation_completion(operation_id: str) -> Any:
             if operation.error_info:
                 raise Exception(operation.error_info)
             return {"status": operation.status.value}
-        await asyncio.sleep(1)
+        await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
 
 def _create_progress_wrapper(context: OperationExecutionContext):

@@ -1190,18 +1190,19 @@ async def _cleanup_conversation_transcript(session_id: str) -> dict:
         Dict with cleanup result
     """
     import os
-    from pathlib import Path
+
+    from autobot_shared.security.path_validator import validate_relative_path
+    from constants.path_constants import PATH
 
     result = {"transcript_deleted": False, "error": None}
 
     try:
         if "/" in session_id or "\\" in session_id or ".." in session_id:
             raise ValueError("Invalid session ID")
-        from autobot_shared.security.path_validator import validate_relative_path
 
         transcript_path = validate_relative_path(
             f"{session_id}.json",
-            Path("data/conversation_transcripts"),
+            PATH.DATA_DIR / "conversation_transcripts",
         )
 
         if transcript_path.exists():

@@ -8,7 +8,7 @@ Machine learning component for workflow optimization.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from type_defs.common import Metadata
@@ -46,7 +46,7 @@ class WorkflowLearningEngine:
                 "components": intent_analysis.get("components", []),
                 "steps_generated": len(generated_steps),
                 "ai_optimizations": sum(1 for s in generated_steps if s.ai_generated),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
             # Store in learning database

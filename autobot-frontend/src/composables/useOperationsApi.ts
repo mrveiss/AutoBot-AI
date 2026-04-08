@@ -20,6 +20,7 @@ import type {
   OperationStatus
 } from '@/types/operations'
 import { isTerminalStatus } from '@/types/operations'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useOperationsApi')
 
@@ -42,7 +43,7 @@ export function useOperationsApi() {
           if (filter?.limit) params.append('limit', filter.limit.toString())
 
           const queryString = params.toString()
-          const url = `/api/long-running/${queryString ? `?${queryString}` : ''}`
+          const url = `${getApiBase()}/long-running/${queryString ? `?${queryString}` : ''}`
           const response = await api.get(url)
           return await response.json()
         },
@@ -65,7 +66,7 @@ export function useOperationsApi() {
     async getOperation(operationId: string): Promise<Operation | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`/api/long-running/${operationId}`)
+          const response = await api.get(`${getApiBase()}/long-running/${operationId}`)
           return await response.json()
         },
         {
@@ -81,7 +82,7 @@ export function useOperationsApi() {
     async cancelOperation(operationId: string): Promise<CancelOperationResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`/api/long-running/${operationId}/cancel`)
+          const response = await api.post(`${getApiBase()}/long-running/${operationId}/cancel`)
           return await response.json()
         },
         {
@@ -96,7 +97,7 @@ export function useOperationsApi() {
     async resumeOperation(operationId: string): Promise<ResumeOperationResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post(`/api/long-running/${operationId}/resume`)
+          const response = await api.post(`${getApiBase()}/long-running/${operationId}/resume`)
           return await response.json()
         },
         {
@@ -111,7 +112,7 @@ export function useOperationsApi() {
     async getHealth(): Promise<OperationsHealthResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/long-running/health')
+          const response = await api.get(`${getApiBase()}/long-running/health`)
           return await response.json()
         },
         {

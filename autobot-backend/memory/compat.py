@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import logging
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from .enums import MemoryCategory, TaskPriority, TaskStatus
@@ -105,7 +105,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         """
         # Generate task_id using same pattern as enhanced_memory_manager.py
         task_id = hashlib.sha256(
-            f"{task_name}_{datetime.now().isoformat()}".encode()
+            f"{task_name}_{datetime.now(tz=timezone.utc).isoformat()}".encode()
         ).hexdigest()[:16]
 
         # Create TaskExecutionRecord
@@ -115,7 +115,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
             description=description,
             status=TaskStatus.PENDING,
             priority=priority,
-            created_at=datetime.now(),
+            created_at=datetime.now(tz=timezone.utc),
             agent_type=agent_type,
             inputs=inputs,
             parent_task_id=parent_task_id,
@@ -141,7 +141,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         """
         result = self._run_sync(
             self.update_task_status(
-                task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now()
+                task_id, TaskStatus.IN_PROGRESS, started_at=datetime.now(tz=timezone.utc)
             )
         )
         if result:
@@ -175,7 +175,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
             logger.warning("Task not found for completion: %s", task_id)
             return False
 
-        completed_at = datetime.now()
+        completed_at = datetime.now(tz=timezone.utc)
         duration = None
         if task.started_at:
             duration = (completed_at - task.started_at).total_seconds()
@@ -212,7 +212,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
             self.update_task_status(
                 task_id,
                 TaskStatus.FAILED,
-                completed_at=datetime.now(),
+                completed_at=datetime.now(tz=timezone.utc),
                 error_message=error_message,
                 retry_count=retry_count,
             )
@@ -246,7 +246,7 @@ class EnhancedMemoryManager(UnifiedMemoryManager):
         ⚠️ WARNING: This is a synchronous method. DO NOT call from async code.
         """
         # Convert days_back to start_date
-        start_date = datetime.now() - timedelta(days=days_back)
+        start_date = datetime.now(tz=timezone.utc) - timedelta(days=days_back)
 
         return self._run_sync(
             self.get_task_history(

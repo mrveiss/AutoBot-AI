@@ -8,6 +8,38 @@ from unittest.mock import patch
 
 import pytest
 
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE35_SONNET,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_OPUS4,
+    ANTHROPIC_CLAUDE_SONNET4,
+    GOOGLE_GEMINI20_FLASH,
+    GOOGLE_GEMINI25_FLASH,
+    GOOGLE_GEMINI25_PRO,
+    LOCAL_CODELLAMA,
+    LOCAL_DEEPSEEK_CODER,
+    LOCAL_DEEPSEEK_R1,
+    LOCAL_GEMMA2,
+    LOCAL_GEMMA3,
+    LOCAL_LLAMA3,
+    LOCAL_LLAMA31,
+    LOCAL_LLAMA32,
+    LOCAL_LLAMA33,
+    LOCAL_MISTRAL,
+    LOCAL_MIXTRAL,
+    LOCAL_PHI3,
+    LOCAL_PHI4,
+    LOCAL_QWEN25,
+    LOCAL_QWEN3,
+    OPENAI_GPT41,
+    OPENAI_GPT41_MINI,
+    OPENAI_GPT41_NANO,
+    OPENAI_GPT4O,
+    OPENAI_GPT4_TURBO,
+    OPENAI_O3,
+    OPENAI_O3_MINI,
+    OPENAI_O4_MINI,
+)
 from services.llm_cost_tracker import (
     MODEL_PRICING,
     PRICING_STALENESS_DAYS,
@@ -22,42 +54,42 @@ class TestModelPricingCompleteness:
 
     REQUIRED_MODELS = [
         # Anthropic Claude 4.x
-        "claude-opus-4-20250514",
-        "claude-sonnet-4-20250514",
-        "claude-haiku-4-5-20251001",
+        ANTHROPIC_CLAUDE_OPUS4,
+        ANTHROPIC_CLAUDE_SONNET4,
+        ANTHROPIC_CLAUDE_HAIKU4_5,
         # OpenAI GPT-4.1 family
-        "gpt-4.1",
-        "gpt-4.1-mini",
-        "gpt-4.1-nano",
+        OPENAI_GPT41,
+        OPENAI_GPT41_MINI,
+        OPENAI_GPT41_NANO,
         # OpenAI reasoning
-        "o3",
-        "o3-mini",
-        "o4-mini",
+        OPENAI_O3,
+        OPENAI_O3_MINI,
+        OPENAI_O4_MINI,
         # Google Gemini 2.5
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
+        GOOGLE_GEMINI25_PRO,
+        GOOGLE_GEMINI25_FLASH,
         # Existing baseline models
-        "gpt-4o",
-        "claude-3-5-sonnet-20241022",
-        "gemini-2.0-flash",
+        OPENAI_GPT4O,
+        ANTHROPIC_CLAUDE35_SONNET,
+        GOOGLE_GEMINI20_FLASH,
     ]
 
     LOCAL_MODELS = [
-        "llama3",
-        "llama3.1",
-        "llama3.2",
-        "llama3.3",
-        "mistral",
-        "mixtral",
-        "codellama",
-        "qwen2.5",
-        "qwen3",
-        "deepseek-coder",
-        "deepseek-r1",
-        "phi3",
-        "phi4",
-        "gemma2",
-        "gemma3",
+        LOCAL_LLAMA3,
+        LOCAL_LLAMA31,
+        LOCAL_LLAMA32,
+        LOCAL_LLAMA33,
+        LOCAL_MISTRAL,
+        LOCAL_MIXTRAL,
+        LOCAL_CODELLAMA,
+        LOCAL_QWEN25,
+        LOCAL_QWEN3,
+        LOCAL_DEEPSEEK_CODER,
+        LOCAL_DEEPSEEK_R1,
+        LOCAL_PHI3,
+        LOCAL_PHI4,
+        LOCAL_GEMMA2,
+        LOCAL_GEMMA3,
     ]
 
     @pytest.mark.parametrize("model", REQUIRED_MODELS)
@@ -100,25 +132,27 @@ class TestModelPricingCompleteness:
 
     def test_claude_opus_4_more_expensive_than_haiku(self):
         """Opus tier should cost more than Haiku tier."""
-        opus = MODEL_PRICING["claude-opus-4-20250514"]["output"]
-        haiku = MODEL_PRICING["claude-haiku-4-5-20251001"]["output"]
+        opus = MODEL_PRICING[ANTHROPIC_CLAUDE_OPUS4]["output"]
+        haiku = MODEL_PRICING[ANTHROPIC_CLAUDE_HAIKU4_5]["output"]
         assert opus > haiku, "Claude Opus 4 output should cost more than Haiku 4.5"
 
     def test_gpt41_cheaper_than_gpt4_turbo(self):
         """GPT-4.1 should be cheaper than GPT-4-turbo."""
-        gpt41 = MODEL_PRICING["gpt-4.1"]["input"]
-        turbo = MODEL_PRICING["gpt-4-turbo"]["input"]
+        gpt41 = MODEL_PRICING[OPENAI_GPT41]["input"]
+        turbo = MODEL_PRICING[OPENAI_GPT4_TURBO]["input"]
         assert gpt41 < turbo, "GPT-4.1 input should cost less than GPT-4-turbo"
 
     def test_o3_more_expensive_than_o3_mini(self):
         """o3 reasoning should cost more than o3-mini."""
-        o3 = MODEL_PRICING["o3"]["input"]
-        o3_mini = MODEL_PRICING["o3-mini"]["input"]
+        o3 = MODEL_PRICING[OPENAI_O3]["input"]
+        o3_mini = MODEL_PRICING[OPENAI_O3_MINI]["input"]
         assert o3 >= o3_mini, "o3 input should cost at least as much as o3-mini"
 
     def test_deepseek_api_models_have_positive_price(self):
         """DeepSeek hosted API models should have a positive price."""
-        for model in ("deepseek-v3", "deepseek-r1-api"):
+        from constants.model_constants import DEEPSEEK_R1_API, DEEPSEEK_V3
+
+        for model in (DEEPSEEK_V3, DEEPSEEK_R1_API):
             assert (
                 MODEL_PRICING[model]["input"] > 0
             ), f"{model} should have positive input price"

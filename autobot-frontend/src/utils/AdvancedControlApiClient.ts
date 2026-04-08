@@ -8,7 +8,7 @@
  * Issue #583: GUI integration for Advanced Control & Session Takeover
  */
 
-import { getConfig } from '@/config/ssot-config';
+import { getConfig, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 
@@ -237,7 +237,7 @@ class AdvancedControlApiClient {
    * GET /api/advanced-control/
    */
   async getControlInfo(): Promise<ApiResponse<AdvancedControlInfo>> {
-    return this.request<AdvancedControlInfo>('/api/advanced-control/');
+    return this.request<AdvancedControlInfo>(`${getApiBase()}/advanced-control/`);
   }
 
   // ==================================================================================
@@ -251,7 +251,7 @@ class AdvancedControlApiClient {
   async createStreamingSession(
     request: StreamingSessionRequest
   ): Promise<ApiResponse<StreamingSessionResponse>> {
-    return this.request<StreamingSessionResponse>('/api/advanced-control/streaming/create', {
+    return this.request<StreamingSessionResponse>(`${getApiBase()}/advanced-control/streaming/create`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -264,7 +264,7 @@ class AdvancedControlApiClient {
   async terminateStreamingSession(
     sessionId: string
   ): Promise<ApiResponse<{ success: boolean; session_id: string }>> {
-    return this.request(`/api/advanced-control/streaming/${encodeURIComponent(sessionId)}`, {
+    return this.request(`${getApiBase()}/advanced-control/streaming/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
     });
   }
@@ -277,7 +277,7 @@ class AdvancedControlApiClient {
     sessions: StreamingSession[];
     count: number;
   }>> {
-    return this.request('/api/advanced-control/streaming/sessions');
+    return this.request(`${getApiBase()}/advanced-control/streaming/sessions`);
   }
 
   /**
@@ -285,7 +285,7 @@ class AdvancedControlApiClient {
    * GET /api/advanced-control/streaming/capabilities
    */
   async getStreamingCapabilities(): Promise<ApiResponse<StreamingCapabilities>> {
-    return this.request<StreamingCapabilities>('/api/advanced-control/streaming/capabilities');
+    return this.request<StreamingCapabilities>(`${getApiBase()}/advanced-control/streaming/capabilities`);
   }
 
   // ==================================================================================
@@ -299,7 +299,7 @@ class AdvancedControlApiClient {
   async requestTakeover(
     request: TakeoverRequest
   ): Promise<ApiResponse<{ success: boolean; request_id: string }>> {
-    return this.request('/api/advanced-control/takeover/request', {
+    return this.request(`${getApiBase()}/advanced-control/takeover/request`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -313,7 +313,7 @@ class AdvancedControlApiClient {
     requestId: string,
     approval: TakeoverApprovalRequest
   ): Promise<ApiResponse<{ success: boolean; session_id: string }>> {
-    return this.request(`/api/advanced-control/takeover/${encodeURIComponent(requestId)}/approve`, {
+    return this.request(`${getApiBase()}/advanced-control/takeover/${encodeURIComponent(requestId)}/approve`, {
       method: 'POST',
       body: JSON.stringify(approval),
     });
@@ -327,7 +327,7 @@ class AdvancedControlApiClient {
     sessionId: string,
     action: TakeoverActionRequest
   ): Promise<ApiResponse<{ success: boolean; result: Record<string, unknown> }>> {
-    return this.request(`/api/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/action`, {
+    return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/action`, {
       method: 'POST',
       body: JSON.stringify(action),
     });
@@ -340,7 +340,7 @@ class AdvancedControlApiClient {
   async pauseTakeoverSession(
     sessionId: string
   ): Promise<ApiResponse<{ success: boolean; session_id: string; status: string }>> {
-    return this.request(`/api/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/pause`, {
+    return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/pause`, {
       method: 'POST',
     });
   }
@@ -352,7 +352,7 @@ class AdvancedControlApiClient {
   async resumeTakeoverSession(
     sessionId: string
   ): Promise<ApiResponse<{ success: boolean; session_id: string; status: string }>> {
-    return this.request(`/api/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/resume`, {
+    return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/resume`, {
       method: 'POST',
     });
   }
@@ -365,7 +365,7 @@ class AdvancedControlApiClient {
     sessionId: string,
     completion: TakeoverCompletionRequest = {}
   ): Promise<ApiResponse<{ success: boolean; session_id: string; status: string }>> {
-    return this.request(`/api/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/complete`, {
+    return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/complete`, {
       method: 'POST',
       body: JSON.stringify(completion),
     });
@@ -379,7 +379,7 @@ class AdvancedControlApiClient {
     pending_requests: PendingTakeoverRequest[];
     count: number;
   }>> {
-    return this.request('/api/advanced-control/takeover/pending');
+    return this.request(`${getApiBase()}/advanced-control/takeover/pending`);
   }
 
   /**
@@ -390,7 +390,7 @@ class AdvancedControlApiClient {
     active_sessions: ActiveTakeoverSession[];
     count: number;
   }>> {
-    return this.request('/api/advanced-control/takeover/active');
+    return this.request(`${getApiBase()}/advanced-control/takeover/active`);
   }
 
   /**
@@ -398,7 +398,7 @@ class AdvancedControlApiClient {
    * GET /api/advanced-control/takeover/status
    */
   async getTakeoverStatus(): Promise<ApiResponse<TakeoverSystemStatus>> {
-    return this.request<TakeoverSystemStatus>('/api/advanced-control/takeover/status');
+    return this.request<TakeoverSystemStatus>(`${getApiBase()}/advanced-control/takeover/status`);
   }
 
   // ==================================================================================
@@ -410,7 +410,7 @@ class AdvancedControlApiClient {
    * GET /api/advanced-control/system/status
    */
   async getSystemStatus(): Promise<ApiResponse<SystemMonitoringResponse>> {
-    return this.request<SystemMonitoringResponse>('/api/advanced-control/system/status');
+    return this.request<SystemMonitoringResponse>(`${getApiBase()}/advanced-control/system/status`);
   }
 
   /**
@@ -418,7 +418,7 @@ class AdvancedControlApiClient {
    * GET /api/advanced-control/system/health
    */
   async getSystemHealth(): Promise<ApiResponse<SystemHealthResponse>> {
-    return this.request<SystemHealthResponse>('/api/advanced-control/system/health');
+    return this.request<SystemHealthResponse>(`${getApiBase()}/advanced-control/system/health`);
   }
 
   /**
@@ -430,7 +430,7 @@ class AdvancedControlApiClient {
     message: string;
     takeover_request_id: string;
   }>> {
-    return this.request('/api/advanced-control/system/emergency-stop', {
+    return this.request(`${getApiBase()}/advanced-control/system/emergency-stop`, {
       method: 'POST',
     });
   }
@@ -445,7 +445,7 @@ class AdvancedControlApiClient {
   getMonitoringWebSocketUrl(): string {
     const cfg = getConfig();
     const wsProtocol = cfg.httpProtocol === 'https' ? 'wss' : 'ws';
-    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}/api/advanced-control/ws/monitoring`;
+    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}${getApiBase()}/advanced-control/ws/monitoring`;
   }
 
   /**
@@ -454,7 +454,7 @@ class AdvancedControlApiClient {
   getDesktopWebSocketUrl(sessionId: string): string {
     const cfg = getConfig();
     const wsProtocol = cfg.httpProtocol === 'https' ? 'wss' : 'ws';
-    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}/api/advanced-control/ws/desktop/${encodeURIComponent(sessionId)}`;
+    return `${wsProtocol}://${cfg.vm.main}:${cfg.port.backend}${getApiBase()}/advanced-control/ws/desktop/${encodeURIComponent(sessionId)}`;
   }
 }
 

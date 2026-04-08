@@ -13,7 +13,7 @@ import logging
 import re
 import subprocess  # nosec B404
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -431,7 +431,7 @@ def _calculate_check_statistics(
     Returns:
         Dictionary with duration_ms, blocked, warnings, failed counts
     """
-    duration_ms = (datetime.now() - start_time).total_seconds() * 1000
+    duration_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
     blocked = any(r.severity == CheckSeverity.BLOCK and not r.passed for r in results)
     warnings = sum(
         1 for r in results if r.severity == CheckSeverity.WARN and not r.passed
@@ -467,7 +467,7 @@ async def check_staged_files(
     Issue #744: Requires admin authentication.
     Issue #620: Refactored to use helper functions.
     """
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
 
     # Get staged files
     staged_files = get_staged_files()
@@ -499,7 +499,7 @@ async def check_staged_files(
         duration_ms=stats["duration_ms"],
         results=results,
         files_checked=staged_files,
-        timestamp=datetime.now().isoformat(),
+        timestamp=datetime.now(tz=timezone.utc).isoformat(),
     )
 
     # Store in history (thread-safe)

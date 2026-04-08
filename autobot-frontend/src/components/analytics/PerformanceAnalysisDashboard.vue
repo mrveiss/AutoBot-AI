@@ -357,6 +357,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 const logger = createLogger('PerformanceAnalysisDashboard')
@@ -533,7 +534,7 @@ async function runAnalysis() {
   loading.value = true
   try {
     // Issue #701: Fixed api.get call to use params option and type assertion
-    const response = await api.get<ApiDataResponse>('/api/performance/analyze', {
+    const response = await api.get<ApiDataResponse>(`${getApiBase()}/performance/analyze`, {
       params: { path: selectedPath.value }
     })
     // Issue #701: Response is returned directly, handle both response structures
@@ -558,7 +559,7 @@ async function runAnalysis() {
 async function loadPatterns() {
   try {
     // Issue #701: Added type assertion for response
-    const response = await api.get<Pattern[] | ApiDataResponse>('/api/performance/patterns')
+    const response = await api.get<Pattern[] | ApiDataResponse>(`${getApiBase()}/performance/patterns`)
     // Issue #701: Response could be array directly or wrapped in data
     patterns.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
@@ -570,7 +571,7 @@ async function loadPatterns() {
 async function loadHotspots() {
   try {
     // Issue #701: Added type assertion for response
-    const response = await api.get<Hotspot[] | ApiDataResponse>('/api/performance/hotspots')
+    const response = await api.get<Hotspot[] | ApiDataResponse>(`${getApiBase()}/performance/hotspots`)
     // Issue #701: Response could be array directly or wrapped in data
     hotspots.value = Array.isArray(response) ? response : ((response as ApiDataResponse).data || [])
   } catch (error) {
@@ -583,7 +584,7 @@ async function togglePattern(pattern: Pattern) {
   const newState = !pattern.enabled
   try {
     // Issue #701: Fixed api.post call - data should be second arg, options third
-    await api.post(`/api/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
+    await api.post(`${getApiBase()}/performance/patterns/${pattern.id}/toggle`, { enabled: newState })
     pattern.enabled = newState
   } catch (error) {
     logger.warn('Failed to toggle pattern:', error)

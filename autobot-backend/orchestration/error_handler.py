@@ -31,6 +31,8 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_7_DAYS
+from retry_mechanism import BackoffStrategy, RetryConfig, RetryMechanism
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +41,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 CHECKPOINT_KEY_PREFIX = "autobot:workflow:checkpoint:"
-# Issue #3231: 30-day TTL so paused workflows (e.g. awaiting human approval)
-# survive extended pauses without silent expiry.  The TTL is refreshed on
-# every save() and on every resume, so active workflows never approach the
-# limit.  Operators who need a different window can override via
-# AUTOBOT_WORKFLOW_CHECKPOINT_TTL_DAYS.
-CHECKPOINT_TTL = 30 * 24 * 3600  # 30 days in seconds
+CHECKPOINT_TTL = TTL_7_DAYS
 
 
 # ---------------------------------------------------------------------------
@@ -65,15 +62,8 @@ class StepErrorAction(str, Enum):
     ABORT = "abort"
 
 
-class BackoffStrategy(str, Enum):
-    """Retry delay growth strategy.
-
-    Issue #2154.
-    """
-
-    LINEAR = "linear"
-    EXPONENTIAL = "exponential"
-
+# BackoffStrategy is imported from retry_mechanism (Issue #3830).
+# The local enum is removed; callers use retry_mechanism.BackoffStrategy directly.
 
 # ---------------------------------------------------------------------------
 # Configuration dataclass
@@ -107,12 +97,27 @@ class StepErrorConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StepErrorConfig":
-        """Build a StepErrorConfig from a raw dict, ignoring unknown keys."""
+        """Build a StepErrorConfig from a raw dict, ignoring unknown keys.
+
+        Accepts legacy backoff strings ("linear", "exponential") as well as the
+        canonical retry_mechanism BackoffStrategy values (Issue #3830).
+        """
+        _BACKOFF_LEGACY_MAP = {
+            "linear": BackoffStrategy.LINEAR,
+            "exponential": BackoffStrategy.EXPONENTIAL,
+        }
+        raw_backoff = data.get("backoff", BackoffStrategy.EXPONENTIAL)
+        if isinstance(raw_backoff, BackoffStrategy):
+            backoff = raw_backoff
+        elif isinstance(raw_backoff, str) and raw_backoff in _BACKOFF_LEGACY_MAP:
+            backoff = _BACKOFF_LEGACY_MAP[raw_backoff]
+        else:
+            backoff = BackoffStrategy(raw_backoff)
         return cls(
             action=StepErrorAction(data.get("action", StepErrorAction.ABORT)),
             max_retries=int(data.get("max_retries", 3)),
             base_delay=float(data.get("base_delay", 1.0)),
-            backoff=BackoffStrategy(data.get("backoff", BackoffStrategy.EXPONENTIAL)),
+            backoff=backoff,
             fallback_step_id=data.get("fallback_step_id"),
         )
 
@@ -255,35 +260,6 @@ class WorkflowCheckpointManager:
                 )
         return result
 
-    def refresh_ttl(self, workflow_id: str) -> None:
-        """
-        Reset the TTL on the checkpoint hash for *workflow_id* to
-        ``CHECKPOINT_TTL`` seconds from now.
-
-        Call this at resume time so that a workflow paused for human
-        approval gets a fresh 30-day window from the moment it is
-        resumed — not from the moment the last step completed before the
-        pause.  This prevents silent expiry when a human-in-the-loop
-        approval spans many days.
-
-        Issue #3231.
-        """
-        redis = self._get_redis()
-        key = self._checkpoint_key(workflow_id)
-        try:
-            redis.expire(key, CHECKPOINT_TTL)
-            logger.debug(
-                "Checkpoint TTL refreshed for workflow=%s (%ds)",
-                workflow_id,
-                CHECKPOINT_TTL,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to refresh checkpoint TTL for workflow=%s: %s",
-                workflow_id,
-                exc,
-            )
-
     def clear(self, workflow_id: str) -> None:
         """
         Delete all checkpoints for *workflow_id*.
@@ -345,14 +321,19 @@ class StepErrorHandler:
         """
         Return the retry delay for *attempt* (1-based) under *config*.
 
-        LINEAR:      base_delay * attempt
-        EXPONENTIAL: base_delay * 2^(attempt-1)
-
-        Issue #2154.
+        Delegates to RetryMechanism.calculate_delay so all backoff curves are
+        computed by a single implementation (Issue #3830).
         """
-        if config.backoff == BackoffStrategy.LINEAR:
-            return config.base_delay * attempt
-        return config.base_delay * (2 ** (attempt - 1))
+        retry_config = RetryConfig(
+            max_attempts=config.max_retries,
+            base_delay=config.base_delay,
+            max_delay=config.base_delay * (2 ** config.max_retries),  # no hard cap needed
+            backoff_multiplier=2.0,
+            jitter=False,
+            strategy=config.backoff.to_retry_strategy(),
+        )
+        mechanism = RetryMechanism(retry_config)
+        return mechanism.calculate_delay(attempt)
 
     async def handle_error(
         self,

@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import WebSocket
@@ -163,7 +163,7 @@ class ConsolidatedTerminalWebSocket:
         self.command_history = []
         self.audit_log = []
         self.user_role = "user"  # Could be enhanced with actual auth
-        self.session_start_time = datetime.now()
+        self.session_start_time = datetime.now(tz=timezone.utc)
         self.pty_process = None
         self.active = False
         self.terminal_adapter = None
@@ -601,7 +601,7 @@ class ConsolidatedTerminalWebSocket:
                     "message_received",
                     {
                         "type": message_type,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                         "session_id": self.session_id,
                     },
                 )
@@ -634,10 +634,9 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            from pathlib import Path
-
             import aiofiles
 
+            from autobot_shared.security.path_validator import validate_relative_path
             from utils.encoding_utils import strip_ansi_codes
 
             # Strip ANSI escape codes before writing to transcript
@@ -646,9 +645,15 @@ class ConsolidatedTerminalWebSocket:
                 return
 
             transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
-            transcript_path = Path("data/chats") / transcript_file
+            chats_base = PATH.DATA_DIR / "chats"
+            transcript_path = validate_relative_path(transcript_file, chats_base)
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_text)
+        except ValueError:
+            logger.error(
+                "Blocked path traversal attempt in transcript write for session %s",
+                self.conversation_id,
+            )
         except OSError as e:
             logger.error("Failed to write input to transcript (I/O error): %s", e)
         except Exception as e:
@@ -711,7 +716,7 @@ class ConsolidatedTerminalWebSocket:
                     "command": command,
                     "risk_level": risk_level.value,
                     "user_role": self.user_role,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -729,7 +734,7 @@ class ConsolidatedTerminalWebSocket:
         self.command_history.append(
             {
                 "command": command,
-                "timestamp": datetime.now(),
+                "timestamp": datetime.now(tz=timezone.utc),
                 "risk_level": risk_level.value,
             }
         )
@@ -984,7 +989,7 @@ class ConsolidatedTerminalWebSocket:
                 {
                     "action": action,
                     "workflow_id": workflow_id,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -1014,7 +1019,7 @@ class ConsolidatedTerminalWebSocket:
                     {
                         "rows": rows,
                         "cols": cols,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     },
                 )
 
@@ -1080,7 +1085,7 @@ class ConsolidatedTerminalWebSocket:
                     "signal_sent",
                     {
                         "signal": signal_name,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                         "success": success,
                     },
                 )
@@ -1127,7 +1132,7 @@ class ConsolidatedTerminalWebSocket:
             "session_id": self.session_id,
             "user_role": self.user_role,
             "security_level": self.security_level.value,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "data": data,
         }
 
@@ -1175,10 +1180,9 @@ class ConsolidatedTerminalWebSocket:
         if not (self.terminal_logger and self.conversation_id and content):
             return
 
-        from pathlib import Path
-
         import aiofiles
 
+        from autobot_shared.security.path_validator import validate_relative_path
         from utils.encoding_utils import strip_ansi_codes
 
         try:
@@ -1187,11 +1191,16 @@ class ConsolidatedTerminalWebSocket:
             if not clean_content:
                 return
 
-            transcript_path = (
-                Path("data/chats") / f"{self.conversation_id}_terminal_transcript.txt"
-            )
+            transcript_file = f"{self.conversation_id}_terminal_transcript.txt"
+            chats_base = PATH.DATA_DIR / "chats"
+            transcript_path = validate_relative_path(transcript_file, chats_base)
             async with aiofiles.open(transcript_path, "a", encoding="utf-8") as f:
                 await f.write(clean_content)
+        except ValueError:
+            logger.error(
+                "Blocked path traversal attempt in transcript log for session %s",
+                self.conversation_id,
+            )
         except OSError as e:
             logger.error("Failed to write terminal transcript (I/O error): %s", e)
         except Exception as e:
@@ -1238,7 +1247,7 @@ class ConsolidatedTerminalWebSocket:
                 "command_output",
                 {
                     "output_length": len(content),
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
 
@@ -1339,7 +1348,7 @@ class ConsolidatedTerminalManager:
         # Note: Should be called within async context with lock acquired
         self.active_connections[session_id] = terminal
         self.session_stats[session_id] = {
-            "connected_at": datetime.now(),
+            "connected_at": datetime.now(tz=timezone.utc),
             "messages_sent": 0,
             "messages_received": 0,
             "commands_executed": 0,
@@ -1479,7 +1488,7 @@ class ConsolidatedTerminalManager:
         session_stats = self.session_stats.get(session_id, {})
         uptime = 0
         if "connected_at" in session_stats:
-            uptime = (datetime.now() - session_stats["connected_at"]).total_seconds()
+            uptime = (datetime.now(tz=timezone.utc) - session_stats["connected_at"]).total_seconds()
 
         return {
             "session_id": session_id,

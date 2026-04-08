@@ -33,7 +33,7 @@ Key Features:
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import aiohttp
@@ -98,7 +98,7 @@ class MCPToolCache:
             self._stats["cache_misses"] += 1
             return None
 
-        age = datetime.now() - self._tools_updated
+        age = datetime.now(tz=timezone.utc) - self._tools_updated
         if age > self.ttl:
             logger.debug("MCP tools cache expired (age: %.1fs)", age.total_seconds())
             self._stats["cache_misses"] += 1
@@ -114,7 +114,7 @@ class MCPToolCache:
             return
 
         self._tools_cache = data
-        self._tools_updated = datetime.now()
+        self._tools_updated = datetime.now(tz=timezone.utc)
         logger.info("MCP tools cache updated (TTL: %ss)", self.ttl.seconds)
 
     def get_bridges(self) -> Optional[Metadata]:
@@ -126,7 +126,7 @@ class MCPToolCache:
             self._stats["cache_misses"] += 1
             return None
 
-        age = datetime.now() - self._bridges_updated
+        age = datetime.now(tz=timezone.utc) - self._bridges_updated
         if age > self.ttl:
             logger.debug("MCP bridges cache expired (age: %.1fs)", age.total_seconds())
             self._stats["cache_misses"] += 1
@@ -142,7 +142,7 @@ class MCPToolCache:
             return
 
         self._bridges_cache = data
-        self._bridges_updated = datetime.now()
+        self._bridges_updated = datetime.now(tz=timezone.utc)
         logger.info("MCP bridges cache updated (TTL: %ss)", self.ttl.seconds)
 
     def invalidate_all(self) -> None:
@@ -172,13 +172,13 @@ class MCPToolCache:
             "invalidations": self._stats["invalidations"],
             "tools_cached": self._tools_cache is not None,
             "tools_cache_age_seconds": (
-                round((datetime.now() - self._tools_updated).total_seconds(), 1)
+                round((datetime.now(tz=timezone.utc) - self._tools_updated).total_seconds(), 1)
                 if self._tools_updated
                 else None
             ),
             "bridges_cached": self._bridges_cache is not None,
             "bridges_cache_age_seconds": (
-                round((datetime.now() - self._bridges_updated).total_seconds(), 1)
+                round((datetime.now(tz=timezone.utc) - self._bridges_updated).total_seconds(), 1)
                 if self._bridges_updated
                 else None
             ),
@@ -400,7 +400,7 @@ async def _fetch_tools_from_bridges() -> Metadata:
         "total_bridges": len(MCP_BRIDGES),
         "healthy_bridges": bridge_count,
         "tools": all_tools,
-        "last_updated": datetime.now().isoformat(),
+        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
         "cached": False,
     }
 
@@ -459,7 +459,7 @@ async def _fetch_bridges_info() -> Metadata:
         "total_bridges": len(bridges),
         "healthy_bridges": healthy_count,
         "bridges": bridges,
-        "last_checked": datetime.now().isoformat(),
+        "last_checked": datetime.now(tz=timezone.utc).isoformat(),
         "cached": False,
     }
 
@@ -584,7 +584,7 @@ async def invalidate_mcp_cache() -> Metadata:
     return {
         "status": "success",
         "message": "MCP Registry cache invalidated",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "cache_stats": mcp_cache.get_stats(),
     }
 
@@ -608,7 +608,7 @@ async def get_mcp_cache_stats() -> Metadata:
     return {
         "status": "success",
         "cache": mcp_cache.get_stats(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -771,7 +771,7 @@ async def get_mcp_registry_health() -> Metadata:
         endpoint,
         _,
     ) in MCP_BRIDGES:  # Issue #382: features unused
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         check = {
             "bridge": bridge_name,
             "status": "unknown",
@@ -783,7 +783,7 @@ async def get_mcp_registry_health() -> Metadata:
                 f"{backend_url}{endpoint}",
                 timeout=aiohttp.ClientTimeout(total=3),
             ) as response:
-                response_time = (datetime.now() - start_time).total_seconds() * 1000
+                response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
                 check["response_time_ms"] = round(response_time, 2)
 
                 if response.status == 200:
@@ -812,7 +812,7 @@ async def get_mcp_registry_health() -> Metadata:
         "healthy_bridges": healthy_bridges,
         "checks": health_checks,
         "cache_stats": mcp_cache.get_stats(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -860,7 +860,7 @@ async def get_mcp_registry_stats() -> Metadata:
             set(feature for _, _, _, features in MCP_BRIDGES for feature in features)
         ),
         "cache": mcp_cache.get_stats(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 

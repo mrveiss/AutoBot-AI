@@ -56,6 +56,14 @@ AGENT_TIER_MAP: Dict[str, AgentTier] = {
     "content-writer": AgentTier.TIER_3_SPECIALIZED,
     "memory-monitor": AgentTier.TIER_3_SPECIALIZED,
     "project-task-planner": AgentTier.TIER_3_SPECIALIZED,
+    # Issue #3389: task agents that call chat_completion_optimized
+    "summarization": AgentTier.TIER_3_SPECIALIZED,
+    "translation": AgentTier.TIER_3_SPECIALIZED,
+    "sentiment-analysis": AgentTier.TIER_3_SPECIALIZED,
+    "code-generation": AgentTier.TIER_3_SPECIALIZED,
+    "audio-processing": AgentTier.TIER_3_SPECIALIZED,
+    "image-analysis": AgentTier.TIER_3_SPECIALIZED,
+    "data-analysis": AgentTier.TIER_3_SPECIALIZED,
     # Tier 4: Orchestrator (Session-Specific)
     "orchestrator": AgentTier.TIER_4_ORCHESTRATOR,
 }

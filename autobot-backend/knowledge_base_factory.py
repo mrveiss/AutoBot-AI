@@ -29,16 +29,12 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from config import ConfigManager
 from constants.threshold_constants import TimingConstants
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
-
-# Create singleton config instance
-config = ConfigManager()
 
 
 class KnowledgeBaseInitializer:

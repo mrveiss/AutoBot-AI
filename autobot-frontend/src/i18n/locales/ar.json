@@ -1657,7 +1657,9 @@
       "issueResolved": "Issue marked as resolved",
       "failedToUpdate": "Failed to update issue status",
       "markedFalsePositive": "Marked as false positive",
-      "failedToLoadReview": "Failed to load review details"
+      "failedToLoadReview": "Failed to load review details",
+      "reviewLoaded": "Review loaded from history.",
+      "reviewNotAvailable": "Review details not available — run analysis again to see results."
     },
     "performanceAnalysis": {
       "title": "Performance Analysis",
@@ -3022,6 +3024,28 @@
       "aboutPopulateCommands": "Discovers available system commands and creates knowledge entries with usage information, flags, and examples.",
       "aboutIndexDocs": "Indexes documentation files from configured directories (e.g., /usr/share/doc) into the knowledge base.",
       "aboutWhenToUse": "Run <strong>Initialize</strong> first on new systems. Use <strong>Refresh Man Pages</strong> and <strong>Populate Commands</strong> after installing new software. <strong>Reindex</strong> if search performance degrades."
+    },
+    "vectorization": {
+      "actionVectorize": "Vectorize",
+      "actionRetry": "Retry",
+      "actionInProgress": "Processing...",
+      "actionAlreadyDone": "Vectorized",
+      "tooltipVectorize": "Vectorize this document",
+      "tooltipRetry": "Retry vectorization",
+      "tooltipInProgress": "Vectorization in progress",
+      "tooltipAlreadyDone": "Already vectorized"
+    },
+    "batchSelection": {
+      "selected": "{count} selected",
+      "eligible": "{count} eligible",
+      "vectorizeSelected": "Vectorize {count}",
+      "vectorizing": "Vectorizing...",
+      "noneEligible": "None eligible",
+      "vectorizeSelectedTooltip": "Vectorize {count} selected documents",
+      "vectorizingTooltip": "Vectorization in progress",
+      "noneEligibleTooltip": "All selected documents are already vectorized or pending",
+      "clearSelection": "Clear",
+      "clearSelectionTitle": "Clear selection"
     }
   },
   "workflow": {
@@ -6072,6 +6096,14 @@
     "llmConfig": "LLM Config",
     "browserAutomation": "Browser",
     "devSpeedup": "Dev Tools",
+    "desktop": "Desktop",
+    "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents"
+  },
+  "reasoningTrace": {
+    "title": "Reasoning trace",
+    "toggleLabel": "Toggle reasoning trace panel",
+    "success": "Success",
+    "error": "Error"
   }
 }

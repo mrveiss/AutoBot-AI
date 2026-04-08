@@ -14,6 +14,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase, getBackendUrl } from '@/config/ssot-config'
 import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
 import {
   useSlmUserApi,
@@ -47,7 +48,8 @@ const slmUsers = ref<SlmUserResponse[]>([])
 const autobotUsers = ref<SlmUserResponse[]>([])
 const teams = ref<TeamResponse[]>([])
 const ssoProviders = ref<SSOProviderResponse[]>([])
-const selectedUser = ref<UserResponse | null>(null)
+const selectedUser = ref<UserResponse | SlmUserResponse | null>(null)
+const selectedUserType = ref<'slm' | 'autobot' | 'legacy'>('legacy')
 const showCreateUserModal = ref(false)
 const showCreateTeamModal = ref(false)
 const showCreateProviderModal = ref(false)
@@ -124,6 +126,15 @@ const isAdminReset = computed(() => {
 
 const passwordChangeUserId = computed(() => {
   return selectedUser.value?.id || currentUser.value?.id || ''
+})
+
+const passwordChangeApiEndpoint = computed(() => {
+  const uid = passwordChangeUserId.value
+  if (!uid) return ''
+  const base = getSlmApiBase()
+  if (selectedUserType.value === 'slm') return `${base}/slm-users/${uid}/change-password`
+  if (selectedUserType.value === 'autobot') return `${base}/autobot-users/${uid}/change-password`
+  return `${base}/users/${uid}/change-password`
 })
 
 // ===========================================================================
@@ -305,8 +316,12 @@ async function deleteTeam(teamId: string): Promise<void> {
 // Password & RBAC
 // ===========================================================================
 
-function openPasswordChangeModal(user?: UserResponse): void {
-  selectedUser.value = user || currentUser.value
+function openPasswordChangeModal(
+  user?: UserResponse | SlmUserResponse,
+  type: 'slm' | 'autobot' | 'legacy' = 'legacy',
+): void {
+  selectedUser.value = user ?? currentUser.value
+  selectedUserType.value = type
   showChangePasswordModal.value = true
 }
 
@@ -314,6 +329,7 @@ function handlePasswordChangeSuccess(message: string): void {
   showSuccess(message)
   showChangePasswordModal.value = false
   selectedUser.value = null
+  selectedUserType.value = 'legacy'
 }
 
 function handlePasswordChangeError(errorMsg: string): void {
@@ -325,7 +341,7 @@ async function checkRbacStatus(): Promise<void> {
   if (!isAdmin.value) return
 
   try {
-    const response = await fetch('/autobot-api/settings/rbac/status', {
+    const response = await fetch(`${getBackendUrl()}/settings/rbac/status`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
 
@@ -344,7 +360,7 @@ async function initializeRbac(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch('/autobot-api/settings/rbac/initialize', {
+    const response = await fetch(`${getBackendUrl()}/settings/rbac/initialize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -793,11 +809,18 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
-                  <button @click="deleteSlmUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div class="flex items-center justify-end gap-1">
+                    <button @click="openPasswordChangeModal(user, 'slm')" class="text-amber-600 hover:text-amber-800 p-1" title="Reset password">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                    </button>
+                    <button @click="deleteSlmUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="slmUsers.length === 0">
@@ -853,11 +876,18 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                 </td>
                 <td class="py-3 px-4 text-sm text-gray-600">{{ formatDate(user.last_login_at) }}</td>
                 <td class="py-3 px-4 text-right">
-                  <button @click="deleteAutobotUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div class="flex items-center justify-end gap-1">
+                    <button @click="openPasswordChangeModal(user, 'autobot')" class="text-amber-600 hover:text-amber-800 p-1" title="Reset password">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                    </button>
+                    <button @click="deleteAutobotUser(user.id)" class="text-red-600 hover:text-red-800 p-1" title="Delete user">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
               <tr v-if="autobotUsers.length === 0">
@@ -1025,7 +1055,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
 
     <!-- Change Password Modal -->
     <div v-if="showChangePasswordModal" class="fixed inset-0 z-50 flex items-center justify-center">
-      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null"></div>
+      <div class="absolute inset-0 bg-black/50" @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'"></div>
       <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
           {{ isAdminReset ? `Reset Password for ${selectedUser?.username}` : 'Change Password' }}
@@ -1035,12 +1065,14 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
           v-if="passwordChangeUserId"
           :user-id="passwordChangeUserId"
           :require-current-password="!isAdminReset"
+          :api-endpoint="passwordChangeApiEndpoint"
+          :auth-token="authStore.token ?? undefined"
           @success="handlePasswordChangeSuccess"
           @error="handlePasswordChangeError"
         />
 
         <div class="flex justify-end mt-4">
-          <button @click="showChangePasswordModal = false; selectedUser = null" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+          <button @click="showChangePasswordModal = false; selectedUser = null; selectedUserType = 'legacy'" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
             Cancel
           </button>
         </div>

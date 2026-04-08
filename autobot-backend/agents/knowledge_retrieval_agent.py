@@ -21,6 +21,9 @@ from constants.threshold_constants import LLMDefaults
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuples for knowledge retrieval patterns
@@ -46,14 +49,15 @@ _KNOWLEDGE_PATTERNS = (
 _QUICK_LOOKUP_PATTERNS = ("quick", "fast", "briefly", "simple", "basic", "just tell me")
 
 
-class KnowledgeRetrievalAgent:
+class KnowledgeRetrievalAgent(StandardizedAgent):
     """Fast knowledge retrieval agent for simple facts and quick lookups."""
 
     # Agent identifier for SSOT config lookup
     AGENT_ID = "knowledge_retrieval"
 
     def __init__(self):
-        """Initialize the Knowledge Retrieval Agent with explicit LLM configuration."""
+        """Initialize the Knowledge Retrieval Agent (#3387: migrated to StandardizedAgent)."""
+        super().__init__("knowledge_retrieval", DeploymentMode.LOCAL)
         self.llm_interface = LLMInterface()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
@@ -61,11 +65,31 @@ class KnowledgeRetrievalAgent:
         self.llm_endpoint = get_agent_endpoint_explicit(self.AGENT_ID)
         self.model_name = get_agent_model_explicit(self.AGENT_ID)
 
-        self.agent_type = "knowledge_retrieval"
         self.knowledge_base = None
 
         # Initialize knowledge base (lazy loading)
         self._kb_initialized = False
+
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "query": ActionHandler(
+                    handler_method="_handle_query",
+                    required_params=["query"],
+                    description="Process a knowledge query",
+                ),
+                "find_similar": ActionHandler(
+                    handler_method="_handle_find_similar",
+                    required_params=["query"],
+                    description="Find documents similar to query",
+                ),
+                "quick_fact": ActionHandler(
+                    handler_method="_handle_quick_fact",
+                    required_params=["fact_query"],
+                    description="Quick fact lookup",
+                ),
+            }
+        )
 
         logger.info(
             "Knowledge Retrieval Agent initialized with provider=%s, endpoint=%s, model=%s",
@@ -73,6 +97,42 @@ class KnowledgeRetrievalAgent:
             self.llm_endpoint,
             self.model_name,
         )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return ["query", "find_similar", "quick_fact", "knowledge_retrieval"]
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a fast knowledge retrieval assistant. "
+            "Provide brief, direct answers based on knowledge base context."
+        )
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_query(self, request) -> Dict[str, Any]:
+        """Handle query action via StandardizedAgent routing."""
+        query = request.payload["query"]
+        limit = request.payload.get("limit", 5)
+        similarity_threshold = request.payload.get("similarity_threshold", 0.6)
+        context = request.payload.get("context")
+        return await self.process_query(
+            query, limit=limit, similarity_threshold=similarity_threshold, context=context
+        )
+
+    async def _handle_find_similar(self, request) -> Dict[str, Any]:
+        """Handle find_similar action via StandardizedAgent routing."""
+        query = request.payload["query"]
+        top_k = request.payload.get("top_k", 10)
+        min_score = request.payload.get("min_score", 0.5)
+        return await self.find_similar_documents(query, top_k=top_k, min_score=min_score)
+
+    async def _handle_quick_fact(self, request) -> Dict[str, Any]:
+        """Handle quick_fact action via StandardizedAgent routing."""
+        fact_query = request.payload["fact_query"]
+        max_docs = request.payload.get("max_docs", 3)
+        return await self.quick_fact_lookup(fact_query, max_docs=max_docs)
 
     async def _ensure_kb_initialized(self):
         """Ensure knowledge base is initialized (lazy loading)."""

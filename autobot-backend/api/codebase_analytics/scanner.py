@@ -386,7 +386,10 @@ async def do_indexing_with_progress(
         )
 
         async with _tasks_lock:
-            indexing_tasks[task_id] = _create_initial_task_state_bound()
+            state = _create_initial_task_state_bound()
+            # Issue #3685: Store source_id so stats endpoint can filter by project
+            state["source_id"] = source_id
+            indexing_tasks[task_id] = state
             await _save_task_to_redis_bound(task_id)
 
         def update_phase(phase_id, status):

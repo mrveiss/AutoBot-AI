@@ -16,6 +16,9 @@ from PIL import Image
 
 # Add project root to Python path (must be before src imports)
 sys.path.append(str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tests.test_helpers import get_test_backend_url  # noqa: E402
 
 from computer_vision_system import computer_vision_system  # noqa: E402
 from context_aware_decision_system import (  # noqa: E402
@@ -39,7 +42,7 @@ def test_api_connectivity():
     try:
         import requests
 
-        response = requests.get("http://localhost:8001/api/system/health", timeout=5)
+        response = requests.get(get_test_backend_url() + "/api/system/health", timeout=5)
         if response.status_code == 200:
             health_data = response.json()
             print(  # noqa: print
@@ -51,7 +54,7 @@ def test_api_connectivity():
             return False
     except requests.exceptions.ConnectionError:
         print(  # noqa: print
-            "⚠️ Cannot connect to backend API at http://localhost:8001 "
+            f"⚠️ Cannot connect to backend API at {get_test_backend_url()} "
             "(not required for Phase 9 tests)"
         )
         return False

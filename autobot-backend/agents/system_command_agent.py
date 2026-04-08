@@ -10,7 +10,7 @@ terminal streaming
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
@@ -24,14 +24,18 @@ from security.command_patterns import (
 )
 from security_layer import SecurityLayer
 
+from .base_agent import AgentRequest
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 
-class SystemCommandAgent:
+class SystemCommandAgent(StandardizedAgent):
     """Agent capable of running any system command with safety checks and
     terminal streaming.
 
     Issue #765: Uses centralized command patterns from security.command_patterns
+    Inherits StandardizedAgent for standardized action routing and metrics.
     """
 
     # List of package managers and their install commands
@@ -89,9 +93,145 @@ class SystemCommandAgent:
 
     def __init__(self):
         """Initialize system command agent with security layer and session tracking."""
+        super().__init__("system_command")
         self.security_layer = SecurityLayer()
         self.active_sessions: Dict[str, InteractiveTerminalAgent] = {}
         self.command_history: List[Dict[str, Any]] = []
+
+        self.register_actions(
+            {
+                "execute": ActionHandler(
+                    handler_method="handle_execute",
+                    required_params=["command", "chat_id"],
+                    description="Execute a system command with interactive terminal streaming",
+                ),
+                "install_tool": ActionHandler(
+                    handler_method="handle_install_tool",
+                    required_params=["tool_info", "chat_id"],
+                    description="Install a system tool using the detected package manager",
+                ),
+                "check_tool": ActionHandler(
+                    handler_method="handle_check_tool",
+                    required_params=["tool_name"],
+                    description="Check whether a tool is installed on the system",
+                ),
+                "validate_command": ActionHandler(
+                    handler_method="handle_validate_command",
+                    required_params=["command"],
+                    description="Validate command safety before execution",
+                ),
+                "send_input": ActionHandler(
+                    handler_method="handle_send_input",
+                    required_params=["chat_id", "user_input"],
+                    description="Send input to an active terminal session",
+                ),
+                "send_signal": ActionHandler(
+                    handler_method="handle_send_signal",
+                    required_params=["chat_id", "signal_type"],
+                    description="Send a signal to an active terminal session",
+                ),
+                "take_control": ActionHandler(
+                    handler_method="handle_take_control",
+                    required_params=["chat_id"],
+                    description="Transfer terminal session control to the user",
+                ),
+                "return_control": ActionHandler(
+                    handler_method="handle_return_control",
+                    required_params=["chat_id"],
+                    description="Return terminal session control to the agent",
+                ),
+                "get_sessions": ActionHandler(
+                    handler_method="handle_get_sessions",
+                    description="List all active terminal sessions",
+                ),
+            }
+        )
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a system command execution agent. "
+            "Run validated shell commands safely, manage terminal sessions, "
+            "and install tools using the appropriate package manager."
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of supported agent capabilities."""
+        return [
+            "command_execution",
+            "tool_installation",
+            "package_management",
+            "terminal_sessions",
+            "command_validation",
+            "interactive_terminal",
+        ]
+
+    async def handle_execute(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle execute action."""
+        command = request.payload["command"]
+        chat_id = request.payload["chat_id"]
+        description = request.payload.get("description")
+        require_confirmation = request.payload.get("require_confirmation", True)
+        env = request.payload.get("env")
+        cwd = request.payload.get("cwd")
+        timeout = request.payload.get("timeout")
+        return await self.execute_interactive_command(
+            command,
+            chat_id,
+            description=description,
+            require_confirmation=require_confirmation,
+            env=env,
+            cwd=cwd,
+            timeout=timeout,
+        )
+
+    async def handle_install_tool(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle install_tool action."""
+        tool_info = request.payload["tool_info"]
+        chat_id = request.payload["chat_id"]
+        return await self.install_tool(tool_info, chat_id)
+
+    async def handle_check_tool(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle check_tool action."""
+        tool_name = request.payload["tool_name"]
+        return await self.check_tool_installed(tool_name)
+
+    async def handle_validate_command(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle validate_command action."""
+        command = request.payload["command"]
+        return await self.validate_command_safety(command)
+
+    async def handle_send_input(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle send_input action."""
+        chat_id = request.payload["chat_id"]
+        user_input = request.payload["user_input"]
+        is_password = request.payload.get("is_password", False)
+        await self.send_input_to_session(chat_id, user_input, is_password=is_password)
+        return {"status": "sent"}
+
+    async def handle_send_signal(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle send_signal action."""
+        chat_id = request.payload["chat_id"]
+        signal_type = request.payload["signal_type"]
+        await self.send_signal_to_session(chat_id, signal_type)
+        return {"status": "sent", "signal_type": signal_type}
+
+    async def handle_take_control(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle take_control action."""
+        chat_id = request.payload["chat_id"]
+        await self.take_control_of_session(chat_id)
+        return {"status": "user_control", "chat_id": chat_id}
+
+    async def handle_return_control(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle return_control action."""
+        chat_id = request.payload["chat_id"]
+        await self.return_control_of_session(chat_id)
+        return {"status": "agent_control", "chat_id": chat_id}
+
+    async def handle_get_sessions(self, request: AgentRequest) -> Dict[str, Any]:
+        """Handle get_sessions action."""
+        sessions = await self.get_active_sessions()
+        return {"sessions": sessions}
 
     async def check_tool_installed(self, tool_name: str) -> Dict[str, Any]:
         """Check if a tool is installed on the system"""
@@ -227,7 +367,7 @@ class SystemCommandAgent:
             "chat_id": chat_id,
             "command": command,
             "status": status,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
         if status == "started":
             event_data["description"] = description or f"Executing: {command}"
@@ -359,7 +499,7 @@ class SystemCommandAgent:
     def _log_command(self, command: str, chat_id: str):
         """Log command execution for audit trail"""
         log_entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "chat_id": chat_id,
             "command": command,
             "user": os.getenv("USER", "unknown"),

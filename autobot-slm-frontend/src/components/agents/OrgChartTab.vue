@@ -11,6 +11,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { getBackendUrl } from '@/config/ssot-config'
 import OrgTreeNode from './OrgTreeNode.vue'
 
 interface OrgNode {
@@ -60,7 +61,7 @@ async function fetchTree() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/autobot-api/agents/org', { headers: headers.value })
+    const res = await fetch(`${getBackendUrl()}/agents/org`, { headers: headers.value })
     if (!res.ok) throw new Error(`Failed to load org tree: ${res.status}`)
     tree.value = await res.json()
   } catch (err) {
@@ -76,9 +77,9 @@ async function selectNode(node: OrgNode) {
   delegateError.value = null
   try {
     const [reportsRes, activityRes, delegationsRes] = await Promise.all([
-      fetch(`/autobot-api/agents/${node.agent_id}/reports`, { headers: headers.value }),
-      fetch(`/autobot-api/agents/${node.agent_id}/activity`, { headers: headers.value }),
-      fetch(`/autobot-api/agents/${node.agent_id}/delegations?role=delegator&limit=10`, {
+      fetch(`${getBackendUrl()}/agents/${node.agent_id}/reports`, { headers: headers.value }),
+      fetch(`${getBackendUrl()}/agents/${node.agent_id}/activity`, { headers: headers.value }),
+      fetch(`${getBackendUrl()}/agents/${node.agent_id}/delegations?role=delegator&limit=10`, {
         headers: headers.value,
       }),
     ])
@@ -97,7 +98,7 @@ async function submitDelegation() {
   delegateError.value = null
   try {
     const res = await fetch(
-      `/autobot-api/agents/${selectedNode.value.agent_id}/delegate`,
+      `${getBackendUrl()}/agents/${selectedNode.value.agent_id}/delegate`,
       {
         method: 'POST',
         headers: headers.value,

@@ -271,9 +271,9 @@ class LLMConfigurationSynchronizer:
         }
 
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone
 
-            results["timestamp"] = datetime.now().isoformat()
+            results["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
             # Step 1: Synchronize agent configurations with global LLM config
             results["sync_result"] = await asyncio.to_thread(

@@ -15,7 +15,7 @@ from .types import (
     ModelInfo,
     ModelPerformanceLevel,
     SystemResources,
-    TaskComplexity,
+    ModelCapabilityTier,
     TaskRequest,
 )
 
@@ -30,13 +30,13 @@ class ModelSelector:
         self._min_samples = min_samples
 
     def filter_by_complexity(
-        self, models: List[ModelInfo], complexity: TaskComplexity
+        self, models: List[ModelInfo], complexity: ModelCapabilityTier
     ) -> List[ModelInfo]:
         """Filter models based on task complexity requirements."""
         filtered = [m for m in models if m.meets_complexity_requirement(complexity)]
 
         # For SPECIALIZED complexity, prefer advanced models but fall back
-        if complexity == TaskComplexity.SPECIALIZED and not filtered:
+        if complexity == ModelCapabilityTier.SPECIALIZED and not filtered:
             return models
 
         return filtered if filtered else models

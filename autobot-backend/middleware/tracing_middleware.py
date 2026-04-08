@@ -26,6 +26,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from constants.api_constants import PATH_API_HEALTH, PATH_HEALTH
 from middleware.proxy_utils import get_client_ip
 from services.tracing_service import get_tracing_service
 
@@ -45,8 +46,8 @@ class TracingMiddleware(BaseHTTPMiddleware):
 
     # Paths to exclude from detailed tracing (health checks, metrics, etc.)
     EXCLUDED_PATHS = {
-        "/health",
-        "/api/health",
+        PATH_HEALTH,
+        PATH_API_HEALTH,
         "/metrics",
         "/api/metrics",
         "/favicon.ico",

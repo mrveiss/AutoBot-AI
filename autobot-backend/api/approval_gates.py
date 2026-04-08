@@ -12,12 +12,13 @@ import uuid
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.models.pagination import PaginationParams
 from models.approval import ApprovalStatus, ApprovalType
 from services.approval_gate_service import ApprovalGateService
 
@@ -209,8 +210,7 @@ async def list_approvals(
     approval_type: Optional[ApprovalType] = None,
     workflow_id: Optional[str] = None,
     agent_id: Optional[str] = None,
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -221,8 +221,8 @@ async def list_approvals(
         approval_type=approval_type.value if approval_type else None,
         workflow_id=workflow_id,
         agent_id=agent_id,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
     return [_to_response(a) for a in approvals]
 

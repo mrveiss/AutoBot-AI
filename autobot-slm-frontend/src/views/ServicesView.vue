@@ -19,6 +19,7 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
 import type { FleetServiceStatus, ServiceStatus, ServiceCategory, ServiceActionResponse } from '@/types/slm'
+import RedisServicePanel from '@/components/RedisServicePanel.vue'
 
 const logger = createLogger('ServicesView')
 const api = useSlmApi()
@@ -528,6 +529,11 @@ onUnmounted(() => {
         <div class="text-sm text-gray-500">Failed</div>
         <div class="text-2xl font-bold text-red-600">{{ summaryStats.failed }}</div>
       </div>
+    </div>
+
+    <!-- Redis Service Management -->
+    <div class="mb-6">
+      <RedisServicePanel />
     </div>
 
     <!-- Error Banner -->

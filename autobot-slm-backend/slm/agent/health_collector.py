@@ -19,6 +19,8 @@ from typing import Dict, List, Optional
 
 import psutil
 
+from autobot_shared.redis_client import get_redis_client
+
 logger = logging.getLogger(__name__)
 
 _STATE_CHANGE_CHANNEL_TEMPLATE = "autobot:services:{service}:state_change"
@@ -314,8 +316,6 @@ class HealthCollector:
         outage must not interrupt health collection (#3404).
         """
         try:
-            from autobot_shared.redis_client import get_redis_client
-
             client = get_redis_client(database="main")
             if client is None:
                 logger.warning(

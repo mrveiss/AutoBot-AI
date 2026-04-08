@@ -37,6 +37,9 @@ import requests
 
 # Add AutoBot paths
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from tests.test_helpers import get_test_backend_url
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -192,11 +195,11 @@ class MonitoringAndAlertingTester:
         logger.info("🏥 Testing Health Monitoring Endpoints...")
 
         health_endpoints = [
-            ("backend", "http://10.0.0.1:8001/api/health"),
-            ("backend_system", "http://10.0.0.1:8001/api/system/status"),
+            ("backend", get_test_backend_url() + "/api/health"),
+            ("backend_system", get_test_backend_url() + "/api/system/status"),
             (
                 "backend_monitoring",
-                "http://10.0.0.1:8001/api/monitoring/services",
+                get_test_backend_url() + "/api/monitoring/services",
             ),
             ("ollama", "http://127.0.0.1:11434/api/tags"),
         ]
@@ -411,7 +414,7 @@ class MonitoringAndAlertingTester:
         """Simulate a threshold breach and check if alert is triggered"""
         try:
             # Try to send test metric to monitoring endpoint
-            backend_url = "http://10.0.0.1:8001"
+            backend_url = get_test_backend_url()
 
             # Check if there's a test metrics endpoint
             test_endpoints = [
@@ -473,7 +476,7 @@ class MonitoringAndAlertingTester:
         for i in range(5):
             start_time = time.time()
             try:
-                response = requests.get("http://10.0.0.1:8001/api/health", timeout=10)
+                response = requests.get(get_test_backend_url() + "/api/health", timeout=10)
                 response_time = time.time() - start_time
 
                 if response.status_code == 200:
@@ -538,9 +541,9 @@ class MonitoringAndAlertingTester:
 
         # Test main monitoring endpoints that might serve dashboards
         dashboard_urls = [
-            ("System Status", "http://10.0.0.1:8001/api/system/status"),
-            ("Service Health", "http://10.0.0.1:8001/api/monitoring/services"),
-            ("Metrics Summary", "http://10.0.0.1:8001/api/metrics/summary"),
+            ("System Status", get_test_backend_url() + "/api/system/status"),
+            ("Service Health", get_test_backend_url() + "/api/monitoring/services"),
+            ("Metrics Summary", get_test_backend_url() + "/api/metrics/summary"),
             ("Frontend Dashboard", "http://10.0.0.2:5173/dashboard"),
         ]
 
@@ -881,7 +884,7 @@ class MonitoringAndAlertingTester:
         """Simulate an incident scenario"""
         try:
             # Try to trigger incident via test endpoint
-            backend_url = "http://10.0.0.1:8001"
+            backend_url = get_test_backend_url()
 
             incident_endpoints = [
                 "/api/monitoring/incident/simulate",
@@ -921,7 +924,7 @@ class MonitoringAndAlertingTester:
         """Check if incident response was initiated"""
         try:
             # Check for incident response via monitoring endpoint
-            backend_url = "http://10.0.0.1:8001"
+            backend_url = get_test_backend_url()
 
             response_endpoints = [
                 "/api/monitoring/incidents/recent",

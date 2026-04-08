@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from constants.network_constants import ServiceURLs
 from constants.threshold_constants import TimingConstants
 from utils.catalog_http_exceptions import (
-    raise_not_found_error,
+    raise_catalog_error_simple,
     raise_server_error,
     raise_validation_error,
 )
@@ -270,7 +270,7 @@ class OperationIntegrationManager:
             # Issue #321: Use helper method to reduce message chains
             checkpoints = await self.list_operation_checkpoints(operation_id)
             if not checkpoints:
-                raise_not_found_error("API_0002", "No checkpoints found for operation")
+                raise_catalog_error_simple("API_0002", "No checkpoints found for operation")
             latest_checkpoint = checkpoints[-1]
             new_operation_id = await self.operation_manager.resume_operation(
                 latest_checkpoint.checkpoint_id
@@ -290,7 +290,7 @@ class OperationIntegrationManager:
         """Handle update progress request."""
         operation = self.operation_manager.get_operation(operation_id)
         if not operation:
-            raise_not_found_error("API_0002", "Operation not found")
+            raise_catalog_error_simple("API_0002", "Operation not found")
         # Issue #321: Use helper method to reduce message chains
         await self.update_operation_progress(
             operation,
@@ -347,7 +347,7 @@ class OperationIntegrationManager:
             """Get operation details by ID."""
             operation = self.operation_manager.get_operation(operation_id)
             if not operation:
-                raise_not_found_error("API_0002", "Operation not found")
+                raise_catalog_error_simple("API_0002", "Operation not found")
             return self._convert_operation_to_response(operation)
 
         @self.router.get("/", response_model=OperationListResponse)
@@ -381,7 +381,7 @@ class OperationIntegrationManager:
         async def cancel_operation(operation_id: str):
             """Cancel a running operation."""
             if not await self.operation_manager.cancel_operation(operation_id):
-                raise_not_found_error("API_0002", "Operation not found")
+                raise_catalog_error_simple("API_0002", "Operation not found")
             return {"status": "cancelled"}
 
         @self.router.post("/{operation_id}/resume")
@@ -564,7 +564,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Starting code analysis", 0, 1)
 
             # Simulate analysis
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             return {"analysis": "placeholder"}
 
@@ -579,7 +579,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Starting KB population", 0, 1)
 
             # Simulate population
-            await asyncio.sleep(1)
+            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
             return {"populated": "placeholder"}
 

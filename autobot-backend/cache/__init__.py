@@ -12,10 +12,10 @@ Usage:
     from cache import get_cache_coordinator, register_all_caches
 
     # At application startup
-    register_all_caches()
+    await register_all_caches()
 
     # Get coordinator for stats/eviction
-    coordinator = get_cache_coordinator()
+    coordinator = await get_cache_coordinator()
     stats = coordinator.get_unified_stats()
 """
 
@@ -115,11 +115,12 @@ def _register_single_cache(
         return False
 
 
-def register_all_caches() -> int:
+async def register_all_caches() -> int:
     """
     Register all known caches with the CacheCoordinator.
 
     Issue #743: Central registration function for coordinated cache management.
+    Issue #3390: Migrated to async to use lazy-initialized coordinator.
 
     This function should be called at application startup to enable
     memory-pressure-aware coordinated eviction across all caches.
@@ -129,10 +130,10 @@ def register_all_caches() -> int:
 
     Example:
         from cache import register_all_caches
-        count = register_all_caches()
+        count = await register_all_caches()
         logger.info(f"Registered {count} caches with coordinator")
     """
-    coordinator = get_cache_coordinator()
+    coordinator = await get_cache_coordinator()
     registered = 0
 
     for module_path, class_name, factory in _get_cache_registry():

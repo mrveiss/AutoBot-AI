@@ -1,4 +1,5 @@
 # AutoBot - AI-Powered Automation Platform
+import uuid
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
@@ -98,22 +99,22 @@ class SentimentAnalysisAgent(StandardizedAgent):
     async def process_query(
         self, request_text: str, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Process a sentiment analysis query using LLM."""
+        """Process a sentiment analysis query using the vLLM-optimised API (Issue #3389)."""
         try:
             logger.info("Sentiment Analysis Agent processing: %s...", request_text[:50])
-            messages = [
-                {"role": "system", "content": self._get_localized_system_prompt()},
-                {"role": "user", "content": request_text},
-            ]
-            response = await self.llm_interface.chat_completion(
-                messages=messages,
-                llm_type="chat",
+            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
+            response = await self.llm_interface.chat_completion_optimized(
+                agent_type=self.AGENT_ID,
+                user_message=request_text,
+                session_id=session_id,
+                user_name=(context or {}).get("user_name"),
+                user_role=(context or {}).get("user_role"),
                 temperature=0.1,
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=LLMDefaults.DEFAULT_TOP_P,
             )
             response_text = self._extract_content(response)
-            return {
+            result = {
                 "status": "success",
                 "response": response_text,
                 "response_text": response_text,
@@ -123,6 +124,14 @@ class SentimentAnalysisAgent(StandardizedAgent):
                     response.get("usage", {}) if isinstance(response, dict) else {}
                 ),
             }
+            diary_entry = (
+                f"SESSION:{session_id}|ACTION:sentiment_analysis"
+                f"|OUTCOME:{result['status']}|TOPIC:sentiment"
+            )
+            await self.memory_manager.agent_diary.write(
+                self.AGENT_ID, session_id, diary_entry, topic="sentiment"
+            )
+            return result
         except Exception as e:
             logger.error("Sentiment Analysis Agent error: %s", e)
             return {
@@ -132,6 +141,30 @@ class SentimentAnalysisAgent(StandardizedAgent):
                 "agent_type": "sentiment_analysis",
                 "model_used": self.model_name,
             }
+
+    async def _before_process(self, context: dict) -> dict:
+        """Inject cached session sentiment history into context."""
+        session_id = context.get("session_id")
+        if session_id:
+            history = await self.memory_manager.working_memory.get(
+                session_id, "sentiment_history"
+            )
+            if history:
+                context["sentiment_history"] = history
+        return context
+
+    async def _after_process(self, context: dict, result: Any) -> None:
+        """Persist the most recent sentiment label to working memory."""
+        if not result:
+            return
+        session_id = context.get("session_id")
+        if not session_id:
+            return
+        sentiment = result.get("response", "") if isinstance(result, dict) else ""
+        if sentiment:
+            await self.memory_manager.working_memory.store(
+                session_id, "sentiment_history", sentiment
+            )
 
     def _get_system_prompt(self) -> str:
         """Get system prompt for sentiment analysis tasks."""

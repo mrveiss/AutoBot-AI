@@ -13,7 +13,7 @@ import logging
 import re
 import subprocess  # nosec B404
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
@@ -353,7 +353,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
             }
         sanitized.append(s)
     try:
-        result = subprocess.run(  # nosec B603 B607
+        result = subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]
             ["/usr/bin/xdotool"] + sanitized,
             capture_output=True,
             text=True,
@@ -532,7 +532,7 @@ async def vnc_mouse_drag(
     for x, y in path_points[1:]:  # Skip first point (already there)
         _run_xdotool_cmd(["mousemove", str(x), str(y)])
         # Small delay between movements for smooth curve
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(TimingConstants.POLL_INTERVAL)
 
     # Release mouse button at end position
     return _run_xdotool_cmd(["mouseup", "1"])
@@ -715,7 +715,7 @@ async def get_connection_quality_metrics(
     """
     metrics = {
         "vnc_running": is_vnc_running(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     # Check VNC port connectivity
@@ -724,9 +724,9 @@ async def get_connection_quality_metrics(
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         result = sock.connect_ex(("localhost", 5901))
-        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        latency_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
         sock.close()
 
         metrics["vnc_port_reachable"] = result == 0
@@ -942,7 +942,7 @@ async def get_desktop_context(
         "system": _get_system_info(),
         "desktop": _get_desktop_info(),
         "processes": _get_process_list(),
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -964,7 +964,7 @@ class MacroRecording(BaseModel):
 
     name: str = Field(..., description="Macro name")
     actions: List[MacroAction] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
 
 # Global macro storage (in-memory for now)
@@ -1079,7 +1079,7 @@ async def playback_macro(
     logger.info("Playing back macro: %s (%d actions)", name, len(macro.actions))
 
     # Replay actions with timing delays
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
     for i, action in enumerate(macro.actions):
         # Calculate delay since previous action
         if i > 0:
@@ -1106,7 +1106,7 @@ async def playback_macro(
                 "message": f"Failed at action {i + 1}/{len(macro.actions)}",
             }
 
-    elapsed = (datetime.now() - start_time).total_seconds()
+    elapsed = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
     return {
         "status": "success",
         "message": f"Played macro '{name}' ({len(macro.actions)} actions in {elapsed:.1f}s)",
@@ -1374,10 +1374,10 @@ async def vnc_wait_for_text(
     Returns:
         {"status": "success|timeout", "found": true/false, "message": "..."}
     """
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
     poll_interval = 2.0  # Check every 2 seconds
 
-    while (datetime.now() - start_time).total_seconds() < request.timeout_seconds:
+    while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Perform OCR
         ocr_result = await vnc_ocr_text(OCRRequest(region=request.region))
 
@@ -1430,10 +1430,10 @@ async def vnc_wait_for_image(
             "message": "..."
         }
     """
-    start_time = datetime.now()
+    start_time = datetime.now(tz=timezone.utc)
     poll_interval = 2.0  # Check every 2 seconds
 
-    while (datetime.now() - start_time).total_seconds() < request.timeout_seconds:
+    while (datetime.now(tz=timezone.utc) - start_time).total_seconds() < request.timeout_seconds:
         # Find image
         find_result = await vnc_find_image(
             FindImageRequest(
@@ -1480,7 +1480,7 @@ class DesktopSessionState(BaseModel):
     action_log: List[Dict] = Field(
         default_factory=list, description="VNC actions performed"
     )
-    last_updated: str = Field(default_factory=lambda: datetime.now().isoformat())
+    last_updated: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
 
 class SessionActionLog(BaseModel):
@@ -1488,7 +1488,7 @@ class SessionActionLog(BaseModel):
 
     action_type: str = Field(..., description="Type of action performed")
     params: Dict = Field(default_factory=dict)
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
     result: str = Field(default="success", description="Action result: success/error")
 
 
@@ -1534,7 +1534,7 @@ async def save_session_desktop_state(
             ]
 
         # Update timestamp
-        state.last_updated = datetime.now().isoformat()
+        state.last_updated = datetime.now(tz=timezone.utc).isoformat()
 
         logger.info("Saved desktop state for session: %s", session_id)
 
@@ -1605,7 +1605,7 @@ async def log_session_action(
 
         state = _session_states[session_id]
         state.action_log.append(action.dict())
-        state.last_updated = datetime.now().isoformat()
+        state.last_updated = datetime.now(tz=timezone.utc).isoformat()
 
     return {"status": "success", "message": "Action logged to session"}
 
@@ -1682,7 +1682,7 @@ async def save_session_screenshot(
     screenshot_dir = validate_relative_path(session_id, vnc_base)
     screenshot_dir.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     screenshot_path = validate_relative_path(
         f"screenshot_{timestamp}.png", screenshot_dir
     )
@@ -1699,7 +1699,7 @@ async def save_session_screenshot(
 
         state = _session_states[session_id]
         state.screenshots.append(str(screenshot_path))
-        state.last_updated = datetime.now().isoformat()
+        state.last_updated = datetime.now(tz=timezone.utc).isoformat()
 
     logger.info("Saved screenshot for session %s: %s", session_id, screenshot_path)
 

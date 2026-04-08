@@ -340,3 +340,35 @@ class TestRequireFeatureDecorator:
         err = FeatureDisabledError("browser")
         assert isinstance(err, RuntimeError)
         assert err.feature_name == "browser"
+
+
+# ---------------------------------------------------------------------------
+# FeatureConfig plan short-name fields — issue #3009
+# ---------------------------------------------------------------------------
+
+
+class TestFeatureConfigPlanFields:
+    """Verify the short-name subsystem fields added in issue #3009."""
+
+    def test_default_flags_exist(self):
+        cfg = _fresh_feature_config()
+        assert hasattr(cfg, "npu")
+        assert hasattr(cfg, "voice")
+        assert hasattr(cfg, "browser_automation")
+        assert hasattr(cfg, "computer_vision")
+        assert hasattr(cfg, "training")
+        assert hasattr(cfg, "graph_rag")
+        assert hasattr(cfg, "mcp")
+
+    def test_heavy_features_off_by_default(self):
+        cfg = _fresh_feature_config()
+        assert cfg.computer_vision is False
+        assert cfg.training is False
+
+    def test_standard_features_on_by_default(self):
+        cfg = _fresh_feature_config()
+        assert cfg.npu is True
+        assert cfg.voice is True
+        assert cfg.browser_automation is True
+        assert cfg.graph_rag is True
+        assert cfg.mcp is True

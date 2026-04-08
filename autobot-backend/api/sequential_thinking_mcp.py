@@ -16,7 +16,7 @@ Enables agents to:
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -167,7 +167,7 @@ class SequentialThinkingRequest(BaseModel):
             "branch_from_thought": self.branch_from_thought,
             "branch_id": self.branch_id,
             "needs_more_thoughts": self.needs_more_thoughts,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def get_progress_percentage(self) -> float:

@@ -504,14 +504,67 @@ class ToolRegistry:
         }
         return dispatch.get(tool_name)
 
+    async def _try_sdk_dispatch(
+        self, tool_name: str, tool_args: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Attempt to dispatch via ToolSDKRegistry.
+
+        Returns None if the tool is not registered in the SDK registry so the
+        caller can fall through to the legacy dispatch table.
+
+        Args:
+            tool_name: Raw tool name (not normalised).
+            tool_args: Argument dict to pass to the tool.
+
+        Returns:
+            Serialisable result dict on success/failure, or None if the tool
+            is not in the SDK registry.
+        """
+        try:
+            from tool_sdk.registry import ToolNotFoundError, get_tool_registry
+
+            registry = get_tool_registry()
+            # Probe registry without instantiating — raises ToolNotFoundError if absent
+            try:
+                registry.get(tool_name)
+            except ToolNotFoundError:
+                return None
+
+            # Tool is registered; execute via the registry (handles validation + timing)
+            from tool_sdk.base import ToolPermission
+
+            result = await registry.execute(
+                tool_name,
+                tool_args,
+                caller_permission=ToolPermission.SYSTEM,
+            )
+            return {
+                "tool_name": tool_name,
+                "tool_args": tool_args,
+                "result": result.data if result.success else result.error,
+                "status": "success" if result.success else "error",
+            }
+        except Exception as exc:
+            self.logger.error(
+                "SDK tool dispatch failed for '%s': %s", tool_name, exc, exc_info=True
+            )
+            return None
+
     async def execute_tool(
         self, tool_name: str, tool_args: Dict[str, Any]
     ) -> Dict[str, Any]:
+        """Execute a tool by name with arguments.
+
+        Checks ToolSDKRegistry first for schema-validated tools registered via
+        the Tool SDK (#3009), then falls back to the legacy dispatch table.
+        This method provides a unified interface for both orchestrators to call
+        tools using string names and arguments.
         """
-        Execute a tool by name with arguments. This method provides a unified
-        interface for both orchestrators to call tools using string names and
-        arguments.
-        """
+        # Try SDK-registered tools first (#3009)
+        sdk_result = await self._try_sdk_dispatch(tool_name, tool_args)
+        if sdk_result is not None:
+            return sdk_result
+
         # Normalize tool name variations
         normalized_name = tool_name.lower().replace("_", "").replace("-", "")
 

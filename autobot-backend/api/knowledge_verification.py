@@ -19,7 +19,7 @@ Related Issues: #1252 (Source Provenance Metadata & Verification Workflow)
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
@@ -160,7 +160,7 @@ async def approve_fact(
     if kb is None:
         _raise_kb_unavailable()
 
-    now = datetime.now().isoformat()
+    now = datetime.now(tz=timezone.utc).isoformat()
     update_meta = {
         "verification_status": "verified",
         "verification_method": "user_approved",
@@ -228,7 +228,7 @@ async def reject_fact(
             raise HTTPException(status_code=404, detail=msg)
         raise HTTPException(status_code=500, detail=msg)
 
-    now = datetime.now().isoformat()
+    now = datetime.now(tz=timezone.utc).isoformat()
     update_meta = {
         "verification_status": "rejected",
         "verified_by": body.user,

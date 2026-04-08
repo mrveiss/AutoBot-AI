@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_7_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 KEY_PREFIX = "autobot:workflow:"
 ACTIVE_SET = "autobot:workflow:active"
-COMPLETED_TTL = 7 * 24 * 3600  # 7 days in seconds
+COMPLETED_TTL = TTL_7_DAYS
 REDIS_DATABASE = "workflows"
 
 # Step name constants

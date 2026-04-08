@@ -317,6 +317,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
 import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
 import api from '@/services/api'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BusinessIntelligenceView')
@@ -378,7 +379,7 @@ const getTrendIcon = (trend: string): string => {
 const fetchDashboard = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>('/api/advanced/dashboard')
+    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/dashboard`)
     dashboard.value = res.data
   } catch (error) {
     logger.error('Failed to fetch dashboard:', error)
@@ -388,7 +389,7 @@ const fetchDashboard = async () => {
 const fetchMaintenance = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>('/api/advanced/maintenance')
+    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/maintenance`)
     maintenance.value = res.data
   } catch (error) {
     logger.error('Failed to fetch maintenance:', error)
@@ -398,7 +399,7 @@ const fetchMaintenance = async () => {
 const fetchOptimization = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>('/api/advanced/optimization')
+    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/optimization`)
     optimization.value = res.data
   } catch (error) {
     logger.error('Failed to fetch optimization:', error)
@@ -408,7 +409,7 @@ const fetchOptimization = async () => {
 const fetchInsights = async () => {
   try {
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.get<{ data: any }>('/api/advanced/insights')
+    const res = await api.get<{ data: any }>(`${getApiBase()}/advanced/insights`)
     insights.value = res.data
   } catch (error) {
     logger.error('Failed to fetch insights:', error)
@@ -419,7 +420,7 @@ const generateReport = async (reportType: string) => {
   try {
     loading.value = true
     // Issue #552: Fixed path - backend uses /api/advanced/* not /api/analytics/advanced/*
-    const res = await api.post<{ data: any }>('/api/advanced/report', {
+    const res = await api.post<{ data: any }>(`${getApiBase()}/advanced/report`, {
       report_type: reportType,
       days: 30
     })

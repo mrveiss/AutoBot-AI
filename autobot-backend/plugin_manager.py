@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import config
 from plugin_sdk.base import PluginRegistry
 from plugin_sdk.loader import PluginLoader
 
@@ -35,10 +36,11 @@ def get_plugin_loader() -> PluginLoader:
     """Get or create plugin loader instance."""
     global _plugin_loader
     if _plugin_loader is None:
-        # Define plugin directories
+        # Define plugin directories using SSOT config (#3397)
+        plugins_root = config.path.plugins_path
         plugin_dirs = [
-            Path("/opt/autobot/plugins/core-plugins"),
-            Path("/opt/autobot/plugins/community-plugins"),
+            plugins_root / "core-plugins",
+            plugins_root / "community-plugins",
             # Development fallback
             Path("plugins/core-plugins"),
             Path("plugins/community-plugins"),

@@ -16,6 +16,7 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from circuit_breaker import circuit_breaker_async
+from constants.model_constants import OPENAI_GPT35_TURBO
 
 from ..models import LLMRequest, LLMResponse
 
@@ -37,14 +38,15 @@ class OpenAIProvider:
         Initialize OpenAI provider.
 
         Args:
-            api_key: OpenAI API key (falls back to unified config #536)
+            api_key: OpenAI API key (falls back to ssot_config #536)
         """
         if api_key:
             self.api_key = api_key
         else:
-            from config import ConfigManager
+            from autobot_shared.ssot_config import config as _ssot_config
 
-            self.api_key = ConfigManager().get_api_key("openai")
+            # ssot_config reads OPENAI_API_KEY from .env (Issue #3829)
+            self.api_key = _ssot_config.llm.openai_api_key
 
     def _record_success_span_attributes(
         self, span, response, processing_time: float
@@ -147,7 +149,7 @@ class OpenAIProvider:
         import openai
 
         client = openai.AsyncOpenAI(api_key=self.api_key)
-        model = request.model_name or "gpt-3.5-turbo"
+        model = request.model_name or OPENAI_GPT35_TURBO
         span_attrs = self._build_span_attributes(model, request)
 
         with _tracer.start_as_current_span(

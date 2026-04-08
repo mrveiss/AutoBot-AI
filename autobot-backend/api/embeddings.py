@@ -9,7 +9,7 @@ Handles vector storage configuration and embedding model selection.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -90,7 +90,7 @@ async def get_embedding_settings(
             content={
                 "status": "success",
                 "embedding_config": embedding_config,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -147,7 +147,7 @@ async def update_embedding_settings(
                     "selected_model": update.selected_model,
                     "endpoint": update.endpoint,
                 },
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -197,7 +197,7 @@ async def get_available_embedding_models(
                 "status": "success",
                 "providers": available_models,
                 "current_provider": embedding_config.get("provider", "ollama"),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -246,7 +246,7 @@ async def refresh_embedding_models(
                     "status": "success",
                     "message": f"Models refreshed for {provider_name}",
                     "models": embedding_models,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
             )
         else:
@@ -298,7 +298,7 @@ async def get_embedding_status(
             "provider": current_provider,
             "model": selected_model,
             "endpoint": endpoint,
-            "last_check": datetime.now().isoformat(),
+            "last_check": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         return JSONResponse(
@@ -306,7 +306,7 @@ async def get_embedding_status(
             content={
                 "status": "success",
                 "embedding_status": status,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 

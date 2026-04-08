@@ -14,7 +14,7 @@ import asyncio
 import csv
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from io import StringIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -464,7 +464,7 @@ class BulkOperationsMixin:
         lines = [
             "# Knowledge Base Export",
             "",
-            f"Generated: {datetime.now().isoformat()}",
+            f"Generated: {datetime.now(tz=timezone.utc).isoformat()}",
             "",
         ]
 
@@ -1454,7 +1454,7 @@ class BulkOperationsMixin:
         """
         import os
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_name = f"kb_backup_{timestamp}"
         ext = ".jsongz" if compression else ".json"
         backup_file = os.path.join(backup_dir, f"{backup_name}{ext}")
@@ -1474,7 +1474,7 @@ class BulkOperationsMixin:
         """
         backup_data = {
             "version": "1.0",
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "description": description,
             "facts_count": len(facts),
             "include_embeddings": include_embeddings,

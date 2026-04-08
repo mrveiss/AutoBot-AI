@@ -122,6 +122,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('HostSelector');
 const { t } = useI18n();
@@ -211,7 +212,7 @@ const loadHosts = async () => {
     // Use relative URL to go through Vite proxy in dev mode
     // This ensures the request works regardless of browser origin
     const response = await fetchWithAuth(
-      `/api/infrastructure/hosts?${params.toString()}`
+      `${getApiBase()}/infrastructure/hosts?${params.toString()}`
     );
 
     if (!response.ok) {

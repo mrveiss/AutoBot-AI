@@ -19,10 +19,10 @@ from celery import Celery
 
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
-from config import ConfigManager
+from config.manager import get_config_manager
 
-# Create singleton config instance for extended config values
-config = ConfigManager()
+# Use singleton config instance for extended config values
+config = get_config_manager()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)

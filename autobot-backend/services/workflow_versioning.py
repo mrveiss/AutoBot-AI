@@ -133,7 +133,7 @@ class WorkflowVersionStore:
         Returns:
             The new version number on success, None when Redis is unavailable.
         """
-        redis = get_redis_client(async_client=True, database="workflows")
+        redis = await get_redis_client(async_client=True, database="workflows")
         if redis is None:
             logger.error("save_version: Redis unavailable for workflow %s", workflow_id)
             return None
@@ -172,7 +172,7 @@ class WorkflowVersionStore:
         Returns:
             True when the version existed and was removed; False otherwise.
         """
-        redis = get_redis_client(async_client=True, database="workflows")
+        redis = await get_redis_client(async_client=True, database="workflows")
         if redis is None:
             logger.error(
                 "delete_version: Redis unavailable for workflow %s", workflow_id
@@ -211,7 +211,7 @@ class WorkflowVersionStore:
             List of summary dicts sorted by version descending.  Empty list
             when no versions exist or Redis is unavailable.
         """
-        redis = get_redis_client(async_client=True, database="workflows")
+        redis = await get_redis_client(async_client=True, database="workflows")
         if redis is None:
             logger.error(
                 "list_versions: Redis unavailable for workflow %s", workflow_id
@@ -252,7 +252,7 @@ class WorkflowVersionStore:
         Returns:
             WorkflowVersion dataclass, or None when not found.
         """
-        redis = get_redis_client(async_client=True, database="workflows")
+        redis = await get_redis_client(async_client=True, database="workflows")
         if redis is None:
             logger.error("get_version: Redis unavailable for workflow %s", workflow_id)
             return None

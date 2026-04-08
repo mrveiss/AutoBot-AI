@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from constants.status_enums import TaskStatus
 from orchestration.dag_executor import (
     DAGExecutionContext,
     DAGExecutor,
@@ -182,7 +183,7 @@ class TestDAGExecutorLinear:
         dag = WorkflowDAG(nodes, [])
         executor = DAGExecutor(_noop_executor)
         ctx = await executor.execute(dag, "wf1")
-        assert ctx.status == "completed"
+        assert ctx.status == TaskStatus.COMPLETED.value
         assert "a" in ctx.step_results
 
     @pytest.mark.asyncio
@@ -191,7 +192,7 @@ class TestDAGExecutorLinear:
         dag = WorkflowDAG(nodes, _linear_edges("a", "b", "c"))
         executor = DAGExecutor(_noop_executor)
         ctx = await executor.execute(dag, "wf2")
-        assert ctx.status == "completed"
+        assert ctx.status == TaskStatus.COMPLETED.value
         assert set(ctx.step_results.keys()) == {"a", "b", "c"}
 
     @pytest.mark.asyncio
@@ -210,7 +211,7 @@ class TestDAGExecutorLinear:
         dag = WorkflowDAG(nodes, edges)
         executor = DAGExecutor(_noop_executor)
         ctx = await executor.execute(dag, "wf_cycle")
-        assert ctx.status == "failed"
+        assert ctx.status == TaskStatus.FAILED.value
         assert "cycle" in ctx.error.lower()
 
     @pytest.mark.asyncio
@@ -218,7 +219,7 @@ class TestDAGExecutorLinear:
         dag = WorkflowDAG([], [])
         executor = DAGExecutor(_noop_executor)
         ctx = await executor.execute(dag, "wf_empty")
-        assert ctx.status == "failed"
+        assert ctx.status == TaskStatus.FAILED.value
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ class TestDAGExecutorBranching:
 
         executor = DAGExecutor(recording_executor)
         ctx = await executor.execute(dag, "wf_branch")
-        assert ctx.status == "completed"
+        assert ctx.status == TaskStatus.COMPLETED.value
         assert "true_branch" in executed
         assert "false_branch" not in executed
         assert "end" in executed
@@ -273,7 +274,7 @@ class TestDAGExecutorBranching:
 
         executor = DAGExecutor(recording_executor)
         ctx = await executor.execute(dag, "wf_false")
-        assert ctx.status == "completed"
+        assert ctx.status == TaskStatus.COMPLETED.value
         assert "false_branch" in executed
         assert "true_branch" not in executed
         assert ctx.branches_taken["cond"] is False
@@ -321,7 +322,7 @@ class TestDAGExecutorForkJoin:
 
         executor = DAGExecutor(recording_executor)
         ctx = await executor.execute(dag, "wf_fork")
-        assert ctx.status == "completed"
+        assert ctx.status == TaskStatus.COMPLETED.value
         assert set(executed) == {"root", "branch_a", "branch_b", "end"}
 
     @pytest.mark.asyncio

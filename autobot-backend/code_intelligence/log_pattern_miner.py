@@ -23,7 +23,7 @@ import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from statistics import mean, stdev
@@ -321,7 +321,7 @@ class LogParser:
         try:
             timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
         except ValueError:
-            timestamp = datetime.now()
+            timestamp = datetime.now(tz=timezone.utc)
 
         level = LogLevel(level_str.lower())
 
@@ -372,7 +372,7 @@ class LogParser:
         level_str, logger_name, message = match.groups()
 
         return LogEntry(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             level=LogLevel(level_str.lower()),
             logger_name=logger_name,
             message=message,
@@ -506,11 +506,11 @@ class LogPatternMiner:
         Issue #620.
         """
         return MiningResult(
-            id=f"mining-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            timestamp=datetime.now(),
+            id=f"mining-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            timestamp=datetime.now(tz=timezone.utc),
             files_analyzed=0,
             total_entries=0,
-            time_range=(datetime.now(), datetime.now()),
+            time_range=(datetime.now(tz=timezone.utc), datetime.now(tz=timezone.utc)),
             patterns=[],
             anomalies=[],
             sessions=[],
@@ -534,8 +534,8 @@ class LogPatternMiner:
         time_range = (self.entries[0].timestamp, self.entries[-1].timestamp)
 
         return MiningResult(
-            id=f"mining-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            timestamp=datetime.now(),
+            id=f"mining-{datetime.now(tz=timezone.utc).strftime('%Y%m%d%H%M%S')}",
+            timestamp=datetime.now(tz=timezone.utc),
             files_analyzed=files_analyzed,
             total_entries=len(self.entries),
             time_range=time_range,

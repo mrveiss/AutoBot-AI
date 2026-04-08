@@ -12,6 +12,7 @@
 
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for RedisServiceAPI
 const logger = createLogger('RedisServiceAPI')
@@ -84,7 +85,7 @@ class RedisServiceAPI {
     this.client = apiClient
     // Note: Redis service control endpoints require paramiko (SSH library)
     // which is not currently installed. Using monitoring endpoint for now.
-    this.baseEndpoint = '/api/service-monitor/services'
+    this.baseEndpoint = `${getApiBase()}/service-monitor/services`
   }
 
   /**

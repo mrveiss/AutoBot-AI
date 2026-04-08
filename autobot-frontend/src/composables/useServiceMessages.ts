@@ -10,6 +10,7 @@
 import { ref, onUnmounted } from 'vue'
 import { useApiWithState } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useServiceMessages')
 
@@ -78,7 +79,7 @@ export function useServiceMessages() {
           if (params?.receiver) sp.append('receiver', params.receiver)
           if (params?.msg_type) sp.append('msg_type', params.msg_type)
           const qs = sp.toString()
-          const url = `/api/service-messages/latest${qs ? `?${qs}` : ''}`
+          const url = `${getApiBase()}/service-messages/latest${qs ? `?${qs}` : ''}`
           const resp = await api.get(url)
           return (await resp.json()) as LatestMessagesResponse
         },
@@ -105,7 +106,7 @@ export function useServiceMessages() {
   ): Promise<SingleMessageResponse | null> {
     return withErrorHandling(
       async () => {
-        const resp = await api.get(`/api/service-messages/${msgId}`)
+        const resp = await api.get(`${getApiBase()}/service-messages/${msgId}`)
         return (await resp.json()) as SingleMessageResponse
       },
       { errorMessage: 'Failed to fetch service message', fallbackValue: null }
@@ -121,7 +122,7 @@ export function useServiceMessages() {
       const result = await withErrorHandling(
         async () => {
           const resp = await api.get(
-            `/api/service-messages/chain/${correlationId}`
+            `${getApiBase()}/service-messages/chain/${correlationId}`
           )
           return (await resp.json()) as CorrelationChainResponse
         },

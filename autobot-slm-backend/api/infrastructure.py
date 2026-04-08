@@ -625,8 +625,17 @@ async def _run_playbook(
             logger.error("Dynamic inventory generation failed: no nodes in DB")
             return
         inventory_path = str(inventory_path_obj)
+
+        # Inject stored SLM secrets so standalone re-deploys receive the same
+        # secrets as the full wizard provisioning flow (#3519, #3778).
+        from services.ansible_secrets import fetch_deploy_secrets
+
+        deploy_secrets = await fetch_deploy_secrets()
+        # Caller-supplied variables take precedence over stored secrets.
+        merged_variables = {**deploy_secrets, **(variables or {})}
+
         cmd = _build_playbook_command(
-            playbook_path, inventory_path, playbook, limit_hosts, variables
+            playbook_path, inventory_path, playbook, limit_hosts, merged_variables
         )
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")

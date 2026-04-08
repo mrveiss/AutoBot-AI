@@ -31,7 +31,7 @@ import re
 import subprocess  # nosec B404 - required for git operations
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -562,7 +562,7 @@ class BugPredictor(_BaseClass):
         stats = self._compute_prediction_stats(assessments)
 
         return PredictionResult(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             total_files=total_files,
             analyzed_files=len(assessments),
             high_risk_count=stats["high_risk_count"],
@@ -1381,7 +1381,7 @@ class BugPredictor(_BaseClass):
         stats = self._compute_prediction_stats(assessments)
 
         result = PredictionResult(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             total_files=total_files,
             analyzed_files=len(assessments),
             high_risk_count=stats["high_risk_count"],

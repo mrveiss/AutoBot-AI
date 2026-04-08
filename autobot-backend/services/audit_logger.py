@@ -35,7 +35,7 @@ import os
 import socket
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -46,6 +46,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.network_constants import NetworkConstants
 from models.task_context import AuditQueryContext
 from type_defs.common import Metadata
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +106,8 @@ class AuditEntry:
     """
 
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    date: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
+    timestamp: float = field(default_factory=lambda: datetime.now(tz=timezone.utc).timestamp())
+    date: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"))
 
     # OWASP Required Fields
     operation: str = ""
@@ -187,7 +188,7 @@ class AuditEntry:
         return self
 
 
-class AuditLogger:
+class AuditLogger(AsyncInitializable):
     """
     Async audit logging service with Redis DB 10 backend
 
@@ -212,6 +213,7 @@ class AuditLogger:
             batch_timeout_seconds: Max time to wait before flushing batch
             fallback_log_dir: Directory for file-based fallback logs
         """
+        super().__init__(component_name="audit_logger")
         self.retention_days = retention_days
         self.batch_size = batch_size
         self.batch_timeout_seconds = batch_timeout_seconds
@@ -227,18 +229,24 @@ class AuditLogger:
         self._batch_lock = asyncio.Lock()
         self._batch_task: Optional[asyncio.Task] = None
 
-        # Fallback logging
+        # Fallback logging — directory creation deferred to _initialize_impl
         self.fallback_log_dir = Path(fallback_log_dir)
-        self.fallback_log_dir.mkdir(parents=True, exist_ok=True)
 
         # Statistics
         self._total_logged = 0
         self._total_failed = 0
         self._redis_failures = 0
 
+    async def _initialize_impl(self) -> bool:
+        """Create fallback log directory (deferred from __init__ to avoid blocking I/O)."""
+        await asyncio.to_thread(self.fallback_log_dir.mkdir, parents=True, exist_ok=True)
         logger.info(
-            f"AuditLogger initialized: VM={self.vm_name} ({self.vm_source}), Retention={retention_days}d"
+            "AuditLogger initialized: VM=%s (%s), Retention=%dd",
+            self.vm_name,
+            self.vm_source,
+            self.retention_days,
         )
+        return True
 
     def _get_vm_name(self) -> str:
         """Determine VM name from IP address"""
@@ -346,7 +354,7 @@ class AuditLogger:
         Issue #665: uses _create_sanitized_entry and _add_to_batch_and_schedule.
         Returns True if logged, False if fallback used.
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         entry = None
 
         try:
@@ -367,7 +375,7 @@ class AuditLogger:
             await self._add_to_batch_and_schedule(entry)
 
             # Track performance
-            log_duration_ms = (datetime.now() - start_time).total_seconds() * 1000
+            log_duration_ms = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
             if log_duration_ms > 5.0:
                 logger.warning(
                     f"Audit logging exceeded 5ms target: {log_duration_ms:.2f}ms"
@@ -489,11 +497,11 @@ class AuditLogger:
         try:
             fallback_file = (
                 self.fallback_log_dir
-                / f"audit_{datetime.now().strftime('%Y-%m-%d')}.jsonl"
+                / f"audit_{datetime.now(tz=timezone.utc).strftime('%Y-%m-%d')}.jsonl"
             )
 
             log_data = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 "fallback_reason": error or "Redis unavailable",
                 "entry": asdict(entry) if entry else None,
             }
@@ -582,7 +590,7 @@ class AuditLogger:
 
             # Default time range: last 24 hours
             if not end_time:
-                end_time = datetime.now()
+                end_time = datetime.now(tz=timezone.utc)
             if not start_time:
                 start_time = end_time - timedelta(days=1)
 
@@ -884,9 +892,9 @@ class AuditLogger:
 
             if audit_db:
                 # Count entries in last 24 hours
-                yesterday = datetime.now() - timedelta(days=1)
+                yesterday = datetime.now(tz=timezone.utc) - timedelta(days=1)
                 date_str = yesterday.strftime("%Y-%m-%d")
-                today_str = datetime.now().strftime("%Y-%m-%d")
+                today_str = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
 
                 yesterday_count = (
                     await audit_db._redis.zcard(f"audit:log:{date_str}")
@@ -919,7 +927,7 @@ class AuditLogger:
             days_to_keep: Override default retention period
         """
         retention = days_to_keep or self.retention_days
-        cutoff_date = datetime.now() - timedelta(days=retention)
+        cutoff_date = datetime.now(tz=timezone.utc) - timedelta(days=retention)
 
         try:
             audit_db = await self._get_audit_db()
@@ -991,11 +999,12 @@ async def get_audit_logger() -> AuditLogger:
     """Get or create global audit logger instance"""
     global _audit_logger
 
-    async with _logger_lock:
-        if _audit_logger is None:
-            _audit_logger = AuditLogger()
-            logger.info("Global audit logger initialized")
-        return _audit_logger
+    if _audit_logger is None:
+        async with _logger_lock:
+            if _audit_logger is None:
+                _audit_logger = AuditLogger()
+                await _audit_logger.initialize()
+    return _audit_logger
 
 
 async def close_audit_logger():

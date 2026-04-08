@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.mcp_dispatch import MCPDispatcher, get_mcp_dispatcher
+from tests.test_helpers import get_test_backend_url
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +32,7 @@ _SAMPLE_TOOL = {
     "description": "Search the knowledge base",
     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}},
     "bridge": "knowledge_mcp",
-    "endpoint": "http://localhost:8001/api/knowledge/mcp/search_knowledge_base",
+    "endpoint": get_test_backend_url() + "/api/knowledge/mcp/search_knowledge_base",
     "features": ["search"],
 }
 
@@ -238,7 +239,7 @@ _ADMIN_TOOL = {
     "description": "List all Redis clients",
     "input_schema": {},
     "bridge": "redis_mcp",
-    "endpoint": "http://localhost:8001/api/redis/mcp/client_list",
+    "endpoint": get_test_backend_url() + "/api/redis/mcp/client_list",
     "features": [],
 }
 

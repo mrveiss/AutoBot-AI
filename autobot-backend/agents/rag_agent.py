@@ -105,6 +105,14 @@ class RAGAgent(StandardizedAgent):
         result = await self.rank_documents(query, documents)
         return {"ranked_documents": result}
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a retrieval-augmented generation assistant. "
+            "Synthesize information from retrieved documents, reformulate queries for clarity, "
+            "rank context by relevance, and integrate knowledge base content into accurate responses."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()

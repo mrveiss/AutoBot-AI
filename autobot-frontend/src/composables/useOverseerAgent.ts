@@ -12,7 +12,8 @@
 
 import { ref, computed, onUnmounted, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { getBackendUrl } from '@/config/ssot-config'
+import { getBackendUrl, getApiBase } from '@/config/ssot-config'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const logger = createLogger('useOverseerAgent')
 
@@ -103,7 +104,6 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
   } = options
 
   // State
-  const isConnected = ref(false)
   const isProcessing = ref(false)
   const currentPlan = ref<OverseerPlan | null>(null)
   const steps = ref<OverseerStep[]>([])
@@ -112,87 +112,48 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
   const error = ref<string | null>(null)
   const streamingOutput = ref<Map<number, string>>(new Map())
 
-  // WebSocket instance
-  let ws: WebSocket | null = null
-  let reconnectAttempts = 0
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null // Issue #821
-  const maxReconnectAttempts = 5
-
-  /**
-   * Get WebSocket URL for overseer endpoint
-   */
+  // Build the overseer WebSocket URL
   const getWebSocketUrl = (): string => {
     const backendUrl = getBackendUrl()
-    // Convert http(s) to ws(s)
     const wsUrl = backendUrl.replace(/^http/, 'ws')
-    return `${wsUrl}/api/overseer/ws/${sessionId}`
+    return `${wsUrl}${getApiBase()}/overseer/ws/${sessionId}`
   }
 
-  /**
-   * Connect to the overseer WebSocket
-   */
-  const connect = (): void => {
-    if (ws?.readyState === WebSocket.OPEN) {
-      logger.debug('Already connected to overseer WebSocket')
-      return
-    }
-
-    const url = getWebSocketUrl()
-    logger.info('Connecting to overseer WebSocket:', url)
-
-    try {
-      ws = new WebSocket(url)
-
-      ws.onopen = () => {
-        isConnected.value = true
-        reconnectAttempts = 0
-        error.value = null
-        logger.info('Connected to overseer WebSocket')
-      }
-
-      ws.onclose = (event) => {
-        isConnected.value = false
-        logger.info('Overseer WebSocket closed:', { code: event.code, reason: event.reason })
-
-        // Auto-reconnect if not a clean close
-        if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
-          reconnectAttempts++
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000) // Issue #821: 10s cap
-          logger.info(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`)
-          reconnectTimer = setTimeout(connect, delay)
-        }
-      }
-
-      ws.onerror = (event) => {
-        logger.error('Overseer WebSocket error:', event)
-        error.value = 'WebSocket connection error'
-        onError?.('WebSocket connection error')
-      }
-
-      ws.onmessage = (event) => {
-        handleMessage(event.data)
-      }
-    } catch (e) {
-      logger.error('Failed to connect to overseer WebSocket:', e)
-      error.value = `Failed to connect: ${e}`
-      onError?.(`Failed to connect: ${e}`)
-    }
-  }
+  // WebSocket managed via useWebSocket composable
+  const {
+    isConnected,
+    send: wsSend,
+    connect,
+    disconnect: wsDisconnect,
+  } = useWebSocket(getWebSocketUrl(), {
+    autoConnect: false,
+    autoReconnect: true,
+    maxReconnectAttempts: 5,
+    reconnectDelay: 1000,
+    maxReconnectDelay: 10000,
+    parseJSON: false,
+    onOpen: () => {
+      error.value = null
+      logger.info('Connected to overseer WebSocket')
+    },
+    onClose: (event) => {
+      logger.info('Overseer WebSocket closed:', { code: event.code, reason: event.reason })
+    },
+    onError: (event) => {
+      logger.error('Overseer WebSocket error:', event)
+      error.value = 'WebSocket connection error'
+      onError?.('WebSocket connection error')
+    },
+    onMessage: (data: string) => {
+      handleMessage(data)
+    },
+  })
 
   /**
    * Disconnect from WebSocket
    */
   const disconnect = (): void => {
-    // Issue #821: Cancel pending reconnect timer to prevent reconnect after unmount
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-    if (ws) {
-      ws.close(1000, 'Client disconnect')
-      ws = null
-    }
-    isConnected.value = false
+    wsDisconnect()
     isProcessing.value = false
   }
 
@@ -381,11 +342,11 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     status.value = 'planning'
 
     // Send query
-    ws?.send(JSON.stringify({
+    wsSend({
       type: 'query',
       query,
       context
-    }))
+    })
 
     logger.info('Submitted query to overseer:', query.substring(0, 100))
   }
@@ -394,7 +355,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    * Cancel current execution
    */
   const cancel = (): void => {
-    ws?.send(JSON.stringify({ type: 'cancel' }))
+    wsSend({ type: 'cancel' })
     isProcessing.value = false
     status.value = 'cancelled'
   }
@@ -403,7 +364,7 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
    * Get status
    */
   const getStatus = (): void => {
-    ws?.send(JSON.stringify({ type: 'status' }))
+    wsSend({ type: 'status' })
   }
 
   // Computed
@@ -424,9 +385,10 @@ export function useOverseerAgent(options: UseOverseerAgentOptions) {
     connect()
   }
 
-  // Cleanup on unmount
+  // useWebSocket registers onUnmounted cleanup automatically;
+  // we also reset isProcessing on unmount
   onUnmounted(() => {
-    disconnect()
+    isProcessing.value = false
   })
 
   return {

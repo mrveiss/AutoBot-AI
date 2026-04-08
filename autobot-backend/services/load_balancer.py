@@ -26,7 +26,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
@@ -121,7 +121,7 @@ class Worker:
         self.current_load = max(0, self.current_load - 1)
         self.total_tasks_completed += 1
         self.consecutive_failures = 0
-        self.last_success = datetime.now()
+        self.last_success = datetime.now(tz=timezone.utc)
         # Close circuit breaker on success
         if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
             self.circuit_breaker_state = CircuitBreakerState.CLOSED
@@ -138,7 +138,7 @@ class Worker:
         # Open circuit breaker if threshold reached
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.circuit_breaker_state = CircuitBreakerState.OPEN
-            self.circuit_open_until = datetime.now() + timedelta(
+            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(
                 seconds=circuit_breaker_timeout
             )
             self.status = WorkerStatus.ERROR
@@ -150,7 +150,7 @@ class Worker:
     def check_circuit_breaker_recovery(self):
         """Check if circuit breaker can transition from OPEN to HALF_OPEN"""
         if self.circuit_breaker_state == CircuitBreakerState.OPEN:
-            if self.circuit_open_until and datetime.now() >= self.circuit_open_until:
+            if self.circuit_open_until and datetime.now(tz=timezone.utc) >= self.circuit_open_until:
                 self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
                 logger.info(
                     f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests"
@@ -162,7 +162,7 @@ class Worker:
         Returns:
             True if circuit breaker was closed (status changed significantly).
         """
-        self.last_health_check = datetime.now()
+        self.last_health_check = datetime.now(tz=timezone.utc)
         self.status = WorkerStatus.ONLINE
         self.consecutive_failures = 0
 
@@ -182,13 +182,13 @@ class Worker:
             circuit_breaker_threshold: Number of failures before opening circuit
             circuit_breaker_timeout: Seconds before circuit can attempt recovery
         """
-        self.last_health_check = datetime.now()
+        self.last_health_check = datetime.now(tz=timezone.utc)
         self.consecutive_failures += 1
 
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.status = WorkerStatus.ERROR
             self.circuit_breaker_state = CircuitBreakerState.OPEN
-            self.circuit_open_until = datetime.now() + timedelta(
+            self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(
                 seconds=circuit_breaker_timeout
             )
         else:
@@ -209,7 +209,7 @@ class Worker:
             "circuit_breaker_state": self.circuit_breaker_state.value,
             "current_load": self.current_load,
             "reason": reason,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     def to_dict(self) -> Metadata:

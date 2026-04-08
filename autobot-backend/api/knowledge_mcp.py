@@ -22,8 +22,8 @@ from pydantic import BaseModel, Field
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from config import config as global_config_manager
 from constants.model_constants import ModelConstants
+from dependencies import get_config
 from knowledge_base import KnowledgeBase
 from type_defs.common import Metadata
 from utils.service_registry import get_service_url
@@ -40,13 +40,15 @@ def get_knowledge_base():
     """Get or create knowledge base instance with Redis vector store.
 
     Issue #395: Added thread-safe lazy initialization with double-check locking.
+    Issue #3374: Replaced direct global_config_manager import with get_config()
+    DI provider so tests can override config via dependency_overrides.
     """
     global knowledge_base
     if knowledge_base is None:
         with _knowledge_base_lock:
             # Double-check after acquiring lock to prevent race condition
             if knowledge_base is None:
-                knowledge_base = KnowledgeBase(config_manager=global_config_manager)
+                knowledge_base = KnowledgeBase(config_manager=get_config())
     return knowledge_base
 
 
@@ -71,9 +73,7 @@ def _get_chat_ollama():
         return None
 
     try:
-        from config import config as cfg
-
-        llm_config = cfg.get_llm_config()
+        llm_config = get_config().get_llm_config()
         model = ModelConstants.DEFAULT_OLLAMA_MODEL
         base_url = llm_config.get("ollama", {}).get(
             "base_url", get_service_url("ollama")

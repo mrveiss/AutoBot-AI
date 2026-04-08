@@ -164,6 +164,14 @@ class EnhancedSystemCommandsAgent(StandardizedAgent):
         result = self.validate_command_safety(command)
         return {"is_safe": result, "command": command}
 
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are a secure system commands assistant. "
+            "Generate safe, validated shell commands for system operations and administration. "
+            "Always refuse dangerous or destructive commands outside the allowed set."
+        )
+
     def get_capabilities(self) -> List[str]:
         """Return list of capabilities this agent supports."""
         return self.capabilities.copy()

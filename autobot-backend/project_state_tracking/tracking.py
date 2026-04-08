@@ -12,8 +12,10 @@ Part of Issue #381 - God Class Refactoring
 import asyncio
 import functools
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
+
+from constants.ttl_constants import TTL_24_HOURS
 
 from .types import REDIS_METRIC_KEYS, SIGNIFICANT_INTERACTIONS
 
@@ -30,13 +32,13 @@ async def track_error_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         error_key = f"{REDIS_METRIC_KEYS['error_count']}:{current_hour.timestamp()}"
 
         # Issue #379: Batch Redis operations using pipeline
         async with redis_client.pipeline() as pipe:
             await pipe.incr(error_key)
-            await pipe.expire(error_key, 86400)  # Expire after 24 hours
+            await pipe.expire(error_key, TTL_24_HOURS)  # Expire after 24 hours
             await pipe.execute()
 
     except Exception as e:
@@ -54,7 +56,7 @@ async def track_api_call_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         api_key = f"{REDIS_METRIC_KEYS['api_calls']}:{current_hour.timestamp()}"
         endpoint_key = f"autobot:metrics:endpoints:{endpoint}:calls"
 
@@ -62,10 +64,10 @@ async def track_api_call_to_redis(
         async with redis_client.pipeline() as pipe:
             # Increment API call count for this hour
             await pipe.incr(api_key)
-            await pipe.expire(api_key, 86400)  # Expire after 24 hours
+            await pipe.expire(api_key, TTL_24_HOURS)  # Expire after 24 hours
             # Track specific endpoint stats
             await pipe.incr(endpoint_key)
-            await pipe.expire(endpoint_key, 86400)
+            await pipe.expire(endpoint_key, TTL_24_HOURS)
             await pipe.execute()
 
         logger.debug("API call tracked: %s %s -> %s", method, endpoint, response_status)
@@ -85,7 +87,7 @@ async def track_user_interaction_to_redis(
         if not redis_client:
             return
 
-        current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
+        current_hour = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
         interaction_key = (
             f"{REDIS_METRIC_KEYS['user_interactions']}:{current_hour.timestamp()}"
         )
@@ -95,10 +97,10 @@ async def track_user_interaction_to_redis(
         async with redis_client.pipeline() as pipe:
             # Increment user interaction count for this hour
             await pipe.incr(interaction_key)
-            await pipe.expire(interaction_key, 86400)  # Expire after 24 hours
+            await pipe.expire(interaction_key, TTL_24_HOURS)  # Expire after 24 hours
             # Track interaction types
             await pipe.incr(type_key)
-            await pipe.expire(type_key, 86400)
+            await pipe.expire(type_key, TTL_24_HOURS)
             await pipe.execute()
 
         logger.debug("User interaction tracked: %s by %s", interaction_type, user_id)

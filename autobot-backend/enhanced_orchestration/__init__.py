@@ -13,6 +13,18 @@ Provides advanced orchestration system with improved agent coordination.
 """
 
 from .execution_strategies import ExecutionStrategyHandler
+from .orchestrator import (
+    EnhancedMultiAgentOrchestrator,
+    create_and_execute_workflow,
+    enhanced_orchestrator,
+)
+from .success_criteria import (
+    CriteriaResult,
+    EvaluationResult,
+    SuccessCriteria,
+    SuccessCriteriaEvaluator,
+    SuccessCriteriaType,
+)
 from .types import (
     FALLBACK_TIERS,
     AgentCapability,
@@ -35,4 +47,14 @@ __all__ = [
     "ExecutionStrategyHandler",
     # Workflow planner
     "WorkflowPlanner",
+    # Issue #3293: success criteria
+    "SuccessCriteriaType",
+    "SuccessCriteria",
+    "CriteriaResult",
+    "EvaluationResult",
+    "SuccessCriteriaEvaluator",
+    # Issue #3393: orchestrator moved from enhanced_multi_agent_orchestrator.py
+    "EnhancedMultiAgentOrchestrator",
+    "enhanced_orchestrator",
+    "create_and_execute_workflow",
 ]

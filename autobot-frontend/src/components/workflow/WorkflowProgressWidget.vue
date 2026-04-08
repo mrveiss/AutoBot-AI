@@ -80,6 +80,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { apiService } from '@/services/api'
+import { getApiBase } from '@/config/ssot-config'
 
 const { t } = useI18n()
 
@@ -127,7 +128,7 @@ const loadWorkflowData = async () => {
   if (!props.workflowId) return
 
   try {
-    const response = await apiService.get(`/api/workflow/workflow/${props.workflowId}`)
+    const response = await apiService.get(`${getApiBase()}/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = response.workflow
     workflowSteps.value = response.workflow.steps || []
   } catch (error) {
@@ -152,7 +153,7 @@ const cancelWorkflow = async () => {
   if (!confirm(t('workflow.progress.cancelConfirm'))) return
 
   try {
-    await apiService.delete(`/api/workflow/workflow/${props.workflowId}`)
+    await apiService.delete(`${getApiBase()}/workflow/workflow/${props.workflowId}`)
     activeWorkflow.value = null
     emit('workflow-cancelled', props.workflowId)
   } catch (error) {

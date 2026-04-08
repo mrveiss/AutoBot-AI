@@ -10,7 +10,7 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Awaitable, Callable, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_WORKFLOW_NOT_FOUND
 from event_manager import event_manager
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
@@ -110,7 +111,7 @@ async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
         "workflow_id": ctx.workflow_id,
         "step_id": ctx.step["step_id"],
         "agent_type": "knowledge_manager",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     await kb.add_document(content, metadata)
@@ -327,7 +328,7 @@ def _prepare_workflow_data(
         "steps": [],
         "current_step": 0,
         "status": "planned",
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "workflow_start_time": time.time(),
         "estimated_duration": workflow_response.get("estimated_duration"),
         "agents_involved": workflow_response.get("agents_involved", []),
@@ -483,7 +484,7 @@ async def get_workflow_details(
     Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
         # Create a copy to avoid race conditions
         workflow = dict(active_workflows[workflow_id])
@@ -504,7 +505,7 @@ async def get_workflow_status(
 
     Issue #744: Requires admin authentication."""
     if workflow_id not in active_workflows:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     workflow = active_workflows[workflow_id]
     current_step = workflow.get("current_step", 0)
@@ -594,7 +595,7 @@ async def approve_workflow_step(
     Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     approval_key = f"{workflow_id}_{approval.step_id}"
 
@@ -850,7 +851,7 @@ async def _execute_step_with_approval(
 
     async with _workflows_lock:
         step["status"] = "completed"
-        step["completed_at"] = datetime.now().isoformat()
+        step["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     return True
 
@@ -872,7 +873,7 @@ async def _execute_step_iteration(
     async with _workflows_lock:
         workflow["current_step"] = step_index
         step["status"] = "in_progress"
-        step["started_at"] = datetime.now().isoformat()
+        step["started_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     # Publish step start event (Issue #281: uses helper)
     await _publish_step_started(workflow_id, step, step_index, len(steps))
@@ -898,7 +899,7 @@ async def _finalize_workflow_completed(
     """
     async with _workflows_lock:
         workflow["status"] = "completed"
-        workflow["completed_at"] = datetime.now().isoformat()
+        workflow["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         workflow_start_time = workflow.get("workflow_start_time")
         workflow_type = workflow.get("classification", "unknown")
 
@@ -1052,11 +1053,11 @@ async def cancel_workflow(
     Issue #744: Requires admin authentication."""
     async with _workflows_lock:
         if workflow_id not in active_workflows:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+            raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
         workflow = active_workflows[workflow_id]
         workflow["status"] = "cancelled"
-        workflow["cancelled_at"] = datetime.now().isoformat()
+        workflow["cancelled_at"] = datetime.now(tz=timezone.utc).isoformat()
         user_message = workflow.get("user_message", "")
 
     # Cancel any pending approvals (thread-safe)
@@ -1088,7 +1089,7 @@ async def get_pending_approvals(
 
     Issue #744: Requires admin authentication."""
     if workflow_id not in active_workflows:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     workflow = active_workflows[workflow_id]
     pending_steps = []

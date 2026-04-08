@@ -17,6 +17,7 @@ import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -160,7 +161,7 @@ async function loadFactCount(categoryId: string): Promise<void> {
   isLoadingFactCount.value = true
   try {
     const response = await apiClient.get(
-      `/api/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
+      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts?limit=1`
     )
     const data = await parseApiResponse(response)
     factCount.value = data?.total_count ?? 0
@@ -181,7 +182,7 @@ async function saveChanges(): Promise<void> {
 
   try {
     const response = await apiClient.put(
-      `/api/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
+      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`,
       formData.value
     )
     const data = await parseApiResponse(response)
@@ -213,7 +214,7 @@ async function deleteCategory(): Promise<void> {
 
   try {
     const response = await apiClient.delete(
-      `/api/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
+      `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(props.category.id)}`
     )
     const data = await parseApiResponse(response)
 

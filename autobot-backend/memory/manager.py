@@ -9,16 +9,19 @@ import asyncio
 import gc
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from .agent_diary import AgentDiaryService
 from .cache import LRUCacheManager
 from .enums import MemoryCategory, StorageStrategy, TaskPriority, TaskStatus
+from .essential_story import EssentialStoryGenerator
 from .models import MemoryEntry, TaskExecutionRecord
 from .monitor import MemoryMonitor
 from .protocols import ICacheManager, IGeneralStorage, ITaskStorage
 from .storage import GeneralStorage, TaskStorage
+from .working_memory import WorkingMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +59,7 @@ class UnifiedMemoryManager:
         ...     task_name="Process Document",
         ...     status=TaskStatus.PENDING,
         ...     priority=TaskPriority.HIGH,
-        ...     created_at=datetime.now()
+        ...     created_at=datetime.now(tz=timezone.utc)
         ... )
         >>> await manager.log_task(record)
 
@@ -119,6 +122,13 @@ class UnifiedMemoryManager:
         # Database initialization flag and lock (thread-safe lazy initialization)
         self._initialized = False
         self._init_lock = asyncio.Lock()
+
+        # Session-scoped short-term memory (Redis-backed, eagerly created)
+        self._working_memory: WorkingMemoryService = WorkingMemoryService()
+
+        # Lazily-instantiated subsystems
+        self._essential_story: Optional[EssentialStoryGenerator] = None
+        self._agent_diary: Optional[AgentDiaryService] = None
 
         logger.info("Unified Memory Manager created at %s", self.db_path)
 
@@ -327,7 +337,7 @@ class UnifiedMemoryManager:
             category=category,
             content=content,
             metadata=metadata or {},
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             reference_path=reference_path,
             embedding=embedding,
         )
@@ -545,6 +555,41 @@ class UnifiedMemoryManager:
             return self._store_cached(data)
         else:
             raise ValueError(f"Unknown storage strategy: {strategy}")
+
+    # ========================================================================
+    # MEMORY SUBSYSTEM PROPERTIES
+    # Agents access all three subsystems via these properties so they
+    # never need to import WorkingMemoryService, EssentialStoryGenerator,
+    # or AgentDiaryService directly.
+    # ========================================================================
+
+    @property
+    def working_memory(self) -> WorkingMemoryService:
+        """Redis-backed session-scoped short-term memory (eager, TTL-backed).
+
+        Instantiated at construction time; safe to call immediately.
+        """
+        return self._working_memory
+
+    @property
+    def essential_story(self) -> EssentialStoryGenerator:
+        """Always-loaded compact memory summary generator (lazy-init).
+
+        First access constructs the instance; subsequent accesses are free.
+        """
+        if self._essential_story is None:
+            self._essential_story = EssentialStoryGenerator()
+        return self._essential_story
+
+    @property
+    def agent_diary(self) -> AgentDiaryService:
+        """Per-agent cross-session journal backed by the knowledge base (lazy-init).
+
+        First access constructs the instance; subsequent accesses are free.
+        """
+        if self._agent_diary is None:
+            self._agent_diary = AgentDiaryService()
+        return self._agent_diary
 
     # ========================================================================
     # STATISTICS & MONITORING

@@ -9,6 +9,7 @@ import { ref, computed } from 'vue'
 import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for useConversationFiles
 const logger = createLogger('useConversationFiles')
@@ -95,7 +96,7 @@ export function useConversationFiles(sessionId: string) {
     return result
   })
 
-  const API = `/api/conversation-files/conversation/${sessionId}`
+  const API = `${getApiBase()}/conversation-files/conversation/${sessionId}`
 
   const loadFiles = async (): Promise<void> => {
     if (!sessionId) {
@@ -107,7 +108,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
 
     try {
-      const response = await api.get(`/api/conversation-files/conversation/${sessionId}/list`)
+      const response = await api.get(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
       // Issue #156 Fix: Call .json() to get data from Response
       const data = await response.json()
 
@@ -152,7 +153,7 @@ export function useConversationFiles(sessionId: string) {
       })
 
       const response = await api.post(
-        `/api/conversation-files/conversation/${sessionId}/upload`,
+        `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`,
         formData,
         {
           headers: {
@@ -202,7 +203,7 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
 
     try {
-      await api.delete(`/api/conversation-files/conversation/${sessionId}/files/${fileId}`)
+      await api.delete(`${getApiBase()}/conversation-files/conversation/${sessionId}/files/${fileId}`)
 
       // Remove file from local state
       files.value = files.value.filter(f => f.file_id !== fileId)
@@ -229,7 +230,7 @@ export function useConversationFiles(sessionId: string) {
 
     try {
       const response = await api.get(
-        `/api/conversation-files/conversation/${sessionId}/download/${fileId}`,
+        `${getApiBase()}/conversation-files/conversation/${sessionId}/download/${fileId}`,
         { responseType: 'blob' }
       )
 
@@ -274,7 +275,7 @@ export function useConversationFiles(sessionId: string) {
 
       // For previewable types, open preview URL
       if (isPreviewable(file.mime_type)) {
-        const previewUrl = `/api/conversation-files/conversation/${sessionId}/preview/${fileId}`
+        const previewUrl = `${getApiBase()}/conversation-files/conversation/${sessionId}/preview/${fileId}`
         window.open(previewUrl, '_blank')
       } else {
         // For non-previewable types, download instead

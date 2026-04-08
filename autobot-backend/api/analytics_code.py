@@ -10,7 +10,7 @@ Extracted from analytics.py to maintain <20 functions per file
 import asyncio
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -162,7 +162,7 @@ async def get_code_quality_assessment(
         "complexity": 85,
         "security": 75,
         "performance": 80,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     # If we have cached analysis, use it

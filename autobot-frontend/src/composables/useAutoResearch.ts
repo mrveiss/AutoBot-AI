@@ -7,6 +7,7 @@ import { useApi } from './useApi'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAutoResearch')
 
@@ -120,7 +121,7 @@ export function useAutoResearch() {
       if (params?.limit != null) query.set('limit', String(params.limit))
       if (params?.offset != null) query.set('offset', String(params.offset))
       if (params?.state) query.set('state', params.state)
-      const response = await api.get(`/api/autoresearch/experiments?${query}`)
+      const response = await api.get(`${getApiBase()}/autoresearch/experiments?${query}`)
       experiments.value = response.experiments ?? []
     } catch (err) {
       const msg = extractApiErrorMessage(err, 'Failed to fetch experiments')
@@ -134,7 +135,7 @@ export function useAutoResearch() {
 
   async function fetchStats(): Promise<void> {
     try {
-      const response = await api.get('/api/autoresearch/experiments/stats')
+      const response = await api.get(`${getApiBase()}/autoresearch/experiments/stats`)
       stats.value = response
     } catch (err) {
       const msg = extractApiErrorMessage(err, 'Failed to fetch experiment stats')
@@ -148,7 +149,7 @@ export function useAutoResearch() {
 
   async function fetchOptimizerStatus(): Promise<void> {
     try {
-      const response = await api.get('/api/autoresearch/prompt-optimizer/status')
+      const response = await api.get(`${getApiBase()}/autoresearch/prompt-optimizer/status`)
       optimizerStatus.value = response.session ?? null
     } catch (err) {
       const msg = extractApiErrorMessage(err, 'Failed to fetch optimizer status')
@@ -162,7 +163,7 @@ export function useAutoResearch() {
     agentName: string,
     maxRounds: number = 3,
   ): Promise<void> {
-    await api.post('/api/autoresearch/prompt-optimizer/start', {
+    await api.post(`${getApiBase()}/autoresearch/prompt-optimizer/start`, {
       agent_name: agentName,
       max_rounds: maxRounds,
     })
@@ -170,13 +171,13 @@ export function useAutoResearch() {
   }
 
   async function cancelOptimization(): Promise<void> {
-    await api.post('/api/autoresearch/prompt-optimizer/cancel')
+    await api.post(`${getApiBase()}/autoresearch/prompt-optimizer/cancel`)
     await fetchOptimizerStatus()
   }
 
   async function fetchVariants(sessionId: string): Promise<void> {
     const response = await api.get(
-      `/api/autoresearch/prompt-optimizer/variants/${sessionId}`,
+      `${getApiBase()}/autoresearch/prompt-optimizer/variants/${sessionId}`,
     )
     variants.value = response.variants ?? []
   }
@@ -188,7 +189,7 @@ export function useAutoResearch() {
     comment: string = '',
   ): Promise<void> {
     await api.post(
-      `/api/autoresearch/prompt-optimizer/variants/${variantId}/score?session_id=${sessionId}`,
+      `${getApiBase()}/autoresearch/prompt-optimizer/variants/${variantId}/score?session_id=${sessionId}`,
       { score, comment },
     )
   }
@@ -196,7 +197,7 @@ export function useAutoResearch() {
   // --- Approvals ---
 
   async function fetchPendingApprovals(): Promise<void> {
-    const response = await api.get('/api/autoresearch/approvals/pending')
+    const response = await api.get(`${getApiBase()}/autoresearch/approvals/pending`)
     pendingApprovals.value = response.approvals ?? []
   }
 
@@ -205,7 +206,7 @@ export function useAutoResearch() {
     experimentId: string,
   ): Promise<void> {
     await api.post(
-      `/api/autoresearch/approvals/${sessionId}/${experimentId}`,
+      `${getApiBase()}/autoresearch/approvals/${sessionId}/${experimentId}`,
       { decision: 'approved' },
     )
     await fetchPendingApprovals()
@@ -216,7 +217,7 @@ export function useAutoResearch() {
     experimentId: string,
   ): Promise<void> {
     await api.post(
-      `/api/autoresearch/approvals/${sessionId}/${experimentId}`,
+      `${getApiBase()}/autoresearch/approvals/${sessionId}/${experimentId}`,
       { decision: 'rejected' },
     )
     await fetchPendingApprovals()
@@ -226,14 +227,14 @@ export function useAutoResearch() {
 
   async function fetchInsights(minConfidence: number = 0): Promise<void> {
     const response = await api.get(
-      `/api/autoresearch/insights?min_confidence=${minConfidence}`,
+      `${getApiBase()}/autoresearch/insights?min_confidence=${minConfidence}`,
     )
     insights.value = response.insights ?? []
   }
 
   async function searchInsights(query: string): Promise<void> {
     const response = await api.get(
-      `/api/autoresearch/insights/search?q=${encodeURIComponent(query)}`,
+      `${getApiBase()}/autoresearch/insights/search?q=${encodeURIComponent(query)}`,
     )
     insights.value = response.insights ?? []
   }

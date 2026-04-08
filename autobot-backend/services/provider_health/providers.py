@@ -15,6 +15,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
+from constants.model_constants import ANTHROPIC_CLAUDE3_HAIKU_DATED
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +277,7 @@ class AnthropicHealth(BaseProviderHealth):
 
             # Minimal validation payload (count_tokens is free)
             payload = {
-                "model": "claude-3-haiku-20240307",
+                "model": ANTHROPIC_CLAUDE3_HAIKU_DATED,
                 "messages": [{"role": "user", "content": "test"}],
             }
 

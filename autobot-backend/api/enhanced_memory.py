@@ -10,7 +10,7 @@ Issue #357: Converted to use AsyncEnhancedMemoryManager to fix blocking I/O in a
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -142,7 +142,7 @@ async def get_memory_statistics(days_back: int = Query(30, ge=1, le=365)):
 
         return {
             "period_days": days_back,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "task_execution": task_stats,
             "markdown_system": markdown_stats,
             "active_tasks": {"count": len(active_tasks), "details": active_tasks},
@@ -231,8 +231,8 @@ async def create_task(request: TaskCreateRequest):
             description=f"{request.task_name}: {request.description}",
             status=TaskStatus.PENDING,
             priority=priority_enum,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(tz=timezone.utc),
+            updated_at=datetime.now(tz=timezone.utc),
             assigned_agent=request.agent_type,
             parent_task_id=request.parent_task_id,
             metadata=request.metadata or {},
@@ -243,7 +243,7 @@ async def create_task(request: TaskCreateRequest):
         return {
             "task_id": task_id,
             "status": "created",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -294,7 +294,7 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
         return {
             "task_id": task_id,
             "status": "updated",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -340,7 +340,7 @@ async def add_markdown_reference(task_id: str, request: MarkdownReferenceRequest
             "markdown_file": request.markdown_file_path,
             "reference_type": request.reference_type,
             "status": "added",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -367,7 +367,7 @@ async def scan_markdown_system():
         return {
             "status": "completed",
             "scan_results": result,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error("Error scanning markdown system: %s", e)
@@ -427,7 +427,7 @@ async def get_document_references(file_path: str):
 
         return {
             "file_path": file_path,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "references": references,
         }
 
@@ -456,7 +456,7 @@ async def get_embedding_cache_stats():
 
         return {
             "cache_size": cache_size,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "status": "operational",
         }
 
@@ -484,7 +484,7 @@ async def cleanup_old_data(days_to_keep: int = Query(90, ge=30, le=365)):
             "status": "completed",
             "cleanup_results": {"retention_days": days_to_keep},
             "days_kept": days_to_keep,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except Exception as e:
@@ -506,7 +506,7 @@ async def get_active_tasks():
         return {
             "count": len(active_tasks),
             "active_tasks": active_tasks,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except Exception as e:

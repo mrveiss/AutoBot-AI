@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 import heapq
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from uuid import uuid4
@@ -227,7 +227,7 @@ class WorkflowQueue:
         """Add workflow to queue with priority scoring"""
         priority_score = self._calculate_priority_score(workflow)
         queued_workflow = QueuedWorkflow(
-            workflow=workflow, priority_score=priority_score, queued_at=datetime.now()
+            workflow=workflow, priority_score=priority_score, queued_at=datetime.now(tz=timezone.utc)
         )
 
         heapq.heappush(self._queue, queued_workflow)
@@ -315,7 +315,7 @@ class WorkflowQueue:
         base_score = workflow.priority.value * WorkflowConfig.PRIORITY_BASE_MULTIPLIER
 
         # Add urgency based on scheduled time
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         if workflow.scheduled_time <= now:
             # Overdue workflows get bonus
             overdue_minutes = (now - workflow.scheduled_time).total_seconds() / 60
@@ -630,7 +630,7 @@ class WorkflowScheduler:
             scheduled_time=params["scheduled_time"],
             priority=params["priority"],
             status=WorkflowStatus.SCHEDULED,
-            created_at=datetime.now(),
+            created_at=datetime.now(tz=timezone.utc),
             complexity=params["complexity"],
             user_id=params["user_id"],
             variables=params["variables"] or {},
@@ -764,7 +764,7 @@ class WorkflowScheduler:
 
     def get_scheduler_status(self) -> Dict[str, Any]:
         """Get current scheduler status"""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         status_counts = {}
         overdue_count = 0
@@ -803,7 +803,7 @@ class WorkflowScheduler:
 
     async def _process_scheduled_workflows(self) -> None:
         """Move due scheduled workflows to queue"""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
 
         for workflow in list(self.scheduled_workflows.values()):
             if (
@@ -856,7 +856,7 @@ class WorkflowScheduler:
             retry_delay = min(
                 300 * (2**workflow.retry_count), 3600
             )  # Exponential backoff, max 1 hour
-            workflow.scheduled_time = datetime.now() + timedelta(seconds=retry_delay)
+            workflow.scheduled_time = datetime.now(tz=timezone.utc) + timedelta(seconds=retry_delay)
             workflow.status = WorkflowStatus.SCHEDULED
             logger.info(
                 f"Rescheduling workflow {workflow.id} for retry {workflow.retry_count}"
@@ -878,7 +878,7 @@ class WorkflowScheduler:
 
     def _parse_time_string(self, time_str: str) -> datetime:
         """Parse various time string formats"""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         time_str = time_str.lower().strip()
 
         # Handle relative times

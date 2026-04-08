@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Dict, List
 
-from enhanced_orchestrator import get_orchestrator
+from orchestrator import get_orchestrator_sync as get_orchestrator
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from services.workflow_automation import (

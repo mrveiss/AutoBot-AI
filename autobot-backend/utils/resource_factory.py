@@ -85,9 +85,9 @@ class ResourceFactory:
         The request parameter is kept for backward compatibility but no longer
         used for app.state caching — the singleton handles its own lifecycle.
         """
-        from enhanced_orchestrator import get_orchestrator
+        from orchestrator import get_orchestrator_sync
 
-        return get_orchestrator()
+        return get_orchestrator_sync()
 
     @staticmethod
     async def get_chat_history_manager(request: Request = None):
@@ -119,6 +119,7 @@ class ResourceFactory:
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),
             )
+            await chm.initialize()
 
             # Cache in app state if available
             if request is not None:

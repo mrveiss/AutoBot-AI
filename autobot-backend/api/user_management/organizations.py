@@ -20,6 +20,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
+from autobot_shared.models.pagination import PaginationParams
 from user_management.services import OrganizationService
 from user_management.services.organization_service import (
     DuplicateOrganizationError,
@@ -135,16 +136,15 @@ class OrganizationStatsResponse(BaseModel):
     ],
 )
 async def list_organizations(
-    limit: int = Query(50, ge=1, le=100, description="Maximum number of organizations"),
-    offset: int = Query(0, ge=0, description="Number of organizations to skip"),
+    pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(None, description="Search by name or slug"),
     include_inactive: bool = Query(False, description="Include inactive organizations"),
     org_service: OrganizationService = Depends(get_organization_service),
 ):
     """List organizations with pagination."""
     orgs, total = await org_service.list_organizations(
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         search=search,
         include_inactive=include_inactive,
     )
@@ -152,8 +152,8 @@ async def list_organizations(
     return OrganizationListResponse(
         organizations=[_org_to_response(org) for org in orgs],
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
 
 

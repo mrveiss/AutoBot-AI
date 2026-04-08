@@ -13,6 +13,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Set
 
+from constants.status_enums import TaskStatus
+
 
 class AgentCapability(Enum):
     """Agent capabilities for dynamic task assignment."""
@@ -82,7 +84,7 @@ class AgentInteraction:
     interaction_type: str  # request, response, notification, collaboration
     message: Dict[str, Any]
     context: Dict[str, Any]
-    outcome: str = "pending"
+    outcome: str = TaskStatus.PENDING.value
 
 
 @dataclass
@@ -96,7 +98,7 @@ class WorkflowStep:
     required_capabilities: Set[AgentCapability]
     estimated_duration: float
     dependencies: List[str] = field(default_factory=list)
-    status: str = "pending"
+    status: str = TaskStatus.PENDING.value
     result: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -110,6 +112,6 @@ class WorkflowPlan:
     steps: List[WorkflowStep]
     created_at: datetime
     estimated_total_duration: float
-    status: str = "pending"
+    status: str = TaskStatus.PENDING.value
     approval_required: bool = True
     approved: bool = False

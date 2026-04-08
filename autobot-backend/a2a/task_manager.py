@@ -16,10 +16,13 @@ State machine:
   WORKING   → CANCELLED
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from autobot_shared.ssot_config import config
 
 from .tracing import TraceContext, new_trace_id
 from .types import Task, TaskArtifact, TaskState, TaskStatus
@@ -39,6 +42,7 @@ class TaskManager:
 
     def __init__(self) -> None:
         self._tasks: Dict[str, Task] = {}
+        self._eviction_handles: Dict[str, asyncio.Task] = {}
 
     def create_task(
         self,
@@ -116,6 +120,8 @@ class TaskManager:
                 {"state": state.value, "message": message},
             )
         logger.debug("A2A task %s → %s", task_id, state.value)
+        if state in _TERMINAL_STATES:
+            self._schedule_eviction(task_id)
         return task
 
     def add_artifact(self, task_id: str, artifact: TaskArtifact) -> bool:
@@ -144,7 +150,50 @@ class TaskManager:
         if task.trace_context:
             task.trace_context.record("task.cancelled")
         logger.info("A2A task cancelled: %s", task_id)
+        self._schedule_eviction(task_id)
         return True
+
+    def _schedule_eviction(self, task_id: str) -> None:
+        """Schedule removal of *task_id* from *_tasks* after the configured TTL.
+
+        Issue #3823: Prevents unbounded growth of _tasks by evicting terminal
+        tasks after AUTOBOT_A2A_TASK_TTL_SECONDS (default 60 s).  The task
+        remains queryable during the TTL window so callers can still poll the
+        final status.
+
+        If an eviction is already scheduled for this task_id (e.g. cancel_task
+        called after update_state already triggered it) the earlier handle is
+        cancelled and a new one is started to reset the clock.
+        """
+        ttl = config.timeout.a2a_task_ttl
+
+        # Cancel any pre-existing eviction handle for this task
+        existing = self._eviction_handles.pop(task_id, None)
+        if existing and not existing.done():
+            existing.cancel()
+
+        async def _evict_after_delay() -> None:
+            await asyncio.sleep(ttl)
+            removed = self._tasks.pop(task_id, None)
+            self._eviction_handles.pop(task_id, None)
+            if removed is not None:
+                logger.debug(
+                    "A2A task evicted after TTL %.0fs: %s state=%s",
+                    ttl,
+                    task_id,
+                    removed.status.state.value,
+                )
+
+        try:
+            handle = asyncio.get_running_loop().create_task(_evict_after_delay())
+            self._eviction_handles[task_id] = handle
+        except RuntimeError:
+            # No running event loop (e.g. unit tests using sync calls).
+            # Eviction will not be scheduled — the store still bounds itself
+            # via explicit get_task() returning None after eviction in async use.
+            logger.debug(
+                "A2A task eviction skipped (no event loop): %s", task_id
+            )
 
     def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
         """Return the full trace event log for a task, or None if not found."""

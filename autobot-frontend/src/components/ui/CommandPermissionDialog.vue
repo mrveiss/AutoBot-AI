@@ -137,6 +137,7 @@ import { useModal } from '@/composables/useModal';
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import { createLogger } from '@/utils/debugUtils';
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('CommandPermissionDialog');
 
@@ -202,7 +203,7 @@ export default {
 
       // REFACTORED: Use AppConfig for dynamic API URL resolution
       const approvalUrl = await appConfig.getApiUrl(
-        `/api/agent-terminal/sessions/${props.terminalSessionId}/approve`
+        `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`
       );
 
       // Send approval using direct fetch
@@ -278,7 +279,7 @@ export default {
         if (props.terminalSessionId) {
           // Send denial to agent terminal API
           const response = await apiService.post(
-            `/api/agent-terminal/sessions/${props.terminalSessionId}/approve`,
+            `${getApiBase()}/agent-terminal/sessions/${props.terminalSessionId}/approve`,
             {
               approved: false,
               user_id: 'web_user'
@@ -326,7 +327,7 @@ export default {
 
       // Send comment to backend
       // Issue #552: Fixed missing /api prefix
-      const response = await apiService.post('/api/chat/direct', {
+      const response = await apiService.post(`${getApiBase()}/chat/direct`, {
         message: `Command feedback: ${commentText.value}`,
         chat_id: props.chatId
       });

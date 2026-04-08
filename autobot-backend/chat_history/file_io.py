@@ -25,6 +25,8 @@ from typing import Optional
 
 import aiofiles
 
+from constants.ttl_constants import TTL_24_HOURS
+
 logger = logging.getLogger(__name__)
 
 # Issue #718: Dedicated thread pool for chat file I/O operations
@@ -162,7 +164,7 @@ class FileIOMixin:
                     json.dumps(self.history),
                 )
                 await self._run_in_io_executor(
-                    self.redis_client.expire, "autobot:chat_history", 86400
+                    self.redis_client.expire, "autobot:chat_history", TTL_24_HOURS
                 )  # 1 day TTL
             except Exception as e:
                 logger.error("Error saving chat history to Redis: %s", str(e))

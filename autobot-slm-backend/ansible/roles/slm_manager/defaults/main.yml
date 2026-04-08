@@ -73,7 +73,8 @@ slm_admin_password: ""
 # Main Backend Proxy (#1791)
 # ==========================================================
 # Internal API key shared between SLM and main backend.
-# Set via Ansible Vault or inventory; injected into nginx proxy.
+# REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
+# Injected into nginx proxy headers AND into backend/SLM process environments.
 autobot_internal_api_key: ""
 
 # Host and port for the user-facing AutoBot backend (HTTPS).

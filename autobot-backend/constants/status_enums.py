@@ -36,8 +36,11 @@ class TaskStatus(Enum):
     IN_PROGRESS = "in_progress"
     RUNNING = "running"  # Alias for IN_PROGRESS
     COMPLETED = "completed"
+    PARTIALLY_COMPLETED = "partially_completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+    PAUSED = "paused"
     RETRYING = "retrying"
     BLOCKED = "blocked"
     WAITING = "waiting"

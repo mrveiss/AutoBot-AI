@@ -11,6 +11,7 @@
 import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
+import { getApiBase } from '@/config/ssot-config';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('FeatureFlagsApiClient');
@@ -152,7 +153,7 @@ class FeatureFlagsApiClient {
    * GET /api/admin/feature-flags/status
    */
   async getFeatureFlagsStatus(): Promise<ApiResponse<FeatureFlagsStatus>> {
-    return this.request<FeatureFlagsStatus>('/api/admin/feature-flags/status');
+    return this.request<FeatureFlagsStatus>(`${getApiBase()}/admin/feature-flags/status`);
   }
 
   /**
@@ -164,7 +165,7 @@ class FeatureFlagsApiClient {
     updated_by: string;
     updated_at: string;
   }>> {
-    return this.request('/api/admin/feature-flags/enforcement-mode', {
+    return this.request(`${getApiBase()}/admin/feature-flags/enforcement-mode`, {
       method: 'PUT',
       body: JSON.stringify({ mode }),
     });
@@ -180,7 +181,7 @@ class FeatureFlagsApiClient {
   ): Promise<ApiResponse<{ endpoint: string; mode: EnforcementMode }>> {
     // URL encode the endpoint path
     const encodedEndpoint = encodeURIComponent(endpoint);
-    return this.request(`/api/admin/feature-flags/endpoint/${encodedEndpoint}`, {
+    return this.request(`${getApiBase()}/admin/feature-flags/endpoint/${encodedEndpoint}`, {
       method: 'PUT',
       body: JSON.stringify({ mode }),
     });
@@ -194,7 +195,7 @@ class FeatureFlagsApiClient {
     endpoint: string
   ): Promise<ApiResponse<{ endpoint: string; reverted_to: string }>> {
     const encodedEndpoint = encodeURIComponent(endpoint);
-    return this.request(`/api/admin/feature-flags/endpoint/${encodedEndpoint}`, {
+    return this.request(`${getApiBase()}/admin/feature-flags/endpoint/${encodedEndpoint}`, {
       method: 'DELETE',
     });
   }
@@ -221,7 +222,7 @@ class FeatureFlagsApiClient {
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request<ViolationStatistics>(
-      `/api/admin/access-control/metrics${queryString}`
+      `${getApiBase()}/admin/access-control/metrics${queryString}`
     );
   }
 
@@ -235,7 +236,7 @@ class FeatureFlagsApiClient {
   ): Promise<ApiResponse<EndpointStatistics>> {
     const encodedEndpoint = encodeURIComponent(endpoint);
     return this.request<EndpointStatistics>(
-      `/api/admin/access-control/endpoint/${encodedEndpoint}?days=${days}`
+      `${getApiBase()}/admin/access-control/endpoint/${encodedEndpoint}?days=${days}`
     );
   }
 
@@ -249,7 +250,7 @@ class FeatureFlagsApiClient {
   ): Promise<ApiResponse<UserStatistics>> {
     const encodedUsername = encodeURIComponent(username);
     return this.request<UserStatistics>(
-      `/api/admin/access-control/user/${encodedUsername}?days=${days}`
+      `${getApiBase()}/admin/access-control/user/${encodedUsername}?days=${days}`
     );
   }
 
@@ -258,7 +259,7 @@ class FeatureFlagsApiClient {
    * POST /api/admin/access-control/cleanup
    */
   async cleanupMetrics(): Promise<ApiResponse<{ message: string }>> {
-    return this.request('/api/admin/access-control/cleanup', {
+    return this.request(`${getApiBase()}/admin/access-control/cleanup`, {
       method: 'POST',
     });
   }

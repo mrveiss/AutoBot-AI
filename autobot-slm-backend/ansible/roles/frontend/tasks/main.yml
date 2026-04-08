@@ -77,6 +77,15 @@
       - "--exclude=.git"
   tags: ['frontend', 'deploy']
 
+- name: "Frontend | Fix frontend directory ownership after sync"
+  ansible.builtin.file:
+    path: "{{ frontend_install_dir }}/autobot-frontend"
+    state: directory
+    owner: "{{ frontend_user }}"
+    group: "{{ frontend_group }}"
+    recurse: true
+  tags: ['frontend', 'deploy']
+
 - name: "Frontend | Ensure TLS cert directory exists"
   file:
     path: "{{ frontend_tls_cert_dir }}"

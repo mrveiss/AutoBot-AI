@@ -11,7 +11,7 @@
  * and scheduled update management.
  */
 
-import { ref, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
   type PendingNode,
@@ -66,6 +66,13 @@ const showCodeSourceModal = ref(false)
 const driftReport = ref<FileDriftReport | null>(null)
 const isDriftLoading = ref(false)
 const showDriftDetails = ref(false)
+const selectedDriftComponent = ref('autobot-slm-backend')
+
+// Clear stale results when the user switches to a different component (#3433)
+watch(selectedDriftComponent, () => {
+  driftReport.value = null
+  showDriftDetails.value = false
+})
 
 // =============================================================================
 // Computed Properties
@@ -360,7 +367,7 @@ function describeCron(expression: string): string {
 async function handleCheckDrift(): Promise<void> {
   isDriftLoading.value = true
   try {
-    const result = await codeSync.fetchDrift()
+    const result = await codeSync.fetchDrift(selectedDriftComponent.value)
     if (result) {
       driftReport.value = result
       showDriftDetails.value = true
@@ -573,26 +580,40 @@ onUnmounted(() => {
             Compare checksums between code_source and deployed files to detect manual patches.
           </p>
         </div>
-        <button
-          @click="handleCheckDrift"
-          :disabled="isDriftLoading"
-          class="btn btn-secondary flex items-center gap-2 text-sm"
-        >
-          <svg
-            :class="['w-4 h-4', isDriftLoading ? 'animate-spin' : '']"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div class="flex items-center gap-3">
+          <label for="drift-component-select" class="text-sm text-gray-600 font-medium whitespace-nowrap">Component:</label>
+          <select
+            id="drift-component-select"
+            v-model="selectedDriftComponent"
+            :disabled="isDriftLoading"
+            class="form-select text-sm rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-          {{ isDriftLoading ? 'Checking...' : 'Check Drift' }}
-        </button>
+            <option value="autobot-slm-backend">autobot-slm-backend</option>
+            <option value="autobot-slm-frontend">autobot-slm-frontend</option>
+            <option value="autobot-backend">autobot-backend</option>
+            <option value="autobot-frontend">autobot-frontend</option>
+          </select>
+          <button
+            @click="handleCheckDrift"
+            :disabled="isDriftLoading"
+            class="btn btn-secondary flex items-center gap-2 text-sm"
+          >
+            <svg
+              :class="['w-4 h-4', isDriftLoading ? 'animate-spin' : '']"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+            {{ isDriftLoading ? 'Checking...' : 'Check Drift' }}
+          </button>
+        </div>
       </div>
 
       <!-- Drift result summary -->

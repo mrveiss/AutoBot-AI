@@ -31,7 +31,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -113,7 +113,7 @@ class WorkflowMetricsCollector:
                 "complexity": workflow_data.get("complexity", "unknown"),
                 "total_steps": workflow_data.get("total_steps", 0),
                 "agents_involved": workflow_data.get("agents_involved", []),
-                "start_time": datetime.now(),
+                "start_time": datetime.now(tz=timezone.utc),
                 "completed_steps": 0,
                 "failed_steps": 0,
                 "step_timings": {},
@@ -177,7 +177,7 @@ class WorkflowMetricsCollector:
                     {
                         "step_id": step_id,
                         "error": error,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     }
                 )
 
@@ -241,7 +241,7 @@ class WorkflowMetricsCollector:
         try:
             if workflow_id in self.active_workflows:
                 resource_snapshot = {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "cpu_percent": resource_data.get("cpu_percent", 0),
                     "memory_mb": resource_data.get("memory_mb", 0),
                     "disk_io": resource_data.get("disk_io", {}),
@@ -348,7 +348,7 @@ class WorkflowMetricsCollector:
                 return None
 
             workflow = self.active_workflows[workflow_id]
-            end_time = datetime.now()
+            end_time = datetime.now(tz=timezone.utc)
 
             # Build stats using helper
             stats = self._build_workflow_stats(
@@ -404,7 +404,7 @@ class WorkflowMetricsCollector:
                 metric_type=metric_type,
                 metric_name=metric_name,
                 value=value,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(tz=timezone.utc),
                 labels=labels or {},
                 metadata=metadata or {},
             )
@@ -489,7 +489,7 @@ class WorkflowMetricsCollector:
             if workflow_id in self.active_workflows:
                 workflow = self.active_workflows[workflow_id]
                 current_duration = (
-                    datetime.now() - workflow["start_time"]
+                    datetime.now(tz=timezone.utc) - workflow["start_time"]
                 ).total_seconds() * 1000
 
                 return {
@@ -532,7 +532,7 @@ class WorkflowMetricsCollector:
     def get_performance_summary(self, time_window_hours: int = 24) -> Dict[str, Any]:
         """Get overall performance summary for specified time window"""
         try:
-            cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
+            cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=time_window_hours)
             recent_metrics = [
                 m for m in self.metrics_history if m.timestamp >= cutoff_time
             ]
@@ -587,7 +587,7 @@ class WorkflowMetricsCollector:
                     "aggregated_stats": dict(self.aggregated_stats),
                     "active_workflows": len(self.active_workflows),
                     "total_metrics": len(self.metrics_history),
-                    "export_timestamp": datetime.now().isoformat(),
+                    "export_timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 }
                 return json.dumps(export_data, indent=2, default=str)
             else:

@@ -15,11 +15,6 @@ Security model
 - This allowlist approach replaces the prior denylist, which was trivially
   bypassed via semicolons, &&, shell-newline chaining, python3 -c, eval,
   and many other vectors (#3421).
-- Write-capable executables (apt, yum, dnf, rpm, wget, curl, nmap) are
-  excluded from the allowlist entirely (#3450).
-- git is allowed but restricted to read-only subcommands via an argument
-  guard in _validate_command (#3450).
-- find -exec is blocked to prevent arbitrary command execution (#3450).
 - The node must be ONLINE before a job is accepted.
 - The endpoint requires admin privileges (require_admin dependency).
 - All executions are audit-logged including the command and acting user.
@@ -54,19 +49,20 @@ router = APIRouter(prefix="/nodes", tags=["nodes-execution"])
 
 # Only these executable names (first shlex token) are permitted.
 # Add entries deliberately — omission is the safe default.
-# Write-capable tools (apt, yum, dnf, rpm, wget, curl, nmap) are intentionally
-# absent — see #3450.
 ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
     {
         # Service / status inspection
         "systemctl",
         "journalctl",
         "service",
-        # Network diagnostics (read-only; wget/curl/nmap excluded — write-capable)
+        # Network diagnostics
         "ping",
         "ss",
         "netstat",
         "ip",
+        "nmap",
+        "curl",
+        "wget",
         # Process inspection
         "ps",
         "top",
@@ -76,7 +72,7 @@ ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
         "df",
         "du",
         "lsof",
-        # File inspection (read-only; find -exec is blocked at argument level)
+        # File inspection (read-only; find destructive flags blocked by _validate_find_args)
         "ls",
         "cat",
         "head",
@@ -84,20 +80,22 @@ ALLOWED_EXECUTABLES: frozenset[str] = frozenset(
         "find",
         "stat",
         "file",
-        # Package management (query-only; argument guard in _validate_command
-        # restricts dpkg to -l/-s/-L/-S/--list/--status/--listfiles flags)
+        # Package management (query-only)
         "dpkg",
+        "apt",
+        "rpm",
+        "yum",
+        "dnf",
         # AutoBot-specific helpers
         "autobot-status",
         "autobot-health",
-        # Git (read-only subcommands enforced at argument level — see
-        # _GIT_ALLOWED_SUBCOMMANDS and _validate_command)
+        # Git (subcommand is further validated by _validate_git_subcommand)
         "git",
     }
 )
 
-# Read-only git subcommands.  Any other subcommand (clone, push, fetch with
-# --upload-pack, etc.) is rejected with HTTP 400.
+# Permitted git subcommands (second token after "git").
+# Explicit subcommand is always required — bare "git stash" etc. are rejected.
 _GIT_ALLOWED_SUBCOMMANDS: frozenset[str] = frozenset(
     {
         "status",
@@ -105,32 +103,211 @@ _GIT_ALLOWED_SUBCOMMANDS: frozenset[str] = frozenset(
         "diff",
         "show",
         "branch",
-        "tag",
         "remote",
+        "tag",
         "describe",
-        "shortlog",
         "rev-parse",
         "ls-files",
-        "ls-remote",
-        # stash: only list/show are permitted; sub-subcommand enforced in
-        # _validate_command to block stash pop/drop/clear/push
-        "stash",
+        "stash",  # subcommand for stash is further restricted below
+    }
+)
+
+# For "git stash <op>", the operation token must be one of these read-only ops.
+_GIT_STASH_ALLOWED_OPS: frozenset[str] = frozenset({"list", "show"})
+
+# find flags that perform writes or arbitrary execution.  Any argument token
+# that equals one of these is rejected to preserve the read-only intent of the
+# "find" allowlist entry.  The check is case-sensitive (find flag names are
+# always lowercase on Linux).
+_FIND_BLOCKED_FLAGS: frozenset[str] = frozenset(
+    {
+        "-delete",  # deletes matched files/dirs in-place
+        "-fprint",  # writes matched paths to a named file
+        "-fprint0",  # same as -fprint but NUL-separated
+        "-fprintf",  # formatted write to a named file
+        "-exec",  # executes an arbitrary command per match
+        "-execdir",  # like -exec but changes directory first
+        "-ok",  # interactive -exec (still executes commands)
+        "-okdir",  # interactive -execdir
     }
 )
 
 
+def _validate_find_args(tokens: list[str]) -> None:
+    """Reject ``find`` invocations that carry write or execution flags.
+
+    ``find`` is in ``ALLOWED_EXECUTABLES`` for read-only path enumeration
+    (e.g. ``find /var/log -name "*.log"``).  Several ``find`` primaries
+    cause side effects: ``-delete`` removes matched files, ``-fprint``/
+    ``-fprint0``/``-fprintf`` write paths to an arbitrary file, and
+    ``-exec``/``-execdir``/``-ok``/``-okdir`` run arbitrary commands.
+    All of these are blocked here (#3474).
+
+    Args:
+        tokens: The full token list from shlex.split(), with tokens[0] == "find".
+
+    Raises:
+        HTTPException: HTTP 400 if any blocked flag is present in the argument
+            list.
+    """
+    blocked = [t for t in tokens[1:] if t in _FIND_BLOCKED_FLAGS]
+    if blocked:
+        bad = ", ".join(sorted(blocked))
+        logger.warning(
+            "Command rejected — find contains destructive/exec flag(s): %s", bad
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Command rejected: find flag(s) {bad} are not permitted "
+                "(only read-only find operations are allowed)"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Security: path restrictions for file-read commands
+# ---------------------------------------------------------------------------
+
+# Executables that read arbitrary file paths — require additional argument
+# validation to prevent exposure of secrets, credentials, and system files.
+_FILE_READ_EXECUTABLES: frozenset[str] = frozenset({"cat", "head", "tail"})
+
+# Path prefixes that cat/head/tail must never be allowed to read.
+# Any argument that resolves to (or starts with) one of these prefixes is
+# rejected.  The list is intentionally broad: omission is the safe default.
+_SENSITIVE_PATH_PREFIXES: tuple[str, ...] = (
+    "/etc/",
+    "/etc",  # block bare "/etc" as a directory reference too
+    "/root/",
+    "/root",
+    "/home/",  # home directories contain .ssh, .env, etc.
+    "/proc/",
+    "/sys/",
+    "/run/secrets",
+    "/var/lib/",  # databases, docker volumes, snapd state, etc.
+    "/var/log/auth",  # auth.log / auth.log.* — keep general /var/log/ readable
+    "/boot/",
+    "/snap/",
+)
+
+# Filename patterns (basename only) that are always blocked regardless of
+# directory, because they commonly hold secrets or credentials.
+_SENSITIVE_FILENAME_SUFFIXES: tuple[str, ...] = (
+    ".env",
+    ".key",
+    ".pem",
+    ".crt",
+    ".cert",
+    ".pfx",
+    ".p12",
+    ".secret",
+    ".passwd",
+    ".password",
+    ".credentials",
+    ".token",
+    ".htpasswd",
+    ".netrc",
+    "id_rsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_dsa",
+    "authorized_keys",
+    "known_hosts",
+)
+
+
+def _check_sensitive_path(executable: str, tokens: list[str]) -> None:
+    """Validate that file-read commands do not target sensitive paths.
+
+    Applies only to executables in *_FILE_READ_EXECUTABLES*.  Each argument
+    that looks like a file path (does not start with '-') is normalised with
+    os.path.normpath and then checked against *_SENSITIVE_PATH_PREFIXES* and
+    *_SENSITIVE_FILENAME_SUFFIXES*.
+
+    Raises HTTPException 400 if any argument references a sensitive path.
+    """
+    if executable not in _FILE_READ_EXECUTABLES:
+        return
+
+    for arg in tokens[1:]:
+        # Skip option flags (e.g. -n, --lines=10) and non-path tokens such as
+        # numeric option values (100 in "tail -n 100") or bare words produced
+        # by shlex splitting metachar sequences.  Tokens without any '/' cannot
+        # be file paths, so the absolute-path guard below does not apply.
+        if arg.startswith("-") or "/" not in arg:
+            continue  # skip flags and non-path tokens (option values, metachar-split words)
+
+        # Require absolute paths — relative paths bypass the prefix denylist
+        # because the working directory on the remote host is unpredictable.
+        if not os.path.isabs(arg):
+            logger.warning(
+                "Command rejected — %r argument %r is not an absolute path",
+                executable,
+                arg,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Command rejected: file-read commands must use absolute "
+                    f"paths, got {arg!r}"
+                ),
+            )
+
+        # Normalise to collapse ../ traversal attempts
+        normalised = os.path.normpath(arg)
+
+        # Check prefix denylist
+        for prefix in _SENSITIVE_PATH_PREFIXES:
+            if normalised == prefix.rstrip("/") or normalised.startswith(
+                prefix if prefix.endswith("/") else prefix + "/"
+            ):
+                logger.warning(
+                    "Command rejected — %r targets sensitive path %r (prefix %r)",
+                    executable,
+                    normalised,
+                    prefix,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Command rejected: {executable!r} is not permitted to "
+                        f"read {arg!r} — path is restricted."
+                    ),
+                )
+
+        # Check filename denylist (basename match)
+        basename = os.path.basename(normalised).lower()
+        for suffix in _SENSITIVE_FILENAME_SUFFIXES:
+            if basename == suffix or basename.endswith(suffix):
+                logger.warning(
+                    "Command rejected — %r targets sensitive filename %r (rule %r)",
+                    executable,
+                    normalised,
+                    suffix,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Command rejected: {executable!r} is not permitted to "
+                        f"read {arg!r} — filename matches a restricted pattern."
+                    ),
+                )
+
+
 def _validate_command(script: str) -> str:
-    """Parse *script* and enforce the executable allowlist.
+    """Parse *script* and enforce the executable allowlist and path restrictions.
+
+    For git commands, additionally enforces:
+    - An explicit subcommand must be provided (bare ``git`` alone is rejected).
+    - The subcommand must be in ``_GIT_ALLOWED_SUBCOMMANDS``.
+    - For ``git stash``, an explicit operation (e.g. ``list`` or ``show``) must
+      be provided — bare ``git stash`` with no operation is rejected (#3478).
 
     Returns the normalised first token for logging.
-    Raises HTTPException 400 if the command is empty or the executable is
-    not in ALLOWED_EXECUTABLES.
-
-    Additional per-executable argument guards (#3450):
-    - git: first argument must be in _GIT_ALLOWED_SUBCOMMANDS;
-      'stash' is further restricted to list/show sub-subcommands.
-    - dpkg: first argument must be a read-only query flag.
-    - find: -exec/-execdir flags are rejected.
+    Raises HTTPException 400 if the command is empty, the executable is not in
+    ALLOWED_EXECUTABLES, git-specific subcommand rules are violated, or a
+    file-read command targets a sensitive path.
     """
     try:
         tokens = shlex.split(script)
@@ -152,9 +329,7 @@ def _validate_command(script: str) -> str:
     executable = Path(tokens[0]).name
 
     if executable not in ALLOWED_EXECUTABLES:
-        logger.warning(
-            "Command rejected — executable %r not in allowlist", executable
-        )
+        logger.warning("Command rejected — executable %r not in allowlist", executable)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -163,75 +338,74 @@ def _validate_command(script: str) -> str:
             ),
         )
 
-    # Per-executable argument guards -----------------------------------------
-
     if executable == "git":
-        # Require the first argument to be an allowed read-only subcommand.
-        subcommand = tokens[1] if len(tokens) > 1 else ""
-        if subcommand not in _GIT_ALLOWED_SUBCOMMANDS:
-            logger.warning(
-                "Command rejected — git subcommand %r not in read-only allowlist",
-                subcommand,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Command rejected: git subcommand {subcommand!r} is not "
-                    "permitted. Only read-only subcommands are allowed."
-                ),
-            )
-        # git stash: only list and show are read-only; block pop/drop/clear/push.
-        if subcommand == "stash":
-            stash_op = tokens[2] if len(tokens) > 2 else "list"
-            if stash_op not in ("list", "show"):
-                logger.warning(
-                    "Command rejected — git stash %r is not a read-only operation",
-                    stash_op,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Command rejected: git stash {stash_op!r} is not "
-                        "permitted. Only 'stash list' and 'stash show' are allowed."
-                    ),
-                )
-
-    if executable == "dpkg":
-        # Allow only read-only query flags; block install/remove/unpack/configure.
-        _DPKG_READ_FLAGS = {
-            "-l", "--list", "-s", "--status", "-L", "--listfiles",
-            "-S", "--search", "-p", "--print-avail",
-            "--get-selections", "--print-architecture",
-            "--print-foreign-architectures",
-        }
-        flag = tokens[1] if len(tokens) > 1 else ""
-        if flag not in _DPKG_READ_FLAGS:
-            logger.warning(
-                "Command rejected — dpkg flag %r is not a read-only query flag",
-                flag,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Command rejected: dpkg flag {flag!r} is not permitted. "
-                    "Only read-only query flags are allowed."
-                ),
-            )
+        _validate_git_subcommand(tokens)
 
     if executable == "find":
-        # Reject -exec (and the -execdir variant) to prevent arbitrary command
-        # execution chained through find.
-        for token in tokens[1:]:
-            if token in ("-exec", "-execdir"):
-                logger.warning(
-                    "Command rejected — find -exec/-execdir is not permitted"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Command rejected: find -exec/-execdir is not permitted.",
-                )
+        _validate_find_args(tokens)
+
+    # Additional path-level validation for file-read commands (#3475)
+    _check_sensitive_path(executable, tokens)
 
     return executable
+
+
+def _validate_git_subcommand(tokens: list[str]) -> None:
+    """Enforce git subcommand allowlist rules.
+
+    Bare ``git`` (no subcommand) and git subcommands not in
+    ``_GIT_ALLOWED_SUBCOMMANDS`` are rejected with HTTP 400.
+
+    For ``git stash``, a further check requires an explicit operation from
+    ``_GIT_STASH_ALLOWED_OPS`` — bare ``git stash`` with no operation token
+    is rejected (#3478, Option A: explicit is safer for allowlists).
+
+    Args:
+        tokens: The full token list from shlex.split(), with tokens[0] == "git".
+
+    Raises:
+        HTTPException: HTTP 400 if any git subcommand rule is violated.
+    """
+    if len(tokens) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Command rejected: git requires an explicit subcommand",
+        )
+
+    subcommand = tokens[1]
+    if subcommand not in _GIT_ALLOWED_SUBCOMMANDS:
+        logger.warning(
+            "Command rejected — git subcommand %r not in allowlist", subcommand
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Command rejected: git subcommand {subcommand!r} is not permitted"
+            ),
+        )
+
+    if subcommand == "stash":
+        if len(tokens) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Command rejected: 'git stash' requires an explicit operation "
+                    f"(one of: {', '.join(sorted(_GIT_STASH_ALLOWED_OPS))})"
+                ),
+            )
+        stash_op = tokens[2]
+        if stash_op not in _GIT_STASH_ALLOWED_OPS:
+            logger.warning(
+                "Command rejected — git stash operation %r not in allowlist",
+                stash_op,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Command rejected: git stash operation {stash_op!r} is not "
+                    f"permitted (allowed: {', '.join(sorted(_GIT_STASH_ALLOWED_OPS))})"
+                ),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -327,10 +501,15 @@ async def _audit_execute_event(
     await db.commit()
 
 
-_SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_SSH_KEY_PATH = os.environ.get(
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
+)  # noqa: ssot-path
 _SSH_KNOWN_HOSTS_PATH = os.environ.get(
     "SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts"
 )
+# System-wide known_hosts populated by Ansible — used as fallback when the
+# per-user file is absent.  Defined at module level so tests can patch it.
+_SSH_SYSTEM_KNOWN_HOSTS_PATH = "/etc/ssh/ssh_known_hosts"
 
 _LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
 try:
@@ -380,31 +559,49 @@ async def _run_via_ssh(
     """Execute a pre-tokenised command on *ip* via SSH.
 
     Uses known_hosts verification (StrictHostKeyChecking=yes) when a
-    known_hosts file exists, falling back to 'accept-new' for first contact
-    rather than the previous insecure 'no' (#3421).
+    per-user or system-wide known_hosts file exists.  Falls back to the
+    system-wide /etc/ssh/ssh_known_hosts (populated by Ansible) if the
+    per-user file is absent.  Refuses the connection if neither file exists
+    rather than falling back to accept-new+/dev/null, which provides no TOFU
+    protection (every connection would accept whatever key is presented #3469).
     """
     known_hosts_path = Path(_SSH_KNOWN_HOSTS_PATH)
     if known_hosts_path.exists():
         host_key_checking = "yes"
         known_hosts_file = str(known_hosts_path)
-    else:
-        # Accept and persist the key on first connection; never silently
-        # accept a changed key (this is safer than StrictHostKeyChecking=no).
-        host_key_checking = "accept-new"
-        known_hosts_file = "/dev/null"
+    elif Path(_SSH_SYSTEM_KNOWN_HOSTS_PATH).exists():
+        host_key_checking = "yes"
+        known_hosts_file = _SSH_SYSTEM_KNOWN_HOSTS_PATH
         logger.warning(
-            "known_hosts file not found at %s — using accept-new for %s",
+            "Per-user known_hosts not found at %s — falling back to system "
+            "known_hosts %s for %s",
             _SSH_KNOWN_HOSTS_PATH,
+            _SSH_SYSTEM_KNOWN_HOSTS_PATH,
             ip,
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"SSH connection to {ip} refused: no known_hosts file found at "
+                f"{_SSH_KNOWN_HOSTS_PATH} or {_SSH_SYSTEM_KNOWN_HOSTS_PATH}. "
+                "Run the Ansible provisioning playbook to populate known_hosts "
+                "before executing remote commands."
+            ),
         )
 
     cmd = [
         "ssh",
-        "-p", str(ssh_port),
-        "-o", f"StrictHostKeyChecking={host_key_checking}",
-        "-o", f"UserKnownHostsFile={known_hosts_file}",
-        "-o", "BatchMode=yes",
-        "-o", f"ConnectTimeout={min(timeout, 30)}",
+        "-p",
+        str(ssh_port),
+        "-o",
+        f"StrictHostKeyChecking={host_key_checking}",
+        "-o",
+        f"UserKnownHostsFile={known_hosts_file}",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        f"ConnectTimeout={min(timeout, 30)}",
     ]
     if Path(_SSH_KEY_PATH).exists():
         cmd.extend(["-i", _SSH_KEY_PATH])
@@ -454,9 +651,6 @@ async def execute_on_node(
     The node must be ONLINE.  *body.command* is tokenised with shlex.split()
     and the first token (executable name) must be present in
     ALLOWED_EXECUTABLES — any other command is rejected with HTTP 400.
-
-    Additional argument-level guards enforce read-only use for git and block
-    find -exec.  See _validate_command for details (#3450).
 
     Admin privileges are required (require_admin dependency).
 

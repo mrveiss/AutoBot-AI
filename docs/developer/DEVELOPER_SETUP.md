@@ -458,7 +458,7 @@ ENABLE_HOT_RELOAD=true
 
 ### Service Configuration
 
-**VM Configuration** (`config/vm_config.yaml`):
+**VM Configuration** (defined in Ansible inventory `autobot-slm-backend/ansible/inventory/`):
 ```yaml
 vms:
   frontend:
@@ -852,8 +852,8 @@ ansible-playbook playbooks/deploy-native-services.yml
 - **Service Management**: `docs/developer/SERVICE_MANAGEMENT.md` - Complete service management guide
 - **API Documentation**: https://<backend-ip>:8443/docs (when running)
 - **Architecture Guide**: `docs/architecture/DISTRIBUTED_ARCHITECTURE.md`
-- **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md`
-- **Security Guide**: `docs/security/SECURITY_IMPLEMENTATION.md`
+- **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md`
+- **Security Guide**: `docs/security/ACCESS_CONTROL_ROLLOUT_SUMMARY.md`
 
 ### Development Tools
 

@@ -321,7 +321,7 @@ class ResultReranker:
             from autobot_shared.redis_client import get_redis_client
             from services.mesh_brain.staleness_propagator import get_staleness_score
 
-            redis = get_redis_client(async_client=True, database="main")
+            redis = await get_redis_client(async_client=True, database="main")
             staleness_map: Dict[str, float] = {}
             for result in results:
                 chunk_id = result.get("chunk_id") or result.get("id", "")

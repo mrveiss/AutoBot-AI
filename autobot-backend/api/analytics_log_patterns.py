@@ -10,7 +10,7 @@ import asyncio
 import logging
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -260,12 +260,12 @@ class LogPatternMiner:
             first_seen=(
                 data["first_seen"].isoformat()
                 if data["first_seen"]
-                else datetime.now().isoformat()
+                else datetime.now(tz=timezone.utc).isoformat()
             ),
             last_seen=(
                 data["last_seen"].isoformat()
                 if data["last_seen"]
-                else datetime.now().isoformat()
+                else datetime.now(tz=timezone.utc).isoformat()
             ),
             log_levels=list(data["levels"]),
             sources=list(data["sources"]),
@@ -854,7 +854,7 @@ async def mine_log_patterns(
     start_time = time.time()
 
     try:
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
         source_filter = set(sources.split(",")) if sources else None
 
         # Use extracted helper for log collection (Issue #315)
@@ -932,7 +932,7 @@ async def get_pattern_details(
     Issue #744: Requires admin authentication.
     """
     try:
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
         # Use extracted helper with pattern filter (Issue #315)
         log_lines = await _collect_all_log_lines(
@@ -984,7 +984,7 @@ async def get_error_hotspots(
         hourly_errors: Dict[str, Dict] = defaultdict(
             lambda: {"errors": 0, "total": 0, "samples": []}
         )
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
         log_files = await _collect_log_files(LOG_DIR)
         for file_path in log_files:
@@ -1058,7 +1058,7 @@ async def get_log_stats(
     Issue #744: Requires admin authentication.
     """
     try:
-        cutoff_time = datetime.now() - timedelta(hours=hours)
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
 
         # Use extracted helper for log collection (Issue #315)
         log_lines = await _collect_all_log_lines(LOG_DIR, cutoff_time)
@@ -1101,7 +1101,7 @@ async def get_realtime_summary(
     Issue #744: Requires admin authentication.
     """
     try:
-        cutoff = datetime.now() - timedelta(minutes=5)
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(minutes=5)
         recent_logs = []
 
         log_files = await _collect_log_files(LOG_DIR)
@@ -1124,7 +1124,7 @@ async def get_realtime_summary(
             "recent_errors": [
                 log for log in recent_logs if log["level"] in ERROR_LEVELS  # Issue #326
             ][:10],
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     except Exception as e:

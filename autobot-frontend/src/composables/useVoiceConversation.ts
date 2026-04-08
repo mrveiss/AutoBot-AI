@@ -16,7 +16,7 @@ import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
 import { usePreferences } from '@/composables/usePreferences'
-import { getBackendWsUrl } from '@/config/ssot-config'
+import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -624,7 +624,7 @@ async function _transcribeAudioWithLanguage(
   form.append('audio', blob, filename)
   const lang = _getShortLanguage()
   if (lang) form.append('language', lang)
-  const res = await fetchWithAuth('/api/voice/transcribe', {
+  const res = await fetchWithAuth(`${getApiBase()}/voice/transcribe`, {
     method: 'POST',
     body: form,
   })

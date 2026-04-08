@@ -321,6 +321,7 @@ async function syncSource(source: CodeSource) {
     }
     logger.info('Sync started for source:', source.name)
     await loadSources()
+    _startPolling()
   } catch (err: unknown) {
     logger.error(
       'Sync failed:',

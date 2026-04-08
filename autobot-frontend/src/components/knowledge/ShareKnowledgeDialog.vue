@@ -118,6 +118,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { apiService } from '@/services/api'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
@@ -128,6 +129,7 @@ const logger = createLogger('ShareKnowledgeDialog')
  *
  * Issue #679: Dialog for sharing knowledge with users and groups.
  * Issue #2072: Replaced mock user search data with real API call.
+ * Issue #3984: Fetch user/group names from API instead of displaying IDs.
  */
 
 // Types
@@ -167,6 +169,9 @@ const searching = ref(false)
 const searchError = ref<string | null>(null)
 const showNoResults = ref(false)
 
+// Cache for user/group lookups to avoid repeated API calls
+const entityCache = new Map<string, ShareEntity>()
+
 // Computed
 const hasChanges = computed(() => {
   return JSON.stringify(currentAccess.value) !== JSON.stringify(originalAccess.value)
@@ -184,28 +189,67 @@ watch(
 )
 
 // Methods
-const initializeAccessList = () => {
+const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<string> => {
+  const cacheKey = `${type}:${id}`
+
+  // Check cache first
+  if (entityCache.has(cacheKey)) {
+    return entityCache.get(cacheKey)?.name || id
+  }
+
+  try {
+    let response
+    if (type === 'user') {
+      response = await apiService.getUserById(id)
+    } else {
+      response = await apiService.getGroupById(id)
+    }
+
+    // Extract name from response
+    let displayName = id
+    if (response && response.data) {
+      if (type === 'user') {
+        const userData = response.data as { display_name?: string; email?: string; username?: string }
+        displayName = userData.display_name || userData.email || userData.username || id
+      } else {
+        const groupData = response.data as { name?: string }
+        displayName = groupData.name || id
+      }
+    }
+
+    // Cache the result
+    entityCache.set(cacheKey, { id, name: displayName, type })
+    return displayName
+  } catch (err) {
+    logger.warn(`Failed to fetch ${type} details for ${id}: %o`, err)
+    return id
+  }
+}
+
+const initializeAccessList = async () => {
   const accessList: ShareEntity[] = []
 
-  // Add users
-  props.currentUsers.forEach((userId) => {
+  // Add users with fetched names
+  for (const userId of props.currentUsers) {
+    const name = await fetchEntityName(userId, 'user')
     accessList.push({
       id: userId,
-      name: userId, // TODO: Fetch user names from API
+      name,
       type: 'user',
       permission: 'read',
     })
-  })
+  }
 
-  // Add groups
-  props.currentGroups.forEach((groupId) => {
+  // Add groups with fetched names
+  for (const groupId of props.currentGroups) {
+    const name = await fetchEntityName(groupId, 'group')
     accessList.push({
       id: groupId,
-      name: groupId, // TODO: Fetch group names from API
+      name,
       type: 'group',
       permission: 'read',
     })
-  })
+  }
 
   currentAccess.value = accessList
   originalAccess.value = JSON.parse(JSON.stringify(accessList))
@@ -226,7 +270,7 @@ const handleSearch = async () => {
   searchResults.value = []
 
   try {
-    const url = `/api/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
+    const url = `${getApiBase()}/user-management/users/search?q=${encodeURIComponent(query)}&limit=10`
     const response = await apiService.get<{
       users: ShareEntity[]
       available: boolean

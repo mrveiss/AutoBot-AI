@@ -564,9 +564,9 @@ def generate():
         """Test scanning a file with retry patterns."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("""
-from tenacity import retry
+from autobot_shared.retry_mechanism import with_retry
 
-@retry(max_retries=3)
+@with_retry(max_retries=3)
 def call_api():
     pass
 """)
@@ -1007,9 +1007,9 @@ class TestIntegration:
         api_file = src_dir / "api.py"
         api_file.write_text("""
 import openai
-from tenacity import retry
+from autobot_shared.retry_mechanism import with_retry
 
-@retry(max_retries=3)
+@with_retry(max_retries=3)
 def chat_with_llm(message):
     response = openai.chat.completions.create(
         model="gpt-4",

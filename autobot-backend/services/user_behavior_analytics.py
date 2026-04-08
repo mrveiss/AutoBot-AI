@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.ttl_constants import TTL_24_HOURS, TTL_30_DAYS, TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -126,9 +127,9 @@ class UserBehaviorAnalytics:
             redis.hincrby(feature_key, f"events:{event.event_type}", 1),
             redis.hincrby(daily_key, f"{event.feature}:views", 1),
             redis.hincrby(daily_key, f"{event.feature}:events:{event.event_type}", 1),
-            redis.expire(daily_key, 90 * 24 * 3600),
+            redis.expire(daily_key, TTL_90_DAYS),
             redis.hincrby(heatmap_key, f"{hour_key}:{event.feature}", 1),
-            redis.expire(heatmap_key, 30 * 24 * 3600),
+            redis.expire(heatmap_key, TTL_30_DAYS),
         ]
 
         if event.user_id:
@@ -138,7 +139,7 @@ class UserBehaviorAnalytics:
             ops.append(redis.sadd(f"{feature_key}:sessions", event.session_id))
             journey_key = f"{self.USER_JOURNEY_KEY}:{event.session_id}"
             ops.append(redis.rpush(journey_key, event.get_journey_entry()))
-            ops.append(redis.expire(journey_key, 24 * 3600))
+            ops.append(redis.expire(journey_key, TTL_24_HOURS))
 
         if event.duration_ms and event.duration_ms > 0:
             ops.append(redis.hincrby(feature_key, "total_time_ms", event.duration_ms))

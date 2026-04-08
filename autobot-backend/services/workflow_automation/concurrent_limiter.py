@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Awaitable, Callable, Deque, Dict, Optional
 
+from constants.threshold_constants import TimingConstants
+
 logger = logging.getLogger(__name__)
 
 
@@ -254,7 +256,7 @@ class ConcurrentWorkflowLimiter:
         # from _running.  Poll briefly (up to 5 s) to confirm the slot opened.
         deadline = time.monotonic() + 5.0
         while oldest_id in self._running and time.monotonic() < deadline:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(TimingConstants.STREAMING_CHUNK_DELAY)
 
         if oldest_id in self._running:
             logger.error(

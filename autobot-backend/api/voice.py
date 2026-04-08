@@ -28,7 +28,13 @@ logger = logging.getLogger(__name__)
 async def voice_listen_api(request: Request, user_role: str = Form("user")):
     """Listen and convert speech to text"""
     security_layer = request.app.state.security_layer
-    voice_interface = request.app.state.voice_interface
+    voice_interface = getattr(request.app.state, "voice_interface", None)
+    if voice_interface is None:
+        logger.warning("voice_listen called but voice_interface is not initialized")
+        return JSONResponse(
+            status_code=503,
+            content={"message": "Voice interface is not available on this server."},
+        )
     if not security_layer.check_permission(user_role, "allow_voice_listen"):
         security_layer.audit_log(
             "voice_listen", user_role, "denied", {"reason": "permission_denied"}
@@ -65,7 +71,13 @@ async def voice_speak_api(
 ):
     """Converts text to speech and plays it."""
     security_layer = request.app.state.security_layer
-    voice_interface = request.app.state.voice_interface
+    voice_interface = getattr(request.app.state, "voice_interface", None)
+    if voice_interface is None:
+        logger.warning("voice_speak called but voice_interface is not initialized")
+        return JSONResponse(
+            status_code=503,
+            content={"message": "Voice interface is not available on this server."},
+        )
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
             "voice_speak",

@@ -17,7 +17,7 @@ Features:
 import asyncio
 import time
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks
@@ -146,7 +146,7 @@ class KnowledgeSyncService:
             metrics = await self.incremental_sync.perform_incremental_sync()
 
             # Update service state
-            self.last_sync_time = datetime.now()
+            self.last_sync_time = datetime.now(tz=timezone.utc)
             self.last_sync_metrics = metrics
 
             # Add to history
@@ -189,7 +189,7 @@ class KnowledgeSyncService:
             metrics = await self.incremental_sync.perform_incremental_sync()
 
             # Update state
-            self.last_sync_time = datetime.now()
+            self.last_sync_time = datetime.now(tz=timezone.utc)
             self.last_sync_metrics = metrics
 
             # Add to history
@@ -218,7 +218,7 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def get_sync_status(self) -> Dict[str, Any]:
@@ -269,7 +269,7 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _calculate_duration_stats(self, durations: list) -> tuple[float, float, float]:
@@ -404,7 +404,7 @@ class KnowledgeSyncService:
                     avg_files_per_sync,
                     max_duration,
                 ),
-                "analysis_timestamp": datetime.now().isoformat(),
+                "analysis_timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -412,7 +412,7 @@ class KnowledgeSyncService:
             return {
                 "status": "error",
                 "message": str(e),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
 
@@ -457,7 +457,7 @@ async def trigger_manual_sync(
                     "status": "started",
                     "message": "Manual sync started in background",
                     "force_full": force_full,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 }
             )
         else:
@@ -521,7 +521,7 @@ async def start_sync_daemon(interval_minutes: int = 15):
                 "status": "started",
                 "message": "Sync daemon started successfully",
                 "interval_minutes": interval_minutes,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 
@@ -547,7 +547,7 @@ async def stop_sync_daemon():
             {
                 "status": "stopped",
                 "message": "Sync daemon stopped successfully",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         )
 

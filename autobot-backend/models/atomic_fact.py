@@ -10,7 +10,7 @@ extraction.
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -141,7 +141,7 @@ class AtomicFact:
 
         # Set default last_verified to creation time if not provided
         if self.last_verified is None:
-            self.last_verified = datetime.now()
+            self.last_verified = datetime.now(tz=timezone.utc)
 
         # Add subject and object to entities if not already included
         if self.subject not in self.entities:
@@ -362,11 +362,11 @@ class AtomicFact:
             service: Name of the service performing invalidation
         """
         self.is_active = False
-        self.valid_until = datetime.now()
+        self.valid_until = datetime.now(tz=timezone.utc)
         self.metadata = self.metadata or {}
         self.metadata.update(
             {
-                "invalidated_at": datetime.now().isoformat(),
+                "invalidated_at": datetime.now(tz=timezone.utc).isoformat(),
                 "invalidation_reason": reason or {},
                 "invalidation_service": service,
             }

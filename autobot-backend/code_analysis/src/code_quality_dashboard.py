@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,10 +20,8 @@ from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
-from config import UnifiedConfig
+from constants.ttl_constants import TTL_30_DAYS
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 
@@ -141,7 +139,7 @@ class CodeQualityDashboard:
         """Assemble the final comprehensive report dictionary. Issue #1183."""
         qm = quality_metrics
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "analysis_time_seconds": analysis_time,
             "overall_quality_score": qm.overall_score,
             "quality_metrics": {
@@ -801,7 +799,7 @@ class CodeQualityDashboard:
         if self.redis_client:
             try:
                 trend = QualityTrend(
-                    timestamp=datetime.now(),
+                    timestamp=datetime.now(tz=timezone.utc),
                     overall_score=metrics.overall_score,
                     issue_count=issue_count,
                     critical_issues=0,  # Would need to be calculated
@@ -819,7 +817,7 @@ class CodeQualityDashboard:
                 # Store in Redis list (keep last 30 entries)
                 await self.redis_client.lpush(self.TRENDS_KEY, json.dumps(trend_data))
                 await self.redis_client.ltrim(self.TRENDS_KEY, 0, 29)
-                await self.redis_client.expire(self.TRENDS_KEY, 86400 * 30)  # 30 days
+                await self.redis_client.expire(self.TRENDS_KEY, TTL_30_DAYS)  # 30 days
             except Exception as e:
                 logger.warning(f"Failed to save quality trend: {e}")
 
@@ -939,7 +937,7 @@ async def main():
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, default=str)
 
     print(f"📋 Comprehensive report saved to: {report_path}")  # noqa: print

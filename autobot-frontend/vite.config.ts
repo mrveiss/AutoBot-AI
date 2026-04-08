@@ -49,6 +49,11 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    define: {
+      __FEATURE_VOICE__: JSON.stringify(env.VITE_FEATURE_VOICE !== 'false'),
+      __FEATURE_VNC__: JSON.stringify(env.VITE_FEATURE_VNC !== 'false'),
+      __FEATURE_BROWSER__: JSON.stringify(env.VITE_FEATURE_BROWSER !== 'false'),
+    },
     plugins: [vue(), vueDevTools(), vadAssetsPlugin()],
     optimizeDeps: {
       include: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links', '@heroicons/vue/24/outline', '@heroicons/vue/24/solid'],

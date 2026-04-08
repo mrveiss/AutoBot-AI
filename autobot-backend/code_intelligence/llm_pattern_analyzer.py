@@ -24,7 +24,7 @@ backward compatibility by re-exporting all classes.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -248,7 +248,7 @@ class LLMPatternAnalyzer:
         )
         return AnalysisResult(
             analysis_id=analysis_id,
-            analysis_timestamp=datetime.now(),
+            analysis_timestamp=datetime.now(tz=timezone.utc),
             files_analyzed=len(python_files),
             patterns_found=all_patterns,
             prompt_templates=[],

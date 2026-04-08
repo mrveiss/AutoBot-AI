@@ -33,6 +33,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
+from constants.status_enums import TaskStatus
+
 from .variable_resolver import StepOutput, VariableResolver
 
 if TYPE_CHECKING:
@@ -191,7 +193,7 @@ class SubWorkflowExecutor:
             edges=child_edges or None,
         )
 
-        success = child_result.get("status") == "completed"
+        success = child_result.get("status") == TaskStatus.COMPLETED.value
         logger.info(
             "Sub-workflow step %s: child '%s' finished — status=%s",
             sub_step.step_id,

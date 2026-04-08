@@ -23,6 +23,7 @@ import type {
   AuditResult
 } from '@/types/audit'
 import { DEFAULT_AUDIT_FILTER, getDateRangeForFilter } from '@/types/audit'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAuditApi')
 
@@ -51,7 +52,7 @@ export function useAuditApi() {
           if (params?.offset) searchParams.append('offset', params.offset.toString())
 
           const queryString = searchParams.toString()
-          const url = `/api/audit/logs${queryString ? `?${queryString}` : ''}`
+          const url = `${getApiBase()}/audit/logs${queryString ? `?${queryString}` : ''}`
           const response = await api.get(url)
           return await response.json()
         },
@@ -74,7 +75,7 @@ export function useAuditApi() {
     async getStatistics(): Promise<AuditStatisticsResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/audit/statistics')
+          const response = await api.get(`${getApiBase()}/audit/statistics`)
           return await response.json()
         },
         {
@@ -90,7 +91,7 @@ export function useAuditApi() {
     async getSessionAuditTrail(sessionId: string): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`/api/audit/session/${sessionId}`)
+          const response = await api.get(`${getApiBase()}/audit/session/${sessionId}`)
           return await response.json()
         },
         {
@@ -109,7 +110,7 @@ export function useAuditApi() {
     ): Promise<AuditQueryResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get(`/api/audit/user/${userId}?days=${days}`)
+          const response = await api.get(`${getApiBase()}/audit/user/${userId}?days=${days}`)
           return await response.json()
         },
         {
@@ -129,7 +130,7 @@ export function useAuditApi() {
       return withErrorHandling(
         async () => {
           const response = await api.get(
-            `/api/audit/failures?hours=${hours}&result_filter=${resultFilter}`
+            `${getApiBase()}/audit/failures?hours=${hours}&result_filter=${resultFilter}`
           )
           return await response.json()
         },
@@ -146,7 +147,7 @@ export function useAuditApi() {
     async cleanupLogs(request: AuditCleanupRequest): Promise<AuditCleanupResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.post('/api/audit/cleanup', request)
+          const response = await api.post(`${getApiBase()}/audit/cleanup`, request)
           return await response.json()
         },
         {
@@ -161,7 +162,7 @@ export function useAuditApi() {
     async getOperationTypes(): Promise<AuditOperationsResponse | null> {
       return withErrorHandling(
         async () => {
-          const response = await api.get('/api/audit/operations')
+          const response = await api.get(`${getApiBase()}/audit/operations`)
           return await response.json()
         },
         {

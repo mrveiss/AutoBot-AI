@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 
 sys.path.append("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
 
+from tests.test_helpers import get_test_backend_url
+
 from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
 
 
@@ -333,7 +335,7 @@ async def test_scheduler_api_integration():
             for endpoint in endpoints_to_test:
                 try:
                     async with session.get(
-                        f"http://localhost:8001{endpoint}"
+                        get_test_backend_url() + endpoint
                     ) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print

@@ -40,6 +40,7 @@ import numpy as np
 
 # Import centralized logging
 from autobot_shared.logging_manager import get_llm_logger
+from constants.threshold_constants import TimingConstants
 
 logger = get_llm_logger("semantic_chunker_gpu")
 
@@ -377,7 +378,7 @@ class GPUSemanticChunker:
                     )
 
                 all_embeddings.append(batch_embeddings)
-                await asyncio.sleep(0.001)  # Brief yield
+                await asyncio.sleep(TimingConstants.YIELD_INTERVAL)  # Brief yield
 
             # Combine results
             if len(all_embeddings) == 1:

@@ -310,6 +310,17 @@ _OPTIONAL_ROLES = [
 # ---------------------------------------------------------------------------
 _INFRA_ROLES = [
     {
+        "name": "docker",
+        "display_name": "Docker",
+        "sync_type": SyncType.COMPONENT.value,
+        "source_paths": [],
+        "target_path": "",
+        "auto_restart": False,
+        "required": False,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-hybrid-docker.yml",
+    },
+    {
         "name": "autobot_shared",
         "display_name": "Shared Library",
         "sync_type": SyncType.PACKAGE.value,

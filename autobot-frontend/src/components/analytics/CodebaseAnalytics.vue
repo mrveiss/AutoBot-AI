@@ -344,10 +344,10 @@
     />
 
     <!-- Issue #3436: Per-project sub-tab navigation and child route outlet -->
-    <div v-if="sourceIdParam" class="project-sub-tabs-container">
+    <div v-if="route.params.sourceId" class="project-sub-tabs-container">
       <nav class="project-sub-tabs" role="tablist" aria-label="Project analytics tabs">
         <router-link
-          :to="`/analytics/codebase/${sourceIdParam}`"
+          :to="`/analytics/codebase/${route.params.sourceId}`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isOverviewTabActive }"
           role="tab"
@@ -359,7 +359,7 @@
           <span>{{ $t('analytics.codebase.tabs.overview', 'Overview') }}</span>
         </router-link>
         <router-link
-          :to="`/analytics/codebase/${sourceIdParam}/code-quality`"
+          :to="`/analytics/codebase/${route.params.sourceId}/code-quality`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeQualityTabActive }"
           role="tab"
@@ -371,7 +371,7 @@
           <span>{{ $t('analytics.codebase.tabs.codeQuality', 'Code Quality') }}</span>
         </router-link>
         <router-link
-          :to="`/analytics/codebase/${sourceIdParam}/code-review`"
+          :to="`/analytics/codebase/${route.params.sourceId}/code-review`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeReviewTabActive }"
           role="tab"
@@ -384,7 +384,7 @@
           <span>{{ $t('analytics.codebase.tabs.codeReview', 'Code Review') }}</span>
         </router-link>
         <router-link
-          :to="`/analytics/codebase/${sourceIdParam}/evolution`"
+          :to="`/analytics/codebase/${route.params.sourceId}/evolution`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isEvolutionTabActive }"
           role="tab"
@@ -396,7 +396,7 @@
           <span>{{ $t('analytics.codebase.tabs.evolution', 'Evolution') }}</span>
         </router-link>
         <router-link
-          :to="`/analytics/codebase/${sourceIdParam}/code-generation`"
+          :to="`/analytics/codebase/${route.params.sourceId}/code-generation`"
           class="project-sub-tab"
           :class="{ 'project-sub-tab-active': isCodeGenerationTabActive }"
           role="tab"

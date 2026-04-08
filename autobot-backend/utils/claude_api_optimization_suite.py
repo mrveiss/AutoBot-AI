@@ -17,13 +17,14 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import aiofiles
 
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_5_MINUTES
 
 from ..monitoring.claude_api_monitor import ClaudeAPIMonitor
 
@@ -83,7 +84,7 @@ class OptimizationConfig:
 
     # Graceful degradation settings
     enable_caching: bool = True
-    cache_ttl: int = 300  # 5 minutes
+    cache_ttl: int = TTL_5_MINUTES
 
 
 @dataclass
@@ -368,7 +369,7 @@ class ClaudeAPIOptimizationSuite:
         async with self._lock:
             self.optimization_history.append(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "request_type": request_type,
                     "optimizations_applied": optimization_applied,
                     "response_time": time.time() - start_time,
@@ -564,7 +565,7 @@ class ClaudeAPIOptimizationSuite:
         """Execute the optimized request (simulation for this implementation)"""
         # In a real implementation, this would make the actual Claude API call
         # For now, we simulate a successful response
-        await asyncio.sleep(0.1)  # Simulate API response time
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate API response time
 
         return {
             "status": "success",
@@ -685,7 +686,7 @@ class ClaudeAPIOptimizationSuite:
         async with self._lock:
             self.optimization_history.append(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "event": "mode_change",
                     "old_mode": old_mode.value,
                     "new_mode": new_mode.value,
@@ -812,7 +813,7 @@ class ClaudeAPIOptimizationSuite:
             history_copy = list(self.optimization_history[-20:])
 
         report = {
-            "report_generated_at": datetime.now().isoformat(),
+            "report_generated_at": datetime.now(tz=timezone.utc).isoformat(),
             "optimization_suite_status": await self.get_optimization_status(),
             "detailed_metrics": metrics_copy,
             "optimization_history": history_copy,
@@ -871,7 +872,7 @@ class ClaudeAPIOptimizationSuite:
             return {
                 "status": "success",
                 "analysis_results": analysis_results,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -879,7 +880,7 @@ class ClaudeAPIOptimizationSuite:
             return {
                 "status": "error",
                 "error": "Internal server error",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     async def reset_metrics(self):

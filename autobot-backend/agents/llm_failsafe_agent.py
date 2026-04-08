@@ -23,6 +23,9 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +52,7 @@ class LLMResponse:
     metadata: Dict[str, Any]
 
 
-class LLMFailsafeAgent:
+class LLMFailsafeAgent(StandardizedAgent):
     """
     Multi-tier LLM communication system with robust fallbacks.
 
@@ -61,7 +64,9 @@ class LLMFailsafeAgent:
     AGENT_ID = "llm_failsafe"
 
     def __init__(self):
-        """Initialize the failsafe LLM agent with explicit LLM configuration."""
+        """Initialize the failsafe LLM agent (#3387: migrated to StandardizedAgent)."""
+        super().__init__("llm_failsafe", DeploymentMode.LOCAL)
+        # Override self.logger to preserve existing naming convention
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
@@ -104,6 +109,69 @@ class LLMFailsafeAgent:
         # Initialize basic and emergency response systems
         self._init_basic_responses()
         self._init_emergency_responses()
+
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "respond": ActionHandler(
+                    handler_method="_handle_respond",
+                    required_params=["prompt"],
+                    description="Get a robust LLM response with automatic tier failover",
+                ),
+                "status": ActionHandler(
+                    handler_method="_handle_status",
+                    required_params=[],
+                    description="Get system status for all LLM tiers",
+                ),
+                "tier_health_check": ActionHandler(
+                    handler_method="_handle_tier_health_check",
+                    required_params=[],
+                    description="Perform health check on all LLM tiers",
+                ),
+            }
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return [
+            "respond",
+            "status",
+            "tier_health_check",
+            "llm_failsafe",
+            "multi_tier_fallback",
+        ]
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return (
+            "You are AutoBot, an advanced autonomous AI platform. "
+            "Provide robust responses with automatic failover across LLM tiers."
+        )
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_respond(self, request) -> Dict[str, Any]:
+        """Handle respond action via StandardizedAgent routing."""
+        prompt = request.payload["prompt"]
+        context = request.payload.get("context")
+        response = await self.get_response(prompt, context)
+        return {
+            "content": response.content,
+            "tier_used": response.tier_used.value,
+            "model_used": response.model_used,
+            "confidence": response.confidence,
+            "response_time": response.response_time,
+            "warnings": response.warnings,
+        }
+
+    async def _handle_status(self, request) -> Dict[str, Any]:
+        """Handle status action via StandardizedAgent routing."""
+        return self.get_system_status()
+
+    async def _handle_tier_health_check(self, request) -> Dict[str, Any]:
+        """Handle tier_health_check action via StandardizedAgent routing."""
+        tier_health = await self.check_tier_health()
+        return {tier.value: healthy for tier, healthy in tier_health.items()}
 
     def _get_greeting_patterns(self) -> dict:
         """Get greeting and help patterns (Issue #398: extracted)."""
@@ -716,8 +784,12 @@ class LLMFailsafeAgent:
         handler = tier_handlers[tier]
         return await handler(test_prompt, None, time.time())
 
-    async def health_check(self) -> Dict[LLMTier, bool]:
-        """Perform health check on all tiers"""
+    async def check_tier_health(self) -> Dict[LLMTier, bool]:
+        """Perform health check on all LLM tiers.
+
+        Renamed from health_check() to avoid shadowing StandardizedAgent.health_check()
+        which returns AgentHealth (#3387).
+        """
         self.logger.info("Performing comprehensive LLM tier health check")
 
         test_prompt = "Hello, please respond with 'OK' to confirm you're working."
@@ -774,4 +846,4 @@ def get_llm_system_status() -> Dict[str, Any]:
 
 async def perform_llm_health_check() -> Dict[LLMTier, bool]:
     """Perform health check on all LLM tiers"""
-    return await get_llm_failsafe().health_check()
+    return await get_llm_failsafe().check_tier_health()

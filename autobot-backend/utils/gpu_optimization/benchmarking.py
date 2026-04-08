@@ -13,6 +13,8 @@ import logging
 import time
 from typing import Any, Dict, List
 
+from constants.threshold_constants import TimingConstants
+
 from .types import GPUCapabilities
 
 logger = logging.getLogger(__name__)
@@ -22,7 +24,7 @@ async def benchmark_memory_bandwidth() -> Dict[str, Any]:
     """Benchmark GPU memory bandwidth."""
     try:
         # Simulate memory bandwidth test
-        await asyncio.sleep(0.1)  # Simulate test time
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate test time
 
         # Typical RTX 4070 memory bandwidth: ~504 GB/s
         measured_bandwidth = 480.0  # GB/s (simulated)
@@ -45,7 +47,7 @@ async def benchmark_compute_performance() -> Dict[str, Any]:
     """Benchmark GPU compute performance."""
     try:
         # Simulate compute performance test
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         # Typical RTX 4070 compute: ~29 TFLOPS FP32
         measured_tflops = 27.5  # Simulated
@@ -68,7 +70,7 @@ async def benchmark_mixed_precision() -> Dict[str, Any]:
     """Benchmark mixed precision performance."""
     try:
         # Simulate mixed precision test
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         # Mixed precision should provide ~1.5-2x improvement
         speedup_factor = 1.8  # Simulated
@@ -91,7 +93,7 @@ async def benchmark_tensor_cores() -> Dict[str, Any]:
     """Benchmark Tensor Core performance."""
     try:
         # Simulate Tensor Core test
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
         # Tensor Cores should provide significant acceleration
         speedup_factor = 3.5  # Simulated

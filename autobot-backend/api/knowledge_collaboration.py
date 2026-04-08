@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from auth_middleware import get_current_user
+from autobot_shared.models.pagination import PaginationParams
 from knowledge.ownership import VisibilityLevel
 from knowledge.search_filters import extract_user_context_from_request
 from knowledge_factory import get_or_create_knowledge_base
@@ -281,8 +282,7 @@ async def get_knowledge_by_scope(
     scope: Optional[VisibilityLevel] = Query(
         default=None, description="Filter by visibility scope"
     ),
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(),
 ):
     """Get knowledge facts filtered by scope.
 
@@ -290,8 +290,7 @@ async def get_knowledge_by_scope(
 
     Args:
         scope: Optional scope filter (system/organization/group/private/shared)
-        limit: Maximum number of results
-        offset: Pagination offset
+        pagination: Limit and offset for result pagination
 
     Returns:
         List of accessible knowledge facts
@@ -311,8 +310,8 @@ async def get_knowledge_by_scope(
             user_id=user_id,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
-            limit=limit,
-            offset=offset,
+            limit=pagination.limit,
+            offset=pagination.offset,
         )
 
         # If scope filter provided, filter results
@@ -338,8 +337,7 @@ async def get_organization_knowledge(
     organization_id: str,
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(),
 ):
     """Get all knowledge facts for an organization.
 
@@ -347,8 +345,7 @@ async def get_organization_knowledge(
 
     Args:
         organization_id: Organization UUID
-        limit: Maximum number of results
-        offset: Pagination offset
+        pagination: Limit and offset for result pagination
 
     Returns:
         List of organization knowledge facts
@@ -370,7 +367,9 @@ async def get_organization_knowledge(
 
     try:
         fact_ids = await kb.ownership_manager.get_organization_facts(
-            organization_id=organization_id, limit=limit, offset=offset
+            organization_id=organization_id,
+            limit=pagination.limit,
+            offset=pagination.offset,
         )
         facts = await _fetch_facts_from_redis(
             fact_ids, kb.aioredis_client, include_title_only=True
@@ -387,8 +386,7 @@ async def get_group_knowledge(
     group_id: str,
     request: Request,
     current_user: Dict = Depends(get_current_user),
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
+    pagination: PaginationParams = Depends(),
 ):
     """Get all knowledge facts for a group/team.
 
@@ -396,8 +394,7 @@ async def get_group_knowledge(
 
     Args:
         group_id: Group/Team UUID
-        limit: Maximum number of results
-        offset: Pagination offset
+        pagination: Limit and offset for result pagination
 
     Returns:
         List of group knowledge facts
@@ -418,7 +415,7 @@ async def get_group_knowledge(
 
     try:
         fact_ids = await kb.ownership_manager.get_group_facts(
-            group_id=group_id, limit=limit, offset=offset
+            group_id=group_id, limit=pagination.limit, offset=pagination.offset
         )
         facts = await _fetch_facts_from_redis(
             fact_ids, kb.aioredis_client, include_title_only=True

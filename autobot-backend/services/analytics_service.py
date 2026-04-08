@@ -24,6 +24,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.model_constants import (
+    EXPENSIVE_MODEL_MARKER_GPT4,
+    EXPENSIVE_MODEL_MARKER_OPUS,
+)
 from services.agent_analytics import AgentAnalytics, get_agent_analytics
 from services.llm_cost_tracker import LLMCostTracker, get_cost_tracker
 from services.user_behavior_analytics import (
@@ -588,7 +592,7 @@ class AnalyticsService:
         call_count = data.get("call_count", 0)
         if cost > 10:
             model_lower = model.lower()
-            if "opus" in model_lower or "gpt-4" in model_lower:
+            if EXPENSIVE_MODEL_MARKER_OPUS in model_lower or EXPENSIVE_MODEL_MARKER_GPT4 in model_lower:
                 opts.append(
                     ResourceOptimization(
                         id=f"model-substitute-{model[:20]}",

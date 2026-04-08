@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_30_DAYS
 from knowledge.search_components.query_classifier import get_query_classifier
-from knowledge.search_components.retrieval_learner import get_retrieval_learner
+from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
 from live_event_manager import publish_live_event
 from services.context_sufficiency import (
     SufficiencyVerdict,
@@ -32,6 +33,8 @@ from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cach
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_service")
+
+_STREAM_TTL_SECONDS = TTL_30_DAYS
 
 
 class RAGService:
@@ -319,8 +322,12 @@ class RAGService:
         query: str,
         complexity: str,
         categories: Optional[List[str]],
+        user_id: Optional[str] = None,
     ) -> Optional[str]:
         """Query the retrieval learner for a matching historical pattern. Issue #2095.
+
+        Issue #3240: user_id scopes the lookup to per-user patterns first, then
+        falls back to global patterns when no user-specific match is found.
 
         Returns the pattern_hash of the best match (for later outcome recording)
         or None when no high-confidence pattern exists.  Strategy hints are
@@ -330,6 +337,7 @@ class RAGService:
             query:      Raw query string.
             complexity: QueryComplexity.value string.
             categories: Optional category list from the search context.
+            user_id:    Authenticated user identifier for per-user scope.
 
         Returns:
             pattern_hash string or None.
@@ -337,7 +345,10 @@ class RAGService:
         try:
             learner = get_retrieval_learner()
             pattern = await learner.get_matching_pattern(
-                query=query, complexity=complexity, categories=categories
+                query=query,
+                complexity=complexity,
+                categories=categories,
+                user_id=user_id,
             )
             if pattern is not None:
                 logger.debug(
@@ -354,8 +365,12 @@ class RAGService:
         self,
         pattern_hash: Optional[str],
         results: List[SearchResult],
+        user_id: Optional[str] = None,
     ) -> None:
         """Record search outcome against the matched retrieval pattern. Issue #2095.
+
+        Issue #3240: user_id is forwarded so the correct namespaced Redis key
+        is updated by record_pattern_outcome().
 
         Success is defined as returning at least one result with hybrid_score >= 0.5,
         which mirrors the threshold used by the context-sufficiency evaluator.
@@ -363,13 +378,14 @@ class RAGService:
         Args:
             pattern_hash: Hash returned by _lookup_retrieval_pattern(), or None.
             results:      Final search results to evaluate.
+            user_id:      Authenticated user identifier for per-user scope.
         """
         if pattern_hash is None:
             return
         try:
             success = any(r.hybrid_score >= 0.5 for r in results)
             learner = get_retrieval_learner()
-            await learner.record_pattern_outcome(pattern_hash, success)
+            await learner.record_pattern_outcome(pattern_hash, success, user_id=user_id)
         except Exception as exc:
             logger.debug(
                 "RetrievalLearner outcome recording failed (non-fatal): %s", exc
@@ -412,22 +428,28 @@ class RAGService:
         retrieved_ids: List[str],
         ranked_ids: List[str],
         complexity: str = "simple",
+        user_id: Optional[str] = None,
     ) -> None:
-        """Append retrieval feedback to a dated Redis stream. Issue #1516.
+        """Append retrieval feedback to a dated, user-scoped Redis stream. Issue #1516.
 
-        Stream key: rag:feedback:{YYYY-MM-DD}  (UTC date).
+        Issue #3240: Stream key changed from ``rag:feedback:{date}`` to
+        ``rag:feedback:{user_id}:{date}`` so each user's feedback drives their
+        own personalised retrieval patterns.  When user_id is None the global
+        sentinel ``__global__`` is used, preserving backward compatibility.
+
         TTL: 30 days so Neural Mesh Phase 3 (#2056) can consume the data
         before it expires. Increased from 7 days — Fix: #2102.
 
         Args:
-            query: Raw query string.
+            query:         Raw query string.
             retrieved_ids: Chunk IDs retrieved before reranking.
-            ranked_ids: Final ordered chunk IDs after reranking.
-            complexity: QueryComplexity.value string (Issue #2024).
+            ranked_ids:    Final ordered chunk IDs after reranking.
+            complexity:    QueryComplexity.value string (Issue #2024).
+            user_id:       Authenticated user identifier; defaults to global scope.
         """
-        _STREAM_TTL_SECONDS = 30 * 24 * 3600
+        uid = user_id or GLOBAL_USER
         date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-        stream_key = f"rag:feedback:{date_key}"
+        stream_key = f"rag:feedback:{uid}:{date_key}"
         entry = {
             "query_text": query,
             "retrieved_chunk_ids": json.dumps(retrieved_ids, ensure_ascii=False),
@@ -522,9 +544,15 @@ class RAGService:
         return results, metrics
 
     async def _emit_ranked_feedback(
-        self, query: str, results: List[SearchResult]
+        self,
+        query: str,
+        results: List[SearchResult],
+        user_id: Optional[str] = None,
     ) -> None:
         """Classify query complexity and emit retrieval feedback to event + Redis stream.
+
+        Issue #3240: user_id is forwarded to _store_feedback_in_stream so the
+        feedback lands in the correct per-user Redis stream.
 
         ranked_ids: results already sorted by rerank_score (post-rerank order).
         retrieved_ids: re-sorted by hybrid_score to recover pre-rerank retrieval order.
@@ -548,6 +576,7 @@ class RAGService:
             retrieved_ids=retrieved_ids,
             ranked_ids=ranked_ids,
             complexity=complexity.value,
+            user_id=user_id,
         )
 
     async def advanced_search(
@@ -557,11 +586,22 @@ class RAGService:
         enable_reranking: bool = True,
         timeout: Optional[float] = None,
         categories: Optional[List[str]] = None,
+        user_id: Optional[str] = None,
     ) -> Tuple[List[SearchResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
 
         Issue #556: categories. Issue #1372: semantic cache.
         Issue #1376: topic cache. Issue #1374: sufficiency guard.
+        Issue #3240: user_id scopes retrieval pattern lookup and feedback
+        storage to the authenticated user, enabling personalised RAG behaviour.
+
+        Args:
+            query:            Search query string.
+            max_results:      Maximum number of results to return.
+            enable_reranking: Whether to apply cross-encoder reranking.
+            timeout:          Override timeout in seconds.
+            categories:       Optional category filter list.
+            user_id:          Authenticated user identifier; None uses global scope.
         """
         if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories)
@@ -580,11 +620,14 @@ class RAGService:
             logger.warning("RAG init failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
-        # Issue #2095: consult retrieval learner for historical pattern hints.
+        # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
         classifier = get_query_classifier()
         complexity = classifier.classify(query)
         pattern_hash = await self._lookup_retrieval_pattern(
-            query=query, complexity=complexity.value, categories=categories
+            query=query,
+            complexity=complexity.value,
+            categories=categories,
+            user_id=user_id,
         )
 
         cache_key = self._build_cache_key(
@@ -604,10 +647,11 @@ class RAGService:
         await self._store_in_semantic_cache(query, results)
         await self._store_in_topic_cache(results)
 
-        await self._emit_ranked_feedback(query, results)
+        # Issue #3240: emit user-scoped feedback to personalised Redis stream.
+        await self._emit_ranked_feedback(query, results, user_id=user_id)
 
-        # Issue #2095: record outcome so the learner can update success_rate.
-        await self._record_retrieval_outcome(pattern_hash, results)
+        # Issue #2095/#3240: record outcome so the learner can update success_rate.
+        await self._record_retrieval_outcome(pattern_hash, results, user_id=user_id)
 
         return results, metrics
 

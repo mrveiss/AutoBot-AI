@@ -24,9 +24,11 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +223,7 @@ class TodoWriteOptimizer:
                 return True
 
         # Check recent operations to prevent rapid duplicates
-        current_time = datetime.now()
+        current_time = datetime.now(tz=timezone.utc)
         for operation_content, operation_time in self.recent_operations:
             if (current_time - operation_time).seconds < 10:  # 10 second window
                 similarity = self._calculate_similarity(
@@ -264,7 +266,7 @@ class TodoWriteOptimizer:
         if self.pending_todos:
             oldest_todo = min(self.pending_todos, key=lambda t: t.created_at)
             if (
-                datetime.now() - oldest_todo.created_at
+                datetime.now(tz=timezone.utc) - oldest_todo.created_at
             ).seconds >= self.consolidation_window:
                 return True
 
@@ -313,7 +315,7 @@ class TodoWriteOptimizer:
 
                 # Record operation for deduplication
                 operation_summary = f"Batch of {len(self.pending_todos)} todos"
-                self.recent_operations.append((operation_summary, datetime.now()))
+                self.recent_operations.append((operation_summary, datetime.now(tz=timezone.utc)))
 
                 # Clear pending todos
                 self.pending_todos.clear()
@@ -546,7 +548,7 @@ class TodoWriteOptimizer:
             logger.info("Executing optimized TodoWrite with %s todos", len(todos))
 
             # Simulate API call delay
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             return True
 
@@ -568,7 +570,7 @@ class TodoWriteOptimizer:
 
         pattern = self.tool_usage_stats[tool_name]
         pattern.usage_frequency += 1
-        pattern.last_used = datetime.now()
+        pattern.last_used = datetime.now(tz=timezone.utc)
 
         # Update average response time
         current_avg = pattern.avg_response_time

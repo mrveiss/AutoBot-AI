@@ -13,11 +13,12 @@ import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Import communication protocol
+from constants.threshold_constants import TimingConstants
 from protocols.agent_communication import (
     AgentIdentity,
     MessageHeader,
@@ -134,7 +135,7 @@ class BaseAgent(ABC):
         self.agent_type = agent_type
         self.deployment_mode = deployment_mode
         self.capabilities: List[str] = []
-        self.startup_time = datetime.now()
+        self.startup_time = datetime.now(tz=timezone.utc)
 
         # Performance tracking (protected by _stats_lock)
         self.request_count = 0
@@ -174,9 +175,9 @@ class BaseAgent(ABC):
         """
         try:
             # Test basic functionality via ping
-            start_time = datetime.now()
+            start_time = datetime.now(tz=timezone.utc)
             await self._ping()
-            response_time = (datetime.now() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds() * 1000
 
             status = AgentStatus.HEALTHY
             if response_time > 5000:  # 5 second threshold
@@ -194,7 +195,7 @@ class BaseAgent(ABC):
                 agent_type=self.agent_type,
                 status=status,
                 deployment_mode=self.deployment_mode,
-                last_heartbeat=datetime.now(),
+                last_heartbeat=datetime.now(tz=timezone.utc),
                 response_time_ms=response_time,
                 success_rate=success_rate,
                 error_count=error_count,
@@ -212,7 +213,7 @@ class BaseAgent(ABC):
                 agent_type=self.agent_type,
                 status=AgentStatus.UNHEALTHY,
                 deployment_mode=self.deployment_mode,
-                last_heartbeat=datetime.now(),
+                last_heartbeat=datetime.now(tz=timezone.utc),
                 response_time_ms=0.0,
                 success_rate=0.0,
                 error_count=error_count + 1,
@@ -223,7 +224,7 @@ class BaseAgent(ABC):
 
     async def _ping(self) -> bool:
         """Basic connectivity test - can be overridden by subclasses"""
-        await asyncio.sleep(0.001)  # Simulate minimal processing
+        await asyncio.sleep(TimingConstants.YIELD_INTERVAL)  # Simulate minimal processing
         return True
 
     async def _get_resource_usage(self) -> Dict[str, Any]:
@@ -241,7 +242,7 @@ class BaseAgent(ABC):
                 "memory_rss_mb": memory_info.rss / 1024 / 1024,
                 "memory_vms_mb": memory_info.vms / 1024 / 1024,
                 "num_threads": process.num_threads(),
-                "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
+                "uptime_seconds": (datetime.now(tz=timezone.utc) - self.startup_time).total_seconds(),
             }
         except Exception as e:
             logger.warning("Could not get resource usage: %s", e)
@@ -251,17 +252,40 @@ class BaseAgent(ABC):
         """
         Wrapper that adds performance tracking to request processing.
         Used by agent clients for monitoring.
+
+        Persists each invocation to AgentAnalytics (Redis db=ANALYTICS) so
+        usage data is queryable via GET /api/agents/usage.
         """
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
+        task_id = str(uuid.uuid4())
 
         # Increment request count (thread-safe)
         with self._stats_lock:
             self.request_count += 1
 
+        # Record invocation start in Redis analytics
+        try:
+            from services.agent_analytics import TaskStatus, get_agent_analytics
+
+            analytics = get_agent_analytics()
+            await analytics.track_task_start(
+                agent_id=self.agent_type,
+                agent_type=self.agent_type,
+                task_id=task_id,
+                task_name=request.action or "process_request",
+                metadata={
+                    "request_id": request.request_id,
+                    "priority": request.priority,
+                },
+            )
+        except Exception as analytics_err:
+            logger.debug("Analytics track_task_start failed: %s", analytics_err)
+            analytics = None
+
         try:
             response = await self.process_request(request)
 
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             # Update counters (thread-safe)
             with self._stats_lock:
@@ -273,14 +297,49 @@ class BaseAgent(ABC):
 
             response.execution_time = execution_time
 
+            # Record completion in Redis analytics
+            if analytics is not None:
+                try:
+                    outcome = (
+                        TaskStatus.COMPLETED
+                        if response.status == "success"
+                        else TaskStatus.FAILED
+                    )
+                    tokens = (
+                        response.metadata.get("token_usage")
+                        if response.metadata
+                        else None
+                    )
+                    await analytics.track_task_complete(
+                        task_id=task_id,
+                        status=outcome,
+                        tokens_used=tokens,
+                        error_message=response.error,
+                    )
+                except Exception as analytics_err:
+                    logger.debug("Analytics track_task_complete failed: %s", analytics_err)
+
             return response
 
         except Exception as e:
-            execution_time = (datetime.now() - start_time).total_seconds()
+            execution_time = (datetime.now(tz=timezone.utc) - start_time).total_seconds()
 
             # Increment error count (thread-safe)
             with self._stats_lock:
                 self.error_count += 1
+
+            # Record failure in Redis analytics
+            if analytics is not None:
+                try:
+                    from services.agent_analytics import TaskStatus
+
+                    await analytics.track_task_complete(
+                        task_id=task_id,
+                        status=TaskStatus.FAILED,
+                        error_message=str(e),
+                    )
+                except Exception as analytics_err:
+                    logger.debug("Analytics failure record failed: %s", analytics_err)
 
             logger.error("Agent %s error: %s", self.agent_type, e)
             return AgentResponse(
@@ -440,7 +499,7 @@ class BaseAgent(ABC):
             "success_rate": (success_count / max(request_count, 1)) * 100,
             "avg_execution_time_seconds": avg_execution_time,
             "total_execution_time_seconds": total_execution_time,
-            "uptime_seconds": (datetime.now() - self.startup_time).total_seconds(),
+            "uptime_seconds": (datetime.now(tz=timezone.utc) - self.startup_time).total_seconds(),
         }
 
 
@@ -503,7 +562,7 @@ def create_agent_request(
         priority=priority,
         timeout=timeout,
         metadata={
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "source": "autobot_orchestrator",
         },
     )

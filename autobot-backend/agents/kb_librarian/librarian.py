@@ -11,7 +11,7 @@ discovery. Refactored from god class into focused package (Issue #381).
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from agents.web_researcher import WebResearcher as WebResearchAssistant
@@ -164,8 +164,8 @@ def _build_metadata_section(tool_info: Dict[str, Any]) -> str:
         Formatted metadata section string
     """
     return f"""METADATA:
-- Added: {datetime.now().isoformat()}
-- Last Updated: {datetime.now().isoformat()}
+- Added: {datetime.now(tz=timezone.utc).isoformat()}
+- Last Updated: {datetime.now(tz=timezone.utc).isoformat()}
 - Verification Status: {tool_info.get('verified', 'unverified')}
 - Usage Count: 0
 - Success Rate: N/A
@@ -343,7 +343,7 @@ class EnhancedKBLibrarian:
             "category": "tools",
             "type": "tool_documentation",
             "source": "web_research",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         await self.knowledge_base.store_fact(document_content, metadata=metadata)
@@ -485,7 +485,7 @@ class EnhancedKBLibrarian:
 
         summary_content = f"""
 Tool Research Results: {tool_type}
-Date: {datetime.now().isoformat()}
+Date: {datetime.now(tz=timezone.utc).isoformat()}
 
 Found {len(tools)} tools for {tool_type}:
 
@@ -496,7 +496,7 @@ Found {len(tools)} tools for {tool_type}:
             "type": "tool_research_summary",
             "tool_type": tool_type,
             "tools_count": len(tools),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         await self.knowledge_base.store_fact(summary_content, metadata=metadata)
@@ -571,7 +571,7 @@ STEP-BY-STEP GUIDE:
 
         Issue #620.
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(tz=timezone.utc).isoformat()
         return f"""
 COMMON ISSUES & SOLUTIONS:
 {ToolInfoFormatter.format_troubleshooting(doc_info.get('common_issues', []))}
@@ -636,7 +636,7 @@ METADATA:
             "doc_type": doc_type,
             "category": doc_info.get("category", "system"),
             "title": doc_title,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     async def store_system_documentation(self, doc_info: Dict[str, Any]):
@@ -665,7 +665,7 @@ METADATA:
 
         Issue #620.
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(tz=timezone.utc).isoformat()
         return f"""
 WORKFLOW DOCUMENTATION: {workflow_name}
 ==================================================
@@ -724,7 +724,7 @@ METADATA:
             "workflow_name": workflow_name,
             "category": workflow_info.get("category", "workflows"),
             "complexity": workflow_info.get("complexity", "medium"),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     async def store_workflow_knowledge(self, workflow_info: Dict[str, Any]):

@@ -169,6 +169,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import KnowledgeBrowser from './KnowledgeBrowser.vue'
@@ -252,7 +253,7 @@ const viewCategoryDocuments = async (category: any) => {
   selectedCategoryPath.value = category.path
 
   try {
-    const response = await apiClient.get(`/api/knowledge_base/categories/${encodeURIComponent(category.path)}`)
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/${encodeURIComponent(category.path)}`)
     const data = await parseApiResponse(response)
     categoryDocuments.value = data?.documents || []
     showCategoryDocuments.value = true
@@ -285,7 +286,7 @@ const loadMainCategories = async () => {
   isLoadingCategories.value = true
   categoriesError.value = null
   try {
-    const response = await apiClient.get('/api/knowledge_base/categories/main')
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/categories/main`)
     if (response && typeof response === 'object' && 'status' in response) {
       const status = (response as { status: number }).status
       if (status === 401) {

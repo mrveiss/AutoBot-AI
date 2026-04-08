@@ -258,6 +258,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useToast } from '@/composables/useToast';
 import { apiService } from '@/services/api';
+import { getApiBase } from '@/config/ssot-config';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
 import BaseButton from '@/components/base/BaseButton.vue';
 import { createLogger } from '@/utils/debugUtils';
@@ -329,7 +330,7 @@ const loadPendingItems = async () => {
   try {
     loading.value = true;
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.get(`/api/chat-knowledge/knowledge/pending/${props.chatId}`);
+    const response = await apiService.get(`${getApiBase()}/chat-knowledge/knowledge/pending/${props.chatId}`);
 
     if (response.success) {
       pendingItems.value = response.pending_items;
@@ -411,7 +412,7 @@ const applyAllDecisions = async () => {
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
     await Promise.all(
       decisions.map(decision =>
-        apiService.post('/api/chat-knowledge/knowledge/decide', decision)
+        apiService.post(`${getApiBase()}/chat-knowledge/knowledge/decide`, decision)
       )
     );
 
@@ -432,7 +433,7 @@ const compileChat = async () => {
     loading.value = true;
 
     // Issue #552: Fixed path to match backend (hyphen instead of underscore)
-    const response = await apiService.post('/api/chat-knowledge/compile', {
+    const response = await apiService.post(`${getApiBase()}/chat-knowledge/compile`, {
       chat_id: props.chatId,
       title: compileOptions.value.title || null,
       include_system_messages: compileOptions.value.includeSystemMessages

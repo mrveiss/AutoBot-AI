@@ -1,4 +1,12 @@
 ---
+
+# -------------------------------------------------------------------
+# Pre-flight: Sync code_source from GitHub before roles run (#3604)
+# -------------------------------------------------------------------
+- name: "Pre-flight: Sync code_source"
+  import_playbook: pre-flight-code-sync.yml
+  tags: ['pre-flight']
+
 # AutoBot Full Deployment Playbook
 # Orchestrates complete migration from Docker to Hyper-V VMs
 

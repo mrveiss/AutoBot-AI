@@ -14,13 +14,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import bcrypt
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from autobot_shared.auth.jwt_core import hash_password, verify_password
 from user_management.services.base_service import BaseService, TenantContext
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,6 @@ class UserService(BaseService):
     multi-tenancy support.
     """
 
-    # Password hashing configuration
-    BCRYPT_ROUNDS = 12
-
     def __init__(self, session: AsyncSession, context: Optional[TenantContext] = None):
         """Initialize user service."""
         super().__init__(session, context)
@@ -72,8 +69,7 @@ class UserService(BaseService):
         Returns:
             Bcrypt hash string
         """
-        salt = bcrypt.gensalt(rounds=UserService.BCRYPT_ROUNDS)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+        return hash_password(password)
 
     @staticmethod
     def verify_password(password: str, password_hash: str) -> bool:
@@ -87,13 +83,7 @@ class UserService(BaseService):
         Returns:
             True if password matches
         """
-        try:
-            return bcrypt.checkpw(
-                password.encode("utf-8"), password_hash.encode("utf-8")
-            )
-        except Exception as e:
-            logger.error("Password verification error: %s", e)
-            return False
+        return verify_password(password, password_hash)
 
     @staticmethod
     def generate_temp_password() -> str:

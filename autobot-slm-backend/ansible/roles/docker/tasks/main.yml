@@ -1,0 +1,188 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Docker Role - Install Docker Engine and manage containers (#3424)
+---
+
+# ============================================================
+# Phase 1: Detect package manager
+# ============================================================
+- name: "Docker | Detect OS family"
+  ansible.builtin.set_fact:
+    _docker_is_debian: "{{ ansible_os_family == 'Debian' }}"
+    _docker_is_redhat: "{{ ansible_os_family == 'RedHat' }}"
+  tags: ['docker', 'packages']
+
+# ============================================================
+# Phase 2: Install Docker Engine (Debian/Ubuntu)
+# ============================================================
+- name: "Docker | Install prerequisite packages (Debian)"
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Ensure APT keyring directory exists (Debian)"
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Check if Docker GPG key is already present (Debian)"
+  ansible.builtin.stat:
+    path: "{{ docker_apt_gpg_key_path }}"
+  register: _docker_gpg_stat
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Download Docker GPG key (Debian)"
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_gpg_url }}"
+    dest: "{{ docker_apt_gpg_key_path }}"
+    mode: "0644"
+    owner: root
+    group: root
+  when:
+    - _docker_is_debian | bool
+    - not _docker_gpg_stat.stat.exists
+  tags: ['docker', 'packages']
+
+- name: "Docker | Add Docker APT repository (Debian)"
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ docker_apt_repo_arch }} signed-by={{ docker_apt_gpg_key_path }}]
+      https://download.docker.com/linux/{{ ansible_distribution | lower }}
+      {{ ansible_distribution_release }} {{ docker_apt_repo_channel }}
+    state: present
+    filename: docker
+    update_cache: true
+  when: _docker_is_debian | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Install Docker Engine (Debian)"
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+  when: _docker_is_debian | bool
+  notify: restart docker
+  tags: ['docker', 'packages']
+
+# ============================================================
+# Phase 3: Install Docker Engine (RHEL/CentOS/Fedora)
+# ============================================================
+- name: "Docker | Add Docker DNF repository (RedHat)"
+  ansible.builtin.command:
+    cmd: dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    creates: /etc/yum.repos.d/docker-ce.repo
+  when: _docker_is_redhat | bool
+  tags: ['docker', 'packages']
+
+- name: "Docker | Install Docker Engine (RedHat)"
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+  when: _docker_is_redhat | bool
+  notify: restart docker
+  tags: ['docker', 'packages']
+
+# ============================================================
+# Phase 4: Enable and start Docker service
+# ============================================================
+- name: "Docker | Enable and start Docker service"
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: ['docker', 'service']
+
+# ============================================================
+# Phase 5: Add service user to docker group
+# ============================================================
+- name: "Docker | Add {{ docker_service_user }} to docker group"
+  ansible.builtin.user:
+    name: "{{ docker_service_user }}"
+    groups: docker
+    append: true
+  when: docker_service_user != ""
+  tags: ['docker', 'service']
+
+# ============================================================
+# Phase 6: Pull named image when docker_image is specified
+# ============================================================
+- name: "Docker | Pull image {{ docker_image }}"
+  community.docker.docker_image:
+    name: "{{ docker_image }}"
+    source: pull
+  when: docker_image | length > 0
+  tags: ['docker', 'deploy']
+
+# ============================================================
+# Phase 7: Pull images referenced in docker_containers list
+# ============================================================
+- name: "Docker | Pull container images"
+  community.docker.docker_image:
+    name: "{{ item.image }}"
+    source: pull
+  loop: "{{ docker_containers }}"
+  when: docker_containers | length > 0
+  tags: ['docker', 'deploy']
+
+# ============================================================
+# Phase 8: Run containers
+# ============================================================
+- name: "Docker | Run containers"
+  community.docker.docker_container:
+    name: "{{ item.name }}"
+    image: "{{ item.image }}"
+    state: started
+    restart_policy: "{{ item.restart_policy | default(docker_default_restart_policy) }}"
+    published_ports: "{{ item.ports | default([]) }}"
+    env: "{{ item.environment | default({}) }}"
+    pull: true
+  loop: "{{ docker_containers }}"
+  when: docker_containers | length > 0
+  tags: ['docker', 'deploy']
+
+# ============================================================
+# Phase 9: Post-deploy verification
+# ============================================================
+- name: "Docker | Verify containers are running"
+  community.docker.docker_container_info:
+    name: "{{ item.name }}"
+  register: _docker_container_info
+  loop: "{{ docker_containers }}"
+  when: docker_containers | length > 0
+  tags: ['docker', 'smoke-test']
+
+- name: "Docker | Assert all containers reached running state"
+  ansible.builtin.assert:
+    that:
+      - item.container.State.Running | bool
+    fail_msg: "Container {{ item.item.name }} is not in running state"
+    success_msg: "Container {{ item.item.name }} is running"
+  loop: "{{ _docker_container_info.results }}"
+  when:
+    - docker_containers | length > 0
+    - item.container is defined
+  tags: ['docker', 'smoke-test']

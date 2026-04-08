@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from auth_middleware import get_current_user
 from models.infrastructure import (
     DeploymentActionResponse,
     DeploymentCreateRequest,
@@ -46,7 +47,11 @@ from services.slm_client import get_slm_client
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/slm/deployments", tags=["slm-deployments"])
+router = APIRouter(
+    prefix="/slm/deployments",
+    tags=["slm-deployments"],
+    dependencies=[Depends(get_current_user)],
+)
 
 _VALID_STRATEGIES = {s.value for s in DeploymentStrategy}
 

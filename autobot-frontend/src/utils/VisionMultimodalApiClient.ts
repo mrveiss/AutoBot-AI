@@ -12,6 +12,7 @@ import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
 import { getAuthToken } from '@/utils/fetchWithAuth';
+import { getApiBase } from '@/config/ssot-config';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('VisionMultimodalApiClient');
@@ -438,7 +439,7 @@ class VisionMultimodalApiClient {
    * GET /api/vision/health
    */
   async getVisionHealth(): Promise<ApiResponse<VisionHealthResponse>> {
-    return this.request<VisionHealthResponse>('/api/vision/health');
+    return this.request<VisionHealthResponse>(`${getApiBase()}/vision/health`);
   }
 
   /**
@@ -446,7 +447,7 @@ class VisionMultimodalApiClient {
    * GET /api/vision/status
    */
   async getVisionStatus(): Promise<ApiResponse<VisionStatusResponse>> {
-    return this.request<VisionStatusResponse>('/api/vision/status');
+    return this.request<VisionStatusResponse>(`${getApiBase()}/vision/status`);
   }
 
   /**
@@ -456,7 +457,7 @@ class VisionMultimodalApiClient {
   async analyzeScreen(
     request: ScreenAnalysisRequest = {}
   ): Promise<ApiResponse<ScreenAnalysisResponse>> {
-    return this.request<ScreenAnalysisResponse>('/api/vision/analyze', {
+    return this.request<ScreenAnalysisResponse>(`${getApiBase()}/vision/analyze`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -469,7 +470,7 @@ class VisionMultimodalApiClient {
   async detectElements(
     request: ElementDetectionRequest = {}
   ): Promise<ApiResponse<ElementDetectionResponse>> {
-    return this.request<ElementDetectionResponse>('/api/vision/elements', {
+    return this.request<ElementDetectionResponse>(`${getApiBase()}/vision/elements`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -480,7 +481,7 @@ class VisionMultimodalApiClient {
    * POST /api/vision/ocr
    */
   async extractText(request: OCRRequest = {}): Promise<ApiResponse<OCRResponse>> {
-    return this.request<OCRResponse>('/api/vision/ocr', {
+    return this.request<OCRResponse>(`${getApiBase()}/vision/ocr`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -495,7 +496,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<AutomationOpportunitiesResponse>> {
     const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
     return this.request<AutomationOpportunitiesResponse>(
-      `/api/vision/automation-opportunities${params}`
+      `${getApiBase()}/vision/automation-opportunities${params}`
     );
   }
 
@@ -507,7 +508,7 @@ class VisionMultimodalApiClient {
     element_types: ElementTypeInfo[];
     total_types: number;
   }>> {
-    return this.request('/api/vision/element-types');
+    return this.request(`${getApiBase()}/vision/element-types`);
   }
 
   /**
@@ -518,7 +519,7 @@ class VisionMultimodalApiClient {
     interaction_types: InteractionTypeInfo[];
     total_types: number;
   }>> {
-    return this.request('/api/vision/interaction-types');
+    return this.request(`${getApiBase()}/vision/interaction-types`);
   }
 
   /**
@@ -527,7 +528,7 @@ class VisionMultimodalApiClient {
    */
   async getLayoutAnalysis(sessionId?: string): Promise<ApiResponse<LayoutResponse>> {
     const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
-    return this.request<LayoutResponse>(`/api/vision/layout${params}`);
+    return this.request<LayoutResponse>(`${getApiBase()}/vision/layout${params}`);
   }
 
   // ==================================================================================
@@ -539,7 +540,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/health
    */
   async getMultimodalHealth(): Promise<ApiResponse<MultimodalHealthResponse>> {
-    return this.request<MultimodalHealthResponse>('/api/multimodal/health');
+    return this.request<MultimodalHealthResponse>(`${getApiBase()}/multimodal/health`);
   }
 
   /**
@@ -547,7 +548,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/stats
    */
   async getMultimodalStats(): Promise<ApiResponse<MultimodalStats>> {
-    return this.request<MultimodalStats>('/api/multimodal/stats');
+    return this.request<MultimodalStats>(`${getApiBase()}/multimodal/stats`);
   }
 
   /**
@@ -566,7 +567,7 @@ class VisionMultimodalApiClient {
       formData.append('question', question);
     }
 
-    return this.requestFormData<MultiModalResponse>('/api/multimodal/process/image', formData);
+    return this.requestFormData<MultiModalResponse>(`${getApiBase()}/multimodal/process/image`, formData);
   }
 
   /**
@@ -581,7 +582,7 @@ class VisionMultimodalApiClient {
     formData.append('file', file);
     formData.append('intent', intent);
 
-    return this.requestFormData<MultiModalResponse>('/api/multimodal/process/audio', formData);
+    return this.requestFormData<MultiModalResponse>(`${getApiBase()}/multimodal/process/audio`, formData);
   }
 
   /**
@@ -591,7 +592,7 @@ class VisionMultimodalApiClient {
   async processText(
     request: TextProcessingRequest
   ): Promise<ApiResponse<MultiModalResponse>> {
-    return this.request<MultiModalResponse>('/api/multimodal/process/text', {
+    return this.request<MultiModalResponse>(`${getApiBase()}/multimodal/process/text`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -604,7 +605,7 @@ class VisionMultimodalApiClient {
   async generateEmbedding(
     request: EmbeddingRequest
   ): Promise<ApiResponse<EmbeddingResponse>> {
-    return this.request<EmbeddingResponse>('/api/multimodal/embeddings/generate', {
+    return this.request<EmbeddingResponse>(`${getApiBase()}/multimodal/embeddings/generate`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -617,7 +618,7 @@ class VisionMultimodalApiClient {
   async crossModalSearch(
     request: CrossModalSearchRequest
   ): Promise<ApiResponse<CrossModalSearchResponse>> {
-    return this.request<CrossModalSearchResponse>('/api/multimodal/search/cross-modal', {
+    return this.request<CrossModalSearchResponse>(`${getApiBase()}/multimodal/search/cross-modal`, {
       method: 'POST',
       body: JSON.stringify(request),
     });
@@ -646,7 +647,7 @@ class VisionMultimodalApiClient {
     }
     formData.append('intent', intent);
 
-    return this.requestFormData<FusionResponse>('/api/multimodal/fusion/combine', formData);
+    return this.requestFormData<FusionResponse>(`${getApiBase()}/multimodal/fusion/combine`, formData);
   }
 
   /**
@@ -654,7 +655,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/performance/stats
    */
   async getPerformanceStats(): Promise<ApiResponse<PerformanceStats>> {
-    return this.request<PerformanceStats>('/api/multimodal/performance/stats');
+    return this.request<PerformanceStats>(`${getApiBase()}/multimodal/performance/stats`);
   }
 
   /**
@@ -662,7 +663,7 @@ class VisionMultimodalApiClient {
    * GET /api/multimodal/performance/summary
    */
   async getPerformanceSummary(): Promise<ApiResponse<PerformanceSummary>> {
-    return this.request<PerformanceSummary>('/api/multimodal/performance/summary');
+    return this.request<PerformanceSummary>(`${getApiBase()}/multimodal/performance/summary`);
   }
 
   /**
@@ -675,7 +676,7 @@ class VisionMultimodalApiClient {
     optimization_result: Record<string, unknown>;
     message: string;
   }>> {
-    return this.request('/api/multimodal/performance/optimize', {
+    return this.request(`${getApiBase()}/multimodal/performance/optimize`, {
       method: 'POST',
     });
   }
@@ -699,7 +700,7 @@ class VisionMultimodalApiClient {
       modality,
       batch_size: batchSize.toString(),
     });
-    return this.request(`/api/multimodal/performance/batch-size?${params}`, {
+    return this.request(`${getApiBase()}/multimodal/performance/batch-size?${params}`, {
       method: 'POST',
     });
   }

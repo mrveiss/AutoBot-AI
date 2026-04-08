@@ -23,6 +23,28 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE35_HAIKU,
+    ANTHROPIC_CLAUDE_HAIKU4_5,
+    ANTHROPIC_CLAUDE_OPUS4,
+    ANTHROPIC_CLAUDE_SONNET4,
+    DEEPSEEK_R1_API,
+    DEEPSEEK_V3,
+    GOOGLE_GEMINI20_FLASH,
+    GOOGLE_GEMINI25_PRO,
+    GOOGLE_GEMINI15_PRO,
+    MODEL_PRICING_PER_1M_TOKENS,
+    OPENAI_GPT35_TURBO,
+    OPENAI_GPT41,
+    OPENAI_GPT4O,
+    OPENAI_GPT4_TURBO,
+    OPENAI_O1,
+    OPENAI_O1_MINI,
+    OPENAI_O3,
+    OPENAI_O3_MINI,
+    OPENAI_O4_MINI,
+)
+from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -43,63 +65,10 @@ class LLMProvider(str, Enum):
     LOCAL = "local"
 
 
-# Model pricing per 1M tokens (USD) - Updated 2026-03 (#1961)
-# Format: {"input": price_per_1M_input_tokens, "output": price_per_1M_output_tokens}
-# Pricing source: provider published rates as of 2026-03.
-MODEL_PRICING: Dict[str, Dict[str, float]] = {
-    # Anthropic Claude 4.x (2025-2026)
-    "claude-opus-4-20250514": {"input": 15.00, "output": 75.00},
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
-    # Anthropic Claude 3.x / Sonnet 4
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
-    "claude-3-5-haiku-20241022": {"input": 0.80, "output": 4.00},
-    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-    # OpenAI GPT-4.1 family (2025)
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    # OpenAI GPT-4o / GPT-4 / GPT-3.5
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    # OpenAI reasoning models
-    "o1": {"input": 15.00, "output": 60.00},
-    "o1-mini": {"input": 3.00, "output": 12.00},
-    "o3": {"input": 2.00, "output": 8.00},
-    "o3-mini": {"input": 1.10, "output": 4.40},
-    "o4-mini": {"input": 1.10, "output": 4.40},
-    # Google Gemini 2.5 (2025-2026)
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "gemini-2.5-flash": {"input": 0.15, "output": 0.60},
-    # Google Gemini 2.0 / 1.5
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    # DeepSeek hosted API models (2025)
-    "deepseek-v3": {"input": 0.27, "output": 1.10},
-    "deepseek-r1-api": {"input": 0.55, "output": 2.19},
-    # Local/Ollama models (free)
-    "llama3": {"input": 0.0, "output": 0.0},
-    "llama3.1": {"input": 0.0, "output": 0.0},
-    "llama3.2": {"input": 0.0, "output": 0.0},
-    "llama3.3": {"input": 0.0, "output": 0.0},
-    "mistral": {"input": 0.0, "output": 0.0},
-    "mixtral": {"input": 0.0, "output": 0.0},
-    "codellama": {"input": 0.0, "output": 0.0},
-    "qwen2.5": {"input": 0.0, "output": 0.0},
-    "qwen3": {"input": 0.0, "output": 0.0},
-    "deepseek-coder": {"input": 0.0, "output": 0.0},
-    "deepseek-r1": {"input": 0.0, "output": 0.0},
-    "phi3": {"input": 0.0, "output": 0.0},
-    "phi4": {"input": 0.0, "output": 0.0},
-    "gemma2": {"input": 0.0, "output": 0.0},
-    "gemma3": {"input": 0.0, "output": 0.0},
-}
+# Model pricing per 1M tokens (USD) - single source of truth in
+# constants/model_constants.py (#3528). Update PRICING_VERSION above when
+# prices change.
+MODEL_PRICING: Dict[str, Dict[str, float]] = MODEL_PRICING_PER_1M_TOKENS
 
 
 def _check_pricing_staleness() -> None:
@@ -264,25 +233,25 @@ class LLMCostTracker:
     # Pattern-based pricing fallbacks for unknown models (#1961).
     # Ordered from most specific to least specific.
     _FALLBACK_PATTERNS: List[tuple] = [
-        ("claude-opus", "claude-opus-4-20250514"),
-        ("claude-sonnet", "claude-sonnet-4-20250514"),
-        ("claude-haiku", "claude-haiku-4-5-20251001"),
-        ("claude", "claude-sonnet-4-20250514"),
-        ("gpt-4o", "gpt-4o"),
-        ("gpt-4.1", "gpt-4.1"),
-        ("gpt-4", "gpt-4-turbo"),
-        ("gpt-3.5", "gpt-3.5-turbo"),
-        ("o1-mini", "o1-mini"),
-        ("o3-mini", "o3-mini"),
-        ("o4-mini", "o4-mini"),
-        ("o1", "o1"),
-        ("o3", "o3"),
-        ("gemini-2.5", "gemini-2.5-pro"),
-        ("gemini-2.0", "gemini-2.0-flash"),
-        ("gemini-1.5", "gemini-1.5-pro"),
-        ("gemini", "gemini-2.0-flash"),
-        ("deepseek-v3", "deepseek-v3"),
-        ("deepseek-r1", "deepseek-r1-api"),
+        ("claude-opus", ANTHROPIC_CLAUDE_OPUS4),
+        ("claude-sonnet", ANTHROPIC_CLAUDE_SONNET4),
+        ("claude-haiku", ANTHROPIC_CLAUDE_HAIKU4_5),
+        ("claude", ANTHROPIC_CLAUDE_SONNET4),
+        ("gpt-4o", OPENAI_GPT4O),
+        ("gpt-4.1", OPENAI_GPT41),
+        ("gpt-4", OPENAI_GPT4_TURBO),
+        ("gpt-3.5", OPENAI_GPT35_TURBO),
+        ("o1-mini", OPENAI_O1_MINI),
+        ("o3-mini", OPENAI_O3_MINI),
+        ("o4-mini", OPENAI_O4_MINI),
+        ("o1", OPENAI_O1),
+        ("o3", OPENAI_O3),
+        ("gemini-2.5", GOOGLE_GEMINI25_PRO),
+        ("gemini-2.0", GOOGLE_GEMINI20_FLASH),
+        ("gemini-1.5", GOOGLE_GEMINI15_PRO),
+        ("gemini", GOOGLE_GEMINI20_FLASH),
+        ("deepseek-v3", DEEPSEEK_V3),
+        ("deepseek-r1", DEEPSEEK_R1_API),
     ]
 
     def _estimate_pricing_by_pattern(
@@ -657,7 +626,7 @@ class LLMCostTracker:
 
                 # Update daily totals
                 await pipe.incrbyfloat(daily_key, record.cost_usd)
-                await pipe.expire(daily_key, 86400 * 90)  # Keep 90 days
+                await pipe.expire(daily_key, TTL_90_DAYS)  # Keep 90 days
 
                 # Update model totals
                 await pipe.hincrby(model_key, "input_tokens", record.input_tokens)
@@ -673,7 +642,7 @@ class LLMCostTracker:
                     await pipe.hincrby(
                         session_key, "output_tokens", record.output_tokens
                     )
-                    await pipe.expire(session_key, 86400 * 30)  # Keep 30 days
+                    await pipe.expire(session_key, TTL_30_DAYS)  # Keep 30 days
 
                 # Update per-agent totals if agent provided (#1401)
                 if record.agent_id:
@@ -686,7 +655,7 @@ class LLMCostTracker:
                         f"{self.AGENT_TOTALS_KEY}:{record.agent_id}" f":daily:{today}"
                     )
                     await pipe.incrbyfloat(daily_agent_key, record.cost_usd)
-                    await pipe.expire(daily_agent_key, 86400 * 90)
+                    await pipe.expire(daily_agent_key, TTL_90_DAYS)
 
                 # Execute all operations in single round-trip
                 await pipe.execute()

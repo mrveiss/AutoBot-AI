@@ -13,7 +13,7 @@ import platform
 import subprocess  # nosec B404 - controlled system diagnostics
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import psutil
@@ -92,13 +92,13 @@ class PerformanceOptimizedDiagnostics:
                 "cpu": cpu_info,
                 "memory": memory_data,
                 "gpu": gpu_info,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error("Error gathering system info: %s", e)
             return {
                 "error": "Failed to gather system info",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
     def _get_gpu_info(self) -> Dict[str, Any]:
@@ -273,7 +273,7 @@ class PerformanceOptimizedDiagnostics:
                 "system_info": self.system_info,
                 "performance_analysis": performance_analysis,
                 "recommendations": self._generate_performance_recommendations(),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error("Error checking system resources: %s", e)
@@ -488,7 +488,7 @@ class PerformanceOptimizedDiagnostics:
                 "memory_freed_mb": round(memory_freed_mb, 2),
                 "memory_before_percent": round(memory_before.percent, 1),
                 "memory_after_percent": round(memory_after.percent, 1),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:

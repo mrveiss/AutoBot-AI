@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAgentRegistry')
 
@@ -101,7 +102,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
     isLoading.value = true
     errors.value = []
     try {
-      const data = await ApiClient.get('/api/agent_config/agents/all')
+      const data = await ApiClient.get(`${getApiBase()}/agent_config/agents/all`)
       backendAgents.value = data.agents || []
       specializedAgents.value = data.specialized_agents || []
       summary.value = data.summary || null
@@ -123,7 +124,7 @@ export function useAgentRegistry(options: UseAgentRegistryOptions = {}) {
     isLoadingDetail.value = true
     try {
       const data = await ApiClient.get(
-        `/api/agent_config/agents/specialized/${agentId}`
+        `${getApiBase()}/agent_config/agents/specialized/${agentId}`
       )
       selectedAgent.value = data
     } catch (err: unknown) {

@@ -17,7 +17,7 @@ Features:
 import asyncio
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -445,7 +445,7 @@ class TemporalKnowledgeManager:
             },
             "most_accessed_content": self._build_most_accessed_list(),
             "analytics": self.temporal_analytics,
-            "analysis_timestamp": datetime.now().isoformat(),
+            "analysis_timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     async def start_background_processing(

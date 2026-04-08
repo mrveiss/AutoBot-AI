@@ -1,6 +1,7 @@
 // ChatInterface TypeScript definitions and setup
 import { ref, computed, onUnmounted, nextTick } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for ChatInterface
 const logger = createLogger('ChatInterface')
@@ -263,7 +264,7 @@ export function useChatInterface() {
       // Upload files in parallel - eliminates N+1 sequential uploads
       const uploadResults = await Promise.allSettled(
         filesToUpload.map(async (file) => {
-          const result = (await apiClient.uploadFile('/api/files/upload', file)) as unknown as FileUploadResponse
+          const result = (await apiClient.uploadFile(`${getApiBase()}/files/upload`, file)) as unknown as FileUploadResponse
           const filePath = result.path || result.filename || file.name
           await associateFileWithChat(filePath, file.name)
           return filePath

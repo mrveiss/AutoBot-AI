@@ -98,7 +98,7 @@ class BackgroundLLMSync:
 
             # For now, just simulate a health check
             # In a real implementation, this would make actual HTTP requests
-            await asyncio.sleep(0.1)  # Simulate network delay
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate network delay
 
             response_time = time.time() - start_time
 
@@ -149,7 +149,7 @@ class BackgroundLLMSync:
             logger.debug("Warming up LLM connection pools...")
 
             # Simulate connection pool warming
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
             logger.debug("Connection pools warmed successfully")
 

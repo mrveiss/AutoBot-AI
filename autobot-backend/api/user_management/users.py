@@ -19,6 +19,7 @@ from api.user_management.dependencies import (
     get_user_service,
     require_user_management_enabled,
 )
+from autobot_shared.models.pagination import PaginationParams
 from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,
@@ -110,8 +111,7 @@ class UserSearchResponse(BaseModel):
     dependencies=[Depends(require_user_management_enabled)],
 )
 async def list_users(
-    limit: int = Query(50, ge=1, le=100, description="Maximum number of users"),
-    offset: int = Query(0, ge=0, description="Number of users to skip"),
+    pagination: PaginationParams = Depends(),
     search: Optional[str] = Query(
         None, description="Search by email, username, or name"
     ),
@@ -120,8 +120,8 @@ async def list_users(
 ):
     """List users with pagination."""
     users, total = await user_service.list_users(
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         search=search,
         include_inactive=include_inactive,
     )
@@ -129,8 +129,8 @@ async def list_users(
     return UserListResponse(
         users=[_user_to_response(user) for user in users],
         total=total,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
 
 

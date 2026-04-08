@@ -8,7 +8,7 @@ Issue #2013: Decomposed from scanner.py god module.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 from utils.file_categorization import (
@@ -229,7 +229,7 @@ def _calculate_analysis_statistics(analysis_results: Dict) -> None:
         stats["docstring_ratio"] = "0.0%"
         stats["documentation_ratio"] = "0.0%"
 
-    stats["last_indexed"] = datetime.now().isoformat()
+    stats["last_indexed"] = datetime.now(tz=timezone.utc).isoformat()
 
 
 def _update_file_type_stats(stats: Dict, result: "FileAnalysisResult") -> None:

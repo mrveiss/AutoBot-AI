@@ -13,6 +13,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type CacheConfig, type CacheStats } from '@/composables/useAutobotApi'
+import { getBackendUrl } from '@/config/ssot-config'
 
 const authStore = useAuthStore()
 const api = useAutobotApi()
@@ -136,7 +137,7 @@ async function clearRedisCache(database: string): Promise<void> {
   error.value = null
 
   try {
-    await fetch(`/autobot-api/cache/redis/clear/${database}`, {
+    await fetch(`${getBackendUrl()}/cache/redis/clear/${database}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${authStore.token}`,

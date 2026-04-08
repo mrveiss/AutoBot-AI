@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import config
+from constants.threshold_constants import TimingConstants
 
 # Add scripts path for log forwarder import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -607,7 +608,7 @@ async def start_forwarding(
         thread.start()
 
         # Wait briefly for startup
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
         return {"message": "Log forwarding service started"}
     except Exception as e:

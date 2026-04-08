@@ -9,7 +9,7 @@ Integrates with backend VNC proxy for browser and desktop observation
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 import aiohttp
@@ -326,7 +326,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
         last_check = cache.get("last_check")
 
     # Filter by duration
-    cutoff_time = datetime.now() - timedelta(seconds=duration)
+    cutoff_time = datetime.now(tz=timezone.utc) - timedelta(seconds=duration)
     filtered_activity = [
         obs
         for obs in recent_activity
@@ -362,7 +362,7 @@ async def get_browser_vnc_context_mcp() -> Metadata:
 
     context = {
         "success": True,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "playwright_state": {},
         "vnc_state": {},
     }
@@ -431,7 +431,7 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
     for later retrieval by MCP tools
     """
     # Add timestamp
-    observation["timestamp"] = datetime.now().isoformat()
+    observation["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
 
     # Thread-safe update of observations
     async with _vnc_observations_lock:
@@ -443,7 +443,7 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
         vnc_observations[vnc_type]["recent_activity"] = vnc_observations[vnc_type][
             "recent_activity"
         ][-100:]
-        vnc_observations[vnc_type]["last_check"] = datetime.now()
+        vnc_observations[vnc_type]["last_check"] = datetime.now(tz=timezone.utc)
 
     logger.debug(
         "Recorded VNC observation for %s: %s", vnc_type, observation.get("type")
@@ -643,7 +643,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
     state = {
         "success": True,
         "action": "observe_state",
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
     # Get screen resolution

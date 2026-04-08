@@ -10,11 +10,13 @@ from typing import Any, Dict
 
 import aiohttp
 
+from tests.test_helpers import get_test_backend_url
+
 
 async def create_chat_session() -> str:
     """Create a new chat session and return the chat ID."""
     async with aiohttp.ClientSession() as session:
-        async with session.post("http://localhost:8001/api/chats/new") as response:
+        async with session.post(get_test_backend_url() + "/api/chats/new") as response:
             if response.status == 200:
                 data = await response.json()
                 return data.get("chat_id")
@@ -28,7 +30,7 @@ async def send_chat_message(chat_id: str, message: str) -> Dict[str, Any]:
         chat_request = {"chatId": chat_id, "message": message}
 
         async with session.post(
-            "http://localhost:8001/api/chat", json=chat_request
+            get_test_backend_url() + "/api/chat", json=chat_request
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -43,7 +45,7 @@ async def execute_workflow(message: str, auto_approve: bool = True) -> Dict[str,
         workflow_request = {"user_message": message, "auto_approve": auto_approve}
 
         async with session.post(
-            "http://localhost:8001/api/workflow/execute", json=workflow_request
+            get_test_backend_url() + "/api/workflow/execute", json=workflow_request
         ) as response:
             if response.status == 200:
                 return await response.json()
@@ -59,7 +61,7 @@ async def monitor_workflow(workflow_id: str, timeout: int = 60):
 
         while time.time() - start_time < timeout:
             async with session.get(
-                f"http://localhost:8001/api/workflow/workflow/{workflow_id}/status"
+                get_test_backend_url() + f"/api/workflow/workflow/{workflow_id}/status"
             ) as response:
                 if response.status == 200:
                     status = await response.json()
@@ -215,7 +217,7 @@ async def demo_workflow_management():
         # Check active workflows
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "http://localhost:8001/api/workflow/workflows"
+                get_test_backend_url() + "/api/workflow/workflows"
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -256,7 +258,7 @@ async def main():
         async with aiohttp.ClientSession() as session:
             # Check backend health
             async with session.get(
-                "http://localhost:8001/api/system/health"
+                get_test_backend_url() + "/api/system/health"
             ) as response:
                 if response.status == 200:
                     health = await response.json()

@@ -190,7 +190,6 @@ def safe_redis_operation():
 | Component | Location | Purpose | Usage |
 |-----------|----------|---------|-------|
 | **`redis_client.py`** | `src/utils/` | High-level API | 66 files use this ✅ |
-| **`redis_database_manager.py`** | `src/utils/` | Backend pooling | 28 files use this |
 | **`NetworkConstants`** | `src/constants/` | IP/Port config | Provides `REDIS_VM_IP` and `REDIS_PORT` |
 
 ### How It Works
@@ -207,7 +206,6 @@ def safe_redis_operation():
          │ Uses NetworkConstants for IP/port
          ▼
 ┌──────────────────────────┐
-│ redis_database_manager.py │ (Connection pooling)
 └────────┬─────────────────┘
          │ Manages connection pools
          ▼
@@ -420,7 +418,6 @@ ssh autobot@<database-ip> "cat /etc/redis/redis.conf | grep timeout"
 ## 📚 Related Documentation
 
 - **Network Constants**: `src/constants/network_constants.py`
-- **Redis Database Manager**: `src/utils/redis_database_manager.py`
 - **Hardcoding Prevention**: `docs/developer/HARDCODING_PREVENTION.md`
 - **Infrastructure Setup**: `docs/developer/INFRASTRUCTURE_DEPLOYMENT.md`
 

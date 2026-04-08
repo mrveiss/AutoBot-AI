@@ -183,6 +183,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
@@ -325,7 +326,7 @@ function pauseAgent(agent: Agent) {
 
 async function fetchAgents() {
   try {
-    const response = await fetchWithAuth('/api/agents/status')
+    const response = await fetchWithAuth(`${getApiBase()}/agents/status`)
     if (response.ok) {
       const data = await response.json()
       if (data.agents) {
@@ -345,7 +346,7 @@ async function fetchEvents() {
   try {
     // Issue #552: Fixed path - backend uses /api/analytics/agents/tasks/recent
     // (analytics_agents.py has prefix="/agents" and is included into analytics.py router)
-    const response = await fetchWithAuth('/api/analytics/agents/tasks/recent?limit=10')
+    const response = await fetchWithAuth(`${getApiBase()}/analytics/agents/tasks/recent?limit=10`)
     if (response.ok) {
       const data = await response.json()
       // Backend returns tasks, not events - adapt response structure

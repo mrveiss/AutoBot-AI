@@ -24,19 +24,22 @@ Usage::
 """
 
 import asyncio
-import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
+from autobot_shared.redis_management.cache_wrapper import RedisCache
+from autobot_shared.ssot_config import config
+from constants.ttl_constants import TTL_24_HOURS
+
 logger = logging.getLogger(__name__)
 
 # Defaults
-_DEFAULT_TTL = 86400  # 24 hours
-_DEFAULT_TIMEOUT = 600  # 10 minutes
+_DEFAULT_TTL = TTL_24_HOURS
+_DEFAULT_TIMEOUT: float = config.timeout.background_task
 _DEFAULT_MAX_CONCURRENT = 1
 
 
@@ -76,20 +79,14 @@ class BackgroundTaskManager:
 
     async def _save_to_redis(self, task_id: str) -> None:
         """Persist task state to Redis."""
-        try:
-            redis = await self._get_redis()
-            if not redis:
-                return
-            state = self._tasks.get(task_id)
-            if state:
-                safe = {k: v for k, v in state.items() if k != "params"}
-                await redis.set(
-                    f"{self._prefix}{task_id}",
-                    json.dumps(safe, default=str),
-                    ex=self._ttl,
-                )
-        except Exception as exc:
-            logger.debug("Task Redis save failed (non-fatal): %s", exc)
+        redis = await self._get_redis()
+        if not redis:
+            return
+        state = self._tasks.get(task_id)
+        if state:
+            safe = {k: v for k, v in state.items() if k != "params"}
+            cache = RedisCache(redis, default_ttl=self._ttl)
+            await cache.set_json(f"{self._prefix}{task_id}", safe)
 
     async def _load_from_redis(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Load task from Redis (read-only).
@@ -100,17 +97,11 @@ class BackgroundTaskManager:
         handled by ``_clear_orphaned`` (called from ``create_task``
         and ``clear_stuck``) which scans *all* keys.
         """
-        try:
-            redis = await self._get_redis()
-            if not redis:
-                return None
-            data = await redis.get(f"{self._prefix}{task_id}")
-            if not data:
-                return None
-            return json.loads(data)
-        except Exception as exc:
-            logger.debug("Task Redis load failed (non-fatal): %s", exc)
-        return None
+        redis = await self._get_redis()
+        if not redis:
+            return None
+        cache = RedisCache(redis)
+        return await cache.get_json(f"{self._prefix}{task_id}")
 
     async def _clear_orphaned(self) -> int:
         """Mark running-in-Redis-only tasks as failed."""
@@ -142,14 +133,14 @@ class BackgroundTaskManager:
         another handles the cleanup call.
         """
         marked = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
+        cache = RedisCache(redis, default_ttl=self._ttl)
         for key in keys:
-            data = await redis.get(key)
-            if not data:
+            raw_key = key.decode() if isinstance(key, bytes) else key
+            task = await cache.get_json(raw_key)
+            if task is None:
                 continue
-            task = json.loads(data)
-            raw = key.decode() if isinstance(key, bytes) else key
-            tid = raw.removeprefix(self._prefix)
+            tid = raw_key.removeprefix(self._prefix)
             if task.get("status") != "running" or tid in self._tasks:
                 continue
             # Only mark as orphaned if it has exceeded the timeout
@@ -165,11 +156,7 @@ class BackgroundTaskManager:
             task["error"] = "Task orphaned by backend restart"
             task["reason"] = "orphaned"
             task["completed_at"] = now.isoformat()
-            await redis.set(
-                f"{self._prefix}{tid}",
-                json.dumps(task, default=str),
-                ex=self._ttl,
-            )
+            await cache.set_json(f"{self._prefix}{tid}", task)
             marked += 1
             logger.info(
                 "Cleared orphaned task %s%s",
@@ -185,7 +172,7 @@ class BackgroundTaskManager:
     def _cleanup_stuck(self) -> int:
         """Mark timed-out in-memory tasks as failed."""
         cleaned = 0
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         for tid, task in list(self._tasks.items()):
             if task.get("status") != "running":
                 continue
@@ -254,7 +241,7 @@ class BackgroundTaskManager:
             return
         if task["status"] == "pending":
             task["status"] = "running"
-            task["started_at"] = datetime.now().isoformat()
+            task["started_at"] = datetime.now(tz=timezone.utc).isoformat()
         task["current_step"] = step
         task["progress"] = min(progress, 100.0)
         await self._save_to_redis(task_id)
@@ -272,7 +259,7 @@ class BackgroundTaskManager:
         task["status"] = "completed"
         task["progress"] = 100.0
         task["current_step"] = "Complete"
-        task["completed_at"] = datetime.now().isoformat()
+        task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         task["result"] = result
         await self._save_to_redis(task_id)
         sid = (task.get("params") or {}).get("source_id", "")
@@ -285,25 +272,15 @@ class BackgroundTaskManager:
 
         Issue #1757: When source_id is provided, key is scoped per-project.
         """
-        try:
-            redis = await self._get_redis()
-            if not redis:
-                return
-            payload = json.dumps(
-                {
-                    "result": result,
-                    "completed_at": completed_at,
-                },
-                default=str,
-            )
-            suffix = f"{source_id}:" if source_id else ""
-            await redis.set(
-                f"{self._prefix}{suffix}latest_result",
-                payload,
-                ex=self._ttl,
-            )
-        except Exception as exc:
-            logger.debug("Latest result save failed (non-fatal): %s", exc)
+        redis = await self._get_redis()
+        if not redis:
+            return
+        suffix = f"{source_id}:" if source_id else ""
+        cache = RedisCache(redis, default_ttl=self._ttl)
+        await cache.set_json(
+            f"{self._prefix}{suffix}latest_result",
+            {"result": result, "completed_at": completed_at},
+        )
 
     async def get_latest_result(self, source_id: str = "") -> Optional[Dict[str, Any]]:
         """Return the most recent completed result, or *None* (#1540).
@@ -314,18 +291,12 @@ class BackgroundTaskManager:
 
         Issue #1757: source_id scopes to per-project cache.
         """
-        try:
-            redis = await self._get_redis()
-            if not redis:
-                return None
-            suffix = f"{source_id}:" if source_id else ""
-            data = await redis.get(f"{self._prefix}{suffix}latest_result")
-            if not data:
-                return None
-            return json.loads(data)
-        except Exception as exc:
-            logger.debug("Latest result load failed (non-fatal): %s", exc)
-        return None
+        redis = await self._get_redis()
+        if not redis:
+            return None
+        suffix = f"{source_id}:" if source_id else ""
+        cache = RedisCache(redis)
+        return await cache.get_json(f"{self._prefix}{suffix}latest_result")
 
     async def fail_task(
         self,
@@ -340,7 +311,7 @@ class BackgroundTaskManager:
         task["status"] = "failed"
         task["error"] = error
         task["reason"] = reason
-        task["completed_at"] = datetime.now().isoformat()
+        task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
         await self._save_to_redis(task_id)
 
     async def get_status(self, task_id: str) -> Optional[dict]:
@@ -359,24 +330,20 @@ class BackgroundTaskManager:
             if started:
                 try:
                     elapsed = (
-                        datetime.now() - datetime.fromisoformat(started)
+                        datetime.now(tz=timezone.utc) - datetime.fromisoformat(started)
                     ).total_seconds()
                     if elapsed > self._timeout:
                         redis_task["status"] = "failed"
                         redis_task["error"] = "Task timed out (auto-recovered)"
                         redis_task["reason"] = "timeout"
-                        redis_task["completed_at"] = datetime.now().isoformat()
+                        redis_task["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
                         # Persist the cleanup to Redis
-                        redis = await self._get_redis()
-                        if redis:
-                            try:
-                                await redis.set(
-                                    f"{self._prefix}{task_id}",
-                                    json.dumps(redis_task, default=str),
-                                    ex=self._ttl,
-                                )
-                            except Exception:
-                                pass
+                        _redis = await self._get_redis()
+                        if _redis:
+                            cache = RedisCache(_redis, default_ttl=self._ttl)
+                            await cache.set_json(
+                                f"{self._prefix}{task_id}", redis_task
+                            )
                         logger.info(
                             "Auto-recovered zombie task %s "
                             "(running %.0fs, timeout %ds)",

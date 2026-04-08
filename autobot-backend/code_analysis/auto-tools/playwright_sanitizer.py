@@ -18,7 +18,7 @@ import os
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -114,7 +114,7 @@ class PlaywrightSecurityFixer:
         self.vulnerabilities_found = []
         self.backup_dir = None
         self.report = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "tool": "Playwright Security Fixer",
             "version": "1.0.0",
             "summary": {},
@@ -126,7 +126,7 @@ class PlaywrightSecurityFixer:
     def create_backup(self, file_path: str) -> str:
         """Create a backup of the original file."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
             backup_name = f"{Path(file_path).name}.security_backup_{timestamp}"
 
             if not self.backup_dir:
@@ -558,7 +558,7 @@ class PlaywrightSecurityFixer:
     def save_report(self, report_content: str, output_dir: str) -> str:
         """Save the security report."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
 
             # Save markdown report
             md_filename = f"playwright_security_report_{timestamp}.md"

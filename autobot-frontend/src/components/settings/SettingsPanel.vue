@@ -69,6 +69,7 @@
 import { ref, reactive, onMounted, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SettingsPanel')
@@ -387,7 +388,7 @@ const loadSettings = async () => {
 
   const { execute: fetchSettings } = useAsyncHandler(
     // Issue #552: Use trailing slash to match backend endpoint /api/settings/
-    async () => axios.get('/api/settings/'),
+    async () => axios.get(`${getApiBase()}/settings/`),
     {
       errorMessage: 'Failed to load settings',
       notify,
@@ -429,7 +430,7 @@ const saveSettings = async () => {
 
   const { execute: postSettings } = useAsyncHandler(
     // Issue #552: Use trailing slash to match backend endpoint /api/settings/
-    async () => axios.post('/api/settings/', settings.value),
+    async () => axios.post(`${getApiBase()}/settings/`, settings.value),
     {
       errorMessage: 'Failed to save settings',
       successMessage: 'Settings saved successfully',
@@ -461,7 +462,7 @@ const discardChanges = () => {
 // Cache management functions with proper error handling
 const checkCacheApiAvailability = async () => {
   const { execute: checkCache } = useAsyncHandler(
-    async () => axios.get('/api/cache/stats', { timeout: 3000 }),
+    async () => axios.get(`${getApiBase()}/cache/stats`, { timeout: 3000 }),
     {
       logErrors: false, // Silent check - don't log errors for availability check
       onSuccess: () => {
@@ -485,7 +486,7 @@ const saveCacheConfig = async () => {
   isSaving.value = true
 
   const { execute: postCacheConfig } = useAsyncHandler(
-    async () => axios.post('/api/cache/config', cacheConfig),
+    async () => axios.post(`${getApiBase()}/cache/config`, cacheConfig),
     {
       errorMessage: 'Failed to save cache configuration',
       successMessage: 'Cache configuration saved',
@@ -537,7 +538,7 @@ const refreshCacheStats = async () => {
   }
 
   const { execute: getCacheStats } = useAsyncHandler(
-    async () => axios.get('/api/cache/stats'),
+    async () => axios.get(`${getApiBase()}/cache/stats`),
     {
       errorMessage: 'Failed to refresh cache statistics',
       notify,
@@ -567,7 +568,7 @@ const clearCache = async (type: string) => {
   isClearing.value = true
 
   const { execute: postClearCache } = useAsyncHandler(
-    async () => axios.post(`/api/cache/clear/${type}`),
+    async () => axios.post(`${getApiBase()}/cache/clear/${type}`),
     {
       errorMessage: `Failed to clear ${type} cache`,
       successMessage: `${type} cache cleared successfully`,
@@ -595,7 +596,7 @@ const clearRedisCache = async (database: string) => {
   isClearing.value = true
 
   const { execute: postClearRedis } = useAsyncHandler(
-    async () => axios.post(`/api/cache/redis/clear/${database}`),
+    async () => axios.post(`${getApiBase()}/cache/redis/clear/${database}`),
     {
       errorMessage: `Failed to clear Redis ${database} database`,
       successMessage: `Redis ${database} database cleared`,
@@ -624,7 +625,7 @@ const clearCacheType = async (cacheType: string) => {
   isClearing.value = true
 
   const { execute: postClearCacheType } = useAsyncHandler(
-    async () => axios.post(`/api/cache/clear/${cacheType}`),
+    async () => axios.post(`${getApiBase()}/cache/clear/${cacheType}`),
     {
       errorMessage: `Failed to clear ${cacheType} cache`,
       successMessage: `${cacheType} cache cleared`,
@@ -653,7 +654,7 @@ const warmupCaches = async () => {
   isClearing.value = true
 
   const { execute: postWarmup } = useAsyncHandler(
-    async () => axios.post('/api/cache/warmup'),
+    async () => axios.post(`${getApiBase()}/cache/warmup`),
     {
       errorMessage: 'Failed to warm up caches',
       successMessage: 'Cache warmup completed',
@@ -711,7 +712,7 @@ const clearSelectedPrompt = () => {
 
 const loadPrompts = async () => {
   const { execute: getPrompts } = useAsyncHandler(
-    async () => axios.get('/api/prompts'),
+    async () => axios.get(`${getApiBase()}/prompts`),
     {
       errorMessage: 'Failed to load prompts',
       notify,
@@ -740,7 +741,7 @@ const savePrompt = async () => {
   }
 
   const { execute: putPrompt } = useAsyncHandler(
-    async () => axios.put(`/api/prompts/${prompt.id}`, {
+    async () => axios.put(`${getApiBase()}/prompts/${prompt.id}`, {
       content: settings.value.prompts!.editedContent
     }),
     {
@@ -761,7 +762,7 @@ const savePrompt = async () => {
 
 const revertPromptToDefault = async (promptId: string) => {
   const { execute: postRevert } = useAsyncHandler(
-    async () => axios.post(`/api/prompts/${promptId}/revert`),
+    async () => axios.post(`${getApiBase()}/prompts/${promptId}/revert`),
     {
       errorMessage: 'Failed to revert prompt to default',
       successMessage: 'Prompt reverted to default',
@@ -782,7 +783,7 @@ const revertPromptToDefault = async (promptId: string) => {
 const loadHealthStatus = async () => {
   // Try detailed health endpoint first
   const { execute: getDetailedHealth } = useAsyncHandler(
-    async () => axios.get('/api/system/health/detailed'),
+    async () => axios.get(`${getApiBase()}/system/health/detailed`),
     {
       logErrors: true,
       errorPrefix: '[SettingsPanel]',
@@ -792,7 +793,7 @@ const loadHealthStatus = async () => {
       onError: async () => {
         // Fallback to basic health endpoint
         const { execute: getBasicHealth } = useAsyncHandler(
-          async () => axios.get('/api/system/health'),
+          async () => axios.get(`${getApiBase()}/system/health`),
           {
             logErrors: true,
             errorPrefix: '[SettingsPanel]',

@@ -11,7 +11,10 @@ Contains enums and dataclasses for the enhanced orchestration system.
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
+
+if TYPE_CHECKING:
+    from .success_criteria import SuccessCriteria
 
 from constants.status_enums import TaskStatus
 from constants.threshold_constants import RetryConfig, TimingConstants
@@ -133,6 +136,8 @@ class WorkflowPlan:
     estimated_duration: float
     resource_requirements: Dict[str, Any]
     success_criteria: List[str]
+    # Issue #3293: structured success criteria for partial/full/failed evaluation
+    structured_criteria: List["SuccessCriteria"] = field(default_factory=list)
     fallback_plans: List["WorkflowPlan"] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 

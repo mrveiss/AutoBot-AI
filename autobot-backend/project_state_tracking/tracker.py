@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.redis_client import get_redis_client
@@ -97,7 +97,7 @@ class EnhancedProjectStateTracker:
         self.error_boundary_manager = get_error_boundary_manager()
 
         # Tracking state
-        self._last_snapshot_time = datetime.now()
+        self._last_snapshot_time = datetime.now(tz=timezone.utc)
         self._api_call_count = 0
         self._user_interaction_count = 0
         self._error_count = 0
@@ -244,7 +244,7 @@ class EnhancedProjectStateTracker:
         config = self.progression_manager.config.copy()
 
         return StateSnapshot(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             phase_states=phase_states,
             active_capabilities=set(capabilities["active_capabilities"]),
             system_metrics=metrics,
@@ -316,7 +316,7 @@ class EnhancedProjectStateTracker:
     ):
         """Record a state change event using asyncio.to_thread()."""
         change = StateChange(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(tz=timezone.utc),
             change_type=change_type,
             before_state=before_state,
             after_state=after_state,
@@ -367,7 +367,7 @@ class EnhancedProjectStateTracker:
     ):
         """Mark a milestone as achieved and record the event."""
         milestone.achieved = True
-        milestone.achieved_at = datetime.now()
+        milestone.achieved_at = datetime.now(tz=timezone.utc)
         milestone.evidence = evidence
 
         await asyncio.gather(
@@ -394,7 +394,7 @@ class EnhancedProjectStateTracker:
                 milestone.achieved,
                 milestone.achieved_at.isoformat() if milestone.achieved_at else None,
                 json.dumps(milestone.evidence),
-                datetime.now().isoformat(),
+                datetime.now(tz=timezone.utc).isoformat(),
             )
 
         except Exception as e:
@@ -417,7 +417,7 @@ class EnhancedProjectStateTracker:
                     "error_type": type(error).__name__,
                     "error_message": str(error),
                     "context": context or {},
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                 },
                 metadata={
                     "severity": "error",
@@ -472,7 +472,7 @@ class EnhancedProjectStateTracker:
                         "interaction_type": interaction_type,
                         "user_id": user_id,
                         "context": context or {},
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     },
                     user_id=user_id,
                     metadata={"tracking_source": "enhanced_state_tracker"},
@@ -532,7 +532,7 @@ class EnhancedProjectStateTracker:
         trends = calculate_trends(self.state_history)
 
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "current_state": {
                 "phase_states": latest_snapshot.phase_states,
                 "active_capabilities": list(latest_snapshot.active_capabilities),

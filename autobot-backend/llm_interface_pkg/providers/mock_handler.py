@@ -11,6 +11,8 @@ import asyncio
 import logging
 import time
 
+from constants.threshold_constants import TimingConstants
+
 from ..mock_providers import local_llm
 from ..models import LLMRequest, LLMResponse
 
@@ -35,7 +37,7 @@ class MockHandler:
             LLMResponse with mock content
         """
         start_time = time.time()
-        await asyncio.sleep(0.1)  # Simulate processing
+        await asyncio.sleep(TimingConstants.MICRO_DELAY)  # Simulate processing
 
         processing_time = time.time() - start_time
 

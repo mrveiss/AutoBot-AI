@@ -220,7 +220,7 @@ async function cancelExecution(): Promise<void> {
 
   try {
     const response = await fetch(
-      `/api/infrastructure/executions/${currentExecution.value.execution_id}/cancel`,
+      `${getSlmApiBase()}/infrastructure/executions/${currentExecution.value.execution_id}/cancel`,
       {
         method: 'POST',
         headers: {

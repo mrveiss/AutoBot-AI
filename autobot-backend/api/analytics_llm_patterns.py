@@ -22,7 +22,7 @@ import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -31,6 +31,12 @@ from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from constants.model_constants import (
+    EXPENSIVE_MODEL_MARKER_GPT4,
+    EXPENSIVE_MODEL_MARKER_OPUS,
+    MODEL_COSTS_PER_1M_TOKENS,
+)
+from constants.ttl_constants import TTL_30_DAYS
 
 # Prefix provided by analytics_routers.py registry (#1032)
 router = APIRouter(tags=["llm-patterns", "analytics"])
@@ -42,7 +48,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # O(1) lookup optimization constant (Issue #326)
-EXPENSIVE_MODELS = {"opus", "gpt-4"}
+EXPENSIVE_MODELS = {EXPENSIVE_MODEL_MARKER_OPUS, EXPENSIVE_MODEL_MARKER_GPT4}
 
 
 class PromptCategory(str, Enum):
@@ -86,26 +92,9 @@ SIMPLE_PROMPT_CATEGORIES = {
 }
 
 
-# Model costs per 1M tokens (USD)
-MODEL_COSTS = {
-    # Anthropic
-    "claude-3-opus": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku": {"input": 0.25, "output": 1.25},
-    "claude-sonnet-4": {"input": 3.00, "output": 15.00},
-    # OpenAI
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    # Google
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    # Local (free)
-    "llama3": {"input": 0.0, "output": 0.0},
-    "mistral": {"input": 0.0, "output": 0.0},
-    "codellama": {"input": 0.0, "output": 0.0},
-}
+# Model costs per 1M tokens (USD) — single source of truth in
+# constants/model_constants.MODEL_COSTS_PER_1M_TOKENS (#3528).
+MODEL_COSTS = MODEL_COSTS_PER_1M_TOKENS
 
 # Pattern detection rules for prompt categorization
 PROMPT_PATTERNS = {
@@ -260,7 +249,7 @@ class UsageRecordRequest(BaseModel):
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
             "cost": cost,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "response_time": self.response_time,
             "success": self.success,
             "session_id": self.session_id,
@@ -418,7 +407,7 @@ class LLMPatternAnalyzer:
 
         Issue #620: Extracted from analyze_prompt.
         """
-        if "opus" in model.lower() or "gpt-4" in model.lower():
+        if EXPENSIVE_MODEL_MARKER_OPUS in model.lower() or EXPENSIVE_MODEL_MARKER_GPT4 in model.lower():
             if category in SIMPLE_PROMPT_CATEGORIES:  # O(1) lookup (Issue #326)
                 recommendations.append(
                     "Consider using a smaller model (Haiku/GPT-3.5) for this task type"
@@ -451,7 +440,7 @@ class LLMPatternAnalyzer:
             "category": category.value,
             "estimated_tokens": int(token_estimate),
             "estimated_cost": self._calculate_cost(
-                model or "gpt-4o", int(token_estimate), int(token_estimate * 1.5)
+                model or OPENAI_GPT4O, int(token_estimate), int(token_estimate * 1.5)
             ),
             "issues": issues,
             "recommendations": recommendations,
@@ -478,10 +467,10 @@ class LLMPatternAnalyzer:
             redis = await self._get_redis()
 
             # Store usage record
-            date_key = datetime.now().strftime("%Y-%m-%d")
+            date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             usage_key = f"{self._usage_key}:{date_key}"
             await redis.lpush(usage_key, json.dumps(record))
-            await redis.expire(usage_key, 30 * 24 * 60 * 60)  # 30 days
+            await redis.expire(usage_key, TTL_30_DAYS)  # 30 days
 
             # Update cache tracking
             cache_key = f"{self._cache_key}:{prompt_hash}"
@@ -491,18 +480,18 @@ class LLMPatternAnalyzer:
                 data = json.loads(cache_data)
                 data["count"] = data.get("count", 0) + 1
                 data["total_cost"] = data.get("total_cost", 0) + cost
-                data["last_seen"] = datetime.now().isoformat()
+                data["last_seen"] = datetime.now(tz=timezone.utc).isoformat()
             else:
                 data = {
                     "count": 1,
                     "total_cost": cost,
-                    "first_seen": datetime.now().isoformat(),
-                    "last_seen": datetime.now().isoformat(),
+                    "first_seen": datetime.now(tz=timezone.utc).isoformat(),
+                    "last_seen": datetime.now(tz=timezone.utc).isoformat(),
                     "preview": self._get_prompt_preview(request.prompt),
                 }
 
             await redis.set(cache_key, json.dumps(data))
-            await redis.expire(cache_key, 30 * 24 * 60 * 60)
+            await redis.expire(cache_key, TTL_30_DAYS)
 
             # Update stats
             await self._update_stats(request.model, cost, request.success)
@@ -526,7 +515,7 @@ class LLMPatternAnalyzer:
         """
         try:
             redis = await self._get_redis()
-            date_key = datetime.now().strftime("%Y-%m-%d")
+            date_key = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
             stats_key = f"{self._stats_key}:{date_key}"
 
             # Issue #379: Batch all Redis operations using pipeline
@@ -538,7 +527,7 @@ class LLMPatternAnalyzer:
                 if success:
                     await pipe.hincrby(stats_key, "successful_requests", 1)
 
-                await pipe.expire(stats_key, 30 * 24 * 60 * 60)
+                await pipe.expire(stats_key, TTL_30_DAYS)
                 await pipe.execute()
         except RedisError as e:
             logger.warning("Failed to update LLM stats: %s", e)
@@ -596,7 +585,7 @@ class LLMPatternAnalyzer:
 
             # Build date keys and fetch all at once using pipeline - eliminates N+1 queries
             dates = [
-                (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+                (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
                 for i in range(days)
             ]
             stats_keys = [f"{self._stats_key}:{date}" for date in dates]
@@ -812,7 +801,7 @@ class LLMPatternAnalyzer:
             List of record lists from Redis pipeline
         """
         dates = [
-            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
             for i in range(days)
         ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
@@ -943,7 +932,7 @@ class LLMPatternAnalyzer:
 
         # Aggregate from last 7 days - batch fetch all lists using pipeline
         dates = [
-            (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
+            (datetime.now(tz=timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)
         ]
         usage_keys = [f"{self._usage_key}:{date}" for date in dates]
 

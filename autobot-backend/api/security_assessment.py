@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from constants.error_constants import ERR_ASSESSMENT_NOT_FOUND
 from services.security_tool_parsers import parse_tool_output
 from services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
@@ -243,7 +244,7 @@ async def get_assessment(
 
     assessment = await manager.get_assessment(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -283,7 +284,7 @@ async def get_assessment_summary(
 
     summary = await manager.get_assessment_summary(assessment_id)
     if not summary:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -323,7 +324,7 @@ async def delete_assessment(
 
     deleted = await manager.delete_assessment(assessment_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -363,7 +364,7 @@ async def get_current_phase(
 
     assessment = await manager.get_assessment(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     current_phase = assessment.phase.value
     phase_info = PHASE_DESCRIPTIONS.get(current_phase, {})
@@ -472,7 +473,7 @@ async def add_host(
     )
 
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -523,7 +524,7 @@ async def add_port(
     )
 
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -576,7 +577,7 @@ async def add_vulnerability(
     )
 
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -628,7 +629,7 @@ async def add_finding(
     )
 
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,
@@ -672,7 +673,7 @@ async def get_findings(
 
     assessment = await manager.get_assessment(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     findings = assessment.findings
 
@@ -819,7 +820,7 @@ async def parse_and_store_tool_output(
     # Verify assessment exists
     assessment = await manager.get_assessment(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     # Parse the output
     parsed = parse_tool_output(request.output, request.tool)
@@ -886,7 +887,7 @@ async def set_error_state(
 
     assessment = await manager.set_error(assessment_id, error_message)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=ERR_ASSESSMENT_NOT_FOUND)
 
     return JSONResponse(
         status_code=200,

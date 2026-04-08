@@ -26,6 +26,11 @@ from code_intelligence.llm_pattern_analysis.types import (
     PromptIssueType,
     UsagePatternType,
 )
+from constants.model_constants import (
+    ANTHROPIC_CLAUDE3_OPUS,
+    EXPENSIVE_MODEL_MARKER_GPT4,
+    EXPENSIVE_MODEL_MARKER_OPUS,
+)
 
 # =============================================================================
 # Simple Data Classes
@@ -329,7 +334,11 @@ class CostEstimate:
 
     def is_expensive_model(self) -> bool:
         """Check if this is an expensive model."""
-        expensive_markers = ["gpt-4", "opus", "claude-3-opus"]
+        expensive_markers = [
+            EXPENSIVE_MODEL_MARKER_GPT4,
+            EXPENSIVE_MODEL_MARKER_OPUS,
+            ANTHROPIC_CLAUDE3_OPUS,
+        ]
         return any(marker in self.model.lower() for marker in expensive_markers)
 
 

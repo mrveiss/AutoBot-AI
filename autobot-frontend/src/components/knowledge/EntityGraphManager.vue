@@ -197,6 +197,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
+import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import EntityExtractor from './EntityExtractor.vue'
@@ -294,7 +295,7 @@ async function refreshStats(): Promise<void> {
 
 async function fetchGraphStats(): Promise<void> {
   try {
-    const response = await apiClient.get('/api/knowledge_base/unified/graph?max_facts=0')
+    const response = await apiClient.get(`${getApiBase()}/knowledge_base/unified/graph?max_facts=0`)
     const data = await parseApiResponse(response)
     const graphData = data?.data || data
 
@@ -316,7 +317,7 @@ async function fetchGraphStats(): Promise<void> {
 
 async function fetchExtractionHealth(): Promise<void> {
   try {
-    const response = await apiClient.get('/api/entities/extract/health')
+    const response = await apiClient.get(`${getApiBase()}/entities/extract/health`)
     const data = await parseApiResponse(response)
     const healthData = data?.data || data
 
@@ -331,7 +332,7 @@ async function fetchExtractionHealth(): Promise<void> {
 
 async function fetchGraphRagHealth(): Promise<void> {
   try {
-    const response = await apiClient.get('/api/graph-rag/health')
+    const response = await apiClient.get(`${getApiBase()}/graph-rag/health`)
     const data = await parseApiResponse(response)
     const healthData = data?.data || data
 

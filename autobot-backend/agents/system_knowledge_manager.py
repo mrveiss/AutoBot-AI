@@ -11,7 +11,7 @@ import hashlib
 import json
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -197,7 +197,7 @@ class SystemKnowledgeManager:
                 json.dumps(
                     {
                         "file_states": current_state,
-                        "last_updated": datetime.now().isoformat(),
+                        "last_updated": datetime.now(tz=timezone.utc).isoformat(),
                         "file_count": len(current_state),
                     }
                 ),
@@ -217,7 +217,7 @@ class SystemKnowledgeManager:
             async with aiofiles.open(marker_file, "w", encoding="utf-8") as f:
                 await f.write(
                     json.dumps(
-                        {"imported_at": datetime.now().isoformat(), "version": "1.0.0"},
+                        {"imported_at": datetime.now(tz=timezone.utc).isoformat(), "version": "1.0.0"},
                         indent=2,
                     )
                 )
@@ -230,7 +230,7 @@ class SystemKnowledgeManager:
         if not dir_exists:
             return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         backup_path = self.backup_dir / f"backup_{timestamp}"
 
         dir_exists = await asyncio.to_thread(self.runtime_knowledge_dir.exists)
@@ -364,7 +364,7 @@ class SystemKnowledgeManager:
             "metadata": {
                 "category": "steganography",
                 "description": "Tools for steganography analysis and detection",
-                "last_updated": datetime.now().isoformat(),
+                "last_updated": datetime.now(tz=timezone.utc).isoformat(),
                 "version": "1.0.0",
             },
             "tools": [

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from constants.threshold_constants import RetryConfig
+from constants.error_constants import ERR_TEMPLATE_NOT_FOUND, ERR_WORKFLOW_NOT_FOUND
 from type_defs.common import Metadata
 from workflow_scheduler import WorkflowPriority
 from workflow_scheduler import WorkflowScheduleRequest as InternalScheduleRequest
@@ -146,7 +147,7 @@ async def get_workflow_details(workflow_id: str):
     """Get detailed information about a specific scheduled workflow (Issue #372)"""
     workflow = workflow_scheduler.get_workflow(workflow_id)
     if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise HTTPException(status_code=404, detail=ERR_WORKFLOW_NOT_FOUND)
 
     # Use model method to reduce feature envy (Issue #372)
     return {
@@ -437,7 +438,7 @@ async def schedule_template_workflow(
 
     template = workflow_template_manager.get_template(template_id)
     if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise HTTPException(status_code=404, detail=ERR_TEMPLATE_NOT_FOUND)
 
     internal_request = _build_template_schedule_request(
         template_id,

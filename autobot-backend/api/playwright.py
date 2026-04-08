@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
-from config import ConfigManager
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.network_constants import NetworkConstants
 from services.playwright_service import (
     get_playwright_service,
@@ -24,9 +24,6 @@ from services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
-
-# Create singleton config instance
-config = ConfigManager()
 
 router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
@@ -40,11 +37,11 @@ class SearchRequest(BaseModel):
 
 class TestMessageRequest(BaseModel):
     message: str = "what network scanning tools do we have available?"
-    frontend_url: str = config.get_service_url("frontend")
+    frontend_url: str = _ssot_config.frontend_url
 
 
 class FrontendTestRequest(BaseModel):
-    frontend_url: str = config.get_service_url("frontend")
+    frontend_url: str = _ssot_config.frontend_url
 
 
 class ScreenshotRequest(BaseModel):

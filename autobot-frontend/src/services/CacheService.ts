@@ -4,6 +4,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 // Create scoped logger for CacheService
 const logger = createLogger('CacheService')
@@ -37,13 +38,13 @@ class CacheService {
     this.cache = new Map<string, CacheEntry>();
     this.defaultTTL = 5 * 60 * 1000; // 5 minutes
     this.strategies = {
-      '/api/settings': 10 * 60 * 1000,
-      '/api/settings/': 10 * 60 * 1000,
-      '/api/system/health': 30 * 1000,
-      '/api/knowledge_base/stats': 2 * 60 * 1000,
-      '/api/chats': 1 * 60 * 1000,
-      '/api/prompts/': 5 * 60 * 1000,
-      '/api/user/profile': 5 * 60 * 1000
+      [`${getApiBase()}/settings`]: 10 * 60 * 1000,
+      [`${getApiBase()}/settings/`]: 10 * 60 * 1000,
+      [`${getApiBase()}/system/health`]: 30 * 1000,
+      [`${getApiBase()}/knowledge_base/stats`]: 2 * 60 * 1000,
+      [`${getApiBase()}/chats`]: 1 * 60 * 1000,
+      [`${getApiBase()}/prompts/`]: 5 * 60 * 1000,
+      [`${getApiBase()}/user/profile`]: 5 * 60 * 1000
     };
 
     this.cleanupInterval = setInterval(() => {
@@ -101,7 +102,7 @@ class CacheService {
   }
 
   invalidateCategory(category: string): void {
-    const pattern = `/api/${category}`;
+    const pattern = `${getApiBase()}/${category}`;
     this.invalidate(pattern);
   }
 
@@ -153,9 +154,9 @@ class CacheService {
 
   async warmup(): Promise<void> {
     const commonEndpoints = [
-      '/api/system/health',
-      '/api/settings/',
-      '/api/knowledge_base/stats'
+      `${getApiBase()}/system/health`,
+      `${getApiBase()}/settings/`,
+      `${getApiBase()}/knowledge_base/stats`
     ];
 
     logger.info('Warming up cache...');

@@ -12,6 +12,7 @@
 import { ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePlugins')
 
@@ -55,7 +56,7 @@ export function usePlugins() {
     loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get('/api/plugins')
+      const data = await ApiClient.get(`${getApiBase()}/plugins`)
       plugins.value = data.plugins ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to list plugins'
@@ -70,7 +71,7 @@ export function usePlugins() {
     loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get('/api/plugins/discover')
+      const data = await ApiClient.get(`${getApiBase()}/plugins/discover`)
       discovered.value = data.discovered ?? []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to discover plugins'
@@ -84,7 +85,7 @@ export function usePlugins() {
   async function loadPlugin(name: string, config?: Record<string, unknown>): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post(`/api/plugins/${name}/load`, config ? { config } : {})
+      await ApiClient.post(`${getApiBase()}/plugins/${name}/load`, config ? { config } : {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -98,7 +99,7 @@ export function usePlugins() {
   async function unloadPlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post(`/api/plugins/${name}/unload`, {})
+      await ApiClient.post(`${getApiBase()}/plugins/${name}/unload`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -112,7 +113,7 @@ export function usePlugins() {
   async function reloadPlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post(`/api/plugins/${name}/reload`, {})
+      await ApiClient.post(`${getApiBase()}/plugins/${name}/reload`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -126,7 +127,7 @@ export function usePlugins() {
   async function enablePlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post(`/api/plugins/${name}/enable`, {})
+      await ApiClient.post(`${getApiBase()}/plugins/${name}/enable`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -140,7 +141,7 @@ export function usePlugins() {
   async function disablePlugin(name: string): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.post(`/api/plugins/${name}/disable`, {})
+      await ApiClient.post(`${getApiBase()}/plugins/${name}/disable`, {})
       await listPlugins()
       return true
     } catch (err: unknown) {
@@ -153,7 +154,7 @@ export function usePlugins() {
 
   async function getPluginInfo(name: string): Promise<PluginInfo | null> {
     try {
-      return await ApiClient.get(`/api/plugins/${name}`)
+      return await ApiClient.get(`${getApiBase()}/plugins/${name}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to get info for plugin ${name}`
       logger.error('getPluginInfo error: %s', msg)
@@ -163,7 +164,7 @@ export function usePlugins() {
 
   async function getPluginConfig(name: string): Promise<Record<string, unknown> | null> {
     try {
-      return await ApiClient.get(`/api/plugins/${name}/config`)
+      return await ApiClient.get(`${getApiBase()}/plugins/${name}/config`)
     } catch {
       logger.warn('getPluginConfig: no config for %s', name)
       return null
@@ -176,7 +177,7 @@ export function usePlugins() {
   ): Promise<boolean> {
     error.value = null
     try {
-      await ApiClient.put(`/api/plugins/${name}/config`, { config })
+      await ApiClient.put(`${getApiBase()}/plugins/${name}/config`, { config })
       return true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to update config for plugin ${name}`

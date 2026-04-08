@@ -18,6 +18,7 @@ import type {
   UseCodeIntelAnalysisDeps,
   ApiEndpointAnalysisResult,
 } from './codeIntelTypes'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useApiEndpointAnalysis')
 
@@ -32,7 +33,7 @@ export function useApiEndpointAnalysis(
     error: apiEndpointsError,
     load: _loadApiEndpoints,
   } = useAnalyticsFetch<ApiEndpointAnalysisResult>(
-    '/api/analytics/codebase/endpoint-analysis',
+    `${getApiBase()}/analytics/codebase/endpoint-analysis`,
     (r) => {
       if (r.status === 'success' && r.analysis) {
         return r.analysis as unknown as ApiEndpointAnalysisResult

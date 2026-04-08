@@ -6,6 +6,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
+import { getSlmApiBase } from '@/config/ssot-config'
 import type { SLMNode, NodeRole } from '@/types/slm'
 
 interface RoleInfo {
@@ -94,7 +95,7 @@ async function loadData(): Promise<void> {
 async function fetchRoles(): Promise<void> {
   isLoadingRoles.value = true
   try {
-    const response = await fetch('/api/deployments/roles', {
+    const response = await fetch(`${getSlmApiBase()}/deployments/roles`, {
       headers: {
         Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
       },

@@ -10,6 +10,7 @@ Partial completion is preserved: if step N fails, steps 0..N-1 results
 remain in the DB.
 """
 
+import asyncio
 import logging
 import uuid
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from constants.threshold_constants import TimingConstants
 from models.process_run import ProcessRun, ProcessRunStatus, TaskDecomposition
 from services.process_adapter_service import ProcessAdapterService
 
@@ -213,8 +215,6 @@ class TaskDecompositionService:
 
     async def _wait_for_process(self, process_id: str) -> str:
         """Poll until process reaches a terminal state; return status (#1406)."""
-        import asyncio
-
         while True:
             status_data = await self._process_svc.get_process_status(process_id)
             if status_data is None:
@@ -227,7 +227,7 @@ class TaskDecompositionService:
                 ProcessRunStatus.CANCELLED.value,
             }:
                 return status
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(TimingConstants.SHORT_DELAY)
 
 
 # -- Module-level helpers --------------------------------------------------

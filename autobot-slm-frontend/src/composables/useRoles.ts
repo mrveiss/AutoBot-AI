@@ -10,6 +10,7 @@
 
 import { ref, reactive } from 'vue'
 import axios from 'axios'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 export interface Role {
   name: string
@@ -123,12 +124,8 @@ export function useRoles() {
   const error = ref<string | null>(null)
   const fleetHealth = ref<FleetHealth | null>(null)
 
-  // SLM backend endpoints are at /api/* (proxied by nginx)
-  // NOT /autobot-api/* which goes to the Main AutoBot backend
-  const API_BASE = ''
-
   // Create axios instance with auth
-  const client = axios.create({ baseURL: API_BASE })
+  const client = axios.create()
   client.interceptors.request.use((config) => {
     const token = sessionStorage.getItem('slm_access_token')
     if (token) {
@@ -142,7 +139,7 @@ export function useRoles() {
     error.value = null
 
     try {
-      const response = await client.get<Role[]>('/api/roles')
+      const response = await client.get<Role[]>(`${getSlmApiBase()}/roles`)
       roles.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -155,7 +152,7 @@ export function useRoles() {
   async function getNodeRoles(nodeId: string): Promise<NodeRolesInfo | null> {
     try {
       const response = await client.get<NodeRolesInfo>(
-        `/api/nodes/${nodeId}/detected-roles`
+        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`
       )
       return response.data
     } catch (e: unknown) {
@@ -172,7 +169,7 @@ export function useRoles() {
   ): Promise<NodeRoleItem | null> {
     try {
       const response = await client.post<NodeRoleItem>(
-        `/api/nodes/${nodeId}/detected-roles`,
+        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`,
         { role_name: roleName, assignment_type: assignmentType }
       )
       return response.data
@@ -193,7 +190,7 @@ export function useRoles() {
         success: boolean
         message: string
         backup_path?: string
-      }>(`/api/nodes/${nodeId}/detected-roles/${roleName}`, {
+      }>(`${getSlmApiBase()}/nodes/${nodeId}/detected-roles/${roleName}`, {
         params: { backup },
       })
       return response.data
@@ -207,7 +204,7 @@ export function useRoles() {
 
   async function createRole(roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.post<Role>('/api/roles', roleData)
+      const response = await client.post<Role>(`${getSlmApiBase()}/roles`, roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -218,7 +215,7 @@ export function useRoles() {
 
   async function updateRole(roleName: string, roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.put<Role>(`/api/roles/${roleName}`, roleData)
+      const response = await client.put<Role>(`${getSlmApiBase()}/roles/${roleName}`, roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -229,7 +226,7 @@ export function useRoles() {
 
   async function deleteRole(roleName: string): Promise<boolean> {
     try {
-      await client.delete(`/api/roles/${roleName}`)
+      await client.delete(`${getSlmApiBase()}/roles/${roleName}`)
       return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -249,7 +246,7 @@ export function useRoles() {
         params.node_ids = nodeIds
       }
       const response = await client.post<SyncResult>(
-        `/api/code-sync/roles/${roleName}/sync`,
+        `${getSlmApiBase()}/code-sync/roles/${roleName}/sync`,
         null,
         { params }
       )
@@ -267,7 +264,7 @@ export function useRoles() {
   async function pullFromSource(): Promise<{ success: boolean; message: string; commit: string | null }> {
     try {
       const response = await client.post<{ success: boolean; message: string; commit: string | null }>(
-        `/api/code-sync/pull`
+        `${getSlmApiBase()}/code-sync/pull`
       )
       return response.data
     } catch (e: unknown) {
@@ -282,7 +279,7 @@ export function useRoles() {
 
   async function fetchFleetHealth(): Promise<void> {
     try {
-      const response = await client.get<FleetHealth>('/api/roles/fleet-health')
+      const response = await client.get<FleetHealth>(`${getSlmApiBase()}/roles/fleet-health`)
       fleetHealth.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -296,7 +293,7 @@ export function useRoles() {
   ): Promise<PlaybookMigrateResult | null> {
     try {
       const response = await client.post<PlaybookMigrateResult>(
-        `/api/roles/${roleName}/migrate`,
+        `${getSlmApiBase()}/roles/${roleName}/migrate`,
         { target_node_id: targetNodeId }
       )
       return response.data
@@ -313,7 +310,7 @@ export function useRoles() {
   ): Promise<NodeActionsResponse | null> {
     try {
       const resp = await client.get<NodeActionsResponse>(
-        `/api/roles/node-actions/${nodeId}`
+        `${getSlmApiBase()}/roles/node-actions/${nodeId}`
       )
       return resp.data
     } catch (e: unknown) {
@@ -336,7 +333,7 @@ export function useRoles() {
   ): Promise<ExecuteActionResult | null> {
     try {
       const resp = await client.post<ExecuteActionResult>(
-        `/api/roles/node-actions/${nodeId}/execute`,
+        `${getSlmApiBase()}/roles/node-actions/${nodeId}/execute`,
         { role_name: roleName, category }
       )
       return resp.data
@@ -359,7 +356,7 @@ export function useRoles() {
   ): Promise<DecommissionPreflight | null> {
     try {
       const resp = await client.get<DecommissionPreflight>(
-        `/api/nodes/${nodeId}/decommission/preflight`
+        `${getSlmApiBase()}/nodes/${nodeId}/decommission/preflight`
       )
       return resp.data
     } catch (e: unknown) {
@@ -386,7 +383,7 @@ export function useRoles() {
         message: string
         deployment_id: string
         output: string
-      }>(`/api/nodes/${nodeId}/decommission`, {
+      }>(`${getSlmApiBase()}/nodes/${nodeId}/decommission`, {
         backup,
         confirm_node_id: confirmNodeId,
       })
@@ -412,7 +409,7 @@ export function useRoles() {
       const resp = await client.post<{
         success: boolean
         message: string
-      }>(`/api/nodes/${nodeId}/reenroll`)
+      }>(`${getSlmApiBase()}/nodes/${nodeId}/reenroll`)
       return resp.data
     } catch (e: unknown) {
       const err = e as {

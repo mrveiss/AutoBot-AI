@@ -20,8 +20,8 @@ from typing import Dict
 import aiohttp
 import structlog
 
-from autobot_shared.http_client import get_http_client
-from security.service_auth import ServiceAuthManager
+from autobot_shared.http_client import get_http_client, sign_request as _sign_request
+from autobot_shared.ssot_config import config as _ssot_config
 
 logger = structlog.get_logger()
 
@@ -34,7 +34,7 @@ class ServiceHTTPClient:
     required authentication headers.
     """
 
-    def __init__(self, service_id: str, service_key: str, timeout: float = 30.0):
+    def __init__(self, service_id: str, service_key: str, timeout: float = _ssot_config.timeout.default_request):
         """
         Initialize authenticated HTTP client.
 
@@ -58,34 +58,23 @@ class ServiceHTTPClient:
         """
         Generate authentication headers for request.
 
+        Delegates to ``autobot_shared.http_client.sign_request``, the canonical
+        HMAC-SHA256 signing helper, so the algorithm is defined in exactly one
+        place and validated by a single test suite.
+
         Args:
-            method: HTTP method (GET, POST, etc.)
-            url: Full URL of the request
+            method: HTTP method in upper-case (``'GET'``, ``'POST'``, …).
+            url: Full URL of the request — the path component is extracted
+                here before forwarding to the signing helper.
 
         Returns:
-            Dict of authentication headers
+            Dict of authentication headers ready to merge into request kwargs.
         """
-        timestamp = int(time.time())
-
-        # Create auth manager for signing (no Redis needed for signing)
-        auth_manager = ServiceAuthManager(redis_client=None)
-
-        # Extract path from URL for signature
         from urllib.parse import urlparse
 
-        parsed_url = urlparse(url)
-        path = parsed_url.path
-
-        # Generate HMAC signature
-        signature = auth_manager.generate_signature(
-            self.service_id, self.service_key, method, path, timestamp
-        )
-
-        return {
-            "X-Service-ID": self.service_id,
-            "X-Service-Signature": signature,
-            "X-Service-Timestamp": str(timestamp),
-        }
+        timestamp = int(time.time())
+        path = urlparse(url).path
+        return _sign_request(self.service_id, self.service_key, method, path, timestamp)
 
     async def get(self, url: str, **kwargs):
         """

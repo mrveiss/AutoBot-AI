@@ -9,7 +9,7 @@
  */
 
 import { ref } from 'vue';
-import { getBackendUrl } from '@/config/ssot-config';
+import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('NotificationConfig');
@@ -69,8 +69,7 @@ export function useNotificationConfig() {
     loading.value = true;
     error.value = null;
     try {
-      const base = getBackendUrl();
-      const url = `${base}/workflow-automation/notification_config/${workflowId}`;
+      const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
       const resp = await fetch(url, { headers: getAuthHeaders() });
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}`);
@@ -91,8 +90,7 @@ export function useNotificationConfig() {
     saving.value = true;
     error.value = null;
     try {
-      const base = getBackendUrl();
-      const url = `${base}/workflow-automation/notification_config/${workflowId}`;
+      const url = `${getApiBase()}/workflow-automation/notification_config/${workflowId}`;
       const resp = await fetch(url, {
         method: 'PUT',
         headers: getAuthHeaders(),

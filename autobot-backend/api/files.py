@@ -14,7 +14,7 @@ when the main asyncio thread pool is saturated by indexing operations.
 import logging
 import mimetypes
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -27,6 +27,12 @@ from pydantic import BaseModel, field_validator
 from auth_middleware import auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.security.path_validator import validate_relative_path
+from constants.error_constants import (
+    ERR_DIRECTORY_NOT_FOUND,
+    ERR_FILE_NOT_FOUND,
+    ERR_FILE_OR_DIR_NOT_FOUND,
+    ERR_PATH_NOT_FOUND,
+)
 from security_layer import SecurityLayer
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
@@ -415,7 +421,7 @@ async def list_files(request: Request, path: str = ""):
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
     if not await run_in_file_executor(target_path.exists):
-        raise HTTPException(status_code=404, detail="Directory not found")
+        raise HTTPException(status_code=404, detail=ERR_DIRECTORY_NOT_FOUND)
 
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
@@ -724,7 +730,7 @@ async def upload_file(
         success=True,
         message=f"File '{file.filename}' uploaded successfully",
         file_info=file_info,
-        upload_id=f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        upload_id=f"upload_{datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')}",
     )
 
 
@@ -757,7 +763,7 @@ async def download_file(request: Request, path: str):
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
     if not await run_in_file_executor(target_file.exists):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
 
     if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
@@ -814,7 +820,7 @@ async def view_file(request: Request, path: str):
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
     if not await run_in_file_executor(target_file.exists):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
 
     if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
@@ -898,7 +904,7 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     Issue #620.
     """
     if not await run_in_file_executor(source_path.exists):
-        raise HTTPException(status_code=404, detail="File or directory not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND)
 
     target_path = source_path.parent / new_name
 
@@ -1024,7 +1030,7 @@ async def preview_file(request: Request, path: str):
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
     if not await run_in_file_executor(target_file.exists):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
 
     if not await run_in_file_executor(target_file.is_file):
         raise HTTPException(status_code=400, detail="Path is not a file")
@@ -1076,7 +1082,7 @@ async def delete_file(request: Request, path: str):
     target_path = validate_and_resolve_path(path)
 
     if not await run_in_file_executor(target_path.exists):
-        raise HTTPException(status_code=404, detail="File or directory not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_OR_DIR_NOT_FOUND)
 
     security_layer = get_security_layer(request)
     is_file = await run_in_file_executor(target_path.is_file)
@@ -1191,7 +1197,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
     if not await run_in_file_executor(target_path.exists):
-        raise HTTPException(status_code=404, detail="Directory not found")
+        raise HTTPException(status_code=404, detail=ERR_DIRECTORY_NOT_FOUND)
 
     if not await run_in_file_executor(target_path.is_dir):
         raise HTTPException(status_code=400, detail="Path is not a directory")
@@ -1346,7 +1352,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
     """
     target = _validate_admin_path(path)
     if not target.exists():
-        raise HTTPException(status_code=404, detail="Path not found")
+        raise HTTPException(status_code=404, detail=ERR_PATH_NOT_FOUND)
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Path is not a directory")
     try:
@@ -1366,7 +1372,7 @@ async def admin_read_file(path: str) -> dict:
     """
     target = _validate_admin_path(path)
     if not target.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail=ERR_FILE_NOT_FOUND)
     if not target.is_file():
         raise HTTPException(status_code=400, detail="Path is not a file")
     if target.stat().st_size > _ADMIN_MAX_READ_BYTES:

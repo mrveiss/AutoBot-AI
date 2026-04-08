@@ -7,13 +7,16 @@ Provides defensive security scanning and analysis capabilities
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.http_client import get_http_client
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from utils.agent_command_helpers import run_agent_command
+
+from .base_agent import DeploymentMode
+from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = logging.getLogger(__name__)
 
@@ -39,16 +42,93 @@ _COMMON_SUBDOMAINS = ("www", "mail", "ftp", "admin", "api", "dev", "test")
 _DNS_RECORD_TYPES = ("A", "AAAA", "MX", "TXT", "NS", "SOA")
 
 
-class SecurityScannerAgent:
+class SecurityScannerAgent(StandardizedAgent):
     """Agent for performing defensive security scans and vulnerability assessments"""
 
     def __init__(self):
-        """Initialize security scanner agent (Issue #380: use module-level constants)."""
+        """Initialize security scanner agent (#3387: migrated to StandardizedAgent)."""
+        super().__init__("security_scanner", DeploymentMode.LOCAL)
         self.name = "security_scanner"
         self.description = (
             "Performs defensive security scans and vulnerability assessments"
         )
         self.supported_scan_types = _SUPPORTED_SCAN_TYPES
+
+        # Register action handlers for StandardizedAgent routing
+        self.register_actions(
+            {
+                "port_scan": ActionHandler(
+                    handler_method="_handle_port_scan",
+                    required_params=["target"],
+                    description="Perform port scan on target",
+                ),
+                "service_detection": ActionHandler(
+                    handler_method="_handle_service_detection",
+                    required_params=["target"],
+                    description="Detect services on open ports",
+                ),
+                "vulnerability_scan": ActionHandler(
+                    handler_method="_handle_vulnerability_scan",
+                    required_params=["target"],
+                    description="Perform vulnerability scan",
+                ),
+                "ssl_scan": ActionHandler(
+                    handler_method="_handle_ssl_scan",
+                    required_params=["target"],
+                    description="Scan SSL/TLS configuration",
+                ),
+                "dns_enum": ActionHandler(
+                    handler_method="_handle_dns_enum",
+                    required_params=["target"],
+                    description="Perform DNS enumeration",
+                ),
+                "web_scan": ActionHandler(
+                    handler_method="_handle_web_scan",
+                    required_params=["target"],
+                    description="Perform web application scan",
+                ),
+            }
+        )
+
+    def get_capabilities(self) -> List[str]:
+        """Return list of capabilities (#3387)."""
+        return list(_SUPPORTED_SCAN_TYPES)
+
+    def _get_system_prompt(self) -> str:
+        """Return agent system prompt."""
+        return "You are a security scanner agent. Perform defensive security assessments."
+
+    # Action handler wrappers for StandardizedAgent routing
+
+    async def _handle_port_scan(self, request) -> Dict[str, Any]:
+        """Handle port_scan action via StandardizedAgent routing."""
+        return await self._port_scan(request.payload["target"], dict(request.payload))
+
+    async def _handle_service_detection(self, request) -> Dict[str, Any]:
+        """Handle service_detection action via StandardizedAgent routing."""
+        return await self._service_detection(
+            request.payload["target"], dict(request.payload)
+        )
+
+    async def _handle_vulnerability_scan(self, request) -> Dict[str, Any]:
+        """Handle vulnerability_scan action via StandardizedAgent routing."""
+        return await self._vulnerability_scan(
+            request.payload["target"], dict(request.payload)
+        )
+
+    async def _handle_ssl_scan(self, request) -> Dict[str, Any]:
+        """Handle ssl_scan action via StandardizedAgent routing."""
+        return await self._ssl_scan(request.payload["target"], dict(request.payload))
+
+    async def _handle_dns_enum(self, request) -> Dict[str, Any]:
+        """Handle dns_enum action via StandardizedAgent routing."""
+        return await self._dns_enumeration(
+            request.payload["target"], dict(request.payload)
+        )
+
+    async def _handle_web_scan(self, request) -> Dict[str, Any]:
+        """Handle web_scan action via StandardizedAgent routing."""
+        return await self._web_scan(request.payload["target"], dict(request.payload))
 
     def _get_scan_handlers(self) -> Dict[str, Any]:
         """Get scan type to handler mapping (Issue #334 - extracted helper)."""
@@ -62,7 +142,7 @@ class SecurityScannerAgent:
         }
 
     async def execute(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a security scanning task"""
+        """Execute a security scanning task (backward-compatible entry point)."""
         try:
             scan_type = context.get("scan_type", "port_scan")
             target = context.get("target", "")
@@ -161,7 +241,7 @@ class SecurityScannerAgent:
                     "scan_type": "port_scan",
                     "target": target,
                     "open_ports": open_ports,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                     "raw_output": result["output"],
                 }
             else:
@@ -191,7 +271,7 @@ class SecurityScannerAgent:
                     "scan_type": "service_detection",
                     "target": target,
                     "services": services,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -226,7 +306,7 @@ class SecurityScannerAgent:
                     "scan_type": "vulnerability_scan",
                     "target": target,
                     "vulnerabilities": vulnerabilities,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -258,7 +338,7 @@ class SecurityScannerAgent:
                     "target": target,
                     "port": port,
                     "ssl_info": ssl_info,
-                    "scan_time": datetime.now().isoformat(),
+                    "scan_time": datetime.now(tz=timezone.utc).isoformat(),
                 }
             else:
                 return result
@@ -298,7 +378,7 @@ class SecurityScannerAgent:
                 "status": "success",
                 "scan_type": "dns_enumeration",
                 "results": results,
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:
@@ -358,7 +438,7 @@ class SecurityScannerAgent:
                 "status": "success",
                 "scan_type": "web_scan",
                 "results": results,
-                "scan_time": datetime.now().isoformat(),
+                "scan_time": datetime.now(tz=timezone.utc).isoformat(),
             }
 
         except Exception as e:

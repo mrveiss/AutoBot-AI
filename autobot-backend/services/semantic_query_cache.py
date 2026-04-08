@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
+from utils.async_initializable import AsyncInitializable
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class SemanticCacheEntry:
 # ---------------------------------------------------------------------------
 
 
-class SemanticQueryCache:
+class SemanticQueryCache(AsyncInitializable):
     """Embedding-based query cache backed by ChromaDB + Redis.
 
     Lifecycle:
@@ -96,10 +97,9 @@ class SemanticQueryCache:
         self,
         cache_config: Optional[SemanticCacheConfig] = None,
     ):
+        super().__init__(component_name="semantic_query_cache")
         self._config = cache_config or SemanticCacheConfig()
         self._collection = None
-        self._initialized = False
-        self._init_lock = asyncio.Lock()
 
         # Metrics
         self._hits = 0
@@ -111,30 +111,19 @@ class SemanticQueryCache:
     # Initialisation
     # ------------------------------------------------------------------
 
-    async def initialize(self) -> bool:
-        """Create / open the ChromaDB collection (lazy, idempotent)."""
-        if self._initialized:
-            return True
-
-        async with self._init_lock:
-            if self._initialized:
-                return True
-            try:
-                collection = await self._get_or_create_collection()
-                if collection is None:
-                    return False
-                self._collection = collection
-                self._initialized = True
-                logger.info(
-                    "SemanticQueryCache initialised " "(threshold=%.2f, max_size=%d)",
-                    self._config.similarity_threshold,
-                    self._config.max_collection_size,
-                )
-                return True
-            except Exception as exc:
-                logger.error("SemanticQueryCache init failed: %s", exc)
-                self._errors += 1
-                return False
+    async def _initialize_impl(self) -> bool:
+        """Create / open the ChromaDB collection."""
+        collection = await self._get_or_create_collection()
+        if collection is None:
+            self._errors += 1
+            return False
+        self._collection = collection
+        logger.info(
+            "SemanticQueryCache initialised (threshold=%.2f, max_size=%d)",
+            self._config.similarity_threshold,
+            self._config.max_collection_size,
+        )
+        return True
 
     async def _get_or_create_collection(self):
         """Open or create the ChromaDB collection."""

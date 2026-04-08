@@ -35,7 +35,7 @@ from api.knowledge_models import (
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from constants.threshold_constants import QueryDefaults
+from autobot_shared.models.pagination import PaginationParams
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
@@ -123,8 +123,7 @@ async def create_collection(
 )
 @router.get("/collections")
 async def list_collections(
-    limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=500),
-    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
+    pagination: PaginationParams = Depends(),
     sort_by: str = Query(default="name", pattern="^(name|created_at|fact_count)$"),
     req: Request = None,
 ):
@@ -134,8 +133,7 @@ async def list_collections(
     Issue #412: Collections/Folders for grouping documents.
 
     Parameters:
-    - limit: Maximum number of collections (default: 100)
-    - offset: Pagination offset
+    - pagination: Limit and offset for result pagination
     - sort_by: Sort field (name, created_at, fact_count)
 
     Returns:
@@ -152,8 +150,8 @@ async def list_collections(
         )
 
     result = await kb.list_collections(
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         sort_by=sort_by,
     )
 
@@ -163,8 +161,8 @@ async def list_collections(
             "collections": result.get("collections", []),
             "total_count": result.get("total_count", 0),
             "returned_count": result.get("returned_count", 0),
-            "limit": limit,
-            "offset": offset,
+            "limit": pagination.limit,
+            "offset": pagination.offset,
             "has_more": result.get("has_more", False),
         }
     else:
@@ -487,8 +485,7 @@ async def remove_facts_from_collection(
 @router.get("/collections/{collection_id}/facts")
 async def get_facts_in_collection(
     collection_id: str = Path(..., description="Collection UUID"),
-    limit: int = Query(default=QueryDefaults.DEFAULT_PAGE_SIZE, ge=1, le=500),
-    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
+    pagination: PaginationParams = Depends(),
     include_content: bool = Query(default=False, description="Include fact content"),
     req: Request = None,
 ):
@@ -499,8 +496,7 @@ async def get_facts_in_collection(
 
     Parameters:
     - collection_id: Collection UUID
-    - limit: Maximum number of facts
-    - offset: Pagination offset
+    - pagination: Limit and offset for result pagination
     - include_content: Whether to include fact content
 
     Returns:
@@ -526,8 +522,8 @@ async def get_facts_in_collection(
 
     result = await kb.get_facts_in_collection(
         collection_id=collection_id,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         include_content=include_content,
     )
 
@@ -539,8 +535,8 @@ async def get_facts_in_collection(
             "facts": result.get("facts", []),
             "total_count": result.get("total_count", 0),
             "returned_count": result.get("returned_count", 0),
-            "limit": limit,
-            "offset": offset,
+            "limit": pagination.limit,
+            "offset": pagination.offset,
             "has_more": result.get("has_more", False),
         }
     else:

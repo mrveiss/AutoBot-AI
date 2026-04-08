@@ -22,7 +22,7 @@ import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -36,6 +36,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
+from constants.ttl_constants import TTL_1_HOUR
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 # Use .parent (autobot-backend/) so paths work in both Docker (/app/autobot-backend/)
@@ -76,7 +77,7 @@ class FileInfo:
             "file_size": self.file_size,
             "file_hash": self.file_hash,
             "mime_type": self.mime_type,
-            "uploaded_at": datetime.now().isoformat(),
+            "uploaded_at": datetime.now(tz=timezone.utc).isoformat(),
             "deduplicated": self.deduplicated,
         }
 
@@ -113,7 +114,7 @@ class ConversationFileManager:
 
     # Constants
     CACHE_DB = 2  # Redis database for session file caching
-    CACHE_TTL = 3600  # Cache TTL: 1 hour
+    CACHE_TTL = TTL_1_HOUR
     CACHE_KEY_PREFIX = "conv_files:"
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB max file size
     CLEANUP_DAYS = 30  # Schedule cleanup 30 days after session end

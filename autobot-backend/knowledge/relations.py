@@ -19,7 +19,7 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from autobot_shared.error_boundaries import error_boundary
@@ -114,7 +114,7 @@ class RelationsMixin:
                 "message": f"Target fact not found: {target_fact_id}",
             }
 
-        ts = int(datetime.now().timestamp() * 1000)
+        ts = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
         out_entry = {
             "to": target_fact_id,
             "type": relation_type,

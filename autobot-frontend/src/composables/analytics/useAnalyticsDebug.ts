@@ -16,6 +16,7 @@ import { type Ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('useAnalyticsDebug')
 
@@ -37,11 +38,11 @@ export interface UseAnalyticsDebugDeps {
 
 // Endpoint configs for API health check (#1588)
 const _testEndpointConfigs = [
-  { name: 'Declarations', path: '/api/analytics/codebase/declarations' },
-  { name: 'Duplicates', path: '/api/analytics/codebase/duplicates' },
-  { name: 'Hardcodes', path: '/api/analytics/codebase/hardcodes' },
-  { name: 'NPU', path: '/api/npu/status' },
-  { name: 'Stats', path: '/api/analytics/codebase/stats' },
+  { name: 'Declarations', path: `${getApiBase()}/analytics/codebase/declarations` },
+  { name: 'Duplicates', path: `${getApiBase()}/analytics/codebase/duplicates` },
+  { name: 'Hardcodes', path: `${getApiBase()}/analytics/codebase/hardcodes` },
+  { name: 'NPU', path: `${getApiBase()}/npu/status` },
+  { name: 'Stats', path: `${getApiBase()}/analytics/codebase/stats` },
 ]
 
 export function useAnalyticsDebug(deps: UseAnalyticsDebugDeps) {

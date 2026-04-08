@@ -17,6 +17,7 @@ import { defineStore } from 'pinia'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { getApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('usePermissionStore')
 
@@ -148,7 +149,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl('/api/permissions/status')
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/status`)
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
@@ -181,7 +182,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl(`/api/permissions/mode?is_admin=${isAdmin}`)
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/mode?is_admin=${isAdmin}`)
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
@@ -213,7 +214,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl(`/api/permissions/mode?is_admin=${isAdmin}`)
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/mode?is_admin=${isAdmin}`)
       const response = await fetchWithAuth(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -250,7 +251,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl('/api/permissions/rules')
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/rules`)
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
@@ -291,7 +292,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl(`/api/permissions/rules?is_admin=${isAdmin}`)
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/rules?is_admin=${isAdmin}`)
       const response = await fetchWithAuth(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -326,7 +327,7 @@ export const usePermissionStore = defineStore('permission', () => {
     error.value = null
 
     try {
-      const url = await appConfig.getApiUrl('/api/permissions/rules')
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/rules`)
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -362,7 +363,7 @@ export const usePermissionStore = defineStore('permission', () => {
     isAdmin = false
   ): Promise<{ result: string; pattern?: string; description?: string } | null> {
     try {
-      const url = await appConfig.getApiUrl(`/api/permissions/check?is_admin=${isAdmin}`)
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/check?is_admin=${isAdmin}`)
       const response = await fetchWithAuth(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -393,7 +394,7 @@ export const usePermissionStore = defineStore('permission', () => {
     try {
       const encodedPath = encodeURIComponent(projectPath)
       const url = await appConfig.getApiUrl(
-        `/api/permissions/memory/${encodedPath}?user_id=${userId}`
+        `${getApiBase()}/permissions/memory/${encodedPath}?user_id=${userId}`
       )
       const response = await fetchWithAuth(url)
 
@@ -443,7 +444,7 @@ export const usePermissionStore = defineStore('permission', () => {
         params.append('comment', comment)
       }
 
-      const url = await appConfig.getApiUrl(`/api/permissions/memory?${params.toString()}`)
+      const url = await appConfig.getApiUrl(`${getApiBase()}/permissions/memory?${params.toString()}`)
       const response = await fetchWithAuth(url, { method: 'POST' })
 
       if (!response.ok) {
@@ -470,7 +471,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const encodedPath = encodeURIComponent(projectPath)
-      let url = await appConfig.getApiUrl(`/api/permissions/memory/${encodedPath}`)
+      let url = await appConfig.getApiUrl(`${getApiBase()}/permissions/memory/${encodedPath}`)
       if (userId) {
         url += `?user_id=${userId}`
       }

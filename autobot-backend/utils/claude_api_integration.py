@@ -12,7 +12,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.ssot_config import config as _ssot_config
 from constants.threshold_constants import RetryConfig, TimingConstants
+from utils.async_initializable import AsyncInitializable
 
 from .conversation_rate_limiter import ConversationRateLimiter
 from .payload_optimizer import PayloadOptimizer
@@ -212,7 +214,7 @@ class ClaudeAPIBatchManager:
         content: str,
         priority: RequestPriority = RequestPriority.NORMAL,
         context_type: str = "general",
-        timeout: float = 30.0,
+        timeout: float = _ssot_config.timeout.default_request,
         metadata: Dict[str, Any] = None,
     ) -> str:
         """Submit a request for processing with batching optimization (thread-safe).
@@ -310,7 +312,7 @@ class ClaudeAPIBatchManager:
         # This is where you would integrate with your actual Claude API client
         # For now, simulating the API call
 
-        await asyncio.sleep(0.2)  # Simulate API delay
+        await asyncio.sleep(TimingConstants.DEBOUNCE_INTERVAL_S)  # Simulate API delay
 
         # Mock response - replace with actual Claude API integration
         response = f"Mock response to: {content[:50]}..."
@@ -467,25 +469,36 @@ async def batch_claude_requests(
 
 
 # Integration with AutoBot's existing infrastructure
-class AutoBotClaudeAPIAdapter:
-    """Adapter to integrate with AutoBot's existing Claude API usage"""
+class AutoBotClaudeAPIAdapter(AsyncInitializable):
+    """
+    Adapter to integrate with AutoBot's existing Claude API usage.
+
+    Issue #3390: Migrated to AsyncInitializable lazy-init pattern.
+    The module-level singleton is created lazily via get_autobot_claude_adapter().
+    """
+
+    _instance: Optional["AutoBotClaudeAPIAdapter"] = None
 
     def __init__(self):
-        """Initialize adapter with empty manager and uninitialized state."""
+        """Initialize adapter with empty manager; real init deferred to _initialize_impl."""
+        super().__init__(component_name="autobot_claude_adapter")
         self.manager: Optional[ClaudeAPIBatchManager] = None
-        self._initialized = False
+        self._adapter_config: Optional[ClaudeAPIConfig] = None
 
-    async def initialize(self, config: ClaudeAPIConfig = None):
-        """Initialize the adapter"""
-        if not self._initialized:
-            self.manager = await create_claude_api_manager(config)
-            self._initialized = True
+    async def _initialize_impl(self) -> bool:
+        """Create the Claude API batch manager on first use."""
+        self.manager = await create_claude_api_manager(self._adapter_config)
+        return True
+
+    async def _cleanup_impl(self) -> None:
+        """Shut down the batch manager on initialization failure."""
+        if self.manager:
+            await self.manager.stop()
+            self.manager = None
 
     async def process_chat_request(self, message: str, context: str = "chat") -> str:
         """Process a chat request through the batching system"""
-        if not self._initialized:
-            await self.initialize()
-
+        await self.ensure_initialized()
         return await self.manager.submit_request(
             content=message,
             priority=RequestPriority.NORMAL,
@@ -497,9 +510,7 @@ class AutoBotClaudeAPIAdapter:
         self, code: str, analysis_type: str = "general"
     ) -> str:
         """Process code analysis with appropriate batching"""
-        if not self._initialized:
-            await self.initialize()
-
+        await self.ensure_initialized()
         return await self.manager.submit_request(
             content=f"Analyze this code:\n{code}",
             priority=RequestPriority.HIGH,
@@ -509,9 +520,7 @@ class AutoBotClaudeAPIAdapter:
 
     async def process_file_operations(self, operation: str, files: List[str]) -> str:
         """Process file operations with batching optimization"""
-        if not self._initialized:
-            await self.initialize()
-
+        await self.ensure_initialized()
         content = f"Perform {operation} on files: {', '.join(files)}"
         return await self.manager.submit_request(
             content=content,
@@ -533,9 +542,31 @@ class AutoBotClaudeAPIAdapter:
             return await self.manager.get_metrics()
         return {}
 
+    @classmethod
+    def reset_instance(cls) -> None:
+        """Reset singleton (for testing)."""
+        cls._instance = None
 
-# Global adapter instance for AutoBot integration
-autobot_claude_adapter = AutoBotClaudeAPIAdapter()
+
+# Lock that serialises singleton creation in get_autobot_claude_adapter().
+_claude_adapter_lock = asyncio.Lock()
+
+
+async def get_autobot_claude_adapter(
+    adapter_config: Optional[ClaudeAPIConfig] = None,
+) -> "AutoBotClaudeAPIAdapter":
+    """Get and lazily initialize the global AutoBotClaudeAPIAdapter singleton."""
+    async with _claude_adapter_lock:
+        if AutoBotClaudeAPIAdapter._instance is None:
+            AutoBotClaudeAPIAdapter._instance = AutoBotClaudeAPIAdapter()
+            AutoBotClaudeAPIAdapter._instance._adapter_config = adapter_config
+    await AutoBotClaudeAPIAdapter._instance.initialize()
+    return AutoBotClaudeAPIAdapter._instance
+
+
+# Backward-compatible module-level name; instance is NOT initialized until first await.
+# Use `await get_autobot_claude_adapter()` for production code.
+autobot_claude_adapter: Optional["AutoBotClaudeAPIAdapter"] = None
 
 
 # Example usage and testing

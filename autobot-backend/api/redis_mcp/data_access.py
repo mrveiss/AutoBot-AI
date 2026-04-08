@@ -12,6 +12,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.redis_client import get_redis_client
+from constants.ttl_constants import TTL_24_HOURS
 from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 _SCAN_MAX_KEYS = 100
 
 # Issue #2646: auto-expire agent memory keys to prevent unbounded growth
-AGENT_MEMORY_TTL_SECONDS = 86400  # 24 hours
+AGENT_MEMORY_TTL_SECONDS = TTL_24_HOURS
 AGENT_MEMORY_PREFIX = "autobot:agent:memory:"
 
 

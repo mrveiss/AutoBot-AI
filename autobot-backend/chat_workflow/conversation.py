@@ -11,11 +11,13 @@ and conversation history loading/saving with deduplication.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
 import aiofiles
+
+from autobot_shared.ssot_config import config
 
 from .models import WorkflowSession
 
@@ -41,7 +43,7 @@ class ConversationHandlerMixin:
         key = self._get_conversation_key(session_id)
         try:
             history_json = await asyncio.wait_for(
-                self.redis_client.get(key), timeout=2.0
+                self.redis_client.get(key), timeout=config.timeout.redis_op
             )
             if history_json:
                 logger.debug(
@@ -50,7 +52,8 @@ class ConversationHandlerMixin:
                 return json.loads(history_json)
         except asyncio.TimeoutError:
             logger.warning(
-                "Redis get timeout after 2s for session %s, falling back to file",
+                "Redis get timeout after %.1fs for session %s, falling back to file",
+                config.timeout.redis_op,
                 session_id,
             )
         return None
@@ -122,7 +125,7 @@ class ConversationHandlerMixin:
         """Create an empty transcript structure (Issue #332 - extracted helper)."""
         return {
             "session_id": session_id,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "messages": [],
         }
 
@@ -211,12 +214,12 @@ class ConversationHandlerMixin:
             # Append new exchange
             transcript["messages"].append(
                 {
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "user": user_message,
                     "assistant": assistant_message,
                 }
             )
-            transcript["updated_at"] = datetime.now().isoformat()
+            transcript["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
             transcript["message_count"] = len(transcript["messages"])
 
             # Write atomically

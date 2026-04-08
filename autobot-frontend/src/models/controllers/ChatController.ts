@@ -54,6 +54,8 @@ export class ChatController {
   } | null = null
   private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
   private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
+  // Issue #3749: stored so disableAutoSave() can clearInterval()
+  private _autoSaveIntervalId: ReturnType<typeof setInterval> | null = null
   private static readonly STREAM_FLUSH_INTERVAL_MS = 80
   private static readonly PREVIEW_THROTTLE_MS = 200
 
@@ -351,7 +353,7 @@ export class ChatController {
                   sender: 'assistant'
                 })
                 this.chatStore.updateMessage(errorMsgId, {
-                  content: `Error: ${data.content || 'Stream error'}`,
+                  content: `Error: ${data.content || data.message || 'Unknown error'}`,
                   status: 'error'
                 })
                 continue
@@ -456,7 +458,9 @@ export class ChatController {
           .trim()
 
         if (displayContent) {
-          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+          if (msg.status !== 'error') {
+            this.chatStore.updateMessage(frontendId, { status: 'sent' })
+          }
         } else {
           this.chatStore.deleteMessage(frontendId)
         }
@@ -939,7 +943,8 @@ export class ChatController {
 
   // Auto-save functionality with error handling
   enableAutoSave(intervalMs: number = 30000): void {
-    setInterval(() => {
+    this.disableAutoSave()
+    this._autoSaveIntervalId = setInterval(() => {
       if (this.chatStore.settings.autoSave && this.chatStore.currentSessionId) {
         this.saveChatSession().catch(error => {
           logger.warn('Auto-save failed:', error)
@@ -947,6 +952,13 @@ export class ChatController {
         })
       }
     }, intervalMs)
+  }
+
+  disableAutoSave(): void {
+    if (this._autoSaveIntervalId !== null) {
+      clearInterval(this._autoSaveIntervalId)
+      this._autoSaveIntervalId = null
+    }
   }
 
   // Enhanced validation helpers

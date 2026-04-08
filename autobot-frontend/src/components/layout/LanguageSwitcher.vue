@@ -1,0 +1,239 @@
+<!--
+AutoBot - AI-Powered Automation Platform
+Copyright (c) 2025 mrveiss
+Author: mrveiss
+
+LanguageSwitcher.vue - Globe icon language switcher for nav bar
+-->
+
+<template>
+  <div class="language-switcher" :class="{ 'language-switcher--mobile': mobile }">
+    <!-- Desktop: icon button that opens dropdown -->
+    <template v-if="!mobile">
+      <button
+        ref="triggerRef"
+        @click="toggleDropdown"
+        class="lang-trigger"
+        :aria-label="t('nav.switchLanguage')"
+        :aria-expanded="open"
+        aria-haspopup="listbox"
+      >
+        <i class="fas fa-globe" aria-hidden="true"></i>
+      </button>
+
+      <Transition name="lang-dropdown">
+        <ul
+          v-if="open"
+          ref="dropdownRef"
+          role="listbox"
+          class="lang-dropdown"
+          :aria-label="t('nav.switchLanguage')"
+        >
+          <li
+            v-for="lang in languages"
+            :key="lang.code"
+            role="option"
+            :aria-selected="lang.code === currentLanguage"
+            class="lang-option"
+            :class="{ 'lang-option--active': lang.code === currentLanguage }"
+            @click="select(lang.code)"
+          >
+            <i
+              v-if="lang.code === currentLanguage"
+              class="fas fa-check lang-option__check"
+              aria-hidden="true"
+            ></i>
+            <span class="lang-option__name">{{ lang.name }}</span>
+          </li>
+        </ul>
+      </Transition>
+    </template>
+
+    <!-- Mobile: inline row with select -->
+    <template v-else>
+      <div class="lang-mobile-row">
+        <i class="fas fa-globe lang-mobile-icon" aria-hidden="true"></i>
+        <select
+          :value="currentLanguage"
+          @change="select(($event.target as HTMLSelectElement).value)"
+          class="lang-mobile-select"
+          :aria-label="t('nav.switchLanguage')"
+        >
+          <option
+            v-for="lang in languages"
+            :key="lang.code"
+            :value="lang.code"
+          >
+            {{ lang.name }}
+          </option>
+        </select>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { usePreferences } from '@/composables/usePreferences'
+import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('LanguageSwitcher')
+
+defineProps<{ mobile?: boolean }>()
+
+const { t } = useI18n()
+const { language, setLanguage } = usePreferences()
+const { languages } = useAvailableLanguages()
+
+const open = ref(false)
+const triggerRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
+
+const currentLanguage = computed(() => language.value)
+
+function toggleDropdown() {
+  open.value = !open.value
+}
+
+async function select(code: string) {
+  open.value = false
+  if (code === currentLanguage.value) return
+  try {
+    await setLanguage(code)
+  } catch (err) {
+    logger.error('Failed to switch language', err)
+  }
+}
+
+function handleOutsideClick(event: MouseEvent) {
+  const target = event.target as Node
+  if (
+    triggerRef.value && !triggerRef.value.contains(target) &&
+    dropdownRef.value && !dropdownRef.value.contains(target)
+  ) {
+    open.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleOutsideClick))
+onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
+</script>
+
+<style scoped>
+.language-switcher {
+  position: relative;
+}
+
+.lang-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 18px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.lang-trigger:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.lang-trigger:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+.lang-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: var(--spacing-xs) 0;
+  list-style: none;
+  margin: 0;
+}
+
+.lang-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.lang-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.lang-option--active {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.lang-option__check {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  width: 12px;
+}
+
+.lang-option__name {
+  flex: 1;
+}
+
+/* Mobile row */
+.lang-mobile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-primary);
+}
+
+.lang-mobile-icon {
+  width: 16px;
+  text-align: center;
+}
+
+.lang-mobile-select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  appearance: none;
+}
+
+.lang-mobile-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Dropdown transition */
+.lang-dropdown-enter-active,
+.lang-dropdown-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.lang-dropdown-enter-from,
+.lang-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+</style>

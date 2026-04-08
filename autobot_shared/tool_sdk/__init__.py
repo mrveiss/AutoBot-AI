@@ -38,6 +38,9 @@ from tool_sdk.registry import (
     get_tool_registry,
 )
 
+# Alias for plan-specified name (#3009)
+get_tool_sdk_registry = get_tool_registry
+
 __all__ = [
     "BaseTool",
     "ToolInputError",
@@ -48,4 +51,5 @@ __all__ = [
     "ToolNotFoundError",
     "ToolSDKRegistry",
     "get_tool_registry",
+    "get_tool_sdk_registry",
 ]

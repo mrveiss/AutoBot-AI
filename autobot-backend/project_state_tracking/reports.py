@@ -12,7 +12,7 @@ Part of Issue #381 - God Class Refactoring
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -201,7 +201,7 @@ def generate_state_report_from_summary(summary: Dict[str, Any]) -> str:
     """
     report = []
     report.append("# AutoBot Enhanced State Tracking Report")
-    report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report.append(f"Generated: {datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
     report.append("")
 
     # Build sections

@@ -83,6 +83,10 @@ import { ref, computed } from 'vue'
 const props = defineProps<{
   userId: string
   requireCurrentPassword?: boolean
+  /** Full API path for the change-password POST. Defaults to /api/users/{userId}/change-password. */
+  apiEndpoint?: string
+  /** Bearer token to include in the Authorization header. Falls back to localStorage 'authToken'. */
+  authToken?: string
 }>()
 
 const emit = defineEmits<{
@@ -173,10 +177,10 @@ async function handleSubmit() {
   error.value = null
 
   try {
-    // Get auth token from localStorage or auth store
-    const token = localStorage.getItem('authToken') || ''
+    const token = props.authToken || localStorage.getItem('authToken') || ''
 
-    const response = await fetch(`/api/users/${props.userId}/change-password`, {
+    const endpoint = props.apiEndpoint ?? `/api/users/${props.userId}/change-password`
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

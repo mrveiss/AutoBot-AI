@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from llama_index.core import Document
@@ -527,13 +527,63 @@ class FactsMixin:
 
         return None
 
+    async def _find_duplicate(
+        self, content: str, threshold: float = 0.92
+    ) -> Optional[Dict[str, Any]]:
+        """Check ChromaDB for near-duplicate content before inserting.
+
+        Issue #3788: Semantic similarity guard for individual fact writes.
+
+        Queries the vector store for the closest existing fact. ChromaDB
+        returns L2 distances; we convert to cosine similarity via
+        ``1 - distance / 2`` (valid for unit-normalised embeddings).
+
+        Args:
+            content: Candidate fact text to check.
+            threshold: Minimum similarity score to consider a duplicate (0.5-1.0).
+
+        Returns:
+            Metadata dict of the existing fact if a near-duplicate is found,
+            else None.
+        """
+        if not self.vector_store:
+            return None
+        try:
+            embedding = await _generate_embedding_with_npu_fallback(content)
+            chroma_collection = self.vector_store._collection
+            results = await asyncio.to_thread(
+                chroma_collection.query,
+                query_embeddings=[embedding],
+                n_results=3,
+                include=["metadatas", "distances"],
+            )
+            ids = (results.get("ids") or [[]])[0]
+            distances = (results.get("distances") or [[]])[0]
+            metadatas = (results.get("metadatas") or [[]])[0]
+            for i, distance in enumerate(distances):
+                similarity = 1.0 - distance / 2.0
+                if similarity >= threshold:
+                    meta = metadatas[i] if i < len(metadatas) else {}
+                    meta.setdefault("id", ids[i] if i < len(ids) else "?")
+                    logger.debug(
+                        "_find_duplicate: similarity=%.4f >= threshold=%.4f, id=%s",
+                        similarity,
+                        threshold,
+                        meta.get("id"),
+                    )
+                    return meta
+        except Exception as exc:
+            logger.debug("_find_duplicate: query failed, skipping check: %s", exc)
+        return None
+
     async def _check_for_duplicates(
         self, content: str, metadata: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """
-        Check for duplicate facts by unique_key or content hash.
+        Check for duplicate facts by unique_key, content hash, or semantic similarity.
 
         Issue #281: Extracted helper for duplicate detection.
+        Issue #3788: Added semantic similarity check via ChromaDB.
 
         Args:
             content: Fact content text
@@ -555,7 +605,7 @@ class FactsMixin:
                     "message": "Fact already exists with this unique key",
                 }
 
-        # Check for content duplicates
+        # Check for content duplicates (exact hash match)
         existing_id = await self._find_existing_fact(content, metadata)
         if existing_id:
             logger.info("Duplicate content detected: %s", existing_id)
@@ -563,6 +613,21 @@ class FactsMixin:
                 "status": "duplicate",
                 "fact_id": existing_id,
                 "message": "Fact with identical content already exists",
+            }
+
+        # Issue #3788: Semantic similarity check against ChromaDB
+        from autobot_shared.ssot_config import config as _cfg
+
+        existing_meta = await self._find_duplicate(
+            content, threshold=_cfg.cache.l2.kb_dedup_threshold
+        )
+        if existing_meta:
+            dup_id = existing_meta.get("fact_id") or existing_meta.get("id", "?")
+            logger.info("Near-duplicate fact detected via semantic check: %s", dup_id)
+            return {
+                "status": "duplicate",
+                "fact_id": dup_id,
+                "message": "Near-duplicate fact already exists (semantic similarity)",
             }
 
         return None
@@ -590,7 +655,7 @@ class FactsMixin:
             mapping={
                 "content": content,
                 "metadata": json.dumps(metadata),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )
 
@@ -677,7 +742,7 @@ class FactsMixin:
         if metadata is None:
             metadata = {}
         metadata["fact_id"] = fact_id
-        metadata["timestamp"] = datetime.now().isoformat()
+        metadata["timestamp"] = datetime.now(tz=timezone.utc).isoformat()
         metadata["embedding_model"] = self.embedding_model_name
         _apply_provenance_defaults(metadata)
 
@@ -989,7 +1054,7 @@ class FactsMixin:
                 current_metadata["content_fingerprint"] = compute_fingerprint(content)
             if metadata is not None:
                 current_metadata.update(metadata)
-            current_metadata["updated_at"] = datetime.now().isoformat()
+            current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
             await asyncio.to_thread(
                 self.redis_client.hset,
@@ -1469,7 +1534,7 @@ class FactsMixin:
         merged = list(set(existing_shared + shared_with))
         metadata["shared_with"] = merged
         metadata["shared_by"] = shared_by
-        metadata["shared_at"] = datetime.now().isoformat()
+        metadata["shared_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         await asyncio.to_thread(
             self.redis_client.hset, fact_key, "metadata", json.dumps(metadata)

@@ -8,6 +8,7 @@ Integrates secure command execution with role-based permissions
 
 import asyncio
 import datetime
+from datetime import timezone
 import json
 import logging
 import os
@@ -511,7 +512,7 @@ class EnhancedSecurityLayer:
     def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]):
         """Enhanced audit logging with command execution tracking"""
         log_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
             "user": user,
             "action": action,
             "outcome": outcome,

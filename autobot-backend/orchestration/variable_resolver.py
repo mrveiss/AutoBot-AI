@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from constants.status_enums import TaskStatus
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ class StepOutput:
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        status = "completed" if result.get("success") else "failed"
+        status = TaskStatus.COMPLETED.value if result.get("success") else TaskStatus.FAILED.value
 
         metadata = {k: v for k, v in result.items() if k not in ("stdout", "success")}
 

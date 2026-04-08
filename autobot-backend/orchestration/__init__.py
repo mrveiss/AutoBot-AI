@@ -20,6 +20,7 @@ This package contains:
 """
 
 from .agent_registry import AgentRegistry, get_default_agents
+from .dag_graph_adapter import DAGGraphExecutor, build_dag_graph
 from .dag_executor import (
     DAGExecutor,
     NodeType,
@@ -63,6 +64,19 @@ from .workflow_documentation import WorkflowDocumenter
 from .workflow_executor import WorkflowExecutor
 from .workflow_memory import WorkflowMemory
 from .workflow_planner import WorkflowPlanner
+from .graph_runner import (
+    END,
+    START,
+    AutoBotGraph,
+    BackoffMode,
+    CompiledGraph,
+    GraphRunner,
+    GraphStepEvent,
+    NodeRetryConfig,
+    StepEventEmitter,
+    StepEventSink,
+    StepEventType,
+)
 
 __all__ = [
     # Types and dataclasses
@@ -81,6 +95,20 @@ __all__ = [
     "WorkflowExecutor",
     "WorkflowMemory",
     "WorkflowPlanner",
+    # Unified graph model (#3228)
+    "END",
+    "START",
+    "AutoBotGraph",
+    "BackoffMode",
+    "CompiledGraph",
+    "DAGGraphExecutor",
+    "GraphRunner",
+    "GraphStepEvent",
+    "NodeRetryConfig",
+    "StepEventEmitter",
+    "StepEventSink",
+    "StepEventType",
+    "build_dag_graph",
     # Sub-workflow composition (#2143)
     "MAX_NESTING_DEPTH",
     "SubWorkflowExecutor",

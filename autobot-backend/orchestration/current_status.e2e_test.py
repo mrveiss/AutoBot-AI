@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from orchestrator import Orchestrator
-from type_definitions import TaskComplexity
+from autobot_types import TaskComplexity
 
 
 async def test_current_status():

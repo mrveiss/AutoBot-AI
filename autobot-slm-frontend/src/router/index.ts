@@ -11,6 +11,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { getSlmApiBase } from '@/config/ssot-config'
 
 // One-time wizard completion check (Issue #1294)
 let wizardCheckDone = false
@@ -414,37 +415,37 @@ const router = createRouter({
           path: 'terminal',
           name: 'tools-terminal',
           component: () => import('@/views/tools/admin/TerminalTool.vue'),
-          meta: { title: 'Terminal', parent: 'tools' }
+          meta: { title: 'Terminal', parent: 'tools', admin: true }
         },
         {
           path: 'files',
           name: 'tools-files',
           component: () => import('@/views/tools/admin/FileBrowserTool.vue'),
-          meta: { title: 'File Browser', parent: 'tools' }
+          meta: { title: 'File Browser', parent: 'tools', admin: true }
         },
         {
           path: 'browser',
           name: 'tools-browser',
           component: () => import('@/views/tools/admin/BrowserTool.vue'),
-          meta: { title: 'Browser', parent: 'tools' }
+          meta: { title: 'Browser', parent: 'tools', admin: true }
         },
         {
           path: 'novnc',
           name: 'tools-novnc',
           component: () => import('@/views/tools/admin/NoVNCTool.vue'),
-          meta: { title: 'noVNC', parent: 'tools' }
+          meta: { title: 'noVNC', parent: 'tools', admin: true }
         },
         {
           path: 'voice',
           name: 'tools-voice',
           component: () => import('@/views/tools/admin/VoiceTool.vue'),
-          meta: { title: 'Voice', parent: 'tools' }
+          meta: { title: 'Voice', parent: 'tools', admin: true }
         },
         {
           path: 'mcp',
           name: 'tools-mcp',
           component: () => import('@/views/tools/admin/MCPTool.vue'),
-          meta: { title: 'MCP Registry', parent: 'tools' }
+          meta: { title: 'MCP Registry', parent: 'tools', admin: true }
         },
         {
           path: 'agents',
@@ -506,7 +507,7 @@ router.beforeEach(async (to, _from) => {
     wizardCheckDone = true
     try {
       const token = sessionStorage.getItem('slm_access_token')
-      const { data } = await axios.get('/api/setup/status', {
+      const { data } = await axios.get(`${getSlmApiBase()}/setup/status`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!data.completed) {

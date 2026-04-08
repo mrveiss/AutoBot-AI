@@ -16,9 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
-_TEST_TIMEOUT = 15.0
+_TEST_TIMEOUT: float = config.timeout.skill_test
 
 
 @dataclass

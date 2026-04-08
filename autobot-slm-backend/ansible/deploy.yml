@@ -40,6 +40,13 @@
         name: redis
       when: "'redis' in role_list"
 
+    # AI/ML Roles
+    # python312 must be present before ai-stack or backend creates its venv (#3538, #3584)
+    - name: Install Python 3.12 prerequisite for ai-stack and backend
+      ansible.builtin.include_role:
+        name: python312
+      when: "'ai-stack' in role_list or 'backend' in role_list"
+
     - name: Deploy backend role
       ansible.builtin.include_role:
         name: backend
@@ -50,7 +57,6 @@
         name: frontend
       when: "'frontend' in role_list"
 
-    # AI/ML Roles
     - name: Deploy npu-worker role
       ansible.builtin.include_role:
         name: npu-worker
@@ -89,6 +95,12 @@
       ansible.builtin.include_role:
         name: monitoring
       when: "'monitoring' in role_list"
+
+    # Container Roles (#3424)
+    - name: Deploy docker role
+      ansible.builtin.include_role:
+        name: docker
+      when: "'docker' in role_list"
 
     - name: Deployment complete
       ansible.builtin.debug:

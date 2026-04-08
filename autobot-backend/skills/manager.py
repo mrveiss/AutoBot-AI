@@ -8,10 +8,10 @@ High-level manager for the skills system. Handles initialization,
 per-user skill preferences (via Redis), and skill execution routing.
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.redis_management.cache_wrapper import RedisCache
 from skills.registry import SkillRegistry, get_skill_registry
 
 logger = logging.getLogger(__name__)
@@ -96,14 +96,8 @@ class SkillManager:
         redis_client = await _get_redis()
         if not redis_client:
             return {}
-        key = f"{REDIS_USER_SKILLS_PREFIX}{user_id}"
-        try:
-            raw = await redis_client.get(key)
-            if raw:
-                return json.loads(raw)
-        except Exception:
-            logger.exception("Failed to load user skill prefs: %s", user_id)
-        return {}
+        cache = RedisCache(redis_client)
+        return await cache.get_json(f"{REDIS_USER_SKILLS_PREFIX}{user_id}", default={})
 
     async def save_user_skill_preferences(
         self, user_id: str, preferences: Dict[str, bool]
@@ -112,13 +106,8 @@ class SkillManager:
         redis_client = await _get_redis()
         if not redis_client:
             return False
-        key = f"{REDIS_USER_SKILLS_PREFIX}{user_id}"
-        try:
-            await redis_client.set(key, json.dumps(preferences))
-            return True
-        except Exception:
-            logger.exception("Failed to save user skill prefs: %s", user_id)
-            return False
+        cache = RedisCache(redis_client)
+        return await cache.set_json(f"{REDIS_USER_SKILLS_PREFIX}{user_id}", preferences)
 
     async def persist_skill_config(
         self, skill_name: str, config: Dict[str, Any]
@@ -127,48 +116,36 @@ class SkillManager:
         redis_client = await _get_redis()
         if not redis_client:
             return False
-        key = f"{REDIS_SKILL_PREFIX}{skill_name}"
-        try:
-            await redis_client.set(key, json.dumps(config))
-            return True
-        except Exception:
-            logger.exception("Failed to persist skill config: %s", skill_name)
-            return False
+        cache = RedisCache(redis_client)
+        return await cache.set_json(f"{REDIS_SKILL_PREFIX}{skill_name}", config)
 
     async def persist_skill_enabled(self, skill_name: str, enabled: bool) -> bool:
         """Persist a skill's enabled/disabled state to Redis (Issue #993)."""
         redis_client = await _get_redis()
         if not redis_client:
             return False
-        key = f"{REDIS_SKILL_ENABLED_PREFIX}{skill_name}"
-        try:
-            await redis_client.set(key, json.dumps(enabled))
-            return True
-        except Exception:
-            logger.exception("Failed to persist skill enabled state: %s", skill_name)
-            return False
+        cache = RedisCache(redis_client)
+        return await cache.set_json(f"{REDIS_SKILL_ENABLED_PREFIX}{skill_name}", enabled)
 
     async def _load_persisted_configs(self) -> None:
         """Load persisted configs and enabled states from Redis (Issues #731, #993)."""
         redis_client = await _get_redis()
         if not redis_client:
             return
+        cache = RedisCache(redis_client)
         for skill_info in self._registry.list_skills():
             name = skill_info["name"]
             try:
-                config_key = f"{REDIS_SKILL_PREFIX}{name}"
-                raw = await redis_client.get(config_key)
-                if raw:
-                    config = json.loads(raw)
+                config = await cache.get_json(f"{REDIS_SKILL_PREFIX}{name}")
+                if config is not None:
                     self._registry.update_config(name, config)
                     logger.debug("Loaded persisted config for skill: %s", name)
             except Exception:
                 logger.warning("Failed to load config for skill: %s", name)
             try:
-                enabled_key = f"{REDIS_SKILL_ENABLED_PREFIX}{name}"
-                raw_enabled = await redis_client.get(enabled_key)
-                if raw_enabled is not None:
-                    if json.loads(raw_enabled):
+                enabled = await cache.get_json(f"{REDIS_SKILL_ENABLED_PREFIX}{name}")
+                if enabled is not None:
+                    if enabled:
                         self._registry.enable_skill(name)
                     else:
                         self._registry.disable_skill(name)
