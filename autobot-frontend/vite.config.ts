@@ -57,7 +57,7 @@ export default defineConfig(({ mode }) => {
     plugins: [vue(), vueDevTools(), vadAssetsPlugin()],
     optimizeDeps: {
       include: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links', '@heroicons/vue/24/outline', '@heroicons/vue/24/solid'],
-      esbuildOptions: { target: 'es2022' }
+      rolldownOptions: { target: 'es2022' }
     },
     css: { devSourcemap: true, postcss: './postcss.config.js' },
     resolve: {
