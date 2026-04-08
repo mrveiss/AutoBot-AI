@@ -932,7 +932,7 @@ onUnmounted(() => {
 
 /* Upload Progress */
 .upload-progress {
-  @apply space-y-3;
+  @apply space-y-3 max-h-48 overflow-y-auto;
 }
 
 .upload-item {
@@ -961,7 +961,7 @@ onUnmounted(() => {
 }
 
 .attached-files-list {
-  @apply space-y-2;
+  @apply space-y-2 max-h-48 overflow-y-auto;
 }
 
 .attached-file-item {
