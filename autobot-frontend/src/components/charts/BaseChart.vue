@@ -452,7 +452,6 @@ watch(
   border-radius: var(--radius-lg);
   padding: var(--spacing-md);
   border: 1px solid var(--border-subtle);
-  /* Issue #4005: CSS containment for layout optimization - 20-80ms reflow savings */
   contain: layout style;
 }
 
