@@ -408,8 +408,8 @@ class ConsolidatedOrchestrator:
 
         try:
             # Issue #379: Initialize core components in parallel
+            # Note: llm_interface is initialized in __init__, no async init needed
             await asyncio.gather(
-                self.llm_interface.initialize(),
                 self.memory_manager.initialize(),
                 self.agent_manager.initialize(),
             )
@@ -1141,8 +1141,8 @@ class ConsolidatedOrchestrator:
 
             # Reinitialize components if needed
             if "orchestrator_llm_model" in new_config:
-                logger.info("Reinitializing LLM interface with new model")
-                await self.llm_interface.initialize()
+                logger.info("LLM interface model update requires restart")
+                # Note: LLMInterface is stateless after init, model change requires service restart
 
             return True
 
