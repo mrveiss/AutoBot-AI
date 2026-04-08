@@ -1315,7 +1315,6 @@ watch(viewMode, async (newMode) => {
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   position: relative;
-  /* Issue #4005: CSS containment for layout optimization - 20-80ms reflow savings */
   contain: layout style;
 }
 

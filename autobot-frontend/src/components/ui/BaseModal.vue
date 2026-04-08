@@ -237,6 +237,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-2xl);
+  contain: layout style;
 }
 
 .dialog-small {
