@@ -124,7 +124,6 @@ class SentimentAnalysisAgent(StandardizedAgent):
                     response.get("usage", {}) if isinstance(response, dict) else {}
                 ),
             }
-            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
             diary_entry = (
                 f"SESSION:{session_id}|ACTION:sentiment_analysis"
                 f"|OUTCOME:{result['status']}|TOPIC:sentiment"
