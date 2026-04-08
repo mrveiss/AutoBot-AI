@@ -182,12 +182,19 @@ def _get_connection_manager() -> RedisConnectionManager:
 
 def get_redis_client(
     async_client: bool = False, database: str = "main"
-) -> Union[redis.Redis, async_redis.Redis, None]:
+) -> Union[redis.Redis, "Coroutine[Any, Any, async_redis.Redis]", None]:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
 
     This is the CANONICAL method for Redis access in AutoBot. Direct redis.Redis()
     instantiation is FORBIDDEN per CLAUDE.md policy.
+
+    ASYNC INITIALIZATION WARNING:
+    ==============================
+    When async_client=True this function is a SYNC function that returns a
+    COROUTINE, not a ready-to-use client. The coroutine MUST be awaited before
+    use. Forgetting to await causes TypeError: object coroutine can't be used
+    in 'await' expression.
 
     CONSOLIDATED FEATURES (from 6 implementations):
     ===============================================
@@ -204,8 +211,8 @@ def get_redis_client(
     - Parameter filtering (removes None values)
 
     Args:
-        async_client (bool): If True, returns async Redis client (for async functions).
-                             If False, returns synchronous client (for regular functions).
+        async_client (bool): If True, returns async Redis client coroutine.
+                             If False, returns synchronous client.
                              Default: False
         database (str): Named database for logical separation. Use self-documenting
                         names instead of DB numbers. Default: "main"

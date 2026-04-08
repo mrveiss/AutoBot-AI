@@ -13,6 +13,21 @@ import { getApiBase } from '@/config/ssot-config'
 // Create scoped logger for ApiService
 const logger = createLogger('ApiService')
 
+// Session collaboration response types
+export interface ParticipantResponse {
+  user_id: string
+  permission: string
+  is_owner: boolean
+  online?: boolean
+}
+
+export interface SessionParticipantsResponse {
+  session_id: string
+  owner_id: string
+  participants: ParticipantResponse[]
+  total_count: number
+}
+
 class ApiService {
   private client: typeof apiClient
 
@@ -85,6 +100,11 @@ class ApiService {
 
   async deleteChatHistory(chatId: string): Promise<ApiResponse> {
     return this.delete(`${getApiBase()}/chats/${chatId}`)
+  }
+
+  // Session Collaboration API (Issue #3986)
+  async getSessionParticipants(sessionId: string): Promise<SessionParticipantsResponse> {
+    return this.get<SessionParticipantsResponse>(`${getApiBase()}/sessions/${sessionId}/participants`)
   }
 
   // Workflow API
@@ -238,6 +258,15 @@ class ApiService {
 
   async getSystemMetrics(): Promise<ApiResponse> {
     return this.get(`${getApiBase()}/service-monitor/resources`)
+  }
+
+  // User Management API
+  async getUserById(userId: string): Promise<ApiResponse> {
+    return this.get(`${getApiBase()}/user-management/users/${userId}`)
+  }
+
+  async getGroupById(groupId: string): Promise<ApiResponse> {
+    return this.get(`${getApiBase()}/user-management/teams/${groupId}`)
   }
 }
 

@@ -67,10 +67,14 @@ watch(() => props.outputLines.length, () => {
 })
 
 // Announce new terminal output to screen readers
-watch(() => props.outputLines, (newLines, oldLines) => {
+// Using shallow watch on length instead of deep watch for performance
+let lastAnnouncedLength = 0
+
+watch(() => props.outputLines.length, (newLength) => {
   // Only announce if a new line was added
-  if (newLines.length > (oldLines?.length || 0)) {
-    const latestLine = newLines[newLines.length - 1]
+  if (newLength > lastAnnouncedLength && newLength > 0) {
+    lastAnnouncedLength = newLength
+    const latestLine = props.outputLines[newLength - 1]
     if (latestLine) {
       // Strip HTML and ANSI codes for announcement
       // #1721: Loop HTML strip to prevent incomplete multi-char sanitization
@@ -92,7 +96,7 @@ watch(() => props.outputLines, (newLines, oldLines) => {
       }, 2000)
     }
   }
-}, { deep: true })
+})
 
 // Format terminal line content
 const formatTerminalLine = (line: OutputLine): string => {

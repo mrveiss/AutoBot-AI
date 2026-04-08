@@ -588,6 +588,24 @@ const yAxisLabels = computed(() => {
   return ['100', '80', '60', '40', '20', '0'];
 });
 
+// Single pass over trendData to extract all aggregate values consumed by
+// trendStats and trendPoints.  The previous code mapped trendData to a scores
+// array in trendStats (O(n)), then called Math.min/max with spread (O(n) each),
+// while trendPoints did a separate O(n) map — three traversals total.
+// xAxisLabels called trendData.indexOf(point) for each filtered entry, making
+// it O(n²).  All four consumers now share a single O(n) base computation.
+const trendAggregates = computed((): { min: number; max: number; sum: number; current: number; first: number } => {
+  const data = trendData.value;
+  if (data.length === 0) return { min: 0, max: 0, sum: 0, current: 0, first: 0 };
+  let min = data[0].score, max = data[0].score, sum = 0;
+  for (const p of data) {
+    if (p.score < min) min = p.score;
+    if (p.score > max) max = p.score;
+    sum += p.score;
+  }
+  return { min, max, sum, current: data[data.length - 1].score, first: data[0].score };
+});
+
 const trendPoints = computed((): TrendPoint[] => {
   if (trendData.value.length === 0) return [];
 
@@ -629,29 +647,33 @@ const trendAreaPath = computed(() => {
 
 const xAxisLabels = computed(() => {
   if (trendData.value.length === 0) return [];
-  const step = Math.max(1, Math.floor(trendData.value.length / 7));
-  return trendData.value
-    .filter((_, i) => i % step === 0 || i === trendData.value.length - 1)
-    .map((point, i, arr) => ({
-      x: 50 + (trendData.value.indexOf(point) / Math.max(trendData.value.length - 1, 1)) * 730,
-      text: formatShortDate(point.date),
-    }));
+  const len = trendData.value.length;
+  const step = Math.max(1, Math.floor(len / 7));
+  const maxX = Math.max(len - 1, 1);
+  const result: { x: number; text: string }[] = [];
+  for (let i = 0; i < len; i++) {
+    if (i % step === 0 || i === len - 1) {
+      result.push({
+        x: 50 + (i / maxX) * 730,
+        text: formatShortDate(trendData.value[i].date),
+      });
+    }
+  }
+  return result;
 });
 
 const trendStats = computed(() => {
   if (trendData.value.length === 0) {
     return { current: 0, change: 0, average: 0, min: 0, max: 0 };
   }
-  const scores = trendData.value.map(t => t.score);
-  const current = scores[scores.length - 1] || 0;
-  const first = scores[0] || 0;
+  const { min, max, sum, current, first } = trendAggregates.value;
   const change = first > 0 ? ((current - first) / first) * 100 : 0;
   return {
     current,
     change,
-    average: scores.reduce((a, b) => a + b, 0) / scores.length,
-    min: Math.min(...scores),
-    max: Math.max(...scores),
+    average: sum / trendData.value.length,
+    min,
+    max,
   };
 });
 

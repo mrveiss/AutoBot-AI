@@ -17,11 +17,10 @@ import aiohttp
 import psutil
 
 from autobot_shared.http_client import get_http_client
-from config import ConfigManager
-
-# Create singleton config instance
-config = ConfigManager()
+from config.manager import get_config_manager
 from constants.network_constants import NetworkConstants
+
+config = get_config_manager()
 
 # Issue #380: Module-level tuple for expected system metrics
 _EXPECTED_SYSTEM_METRICS = ("cpu_percent", "memory_percent", "disk_usage")

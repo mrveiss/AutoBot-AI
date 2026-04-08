@@ -241,7 +241,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
+import { knowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 import type { SearchResult } from '@/stores/useKnowledgeStore'
 import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
@@ -253,8 +253,8 @@ const logger = createLogger('KnowledgeSearch')
 
 const { t } = useI18n()
 
-// Repository instance
-const knowledgeRepo = new KnowledgeRepository()
+// Issue #3969: Use shared singleton — never instantiate a second KnowledgeRepository here
+const knowledgeRepo = knowledgeRepository
 
 // Knowledge base composable for category fetching
 const { fetchCategories, formatCategory } = useKnowledgeBase()

@@ -22,14 +22,14 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_ollama_url
 from circuit_breaker import circuit_breaker_async
-from config import ConfigManager
+from config.manager import get_config_manager
 from constants.api_constants import PATH_OLLAMA_CHAT
 
 from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
 
 logger = logging.getLogger(__name__)
-config = ConfigManager()
+config = get_config_manager()
 
 # Issue #697: Get tracer for LLM operations
 _tracer = trace.get_tracer("autobot.llm.ollama", "2.0.0")

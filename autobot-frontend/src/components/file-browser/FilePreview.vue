@@ -37,6 +37,7 @@
             :src="previewFile.url"
             :alt="previewFile.name"
             class="preview-image"
+            loading="lazy"
           />
         </div>
 

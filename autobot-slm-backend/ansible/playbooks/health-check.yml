@@ -254,6 +254,23 @@
       when: is_ai_stack | bool
       tags: [ai_stack, services]
 
+    # Issue #3461: ChromaDB health checks
+    - name: Check ChromaDB service (AI Stack)
+      systemd:
+        name: autobot-chromadb
+      register: chromadb_service_status
+      when: is_ai_stack | bool
+      tags: [ai_stack, services, chromadb]
+
+    - name: Test ChromaDB health endpoint (AI Stack)
+      uri:
+        url: "http://127.0.0.1:8100/health"
+        method: GET
+        timeout: 20
+      register: chromadb_health_test
+      when: is_ai_stack | bool
+      tags: [ai_stack, services, chromadb]
+
     - name: Check for GPU devices (AI Stack)
       shell: |
         echo "GPU devices:"

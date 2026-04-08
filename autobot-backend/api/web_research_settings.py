@@ -213,10 +213,10 @@ async def disable_web_research():
 async def get_research_settings():
     """Get current web research settings"""
     try:
-        from config import ConfigManager
+        from config.manager import get_config_manager
 
         # Get settings from config
-        unified_config_manager = ConfigManager()
+        unified_config_manager = get_config_manager()
         research_config = unified_config_manager.get_nested("agents.research", {})
         web_research_config = unified_config_manager.get_nested("web_research", {})
 

@@ -1,6 +1,7 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, defineAsyncComponent } from 'vue-router'
 import App from './App.vue'
-import TerminalWindow from './components/terminal/TerminalWindow.vue'
+// Issue #4003: Lazy-load TerminalWindow (2261 lines) to reduce initial bundle parse time
+const TerminalWindow = defineAsyncComponent(() => import('./components/terminal/TerminalWindow.vue'))
 
 // Since this is a single page application, we just need basic routing
 // for components that expect route parameters

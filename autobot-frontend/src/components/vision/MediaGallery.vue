@@ -35,6 +35,7 @@
             v-if="item.thumbnail"
             :src="item.thumbnail"
             :alt="item.filename"
+            loading="lazy"
             @error="handleThumbnailError"
           />
           <div v-else class="thumbnail-placeholder">
@@ -88,6 +89,7 @@
               :src="selectedItem.thumbnail"
               :alt="selectedItem.filename"
               class="preview-image"
+              loading="lazy"
             />
             <div v-else class="preview-placeholder">
               <i :class="getTypeIcon(selectedItem.type)"></i>

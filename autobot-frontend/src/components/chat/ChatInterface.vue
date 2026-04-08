@@ -719,7 +719,7 @@ const enableAutoSave = () => {
 // Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
 // after 3 consecutive errors and retries slowly.
 const messagePoller = useBackoffPoller({
-  baseInterval: 10_000,          // 10 s when healthy (unchanged from before)
+  baseInterval: 30_000,          // 30 s when healthy (increased for inactive sessions #3999)
   maxInterval: 60_000,           // cap at 60 s during backoff
   backoffMultiplier: 2,
   circuitBreakerThreshold: 3,
@@ -736,8 +736,21 @@ const messagePoller = useBackoffPoller({
 })
 
 const startMessagePolling = () => {
-  logger.debug('Starting message polling (backoff poller, base 10 s)')
+  logger.debug('Starting message polling (backoff poller, base 30 s)')
   messagePoller.start()
+}
+
+// Handle visibility changes to pause/resume polling (#3999)
+// When tab is hidden, pause polling to reduce network traffic
+// When tab becomes visible, resume polling immediately
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    logger.debug('Tab hidden - pausing message polling')
+    messagePoller.pause()
+  } else {
+    logger.debug('Tab visible - resuming message polling')
+    messagePoller.resume()
+  }
 }
 
 // Keyboard shortcuts
@@ -845,11 +858,15 @@ onMounted(async () => {
 
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts)
+
+  // Add visibility change listener to pause/resume polling (#3999)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   // Clean up event listeners
   document.removeEventListener('keydown', handleKeyboardShortcuts)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 
   // Clean up intervals
   if (heartbeatInterval.value) {

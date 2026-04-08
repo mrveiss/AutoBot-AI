@@ -32,13 +32,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.http_client import get_http_client
-from config import ConfigManager
+from config.manager import get_config_manager
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 
 @dataclass

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from auth_middleware import check_admin_permission, get_current_user
 
 try:
-    from enhanced_multi_agent_orchestrator import (
+    from enhanced_orchestration import (
         create_and_execute_workflow,
         enhanced_orchestrator,
     )
@@ -28,7 +28,7 @@ except ImportError:
     create_and_execute_workflow = None
     enhanced_orchestrator = None
     logging.getLogger(__name__).warning(
-        "enhanced_multi_agent_orchestrator not available"
+        "enhanced_orchestration package not available"
     )
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

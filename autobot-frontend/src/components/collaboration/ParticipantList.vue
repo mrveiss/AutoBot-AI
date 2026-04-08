@@ -2,17 +2,21 @@
 /**
  * Participant List Component
  *
- * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
+ * Issue #3986: Connect ParticipantList to session API for real role data
  *
  * Displays list of session participants with their roles and permissions.
  * Allows session owner to manage participant access levels.
+ * Fetches real role and permission data from session API instead of mocking.
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type UserPresence } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
+import { apiService, type ParticipantResponse } from '@/services/api'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('ParticipantList')
 const { t } = useI18n()
 const chatStore = useChatStore()
 const { sessionPresence, myPresence, isConnected } = useSessionCollaboration()
@@ -35,6 +39,8 @@ const emit = defineEmits<{
 // Local state
 const showRoleMenu = ref<string | null>(null)
 const removingUserId = ref<string | null>(null)
+const isLoadingParticipants = ref(false)
+const participantRoles = ref<Map<string, ParticipantResponse>>(new Map())
 
 // Current user is owner
 const isOwner = computed(() => {
@@ -42,21 +48,53 @@ const isOwner = computed(() => {
   return session?.owner?.id === myPresence.value?.userId
 })
 
-// Participant with role data (mock for now, will come from API later)
+// Participant with role data (fetched from API)
 interface ParticipantWithRole extends UserPresence {
   role: 'owner' | 'collaborator' | 'viewer'
   email?: string
   joinedAt: Date
 }
 
-// Mock role data (in real implementation, this comes from session API)
+// Fetch real role data from session API
+const fetchParticipantRoles = async () => {
+  const sessionId = chatStore.currentSession?.id
+  if (!sessionId) {
+    logger.warn('[Issue #3986] No current session ID for fetching participant roles')
+    return
+  }
+
+  isLoadingParticipants.value = true
+  try {
+    const response = await apiService.getSessionParticipants(sessionId)
+    logger.debug('[Issue #3986] Fetched participant roles from API', response)
+
+    // Map API responses to a lookup table
+    participantRoles.value.clear()
+    response.participants.forEach(participant => {
+      participantRoles.value.set(participant.user_id, participant)
+    })
+  } catch (error) {
+    logger.error('[Issue #3986] Failed to fetch participant roles:', error)
+  } finally {
+    isLoadingParticipants.value = false
+  }
+}
+
+// Map presence data with real roles from API
 const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
-  return sessionPresence.value.map(p => ({
-    ...p,
-    role: p.userId === myPresence.value?.userId ? 'owner' : 'collaborator' as const,
-    email: `${p.username}@example.com`,
-    joinedAt: new Date()
-  }))
+  return sessionPresence.value.map(p => {
+    const roleData = participantRoles.value.get(p.userId)
+    const role = (roleData?.permission === 'owner' ? 'owner' :
+                  roleData?.permission === 'editor' ? 'collaborator' :
+                  'viewer') as const
+
+    return {
+      ...p,
+      role,
+      email: `${p.username}@example.com`, // Placeholder - can be enhanced with user profile API
+      joinedAt: new Date() // Placeholder - can be enhanced with actual join timestamp
+    }
+  })
 })
 
 // Get role badge styling
@@ -116,6 +154,26 @@ const removeParticipant = (userId: string) => {
 const inviteParticipant = () => {
   emit('invite')
 }
+
+// Fetch participant roles when session changes or component mounts
+onMounted(() => {
+  fetchParticipantRoles()
+})
+
+watch(
+  () => chatStore.currentSession?.id,
+  () => {
+    fetchParticipantRoles()
+  }
+)
+
+// Refetch when session presence changes (e.g., someone joins/leaves)
+watch(
+  () => sessionPresence.value.length,
+  () => {
+    fetchParticipantRoles()
+  }
+)
 </script>
 
 <template>
@@ -131,6 +189,14 @@ const inviteParticipant = () => {
           class="px-2 py-0.5 text-xs rounded-full bg-autobot-bg-tertiary text-autobot-text-muted"
         >
           {{ participantsWithRoles.length }}
+        </span>
+        <span
+          v-if="isLoadingParticipants"
+          class="px-2 py-0.5 text-xs rounded-full bg-blue-500/10 text-blue-400 animate-pulse"
+          :title="$t('collaboration.participants.loadingRoles')"
+        >
+          <i class="bi bi-hourglass-split mr-1" />
+          {{ $t('collaboration.participants.loading') }}
         </span>
       </div>
       <button

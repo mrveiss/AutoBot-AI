@@ -18,6 +18,7 @@
  * @see KnowledgeGraph.vue - Parent component that owns data fetching and controls
  * @see Issue #3330 - 3D graph view toggle feature
  * @see Issue #3363 - WebGL teardown, i18n, shallowRef typing, nextTick fixes
+ * @see Issue #4004 - Replace deep watch with length-based watch for performance
  *
  * @author mrveiss
  * @copyright (c) 2026 mrveiss
@@ -268,10 +269,13 @@ onUnmounted(() => {
 })
 
 // Rebuild graph data when filtered entities/edges change.
-// nextTick in the init path ensures DOM has laid out before dimensions are read.
-// Issue #3363: fixes invisible graph when data arrives before DOM layout.
+// Issue #4004: Replace deep watch with length-based watch for performance.
+// Watching array length is a lightweight proxy for data changes, avoiding 40-80ms
+// deep comparison overhead on 1000+ node graphs. The graph is completely rebuilt
+// on each data change, so we only need to detect when the arrays change, not which
+// specific properties mutated within each entity.
 watch(
-  () => [props.entities, props.edges] as const,
+  () => [props.entities?.length ?? 0, props.edges?.length ?? 0] as const,
   async () => {
     if (!graph.value) {
       if (!isEmpty.value) {
@@ -281,8 +285,7 @@ watch(
       return
     }
     graph.value.graphData(buildGraphData())
-  },
-  { deep: true }
+  }
 )
 </script>
 

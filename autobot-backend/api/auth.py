@@ -466,14 +466,14 @@ def _verify_current_password(
 
 def _persist_password_change(username: str, new_password_hash: str) -> None:
     """Persist password change to config file."""
-    from config import ConfigManager
+    from config.manager import get_config_manager
 
     # Update in-memory config
     allowed_users = auth_middleware.security_config.get("allowed_users", {})
     allowed_users[username]["password_hash"] = new_password_hash
 
     # Persist to disk
-    config_manager = ConfigManager()
+    config_manager = get_config_manager()
     config_manager.set_nested(
         f"security_config.allowed_users.{username}.password_hash",
         new_password_hash,

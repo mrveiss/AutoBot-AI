@@ -8,6 +8,7 @@
  * Tests the vectorization composable:
  * - Status polling mechanism
  * - Batch status fetching
+ * - Request deduplication (Issue #4006)
  * - Error handling
  * - Cleanup on unmount
  */
@@ -241,6 +242,145 @@ describe('useKnowledgeVectorization', () => {
 
       // Should have made 3 API calls
       expect(apiClient.default.post).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  // ============================================================================
+  // REQUEST DEDUPLICATION TESTS (Issue #4006)
+  // ============================================================================
+
+  describe('Request Deduplication (Issue #4006)', () => {
+    it('should deduplicate identical batch requests within TTL', async () => {
+      const apiClient = await import('@/utils/ApiClient')
+      const mockResponse = {
+        json: vi.fn().mockResolvedValue({
+          statuses: {
+            doc_1: { vectorized: true },
+            doc_2: { vectorized: false }
+          }
+        })
+      }
+
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // Make first request
+      const docIds = ['doc_1', 'doc_2']
+      await composable.fetchBatchStatus(docIds)
+
+      // Make identical request (should use cache)
+      await composable.fetchBatchStatus(docIds)
+
+      // Should only make one API call (deduplication working)
+      expect(apiClient.default.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('should deduplicate requests with different order but same IDs', async () => {
+      const apiClient = await import('@/utils/ApiClient')
+      const mockResponse = {
+        json: vi.fn().mockResolvedValue({
+          statuses: {
+            doc_1: { vectorized: true },
+            doc_2: { vectorized: false },
+            doc_3: { vectorized: true }
+          }
+        })
+      }
+
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // First request: [doc_1, doc_2, doc_3]
+      await composable.fetchBatchStatus(['doc_1', 'doc_2', 'doc_3'])
+
+      // Second request with different order: [doc_3, doc_1, doc_2]
+      // Should use cache because sorted keys are identical
+      await composable.fetchBatchStatus(['doc_3', 'doc_1', 'doc_2'])
+
+      // Should only make one API call (order-invariant cache key)
+      expect(apiClient.default.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('should make new request for different batch IDs', async () => {
+      const apiClient = await import('@/utils/ApiClient')
+      const mockResponse = {
+        json: vi.fn().mockResolvedValue({
+          statuses: {
+            doc_1: { vectorized: true },
+            doc_2: { vectorized: false },
+            doc_3: { vectorized: true }
+          }
+        })
+      }
+
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // First request
+      await composable.fetchBatchStatus(['doc_1', 'doc_2'])
+
+      // Second request with different IDs
+      await composable.fetchBatchStatus(['doc_3', 'doc_4'])
+
+      // Should make two API calls (different batches)
+      expect(apiClient.default.post).toHaveBeenCalledTimes(2)
+    })
+
+    it('should clear request cache on cleanup', async () => {
+      const apiClient = await import('@/utils/ApiClient')
+      const mockResponse = {
+        json: vi.fn().mockResolvedValue({
+          statuses: {
+            doc_1: { vectorized: true }
+          }
+        })
+      }
+
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // Make a request to populate cache
+      await composable.fetchBatchStatus(['doc_1'])
+
+      // Clear mocks
+      vi.clearAllMocks()
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // Cleanup should clear the cache
+      composable.cleanup()
+
+      // Make the same request again
+      await composable.fetchBatchStatus(['doc_1'])
+
+      // Should make a new API call because cache was cleared
+      expect(apiClient.default.post).toHaveBeenCalledTimes(1)
+    })
+
+    it('should handle concurrent requests to same batch', async () => {
+      const apiClient = await import('@/utils/ApiClient')
+      const mockResponse = {
+        json: vi.fn().mockResolvedValue({
+          statuses: {
+            doc_1: { vectorized: true },
+            doc_2: { vectorized: false }
+          }
+        })
+      }
+
+      apiClient.default.post = vi.fn().mockResolvedValue(mockResponse)
+
+      // Make concurrent requests for the same batch
+      const docIds = ['doc_1', 'doc_2']
+      const promises = [
+        composable.fetchBatchStatus(docIds),
+        composable.fetchBatchStatus(docIds),
+        composable.fetchBatchStatus(docIds)
+      ]
+
+      await Promise.all(promises)
+
+      // All should resolve successfully
+      expect(composable.getDocumentStatus('doc_1')).toBe('vectorized')
+      expect(composable.getDocumentStatus('doc_2')).toBe('pending')
+
+      // First request goes to API, subsequent use cache
+      expect(apiClient.default.post).toHaveBeenCalledTimes(1)
     })
   })
 
