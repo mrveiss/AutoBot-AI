@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 
 import aiofiles
 
-from config import ConfigManager
+from config.manager import get_config_manager
 
 try:
     from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -33,8 +33,7 @@ from utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 # Issue #665: JavaScript snippets for content extraction
 _JS_EXTRACT_TEXT = """

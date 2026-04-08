@@ -12,10 +12,9 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-from config import ConfigManager
+from config.manager import get_config_manager
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 # Issue #380: Pre-compiled regex for word extraction
 _WORD_BOUNDARY_RE = re.compile(r"\b[a-zA-Z0-9]+\b")

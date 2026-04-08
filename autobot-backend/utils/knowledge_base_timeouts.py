@@ -13,10 +13,9 @@ Part of KB-ASYNC-014: Timeout Configuration Centralization
 import os
 from typing import Dict
 
-from config import ConfigManager
+from config.manager import get_config_manager
 
-# Create singleton config instance
-config = ConfigManager()
+config = get_config_manager()
 
 
 class KnowledgeBaseTimeouts:

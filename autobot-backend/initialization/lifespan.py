@@ -24,7 +24,7 @@ from autobot_shared.tracing import (
 )
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import ConfigManager
+from config.manager import get_config_manager
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
 from services.slm_client import init_slm_client, shutdown_slm_client
@@ -233,7 +233,7 @@ async def _check_env_drift() -> None:
 async def _init_config(app: FastAPI) -> None:
     """Helper for initialize_critical_services. Ref: #1088, #3398."""
     logger.info("✅ [ 10%] Config: Loading unified configuration...")
-    config = ConfigManager()
+    config = get_config_manager()
     app.state.config = config
     await update_app_state("config", config)
     logger.info("✅ [ 10%] Config: Configuration loaded successfully")

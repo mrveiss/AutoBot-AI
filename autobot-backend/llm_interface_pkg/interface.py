@@ -24,7 +24,7 @@ import xxhash
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
-from config import ConfigManager
+from config.manager import get_config_manager
 from constants.model_constants import ModelConstants
 
 # Issue #1403: Adapter registry
@@ -85,7 +85,7 @@ except ImportError:
     UsageRecordRequest = None
     logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
-config = ConfigManager()
+config = get_config_manager()
 
 # Issue #697: OpenTelemetry tracer for LLM operations
 _llm_tracer = get_tracer("autobot.llm")

@@ -15,11 +15,10 @@ from typing import Any, Dict
 import aiohttp
 import psutil
 
-from config import ConfigManager
-
-# Create singleton config instance
-config = ConfigManager()
 from autobot_shared.http_client import get_http_client
+from config.manager import get_config_manager
+
+config = get_config_manager()
 from autobot_shared.redis_client import get_redis_client
 
 
