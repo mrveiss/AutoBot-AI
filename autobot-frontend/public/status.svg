@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none;">
+  <!-- Status Indicators Sprite Sheet -->
+  <!-- Usage: <use href="/status.svg#status-online"></use> -->
+
+  <!-- Online Status -->
+  <symbol id="status-online" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="1"/>
+    <circle cx="12" cy="12" r="6" fill="white"/>
+  </symbol>
+
+  <!-- Offline Status -->
+  <symbol id="status-offline" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.4"/>
+    <circle cx="12" cy="12" r="6" fill="white" opacity="0.6"/>
+  </symbol>
+
+  <!-- Away Status -->
+  <symbol id="status-away" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    <rect x="10" y="5" width="4" height="14" fill="white" opacity="0.8"/>
+  </symbol>
+
+  <!-- Success Indicator -->
+  <symbol id="status-success" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    <path d="M10 16.17l-3.59-3.59L5 14l5 5 10-10-1.41-1.41L10 16.17z" fill="white"/>
+  </symbol>
+
+  <!-- Error Indicator -->
+  <symbol id="status-error" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    <path d="M15 9H9v6h6V9zm-2 5h-2v-2h2v2zm0-3h-2V8h2v3z" fill="white"/>
+  </symbol>
+
+  <!-- Warning Indicator -->
+  <symbol id="status-warning" viewBox="0 0 24 24">
+    <path d="M12 2L2 20h20L12 2zm1 16h-2v-2h2v2zm0-4h-2v-4h2v4z" fill="currentColor"/>
+  </symbol>
+
+  <!-- Loading/Pending Indicator -->
+  <symbol id="status-loading" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+    <path d="M 12 2 A 10 10 0 0 1 22 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+
+  <!-- In Progress Indicator -->
+  <symbol id="status-in-progress" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.2"/>
+    <circle cx="12" cy="12" r="5" fill="currentColor"/>
+    <circle cx="12" cy="12" r="3" fill="white"/>
+  </symbol>
+
+  <!-- Blocked/Stopped Indicator -->
+  <symbol id="status-blocked" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    <rect x="8" y="8" width="8" height="8" fill="white"/>
+  </symbol>
+
+  <!-- Completed/Done Indicator -->
+  <symbol id="status-completed" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="10" fill="currentColor"/>
+    <path d="M10 16.17l-3.59-3.59L5 14l5 5 10-10-1.41-1.41L10 16.17z" fill="white" stroke="white" stroke-width="0.5"/>
+  </symbol>
+
+  <!-- Processing Indicator -->
+  <symbol id="status-processing" viewBox="0 0 24 24">
+    <g opacity="0.3">
+      <circle cx="12" cy="12" r="2" fill="currentColor"/>
+      <circle cx="19" cy="12" r="2" fill="currentColor"/>
+      <circle cx="5" cy="12" r="2" fill="currentColor"/>
+    </g>
+  </symbol>
+</svg>
