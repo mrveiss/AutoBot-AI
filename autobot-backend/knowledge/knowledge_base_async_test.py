@@ -86,7 +86,7 @@ class TestInitRedisConnections:
 
         with (
             patch(_SYNC_CLIENT_PATH, return_value=sync_client),
-            patch(_ASYNC_CLIENT_PATH, return_value=mock_async_redis),
+            patch(_ASYNC_CLIENT_PATH, new=AsyncMock(return_value=mock_async_redis)),
         ):
             await kb._init_redis_connections()
 
@@ -105,7 +105,7 @@ class TestInitRedisConnections:
 
         with (
             patch(_SYNC_CLIENT_PATH, return_value=sync_client),
-            patch(_ASYNC_CLIENT_PATH, return_value=mock_async_redis),
+            patch(_ASYNC_CLIENT_PATH, new=AsyncMock(return_value=mock_async_redis)),
         ):
             await kb._init_redis_connections()
 
@@ -123,7 +123,7 @@ class TestInitRedisConnections:
 
         with (
             patch(_SYNC_CLIENT_PATH, return_value=sync_client),
-            patch(_ASYNC_CLIENT_PATH, return_value=None),
+            patch(_ASYNC_CLIENT_PATH, new=AsyncMock(return_value=None)),
         ):
             with pytest.raises(
                 Exception, match="Async Redis client initialization returned None"
@@ -153,7 +153,7 @@ class TestInitRedisConnections:
 
         with (
             patch(_SYNC_CLIENT_PATH, return_value=sync_client),
-            patch(_ASYNC_CLIENT_PATH, return_value=mock_async_redis),
+            patch(_ASYNC_CLIENT_PATH, new=AsyncMock(return_value=mock_async_redis)),
         ):
             with pytest.raises(ConnectionError, match="Redis down"):
                 await kb._init_redis_connections()
