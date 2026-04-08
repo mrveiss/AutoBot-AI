@@ -1,31 +1,44 @@
 ---
-name: Bug report
-about: Report a bug to help us improve
-title: "[BUG] "
-labels: bug
+name: Bug Report
+description: Report a bug or issue you've encountered
+labels: ['type:bug']
 ---
 
 ## Description
-A clear and concise description of what the bug is.
+
+Clear, concise description of the bug.
 
 ## Steps to Reproduce
-1. ...
-2. ...
-3. ...
+
+1. Step 1
+2. Step 2
+3. Step 3
 
 ## Expected Behavior
+
 What should happen?
 
 ## Actual Behavior
+
 What actually happens?
 
 ## Environment
-- OS: [e.g., macOS, Linux, Windows]
-- Docker version: [e.g., 24.0]
-- Branch: [e.g., Dev_new_gui]
 
-## Logs/Screenshots
-Paste relevant logs or screenshots here.
+- OS: [e.g., Ubuntu 22.04]
+- Docker version: [e.g., 24.0]
+- AutoBot version: [e.g., v1.5.0]
+- Browser: [if applicable]
 
 ## Additional Context
-Any other context about the problem?
+
+Any other relevant information.
+
+---
+
+## Help Us Triage
+
+Does this look like a **frontend**, **backend**, **infrastructure**, or **docs** issue?
+
+Is it **beginner-friendly**, **intermediate**, or **advanced**?
+
+For guidance on contribution, see [CONTRIBUTORS.md](../../CONTRIBUTORS.md).
