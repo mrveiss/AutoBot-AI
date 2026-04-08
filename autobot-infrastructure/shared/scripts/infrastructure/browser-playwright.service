@@ -10,6 +10,7 @@ WorkingDirectory=/home/autobot
 Environment="HEADLESS=false"
 Environment="DISPLAY=:1"
 Environment="NODE_ENV=production"
+Environment="PLAYWRIGHT_PORT=9001"
 ExecStart=/usr/bin/node /home/autobot/playwright-server.js
 Restart=always
 RestartSec=10
