@@ -105,13 +105,31 @@ def load_json_settings(settings_file: Path) -> Dict[str, Any]:
         return {}
 
 
-def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    """Deep merge two dictionaries, with override taking precedence"""
+def deep_merge(
+    base: Dict[str, Any],
+    override: Dict[str, Any],
+    max_depth: int = 10,
+    current_depth: int = 0,
+) -> Dict[str, Any]:
+    """Deep merge two dictionaries with depth protection, override taking precedence.
+
+    Args:
+        base: Base dictionary to merge into
+        override: Dictionary with override values
+        max_depth: Maximum nesting depth allowed (default: 10)
+        current_depth: Current recursion depth (internal use)
+
+    Raises:
+        ValueError: If nesting depth exceeds max_depth
+    """
+    if current_depth > max_depth:
+        raise ValueError(f"Config nesting depth exceeds maximum of {max_depth}")
+
     result = base.copy()
 
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = deep_merge(result[key], value)
+            result[key] = deep_merge(result[key], value, max_depth=max_depth, current_depth=current_depth + 1)
         else:
             result[key] = value
 

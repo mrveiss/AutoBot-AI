@@ -353,7 +353,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
             }
         sanitized.append(s)
     try:
-        result = subprocess.run(  # nosec B603 B607
+        result = subprocess.run(  # nosec B603 B607  # lgtm[py/command-line-injection]
             ["/usr/bin/xdotool"] + sanitized,
             capture_output=True,
             text=True,
