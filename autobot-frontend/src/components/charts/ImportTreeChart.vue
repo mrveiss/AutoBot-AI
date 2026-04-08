@@ -217,6 +217,7 @@ import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
 import { getCssVar } from '@/composables/useCssVars'
+import { useDebounce } from '@/composables/useTimeout'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -397,8 +398,12 @@ function navigateToFile(file?: string) {
   }
 }
 
-function handleSearch() {
+const debouncedUpdateCytoscapeElements = useDebounce(() => {
   updateCytoscapeElements()
+}, 300)
+
+function handleSearch() {
+  debouncedUpdateCytoscapeElements()
 }
 
 // ============================================================================

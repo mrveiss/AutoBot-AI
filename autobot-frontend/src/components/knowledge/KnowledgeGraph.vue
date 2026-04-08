@@ -374,6 +374,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import { getCssVar } from '@/composables/useCssVars'
+import { useDebounce } from '@/composables/useTimeout'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 import KnowledgeGraph3D from '@/components/knowledge/KnowledgeGraph3D.vue'
 
@@ -463,25 +464,8 @@ const cy = shallowRef<Core | null>(null)
 // Utilities
 // ============================================================================
 
-/**
- * Creates a debounced version of a function
- * @param fn - Function to debounce
- * @param delay - Delay in milliseconds
- * @returns Debounced function
- */
-function debounce<T extends (...args: Parameters<T>) => void>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
-  return (...args: Parameters<T>) => {
-    if (timeoutId) clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => fn(...args), delay)
-  }
-}
-
-/** Debounced graph update for search performance (300ms delay) */
-const debouncedUpdateGraph = debounce(() => {
+/** Debounced graph update for search performance (300ms delay, auto-cleanup on unmount) */
+const debouncedUpdateGraph = useDebounce(() => {
   updateCytoscapeElements()
 }, 300)
 

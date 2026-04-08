@@ -317,6 +317,7 @@ import { useKnowledgeBase } from '@/composables/useKnowledgeBase'
 import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { usePagination } from '@/composables/usePagination'
+import { useDebounce } from '@/composables/useTimeout'
 import TreeNodeComponent, { type TreeNode } from './TreeNodeComponent.vue'
 import VectorizationProgressModal from './VectorizationProgressModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -379,6 +380,10 @@ const expandedNodes = ref<Set<string>>(new Set())
 const selectedFile = ref<TreeNode | null>(null)
 const fileContent = ref('')
 const searchQuery = ref('')
+const debouncedSearchQuery = ref('')
+const updateDebouncedSearch = useDebounce((value: string) => {
+  debouncedSearchQuery.value = value
+}, 300)
 const selectedCategory = ref<string | null>(null)
 const selectedMainCategory = ref<string | null>(null)
 const mainCategories = ref<any[]>([])
@@ -551,9 +556,10 @@ const filteredTree = computed(() => {
   }
 
   // Filter by search query
-  if (!searchQuery.value) return tree
+  // Filter by search query (debounced to avoid re-rendering on every keystroke)
+  if (!debouncedSearchQuery.value) return tree
 
-  const query = searchQuery.value.toLowerCase()
+  const query = debouncedSearchQuery.value.toLowerCase()
 
   const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
     return nodes.reduce((acc: TreeNode[], node) => {
@@ -1153,11 +1159,13 @@ const clearSelection = () => {
 }
 
 const handleSearch = () => {
-  // Search is handled by computed property
+  updateDebouncedSearch(searchQuery.value)
 }
 
 const clearSearch = () => {
   searchQuery.value = ''
+  debouncedSearchQuery.value = ''
+  updateDebouncedSearch.cancel()
   expandedNodes.value.clear()
 }
 
