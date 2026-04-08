@@ -182,12 +182,19 @@ def _get_connection_manager() -> RedisConnectionManager:
 
 def get_redis_client(
     async_client: bool = False, database: str = "main"
-) -> Union[redis.Redis, async_redis.Redis, None]:
+) -> Union[redis.Redis, "Coroutine[Any, Any, async_redis.Redis]", None]:
     """
     Get a Redis client instance with circuit breaker and health monitoring.
 
     This is the CANONICAL method for Redis access in AutoBot. Direct redis.Redis()
     instantiation is FORBIDDEN per CLAUDE.md policy.
+
+    ASYNC INITIALIZATION WARNING:
+    ==============================
+    When async_client=True this function is a SYNC function that returns a
+    COROUTINE, not a ready-to-use client. The coroutine MUST be awaited before
+    use. Forgetting to await causes TypeError: object coroutine can't be used
+    in 'await' expression.
 
     CONSOLIDATED FEATURES (from 6 implementations):
     ===============================================
@@ -204,27 +211,39 @@ def get_redis_client(
     - Parameter filtering (removes None values)
 
     Args:
-        async_client (bool): If True, returns async Redis client (for async functions).
-                             If False, returns synchronous client (for regular functions).
+        async_client (bool): If True, returns async Redis client coroutine.
+                             If False, returns synchronous client.
                              Default: False
         database (str): Named database for logical separation. Use self-documenting
                         names instead of DB numbers. Default: "main"
 
     Returns:
-        Union[redis.Redis, async_redis.Redis, None]:
+        Union[redis.Redis, Coroutine[Any, Any, async_redis.Redis], None]:
             - redis.Redis: Synchronous client (if async_client=False)
-            - async_redis.Redis: Async client coroutine (if async_client=True)
+            - Coroutine returning async_redis.Redis (if async_client=True)
             - None: If Redis is disabled or connection fails
 
     Examples:
-        Basic usage (backward compatible - existing code works unchanged):
-            >>> redis = get_redis_client(database="main")
-            >>> redis.set("key", "value")
 
-        Async usage - Direct call in async functions:
+        SYNCHRONOUS USAGE (async_client=False):
+            >>> redis = get_redis_client(database="main")
+            >>> redis.set("key", "value")  # Blocks until response
+            >>> value = redis.get("key")
+
+        ASYNC USAGE (async_client=True) - CORRECT:
+            When async_client=True, this function returns a coroutine. You must
+            separate assignment from await to make intent explicit:
+
             >>> async def store_data():
-            ...     redis = await get_redis_client(async_client=True, database="main")
-            ...     await redis.set("key", "value")
+            ...     # Separate assignment from await to make the coroutine explicit
+            ...     redis_coro = get_redis_client(async_client=True, database="main")
+            ...     client = await redis_coro
+            ...     await client.set("key", "value")
+
+        Async inline form (equivalent, more concise):
+            >>> async def store_data():
+            ...     client = await get_redis_client(async_client=True, database="main")
+            ...     await client.set("key", "value")
 
         AsyncInitializable pattern for service classes:
             >>> from autobot_shared.async_initializable import AsyncInitializable
@@ -234,12 +253,6 @@ def get_redis_client(
             ...     async def cleanup(self):
             ...         if self.redis:
             ...             await self.redis.close()
-
-    NOTE on Async Initialization:
-        The async client is returned as a coroutine that must be awaited. Always use
-        `await get_redis_client(async_client=True)` in async contexts. For services
-        using AsyncInitializable, initialize the client in the initialize() method,
-        not at class definition time.
     """
     if async_client:
         # Return coroutine for async client
