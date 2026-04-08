@@ -5,13 +5,17 @@
  * Issue #874: Frontend Collaborative Session UI (#608 Phase 6)
  *
  * Manages session secrets with categorization, search, and sharing capabilities.
+ * Fetches real secrets from backend API instead of using hardcoded mock data.
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionSecret } from '@/stores/useChatStore'
 import { useSessionActivityLogger, type SecretType } from '@/composables/useSessionActivityLogger'
+import { secretsApiClient } from '@/utils/SecretsApiClient'
+import { createLogger } from '@/utils/debugUtils'
 
+const logger = createLogger('SecretVault')
 const { t } = useI18n()
 const chatStore = useChatStore()
 const { linkSecretToSession, logSecretUsage } = useSessionActivityLogger()
@@ -27,6 +31,8 @@ const emit = defineEmits<{
   share: [secretId: string]
   revoke: [secretId: string]
   copy: [secretId: string]
+  add: [secret: any]
+  delete: [secretId: string]
 }>()
 
 // Local state
@@ -35,76 +41,33 @@ const filterType = ref<SecretType | 'all'>('all')
 const showAddSecret = ref(false)
 const revealedSecrets = ref<Set<string>>(new Set())
 const sortBy = ref<'name' | 'type' | 'recent'>('name')
+const isLoading = ref(false)
+const error = ref<string | null>(null)
+const successMessage = ref<string | null>(null)
 
-// Mock secrets data (in real implementation, comes from API)
-const mockSecrets: Array<SessionSecret & { value: string; createdAt: Date; lastUsed?: Date }> = [
-  {
-    id: 'secret-1',
-    name: 'GitHub API Token',
-    type: 'api_key',
-    scope: 'user',
-    ownerId: 'user-1',
-    usageCount: 5,
-    value: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-    createdAt: new Date('2024-01-15'),
-    lastUsed: new Date('2024-02-14')
-  },
-  {
-    id: 'secret-2',
-    name: 'SSH Private Key',
-    type: 'ssh_key',
-    scope: 'session',
-    ownerId: 'user-1',
-    usageCount: 2,
-    value: '-----BEGIN OPENSSH PRIVATE KEY-----\nxxxxxxxx\n-----END OPENSSH PRIVATE KEY-----',
-    createdAt: new Date('2024-02-01')
-  },
-  {
-    id: 'secret-3',
-    name: 'Database Password',
-    type: 'password',
-    scope: 'shared',
-    ownerId: 'user-2',
-    usageCount: 12,
-    value: 'super_secret_password_123',
-    createdAt: new Date('2024-02-10'),
-    lastUsed: new Date('2024-02-15')
-  },
-  {
-    id: 'secret-4',
-    name: 'AWS Access Token',
-    type: 'token',
-    scope: 'user',
-    ownerId: 'user-1',
-    usageCount: 0,
-    value: 'AKIAxxxxxxxxxxxxxxxxx',
-    createdAt: new Date('2024-01-20')
-  }
-]
+// Secrets data from API
+const secrets = ref<Array<any>>([])
 
 // Get current session secrets
 const currentSession = computed(() => chatStore.currentSession)
-const sessionSecrets = computed(() => {
-  if (!currentSession.value?.sessionSecrets) return []
-  return currentSession.value.sessionSecrets
-})
 
 // Combine and filter secrets
 const allSecrets = computed(() => {
-  // Merge mock data with session secrets
-  const combined = [...mockSecrets]
+  let filtered = [...secrets.value]
 
   // Filter by scope
-  let filtered = combined
   if (props.scope === 'session') {
-    filtered = combined.filter(s => s.scope === 'session')
+    filtered = filtered.filter(s => s.scope === 'session' || s.scope === 'chat')
   } else if (props.scope === 'user') {
-    filtered = combined.filter(s => s.scope === 'user')
+    filtered = filtered.filter(s => s.scope === 'user' || s.scope === 'global')
   }
 
-  // Filter by type
+  // Filter by type - handle both snake_case and regular secret types
   if (filterType.value !== 'all') {
-    filtered = filtered.filter(s => s.type === filterType.value)
+    filtered = filtered.filter(s => {
+      const secretType = s.type as SecretType
+      return secretType === filterType.value
+    })
   }
 
   // Filter by search
@@ -112,7 +75,8 @@ const allSecrets = computed(() => {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(s =>
       s.name.toLowerCase().includes(query) ||
-      s.type.toLowerCase().includes(query)
+      (s.type && s.type.toLowerCase().includes(query)) ||
+      (s.description && s.description.toLowerCase().includes(query))
     )
   }
 
@@ -120,11 +84,11 @@ const allSecrets = computed(() => {
   if (sortBy.value === 'name') {
     filtered.sort((a, b) => a.name.localeCompare(b.name))
   } else if (sortBy.value === 'type') {
-    filtered.sort((a, b) => a.type.localeCompare(b.type))
+    filtered.sort((a, b) => (a.type || '').localeCompare(b.type || ''))
   } else if (sortBy.value === 'recent') {
     filtered.sort((a, b) => {
-      const aTime = a.lastUsed?.getTime() || a.createdAt.getTime()
-      const bTime = b.lastUsed?.getTime() || b.createdAt.getTime()
+      const aTime = new Date(a.updated_at || a.created_at).getTime()
+      const bTime = new Date(b.updated_at || b.created_at).getTime()
       return bTime - aTime
     })
   }
@@ -133,7 +97,7 @@ const allSecrets = computed(() => {
 })
 
 // Get secret type icon
-const getTypeIcon = (type: SecretType): string => {
+const getTypeIcon = (type: string): string => {
   switch (type) {
     case 'ssh_key': return 'key'
     case 'password': return 'lock'
@@ -145,14 +109,18 @@ const getTypeIcon = (type: SecretType): string => {
 }
 
 // Get scope badge
-const getScopeBadge = (scope: SessionSecret['scope']): { color: string; label: string } => {
+const getScopeBadge = (scope: string): { color: string; label: string } => {
   switch (scope) {
     case 'user':
+    case 'global':
       return { color: 'bg-blue-500/20 text-blue-400', label: t('secrets.vault.scopePersonal') }
     case 'session':
+    case 'chat':
       return { color: 'bg-green-500/20 text-green-400', label: t('secrets.vault.scopeSession') }
     case 'shared':
       return { color: 'bg-purple-500/20 text-purple-400', label: t('secrets.vault.scopeShared') }
+    default:
+      return { color: 'bg-gray-500/20 text-gray-400', label: scope }
   }
 }
 
@@ -165,16 +133,23 @@ const toggleReveal = (secretId: string) => {
     // Log reveal action
     const secret = allSecrets.value.find(s => s.id === secretId)
     if (secret) {
-      logSecretUsage('reveal', secret.id, secret.name, secret.type as SecretType)
+      logSecretUsage('reveal', secret.id, secret.name, (secret.type || 'unknown') as SecretType)
     }
   }
 }
 
 // Copy secret to clipboard
-const copySecret = (secret: typeof mockSecrets[0]) => {
+const copySecret = (secret: any) => {
+  if (!secret.value) {
+    error.value = t('secrets.vault.errorNoValue')
+    setTimeout(() => { error.value = null }, 3000)
+    return
+  }
   navigator.clipboard.writeText(secret.value)
   emit('copy', secret.id)
-  logSecretUsage('copy', secret.id, secret.name, secret.type as SecretType)
+  logSecretUsage('copy', secret.id, secret.name, (secret.type || 'unknown') as SecretType)
+  successMessage.value = t('secrets.vault.copiedSuccess')
+  setTimeout(() => { successMessage.value = null }, 3000)
 }
 
 // Share secret
@@ -183,14 +158,47 @@ const shareSecret = (secretId: string) => {
 }
 
 // Revoke secret
-const revokeSecret = (secretId: string) => {
+const revokeSecret = async (secretId: string) => {
   if (!window.confirm(t('secrets.vault.revokeConfirm'))) return
-  emit('revoke', secretId)
+
+  try {
+    isLoading.value = true
+    await secretsApiClient.deleteSecret(secretId)
+    secrets.value = secrets.value.filter(s => s.id !== secretId)
+    emit('delete', secretId)
+    successMessage.value = t('secrets.vault.revokeSuccess')
+    setTimeout(() => { successMessage.value = null }, 3000)
+  } catch (err) {
+    logger.error('Failed to revoke secret:', err)
+    error.value = t('secrets.vault.revokeError')
+    setTimeout(() => { error.value = null }, 3000)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Format date
-const formatDate = (date: Date): string => {
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+const formatDate = (date: string | Date | undefined): string => {
+  if (!date) return 'N/A'
+  const d = new Date(date)
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })
+}
+
+// Load secrets from backend
+const loadSecrets = async () => {
+  isLoading.value = true
+  error.value = null
+  try {
+    const response = (await secretsApiClient.getSecrets({})) as Record<string, any>
+    secrets.value = response.secrets || []
+    logger.info(`Loaded ${secrets.value.length} secrets from backend`)
+  } catch (err) {
+    logger.error('Failed to load secrets:', err)
+    error.value = t('secrets.vault.loadError')
+    secrets.value = []
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Secret type options
@@ -202,10 +210,25 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
   { value: 'token', label: t('secrets.vault.typeTokens') },
   { value: 'certificate', label: t('secrets.vault.typeCertificates') }
 ])
+
+// Load secrets on mount
+onMounted(() => {
+  loadSecrets()
+})
 </script>
 
 <template>
   <div class="secret-vault h-full flex flex-col bg-gray-800 rounded-lg">
+    <!-- Error/Success Messages -->
+    <div v-if="error" class="px-4 py-2 bg-red-900/50 text-red-300 text-sm border-b border-red-700">
+      <i class="bi bi-exclamation-circle mr-2" />
+      {{ error }}
+    </div>
+    <div v-if="successMessage" class="px-4 py-2 bg-green-900/50 text-green-300 text-sm border-b border-green-700">
+      <i class="bi bi-check-circle mr-2" />
+      {{ successMessage }}
+    </div>
+
     <!-- Header -->
     <div class="px-4 py-3 border-b border-gray-700">
       <div class="flex items-center justify-between mb-3">
@@ -214,8 +237,9 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
           {{ $t('secrets.vault.title') }}
         </h3>
         <button
-          class="px-3 py-1.5 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-2"
+          class="px-3 py-1.5 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           :aria-label="$t('secrets.vault.addSecretAriaLabel')"
+          :disabled="isLoading"
           @click="showAddSecret = true"
         >
           <i class="bi bi-plus-lg" />
@@ -257,7 +281,18 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
 
     <!-- Secret list -->
     <div class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-      <TransitionGroup name="secret">
+      <!-- Loading state -->
+      <div v-if="isLoading" class="flex items-center justify-center py-12">
+        <div class="flex flex-col items-center gap-3">
+          <div class="animate-spin">
+            <i class="bi bi-hourglass text-2xl text-blue-400" />
+          </div>
+          <div class="text-sm text-gray-400">{{ $t('secrets.vault.loading') }}</div>
+        </div>
+      </div>
+
+      <!-- Secrets list -->
+      <TransitionGroup v-else name="secret">
         <div
           v-for="secret in allSecrets"
           :key="secret.id"
@@ -267,7 +302,7 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
           <div class="flex items-start justify-between mb-3">
             <div class="flex items-start gap-3 flex-1 min-w-0">
               <div class="w-10 h-10 rounded-lg bg-gray-600 flex items-center justify-center text-lg flex-shrink-0">
-                <i :class="`bi bi-${getTypeIcon(secret.type as SecretType)}`" class="text-gray-300" />
+                <i :class="`bi bi-${getTypeIcon(secret.type)}`" class="text-gray-300" />
               </div>
               <div class="flex-1 min-w-0">
                 <h4 class="text-sm font-medium text-gray-200 truncate">
@@ -283,7 +318,7 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
                     {{ getScopeBadge(secret.scope).label }}
                   </span>
                   <span class="text-xs text-gray-500">
-                    {{ secret.type.replace('_', ' ') }}
+                    {{ secret.type }}
                   </span>
                 </div>
               </div>
@@ -295,7 +330,7 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
             <div class="relative">
               <input
                 :type="revealedSecrets.has(secret.id) ? 'text' : 'password'"
-                :value="secret.value"
+                :value="secret.value || '••••••••'"
                 readonly
                 class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-xs text-gray-300 font-mono"
               >
@@ -311,43 +346,50 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
 
           <!-- Metadata -->
           <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
-            <span>
+            <span v-if="secret.created_at">
               <i class="bi bi-calendar mr-1" />
-              {{ $t('secrets.vault.created', { date: formatDate(secret.createdAt) }) }}
+              {{ $t('secrets.vault.created', { date: formatDate(secret.created_at) }) }}
             </span>
-            <span v-if="secret.lastUsed">
+            <span v-if="secret.updated_at && secret.updated_at !== secret.created_at">
               <i class="bi bi-clock mr-1" />
-              {{ $t('secrets.vault.used', { date: formatDate(secret.lastUsed) }) }}
+              {{ $t('secrets.vault.used', { date: formatDate(secret.updated_at) }) }}
             </span>
+          </div>
+
+          <!-- Description if available -->
+          <div v-if="secret.description" class="text-xs text-gray-400 mb-3">
+            {{ secret.description }}
           </div>
 
           <!-- Actions -->
           <div class="flex items-center gap-2 flex-wrap">
             <button
-              class="px-3 py-1.5 text-xs rounded bg-gray-600 hover:bg-gray-500 text-gray-200 transition-colors flex items-center gap-1"
+              class="px-3 py-1.5 text-xs rounded bg-gray-600 hover:bg-gray-500 text-gray-200 transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.copyAriaLabel')"
+              :disabled="isLoading"
               @click="copySecret(secret)"
             >
               <i class="bi bi-clipboard" />
               {{ $t('secrets.vault.copyBtn') }}
             </button>
             <button
-              v-if="secret.scope === 'user'"
-              class="px-3 py-1.5 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1"
+              v-if="secret.scope === 'user' || secret.scope === 'global'"
+              class="px-3 py-1.5 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.shareAriaLabel')"
+              :disabled="isLoading"
               @click="shareSecret(secret.id)"
             >
               <i class="bi bi-share" />
               {{ $t('secrets.vault.shareBtn') }}
             </button>
             <button
-              v-if="secret.scope === 'shared'"
-              class="px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500 text-white transition-colors flex items-center gap-1"
+              class="px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500 text-white transition-colors flex items-center gap-1 disabled:opacity-50"
               :aria-label="$t('secrets.vault.revokeAriaLabel')"
+              :disabled="isLoading"
               @click="revokeSecret(secret.id)"
             >
               <i class="bi bi-x-circle" />
-              {{ $t('secrets.vault.revokeBtn') }}
+              {{ $t('secrets.vault.deleteBtn') }}
             </button>
           </div>
         </div>
@@ -355,7 +397,7 @@ const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>
 
       <!-- Empty state -->
       <div
-        v-if="allSecrets.length === 0"
+        v-if="!isLoading && allSecrets.length === 0"
         class="flex flex-col items-center justify-center py-12 text-gray-500"
       >
         <i class="bi bi-shield-lock text-4xl mb-3" />
