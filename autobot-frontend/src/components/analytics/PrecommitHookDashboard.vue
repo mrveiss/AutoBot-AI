@@ -395,25 +395,38 @@ const filteredResults = computed(() => {
   return results.filter(r => r.severity === activeSeverity.value)
 })
 
+// Single-pass computed that partitions checks by category, producing both
+// the category summary rows and an O(1) lookup map used by getChecksForCategory.
+// Replaces a separate forEach (checkCategories) + per-category .filter()
+// (getChecksForCategory) that together traversed the array multiple times per
+// reactive update.
+const checksByCategory = computed((): Map<string, Check[]> => {
+  const map = new Map<string, Check[]>()
+  for (const check of checks.value) {
+    const bucket = map.get(check.category)
+    if (bucket) {
+      bucket.push(check)
+    } else {
+      map.set(check.category, [check])
+    }
+  }
+  return map
+})
+
 const enabledChecks = computed(() => checks.value.filter(c => c.enabled).length)
 const totalChecks = computed(() => checks.value.length)
 
 const checkCategories = computed(() => {
-  const cats: Record<string, { enabled: number; total: number }> = {}
-
-  checks.value.forEach(check => {
-    if (!cats[check.category]) {
-      cats[check.category] = { enabled: 0, total: 0 }
-    }
-    cats[check.category].total++
-    if (check.enabled) cats[check.category].enabled++
-  })
-
-  return Object.entries(cats).map(([id, counts]) => ({
-    id,
-    name: getCategoryName(id),
-    ...counts
-  }))
+  const result: { id: string; name: string; enabled: number; total: number }[] = []
+  for (const [id, items] of checksByCategory.value) {
+    result.push({
+      id,
+      name: getCategoryName(id),
+      enabled: items.filter(c => c.enabled).length,
+      total: items.length,
+    })
+  }
+  return result
 })
 
 // Methods
@@ -444,7 +457,7 @@ function getCategoryName(category: string): string {
 }
 
 function getChecksForCategory(category: string): Check[] {
-  return checks.value.filter(c => c.category === category)
+  return checksByCategory.value.get(category) ?? []
 }
 
 function toggleCategory(category: string) {

@@ -359,17 +359,23 @@ const activeFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
 const visibleCount = ref(PAGE_SIZE)
 const expandedFiles = ref<Set<string>>(new Set())
 
-const mediumRiskCount = computed(() =>
-  props.analysis?.files.filter((f) => f.risk_score >= 40 && f.risk_score < 60).length ?? 0
-)
+// Single pass over the file list to derive all three risk-bucket counts.
+// Replaces three separate .filter() traversals that each iterated the full
+// array independently on every reactive update.
+const riskCounts = computed((): { high: number; medium: number; low: number } => {
+  if (!props.analysis) return { high: 0, medium: 0, low: 0 }
+  let high = 0, medium = 0, low = 0
+  for (const f of props.analysis.files) {
+    if (f.risk_score >= 60) high++
+    else if (f.risk_score >= 40) medium++
+    else low++
+  }
+  return { high, medium, low }
+})
 
-const lowRiskCount = computed(() =>
-  props.analysis?.files.filter((f) => f.risk_score < 40).length ?? 0
-)
-
-const atRiskCount = computed(() =>
-  props.analysis?.files.filter((f) => f.risk_score >= 40).length ?? 0
-)
+const mediumRiskCount = computed(() => riskCounts.value.medium)
+const lowRiskCount = computed(() => riskCounts.value.low)
+const atRiskCount = computed(() => riskCounts.value.high + riskCounts.value.medium)
 
 const filteredFiles = computed((): BugPredictionFile[] => {
   if (!props.analysis) return []

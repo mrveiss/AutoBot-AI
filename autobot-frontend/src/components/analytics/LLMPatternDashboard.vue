@@ -468,9 +468,14 @@ const formatDateLabel = (dateStr: string): string => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-const getModelBarWidth = (model: ModelData): number => {
+const maxModelCost = computed((): number => {
   if (!modelComparison.value.length) return 0
-  const maxCost = Math.max(...modelComparison.value.map(m => m.total_cost))
+  return Math.max(...modelComparison.value.map(m => m.total_cost))
+})
+
+const getModelBarWidth = (model: ModelData): number => {
+  const maxCost = maxModelCost.value
+  if (maxCost === 0) return 0
   return (model.total_cost / maxCost) * 100
 }
 
