@@ -1407,9 +1407,15 @@ class LLMInterface:
         request_id = llm_params.pop("request_id", str(uuid.uuid4()))
         start_time = time.time()
 
-        # Issue #3860: resolve model_name from provider config so usage
-        # analytics records a non-empty value instead of "".
-        _, model_name = self._determine_provider_and_model("vllm")
+        # Issue #3943: resolve vLLM model name directly from config so cache keys
+        # and analytics record the actual vLLM model instead of the Ollama default.
+        # _determine_provider_and_model("vllm") falls through to the else-branch
+        # (provider="ollama", model=self.settings.default_model) because "vllm"
+        # is not a recognised llm_type alias.  Read from the same config key that
+        # VLLMProviderHandler._ensure_initialized() uses.
+        model_name: str = config.get(
+            "llm.vllm.default_model", "meta-llama/Llama-3.2-3B-Instruct"
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
