@@ -20,11 +20,8 @@ from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
-from config import UnifiedConfig
 from constants.ttl_constants import TTL_30_DAYS
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 

@@ -32,14 +32,12 @@ if str(_project_root) not in sys.path:
 
 try:
     from autobot_shared.redis_client import get_redis_client
-    from config import UnifiedConfig
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:
     # Fallback for when running without project context
     get_redis_client = None
-    UnifiedConfig = None
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
 
@@ -61,8 +59,6 @@ except ImportError:
     SSOTMapping = None
 
 
-# Initialize unified config (with fallback)
-config = UnifiedConfig() if _CONFIG_AVAILABLE else None
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for literal value AST types

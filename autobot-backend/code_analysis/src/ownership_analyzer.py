@@ -30,20 +30,17 @@ if str(_project_root) not in sys.path:
 
 try:
     from autobot_shared.redis_client import get_redis_client
-    from config import UnifiedConfig
     from constants.ttl_constants import TTL_1_HOUR
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
 except ImportError:
     get_redis_client = None
-    UnifiedConfig = None
     TTL_1_HOUR = 3_600
     _REDIS_AVAILABLE = False
     _CONFIG_AVAILABLE = False
 
 
-config = UnifiedConfig() if _CONFIG_AVAILABLE else None
 logger = logging.getLogger(__name__)
 
 # Directories to skip during analysis

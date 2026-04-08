@@ -13,11 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
 from constants.ttl_constants import TTL_1_HOUR
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 

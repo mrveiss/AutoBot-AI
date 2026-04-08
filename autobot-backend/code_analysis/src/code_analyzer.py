@@ -17,11 +17,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from config import UnifiedConfig
 from constants.ttl_constants import TTL_1_HOUR
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuples for AST node type checks

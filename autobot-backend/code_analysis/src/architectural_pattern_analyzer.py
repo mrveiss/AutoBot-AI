@@ -18,7 +18,6 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
 
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
@@ -31,8 +30,6 @@ from .architectural_analysis import (
     PatternDetector,
 )
 
-# Initialize unified config
-config = UnifiedConfig()
 logger = logging.getLogger(__name__)
 
 
