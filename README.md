@@ -217,6 +217,22 @@ We welcome contributions! Whether you're fixing bugs, adding features, or improv
 
 ---
 
+## How to Contribute
+
+AutoBot is open source and we welcome contributions from the community!
+
+**New to open source?** Start with [good-first-issue](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Agood-first-issue) issues — these are beginner-friendly and designed as learning opportunities.
+
+**Experienced developer?** Find issues matching your skill:
+- [Frontend (Vue.js, TypeScript)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Afrontend+label%3Ahelp-wanted)
+- [Backend (FastAPI, Python)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Abackend+label%3Ahelp-wanted)
+- [Infrastructure (Docker, Ansible)](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Ainfrastructure+label%3Ahelp-wanted)
+- [Documentation](https://github.com/mrveiss/AutoBot-AI/issues?q=is%3Aissue+is%3Aopen+label%3Adocs+label%3Ahelp-wanted)
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for detailed contribution guidelines.
+
+---
+
 ## Sponsors & Supporters
 
 Support AutoBot's development:
