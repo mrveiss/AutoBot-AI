@@ -1,0 +1,72 @@
+name: Auto-Triage Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Triage issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = issue.body ? issue.body.toLowerCase() : '';
+            const content = `${title} ${body}`;
+
+            const labels = [];
+
+            // Skill-based detection
+            if (content.match(/\b(vue|frontend|typescript|ui|css|vite|component)\b/i)) {
+              labels.push('frontend');
+            }
+            if (content.match(/\b(fastapi|python|api|database|async|backend|service)\b/i)) {
+              labels.push('backend');
+            }
+            if (content.match(/\b(docker|ansible|deploy|infrastructure|devops|ci\/cd|kubernetes)\b/i)) {
+              labels.push('infrastructure');
+            }
+            if (content.match(/\b(docs|readme|documentation|guide|tutorial|example)\b/i)) {
+              labels.push('docs');
+            }
+            if (content.match(/\b(test|coverage|qa|pytest|testing)\b/i)) {
+              labels.push('testing');
+            }
+
+            // Difficulty detection
+            if (content.match(/\b(beginner|simple|easy|first issue|for newcomers|good-first|starter)\b/i)) {
+              labels.push('good-first-issue');
+            } else if (content.match(/\b(intermediate|moderate|some experience|moderate complexity)\b/i)) {
+              labels.push('intermediate');
+            } else if (content.match(/\b(advanced|complex|architecture|deep knowledge|refactor|system-wide)\b/i)) {
+              labels.push('advanced');
+            }
+
+            // Apply labels if found
+            if (labels.length > 0) {
+              // Remove duplicates
+              const uniqueLabels = [...new Set(labels)];
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: uniqueLabels
+              });
+              console.log(`Applied labels: ${uniqueLabels.join(', ')}`);
+            } else {
+              // Comment if no skill label detected
+              if (!content.match(/\b(frontend|backend|infrastructure|docs|testing)\b/i)) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '👋 Thanks for opening an issue! I couldn\'t automatically determine the skill area (frontend, backend, infrastructure, docs, testing). Could a maintainer help triage this?'
+                });
+              }
+            }
